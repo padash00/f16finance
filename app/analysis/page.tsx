@@ -11,21 +11,24 @@ import {
   AlertTriangle, 
   Target, 
   Sparkles,
-  Info
+  Info,
+  BookOpen,
+  HelpCircle,
+  Search
 } from 'lucide-react'
 import {
   ResponsiveContainer,
-  AreaChart,   // Используется для заливки
+  AreaChart,   
   Area,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
   ReferenceLine,
-  ComposedChart, // Используется для сложного графика
+  ComposedChart, 
   Line,
   Bar,
-  BarChart,    // <--- ВОТ ЭТОГО НЕ ХВАТАЛО
+  BarChart,    
   Legend
 } from 'recharts'
 
@@ -34,39 +37,38 @@ type DataPoint = {
     date: string; 
     income: number; 
     expense: number;
-    dayOfWeek: number; // 0 = Вс, 1 = Пн ...
+    dayOfWeek: number; 
 }
 
 type Anomaly = {
     date: string;
     type: 'income_high' | 'income_low' | 'expense_high';
     amount: number;
-    avgForDay: number; // Среднее для этого дня недели
+    avgForDay: number; 
 }
 
 // Хелпер: форматирование денег
 const formatMoney = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+const fullDayNames = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота']
 
 export default function AIAnalysisPage() {
   const [history, setHistory] = useState<DataPoint[]>([])
   const [loading, setLoading] = useState(true)
 
-  // 1. ЗАГРУЗКА ДАННЫХ (Берем историю за 90 дней для обучения)
+  // 1. ЗАГРУЗКА ДАННЫХ
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
       const d = new Date()
-      d.setDate(d.getDate() - 90) // Анализируем последние 3 месяца
+      d.setDate(d.getDate() - 90) // Берем 90 дней
       const fromDate = d.toISOString().slice(0, 10)
 
-      // Параллельная загрузка доходов и расходов
       const [incRes, expRes] = await Promise.all([
         supabase.from('incomes').select('date, cash_amount, kaspi_amount, card_amount').gte('date', fromDate).order('date'),
         supabase.from('expenses').select('date, cash_amount, kaspi_amount').gte('date', fromDate).order('date')
       ])
 
-      // Агрегация по дням (схлопываем записи за один день)
       const map = new Map<string, DataPoint>()
       
       incRes.data?.forEach((r: any) => {
@@ -90,11 +92,11 @@ export default function AIAnalysisPage() {
     loadData()
   }, [])
 
-  // 🧠 AI ЯДРО: СЕЗОННЫЙ ПРОГНОЗ
+  // 🧠 AI ЯДРО
   const analysis = useMemo(() => {
-     if (history.length < 7) return null // Нужно хотя бы неделю данных, чтобы понять структуру
+     if (history.length < 7) return null 
 
-     // 1. ОБУЧЕНИЕ: Считаем среднее для каждого дня недели (Пн, Вт...)
+     // 1. ОБУЧЕНИЕ (Сезонность по дням недели)
      const dayStats = Array(7).fill(0).map(() => ({ totalIncome: 0, totalExpense: 0, count: 0 }))
      
      history.forEach(d => {
@@ -106,15 +108,19 @@ export default function AIAnalysisPage() {
 
      const dayAverages = dayStats.map(d => ({
          income: d.count > 0 ? d.totalIncome / d.count : 0,
-         expense: d.count > 0 ? d.totalExpense / d.count : 0
+         expense: d.count > 0 ? d.totalExpense / d.count : 0,
+         count: d.count
      }))
 
-     // 2. ПРОГНОЗ: Генерируем будущее на 30 дней вперед
+     // Оценка уверенности ИИ (на основе количества данных)
+     const totalDataPoints = history.length;
+     const confidenceScore = Math.min(100, Math.round((totalDataPoints / 60) * 100)); // 60 дней = 100% уверенности
+
+     // 2. ПРОГНОЗ
      const forecastData = []
      let totalForecastIncome = 0
      let totalForecastExpense = 0
      
-     // Начинаем прогноз с завтрашнего дня после последней записи
      const lastDateStr = history[history.length - 1].date
      const lastDate = new Date(lastDateStr)
 
@@ -123,7 +129,6 @@ export default function AIAnalysisPage() {
          nextDate.setDate(lastDate.getDate() + i)
          const dayOfWeek = nextDate.getDay()
          
-         // Берем среднее для этого дня недели (Seasonality logic)
          const predictedIncome = dayAverages[dayOfWeek].income
          const predictedExpense = dayAverages[dayOfWeek].expense
 
@@ -139,34 +144,32 @@ export default function AIAnalysisPage() {
          totalForecastExpense += predictedExpense
      }
 
-     // 3. ПОИСК АНОМАЛИЙ (В прошлом)
+     // 3. ПОИСК АНОМАЛИЙ
      const anomalies: Anomaly[] = []
      history.slice(-30).forEach(d => {
          const avg = dayAverages[d.dayOfWeek]
-         
-         // Ищем просадки дохода (меньше 50% от нормы, если норма существенная)
          if (d.income < avg.income * 0.5 && avg.income > 5000) {
              anomalies.push({ date: d.date, type: 'income_low', amount: d.income, avgForDay: avg.income })
          }
-         // Ищем скачки расходов (в 3 раза выше нормы)
          if (d.expense > avg.expense * 3 && d.expense > 10000) {
              anomalies.push({ date: d.date, type: 'expense_high', amount: d.expense, avgForDay: avg.expense })
          }
      })
 
-     // Данные для графика: История (последние 14 дней) + Прогноз
      const chartData = [
          ...history.slice(-14).map(d => ({ ...d, dayName: dayNames[d.dayOfWeek], type: 'fact' })),
          ...forecastData
      ]
 
      return {
-         dayAverages, // Профиль недели (Пн-Вс)
-         forecastData, // Будущее
-         chartData, // Для графика
+         dayAverages, 
+         forecastData, 
+         chartData, 
          totalForecastIncome,
          totalForecastProfit: totalForecastIncome - totalForecastExpense,
-         anomalies: anomalies.reverse().slice(0, 5) // Последние 5 аномалий
+         anomalies: anomalies.reverse().slice(0, 5),
+         confidenceScore,
+         totalDataPoints
      }
   }, [history])
 
@@ -183,176 +186,167 @@ export default function AIAnalysisPage() {
                         <BrainCircuit className="w-8 h-8 text-purple-400" />
                     </div>
                     <div>
-                        <h1 className="text-3xl font-bold text-foreground">AI Аналитика</h1>
-                        <p className="text-muted-foreground text-sm">Прогноз на основе дней недели (Сезонность)</p>
+                        <h1 className="text-3xl font-bold text-foreground">AI Советник</h1>
+                        <p className="text-muted-foreground text-sm">Глубокая аналитика и объяснение прогнозов</p>
                     </div>
                 </div>
-                {analysis && (
-                    <div className="bg-card border border-border px-4 py-2 rounded-xl flex items-center gap-4 neon-glow">
-                         <div className="text-right">
-                             <p className="text-[10px] text-muted-foreground uppercase font-bold">Прогноз прибыли (30 дн)</p>
-                             <p className="text-xl font-bold text-green-400">{formatMoney(analysis.totalForecastProfit)}</p>
-                         </div>
-                         <Target className="w-8 h-8 text-purple-500/50" />
-                    </div>
-                )}
             </div>
 
-            {loading && <div className="p-12 text-center text-muted-foreground animate-pulse">ИИ изучает ваши данные...</div>}
+            {loading && <div className="p-12 text-center text-muted-foreground animate-pulse">Анализируем историю операций...</div>}
 
             {!loading && analysis && (
-                <div className="space-y-8">
+                <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
                     
-                    {/* 🔮 ГРАФИК: ФАКТ + ПРОГНОЗ */}
-                    <Card className="p-6 border border-purple-500/20 bg-card relative overflow-hidden">
-                        <div className="mb-6 relative z-10">
-                            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                                <CalendarDays className="w-5 h-5 text-purple-400" />
-                                Модель будущего месяца
-                            </h2>
-                            <p className="text-sm text-muted-foreground">
-                                Алгоритм учитывает, что в выходные выручка обычно отличается от будней.
-                            </p>
-                        </div>
-
-                        <div className="h-80 w-full relative z-10">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <ComposedChart data={analysis.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="forecastGradient" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3}/>
-                                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                                    <XAxis 
-                                        dataKey="dayName" 
-                                        stroke="#666" 
-                                        fontSize={10} 
-                                        interval={0} // Показать все дни
-                                    />
-                                    <YAxis stroke="#666" fontSize={10} tickFormatter={v => `${v/1000}k`} />
-                                    <Tooltip 
-                                        contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
-                                        cursor={{ fill: 'white', opacity: 0.05 }}
-                                        formatter={(val: number, name: string, props: any) => [
-                                            formatMoney(val), 
-                                            props.payload.type === 'forecast' ? 'Прогноз 🔮' : 'Факт ✅'
-                                        ]}
-                                        labelFormatter={(label, payload) => {
-                                            if (payload && payload.length > 0) {
-                                                return `${payload[0].payload.date} (${label})`
-                                            }
-                                            return label
-                                        }}
-                                    />
-                                    
-                                    {/* Разделитель Факта и Прогноза */}
-                                    <ReferenceLine x={history[history.length - 1].date} stroke="#666" strokeDasharray="3 3" label="СЕГОДНЯ" />
-
-                                    <Area 
-                                        type="monotone" 
-                                        dataKey="income" 
-                                        name="Доход"
-                                        stroke="#8b5cf6" 
-                                        strokeWidth={3}
-                                        fill="url(#forecastGradient)"
-                                        strokeDasharray={(d) => d.type === 'forecast' ? "5 5" : "0"} // Пунктир для прогноза (сложно реализовать в Recharts напрямую, поэтому просто стиль)
-                                    />
-                                </ComposedChart>
-                            </ResponsiveContainer>
-                        </div>
+                    {/* ЛЕВАЯ КОЛОНКА (ОСНОВНАЯ) */}
+                    <div className="xl:col-span-3 space-y-8">
                         
-                        {/* Легенда */}
-                        <div className="flex justify-center gap-6 mt-4 text-xs relative z-10">
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                                <span className="text-muted-foreground">Линия дохода (Факт → Прогноз)</span>
+                        {/* 🔮 ГРАФИК ПРОГНОЗА */}
+                        <Card className="p-6 border border-purple-500/20 bg-card relative overflow-hidden">
+                            <div className="mb-6 relative z-10 flex justify-between items-start">
+                                <div>
+                                    <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                        <CalendarDays className="w-5 h-5 text-purple-400" />
+                                        Прогноз на 30 дней
+                                    </h2>
+                                    <p className="text-sm text-muted-foreground">
+                                        Ожидаемая прибыль: <span className="text-green-400 font-bold">{formatMoney(analysis.totalForecastProfit)}</span>
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-[10px] uppercase text-muted-foreground tracking-wider">Уверенность ИИ</span>
+                                    <div className="flex items-center gap-2 justify-end">
+                                        <div className="h-2 w-20 bg-white/10 rounded-full overflow-hidden">
+                                            <div className="h-full bg-purple-500" style={{width: `${analysis.confidenceScore}%`}} />
+                                        </div>
+                                        <span className="text-xs font-bold text-purple-300">{analysis.confidenceScore}%</span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Фоновый эффект */}
-                        <div className="absolute -right-20 -top-20 w-64 h-64 bg-purple-600/10 blur-[100px] rounded-full pointer-events-none" />
-                    </Card>
+                            <div className="h-80 w-full relative z-10">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ComposedChart data={analysis.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="forecastGradient" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3}/>
+                                                <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
+                                        <XAxis dataKey="dayName" stroke="#666" fontSize={10} interval={0} />
+                                        <YAxis stroke="#666" fontSize={10} tickFormatter={v => `${v/1000}k`} />
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
+                                            formatter={(val: number, name: string, props: any) => [
+                                                formatMoney(val), 
+                                                props.payload.type === 'forecast' ? 'Прогноз 🔮' : 'Факт ✅'
+                                            ]}
+                                        />
+                                        <ReferenceLine x={history[history.length - 1].date} stroke="#666" strokeDasharray="3 3" label="СЕГОДНЯ" />
+                                        <Area type="monotone" dataKey="income" name="Доход" stroke="#8b5cf6" strokeWidth={3} fill="url(#forecastGradient)" />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </Card>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        
-                        {/* 📊 СРЕДНИЕ ПО ДНЯМ (Профиль недели) */}
+                        {/* 📊 ПРОФИЛЬ НЕДЕЛИ */}
                         <Card className="p-6 border-border bg-card neon-glow">
-                            <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
-                                <TrendingUp className="w-4 h-4 text-blue-400"/>
-                                Профиль вашей недели (Средние)
-                            </h3>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                                    <TrendingUp className="w-4 h-4 text-blue-400"/>
+                                    Матрица вашей недели
+                                </h3>
+                            </div>
                             <div className="h-48">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    {/* Здесь используется BarChart, который был пропущен в импорте */}
                                     <BarChart data={analysis.dayAverages.map((d, i) => ({ ...d, name: dayNames[i] }))}>
                                         <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
                                         <XAxis dataKey="name" stroke="#666" fontSize={12} />
                                         <Tooltip 
                                             cursor={{fill: 'transparent'}}
                                             contentStyle={{ backgroundColor: '#111', border: '1px solid #333' }}
-                                            formatter={(val: number) => [formatMoney(val), 'Средний доход']}
+                                            formatter={(val: number) => [formatMoney(val), 'Среднее']}
                                         />
                                         <Bar dataKey="income" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
-                            <p className="text-xs text-muted-foreground text-center mt-2">
-                                ИИ использует эти данные, чтобы предсказывать выручку на конкретный день недели.
-                            </p>
+                        </Card>
+                    </div>
+
+                    {/* ПРАВАЯ КОЛОНКА (ОБУЧЕНИЕ И ИНФО) */}
+                    <div className="xl:col-span-1 space-y-6">
+                        
+                        {/* КАРТОЧКА 1: КАК ЭТО РАБОТАЕТ */}
+                        <Card className="p-5 border border-blue-500/20 bg-blue-900/5">
+                            <h3 className="text-sm font-bold text-blue-300 mb-3 flex items-center gap-2">
+                                <HelpCircle className="w-4 h-4" />
+                                Как работает этот алгоритм?
+                            </h3>
+                            <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
+                                <p>
+                                    <strong className="text-blue-200">1. Сезонность:</strong> Мы не просто берем среднее. ИИ знает, что в пятницу выручка выше, чем в понедельник.
+                                </p>
+                                <p>
+                                    <strong className="text-blue-200">2. Обучение:</strong> Алгоритм изучил <strong>{analysis.totalDataPoints} дней</strong> вашей истории, чтобы понять привычки клиентов.
+                                </p>
+                                <p>
+                                    <strong className="text-blue-200">3. Экстраполяция:</strong> Прогноз строится путем наложения вашей "типичной недели" на календарь следующего месяца.
+                                </p>
+                            </div>
                         </Card>
 
-                        {/* ⚠️ ДЕТЕКТОР АНОМАЛИЙ */}
-                        <Card className="p-6 border-border bg-card neon-glow">
-                            <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
-                                <AlertTriangle className="w-4 h-4 text-yellow-400"/>
-                                Найденные аномалии (Последние 30 дней)
+                        {/* КАРТОЧКА 2: АНОМАЛИИ */}
+                        <Card className="p-5 border border-border bg-card neon-glow">
+                            <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                                <Search className="w-4 h-4 text-yellow-400"/>
+                                Детектор Аномалий
                             </h3>
-                            
                             {analysis.anomalies.length === 0 ? (
-                                <div className="h-48 flex flex-col items-center justify-center text-muted-foreground">
-                                    <Sparkles className="w-8 h-8 text-green-500/50 mb-2" />
-                                    <p className="text-sm">Аномалий не обнаружено.</p>
-                                    <p className="text-xs opacity-50">Бизнес работает стабильно.</p>
-                                </div>
+                                <p className="text-xs text-muted-foreground text-center py-4">
+                                    Отклонений не найдено. Бизнес работает как часы.
+                                </p>
                             ) : (
-                                <div className="space-y-3">
+                                <div className="space-y-2">
                                     {analysis.anomalies.map((a, idx) => (
-                                        <div key={idx} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-full ${a.type === 'income_low' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                                                    {a.type === 'income_low' ? <TrendingUp className="w-4 h-4 rotate-180" /> : <AlertTriangle className="w-4 h-4" />}
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs font-bold text-foreground">
-                                                        {new Date(a.date).toLocaleDateString('ru-RU')} ({dayNames[new Date(a.date).getDay()]})
-                                                    </p>
-                                                    <p className="text-[10px] text-muted-foreground">
-                                                        {a.type === 'income_low' ? 'Просадка по выручке' : 'Аномально высокий расход'}
-                                                    </p>
-                                                </div>
+                                        <div key={idx} className="p-2 bg-white/5 rounded border border-white/5 text-xs">
+                                            <div className="flex justify-between mb-1">
+                                                <span className="font-bold text-foreground">{new Date(a.date).toLocaleDateString('ru-RU')}</span>
+                                                <span className={a.type === 'income_low' ? 'text-red-400' : 'text-yellow-400'}>
+                                                    {a.type === 'income_low' ? '📉 Низкий доход' : '⚠️ Высокий расход'}
+                                                </span>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="text-sm font-bold text-foreground">{formatMoney(a.amount)}</p>
-                                                <p className="text-[10px] text-muted-foreground">
-                                                    Норма: ~{formatMoney(a.avgForDay)}
-                                                </p>
-                                            </div>
+                                            <p className="text-muted-foreground">
+                                                Было: <span className="text-foreground">{formatMoney(a.amount)}</span> (Норма: {formatMoney(a.avgForDay)})
+                                            </p>
                                         </div>
                                     ))}
                                 </div>
                             )}
                         </Card>
+
+                        {/* КАРТОЧКА 3: СЛОВАРЬ */}
+                        <Card className="p-5 border border-border bg-card">
+                            <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                                <BookOpen className="w-4 h-4 text-muted-foreground"/>
+                                Словарь терминов
+                            </h3>
+                            <ul className="space-y-2 text-xs text-muted-foreground">
+                                <li><span className="text-foreground font-semibold">Маржа:</span> Какой % от выручки вы реально кладете в карман после расходов.</li>
+                                <li><span className="text-foreground font-semibold">ROI (Эффективность):</span> Сколько тенге дохода приносит каждый потраченный 1 тенге.</li>
+                                <li><span className="text-foreground font-semibold">Run Rate:</span> Прогноз годовой выручки, если дела пойдут так же, как сейчас.</li>
+                            </ul>
+                        </Card>
+
                     </div>
+
                 </div>
             )}
             
             {!loading && !analysis && (
                 <div className="text-center py-20 text-muted-foreground">
                     <Info className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                    <p>Недостаточно данных для построения модели.</p>
-                    <p className="text-sm mt-2">Ведите учет хотя бы 7 дней, чтобы алгоритм начал работать.</p>
+                    <p>Недостаточно данных для анализа.</p>
                 </div>
             )}
 
