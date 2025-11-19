@@ -64,12 +64,12 @@ const getLocalTodayStr = () => {
 }
 
 // Функция для генерации всех дат в диапазоне
-const generateDateRange = (startDate: Date, daysCount: number) => {
+const generateDateRange = (startDate: Date, endDate: Date) => {
     const dates = [];
-    for (let i = 0; i < daysCount; i++) {
-        const d = new Date(startDate);
-        d.setDate(d.getDate() + i);
-        dates.push(d.toISOString().slice(0, 10));
+    let current = new Date(startDate);
+    while (current <= endDate) {
+        dates.push(current.toISOString().slice(0, 10));
+        current.setDate(current.getDate() + 1);
     }
     return dates;
 }
@@ -78,17 +78,16 @@ export default function AIAnalysisPage() {
   const [history, setHistory] = useState<DataPoint[]>([])
   const [loading, setLoading] = useState(true)
 
-  // 1. ЗАГРУЗКА ДАННЫХ
+  // 1. ЗАГРУЗКА ДАННЫХ С 1 НОЯБРЯ
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
       
       const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(endDate.getDate() - 90); // 90 дней истории
+      const startDate = new Date(2025, 10, 1); // 1 ноября 2025
       
       const fromDateStr = startDate.toISOString().slice(0, 10);
-      const allDates = generateDateRange(startDate, 91); 
+      const allDates = generateDateRange(startDate, endDate); 
 
       const [incRes, expRes] = await Promise.all([
         supabase.from('incomes').select('date, cash_amount, kaspi_amount, card_amount').gte('date', fromDateStr).order('date'),
@@ -130,12 +129,11 @@ export default function AIAnalysisPage() {
     loadData();
   }, [])
 
-  // 🧠 ПРОДВИНУТЫЙ AI АНАЛИЗ (Медиана + Линейная регрессия + MAD)
+  // 🧠 УЛУЧШЕННЫЙ AI АНАЛИЗ (Экспоненциальное сглаживание + ARIMA-подобный тренд + Сезонность)
   const analysis = useMemo(() => {
      if (history.length < 7) return null;
      
      const todayStr = getLocalTodayStr();
-     // Берем только прошлое, игнорируем нули (дни простоя), чтобы не портить статистику
      const past = history.filter(d => d.date < todayStr && (d.income > 0 || d.expense > 0));
      
      if (past.length === 0) return null;
@@ -161,61 +159,52 @@ export default function AIAnalysisPage() {
          return arr.reduce((s, v) => s + Math.abs(v - med), 0) / arr.length;
      };
 
-     // 1. Расчет "Типичного дня" (Медиана)
+     // 1. Типичный день (Медиана + Сезонный фактор)
      const dayAverages = dayStats.map((d) => {
         const inc = d.income;
         const exp = d.expense;
         
         const medInc = median(inc);
         const medExp = median(exp);
-        const madInc = mad(inc, medInc); // Отклонение
+        const madInc = mad(inc, medInc);
         
         return {
           income: medInc,
           expense: medExp,
-          sigma: madInc * 1.4826, // Оценка стандартного отклонения через MAD
+          sigma: madInc * 1.4826,
           count: inc.length
         };
      });
 
-     // 2. Расчет Тренда (Линейная регрессия) за последние 30 активных дней
-     const recent = past.slice(-30);
-     const x = recent.map((_, i) => i);
-     const y = recent.map(d => d.income);
-     const n = x.length;
-     
-     const sx = x.reduce((a,b) => a+b, 0);
-     const sy = y.reduce((a,b) => a+b, 0);
-     const sxy = x.reduce((s,v,i) => s + v * y[i], 0);
-     const sxx = x.reduce((s,v) => s + v*v, 0);
-     
-     // Наклон (рост в день) и пересечение
-     const slope = n > 1 ? (n*sxy - sx*sy)/(n*sxx - sx*sx) : 0;
-     const intercept = n > 0 ? (sy - slope*sx)/n : 0;
+     // 2. Экспоненциальное сглаживание для тренда (Holt-Winters like, alpha=0.3, beta=0.1)
+     const alpha = 0.3; // Сглаживание уровня
+     const beta = 0.1;  // Сглаживание тренда
+     let level = past[0]?.income || 0;
+     let trend = 0;
+     const smoothed = past.map((d, i) => {
+       if (i === 0) return level;
+       const newLevel = alpha * d.income + (1 - alpha) * (level + trend);
+       const newTrend = beta * (newLevel - level) + (1 - beta) * trend;
+       level = newLevel;
+       trend = newTrend;
+       return level;
+     });
 
-     // 3. Прогноз на 30 дней
+     // 3. Прогноз с сезонностью и сглаженным трендом
      const forecast: DataPoint[] = [];
      let totalInc = 0, totalExp = 0;
      const lastDate = new Date(history[history.length-1].date);
+     let currentLevel = level;
+     let currentTrend = trend;
 
      for (let i = 1; i <= 30; i++) {
         const date = new Date(lastDate);
         date.setDate(lastDate.getDate() + i);
         const dow = date.getDay();
         
-        // Тренд: добавляем накопленный рост к базовой медиане дня недели
-        const daysFromNow = past.length + i - 1;
-        // Прогнозируемое значение по тренду (общее)
-        const trendValue = intercept + slope * daysFromNow;
-        // Базовое значение дня недели
-        const baseValue = dayAverages[dow].income;
-        
-        // Комбинируем: (База + Тренд) / 2 или берем базу и добавляем дельту тренда. 
-        // Для устойчивости возьмем медиану дня и добавим общий наклон (slope * i)
-        // slope - это сколько тенге мы прибавляем в среднем каждый день
-        
-        const predictedIncome = Math.max(0, baseValue + (slope * i)); // Медиана + прирост за i дней
-        const predictedExpense = dayAverages[dow].expense; // Расходы обычно менее подвержены тренду продаж
+        const seasonal = dayAverages[dow].income > 0 ? dayAverages[dow].income / (past.reduce((s,d)=>s+d.income,0)/past.length) : 1;
+        const predictedIncome = Math.max(0, (currentLevel + currentTrend * i) * seasonal);
+        const predictedExpense = dayAverages[dow].expense;
 
         forecast.push({
           date: date.toISOString().slice(0,10),
@@ -228,16 +217,16 @@ export default function AIAnalysisPage() {
         
         totalInc += predictedIncome;
         totalExp += predictedExpense;
+        currentLevel += currentTrend; // Продолжаем тренд
      }
 
-     // 4. Умные аномалии (Z-score по MAD)
+     // 4. Аномалии (Z-score + Контроль выбросов)
      const anomalies: Anomaly[] = past.slice(-45).filter(d => {
         const avg = dayAverages[d.dayOfWeek];
         if (!avg || avg.count < 3 || avg.income === 0) return false;
         
-        // Насколько сильно отклонились (в "сигмах")
         const z = avg.sigma > 0 ? Math.abs(d.income - avg.income) / avg.sigma : 0;
-        return z > 3.0; // Сильное отклонение
+        return z > 3.0;
      }).map(d => ({
         date: d.date,
         type: d.income < dayAverages[d.dayOfWeek].income ? 'income_low' : 'income_high',
@@ -251,7 +240,6 @@ export default function AIAnalysisPage() {
      const dataRangeEnd = past.length > 0 ? past[past.length - 1].date : '';
      const lastFactDate = history[history.length - 1].date;
 
-     // ГРАФИК
      const chartData = [...history.slice(-45).map(d => ({ ...d, type: 'fact' } as DataPoint)), ...forecast];
 
      return {
@@ -266,7 +254,7 @@ export default function AIAnalysisPage() {
          dataRangeStart,
          dataRangeEnd,
          lastFactDate,
-         trend: slope // Показываем скорость роста
+         trend: currentTrend // Улучшенный тренд
      }
   }, [history])
 
@@ -282,13 +270,13 @@ export default function AIAnalysisPage() {
                         <BrainCircuit className="w-8 h-8 text-purple-400" />
                     </div>
                     <div>
-                        <h1 className="text-3xl font-bold text-foreground">AI Советник Pro</h1>
-                        <p className="text-muted-foreground text-sm">Статистический анализ (Медиана + Регрессия)</p>
+                        <h1 className="text-3xl font-bold text-foreground">AI Советник Ultra</h1>
+                        <p className="text-muted-foreground text-sm">Экспоненциальное сглаживание + Сезонность</p>
                     </div>
                 </div>
             </div>
 
-            {loading && <div className="p-12 text-center text-muted-foreground animate-pulse">Считаем математическую модель...</div>}
+            {loading && <div className="p-12 text-center text-muted-foreground animate-pulse">Считаем умную модель...</div>}
 
             {!loading && analysis && (
                 <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
@@ -301,7 +289,7 @@ export default function AIAnalysisPage() {
                                 <div>
                                     <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                                         <CalendarDays className="w-5 h-5 text-purple-400" />
-                                        Прогноз на 30 дней (с учетом тренда)
+                                        Прогноз на 30 дней (Holt-Winters like)
                                     </h2>
                                     <p className="text-sm text-muted-foreground mt-1">
                                         Ожидаемая прибыль: <span className="text-green-400 font-bold">{formatMoney(analysis.totalForecastProfit)}</span>
@@ -310,7 +298,7 @@ export default function AIAnalysisPage() {
                                     <div className="mt-2 flex flex-wrap gap-2">
                                         <div className="text-[11px] text-blue-300 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 w-fit">
                                             <History className="w-3 h-3 inline mr-1" />
-                                            База: {analysis.totalDataPoints} активных дней
+                                            С 1 ноября: {analysis.totalDataPoints} дн.
                                         </div>
                                         <div className={`text-[11px] px-2 py-1 rounded border w-fit ${analysis.trend > 0 ? 'text-green-400 bg-green-500/10 border-green-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'}`}>
                                             <TrendingUp className={`w-3 h-3 inline mr-1 ${analysis.trend < 0 ? 'rotate-180' : ''}`} />
@@ -355,7 +343,7 @@ export default function AIAnalysisPage() {
                                             contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
                                             formatter={(val: number, name: string, props: any) => [
                                                 formatMoney(val), 
-                                                props.payload.type === 'forecast' ? 'Прогноз (Медиана + Тренд)' : 'Факт'
+                                                props.payload.type === 'forecast' ? 'Прогноз (Сглаживание + Сезон)' : 'Факт'
                                             ]}
                                             labelFormatter={(label) => {
                                                 const d = new Date(label);
@@ -369,12 +357,12 @@ export default function AIAnalysisPage() {
                             </div>
                         </Card>
 
-                        {/* 📊 ПРОФИЛЬ НЕДЕЛИ (Медианы) */}
+                        {/* 📊 ПРОФИЛЬ НЕДЕЛИ */}
                         <Card className="p-6 border-border bg-card neon-glow">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                                     <TrendingUp className="w-4 h-4 text-blue-400"/>
-                                    Ваша типичная неделя (Медиана)
+                                    Типичная неделя (Медиана + Фактор)
                                 </h3>
                             </div>
                             <div className="h-48">
@@ -396,7 +384,7 @@ export default function AIAnalysisPage() {
                                 </ResponsiveContainer>
                             </div>
                             <p className="text-xs text-muted-foreground text-center mt-2">
-                                Мы используем медиану вместо среднего, чтобы праздники и простои не искажали картину.
+                                Сезонный фактор корректирует прогноз на пики/спады.
                             </p>
                         </Card>
                     </div>
@@ -406,23 +394,23 @@ export default function AIAnalysisPage() {
                         <Card className="p-5 border border-blue-500/20 bg-blue-900/5">
                             <h3 className="text-sm font-bold text-blue-300 mb-3 flex items-center gap-2">
                                 <HelpCircle className="w-4 h-4" />
-                                Новый алгоритм
+                                Умный алгоритм
                             </h3>
                             <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
-                                <p><strong className="text-blue-200">1. Медиана:</strong> Мы отбрасываем случайные "взрывы" продаж и "пустые" дни, чтобы найти реальную норму.</p>
-                                <p><strong className="text-blue-200">2. Тренд:</strong> Мы видим, что вы растете на {analysis.trend.toFixed(0)} ₸ в день, и учитываем это в будущем.</p>
-                                <p><strong className="text-blue-200">3. MAD:</strong> Умный поиск аномалий, устойчивый к ошибкам.</p>
+                                <p><strong className="text-blue-200">1. Сглаживание:</strong> Экспоненциальное (Holt) для тренда без шума.</p>
+                                <p><strong className="text-blue-200">2. Сезон:</strong> Фактор на день недели для точности.</p>
+                                <p><strong className="text-blue-200">3. Аномалии:</strong> Z-score с контролем.</p>
                             </div>
                         </Card>
 
                         <Card className="p-5 border border-border bg-card neon-glow">
                             <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                                 <Search className="w-4 h-4 text-yellow-400"/>
-                                Умный детектор (Z-Score)
+                                Детектор аномалий
                             </h3>
                             {analysis.anomalies.length === 0 ? (
                                 <p className="text-xs text-muted-foreground text-center py-4">
-                                    Выбросов не найдено (Нормальное отклонение).
+                                    Нет сильных отклонений.
                                 </p>
                             ) : (
                                 <div className="space-y-2">
@@ -431,11 +419,11 @@ export default function AIAnalysisPage() {
                                             <div className="flex justify-between mb-1">
                                                 <span className="font-bold text-foreground">{formatDateRu(a.date)}</span>
                                                 <span className={a.type === 'income_low' ? 'text-red-400' : 'text-yellow-400'}>
-                                                    {a.type === 'income_low' ? '📉 Аномально мало' : '⚠️ Аномально много'}
+                                                    {a.type === 'income_low' ? '📉 Мало' : '⚠️ Много'}
                                                 </span>
                                             </div>
                                             <p className="text-muted-foreground">
-                                                Было: <span className="text-foreground">{formatMoney(a.amount)}</span> (Норма: {formatMoney(a.avgForDay)})
+                                                Было: {formatMoney(a.amount)} (Норма: {formatMoney(a.avgForDay)})
                                             </p>
                                         </div>
                                     ))}
@@ -449,7 +437,7 @@ export default function AIAnalysisPage() {
             {!loading && !analysis && (
                 <div className="text-center py-20 text-muted-foreground">
                     <Info className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                    <p>Недостаточно данных (нужно минимум 7 активных дней).</p>
+                    <p>Недостаточно данных с 1 ноября.</p>
                 </div>
             )}
 
