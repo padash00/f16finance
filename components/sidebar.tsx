@@ -17,7 +17,8 @@ import {
   User,
   Menu,
   X,
-  BrainCircuit // 1. Добавили иконку
+  BrainCircuit,
+  Landmark // 👈 ДОБАВИЛ ЭТОТ ИМПОРТ, ЧТОБЫ ИСЧЕЗЛА ОШИБКА
 } from 'lucide-react'
 import { Button } from './ui/button'
 
@@ -26,7 +27,6 @@ const menuGroups = [
     title: 'Обзор',
     items: [
       { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
-      // 2. Добавили новый пункт меню
       { icon: BrainCircuit, label: 'AI Советник', href: '/analysis' },
     ]
   },
