@@ -52,6 +52,15 @@ const formatMoney = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDi
 const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 const formatDateRu = (dateStr: string) => new Date(dateStr).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 
+// Получаем "сегодня" в формате YYYY-MM-DD по местному времени
+const getLocalTodayStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 export default function AIAnalysisPage() {
   const [history, setHistory] = useState<DataPoint[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,7 +70,7 @@ export default function AIAnalysisPage() {
     const loadData = async () => {
       setLoading(true)
       const d = new Date()
-      d.setDate(d.getDate() - 60) // Берем данные за последние 2 месяца для контекста
+      d.setDate(d.getDate() - 90) 
       const fromDate = d.toISOString().slice(0, 10)
 
       const [incRes, expRes] = await Promise.all([
@@ -153,9 +162,14 @@ export default function AIAnalysisPage() {
          totalForecastExpense += predictedExpense
      }
 
-     // 3. АНОМАЛИИ
+     // 3. АНОМАЛИИ (Только ПРОШЛОЕ)
      const anomalies: Anomaly[] = []
+     const todayStr = getLocalTodayStr(); // "2025-11-19"
+
      history.slice(-30).forEach(d => {
+         // ⚡ ВАЖНО: Пропускаем "Сегодня" и "Будущее"
+         if (d.date >= todayStr) return;
+
          const avg = dayAverages[d.dayOfWeek]
          if (!avg.isEstimated) {
              if (d.income < avg.income * 0.5 && avg.income > 5000) {
@@ -167,7 +181,6 @@ export default function AIAnalysisPage() {
          }
      })
 
-     // ГРАФИК: Показываем последние 45 дней истории (чтобы вместить 1.11 - 19.11 и ранее) + Прогноз
      const chartData = [
          ...history.slice(-45).map(d => ({ ...d, dayName: dayNames[d.dayOfWeek], type: 'fact' })),
          ...forecastData
@@ -324,7 +337,7 @@ export default function AIAnalysisPage() {
                         <Card className="p-5 border border-border bg-card neon-glow">
                             <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                                 <Search className="w-4 h-4 text-yellow-400"/>
-                                Аномалии (Топ-5)
+                                Детектор Аномалий
                             </h3>
                             {analysis.anomalies.length === 0 ? (
                                 <p className="text-xs text-muted-foreground text-center py-4">
