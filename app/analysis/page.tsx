@@ -58,14 +58,6 @@ const formatMoney = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDi
 const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 const formatDateRu = (dateStr: string) => new Date(dateStr).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 
-const getLocalTodayStr = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-
 const generateDateRange = (startDate: Date, daysCount: number) => {
     const dates = [];
     for (let i = 0; i < daysCount; i++) {
@@ -141,20 +133,24 @@ export default function AIAnalysisPage() {
   const analysis = useMemo(() => {
      if (history.length < 1) return null;
      
-     const todayStr = getLocalTodayStr();
-     // Берем только дни строго ДО "сегодня", чтобы "сегодняшний" неполный день не портил статистику
-     const past = history.filter(d => d.date < todayStr);
+     // 1. Находим последний день с ДАННЫМИ (чтобы обрезать хвост из нулей)
+     let lastActiveIndex = history.length - 1;
+     for (let i = history.length - 1; i >= 0; i--) {
+         if (history[i].income > 0 || history[i].expense > 0) {
+             lastActiveIndex = i;
+             break;
+         }
+     }
+     // Если данных вообще нет, берем всё
+     const effectiveHistory = history.slice(0, lastActiveIndex + 1);
      
-     // Если совсем нет данных (первый день работы), берем хотя бы сегодня
-     const dataToAnalyze = past.length > 0 ? past : history;
-     const weeks = Math.max(1, Math.floor(dataToAnalyze.length / 7));
-     
+     const weeks = Math.max(1, Math.floor(effectiveHistory.length / 7));
      const dayStats = Array(7).fill(null).map(() => ({income: [] as number[], expense: [] as number[]}));
      
      let totalIncomeSum = 0;
      let totalExpenseSum = 0;
 
-     dataToAnalyze.forEach(d => {
+     effectiveHistory.forEach(d => {
         dayStats[d.dayOfWeek].income.push(d.income);
         dayStats[d.dayOfWeek].expense.push(d.expense);
         totalIncomeSum += d.income;
@@ -173,7 +169,7 @@ export default function AIAnalysisPage() {
          return arr.reduce((s, v) => s + Math.abs(v - med), 0) / arr.length;
      };
 
-     // 1. Типичный день
+     // 2. Типичный день
      const dayAverages = dayStats.map((d) => {
         const inc = d.income;
         const exp = d.expense;
@@ -190,39 +186,32 @@ export default function AIAnalysisPage() {
         };
      });
 
-     // 2. Тренд
-     const activeDays = dataToAnalyze.filter(d => d.income > 0);
-     const x = activeDays.map((_, i) => i);
-     const y = activeDays.map(d => d.income);
+     // 3. Тренд
+     const x = effectiveHistory.map((_, i) => i);
+     const y = effectiveHistory.map(d => d.income);
      const n = x.length;
      
      let slope = 0;
-
      if (n > 1) {
         const sx = x.reduce((a,b) => a+b, 0);
         const sy = y.reduce((a,b) => a+b, 0);
         const sxy = x.reduce((s,v,i) => s + v * y[i], 0);
         const sxx = x.reduce((s,v) => s + v*v, 0);
-        // Простой линейный тренд
         slope = (n*sxy - sx*sy)/(n*sxx - sx*sx);
      }
 
-     // 3. Прогноз
+     // 4. Прогноз (начинаем СРАЗУ после последнего активного дня)
      const forecast: DataPoint[] = [];
      let totalInc = 0, totalExp = 0;
-     
-     // Начинаем прогноз от ПОСЛЕДНЕГО ИЗВЕСТНОГО ДНЯ (даже если это "сегодня")
-     const lastKnownDate = new Date(history[history.length - 1].date);
+     const lastDate = new Date(effectiveHistory[effectiveHistory.length-1].date);
 
      for (let i = 1; i <= 30; i++) {
-        const date = new Date(lastKnownDate);
-        date.setDate(lastKnownDate.getDate() + i);
+        const date = new Date(lastDate);
+        date.setDate(lastDate.getDate() + i);
         const dow = date.getDay();
         
         const baseValue = dayAverages[dow].income;
-        // Тренд применяем очень аккуратно
         const trendEffect = slope * i; 
-        
         const predictedIncome = Math.max(0, baseValue + trendEffect); 
         const predictedExpense = dayAverages[dow].expense; 
 
@@ -239,8 +228,8 @@ export default function AIAnalysisPage() {
         totalExp += predictedExpense;
      }
 
-     // 4. Аномалии
-     const anomalies: Anomaly[] = dataToAnalyze.filter(d => {
+     // 5. Аномалии
+     const anomalies: Anomaly[] = effectiveHistory.filter(d => {
         const avg = dayAverages[d.dayOfWeek];
         if (!avg || avg.income === 0) return false;
         const zIncome = avg.sigma > 0 ? Math.abs(d.income - avg.income) / avg.sigma : 0;
@@ -261,15 +250,15 @@ export default function AIAnalysisPage() {
      }).reverse().slice(0,5);
 
      const confidence = Math.min(100, Math.round((weeks / 4) * 100));
-     const dataRangeStart = history[0].date;
-     const dataRangeEnd = history[history.length - 1].date;
-     const lastFactDate = history[history.length - 1].date;
+     const dataRangeStart = effectiveHistory[0].date;
+     const dataRangeEnd = effectiveHistory[effectiveHistory.length - 1].date;
+     const lastFactDate = effectiveHistory[effectiveHistory.length - 1].date;
      
-     // ГРАФИК: История + Прогноз
-     const chartData = [...history.map(d => ({ ...d, type: 'fact' } as DataPoint)), ...forecast];
+     // ГРАФИК: Фактические данные (без нулей в конце) + Прогноз
+     const chartData = [...effectiveHistory.map(d => ({ ...d, type: 'fact' } as DataPoint)), ...forecast];
 
-     const avgIncome = totalIncomeSum / dataToAnalyze.length || 0;
-     const avgExpense = totalExpenseSum / dataToAnalyze.length || 0;
+     const avgIncome = totalIncomeSum / effectiveHistory.length || 0;
+     const avgExpense = totalExpenseSum / effectiveHistory.length || 0;
 
      return {
          dayAverages, 
@@ -279,7 +268,7 @@ export default function AIAnalysisPage() {
          totalForecastProfit: totalInc - totalExp,
          anomalies,
          confidenceScore: confidence,
-         totalDataPoints: dataToAnalyze.length,
+         totalDataPoints: effectiveHistory.length,
          dataRangeStart,
          dataRangeEnd,
          lastFactDate,
@@ -338,10 +327,10 @@ export default function AIAnalysisPage() {
           </div>
 
           {aiAdvice && (
-              <Card className="p-6 border border-purple-500/40 bg-purple-950/20 animate-in fade-in slide-in-from-top-4 shadow-[0_0_30px_rgba(168,85,247,0.1)]">
+              <Card className="p-6 border border-purple-500/40 bg-purple-950/20 animate-in fade-in slide-in-from-top-4 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
                   <div className="flex items-start gap-4">
                       <div className="p-2 bg-purple-500/20 rounded-lg shrink-0 mt-1">
-                          <Sparkles className="w-6 h-6 text-purple-300" />
+                          <Sparkles className="w-5 h-5 text-purple-300" />
                       </div>
                       <div className="space-y-2 w-full">
                           <h3 className="font-bold text-purple-100 text-lg">Мнение AI-директора:</h3>
@@ -375,8 +364,22 @@ export default function AIAnalysisPage() {
                                   <div className="mt-2 flex flex-wrap gap-2">
                                       <div className="text-[11px] text-blue-300 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 w-fit">
                                           <History className="w-3 h-3 inline mr-1" />
-                                          Анализ с {formatDateRu(analysis.dataRangeStart)} по {formatDateRu(analysis.dataRangeEnd)}
+                                          Данные: {formatDateRu(analysis.dataRangeStart)} — {formatDateRu(analysis.dataRangeEnd)}
                                       </div>
+                                      <div className={`text-[11px] px-2 py-1 rounded border w-fit ${analysis.trend > 0 ? 'text-green-400 bg-green-500/10 border-green-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'}`}>
+                                          <TrendingUp className={`w-3 h-3 inline mr-1 ${analysis.trend < 0 ? 'rotate-180' : ''}`} />
+                                          Тренд: {analysis.trend > 0 ? '+' : ''}{analysis.trend.toFixed(0)} ₸/день
+                                      </div>
+                                  </div>
+                              </div>
+                              
+                              <div className="text-right">
+                                  <span className="text-[10px] uppercase text-muted-foreground tracking-wider">Достоверность</span>
+                                  <div className="flex items-center gap-2 justify-end">
+                                      <div className="h-2 w-20 bg-white/10 rounded-full overflow-hidden">
+                                          <div className="h-full bg-purple-500" style={{width: `${analysis.confidenceScore}%`}} />
+                                      </div>
+                                      <span className="text-xs font-bold text-purple-300">{analysis.confidenceScore}%</span>
                                   </div>
                               </div>
                           </div>
@@ -391,8 +394,6 @@ export default function AIAnalysisPage() {
                                           </linearGradient>
                                       </defs>
                                       <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                                      
-                                      {/* ⭐️ ИСПРАВЛЕНИЕ: КЛЮЧ ОСИ - 'date' */}
                                       <XAxis 
                                           dataKey="date" 
                                           stroke="#666" 
@@ -402,6 +403,7 @@ export default function AIAnalysisPage() {
                                               return `${dayNames[d.getDay()]} ${d.getDate()}`;
                                           }}
                                           interval="preserveStartEnd"
+                                          minTickGap={20}
                                       />
                                       <YAxis stroke="#666" fontSize={10} tickFormatter={v => `${v/1000}k`} />
                                       <Tooltip 
@@ -414,6 +416,7 @@ export default function AIAnalysisPage() {
                                               const d = new Date(label);
                                               return formatDateRu(label) + ` (${dayNames[d.getDay()]})`;
                                           }}
+                                          cursor={{ stroke: 'white', strokeWidth: 1, strokeDasharray: '3 3' }}
                                       />
                                       <ReferenceLine x={analysis.lastFactDate} stroke="#666" strokeDasharray="3 3" label="СЕГОДНЯ" />
                                       
@@ -490,7 +493,7 @@ export default function AIAnalysisPage() {
                           <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
                               <p><strong className="text-blue-200">1. Медиана:</strong> Мы отбрасываем случайные "взрывы" продаж и "пустые" дни, чтобы найти реальную норму.</p>
                               <p><strong className="text-blue-200">2. Тренд:</strong> Мы видим, что вы растете на {analysis.trend.toFixed(0)} ₸ в день, и учитываем это в будущем.</p>
-                              <p><strong className="text-blue-200">3. Учет расходов:</strong> Теперь прогноз учитывает и регулярные траты.</p>
+                              <p><strong className="text-blue-200">3. Смарт-стыковка:</strong> Прогноз начинается от последней продажи, игнорируя дни простоя.</p>
                           </div>
                       </Card>
 
