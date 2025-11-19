@@ -94,27 +94,41 @@ export default function AIAnalysisPage() {
 
   // 🧠 AI ЯДРО
   const analysis = useMemo(() => {
-     if (history.length < 7) return null 
+     if (history.length < 3) return null // Снизим порог до 3 дней, чтобы график быстрее появлялся
 
      // 1. ОБУЧЕНИЕ (Сезонность по дням недели)
      const dayStats = Array(7).fill(0).map(() => ({ totalIncome: 0, totalExpense: 0, count: 0 }))
+     let overallIncomeSum = 0;
+     let overallExpenseSum = 0;
+     let overallCount = 0;
      
      history.forEach(d => {
          const day = d.dayOfWeek
          dayStats[day].totalIncome += d.income
          dayStats[day].totalExpense += d.expense
          dayStats[day].count += 1
+
+         overallIncomeSum += d.income;
+         overallExpenseSum += d.expense;
+         overallCount++;
      })
 
+     // Считаем "Глобальное среднее" на случай, если данных за конкретный день нет
+     const globalAvgIncome = overallCount > 0 ? overallIncomeSum / overallCount : 0;
+     const globalAvgExpense = overallCount > 0 ? overallExpenseSum / overallCount : 0;
+
      const dayAverages = dayStats.map(d => ({
-         income: d.count > 0 ? d.totalIncome / d.count : 0,
-         expense: d.count > 0 ? d.totalExpense / d.count : 0,
-         count: d.count
+         // ⭐️ FIX: Если данных за этот день недели нет, берем глобальное среднее, а не 0
+         income: d.count > 0 ? d.totalIncome / d.count : globalAvgIncome,
+         expense: d.count > 0 ? d.totalExpense / d.count : globalAvgExpense,
+         count: d.count,
+         isEstimated: d.count === 0 // Флаг, что данные приблизительные
      }))
 
-     // Оценка уверенности ИИ (на основе количества данных)
+     // Оценка уверенности ИИ
      const totalDataPoints = history.length;
-     const confidenceScore = Math.min(100, Math.round((totalDataPoints / 60) * 100)); // 60 дней = 100% уверенности
+     // Если дней мало, уверенность низкая. 30 дней = 100% уверенности (для малого бизнеса)
+     const confidenceScore = Math.min(100, Math.round((totalDataPoints / 30) * 100)); 
 
      // 2. ПРОГНОЗ
      const forecastData = []
@@ -148,11 +162,14 @@ export default function AIAnalysisPage() {
      const anomalies: Anomaly[] = []
      history.slice(-30).forEach(d => {
          const avg = dayAverages[d.dayOfWeek]
-         if (d.income < avg.income * 0.5 && avg.income > 5000) {
-             anomalies.push({ date: d.date, type: 'income_low', amount: d.income, avgForDay: avg.income })
-         }
-         if (d.expense > avg.expense * 3 && d.expense > 10000) {
-             anomalies.push({ date: d.date, type: 'expense_high', amount: d.expense, avgForDay: avg.expense })
+         // Ищем аномалии только если данных достаточно и среднее не искусственное
+         if (!avg.isEstimated) {
+             if (d.income < avg.income * 0.5 && avg.income > 5000) {
+                 anomalies.push({ date: d.date, type: 'income_low', amount: d.income, avgForDay: avg.income })
+             }
+             if (d.expense > avg.expense * 3 && d.expense > 10000) {
+                 anomalies.push({ date: d.date, type: 'expense_high', amount: d.expense, avgForDay: avg.expense })
+             }
          }
      })
 
@@ -267,7 +284,12 @@ export default function AIAnalysisPage() {
                                             contentStyle={{ backgroundColor: '#111', border: '1px solid #333' }}
                                             formatter={(val: number) => [formatMoney(val), 'Среднее']}
                                         />
-                                        <Bar dataKey="income" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                        <Bar 
+                                            dataKey="income" 
+                                            fill="#3b82f6" 
+                                            radius={[4, 4, 0, 0]} 
+                                            fillOpacity={(d:any) => d.isEstimated ? 0.3 : 1} // Бледный цвет, если данные примерные
+                                        />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
