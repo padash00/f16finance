@@ -10,11 +10,8 @@ import {
   BrainCircuit, 
   TrendingUp, 
   CalendarDays, 
-  AlertTriangle, 
-  Target, 
   Sparkles,
   Info,
-  BookOpen,
   HelpCircle,
   Search,
   History,
@@ -33,8 +30,7 @@ import {
   ComposedChart, 
   Line,
   Bar,
-  BarChart,    
-  Legend
+  BarChart
 } from 'recharts'
 
 // --- ТИПЫ ДАННЫХ ---
@@ -70,6 +66,8 @@ const generateDateRange = (startDate: Date, daysCount: number) => {
 
 export default function AIAnalysisPage() {
   const [history, setHistory] = useState<DataPoint[]>([])
+  // 👇 НОВОЕ: Состояние для категорий расходов
+  const [expenseCategories, setExpenseCategories] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   
   const [aiAdvice, setAiAdvice] = useState<string | null>(null)
@@ -91,10 +89,13 @@ export default function AIAnalysisPage() {
 
       const [incRes, expRes] = await Promise.all([
         supabase.from('incomes').select('date, cash_amount, kaspi_amount, card_amount').gte('date', fromDateStr).order('date'),
-        supabase.from('expenses').select('date, cash_amount, kaspi_amount').gte('date', fromDateStr).order('date')
+        // 👇 ИЗМЕНЕНИЕ: Добавили category в выборку
+        supabase.from('expenses').select('date, cash_amount, kaspi_amount, category').gte('date', fromDateStr).order('date')
       ])
 
       const dbMap = new Map<string, { income: number, expense: number }>();
+      // 👇 Временный объект для подсчета категорий
+      const catsMap: Record<string, number> = {};
 
       incRes.data?.forEach((r: any) => {
           const val = (r.cash_amount||0) + (r.kaspi_amount||0) + (r.card_amount||0);
@@ -108,6 +109,12 @@ export default function AIAnalysisPage() {
           const cur = dbMap.get(r.date) || { income: 0, expense: 0 };
           cur.expense += val;
           dbMap.set(r.date, cur);
+
+          // 👇 ПОДСЧЕТ КАТЕГОРИЙ
+          if (val > 0) {
+            const catName = r.category || 'Прочее';
+            catsMap[catName] = (catsMap[catName] || 0) + val;
+          }
       });
 
       const fullHistory: DataPoint[] = allDates.map(date => {
@@ -124,6 +131,7 @@ export default function AIAnalysisPage() {
       });
 
       setHistory(fullHistory);
+      setExpenseCategories(catsMap); // Сохраняем категории
       setLoading(false);
     }
     loadData();
@@ -133,7 +141,7 @@ export default function AIAnalysisPage() {
   const analysis = useMemo(() => {
      if (history.length < 1) return null;
      
-     // 1. Находим последний день с ДАННЫМИ (чтобы обрезать хвост из нулей)
+     // 1. Находим последний день с ДАННЫМИ
      let lastActiveIndex = history.length - 1;
      for (let i = history.length - 1; i >= 0; i--) {
          if (history[i].income > 0 || history[i].expense > 0) {
@@ -141,7 +149,6 @@ export default function AIAnalysisPage() {
              break;
          }
      }
-     // Если данных вообще нет, берем всё
      const effectiveHistory = history.slice(0, lastActiveIndex + 1);
      
      const weeks = Math.max(1, Math.floor(effectiveHistory.length / 7));
@@ -200,7 +207,7 @@ export default function AIAnalysisPage() {
         slope = (n*sxy - sx*sy)/(n*sxx - sx*sx);
      }
 
-     // 4. Прогноз (начинаем СРАЗУ после последнего активного дня)
+     // 4. Прогноз
      const forecast: DataPoint[] = [];
      let totalInc = 0, totalExp = 0;
      const lastDate = new Date(effectiveHistory[effectiveHistory.length-1].date);
@@ -254,7 +261,6 @@ export default function AIAnalysisPage() {
      const dataRangeEnd = effectiveHistory[effectiveHistory.length - 1].date;
      const lastFactDate = effectiveHistory[effectiveHistory.length - 1].date;
      
-     // ГРАФИК: Фактические данные (без нулей в конце) + Прогноз
      const chartData = [...effectiveHistory.map(d => ({ ...d, type: 'fact' } as DataPoint)), ...forecast];
 
      const avgIncome = totalIncomeSum / effectiveHistory.length || 0;
@@ -288,6 +294,8 @@ export default function AIAnalysisPage() {
           avgExpense: Math.round(analysis.avgExpense),
           predictedProfit: Math.round(analysis.totalForecastProfit),
           trend: analysis.trend,
+          // 👇 ПЕРЕДАЕМ КАТЕГОРИИ В ИИ
+          expensesByCategory: expenseCategories,
           anomalies: analysis.anomalies.map(a => ({ 
               date: a.date, 
               type: a.type === 'income_low' ? 'Низкий доход' : 'Высокий расход',
