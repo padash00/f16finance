@@ -35,7 +35,6 @@ const menuGroups = [
     items: [
       { icon: TrendingUp, label: 'Доходы', href: '/income' },
       { icon: TrendingDown, label: 'Расходы', href: '/expenses' },
-      { icon: CalendarClock, label: 'Смены', href: '/shifts' },
       { icon: Landmark, label: 'Налоги 3%', href: '/tax' }, 
     ]
   },
