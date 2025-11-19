@@ -17,6 +17,9 @@ import {
   Legend,
   BarChart,
   Bar,
+  PieChart, // 👈 Добавлено
+  Pie,      // 👈 Добавлено
+  Cell      // 👈 Добавлено
 } from 'recharts'
 
 // --- Типы данных ---
@@ -209,6 +212,9 @@ export default function ReportsPage() {
     }
     
     const expenseByCategoryMap = new Map<string, number>()
+    // 👇 НОВОЕ: Карта доходов по зонам
+    const incomeByZoneMap = new Map<string, number>()
+    
     const totalsByCompanyMap = new Map<string, Aggregation>()
     const chartDataMap = new Map<string, Aggregation>()
     const shiftAgg: { day: number, night: number } = { day: 0, night: 0 }
@@ -272,6 +278,20 @@ export default function ReportsPage() {
             const chartBucket = chartDataMap.get(key) || { income: 0, expense: 0, profit: 0, label: key };
             chartBucket.income += total;
             chartDataMap.set(key, chartBucket);
+
+            // 👇 ЛОГИКА ЗОН
+            const zoneRaw = r.zone || 'pc';
+            let displayZone = zoneRaw;
+            
+            // Красивые названия
+            if (zoneRaw === 'ramen') displayZone = 'Кухня/Бар';
+            else if (zoneRaw === 'ps5') displayZone = 'PlayStation 5';
+            else if (zoneRaw === 'vr') displayZone = 'VR Zone';
+            else if (zoneRaw === 'pc') displayZone = 'Общий зал (PC)';
+            else if (zoneRaw === 'vip') displayZone = 'VIP Комната';
+            
+            const curZoneTotal = incomeByZoneMap.get(displayZone) || 0;
+            incomeByZoneMap.set(displayZone, curZoneTotal + total);
         }
     }
 
@@ -331,6 +351,7 @@ export default function ReportsPage() {
       financialTotals, 
       financialTotalsPrev, 
       expenseByCategoryMap, 
+      incomeByZoneMap, // 👈 Возвращаем карту зон
       totalsByCompanyMap, 
       chartDataMap, 
       shiftAgg,
@@ -411,6 +432,18 @@ export default function ReportsPage() {
       .map(([name, amount]) => ({ name, amount }))
       .sort((a, b) => b.amount - a.amount) 
       .slice(0, 10)
+  }, [processedData])
+
+  // 👇 Подготовка данных для Pie Chart (Зоны)
+  const incomeByZoneData = useMemo(() => {
+    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+    return Array.from(processedData.incomeByZoneMap.entries())
+      .map(([name, value], index) => ({ 
+          name, 
+          value, 
+          fill: COLORS[index % COLORS.length] 
+      }))
+      .sort((a, b) => b.value - a.value);
   }, [processedData])
   
   // -------------------------------------------------------------
@@ -737,27 +770,69 @@ export default function ReportsPage() {
             )}
           </Card>
 
-          {/* ТОП-РАСХОДЫ */}
-          <Card className="p-6 border-border bg-card neon-glow">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Топ-10 расходов по категориям</h3>
-            {loading ? (
-              <p className="text-sm text-muted-foreground">Загрузка данных...</p>
-            ) : expenseByCategoryData.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Нет данных по расходам за выбранный период</p>
-            ) : (
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={expenseByCategoryData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} stroke="#555" />
-                    <XAxis type="number" stroke="#ccc" />
-                    <YAxis type="category" dataKey="name" stroke="#ccc" /> 
-                    <Tooltip {...tooltipStyles} formatter={(value: any) => [`${Number(value).toLocaleString('ru-RU')} ₸`, 'Сумма']} labelFormatter={(label) => `Категория: ${label}`}/>
-                    <Bar dataKey="amount" name="Сумма расхода" fill="#ef4444" radius={[4, 4, 0, 0]}/>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </Card>
+          {/* 🔥 НОВАЯ СЕКЦИЯ: СТРУКТУРА (Расходы vs Доходы) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* График расходов */}
+            <Card className="p-6 border-border bg-card neon-glow">
+                <h3 className="text-sm font-semibold text-foreground mb-4">Топ-10 расходов</h3>
+                {loading ? (
+                <p className="text-sm text-muted-foreground">Загрузка...</p>
+                ) : expenseByCategoryData.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Нет данных по расходам</p>
+                ) : (
+                <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={expenseByCategoryData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.2} stroke="#555" />
+                        <XAxis type="number" stroke="#ccc" />
+                        <YAxis type="category" dataKey="name" stroke="#ccc" width={80} /> 
+                        <Tooltip {...tooltipStyles} formatter={(value: any) => [`${Number(value).toLocaleString('ru-RU')} ₸`, 'Сумма']} labelFormatter={(label) => `Категория: ${label}`}/>
+                        <Bar dataKey="amount" name="Сумма расхода" fill="#ef4444" radius={[0, 4, 4, 0]}/>
+                    </BarChart>
+                    </ResponsiveContainer>
+                </div>
+                )}
+            </Card>
+
+            {/* 🍩 НОВЫЙ ГРАФИК: ИСТОЧНИКИ ДОХОДА (ЗОНЫ) */}
+            <Card className="p-6 border-border bg-card neon-glow">
+                <h3 className="text-sm font-semibold text-foreground mb-4">Источники выручки (Зоны)</h3>
+                {loading ? (
+                  <p className="text-sm text-muted-foreground">Загрузка...</p>
+                ) : incomeByZoneData.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Нет данных</p>
+                ) : (
+                  <div className="h-80 flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={incomeByZoneData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {incomeByZoneData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.fill} stroke="rgba(0,0,0,0.5)" />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                            contentStyle={{ backgroundColor: '#111', border: '1px solid #333' }}
+                            formatter={(value: any) => [`${Number(value).toLocaleString('ru-RU')} ₸`, 'Выручка']} 
+                        />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+            </Card>
+
+          </div>
+          {/* КОНЕЦ СЕКЦИИ СТРУКТУРЫ */}
 
 
           {/* График по компаниям (BarChart) */}
