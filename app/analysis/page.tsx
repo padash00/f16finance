@@ -39,6 +39,8 @@ type DataPoint = {
     income: number; 
     expense: number;
     dayOfWeek: number; 
+    dayName: string;
+    type?: 'fact' | 'forecast';
 }
 
 type Anomaly = {
@@ -52,13 +54,24 @@ const formatMoney = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDi
 const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 const formatDateRu = (dateStr: string) => new Date(dateStr).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 
-// Получаем "сегодня" в формате YYYY-MM-DD по местному времени
+// Получаем "сегодня" по местному времени
 const getLocalTodayStr = () => {
     const d = new Date();
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+
+// Функция для генерации всех дат в диапазоне (чтобы не было дырок)
+const generateDateRange = (startDate: Date, daysCount: number) => {
+    const dates = [];
+    for (let i = 0; i < daysCount; i++) {
+        const d = new Date(startDate);
+        d.setDate(d.getDate() + i);
+        dates.push(d.toISOString().slice(0, 10));
+    }
+    return dates;
 }
 
 export default function AIAnalysisPage() {
@@ -69,59 +82,90 @@ export default function AIAnalysisPage() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
-      const d = new Date()
-      d.setDate(d.getDate() - 90) 
-      const fromDate = d.toISOString().slice(0, 10)
+      
+      // Берем диапазон за 90 дней
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - 90);
+      
+      const fromDateStr = startDate.toISOString().slice(0, 10);
+      const allDates = generateDateRange(startDate, 91); // Генерируем полный список дат
 
       const [incRes, expRes] = await Promise.all([
-        supabase.from('incomes').select('date, cash_amount, kaspi_amount, card_amount').gte('date', fromDate).order('date'),
-        supabase.from('expenses').select('date, cash_amount, kaspi_amount').gte('date', fromDate).order('date')
+        supabase.from('incomes').select('date, cash_amount, kaspi_amount, card_amount').gte('date', fromDateStr).order('date'),
+        supabase.from('expenses').select('date, cash_amount, kaspi_amount').gte('date', fromDateStr).order('date')
       ])
 
-      const map = new Map<string, DataPoint>()
-      
-      incRes.data?.forEach((r: any) => {
-          const val = (r.cash_amount||0) + (r.kaspi_amount||0) + (r.card_amount||0)
-          const cur = map.get(r.date) || { date: r.date, income: 0, expense: 0, dayOfWeek: new Date(r.date).getDay() }
-          cur.income += val
-          map.set(r.date, cur)
-      })
-      
-      expRes.data?.forEach((r: any) => {
-          const val = (r.cash_amount||0) + (r.kaspi_amount||0)
-          const cur = map.get(r.date) || { date: r.date, income: 0, expense: 0, dayOfWeek: new Date(r.date).getDay() }
-          cur.expense += val
-          map.set(r.date, cur)
-      })
+      // Карта данных из БД
+      const dbMap = new Map<string, { income: number, expense: number }>();
 
-      const chartData = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date))
-      setHistory(chartData)
-      setLoading(false)
+      incRes.data?.forEach((r: any) => {
+          const val = (r.cash_amount||0) + (r.kaspi_amount||0) + (r.card_amount||0);
+          const cur = dbMap.get(r.date) || { income: 0, expense: 0 };
+          cur.income += val;
+          dbMap.set(r.date, cur);
+      });
+
+      expRes.data?.forEach((r: any) => {
+          const val = (r.cash_amount||0) + (r.kaspi_amount||0);
+          const cur = dbMap.get(r.date) || { income: 0, expense: 0 };
+          cur.expense += val;
+          dbMap.set(r.date, cur);
+      });
+
+      // ⭐️ ЗАПОЛНЯЕМ ПРОБЕЛЫ НУЛЯМИ
+      // Теперь график будет непрерывным, даже если в какой-то день не было продаж
+      const fullHistory: DataPoint[] = allDates.map(date => {
+          const data = dbMap.get(date) || { income: 0, expense: 0 };
+          const dObj = new Date(date);
+          const dayOfWeek = dObj.getDay();
+          return {
+              date,
+              income: data.income,
+              expense: data.expense,
+              dayOfWeek,
+              dayName: dayNames[dayOfWeek]
+          };
+      });
+
+      setHistory(fullHistory);
+      setLoading(false);
     }
-    loadData()
+    loadData();
   }, [])
 
   // 🧠 AI ЯДРО
   const analysis = useMemo(() => {
      if (history.length < 1) return null 
 
+     const todayStr = getLocalTodayStr();
+
      // 1. ОБУЧЕНИЕ (Сезонность)
+     // Берем только ПРОШЛЫЕ дни для обучения, чтобы не портить статистику нулями из будущего
+     const pastHistory = history.filter(d => d.date < todayStr);
+     
      const dayStats = Array(7).fill(0).map(() => ({ totalIncome: 0, totalExpense: 0, count: 0 }))
      let overallIncomeSum = 0;
      let overallExpenseSum = 0;
      let overallCount = 0;
      
-     history.forEach(d => {
+     pastHistory.forEach(d => {
          const day = d.dayOfWeek
-         dayStats[day].totalIncome += d.income
-         dayStats[day].totalExpense += d.expense
-         dayStats[day].count += 1
-
-         overallIncomeSum += d.income;
-         overallExpenseSum += d.expense;
-         overallCount++;
+         // Игнорируем дни с полным нулем при расчете "среднего", если данных мало,
+         // НО если данных много, то ноль — это тоже статистика.
+         // Для старта бизнеса лучше игнорировать нули, чтобы не занижать прогноз.
+         if (d.income > 0) { 
+             dayStats[day].totalIncome += d.income
+             dayStats[day].totalExpense += d.expense
+             dayStats[day].count += 1
+             
+             overallIncomeSum += d.income;
+             overallExpenseSum += d.expense;
+             overallCount++;
+         }
      })
 
+     // Глобальное среднее (если для конкретного дня недели нет данных)
      const globalAvgIncome = overallCount > 0 ? overallIncomeSum / overallCount : 0;
      const globalAvgExpense = overallCount > 0 ? overallExpenseSum / overallCount : 0;
 
@@ -132,59 +176,57 @@ export default function AIAnalysisPage() {
          isEstimated: d.count === 0 
      }))
 
-     const confidenceScore = Math.min(100, Math.round((history.length / 30) * 100)); 
+     const confidenceScore = Math.min(100, Math.round((pastHistory.length / 30) * 100)); 
 
      // 2. ПРОГНОЗ (на 30 дней вперед)
-     const forecastData = []
+     const forecastData: DataPoint[] = []
      let totalForecastIncome = 0
      let totalForecastExpense = 0
      
-     const lastDateStr = history[history.length - 1].date
-     const lastDate = new Date(lastDateStr)
+     const lastHistoryDate = new Date(history[history.length - 1].date);
 
      for(let i = 1; i <= 30; i++) {
-         const nextDate = new Date(lastDate)
-         nextDate.setDate(lastDate.getDate() + i)
-         const dayOfWeek = nextDate.getDay()
+         const nextDate = new Date(lastHistoryDate);
+         nextDate.setDate(lastHistoryDate.getDate() + i);
+         const dayOfWeek = nextDate.getDay();
          
-         const predictedIncome = dayAverages[dayOfWeek].income
-         const predictedExpense = dayAverages[dayOfWeek].expense
+         const predictedIncome = dayAverages[dayOfWeek].income;
+         const predictedExpense = dayAverages[dayOfWeek].expense;
 
          forecastData.push({
              date: nextDate.toISOString().slice(0, 10),
              income: predictedIncome,
              expense: predictedExpense,
+             dayOfWeek,
              dayName: dayNames[dayOfWeek],
              type: 'forecast'
-         })
+         });
 
-         totalForecastIncome += predictedIncome
-         totalForecastExpense += predictedExpense
+         totalForecastIncome += predictedIncome;
+         totalForecastExpense += predictedExpense;
      }
 
      // 3. АНОМАЛИИ (Только ПРОШЛОЕ)
      const anomalies: Anomaly[] = []
-     const todayStr = getLocalTodayStr(); // "2025-11-19"
 
-     history.slice(-30).forEach(d => {
-         // ⚡ ВАЖНО: Пропускаем "Сегодня" и "Будущее"
-         if (d.date >= todayStr) return;
-
+     pastHistory.slice(-30).forEach(d => {
          const avg = dayAverages[d.dayOfWeek]
-         if (!avg.isEstimated) {
+         if (!avg.isEstimated && avg.income > 0) {
+             // Доход ниже 50% от нормы
              if (d.income < avg.income * 0.5 && avg.income > 5000) {
                  anomalies.push({ date: d.date, type: 'income_low', amount: d.income, avgForDay: avg.income })
              }
+             // Расход выше 300% от нормы
              if (d.expense > avg.expense * 3 && d.expense > 10000) {
                  anomalies.push({ date: d.date, type: 'expense_high', amount: d.expense, avgForDay: avg.expense })
              }
          }
      })
 
-     const chartData = [
-         ...history.slice(-45).map(d => ({ ...d, dayName: dayNames[d.dayOfWeek], type: 'fact' })),
-         ...forecastData
-     ]
+     // ГРАФИК: Склеиваем Историю (последние 45 дней) и Прогноз
+     // Важно: берем history целиком (с нулями), чтобы ось времени была честной
+     const displayHistory = history.slice(-45).map(d => ({ ...d, type: 'fact' } as DataPoint));
+     const chartData = [...displayHistory, ...forecastData];
      
      const dataRangeStart = history.length > 0 ? history[0].date : '';
      const dataRangeEnd = history.length > 0 ? history[history.length - 1].date : '';
@@ -197,9 +239,10 @@ export default function AIAnalysisPage() {
          totalForecastProfit: totalForecastIncome - totalForecastExpense,
          anomalies: anomalies.reverse().slice(0, 5),
          confidenceScore,
-         totalDataPoints: history.length,
+         totalDataPoints: pastHistory.length,
          dataRangeStart,
-         dataRangeEnd
+         dataRangeEnd,
+         lastFactDate: history[history.length - 1].date // Точка разделения на графике
      }
   }, [history])
 
@@ -268,23 +311,47 @@ export default function AIAnalysisPage() {
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                                        <XAxis dataKey="dayName" stroke="#666" fontSize={10} interval={0} />
+                                        
+                                        {/* ⭐️ ВАЖНО: dataKey="date" делает ось уникальной.
+                                            А tickFormatter показывает только день недели или число.
+                                            Это чинит "дерганье" мышки.
+                                        */}
+                                        <XAxis 
+                                            dataKey="date" 
+                                            stroke="#666" 
+                                            fontSize={10} 
+                                            tickFormatter={(val) => {
+                                                const d = new Date(val);
+                                                // Показываем: "Пн 19"
+                                                return `${dayNames[d.getDay()]} ${d.getDate()}`;
+                                            }}
+                                            interval="preserveStartEnd"
+                                        />
                                         <YAxis stroke="#666" fontSize={10} tickFormatter={v => `${v/1000}k`} />
+                                        
                                         <Tooltip 
                                             contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
                                             formatter={(val: number, name: string, props: any) => [
                                                 formatMoney(val), 
                                                 props.payload.type === 'forecast' ? 'Прогноз 🔮' : 'Факт ✅'
                                             ]}
-                                            labelFormatter={(label, payload) => {
-                                                if (payload && payload.length > 0) {
-                                                    return `${payload[0].payload.date} (${label})`
-                                                }
-                                                return label
+                                            labelFormatter={(label) => {
+                                                // label здесь это дата YYYY-MM-DD
+                                                const d = new Date(label);
+                                                return formatDateRu(label) + ` (${dayNames[d.getDay()]})`;
                                             }}
                                         />
-                                        <ReferenceLine x={history[history.length - 1].date} stroke="#666" strokeDasharray="3 3" label="СЕГОДНЯ" />
-                                        <Area type="monotone" dataKey="income" name="Доход" stroke="#8b5cf6" strokeWidth={3} fill="url(#forecastGradient)" />
+                                        
+                                        <ReferenceLine x={analysis.lastFactDate} stroke="#666" strokeDasharray="3 3" label="СЕГОДНЯ" />
+                                        
+                                        <Area 
+                                            type="monotone" 
+                                            dataKey="income" 
+                                            name="Доход"
+                                            stroke="#8b5cf6" 
+                                            strokeWidth={3} 
+                                            fill="url(#forecastGradient)" 
+                                        />
                                     </ComposedChart>
                                 </ResponsiveContainer>
                             </div>
