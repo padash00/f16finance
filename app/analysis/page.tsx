@@ -63,7 +63,7 @@ const getLocalTodayStr = () => {
     return `${year}-${month}-${day}`;
 }
 
-// Функция для генерации всех дат в диапазоне (чтобы не было дырок)
+// Функция для генерации всех дат в диапазоне
 const generateDateRange = (startDate: Date, daysCount: number) => {
     const dates = [];
     for (let i = 0; i < daysCount; i++) {
@@ -83,20 +83,18 @@ export default function AIAnalysisPage() {
     const loadData = async () => {
       setLoading(true)
       
-      // Берем диапазон за 90 дней
       const endDate = new Date();
       const startDate = new Date();
-      startDate.setDate(endDate.getDate() - 90);
+      startDate.setDate(endDate.getDate() - 90); // 90 дней истории
       
       const fromDateStr = startDate.toISOString().slice(0, 10);
-      const allDates = generateDateRange(startDate, 91); // Генерируем полный список дат
+      const allDates = generateDateRange(startDate, 91); 
 
       const [incRes, expRes] = await Promise.all([
         supabase.from('incomes').select('date, cash_amount, kaspi_amount, card_amount').gte('date', fromDateStr).order('date'),
         supabase.from('expenses').select('date, cash_amount, kaspi_amount').gte('date', fromDateStr).order('date')
       ])
 
-      // Карта данных из БД
       const dbMap = new Map<string, { income: number, expense: number }>();
 
       incRes.data?.forEach((r: any) => {
@@ -113,8 +111,6 @@ export default function AIAnalysisPage() {
           dbMap.set(r.date, cur);
       });
 
-      // ⭐️ ЗАПОЛНЯЕМ ПРОБЕЛЫ НУЛЯМИ
-      // Теперь график будет непрерывным, даже если в какой-то день не было продаж
       const fullHistory: DataPoint[] = allDates.map(date => {
           const data = dbMap.get(date) || { income: 0, expense: 0 };
           const dObj = new Date(date);
@@ -134,115 +130,143 @@ export default function AIAnalysisPage() {
     loadData();
   }, [])
 
-  // 🧠 AI ЯДРО
+  // 🧠 ПРОДВИНУТЫЙ AI АНАЛИЗ (Медиана + Линейная регрессия + MAD)
   const analysis = useMemo(() => {
-     if (history.length < 1) return null 
-
+     if (history.length < 7) return null;
+     
      const todayStr = getLocalTodayStr();
-
-     // 1. ОБУЧЕНИЕ (Сезонность)
-     // Берем только ПРОШЛЫЕ дни для обучения, чтобы не портить статистику нулями из будущего
-     const pastHistory = history.filter(d => d.date < todayStr);
+     // Берем только прошлое, игнорируем нули (дни простоя), чтобы не портить статистику
+     const past = history.filter(d => d.date < todayStr && (d.income > 0 || d.expense > 0));
      
-     const dayStats = Array(7).fill(0).map(() => ({ totalIncome: 0, totalExpense: 0, count: 0 }))
-     let overallIncomeSum = 0;
-     let overallExpenseSum = 0;
-     let overallCount = 0;
+     if (past.length === 0) return null;
+
+     const weeks = Math.floor(past.length / 7);
+     const dayStats = Array(7).fill(null).map(() => ({income: [] as number[], expense: [] as number[]}));
      
-     pastHistory.forEach(d => {
-         const day = d.dayOfWeek
-         // Игнорируем дни с полным нулем при расчете "среднего", если данных мало,
-         // НО если данных много, то ноль — это тоже статистика.
-         // Для старта бизнеса лучше игнорировать нули, чтобы не занижать прогноз.
-         if (d.income > 0) { 
-             dayStats[day].totalIncome += d.income
-             dayStats[day].totalExpense += d.expense
-             dayStats[day].count += 1
-             
-             overallIncomeSum += d.income;
-             overallExpenseSum += d.expense;
-             overallCount++;
-         }
-     })
+     past.forEach(d => {
+        dayStats[d.dayOfWeek].income.push(d.income);
+        dayStats[d.dayOfWeek].expense.push(d.expense);
+     });
 
-     // Глобальное среднее (если для конкретного дня недели нет данных)
-     const globalAvgIncome = overallCount > 0 ? overallIncomeSum / overallCount : 0;
-     const globalAvgExpense = overallCount > 0 ? overallExpenseSum / overallCount : 0;
-
-     const dayAverages = dayStats.map(d => ({
-         income: d.count > 0 ? d.totalIncome / d.count : globalAvgIncome,
-         expense: d.count > 0 ? d.totalExpense / d.count : globalAvgExpense,
-         count: d.count,
-         isEstimated: d.count === 0 
-     }))
-
-     const confidenceScore = Math.min(100, Math.round((pastHistory.length / 30) * 100)); 
-
-     // 2. ПРОГНОЗ (на 30 дней вперед)
-     const forecastData: DataPoint[] = []
-     let totalForecastIncome = 0
-     let totalForecastExpense = 0
+     // --- СТАТИСТИЧЕСКИЕ ФУНКЦИИ ---
+     const median = (arr: number[]) => {
+         if (arr.length === 0) return 0;
+         const sorted = [...arr].sort((a,b) => a - b);
+         const mid = Math.floor(sorted.length / 2);
+         return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+     };
      
-     const lastHistoryDate = new Date(history[history.length - 1].date);
+     const mad = (arr: number[], med: number) => {
+         if (arr.length === 0) return 0;
+         return arr.reduce((s, v) => s + Math.abs(v - med), 0) / arr.length;
+     };
 
-     for(let i = 1; i <= 30; i++) {
-         const nextDate = new Date(lastHistoryDate);
-         nextDate.setDate(lastHistoryDate.getDate() + i);
-         const dayOfWeek = nextDate.getDay();
-         
-         const predictedIncome = dayAverages[dayOfWeek].income;
-         const predictedExpense = dayAverages[dayOfWeek].expense;
+     // 1. Расчет "Типичного дня" (Медиана)
+     const dayAverages = dayStats.map((d) => {
+        const inc = d.income;
+        const exp = d.expense;
+        
+        const medInc = median(inc);
+        const medExp = median(exp);
+        const madInc = mad(inc, medInc); // Отклонение
+        
+        return {
+          income: medInc,
+          expense: medExp,
+          sigma: madInc * 1.4826, // Оценка стандартного отклонения через MAD
+          count: inc.length
+        };
+     });
 
-         forecastData.push({
-             date: nextDate.toISOString().slice(0, 10),
-             income: predictedIncome,
-             expense: predictedExpense,
-             dayOfWeek,
-             dayName: dayNames[dayOfWeek],
-             type: 'forecast'
-         });
+     // 2. Расчет Тренда (Линейная регрессия) за последние 30 активных дней
+     const recent = past.slice(-30);
+     const x = recent.map((_, i) => i);
+     const y = recent.map(d => d.income);
+     const n = x.length;
+     
+     const sx = x.reduce((a,b) => a+b, 0);
+     const sy = y.reduce((a,b) => a+b, 0);
+     const sxy = x.reduce((s,v,i) => s + v * y[i], 0);
+     const sxx = x.reduce((s,v) => s + v*v, 0);
+     
+     // Наклон (рост в день) и пересечение
+     const slope = n > 1 ? (n*sxy - sx*sy)/(n*sxx - sx*sx) : 0;
+     const intercept = n > 0 ? (sy - slope*sx)/n : 0;
 
-         totalForecastIncome += predictedIncome;
-         totalForecastExpense += predictedExpense;
+     // 3. Прогноз на 30 дней
+     const forecast: DataPoint[] = [];
+     let totalInc = 0, totalExp = 0;
+     const lastDate = new Date(history[history.length-1].date);
+
+     for (let i = 1; i <= 30; i++) {
+        const date = new Date(lastDate);
+        date.setDate(lastDate.getDate() + i);
+        const dow = date.getDay();
+        
+        // Тренд: добавляем накопленный рост к базовой медиане дня недели
+        const daysFromNow = past.length + i - 1;
+        // Прогнозируемое значение по тренду (общее)
+        const trendValue = intercept + slope * daysFromNow;
+        // Базовое значение дня недели
+        const baseValue = dayAverages[dow].income;
+        
+        // Комбинируем: (База + Тренд) / 2 или берем базу и добавляем дельту тренда. 
+        // Для устойчивости возьмем медиану дня и добавим общий наклон (slope * i)
+        // slope - это сколько тенге мы прибавляем в среднем каждый день
+        
+        const predictedIncome = Math.max(0, baseValue + (slope * i)); // Медиана + прирост за i дней
+        const predictedExpense = dayAverages[dow].expense; // Расходы обычно менее подвержены тренду продаж
+
+        forecast.push({
+          date: date.toISOString().slice(0,10),
+          income: predictedIncome,
+          expense: predictedExpense,
+          dayOfWeek: dow,
+          dayName: dayNames[dow],
+          type: 'forecast'
+        });
+        
+        totalInc += predictedIncome;
+        totalExp += predictedExpense;
      }
 
-     // 3. АНОМАЛИИ (Только ПРОШЛОЕ)
-     const anomalies: Anomaly[] = []
+     // 4. Умные аномалии (Z-score по MAD)
+     const anomalies: Anomaly[] = past.slice(-45).filter(d => {
+        const avg = dayAverages[d.dayOfWeek];
+        if (!avg || avg.count < 3 || avg.income === 0) return false;
+        
+        // Насколько сильно отклонились (в "сигмах")
+        const z = avg.sigma > 0 ? Math.abs(d.income - avg.income) / avg.sigma : 0;
+        return z > 3.0; // Сильное отклонение
+     }).map(d => ({
+        date: d.date,
+        type: d.income < dayAverages[d.dayOfWeek].income ? 'income_low' : 'income_high',
+        amount: d.income,
+        avgForDay: dayAverages[d.dayOfWeek].income
+     })).reverse().slice(0,5);
 
-     pastHistory.slice(-30).forEach(d => {
-         const avg = dayAverages[d.dayOfWeek]
-         if (!avg.isEstimated && avg.income > 0) {
-             // Доход ниже 50% от нормы
-             if (d.income < avg.income * 0.5 && avg.income > 5000) {
-                 anomalies.push({ date: d.date, type: 'income_low', amount: d.income, avgForDay: avg.income })
-             }
-             // Расход выше 300% от нормы
-             if (d.expense > avg.expense * 3 && d.expense > 10000) {
-                 anomalies.push({ date: d.date, type: 'expense_high', amount: d.expense, avgForDay: avg.expense })
-             }
-         }
-     })
-
-     // ГРАФИК: Склеиваем Историю (последние 45 дней) и Прогноз
-     // Важно: берем history целиком (с нулями), чтобы ось времени была честной
-     const displayHistory = history.slice(-45).map(d => ({ ...d, type: 'fact' } as DataPoint));
-     const chartData = [...displayHistory, ...forecastData];
+     const confidence = Math.min(100, Math.round((weeks / 4) * 100));
      
-     const dataRangeStart = history.length > 0 ? history[0].date : '';
-     const dataRangeEnd = history.length > 0 ? history[history.length - 1].date : '';
+     const dataRangeStart = past.length > 0 ? past[0].date : '';
+     const dataRangeEnd = past.length > 0 ? past[past.length - 1].date : '';
+     const lastFactDate = history[history.length - 1].date;
+
+     // ГРАФИК
+     const chartData = [...history.slice(-45).map(d => ({ ...d, type: 'fact' } as DataPoint)), ...forecast];
 
      return {
          dayAverages, 
-         forecastData, 
+         forecastData: forecast, 
          chartData, 
-         totalForecastIncome,
-         totalForecastProfit: totalForecastIncome - totalForecastExpense,
-         anomalies: anomalies.reverse().slice(0, 5),
-         confidenceScore,
-         totalDataPoints: pastHistory.length,
+         totalForecastIncome: totalInc,
+         totalForecastProfit: totalInc - totalExp,
+         anomalies,
+         confidenceScore: confidence,
+         totalDataPoints: past.length,
          dataRangeStart,
          dataRangeEnd,
-         lastFactDate: history[history.length - 1].date // Точка разделения на графике
+         lastFactDate,
+         trend: slope // Показываем скорость роста
      }
   }, [history])
 
@@ -258,13 +282,13 @@ export default function AIAnalysisPage() {
                         <BrainCircuit className="w-8 h-8 text-purple-400" />
                     </div>
                     <div>
-                        <h1 className="text-3xl font-bold text-foreground">AI Советник</h1>
-                        <p className="text-muted-foreground text-sm">Глубокая аналитика и объяснение прогнозов</p>
+                        <h1 className="text-3xl font-bold text-foreground">AI Советник Pro</h1>
+                        <p className="text-muted-foreground text-sm">Статистический анализ (Медиана + Регрессия)</p>
                     </div>
                 </div>
             </div>
 
-            {loading && <div className="p-12 text-center text-muted-foreground animate-pulse">Загружаем данные из базы...</div>}
+            {loading && <div className="p-12 text-center text-muted-foreground animate-pulse">Считаем математическую модель...</div>}
 
             {!loading && analysis && (
                 <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
@@ -277,21 +301,26 @@ export default function AIAnalysisPage() {
                                 <div>
                                     <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                                         <CalendarDays className="w-5 h-5 text-purple-400" />
-                                        Прогноз на 30 дней
+                                        Прогноз на 30 дней (с учетом тренда)
                                     </h2>
                                     <p className="text-sm text-muted-foreground mt-1">
                                         Ожидаемая прибыль: <span className="text-green-400 font-bold">{formatMoney(analysis.totalForecastProfit)}</span>
                                     </p>
                                     
-                                    {/* 🎯 ИНДИКАТОР ПЕРИОДА ДАННЫХ */}
-                                    <div className="mt-2 flex items-center gap-2 text-[11px] text-blue-300 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 w-fit">
-                                        <History className="w-3 h-3" />
-                                        Анализ базы: {formatDateRu(analysis.dataRangeStart)} — {formatDateRu(analysis.dataRangeEnd)} ({analysis.totalDataPoints} дн.)
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        <div className="text-[11px] text-blue-300 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 w-fit">
+                                            <History className="w-3 h-3 inline mr-1" />
+                                            База: {analysis.totalDataPoints} активных дней
+                                        </div>
+                                        <div className={`text-[11px] px-2 py-1 rounded border w-fit ${analysis.trend > 0 ? 'text-green-400 bg-green-500/10 border-green-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'}`}>
+                                            <TrendingUp className={`w-3 h-3 inline mr-1 ${analysis.trend < 0 ? 'rotate-180' : ''}`} />
+                                            Тренд: {analysis.trend > 0 ? '+' : ''}{analysis.trend.toFixed(0)} ₸/день
+                                        </div>
                                     </div>
                                 </div>
                                 
                                 <div className="text-right">
-                                    <span className="text-[10px] uppercase text-muted-foreground tracking-wider">Точность</span>
+                                    <span className="text-[10px] uppercase text-muted-foreground tracking-wider">Достоверность</span>
                                     <div className="flex items-center gap-2 justify-end">
                                         <div className="h-2 w-20 bg-white/10 rounded-full overflow-hidden">
                                             <div className="h-full bg-purple-500" style={{width: `${analysis.confidenceScore}%`}} />
@@ -311,58 +340,41 @@ export default function AIAnalysisPage() {
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                                        
-                                        {/* ⭐️ ВАЖНО: dataKey="date" делает ось уникальной.
-                                            А tickFormatter показывает только день недели или число.
-                                            Это чинит "дерганье" мышки.
-                                        */}
                                         <XAxis 
                                             dataKey="date" 
                                             stroke="#666" 
                                             fontSize={10} 
                                             tickFormatter={(val) => {
                                                 const d = new Date(val);
-                                                // Показываем: "Пн 19"
                                                 return `${dayNames[d.getDay()]} ${d.getDate()}`;
                                             }}
                                             interval="preserveStartEnd"
                                         />
                                         <YAxis stroke="#666" fontSize={10} tickFormatter={v => `${v/1000}k`} />
-                                        
                                         <Tooltip 
                                             contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
                                             formatter={(val: number, name: string, props: any) => [
                                                 formatMoney(val), 
-                                                props.payload.type === 'forecast' ? 'Прогноз 🔮' : 'Факт ✅'
+                                                props.payload.type === 'forecast' ? 'Прогноз (Медиана + Тренд)' : 'Факт'
                                             ]}
                                             labelFormatter={(label) => {
-                                                // label здесь это дата YYYY-MM-DD
                                                 const d = new Date(label);
                                                 return formatDateRu(label) + ` (${dayNames[d.getDay()]})`;
                                             }}
                                         />
-                                        
                                         <ReferenceLine x={analysis.lastFactDate} stroke="#666" strokeDasharray="3 3" label="СЕГОДНЯ" />
-                                        
-                                        <Area 
-                                            type="monotone" 
-                                            dataKey="income" 
-                                            name="Доход"
-                                            stroke="#8b5cf6" 
-                                            strokeWidth={3} 
-                                            fill="url(#forecastGradient)" 
-                                        />
+                                        <Area type="monotone" dataKey="income" name="Доход" stroke="#8b5cf6" strokeWidth={3} fill="url(#forecastGradient)" />
                                     </ComposedChart>
                                 </ResponsiveContainer>
                             </div>
                         </Card>
 
-                        {/* 📊 ПРОФИЛЬ НЕДЕЛИ */}
+                        {/* 📊 ПРОФИЛЬ НЕДЕЛИ (Медианы) */}
                         <Card className="p-6 border-border bg-card neon-glow">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                                     <TrendingUp className="w-4 h-4 text-blue-400"/>
-                                    Матрица вашей недели (Средние значения)
+                                    Ваша типичная неделя (Медиана)
                                 </h3>
                             </div>
                             <div className="h-48">
@@ -373,17 +385,19 @@ export default function AIAnalysisPage() {
                                         <Tooltip 
                                             cursor={{fill: 'transparent'}}
                                             contentStyle={{ backgroundColor: '#111', border: '1px solid #333' }}
-                                            formatter={(val: number) => [formatMoney(val), 'Среднее']}
+                                            formatter={(val: number) => [formatMoney(val), 'Типичный доход']}
                                         />
                                         <Bar 
                                             dataKey="income" 
                                             fill="#3b82f6" 
                                             radius={[4, 4, 0, 0]} 
-                                            fillOpacity={(d:any) => d.isEstimated ? 0.3 : 1} 
                                         />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
+                            <p className="text-xs text-muted-foreground text-center mt-2">
+                                Мы используем медиану вместо среднего, чтобы праздники и простои не искажали картину.
+                            </p>
                         </Card>
                     </div>
 
@@ -392,23 +406,23 @@ export default function AIAnalysisPage() {
                         <Card className="p-5 border border-blue-500/20 bg-blue-900/5">
                             <h3 className="text-sm font-bold text-blue-300 mb-3 flex items-center gap-2">
                                 <HelpCircle className="w-4 h-4" />
-                                Как это работает?
+                                Новый алгоритм
                             </h3>
                             <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
-                                <p><strong className="text-blue-200">1. Данные:</strong> Мы взяли все ваши операции с {formatDateRu(analysis.dataRangeStart)}.</p>
-                                <p><strong className="text-blue-200">2. Сезонность:</strong> Мы посчитали среднее для каждого дня недели (Пн, Вт...).</p>
-                                <p><strong className="text-blue-200">3. Прогноз:</strong> Мы "продлили" этот график на месяц вперед.</p>
+                                <p><strong className="text-blue-200">1. Медиана:</strong> Мы отбрасываем случайные "взрывы" продаж и "пустые" дни, чтобы найти реальную норму.</p>
+                                <p><strong className="text-blue-200">2. Тренд:</strong> Мы видим, что вы растете на {analysis.trend.toFixed(0)} ₸ в день, и учитываем это в будущем.</p>
+                                <p><strong className="text-blue-200">3. MAD:</strong> Умный поиск аномалий, устойчивый к ошибкам.</p>
                             </div>
                         </Card>
 
                         <Card className="p-5 border border-border bg-card neon-glow">
                             <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                                 <Search className="w-4 h-4 text-yellow-400"/>
-                                Детектор Аномалий
+                                Умный детектор (Z-Score)
                             </h3>
                             {analysis.anomalies.length === 0 ? (
                                 <p className="text-xs text-muted-foreground text-center py-4">
-                                    Отклонений не найдено.
+                                    Выбросов не найдено (Нормальное отклонение).
                                 </p>
                             ) : (
                                 <div className="space-y-2">
@@ -417,27 +431,16 @@ export default function AIAnalysisPage() {
                                             <div className="flex justify-between mb-1">
                                                 <span className="font-bold text-foreground">{formatDateRu(a.date)}</span>
                                                 <span className={a.type === 'income_low' ? 'text-red-400' : 'text-yellow-400'}>
-                                                    {a.type === 'income_low' ? '📉 Мало выручки' : '⚠️ Много расхода'}
+                                                    {a.type === 'income_low' ? '📉 Аномально мало' : '⚠️ Аномально много'}
                                                 </span>
                                             </div>
                                             <p className="text-muted-foreground">
-                                                Было: <span className="text-foreground">{formatMoney(a.amount)}</span>
+                                                Было: <span className="text-foreground">{formatMoney(a.amount)}</span> (Норма: {formatMoney(a.avgForDay)})
                                             </p>
                                         </div>
                                     ))}
                                 </div>
                             )}
-                        </Card>
-
-                        <Card className="p-5 border border-border bg-card">
-                            <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-                                <BookOpen className="w-4 h-4 text-muted-foreground"/>
-                                Словарь
-                            </h3>
-                            <ul className="space-y-2 text-xs text-muted-foreground">
-                                <li><span className="text-foreground font-semibold">Аномалия:</span> Резкое отклонение от нормы (например, выручка в пятницу меньше, чем в понедельник).</li>
-                                <li><span className="text-foreground font-semibold">Сезонность:</span> Повторяющиеся колебания (выходные всегда лучше будней).</li>
-                            </ul>
                         </Card>
                     </div>
                 </div>
@@ -446,7 +449,7 @@ export default function AIAnalysisPage() {
             {!loading && !analysis && (
                 <div className="text-center py-20 text-muted-foreground">
                     <Info className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                    <p>Недостаточно данных. Внесите хотя бы одну операцию.</p>
+                    <p>Недостаточно данных (нужно минимум 7 активных дней).</p>
                 </div>
             )}
 
