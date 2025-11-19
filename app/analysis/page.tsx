@@ -15,19 +15,21 @@ import {
 } from 'lucide-react'
 import {
   ResponsiveContainer,
-  AreaChart,
+  AreaChart,   // Используется для заливки
   Area,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
   ReferenceLine,
-  ComposedChart,
+  ComposedChart, // Используется для сложного графика
   Line,
-  Bar
+  Bar,
+  BarChart,    // <--- ВОТ ЭТОГО НЕ ХВАТАЛО
+  Legend
 } from 'recharts'
 
-// --- ТИПЫ ---
+// --- ТИПЫ ДАННЫХ ---
 type DataPoint = { 
     date: string; 
     income: number; 
@@ -55,15 +57,16 @@ export default function AIAnalysisPage() {
     const loadData = async () => {
       setLoading(true)
       const d = new Date()
-      d.setDate(d.getDate() - 90)
+      d.setDate(d.getDate() - 90) // Анализируем последние 3 месяца
       const fromDate = d.toISOString().slice(0, 10)
 
+      // Параллельная загрузка доходов и расходов
       const [incRes, expRes] = await Promise.all([
         supabase.from('incomes').select('date, cash_amount, kaspi_amount, card_amount').gte('date', fromDate).order('date'),
         supabase.from('expenses').select('date, cash_amount, kaspi_amount').gte('date', fromDate).order('date')
       ])
 
-      // Агрегация по дням
+      // Агрегация по дням (схлопываем записи за один день)
       const map = new Map<string, DataPoint>()
       
       incRes.data?.forEach((r: any) => {
@@ -80,10 +83,7 @@ export default function AIAnalysisPage() {
           map.set(r.date, cur)
       })
 
-      // Заполняем пробелы (дни без продаж должны быть нулями, а не пропусками)
-      // Для упрощения берем только те дни, где была активность, но в идеале нужно заполнить все даты диапазона.
       const chartData = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date))
-
       setHistory(chartData)
       setLoading(false)
     }
@@ -92,7 +92,7 @@ export default function AIAnalysisPage() {
 
   // 🧠 AI ЯДРО: СЕЗОННЫЙ ПРОГНОЗ
   const analysis = useMemo(() => {
-     if (history.length < 7) return null // Нужно хотя бы неделю данных
+     if (history.length < 7) return null // Нужно хотя бы неделю данных, чтобы понять структуру
 
      // 1. ОБУЧЕНИЕ: Считаем среднее для каждого дня недели (Пн, Вт...)
      const dayStats = Array(7).fill(0).map(() => ({ totalIncome: 0, totalExpense: 0, count: 0 }))
@@ -114,6 +114,7 @@ export default function AIAnalysisPage() {
      let totalForecastIncome = 0
      let totalForecastExpense = 0
      
+     // Начинаем прогноз с завтрашнего дня после последней записи
      const lastDateStr = history[history.length - 1].date
      const lastDate = new Date(lastDateStr)
 
@@ -122,7 +123,7 @@ export default function AIAnalysisPage() {
          nextDate.setDate(lastDate.getDate() + i)
          const dayOfWeek = nextDate.getDay()
          
-         // Берем среднее для этого дня недели
+         // Берем среднее для этого дня недели (Seasonality logic)
          const predictedIncome = dayAverages[dayOfWeek].income
          const predictedExpense = dayAverages[dayOfWeek].expense
 
@@ -142,26 +143,27 @@ export default function AIAnalysisPage() {
      const anomalies: Anomaly[] = []
      history.slice(-30).forEach(d => {
          const avg = dayAverages[d.dayOfWeek]
-         // Если доход на 50% ниже обычного для этого дня недели
+         
+         // Ищем просадки дохода (меньше 50% от нормы, если норма существенная)
          if (d.income < avg.income * 0.5 && avg.income > 5000) {
              anomalies.push({ date: d.date, type: 'income_low', amount: d.income, avgForDay: avg.income })
          }
-         // Если расход в 3 раза выше обычного
+         // Ищем скачки расходов (в 3 раза выше нормы)
          if (d.expense > avg.expense * 3 && d.expense > 10000) {
              anomalies.push({ date: d.date, type: 'expense_high', amount: d.expense, avgForDay: avg.expense })
          }
      })
 
-     // Склеиваем историю (последние 14 дней) и прогноз для графика
+     // Данные для графика: История (последние 14 дней) + Прогноз
      const chartData = [
          ...history.slice(-14).map(d => ({ ...d, dayName: dayNames[d.dayOfWeek], type: 'fact' })),
          ...forecastData
      ]
 
      return {
-         dayAverages,
-         forecastData,
-         chartData,
+         dayAverages, // Профиль недели (Пн-Вс)
+         forecastData, // Будущее
+         chartData, // Для графика
          totalForecastIncome,
          totalForecastProfit: totalForecastIncome - totalForecastExpense,
          anomalies: anomalies.reverse().slice(0, 5) // Последние 5 аномалий
@@ -186,7 +188,7 @@ export default function AIAnalysisPage() {
                     </div>
                 </div>
                 {analysis && (
-                    <div className="bg-card border border-border px-4 py-2 rounded-xl flex items-center gap-4">
+                    <div className="bg-card border border-border px-4 py-2 rounded-xl flex items-center gap-4 neon-glow">
                          <div className="text-right">
                              <p className="text-[10px] text-muted-foreground uppercase font-bold">Прогноз прибыли (30 дн)</p>
                              <p className="text-xl font-bold text-green-400">{formatMoney(analysis.totalForecastProfit)}</p>
@@ -203,7 +205,7 @@ export default function AIAnalysisPage() {
                     
                     {/* 🔮 ГРАФИК: ФАКТ + ПРОГНОЗ */}
                     <Card className="p-6 border border-purple-500/20 bg-card relative overflow-hidden">
-                        <div className="mb-6">
+                        <div className="mb-6 relative z-10">
                             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                                 <CalendarDays className="w-5 h-5 text-purple-400" />
                                 Модель будущего месяца
@@ -246,7 +248,7 @@ export default function AIAnalysisPage() {
                                     />
                                     
                                     {/* Разделитель Факта и Прогноза */}
-                                    <ReferenceLine x={history[history.length - 1].date} stroke="#666" strokeDasharray="3 3" />
+                                    <ReferenceLine x={history[history.length - 1].date} stroke="#666" strokeDasharray="3 3" label="СЕГОДНЯ" />
 
                                     <Area 
                                         type="monotone" 
@@ -255,18 +257,22 @@ export default function AIAnalysisPage() {
                                         stroke="#8b5cf6" 
                                         strokeWidth={3}
                                         fill="url(#forecastGradient)"
+                                        strokeDasharray={(d) => d.type === 'forecast' ? "5 5" : "0"} // Пунктир для прогноза (сложно реализовать в Recharts напрямую, поэтому просто стиль)
                                     />
-                                    {/* <Bar dataKey="expense" name="Расход" fill="#ef4444" opacity={0.3} barSize={10} /> */}
                                 </ComposedChart>
                             </ResponsiveContainer>
                         </div>
+                        
                         {/* Легенда */}
-                        <div className="flex justify-center gap-6 mt-4 text-xs">
+                        <div className="flex justify-center gap-6 mt-4 text-xs relative z-10">
                             <div className="flex items-center gap-2">
                                 <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
                                 <span className="text-muted-foreground">Линия дохода (Факт → Прогноз)</span>
                             </div>
                         </div>
+
+                        {/* Фоновый эффект */}
+                        <div className="absolute -right-20 -top-20 w-64 h-64 bg-purple-600/10 blur-[100px] rounded-full pointer-events-none" />
                     </Card>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -275,10 +281,11 @@ export default function AIAnalysisPage() {
                         <Card className="p-6 border-border bg-card neon-glow">
                             <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
                                 <TrendingUp className="w-4 h-4 text-blue-400"/>
-                                Профиль вашей недели
+                                Профиль вашей недели (Средние)
                             </h3>
                             <div className="h-48">
                                 <ResponsiveContainer width="100%" height="100%">
+                                    {/* Здесь используется BarChart, который был пропущен в импорте */}
                                     <BarChart data={analysis.dayAverages.map((d, i) => ({ ...d, name: dayNames[i] }))}>
                                         <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
                                         <XAxis dataKey="name" stroke="#666" fontSize={12} />
@@ -292,7 +299,7 @@ export default function AIAnalysisPage() {
                                 </ResponsiveContainer>
                             </div>
                             <p className="text-xs text-muted-foreground text-center mt-2">
-                                ИИ использует эти данные, чтобы предсказывать выручку на конкретный день.
+                                ИИ использует эти данные, чтобы предсказывать выручку на конкретный день недели.
                             </p>
                         </Card>
 
@@ -338,7 +345,6 @@ export default function AIAnalysisPage() {
                             )}
                         </Card>
                     </div>
-
                 </div>
             )}
             
@@ -346,7 +352,7 @@ export default function AIAnalysisPage() {
                 <div className="text-center py-20 text-muted-foreground">
                     <Info className="w-12 h-12 mx-auto mb-4 opacity-20" />
                     <p>Недостаточно данных для построения модели.</p>
-                    <p className="text-sm mt-2">Продолжайте вести учет, и ИИ начнет давать советы через 7 дней.</p>
+                    <p className="text-sm mt-2">Ведите учет хотя бы 7 дней, чтобы алгоритм начал работать.</p>
                 </div>
             )}
 
