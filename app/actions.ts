@@ -4,25 +4,20 @@ export async function getGeminiAdvice(data: any) {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    return "Ошибка: Не настроен API ключ Gemini. Добавьте GEMINI_API_KEY в .env.local";
+    console.error("❌ API Key is missing on server");
+    return "Ошибка: Не настроен API ключ Gemini (проверьте Vercel Env Vars).";
   }
 
-  // Формируем промпт (задание) для ИИ
   const prompt = `
-    Ты — профессиональный финансовый директор компьютерного клуба / кибер-арены.
-    Твоя задача — проанализировать сухие цифры и дать владельцу 3 конкретных, жестких совета по увеличению прибыли.
+    Ты — профессиональный финансовый директор компьютерного клуба.
+    Данные:
+    - Доход: ${data.avgIncome}
+    - Расход: ${data.avgExpense}
+    - Прибыль прогноз: ${data.predictedProfit}
+    - Тренд: ${data.trend}
+    - Аномалии: ${JSON.stringify(data.anomalies)}
     
-    Вот данные бизнеса за последние 30-90 дней:
-    - Текущий средний доход в день: ${data.avgIncome} ₸
-    - Текущий средний расход в день: ${data.avgExpense} ₸
-    - Прогнозируемая прибыль на след. месяц: ${data.predictedProfit} ₸
-    - Тренд роста: ${data.trend > 0 ? '+' : ''}${data.trend.toFixed(2)} ₸/день
-    - Найденные аномалии (дни с плохими показателями): ${JSON.stringify(data.anomalies)}
-    
-    Проанализируй это. 
-    Если тренд отрицательный — бей тревогу. 
-    Если есть аномалии расходов — укажи на это.
-    Дай советы списком (1, 2, 3). Пиши кратко, без воды, как бизнесмен бизнесмену. Используй эмодзи.
+    Дай 3 жестких совета по увеличению прибыли. Кратко.
   `;
 
   try {
@@ -38,13 +33,26 @@ export async function getGeminiAdvice(data: any) {
     );
 
     const json = await response.json();
-    
-    // Извлекаем текст ответа
+
+    // 1. Проверяем, есть ли ошибка от самого Google
+    if (!response.ok || json.error) {
+      console.error("❌ Gemini API Error:", JSON.stringify(json.error, null, 2));
+      // Возвращаем текст ошибки, чтобы вы увидели его на сайте
+      return `Ошибка API (${response.status}): ${json.error?.message || 'Неизвестная ошибка'}`;
+    }
+
+    // 2. Проверяем наличие ответа
     const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-    return text || "ИИ не смог сформировать ответ. Попробуйте позже.";
+    
+    if (!text) {
+        console.error("❌ No candidates in response:", JSON.stringify(json, null, 2));
+        return "ИИ вернул пустой ответ. Проверьте лимиты или промпт.";
+    }
+
+    return text;
     
   } catch (error) {
-    console.error("Gemini Error:", error);
-    return "Ошибка соединения с ИИ.";
+    console.error("❌ Network/Server Error:", error);
+    return "Критическая ошибка соединения с сервером.";
   }
 }
