@@ -18,7 +18,6 @@ import {
   User, 
   Phone, 
   Mail, 
-  Briefcase,
   Settings
 } from 'lucide-react'
 
@@ -95,6 +94,7 @@ export default function SettingsPage() {
   const filteredStaff = useMemo(() => {
       return staff.filter(s => 
         s.full_name.toLowerCase().includes(searchStaff.toLowerCase()) ||
+        (s.email && s.email.toLowerCase().includes(searchStaff.toLowerCase())) ||
         (s.phone && s.phone.includes(searchStaff))
       )
   }, [staff, searchStaff])
@@ -146,7 +146,7 @@ export default function SettingsPage() {
     const { error } = await supabase.from('staff').insert([{ 
         full_name: newStaff.name, 
         phone: newStaff.phone || null,
-        email: newStaff.email || null,
+        email: newStaff.email || null, // Теперь сохраняем Email!
         role: newStaff.role
     }])
     
@@ -301,7 +301,7 @@ export default function SettingsPage() {
                 </Card>
             </div>
 
-            {/* 👥 СОТРУДНИКИ */}
+            {/* 👥 СОТРУДНИКИ (Обновлено: Email + Телефон) */}
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <h2 className="text-xl font-bold flex items-center gap-2">
@@ -330,11 +330,32 @@ export default function SettingsPage() {
                         {!loading && filteredStaff.map(s => (
                             <div key={s.id} className="group p-3 rounded-lg border border-border/50 bg-black/20 hover:bg-white/5 transition-all">
                                 {editStaffId === s.id ? (
+                                    // РЕЖИМ РЕДАКТИРОВАНИЯ СОТРУДНИКА
                                     <div className="space-y-2">
-                                        <input value={editStaffData.name} onChange={e => setEditStaffData({...editStaffData, name: e.target.value})} className="w-full bg-input border border-border rounded px-2 py-1 text-sm" placeholder="ФИО"/>
+                                        <input 
+                                            value={editStaffData.name} 
+                                            onChange={e => setEditStaffData({...editStaffData, name: e.target.value})} 
+                                            className="w-full bg-input border border-border rounded px-2 py-1 text-sm font-bold" 
+                                            placeholder="ФИО"
+                                        />
+                                        <input 
+                                            value={editStaffData.email} 
+                                            onChange={e => setEditStaffData({...editStaffData, email: e.target.value})} 
+                                            className="w-full bg-input border border-border rounded px-2 py-1 text-xs" 
+                                            placeholder="Email (для входа)"
+                                        />
                                         <div className="flex gap-2">
-                                            <input value={editStaffData.phone} onChange={e => setEditStaffData({...editStaffData, phone: e.target.value})} className="flex-1 bg-input border border-border rounded px-2 py-1 text-xs" placeholder="Телефон"/>
-                                            <select value={editStaffData.role} onChange={e => setEditStaffData({...editStaffData, role: e.target.value})} className="bg-input border border-border rounded px-2 py-1 text-xs">
+                                            <input 
+                                                value={editStaffData.phone} 
+                                                onChange={e => setEditStaffData({...editStaffData, phone: e.target.value})} 
+                                                className="flex-1 bg-input border border-border rounded px-2 py-1 text-xs" 
+                                                placeholder="Телефон"
+                                            />
+                                            <select 
+                                                value={editStaffData.role} 
+                                                onChange={e => setEditStaffData({...editStaffData, role: e.target.value})} 
+                                                className="bg-input border border-border rounded px-2 py-1 text-xs"
+                                            >
                                                 <option value="operator">Оператор</option>
                                                 <option value="admin">Админ</option>
                                             </select>
@@ -345,23 +366,24 @@ export default function SettingsPage() {
                                         </div>
                                     </div>
                                 ) : (
+                                    // РЕЖИМ ПРОСМОТРА
                                     <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs ${s.role === 'admin' ? 'bg-purple-600' : 'bg-gray-700'}`}>
+                                        <div className="flex items-center gap-3 overflow-hidden">
+                                            <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-xs ${s.role === 'admin' ? 'bg-purple-600' : 'bg-gray-700'}`}>
                                                 {s.role === 'admin' ? <Shield className="w-3 h-3" /> : <User className="w-3 h-3" />}
                                             </div>
-                                            <div>
+                                            <div className="min-w-0">
                                                 <div className="flex items-center gap-2">
-                                                    <p className="text-sm font-medium text-foreground">{s.full_name}</p>
-                                                    <span className={`text-[9px] px-1.5 rounded border uppercase ${
+                                                    <p className="text-sm font-medium text-foreground truncate">{s.full_name}</p>
+                                                    <span className={`text-[9px] px-1.5 rounded border uppercase shrink-0 ${
                                                         s.role === 'admin' ? 'text-purple-400 border-purple-500/30 bg-purple-500/10' : 'text-muted-foreground border-white/10 bg-white/5'
                                                     }`}>
                                                         {s.role === 'admin' ? 'Admin' : 'Operator'}
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
-                                                    {s.phone && <span className="flex items-center gap-1"><Phone className="w-2.5 h-2.5" /> {s.phone}</span>}
-                                                    {s.email && <span className="flex items-center gap-1"><Mail className="w-2.5 h-2.5" /> {s.email}</span>}
+                                                <div className="flex flex-col gap-0.5 mt-0.5 text-[10px] text-muted-foreground">
+                                                    {s.email && <span className="flex items-center gap-1 truncate"><Mail className="w-2.5 h-2.5" /> {s.email}</span>}
+                                                    {s.phone && <span className="flex items-center gap-1 truncate"><Phone className="w-2.5 h-2.5" /> {s.phone}</span>}
                                                 </div>
                                             </div>
                                         </div>
@@ -379,7 +401,7 @@ export default function SettingsPage() {
                         ))}
                     </div>
 
-                    {/* Добавление */}
+                    {/* Добавление (Обновлено: Email обязателен) */}
                     <div className="pt-4 mt-2 border-t border-border">
                         <form onSubmit={handleAddStaff} className="space-y-2">
                             <input 
@@ -387,6 +409,13 @@ export default function SettingsPage() {
                                 onChange={e => setNewStaff({...newStaff, name: e.target.value})}
                                 placeholder="ФИО сотрудника..."
                                 className="w-full bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-purple-500"
+                            />
+                            {/* Поле Email теперь видно сразу */}
+                            <input 
+                                value={newStaff.email}
+                                onChange={e => setNewStaff({...newStaff, email: e.target.value})}
+                                placeholder="Email (для входа)..."
+                                className="w-full bg-input border border-border rounded-lg px-3 py-2 text-xs focus:border-purple-500"
                             />
                             <div className="flex gap-2">
                                 <input 
