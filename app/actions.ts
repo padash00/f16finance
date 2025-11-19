@@ -21,8 +21,9 @@ export async function getGeminiAdvice(data: any) {
   `;
 
   try {
+    // ИЗМЕНЕНИЕ: Добавил "-latest" в название модели, чтобы исправить ошибку 404
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -37,7 +38,6 @@ export async function getGeminiAdvice(data: any) {
     // 1. Проверяем, есть ли ошибка от самого Google
     if (!response.ok || json.error) {
       console.error("❌ Gemini API Error:", JSON.stringify(json.error, null, 2));
-      // Возвращаем текст ошибки, чтобы вы увидели его на сайте
       return `Ошибка API (${response.status}): ${json.error?.message || 'Неизвестная ошибка'}`;
     }
 
