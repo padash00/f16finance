@@ -69,7 +69,7 @@ type FinancialTotals = {
   totalIncome: number
   totalExpense: number
   profit: number
-  // 🔥 Новое: остатки и общий баланс
+  // Остатки и общий баланс
   remainingCash: number
   remainingKaspi: number
   totalBalance: number
@@ -83,6 +83,18 @@ type MonthlyTrendData = {
   year: string
 }
 
+type DatePreset =
+  | 'custom'
+  | 'today'
+  | 'yesterday'
+  | 'last7'
+  | 'prevWeek'
+  | 'last30'
+  | 'currentMonth'
+  | 'prevMonth'
+  | 'currentYear'
+  | 'prevYear'
+
 // --- Вспомогательные функции ---
 const todayISO = () => {
   const d = new Date()
@@ -95,6 +107,13 @@ const todayISO = () => {
 const addDaysISO = (iso: string, diff: number) => {
   const d = new Date(iso + 'T00:00:00')
   d.setDate(d.getDate() + diff)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+const formatDate = (d: Date) => {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
@@ -148,6 +167,8 @@ export default function ReportsPage() {
     return addDaysISO(today, -6)
   })
   const [dateTo, setDateTo] = useState(todayISO())
+  const [datePreset, setDatePreset] = useState<DatePreset>('last7')
+
   const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
   const [groupMode, setGroupMode] = useState<GroupMode>('day')
 
@@ -192,6 +213,96 @@ export default function ReportsPage() {
     if (!id) return null
     const c = companies.find((x) => x.id === id)
     return (c?.code || '').toLowerCase()
+  }
+
+  // Применение пресета дат
+  const applyPreset = (preset: DatePreset) => {
+    const today = todayISO()
+    const todayDate = new Date(today + 'T00:00:00')
+
+    let from = dateFrom
+    let to = dateTo
+
+    switch (preset) {
+      case 'today': {
+        from = today
+        to = today
+        break
+      }
+      case 'yesterday': {
+        const y = addDaysISO(today, -1)
+        from = y
+        to = y
+        break
+      }
+      case 'last7': {
+        from = addDaysISO(today, -6)
+        to = today
+        break
+      }
+      case 'prevWeek': {
+        const d = todayDate
+        const day = d.getDay() // 0 = воскресенье, 1 = понедельник ...
+        const diffToMonday = (day + 6) % 7
+        const currentMonday = new Date(d)
+        currentMonday.setDate(d.getDate() - diffToMonday)
+        const prevMonday = new Date(currentMonday)
+        prevMonday.setDate(currentMonday.getDate() - 7)
+        const prevSunday = new Date(prevMonday)
+        prevSunday.setDate(prevMonday.getDate() + 6)
+        from = formatDate(prevMonday)
+        to = formatDate(prevSunday)
+        break
+      }
+      case 'last30': {
+        from = addDaysISO(today, -29)
+        to = today
+        break
+      }
+      case 'currentMonth': {
+        const y = todayDate.getFullYear()
+        const m = todayDate.getMonth()
+        const start = new Date(y, m, 1)
+        const end = new Date(y, m + 1, 0)
+        from = formatDate(start)
+        to = formatDate(end)
+        break
+      }
+      case 'prevMonth': {
+        const y = todayDate.getFullYear()
+        const m = todayDate.getMonth() - 1
+        const start = new Date(y, m, 1)
+        const end = new Date(y, m + 1, 0)
+        from = formatDate(start)
+        to = formatDate(end)
+        break
+      }
+      case 'currentYear': {
+        const y = todayDate.getFullYear()
+        from = `${y}-01-01`
+        to = `${y}-12-31`
+        break
+      }
+      case 'prevYear': {
+        const y = todayDate.getFullYear() - 1
+        from = `${y}-01-01`
+        to = `${y}-12-31`
+        break
+      }
+      case 'custom':
+        // Пользователь сам выбирает даты
+        return
+    }
+
+    setDateFrom(from)
+    setDateTo(to)
+  }
+
+  const handlePresetChange = (value: DatePreset) => {
+    setDatePreset(value)
+    if (value !== 'custom') {
+      applyPreset(value)
+    }
   }
 
   const processedData = useMemo(() => {
@@ -243,7 +354,7 @@ export default function ReportsPage() {
       return null
     }
 
-    // --- ОБРАБОТКА ДОХОДОВ ---
+    // ДОХОДЫ
     for (const r of incomes) {
       const range = getRange(r.date)
       if (!range) continue
@@ -286,7 +397,7 @@ export default function ReportsPage() {
       }
     }
 
-    // --- ОБРАБОТКА РАСХОДОВ ---
+    // РАСХОДЫ
     for (const r of expenses) {
       const range = getRange(r.date)
       if (!range) continue
@@ -326,12 +437,12 @@ export default function ReportsPage() {
       }
     }
 
-    // --- Финальные расчёты ---
+    // Финальные расчёты
     const finalizeTotals = (t: FinancialTotals) => {
       t.profit = t.totalIncome - t.totalExpense
       t.remainingCash = t.incomeCash - t.expenseCash
       t.remainingKaspi = t.incomeNonCash - t.expenseKaspi
-      t.totalBalance = t.profit // на будущее, если захочешь отличать баланс от прибыли
+      t.totalBalance = t.profit
       return t
     }
 
@@ -421,15 +532,6 @@ export default function ReportsPage() {
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [processedData])
 
-  const shiftData = useMemo(() => {
-    const res: { shift: 'Day' | 'Night'; income: number }[] = []
-    if (processedData.shiftAgg.day > 0)
-      res.push({ shift: 'Day', income: processedData.shiftAgg.day })
-    if (processedData.shiftAgg.night > 0)
-      res.push({ shift: 'Night', income: processedData.shiftAgg.night })
-    return res
-  }, [processedData])
-
   const expenseByCategoryData = useMemo(() => {
     return Array.from(processedData.expenseByCategoryMap.entries())
       .map(([name, amount]) => ({ name, amount }))
@@ -437,7 +539,6 @@ export default function ReportsPage() {
       .slice(0, 10)
   }, [processedData])
 
-  // 👇 ДАННЫЕ ДЛЯ ПИРОГА ПО КОМПАНИЯМ
   const incomeByCompanyData = useMemo(() => {
     const COLORS = ['#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ef4444']
     return Array.from(processedData.incomeByCompanyMap.entries())
@@ -452,22 +553,9 @@ export default function ReportsPage() {
   const formatMoney = (v: number) =>
     v.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
 
-  const quickRange = (type: 'today' | 'week' | 'month') => {
-    const today = todayISO()
-    if (type === 'today') {
-      setDateFrom(today)
-      setDateTo(today)
-    } else if (type === 'week') {
-      setDateFrom(addDaysISO(today, -6))
-      setDateTo(today)
-    } else {
-      setDateFrom(addDaysISO(today, -29))
-      setDateTo(today)
-    }
-  }
-
   const resetFilters = () => {
-    quickRange('week')
+    setDatePreset('last7')
+    applyPreset('last7')
     setCompanyFilter('all')
     setGroupMode('day')
   }
@@ -578,28 +666,23 @@ export default function ReportsPage() {
                 <Filter className="w-5 h-5 text-accent" />
                 <h3 className="text-sm font-semibold text-foreground">Фильтры</h3>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => quickRange('today')}
+              <div className="flex items-center gap-2">
+                <select
+                  value={datePreset}
+                  onChange={(e) => handlePresetChange(e.target.value as DatePreset)}
+                  className="bg-input border border-border rounded px-3 py-2 text-sm text-foreground"
                 >
-                  Сегодня
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => quickRange('week')}
-                >
-                  Неделя
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => quickRange('month')}
-                >
-                  30 дней
-                </Button>
+                  <option value="today">Сегодня</option>
+                  <option value="yesterday">Вчера</option>
+                  <option value="last7">Последние 7 дней</option>
+                  <option value="prevWeek">Прошлая неделя</option>
+                  <option value="last30">Последние 30 дней</option>
+                  <option value="currentMonth">Текущий месяц</option>
+                  <option value="prevMonth">Прошлый месяц</option>
+                  <option value="currentYear">Текущий год</option>
+                  <option value="prevYear">Прошлый год</option>
+                  <option value="custom">Выбрать период</option>
+                </select>
                 <Button size="sm" variant="outline" onClick={resetFilters}>
                   Сбросить
                 </Button>
@@ -609,13 +692,19 @@ export default function ReportsPage() {
               <input
                 type="date"
                 value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+                onChange={(e) => {
+                  setDateFrom(e.target.value)
+                  setDatePreset('custom')
+                }}
                 className="w-full bg-input border border-border rounded px-3 py-2 text-sm text-foreground"
               />
               <input
                 type="date"
                 value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+                onChange={(e) => {
+                  setDateTo(e.target.value)
+                  setDatePreset('custom')
+                }}
                 className="w-full bg-input border border-border rounded px-3 py-2 text-sm text-foreground"
               />
               <select
@@ -672,7 +761,6 @@ export default function ReportsPage() {
               </p>
             </Card>
 
-            {/* 🔥 Остаток по каналам */}
             <Card className="p-3 border-border bg-card neon-glow">
               <p className="text-[10px] text-muted-foreground mb-1">Остаток (Нал)</p>
               <p
@@ -748,7 +836,6 @@ export default function ReportsPage() {
 
           {/* Структура выручки и расходов */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 1. Топ расходов */}
             <Card className="p-6 border-border bg-card neon-glow flex flex-col">
               <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                 <TrendingDown className="w-4 h-4 text-red-400" />
@@ -788,7 +875,6 @@ export default function ReportsPage() {
               </div>
             </Card>
 
-            {/* 2. Структура выручки по точкам */}
             <Card className="p-6 border-border bg-card neon-glow flex flex-col">
               <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                 <PieIcon className="w-4 h-4 text-blue-400" />
