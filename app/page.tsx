@@ -6,23 +6,22 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
 import Link from 'next/link'
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Percent, 
-  Zap, 
-  Clock, 
-  BarChart2, 
-  Brain, 
-  AlertTriangle, 
-  CheckCircle2, 
+import {
+  TrendingUp,
+  TrendingDown,
+  Percent,
+  Zap,
+  Clock,
+  BarChart2,
+  Brain,
+  AlertTriangle,
+  CheckCircle2,
   Activity,
   CalendarDays,
-  DollarSign 
+  DollarSign,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
-  LineChart,
   Line,
   CartesianGrid,
   XAxis,
@@ -147,6 +146,20 @@ const getPercentageChange = (current: number, previous: number) => {
 const formatMoney = (v: number) =>
   v.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
 
+const fmtPctLabel = (val: number) => {
+  const sign = val > 0 ? '+' : ''
+  return `${sign}${val.toFixed(1)}%`
+}
+
+const tooltipStyles = {
+  contentStyle: {
+    backgroundColor: '#111',
+    border: '1px solid #333',
+    borderRadius: 8,
+  },
+  itemStyle: { color: '#fff' },
+} as const
+
 export default function DashboardPage() {
   const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -6))
   const [dateTo, setDateTo] = useState(todayISO())
@@ -157,6 +170,7 @@ export default function DashboardPage() {
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [includeExtra, setIncludeExtra] = useState(false)
 
   const setQuickRange = (type: RangeType) => {
     const today = todayISO()
@@ -226,7 +240,7 @@ export default function DashboardPage() {
 
   const companyName = (id: string) => companyById[id]?.name ?? '—'
   const isExtraCompany = (companyId: string) =>
-    companyById[companyId]?.code === 'extra'
+    (companyById[companyId]?.code || '').toLowerCase() === 'extra'
 
   const analytics = useMemo(() => {
     const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
@@ -257,7 +271,7 @@ export default function DashboardPage() {
 
     // Доходы
     for (const r of incomes) {
-      if (isExtraCompany(r.company_id)) continue
+      if (!includeExtra && isExtraCompany(r.company_id)) continue
       const range = getRange(r.date)
       if (!range) continue
 
@@ -266,7 +280,6 @@ export default function DashboardPage() {
       const kaspi = Number(r.kaspi_amount || 0)
       const card = Number(r.card_amount || 0)
       const total = cash + kaspi + card
-
       if (total <= 0) continue
 
       target.incomeTotal += total
@@ -289,7 +302,7 @@ export default function DashboardPage() {
 
     // Расходы
     for (const r of expenses) {
-      if (isExtraCompany(r.company_id)) continue
+      if (!includeExtra && isExtraCompany(r.company_id)) continue
       const range = getRange(r.date)
       if (!range) continue
 
@@ -297,7 +310,6 @@ export default function DashboardPage() {
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
       const total = cash + kaspi
-
       if (total <= 0) continue
 
       target.expenseTotal += total
@@ -337,7 +349,6 @@ export default function DashboardPage() {
     if (current.expenseTotal > 0) {
       efficiency = current.incomeTotal / current.expenseTotal
     } else if (current.incomeTotal > 0) {
-      // если расходов нет — считаем как очень высокий ROI, но ограничиваем
       efficiency = 10
     }
 
@@ -347,7 +358,6 @@ export default function DashboardPage() {
     )
     const profitChange = getPercentageChange(current.profit, previous.profit)
 
-    // Примитивный скоринг, но работает
     let score = 50
     if (margin > 20) score += 20
     if (margin > 40) score += 10
@@ -362,20 +372,22 @@ export default function DashboardPage() {
 
     if (score >= 80) {
       status = 'excellent'
-      summary = 'Отличные показатели. Высокая эффективность и рост прибыли.'
+      summary = 'Отличные показатели: вы в плюсе и растёте.'
       recommendation = 'Реинвестируйте часть прибыли в маркетинг или расширение.'
     } else if (score >= 50) {
       status = 'healthy'
-      summary = 'Стабильная работа. Бизнес уверенно в плюсе.'
-      recommendation = 'Ищите мелкие точки оптимизации, чтобы подтянуть маржу.'
+      summary = 'Устойчивая работа: прибыль есть, всё под контролем.'
+      recommendation = 'Ищите мелкие точки оптимизации, улучшайте маржу и загрузку.'
     } else if (score >= 30) {
       status = 'warning'
-      summary = 'Внимание: расходы заметно давят на прибыль.'
-      recommendation = 'Сделайте ревизию затрат и пересмотрите слабые направления.'
+      summary = 'Прибыль под давлением: расходы заметно съедают выручку.'
+      recommendation =
+        'Сделайте ревизию затрат, заморозьте ненужные расходы и сфокусируйтесь на самых прибыльных зонах.'
     } else {
       status = 'critical'
-      summary = 'Критическое состояние. Высокий риск убытков.'
-      recommendation = 'Срочно режьте лишние расходы и подумайте о повышении цен.'
+      summary = 'Риск убытков: бизнес на грани минуса.'
+      recommendation =
+        'Срочно режьте лишние траты, поднимайте цены и увеличивайте загрузку ключевых зон.'
     }
 
     const chartData: ChartPoint[] = Array.from(chartMap.values())
@@ -397,32 +409,49 @@ export default function DashboardPage() {
       chartData,
       insight,
     }
-  }, [incomes, expenses, dateFrom, dateTo, companyById])
+  }, [incomes, expenses, dateFrom, dateTo, includeExtra, companyById])
 
   const { current, previous, chartData, insight } = analytics
-
-  const fmtPct = (val: number) => {
-    const sign = val > 0 ? '+' : ''
-    return `${sign}${val.toFixed(1)}%`
-  }
 
   const transactionsCount = useMemo(
     () =>
       incomes.filter(
         (x) =>
-          !isExtraCompany(x.company_id) &&
+          (includeExtra || !isExtraCompany(x.company_id)) &&
           x.date >= dateFrom &&
           x.date <= dateTo,
       ).length,
-    [incomes, dateFrom, dateTo, companyById],
+    [incomes, dateFrom, dateTo, includeExtra, companyById],
   )
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-[#050505] text-foreground">
+        <Sidebar />
+        <main className="flex-1 flex items-center justify-center text-muted-foreground">
+          Загрузка дэшборда...
+        </main>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen bg-[#050505] text-foreground">
+        <Sidebar />
+        <main className="flex-1 flex items-center justify-center text-red-400">
+          {error}
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen bg-[#050505] text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
-          {/* Хедер + Фильтры */}
+          {/* Хедер + фильтры */}
           <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
@@ -430,11 +459,38 @@ export default function DashboardPage() {
                 AI Dashboard
               </h1>
               <p className="text-muted-foreground text-sm">
-                Умная аналитика бизнеса
+                Умная аналитика по выручке, расходам и прибыли
               </p>
+              <div className="mt-2 text-[11px] text-muted-foreground flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
+                  Основной бизнес: F16 Arena
+                </span>
+                {companies.some(
+                  (c) => (c.code || '').toLowerCase() === 'extra',
+                ) && (
+                  <button
+                    type="button"
+                    onClick={() => setIncludeExtra((v) => !v)}
+                    className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-0.5 text-[11px] ${
+                      includeExtra
+                        ? 'border-red-400 text-red-400 bg-red-500/10'
+                        : 'border-border text-muted-foreground hover:bg-white/5'
+                    }`}
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        includeExtra ? 'bg-red-400' : 'bg-muted-foreground/50'
+                      }`}
+                    />
+                    {includeExtra
+                      ? 'Extra включён в расчёты'
+                      : 'Исключить F16 Extra из итогов'}
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* 🎯 БЛОК ФИЛЬТРОВ */}
+            {/* Фильтры по датам */}
             <div className="flex flex-col sm:flex-row items-center gap-2 w-full xl:w-auto">
               <div className="bg-card/50 border border-border/50 rounded-lg p-1 flex items-center gap-1 w-full sm:w-auto justify-center">
                 <button
@@ -479,7 +535,6 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              {/* Ручной выбор дат */}
               <div className="flex items-center gap-2 bg-card/30 p-1 rounded-lg border border-border/30">
                 <input
                   type="date"
@@ -504,7 +559,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* 🧠 БЛОК 1: AI ИНСАЙТЫ */}
+          {/* Блок 1: AI-инсайты + быстрое резюме */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card
               className={`lg:col-span-2 p-6 border relative overflow-hidden ${
@@ -521,7 +576,7 @@ export default function DashboardPage() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider bg-white/10 border border-white/10">
-                      Анализ
+                      Анализ периода
                     </span>
                     <span
                       className={`text-sm font-bold uppercase ${
@@ -550,6 +605,49 @@ export default function DashboardPage() {
                     <Zap className="w-4 h-4 text-yellow-400" />
                     Совет: {insight.recommendation}
                   </p>
+                  <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+                    <span>
+                      Маржа: <span className="text-foreground">{insight.margin.toFixed(1)}%</span>
+                    </span>
+                    <span>
+                      Рост выручки:{' '}
+                      <span
+                        className={
+                          getPercentageChange(
+                            current.incomeTotal,
+                            previous.incomeTotal,
+                          ) >= 0
+                            ? 'text-green-400'
+                            : 'text-red-400'
+                        }
+                      >
+                        {fmtPctLabel(
+                          getPercentageChange(
+                            current.incomeTotal,
+                            previous.incomeTotal,
+                          ),
+                        )}
+                      </span>
+                    </span>
+                    <span>
+                      Рост прибыли:{' '}
+                      <span
+                        className={
+                          getPercentageChange(current.profit, previous.profit) >=
+                          0
+                            ? 'text-green-400'
+                            : 'text-red-400'
+                        }
+                      >
+                        {fmtPctLabel(
+                          getPercentageChange(
+                            current.profit,
+                            previous.profit,
+                          ),
+                        )}
+                      </span>
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-4 min-w-[140px]">
                   <div className="text-right">
@@ -571,7 +669,11 @@ export default function DashboardPage() {
                 className={`absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl -mr-20 -mt-20 opacity-20 pointer-events-none ${
                   insight.status === 'excellent'
                     ? 'bg-green-500'
-                    : 'bg-purple-600'
+                    : insight.status === 'healthy'
+                    ? 'bg-purple-600'
+                    : insight.status === 'warning'
+                    ? 'bg-yellow-500'
+                    : 'bg-red-500'
                 }`}
               />
             </Card>
@@ -581,24 +683,27 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-center z-10">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">
-                      Чистая Прибыль
+                      Чистая прибыль
                     </p>
                     <p className="text-2xl font-bold text-white">
                       {formatMoney(current.profit)} ₸
                     </p>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Прошлый период:{' '}
+                      <span className="text-foreground">
+                        {formatMoney(previous.profit)} ₸
+                      </span>
+                    </p>
                   </div>
                   <div
                     className={`text-right ${
-                      getPercentageChange(
-                        current.profit,
-                        previous.profit,
-                      ) >= 0
+                      getPercentageChange(current.profit, previous.profit) >= 0
                         ? 'text-green-400'
                         : 'text-red-400'
                     }`}
                   >
                     <div className="text-sm font-bold">
-                      {fmtPct(
+                      {fmtPctLabel(
                         getPercentageChange(
                           current.profit,
                           previous.profit,
@@ -611,10 +716,7 @@ export default function DashboardPage() {
                   <div
                     className="h-full bg-gradient-to-r from-yellow-400 to-orange-500"
                     style={{
-                      width: `${Math.min(
-                        100,
-                        Math.max(0, insight.margin),
-                      )}%`,
+                      width: `${Math.min(100, Math.max(0, insight.margin))}%`,
                     }}
                   />
                 </div>
@@ -627,7 +729,7 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">
-                      Коэф. Эффективности
+                      Коэф. эффективности
                     </p>
                     <p className="text-2xl font-bold text-white">
                       {insight.efficiency.toFixed(2)}x
@@ -636,23 +738,25 @@ export default function DashboardPage() {
                   <Zap className="w-6 h-6 text-purple-500 opacity-50" />
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  ROI: На 1₸ затрат →{' '}
-                  {insight.efficiency.toFixed(2)}₸ выручки
+                  ROI: на 1₸ затрат →{' '}
+                  <span className="text-foreground">
+                    {insight.efficiency.toFixed(2)}₸
+                  </span>{' '}
+                  выручки
                 </p>
               </Card>
             </div>
           </div>
 
-          {/* 📊 БЛОК 2: УМНЫЕ МЕТРИКИ */}
+          {/* Блок 2: ключевые метрики (доход / расход / остатки) */}
           <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+            {/* Общий доход */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors group">
               <div className="flex justify-between mb-2">
-                <span className="text-xs text-muted-foreground">
-                  Общий Доход
-                </span>
+                <span className="text-xs text-muted-foreground">Общий доход</span>
                 <TrendingUp className="w-4 h-4 text-green-500 opacity-50 group-hover:opacity-100 transition-opacity" />
               </div>
-              <div className="text-xl font-bold">
+              <div className="text-xl font-bold text-green-400">
                 {formatMoney(current.incomeTotal)} ₸
               </div>
               <div className="text-[10px] text-muted-foreground mt-1">
@@ -661,16 +765,21 @@ export default function DashboardPage() {
                   {formatMoney(current.incomeCash)}
                 </span>
               </div>
+              <div className="text-[10px] text-muted-foreground">
+                Прошлый период:{' '}
+                <span className="text-foreground">
+                  {formatMoney(previous.incomeTotal)} ₸
+                </span>
+              </div>
             </Card>
 
+            {/* Общий расход */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors group">
               <div className="flex justify-between mb-2">
-                <span className="text-xs text-muted-foreground">
-                  Общий Расход
-                </span>
+                <span className="text-xs text-muted-foreground">Общий расход</span>
                 <TrendingDown className="w-4 h-4 text-red-500 opacity-50 group-hover:opacity-100 transition-opacity" />
               </div>
-              <div className="text-xl font-bold">
+              <div className="text-xl font-bold text-red-400">
                 {formatMoney(current.expenseTotal)} ₸
               </div>
               <div className="text-[10px] text-muted-foreground mt-1">
@@ -679,8 +788,15 @@ export default function DashboardPage() {
                   {formatMoney(current.expenseCash)}
                 </span>
               </div>
+              <div className="text-[10px] text-muted-foreground">
+                Прошлый период:{' '}
+                <span className="text-foreground">
+                  {formatMoney(previous.expenseTotal)} ₸
+                </span>
+              </div>
             </Card>
 
+            {/* Безнал */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
               <div className="flex justify-between mb-2">
                 <span className="text-xs text-muted-foreground">
@@ -688,7 +804,7 @@ export default function DashboardPage() {
                 </span>
                 <DollarSign className="w-4 h-4 text-blue-500 opacity-50" />
               </div>
-              <div className="text-xl font-bold">
+              <div className="text-xl font-bold text-foreground">
                 {formatMoney(current.incomeKaspi + current.incomeCard)} ₸
               </div>
               <div className="text-[10px] text-muted-foreground mt-1">
@@ -703,14 +819,17 @@ export default function DashboardPage() {
               </div>
             </Card>
 
+            {/* Остаток нал */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
               <div className="flex justify-between mb-2">
-                <span className="text-xs text-muted-foreground">
-                  Остаток Нал
-                </span>
+                <span className="text-xs text-muted-foreground">Остаток нал</span>
                 <BarChart2 className="w-4 h-4 text-emerald-500 opacity-50" />
               </div>
-              <div className="text-xl font-bold">
+              <div
+                className={`text-xl font-bold ${
+                  current.netCash >= 0 ? 'text-emerald-400' : 'text-red-400'
+                }`}
+              >
                 {formatMoney(current.netCash)} ₸
               </div>
               <div className="text-[10px] text-muted-foreground mt-1">
@@ -718,6 +837,7 @@ export default function DashboardPage() {
               </div>
             </Card>
 
+            {/* Остаток Kaspi/Card */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
               <div className="flex justify-between mb-2">
                 <span className="text-xs text-muted-foreground">
@@ -725,7 +845,11 @@ export default function DashboardPage() {
                 </span>
                 <BarChart2 className="w-4 h-4 text-sky-500 opacity-50" />
               </div>
-              <div className="text-xl font-bold">
+              <div
+                className={`text-xl font-bold ${
+                  current.netKaspi >= 0 ? 'text-sky-400' : 'text-red-400'
+                }`}
+              >
                 {formatMoney(current.netKaspi)} ₸
               </div>
               <div className="text-[10px] text-muted-foreground mt-1">
@@ -733,22 +857,22 @@ export default function DashboardPage() {
               </div>
             </Card>
 
+            {/* Кол-во операций */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
               <div className="flex justify-between mb-2">
-                <span className="text-xs text-muted-foreground">
-                  Транзакций
-                </span>
+                <span className="text-xs text-muted-foreground">Транзакций</span>
                 <BarChart2 className="w-4 h-4 text-gray-500 opacity-50" />
               </div>
               <div className="text-xl font-bold">{transactionsCount}</div>
               <div className="text-[10px] text-muted-foreground mt-1">
-                Операций дохода
+                Операций дохода за период
               </div>
             </Card>
           </div>
 
-          {/* 📈 БЛОК 3: ГРАФИК И ЛЕНТА */}
+          {/* Блок 3: график + лента операций */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* График */}
             <Card className="lg:col-span-2 p-6 border-border bg-card">
               <h3 className="text-sm font-semibold text-foreground mb-6 flex items-center gap-2">
                 <Activity className="w-4 h-4 text-purple-500" />
@@ -804,12 +928,7 @@ export default function DashboardPage() {
                         tickFormatter={(v) => `${v / 1000}k`}
                       />
                       <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#111',
-                          border: '1px solid #333',
-                          borderRadius: '8px',
-                        }}
-                        itemStyle={{ color: '#fff' }}
+                        {...tooltipStyles}
                         formatter={(val: number) => [
                           formatMoney(val) + ' ₸',
                           '',
@@ -832,7 +951,7 @@ export default function DashboardPage() {
                         stroke="#22c55e"
                         strokeWidth={2}
                         dot={false}
-                        strokeOpacity={0.5}
+                        strokeOpacity={0.7}
                       />
                       <Line
                         type="monotone"
@@ -841,7 +960,7 @@ export default function DashboardPage() {
                         stroke="#ef4444"
                         strokeWidth={2}
                         dot={false}
-                        strokeOpacity={0.5}
+                        strokeOpacity={0.7}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -856,22 +975,17 @@ export default function DashboardPage() {
                   <Clock className="w-4 h-4 text-blue-400" />
                   Лента событий
                 </h3>
+                <p className="text-[11px] text-muted-foreground">
+                  Последние операции дохода и расхода
+                </p>
               </div>
               <div className="flex-1 overflow-auto max-h-[320px] p-2 space-y-1">
-                {!loading &&
-                  incomes.length === 0 &&
-                  expenses.length === 0 && (
-                    <p className="text-xs text-center p-4 text-muted-foreground">
-                      Пусто
-                    </p>
-                  )}
-
                 {[...incomes, ...expenses]
                   .filter(
-                    (i) =>
-                      !isExtraCompany(i.company_id) &&
-                      i.date >= dateFrom &&
-                      i.date <= dateTo,
+                    (op) =>
+                      (includeExtra || !isExtraCompany(op.company_id)) &&
+                      op.date >= dateFrom &&
+                      op.date <= dateTo,
                   )
                   .sort((a, b) => b.date.localeCompare(a.date))
                   .slice(0, 7)
@@ -888,14 +1002,14 @@ export default function DashboardPage() {
                     return (
                       <div
                         key={op.id}
-                        className="group flex items-center justify-between p-3 hover:bg.white/5 hover:bg-white/5 rounded-lg transition-colors cursor-default"
+                        className="group flex items-center justify-between p-3 hover:bg-white/5 rounded-lg transition-colors cursor-default"
                       >
                         <div className="flex items-center gap-3">
                           <div
                             className={`w-2 h-2 rounded-full ${
                               isIncome
                                 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]'
-                                : 'bg-red-500'
+                                : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
                             }`}
                           />
                           <div className="flex flex-col">
@@ -921,6 +1035,13 @@ export default function DashboardPage() {
                       </div>
                     )
                   })}
+                {!loading &&
+                  incomes.length === 0 &&
+                  expenses.length === 0 && (
+                    <p className="text-xs text-center p-4 text-muted-foreground">
+                      Пусто
+                    </p>
+                  )}
               </div>
               <div className="p-3 border-t border-white/5 bg-white/[0.02]">
                 <Link href={`/income?from=${dateFrom}&to=${dateTo}`}>
