@@ -238,16 +238,25 @@ export default function IncomePage() {
     operatorFilter,
   ])
 
-  // 3. Локальный поиск
+  // 3. Локальный поиск (коммент, зона, оператор, компания)
   const filteredRows = useMemo(() => {
     if (!searchTerm) return rows
     const lowerTerm = searchTerm.toLowerCase()
-    return rows.filter(
-      (r) =>
-        (r.comment && r.comment.toLowerCase().includes(lowerTerm)) ||
-        (r.zone && r.zone.toLowerCase().includes(lowerTerm)),
-    )
-  }, [rows, searchTerm])
+
+    return rows.filter((r) => {
+      const comment = r.comment?.toLowerCase() ?? ''
+      const zone = r.zone?.toLowerCase() ?? ''
+      const op = operatorName(r.operator_id).toLowerCase()
+      const comp = companyName(r.company_id).toLowerCase()
+
+      return (
+        comment.includes(lowerTerm) ||
+        zone.includes(lowerTerm) ||
+        op.includes(lowerTerm) ||
+        comp.includes(lowerTerm)
+      )
+    })
+  }, [rows, searchTerm, operatorName, companyName])
 
   // Итоги
   const totals = useMemo(() => {
@@ -572,7 +581,7 @@ export default function IncomePage() {
                         e.target.value as OperatorFilter,
                       )
                     }
-                    className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground min-w-[130px]"
+                    className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground min-w-[150px]"
                   >
                     <option value="all">Все</option>
                     <option value="none">Без оператора</option>
@@ -631,7 +640,7 @@ export default function IncomePage() {
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <input
                       type="text"
-                      placeholder="Комментарий или зона..."
+                      placeholder="Комментарий / зона / оператор / компания..."
                       value={searchTerm}
                       onChange={(e) =>
                         setSearchTerm(e.target.value)
@@ -712,7 +721,7 @@ export default function IncomePage() {
                       return (
                         <tr
                           key={row.id}
-                          className={`border-b border-border/40 hover:bg:white/5 transition-colors ${
+                          className={`border-b border-border/40 hover:bg-white/5 transition-colors ${
                             idx % 2 === 0 ? 'bg-card/40' : ''
                           } ${
                             isExtra
