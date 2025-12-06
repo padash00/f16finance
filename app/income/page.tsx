@@ -249,8 +249,10 @@ export default function IncomePage() {
     setActivePreset(null)
   }
 
-  // Экспорт CSV
+  // === ЭКСПОРТ ДЛЯ EXCEL (с разделителем ;) ===
   const downloadCSV = () => {
+    const SEP = ';'
+
     const headers = [
       'Дата',
       'Компания',
@@ -264,9 +266,12 @@ export default function IncomePage() {
     ]
 
     const csvContent = [
-      headers.join(','),
+      headers.join(SEP),
       ...filteredRows.map((r) => {
         const total = (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.card_amount || 0)
+
+        const safeComment = (r.comment || '').replace(/"/g, '""')
+
         return [
           r.date,
           companyName(r.company_id),
@@ -276,8 +281,8 @@ export default function IncomePage() {
           r.kaspi_amount ?? 0,
           r.card_amount ?? 0,
           total,
-          `"${(r.comment || '').replace(/"/g, '""')}"`,
-        ].join(',')
+          `"${safeComment}"`,
+        ].join(SEP)
       }),
     ].join('\n')
 
