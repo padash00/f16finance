@@ -4,11 +4,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Filter, TrendingUp, TrendingDown, Percent, PieChart as PieIcon } from 'lucide-react'
+import {
+  Filter,
+  TrendingUp,
+  TrendingDown,
+  Percent,
+  PieChart as PieIcon,
+  CalendarDays,
+} from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import {
   ResponsiveContainer,
-  LineChart,
   Line,
   CartesianGrid,
   XAxis,
@@ -20,6 +26,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  ComposedChart,
 } from 'recharts'
 
 // --- Типы данных ---
@@ -69,7 +76,6 @@ type FinancialTotals = {
   totalIncome: number
   totalExpense: number
   profit: number
-  // Остатки и общий баланс
   remainingCash: number
   remainingKaspi: number
   totalBalance: number
@@ -123,7 +129,8 @@ const formatDate = (d: Date) => {
 const calculatePrevPeriod = (dateFrom: string, dateTo: string) => {
   const dFrom = new Date(dateFrom + 'T00:00:00')
   const dTo = new Date(dateTo + 'T00:00:00')
-  const durationDays = Math.floor((dTo.getTime() - dFrom.getTime()) / (24 * 60 * 60 * 1000)) + 1
+  const durationDays =
+    Math.floor((dTo.getTime() - dFrom.getTime()) / (24 * 60 * 60 * 1000)) + 1
   const prevTo = addDaysISO(dateFrom, -1)
   const prevFrom = addDaysISO(prevTo, -(durationDays - 1))
   return { prevFrom, prevTo, durationDays }
@@ -140,7 +147,8 @@ const getWeekKey = (isoDate: string) => {
   const d = new Date(isoDate + 'T00:00:00')
   const year = d.getFullYear()
   const oneJan = new Date(year, 0, 1)
-  const dayOfYear = Math.floor((d.getTime() - oneJan.getTime()) / (24 * 60 * 60 * 1000)) + 1
+  const dayOfYear =
+    Math.floor((d.getTime() - oneJan.getTime()) / (24 * 60 * 60 * 1000)) + 1
   const week = Math.ceil(dayOfYear / 7)
   return `${year}-W${String(week).padStart(2, '0')}`
 }
@@ -171,6 +179,7 @@ export default function ReportsPage() {
 
   const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
   const [groupMode, setGroupMode] = useState<GroupMode>('day')
+  const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
 
   useEffect(() => {
     const loadAll = async () => {
@@ -184,7 +193,9 @@ export default function ReportsPage() {
       ] = await Promise.all([
         supabase
           .from('incomes')
-          .select('id, date, company_id, shift, zone, cash_amount, kaspi_amount, card_amount'),
+          .select(
+            'id, date, company_id, shift, zone, cash_amount, kaspi_amount, card_amount',
+          ),
         supabase
           .from('expenses')
           .select('id, date, company_id, category, cash_amount, kaspi_amount'),
@@ -192,7 +203,11 @@ export default function ReportsPage() {
       ])
 
       if (incomeErr || expenseErr || compErr) {
-        console.error('Error loading reports data:', { incomeErr, expenseErr, compErr })
+        console.error('Error loading reports data:', {
+          incomeErr,
+          expenseErr,
+          compErr,
+        })
         setError('Не удалось загрузить данные для отчётов')
         setLoading(false)
         return
@@ -207,13 +222,21 @@ export default function ReportsPage() {
     loadAll()
   }, [])
 
-  const companyName = (id: string) => companies.find((c) => c.id === id)?.name ?? '—'
+  const companyName = (id: string) =>
+    companies.find((c) => c.id === id)?.name ?? '—'
 
   const companyCodeById = (id: string | null | undefined) => {
     if (!id) return null
     const c = companies.find((x) => x.id === id)
     return (c?.code || '').toLowerCase()
   }
+
+  const extraCompanyId = useMemo(() => {
+    const extra = companies.find(
+      (c) => c.code?.toLowerCase() === 'extra' || c.name === 'F16 Extra',
+    )
+    return extra?.id ?? null
+  }, [companies])
 
   // Применение пресета дат
   const applyPreset = (preset: DatePreset) => {
@@ -242,7 +265,7 @@ export default function ReportsPage() {
       }
       case 'prevWeek': {
         const d = todayDate
-        const day = d.getDay() // 0 = воскресенье, 1 = понедельник ...
+        const day = d.getDay()
         const diffToMonday = (day + 6) % 7
         const currentMonday = new Date(d)
         currentMonday.setDate(d.getDate() - diffToMonday)
@@ -290,7 +313,6 @@ export default function ReportsPage() {
         break
       }
       case 'custom':
-        // Пользователь сам выбирает даты
         return
     }
 
@@ -361,10 +383,13 @@ export default function ReportsPage() {
 
       let filterPass = true
       if (companyFilter !== 'all') {
-        if (r.company_id !== companyFilter) filterPass = false
-      } else {
-        const code = companyCodeById(r.company_id)
-        if (code === 'extra') filterPass = false
+        filterPass = r.company_id === companyFilter
+      } else if (!includeExtraInTotals && extraCompanyId) {
+        if (r.company_id === extraCompanyId) filterPass = false
+        else {
+          const code = companyCodeById(r.company_id)
+          if (code === 'extra') filterPass = false
+        }
       }
       if (!filterPass) continue
 
@@ -404,10 +429,13 @@ export default function ReportsPage() {
 
       let filterPass = true
       if (companyFilter !== 'all') {
-        if (r.company_id !== companyFilter) filterPass = false
-      } else {
-        const code = companyCodeById(r.company_id)
-        if (code === 'extra') filterPass = false
+        filterPass = r.company_id === companyFilter
+      } else if (!includeExtraInTotals && extraCompanyId) {
+        if (r.company_id === extraCompanyId) filterPass = false
+        else {
+          const code = companyCodeById(r.company_id)
+          if (code === 'extra') filterPass = false
+        }
       }
       if (!filterPass) continue
 
@@ -437,7 +465,6 @@ export default function ReportsPage() {
       }
     }
 
-    // Финальные расчёты
     const finalizeTotals = (t: FinancialTotals) => {
       t.profit = t.totalIncome - t.totalExpense
       t.remainingCash = t.incomeCash - t.expenseCash
@@ -467,7 +494,17 @@ export default function ReportsPage() {
       chartDataMap,
       shiftAgg,
     }
-  }, [incomes, expenses, dateFrom, dateTo, companyFilter, companies, groupMode])
+  }, [
+    incomes,
+    expenses,
+    dateFrom,
+    dateTo,
+    companyFilter,
+    companies,
+    groupMode,
+    includeExtraInTotals,
+    extraCompanyId,
+  ])
 
   const monthlyTrends = useMemo(() => {
     const monthlyMap = new Map<string, MonthlyTrendData>()
@@ -508,36 +545,39 @@ export default function ReportsPage() {
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [incomes, expenses])
 
-  const totals = useMemo(() => processedData.financialTotals, [processedData])
-  const totalsPrev = useMemo(
-    () => processedData.financialTotalsPrev,
+  const totals = processedData.financialTotals
+  const totalsPrev = processedData.financialTotalsPrev
+
+  const totalsByCompany = useMemo(
+    () =>
+      Array.from(processedData.totalsByCompanyMap.entries())
+        .map(([companyId, v]) => ({
+          companyId,
+          name: companyName(companyId),
+          income: v.income,
+          expense: v.expense,
+          profit: v.profit,
+        }))
+        .filter((row) => row.income > 0 || row.expense > 0),
+    [processedData, companyName],
+  )
+
+  const chartData = useMemo(
+    () =>
+      Array.from(processedData.chartDataMap.values())
+        .map((v) => ({ ...v, label: v.label || '' }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
     [processedData],
   )
 
-  const totalsByCompany = useMemo(() => {
-    return Array.from(processedData.totalsByCompanyMap.entries())
-      .map(([companyId, v]) => ({
-        companyId,
-        name: companyName(companyId),
-        income: v.income,
-        expense: v.expense,
-        profit: v.profit,
-      }))
-      .filter((row) => row.income > 0 || row.expense > 0)
-  }, [processedData, companyName])
-
-  const chartData = useMemo(() => {
-    return Array.from(processedData.chartDataMap.values())
-      .map((v) => ({ ...v, label: v.label || '' }))
-      .sort((a, b) => a.label.localeCompare(b.label))
-  }, [processedData])
-
-  const expenseByCategoryData = useMemo(() => {
-    return Array.from(processedData.expenseByCategoryMap.entries())
-      .map(([name, amount]) => ({ name, amount }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 10)
-  }, [processedData])
+  const expenseByCategoryData = useMemo(
+    () =>
+      Array.from(processedData.expenseByCategoryMap.entries())
+        .map(([name, amount]) => ({ name, amount }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 10),
+    [processedData],
+  )
 
   const incomeByCompanyData = useMemo(() => {
     const COLORS = ['#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ef4444']
@@ -558,6 +598,7 @@ export default function ReportsPage() {
     applyPreset('last7')
     setCompanyFilter('all')
     setGroupMode('day')
+    setIncludeExtraInTotals(false)
   }
 
   const tooltipStyles = {
@@ -592,8 +633,8 @@ export default function ReportsPage() {
       change === '—'
         ? 'text-muted-foreground'
         : positiveTrend
-          ? 'text-green-400'
-          : 'text-red-400'
+        ? 'text-green-400'
+        : 'text-red-400'
     const TrendIcon = change === '—' ? Icon : positiveTrend ? TrendingUp : TrendingDown
     const formatValue = (value: number) =>
       value.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ' + unit
@@ -650,153 +691,270 @@ export default function ReportsPage() {
       <Sidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-8 space-y-8">
+          {/* ШАПКА */}
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-foreground">Отчёты</h1>
               <p className="text-muted-foreground mt-2">
-                Доходы, расходы и прибыль по выбранному периоду
+                Выручка, расходы и прибыль по выбранному периоду
               </p>
             </div>
           </div>
 
-          {/* Фильтры */}
-          <Card className="p-6 border-border bg-card neon-glow">
-            <div className="flex items-center justify-between mb-4">
+          {/* ФИЛЬТРЫ */}
+          <Card className="p-6 border-border bg-card neon-glow space-y-4">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Filter className="w-5 h-5 text-accent" />
-                <h3 className="text-sm font-semibold text-foreground">Фильтры</h3>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Фильтры
+                </h3>
               </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={datePreset}
-                  onChange={(e) => handlePresetChange(e.target.value as DatePreset)}
-                  className="bg-input border border-border rounded px-3 py-2 text-sm text-foreground"
-                >
-                  <option value="today">Сегодня</option>
-                  <option value="yesterday">Вчера</option>
-                  <option value="last7">Последние 7 дней</option>
-                  <option value="prevWeek">Прошлая неделя</option>
-                  <option value="last30">Последние 30 дней</option>
-                  <option value="currentMonth">Текущий месяц</option>
-                  <option value="prevMonth">Прошлый месяц</option>
-                  <option value="currentYear">Текущий год</option>
-                  <option value="prevYear">Прошлый год</option>
-                  <option value="custom">Выбрать период</option>
-                </select>
-                <Button size="sm" variant="outline" onClick={resetFilters}>
-                  Сбросить
-                </Button>
-              </div>
+              <Button size="sm" variant="outline" onClick={resetFilters}>
+                Сбросить
+              </Button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value)
-                  setDatePreset('custom')
-                }}
-                className="w-full bg-input border border-border rounded px-3 py-2 text-sm text-foreground"
-              />
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value)
-                  setDatePreset('custom')
-                }}
-                className="w-full bg-input border border-border rounded px-3 py-2 text-sm text-foreground"
-              />
-              <select
-                value={companyFilter}
-                onChange={(e) => setCompanyFilter(e.target.value)}
-                className="w-full bg-input border border-border rounded px-3 py-2 text-sm text-foreground"
-              >
-                <option value="all">Все компании</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={groupMode}
-                onChange={(e) => setGroupMode(e.target.value as GroupMode)}
-                className="w-full bg-input border border-border rounded px-3 py-2 text-sm text-foreground"
-              >
-                <option value="day">По дням</option>
-                <option value="week">По неделям</option>
-                <option value="month">По месяцам</option>
-                <option value="year">По годам</option>
-              </select>
+
+            <div className="flex flex-col lg:flex-row gap-4 justify-between">
+              {/* Даты + пресеты */}
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">
+                  Период
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center bg-input/50 rounded-md border border-border/50 px-2 py-1">
+                    <CalendarDays className="w-3.5 h-3.5 text-muted-foreground mr-1.5" />
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => {
+                        setDateFrom(e.target.value)
+                        setDatePreset('custom')
+                      }}
+                      className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
+                    />
+                    <span className="text-muted-foreground text-xs px-1">→</span>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => {
+                        setDateTo(e.target.value)
+                        setDatePreset('custom')
+                      }}
+                      className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-1 bg-input/30 rounded-md border border-border/30 p-0.5">
+                    {(
+                      [
+                        'today',
+                        'yesterday',
+                        'last7',
+                        'last30',
+                        'currentMonth',
+                        'prevMonth',
+                      ] as DatePreset[]
+                    ).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => handlePresetChange(p)}
+                        className={`px-2 py-1 text-[10px] rounded transition-colors ${
+                          datePreset === p
+                            ? 'bg-accent text-accent-foreground'
+                            : 'hover:bg-white/10 text-muted-foreground'
+                        }`}
+                      >
+                        {p === 'today' && 'Сегодня'}
+                        {p === 'yesterday' && 'Вчера'}
+                        {p === 'last7' && '7 дн.'}
+                        {p === 'last30' && '30 дн.'}
+                        {p === 'currentMonth' && 'Тек. месяц'}
+                        {p === 'prevMonth' && 'Прош. месяц'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Компания + группировка + Extra */}
+              <div className="flex flex-col lg:items-end gap-2">
+                <div className="flex flex-wrap gap-2 justify-between lg:justify-end">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] text-muted-foreground">
+                      Компания
+                    </span>
+                    <select
+                      value={companyFilter}
+                      onChange={(e) => setCompanyFilter(e.target.value)}
+                      className="bg-input border border-border rounded px-3 py-2 text-xs text-foreground min-w-[160px]"
+                    >
+                      <option value="all">Все компании</option>
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] text-muted-foreground">
+                      Группировка
+                    </span>
+                    <div className="flex bg-input/30 rounded-md border border-border/30 p-0.5">
+                      {(['day', 'week', 'month', 'year'] as GroupMode[]).map(
+                        (mode) => (
+                          <button
+                            key={mode}
+                            onClick={() => setGroupMode(mode)}
+                            className={`px-3 py-1 text-[10px] rounded transition-colors ${
+                              groupMode === mode
+                                ? 'bg-accent text-accent-foreground'
+                                : 'hover:bg-white/10 text-muted-foreground'
+                            }`}
+                          >
+                            {mode === 'day' && 'Дни'}
+                            {mode === 'week' && 'Нед.'}
+                            {mode === 'month' && 'Мес.'}
+                            {mode === 'year' && 'Год'}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {companyFilter === 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => setIncludeExtraInTotals((v) => !v)}
+                    className={`mt-1 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] ${
+                      includeExtraInTotals
+                        ? 'border-red-400 text-red-400 bg-red-500/10'
+                        : 'border-border text-muted-foreground hover:bg-white/5'
+                    }`}
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        includeExtraInTotals ? 'bg-red-400' : 'bg-muted-foreground/50'
+                      }`}
+                    />
+                    Учитывать F16 Extra в итогах
+                  </button>
+                )}
+              </div>
             </div>
           </Card>
 
-          {/* Итоги + Остатки */}
-          <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-7 gap-4">
-            <Card className="p-3 border-border bg-card neon-glow">
-              <p className="text-[10px] text-muted-foreground mb-1">Доход (Нал)</p>
-              <p className="text-xl font-bold text-green-400">
-                {formatMoney(totals.incomeCash)} ₸
+          {/* ВЫРУЧКА / РАСХОДЫ / ОСТАТКИ */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Выручка */}
+            <Card className="p-4 border-border bg-card neon-glow">
+              <p className="text-xs font-semibold text-green-400 mb-2 uppercase tracking-wide">
+                Выручка
               </p>
-            </Card>
-            <Card className="p-3 border-border bg-card neon-glow">
-              <p className="text-[10px] text-muted-foreground mb-1">
-                Доход (Kaspi/Card)
-              </p>
-              <p className="text-xl font-bold text-green-400">
-                {formatMoney(totals.incomeNonCash)} ₸
-              </p>
-            </Card>
-            <Card className="p-3 border-border bg-card neon-glow">
-              <p className="text-[10px] text-muted-foreground mb-1">Расход (Нал)</p>
-              <p className="text-xl font-bold text-red-400">
-                {formatMoney(totals.expenseCash)} ₸
-              </p>
-            </Card>
-            <Card className="p-3 border-border bg-card neon-glow">
-              <p className="text-[10px] text-muted-foreground mb-1">Расход (Kaspi)</p>
-              <p className="text-xl font-bold text-red-400">
-                {formatMoney(totals.expenseKaspi)} ₸
-              </p>
-            </Card>
-
-            <Card className="p-3 border-border bg-card neon-glow">
-              <p className="text-[10px] text-muted-foreground mb-1">Остаток (Нал)</p>
-              <p
-                className={`text-xl font-bold ${
-                  totals.remainingCash >= 0 ? 'text-sky-400' : 'text-red-500'
-                }`}
-              >
-                {formatMoney(totals.remainingCash)} ₸
-              </p>
-            </Card>
-            <Card className="p-3 border-border bg-card neon-glow">
-              <p className="text-[10px] text-muted-foreground mb-1">
-                Остаток (Kaspi/Card)
-              </p>
-              <p
-                className={`text-xl font-bold ${
-                  totals.remainingKaspi >= 0 ? 'text-sky-400' : 'text-red-500'
-                }`}
-              >
-                {formatMoney(totals.remainingKaspi)} ₸
-              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">Наличные</p>
+                  <p className="text-xl font-bold text-green-400">
+                    {formatMoney(totals.incomeCash)} ₸
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">
+                    Kaspi + Карта
+                  </p>
+                  <p className="text-xl font-bold text-green-400">
+                    {formatMoney(totals.incomeNonCash)} ₸
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-border/60">
+                <p className="text-[10px] text-muted-foreground mb-1">
+                  ВСЕГО ВЫРУЧКА
+                </p>
+                <p className="text-2xl font-bold text-green-400">
+                  {formatMoney(totals.totalIncome)} ₸
+                </p>
+              </div>
             </Card>
 
-            <Card className="p-3 border-border bg-card neon-glow border-accent/60">
-              <p className="text-[10px] text-muted-foreground mb-1">Чистая Прибыль</p>
-              <p
-                className={`text-xl font-bold ${
-                  totals.profit >= 0 ? 'text-yellow-400' : 'text-red-500'
-                }`}
-              >
-                {formatMoney(totals.profit)} ₸
+            {/* Расходы */}
+            <Card className="p-4 border-border bg-card neon-glow">
+              <p className="text-xs font-semibold text-red-400 mb-2 uppercase tracking-wide">
+                Расходы
               </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">Наличные</p>
+                  <p className="text-xl font-bold text-red-400">
+                    {formatMoney(totals.expenseCash)} ₸
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">
+                    Kaspi (безнал)
+                  </p>
+                  <p className="text-xl font-bold text-red-400">
+                    {formatMoney(totals.expenseKaspi)} ₸
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-border/60">
+                <p className="text-[10px] text-muted-foreground mb-1">
+                  ВСЕГО РАСХОДЫ
+                </p>
+                <p className="text-2xl font-bold text-red-400">
+                  {formatMoney(totals.totalExpense)} ₸
+                </p>
+              </div>
+            </Card>
+
+            {/* Остатки и прибыль */}
+            <Card className="p-4 border-border bg-card neon-glow border-accent/60">
+              <p className="text-xs font-semibold text-accent mb-2 uppercase tracking-wide">
+                Остатки и прибыль
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">Остаток (нал)</p>
+                  <p
+                    className={`text-xl font-bold ${
+                      totals.remainingCash >= 0 ? 'text-sky-400' : 'text-red-500'
+                    }`}
+                  >
+                    {formatMoney(totals.remainingCash)} ₸
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">
+                    Остаток (Kaspi/Card)
+                  </p>
+                  <p
+                    className={`text-xl font-bold ${
+                      totals.remainingKaspi >= 0 ? 'text-sky-400' : 'text-red-500'
+                    }`}
+                  >
+                    {formatMoney(totals.remainingKaspi)} ₸
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-border/60">
+                <p className="text-[10px] text-muted-foreground mb-1">
+                  ЧИСТАЯ ПРИБЫЛЬ
+                </p>
+                <p
+                  className={`text-2xl font-bold ${
+                    totals.profit >= 0 ? 'text-yellow-400' : 'text-red-500'
+                  }`}
+                >
+                  {formatMoney(totals.profit)} ₸
+                </p>
+              </div>
             </Card>
           </div>
 
-          {/* Интеллектуальный анализ */}
+          {/* ИНТЕЛЛЕКТУАЛЬНЫЙ АНАЛИЗ */}
           <Card className="p-6 border-border bg-card neon-glow">
             <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-accent" />
@@ -804,17 +962,17 @@ export default function ReportsPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <TrendCard
-                title="Динамика Общего Дохода"
+                title="Динамика общей выручки"
                 current={totals.totalIncome}
                 previous={totalsPrev.totalIncome}
                 Icon={TrendingUp}
               />
               <TrendCard
-                title="Динамика Общего Расхода"
+                title="Динамика общих расходов"
                 current={totals.totalExpense}
                 previous={totalsPrev.totalExpense}
                 Icon={TrendingDown}
-                isExpense={true}
+                isExpense
               />
               <TrendCard
                 title="Рентабельность"
@@ -834,12 +992,12 @@ export default function ReportsPage() {
             </div>
           </Card>
 
-          {/* Структура выручки и расходов */}
+          {/* СТРУКТУРА РАСХОДОВ / ВЫРУЧКИ */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="p-6 border-border bg-card neon-glow flex flex-col">
               <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                 <TrendingDown className="w-4 h-4 text-red-400" />
-                Топ-10 расходов
+                Топ-10 категорий расходов
               </h3>
               <div className="h-80">
                 {expenseByCategoryData.length === 0 ? (
@@ -853,13 +1011,17 @@ export default function ReportsPage() {
                       layout="vertical"
                       margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                     >
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.2} stroke="#555" />
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        opacity={0.2}
+                        stroke="#555"
+                      />
                       <XAxis type="number" stroke="#ccc" />
                       <YAxis
                         type="category"
                         dataKey="name"
                         stroke="#ccc"
-                        width={80}
+                        width={100}
                       />
                       <Tooltip
                         {...tooltipStyles}
@@ -868,7 +1030,11 @@ export default function ReportsPage() {
                           'Сумма',
                         ]}
                       />
-                      <Bar dataKey="amount" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                      <Bar
+                        dataKey="amount"
+                        fill="#ef4444"
+                        radius={[0, 4, 4, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -878,7 +1044,7 @@ export default function ReportsPage() {
             <Card className="p-6 border-border bg-card neon-glow flex flex-col">
               <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                 <PieIcon className="w-4 h-4 text-blue-400" />
-                Структура выручки (по Точкам)
+                Структура выручки по компаниям
               </h3>
               <div className="h-80">
                 {incomeByCompanyData.length === 0 ? (
@@ -915,7 +1081,7 @@ export default function ReportsPage() {
                         }}
                         itemStyle={{ color: '#fff' }}
                         formatter={(value: number) => [
-                          `${formatMoney(value)}`,
+                          `${formatMoney(value)} ₸`,
                           'Выручка',
                         ]}
                       />
@@ -932,47 +1098,59 @@ export default function ReportsPage() {
             </Card>
           </div>
 
-          {/* График по времени */}
+          {/* ГРАФИК ПО ВРЕМЕНИ: ДОХОД / РАСХОД / ПРИБЫЛЬ */}
           <Card className="p-6 border-border bg-card neon-glow">
             <h3 className="text-sm font-semibold text-foreground mb-4">
-              Доход / Расход / Прибыль по времени ({groupLabelMap[groupMode]})
+              Динамика: доход / расход / прибыль ({groupLabelMap[groupMode]})
             </h3>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
+                <ComposedChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} stroke="#555" />
                   <XAxis dataKey="label" stroke="#ccc" />
                   <YAxis stroke="#ccc" />
                   <Tooltip
                     {...tooltipStyles}
-                    formatter={(value: any) => [
+                    formatter={(value: any, name: any) => [
                       `${Number(value).toLocaleString('ru-RU')} ₸`,
-                      '',
+                      name === 'income'
+                        ? 'Доход'
+                        : name === 'expense'
+                        ? 'Расход'
+                        : 'Прибыль',
                     ]}
                   />
-                  <Legend wrapperStyle={{ color: '#fff' }} />
-                  <Line
+                  <Legend
+                    wrapperStyle={{ color: '#fff', fontSize: 12 }}
+                    formatter={(value) =>
+                      value === 'income'
+                        ? 'Доход'
+                        : value === 'expense'
+                        ? 'Расход'
+                        : 'Прибыль'
+                    }
+                  />
+                  <Bar
                     dataKey="income"
-                    name="Доход"
-                    stroke="#22c55e"
-                    strokeWidth={3}
-                    dot={{ r: 4 }}
+                    name="income"
+                    fill="#22c55e"
+                    radius={[4, 4, 0, 0]}
                   />
-                  <Line
+                  <Bar
                     dataKey="expense"
-                    name="Расход"
-                    stroke="#ef4444"
-                    strokeWidth={3}
-                    dot={{ r: 4 }}
+                    name="expense"
+                    fill="#ef4444"
+                    radius={[4, 4, 0, 0]}
                   />
                   <Line
+                    type="monotone"
                     dataKey="profit"
-                    name="Прибыль"
+                    name="profit"
                     stroke="#eab308"
                     strokeWidth={3}
                     dot={{ r: 4 }}
                   />
-                </LineChart>
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </Card>
