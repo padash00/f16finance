@@ -32,8 +32,8 @@ type Company = {
 type Operator = {
   id: string
   name: string
-  role?: string | null
-  is_active?: boolean | null
+  short_name: string | null
+  is_active: boolean
 }
 
 type ShiftType = 'day' | 'night'
@@ -61,11 +61,10 @@ export default function AddIncomePage() {
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
-
   const [companyId, setCompanyId] = useState('')
   const [operatorId, setOperatorId] = useState('')
 
-  const [loadingRefs, setLoadingRefs] = useState(true)
+  const [loadingMeta, setLoadingMeta] = useState(true)
 
   const [shift, setShift] = useState<ShiftType>('day')
 
@@ -82,44 +81,31 @@ export default function AddIncomePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // --- Загрузка компаний + операторов ---
   useEffect(() => {
     const load = async () => {
-      setLoadingRefs(true)
-      setError(null)
+      setLoadingMeta(true)
+      const [{ data: compData, error: compErr }, { data: opData, error: opErr }] =
+        await Promise.all([
+          supabase.from('companies').select('id, name, code').order('name'),
+          supabase
+            .from('operators')
+            .select('id, name, short_name, is_active')
+            .eq('is_active', true)
+            .order('name'),
+        ])
 
-      const [compRes, opRes] = await Promise.all([
-        supabase.from('companies').select('id,name,code').order('name'),
-        supabase
-          .from('operators')
-          .select('id,name,role,is_active')
-          .eq('is_active', true)
-          .order('name'),
-      ])
-
-      if (compRes.error || opRes.error) {
-        console.error('Load refs error', compRes.error, opRes.error)
-        setError('Не удалось загрузить справочники')
-        setLoadingRefs(false)
-        return
+      if (compErr || opErr) {
+        console.error('Income add load error', { compErr, opErr })
+        setError('Не удалось загрузить компании/операторов')
+      } else {
+        setCompanies(compData || [])
+        setOperators(opData || [])
+        if (compData && compData.length > 0) {
+          setCompanyId(compData[0].id)
+        }
       }
-
-      const comps = (compRes.data || []) as Company[]
-      const ops = (opRes.data || []) as Operator[]
-
-      setCompanies(comps)
-      setOperators(ops)
-
-      if (comps.length > 0) {
-        setCompanyId(comps[0].id)
-      }
-      if (ops.length > 0) {
-        setOperatorId(ops[0].id)
-      }
-
-      setLoadingRefs(false)
+      setLoadingMeta(false)
     }
-
     load()
   }, [])
 
@@ -127,16 +113,9 @@ export default function AddIncomePage() {
     () => companies.find((c) => c.id === companyId) || null,
     [companies, companyId],
   )
-
-  const selectedOperator = useMemo(
-    () => operators.find((o) => o.id === operatorId) || null,
-    [operators, operatorId],
-  )
-
   const isExtra = selectedCompany?.code === 'extra'
   const isArena = selectedCompany?.code === 'arena'
   const isRamen = selectedCompany?.code === 'ramen'
-  const isF16Point = isExtra || isArena || isRamen
 
   const getZone = (): ZoneType => {
     if (isArena) return 'pc'
@@ -151,27 +130,22 @@ export default function AddIncomePage() {
 
     try {
       if (!companyId) throw new Error('Выберите компанию')
+      if (!operatorId) throw new Error('Выберите оператора смены')
 
-      // Для F16-точек оператор обязателен
-      if (isF16Point && !operatorId) {
-        throw new Error('Выберите оператора смены')
-      }
-
-      // --- EXTRA: PS5 / VR отдельными строками ---
+      // Extra (виртуальная выручка по зонам)
       if (isExtra) {
         const ps5 = parseAmount(ps5Amount)
         const vr = parseAmount(vrAmount)
 
-        if (ps5 <= 0 && vr <= 0) {
+        if (ps5 <= 0 && vr <= 0)
           throw new Error('Укажите сумму для PS5 или VR')
-        }
 
         const rows: any[] = []
-
         if (ps5 > 0) {
           rows.push({
             date,
             company_id: companyId,
+            operator_id: operatorId,
             shift,
             zone: 'ps5',
             cash_amount: ps5,
@@ -179,15 +153,13 @@ export default function AddIncomePage() {
             card_amount: 0,
             comment: comment ? `${comment} (PS5)` : 'PS5',
             is_virtual: true,
-            operator_id: operatorId || null,
-            operator_name: selectedOperator?.name || null,
           })
         }
-
         if (vr > 0) {
           rows.push({
             date,
             company_id: companyId,
+            operator_id: operatorId,
             shift,
             zone: 'vr',
             cash_amount: vr,
@@ -195,27 +167,25 @@ export default function AddIncomePage() {
             card_amount: 0,
             comment: comment ? `${comment} (VR)` : 'VR',
             is_virtual: true,
-            operator_id: operatorId || null,
-            operator_name: selectedOperator?.name || null,
           })
         }
 
         const { error } = await supabase.from('incomes').insert(rows)
         if (error) throw error
       } else {
-        // --- Остальные компании: обычные деньги ---
+        // Обычные точки: реальные деньги
         const cashVal = parseAmount(cash)
         const kaspiVal = parseAmount(kaspi)
         const cardVal = parseAmount(card)
 
-        if (cashVal <= 0 && kaspiVal <= 0 && cardVal <= 0) {
+        if (cashVal <= 0 && kaspiVal <= 0 && cardVal <= 0)
           throw new Error('Введите сумму дохода')
-        }
 
         const { error } = await supabase.from('incomes').insert([
           {
             date,
             company_id: companyId,
+            operator_id: operatorId,
             shift,
             zone: getZone(),
             cash_amount: cashVal,
@@ -223,8 +193,6 @@ export default function AddIncomePage() {
             card_amount: cardVal,
             comment: comment || null,
             is_virtual: false,
-            operator_id: operatorId || null,
-            operator_name: selectedOperator?.name || null,
           },
         ])
         if (error) throw error
@@ -237,8 +205,6 @@ export default function AddIncomePage() {
       setSaving(false)
     }
   }
-
-  // --- UI-компоненты ---
 
   const CompanyCard = ({ c }: { c: Company }) => {
     const active = c.id === companyId
@@ -264,24 +230,6 @@ export default function AddIncomePage() {
     )
   }
 
-  const OperatorPill = ({ o }: { o: Operator }) => {
-    const active = o.id === operatorId
-    return (
-      <button
-        type="button"
-        onClick={() => setOperatorId(o.id)}
-        className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1 transition-all ${
-          active
-            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.4)]'
-            : 'bg-input/30 border-border/50 text-muted-foreground hover:bg-white/5 hover:text-foreground'
-        }`}
-      >
-        <UserCircle2 className="w-3.5 h-3.5" />
-        <span className="truncate max-w-[120px]">{o.name}</span>
-      </button>
-    )
-  }
-
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
@@ -296,9 +244,11 @@ export default function AddIncomePage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Новая запись</h1>
+              <h1 className="text-2xl font-bold text-foreground">
+                Новая запись
+              </h1>
               <p className="text-xs text-muted-foreground">
-                Внесение выручки в кассу + оператор смены
+                Внесение выручки в кассу
               </p>
             </div>
           </div>
@@ -368,7 +318,7 @@ export default function AddIncomePage() {
                 <label className="text-xs text-muted-foreground mb-2 block ml-1">
                   Точка (Компания)
                 </label>
-                {loadingRefs ? (
+                {loadingMeta ? (
                   <div className="text-sm text-muted-foreground animate-pulse">
                     Загрузка списка...
                   </div>
@@ -381,30 +331,45 @@ export default function AddIncomePage() {
                 )}
               </div>
 
-              {/* Оператор смены */}
+              {/* Оператор */}
               <div>
                 <label className="text-xs text-muted-foreground mb-2 block ml-1">
                   Оператор смены
                 </label>
-                {loadingRefs ? (
-                  <div className="text-sm text-muted-foreground animate-pulse">
+                {loadingMeta ? (
+                  <div className="text-xs text-muted-foreground">
                     Загрузка операторов...
                   </div>
                 ) : operators.length === 0 ? (
-                  <p className="text-xs text-yellow-400">
-                    Операторы не созданы. Добавьте их в таблицу operators.
+                  <p className="text-xs text-yellow-500">
+                    Операторов нет. Добавьте их в разделе «Операторы».
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {operators.map((o) => (
-                      <OperatorPill key={o.id} o={o} />
-                    ))}
+                    {operators.map((op) => {
+                      const active = op.id === operatorId
+                      return (
+                        <button
+                          key={op.id}
+                          type="button"
+                          onClick={() => setOperatorId(op.id)}
+                          className={`px-3 py-1.5 rounded-full text-[11px] font-medium border flex items-center gap-1 transition-all ${
+                            active
+                              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.35)]'
+                              : 'bg-input/30 border-border/50 text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                          }`}
+                        >
+                          <UserCircle2 className="w-3 h-3" />
+                          {op.short_name || op.name}
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </div>
             </Card>
 
-            {/* 2. Сумма выручки */}
+            {/* 2. Суммы */}
             <Card className="p-5 border-border bg-card neon-glow relative overflow-hidden">
               <div className="absolute -right-6 -top-6 opacity-[0.03] pointer-events-none">
                 {isExtra ? (
@@ -423,7 +388,8 @@ export default function AddIncomePage() {
                   <>
                     <div>
                       <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                        <Gamepad2 className="w-4 h-4 text-purple-500" /> PlayStation 5
+                        <Gamepad2 className="w-4 h-4 text-purple-500" />{' '}
+                        PlayStation 5
                       </label>
                       <input
                         type="number"
@@ -452,7 +418,8 @@ export default function AddIncomePage() {
                   <>
                     <div>
                       <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                        <Wallet className="w-4 h-4 text-green-500" /> Наличные (Cash)
+                        <Wallet className="w-4 h-4 text-green-500" /> Наличные
+                        (Cash)
                       </label>
                       <input
                         type="number"
@@ -465,7 +432,8 @@ export default function AddIncomePage() {
                     </div>
                     <div>
                       <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-red-500" /> Kaspi QR
+                        <CreditCard className="w-4 h-4 text-red-500" /> Kaspi
+                        QR
                       </label>
                       <input
                         type="number"
@@ -476,7 +444,7 @@ export default function AddIncomePage() {
                         className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-red-500 focus:ring-1 focus:ring-red-500/50 transition-all"
                       />
                     </div>
-                    {/* если карта понадобится – просто раскомментируешь */}
+                    {/* Если понадобится карта – раскомментируешь */}
                     {/* <div>
                       <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
                         <CreditCard className="w-4 h-4 text-blue-500" /> Карта
@@ -487,7 +455,7 @@ export default function AddIncomePage() {
                         min="0"
                         value={card}
                         onChange={(e) => setCard(e.target.value)}
-                        className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                        className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-blue-500 transition-all"
                       />
                     </div> */}
                   </>
