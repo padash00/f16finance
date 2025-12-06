@@ -18,7 +18,7 @@ import {
   Menu,
   X,
   BrainCircuit,
-  Landmark,   // Налог 3%
+  Landmark,   // Налоги 3%
   ListChecks, // Правила зарплаты
 } from 'lucide-react'
 import { Button } from './ui/button'
