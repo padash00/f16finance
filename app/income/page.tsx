@@ -16,16 +16,20 @@ import {
   Filter,
   X,
   CalendarDays,
+  UserCircle2,
 } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 
 // --- Типы ---
+type Shift = 'day' | 'night'
+
 type IncomeRow = {
   id: string
   date: string
   company_id: string
-  shift: 'day' | 'night'
+  operator_id: string | null
+  shift: Shift
   zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
@@ -36,12 +40,20 @@ type IncomeRow = {
 type Company = {
   id: string
   name: string
-  code?: string
+  code?: string | null
 }
 
-type ShiftFilter = 'all' | 'day' | 'night'
+type Operator = {
+  id: string
+  name: string
+  short_name: string | null
+  is_active: boolean
+}
+
+type ShiftFilter = 'all' | Shift
 type PayFilter = 'all' | 'cash' | 'kaspi' | 'card'
 type DateRangePreset = 'today' | 'week' | 'month' | 'all'
+type OperatorFilter = 'all' | 'none' | string
 
 // --- Хелперы ---
 const todayISO = () => {
@@ -61,7 +73,8 @@ const addDaysISO = (iso: string, diff: number) => {
   return `${y}-${m}-${day}`
 }
 
-const formatMoney = (v: number | null | undefined) => (v ?? 0).toLocaleString('ru-RU')
+const formatMoney = (v: number | null | undefined) =>
+  (v ?? 0).toLocaleString('ru-RU')
 
 const formatDate = (value: string) => {
   if (!value) return ''
@@ -88,48 +101,78 @@ export default function IncomePage() {
   // Данные
   const [rows, setRows] = useState<IncomeRow[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // Фильтры
   const [dateFrom, setDateFrom] = useState(todayISO())
   const [dateTo, setDateTo] = useState(todayISO())
-  const [activePreset, setActivePreset] = useState<DateRangePreset | null>('today')
+  const [activePreset, setActivePreset] =
+    useState<DateRangePreset | null>('today')
 
   const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
+  const [operatorFilter, setOperatorFilter] =
+    useState<OperatorFilter>('all')
   const [shiftFilter, setShiftFilter] = useState<ShiftFilter>('all')
   const [payFilter, setPayFilter] = useState<PayFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
 
-  // 1. Загрузка компаний
+  // 1. Загрузка компаний и операторов
   useEffect(() => {
-    const fetchCompanies = async () => {
-      const { data, error } = await supabase
-        .from('companies')
-        .select('id, name, code')
-        .order('name', { ascending: true })
+    const fetchRefs = async () => {
+      const [compRes, opRes] = await Promise.all([
+        supabase
+          .from('companies')
+          .select('id, name, code')
+          .order('name', { ascending: true }),
+        supabase
+          .from('operators')
+          .select('id, name, short_name, is_active')
+          .eq('is_active', true)
+          .order('name'),
+      ])
 
-      if (!error && data) setCompanies(data)
+      if (!compRes.error && compRes.data) setCompanies(compRes.data)
+      if (!opRes.error && opRes.data) setOperators(opRes.data)
     }
-    fetchCompanies()
+    fetchRefs()
   }, [])
 
-  // Мапа компаний
+  // Мапы
   const companyMap = useMemo(() => {
     const map = new Map<string, Company>()
     for (const c of companies) map.set(c.id, c)
     return map
   }, [companies])
 
+  const operatorMap = useMemo(() => {
+    const map = new Map<string, Operator>()
+    for (const o of operators) map.set(o.id, o)
+    return map
+  }, [operators])
+
   const companyName = useCallback(
     (companyId: string) => companyMap.get(companyId)?.name ?? '—',
-    [companyMap]
+    [companyMap],
+  )
+
+  const operatorName = useCallback(
+    (operatorId: string | null) => {
+      if (!operatorId) return 'Без оператора'
+      const op = operatorMap.get(operatorId)
+      if (!op) return 'Без оператора'
+      return op.short_name || op.name
+    },
+    [operatorMap],
   )
 
   // ID Extra компании
   const extraCompanyId = useMemo(() => {
-    const extra = companies.find((c) => c.code === 'extra' || c.name === 'F16 Extra')
+    const extra = companies.find(
+      (c) => c.code === 'extra' || c.name === 'F16 Extra',
+    )
     return extra?.id ?? null
   }, [companies])
 
@@ -144,7 +187,7 @@ export default function IncomePage() {
       let query = supabase
         .from('incomes')
         .select(
-          'id, date, company_id, shift, zone, cash_amount, kaspi_amount, card_amount, comment'
+          'id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, card_amount, comment',
         )
         .order('date', { ascending: false })
 
@@ -152,6 +195,12 @@ export default function IncomePage() {
       if (dateTo) query = query.lte('date', dateTo)
       if (companyFilter !== 'all') query = query.eq('company_id', companyFilter)
       if (shiftFilter !== 'all') query = query.eq('shift', shiftFilter)
+
+      if (operatorFilter === 'none') {
+        query = query.is('operator_id', null)
+      } else if (operatorFilter !== 'all') {
+        query = query.eq('operator_id', operatorFilter)
+      }
 
       if (payFilter === 'cash') query = query.gt('cash_amount', 0)
       if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
@@ -164,7 +213,9 @@ export default function IncomePage() {
 
       const t1 = performance.now()
       console.log(
-        `incomes query time: ${(t1 - t0).toFixed(0)} ms, rows: ${data?.length ?? 0}`
+        `incomes query time: ${(t1 - t0).toFixed(
+          0,
+        )} ms, rows: ${data?.length ?? 0}`,
       )
 
       if (error) {
@@ -178,7 +229,14 @@ export default function IncomePage() {
     }
 
     loadData()
-  }, [dateFrom, dateTo, companyFilter, shiftFilter, payFilter])
+  }, [
+    dateFrom,
+    dateTo,
+    companyFilter,
+    shiftFilter,
+    payFilter,
+    operatorFilter,
+  ])
 
   // 3. Локальный поиск
   const filteredRows = useMemo(() => {
@@ -187,7 +245,7 @@ export default function IncomePage() {
     return rows.filter(
       (r) =>
         (r.comment && r.comment.toLowerCase().includes(lowerTerm)) ||
-        (r.zone && r.zone.toLowerCase().includes(lowerTerm))
+        (r.zone && r.zone.toLowerCase().includes(lowerTerm)),
     )
   }, [rows, searchTerm])
 
@@ -256,6 +314,7 @@ export default function IncomePage() {
     const headers = [
       'Дата',
       'Компания',
+      'Оператор',
       'Смена',
       'Зона',
       'Cash',
@@ -268,13 +327,17 @@ export default function IncomePage() {
     const csvContent = [
       headers.join(SEP),
       ...filteredRows.map((r) => {
-        const total = (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.card_amount || 0)
+        const total =
+          (r.cash_amount || 0) +
+          (r.kaspi_amount || 0) +
+          (r.card_amount || 0)
 
         const safeComment = (r.comment || '').replace(/"/g, '""')
 
         return [
           r.date,
           companyName(r.company_id),
+          operatorName(r.operator_id),
           r.shift,
           r.zone ?? '',
           r.cash_amount ?? 0,
@@ -308,7 +371,9 @@ export default function IncomePage() {
           {/* Шапка */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Журнал доходов</h1>
+              <h1 className="text-3xl font-bold text-foreground">
+                Журнал доходов
+              </h1>
               <p className="text-muted-foreground mt-1 text-sm">
                 История операций и быстрый анализ по периодам
               </p>
@@ -339,8 +404,10 @@ export default function IncomePage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Banknote className="w-4 h-4" />{' '}
-                  <span className="text-xs uppercase tracking-wide">Наличные</span>
+                  <Banknote className="w-4 h-4" />
+                  <span className="text-xs uppercase tracking-wide">
+                    Наличные
+                  </span>
                 </div>
                 <div className="text-xl font-bold text-foreground">
                   {formatMoney(totals.cash)} ₸
@@ -348,8 +415,10 @@ export default function IncomePage() {
               </Card>
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Smartphone className="w-4 h-4" />{' '}
-                  <span className="text-xs uppercase tracking-wide">Kaspi</span>
+                  <Smartphone className="w-4 h-4" />
+                  <span className="text-xs uppercase tracking-wide">
+                    Kaspi
+                  </span>
                 </div>
                 <div className="text-xl font-bold text-foreground">
                   {formatMoney(totals.kaspi)} ₸
@@ -357,8 +426,10 @@ export default function IncomePage() {
               </Card>
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <CreditCard className="w-4 h-4" />{' '}
-                  <span className="text-xs uppercase tracking-wide">Карта</span>
+                  <CreditCard className="w-4 h-4" />
+                  <span className="text-xs uppercase tracking-wide">
+                    Карта
+                  </span>
                 </div>
                 <div className="text-xl font-bold text-foreground">
                   {formatMoney(totals.card)} ₸
@@ -379,11 +450,15 @@ export default function IncomePage() {
                           ? 'border-accent text-accent bg-accent/10'
                           : 'border-border text-muted-foreground'
                       } cursor-pointer select-none`}
-                      onClick={() => setIncludeExtraInTotals((v) => !v)}
+                      onClick={() =>
+                        setIncludeExtraInTotals((v) => !v)
+                      }
                     >
                       <span
                         className={`h-2 w-2 rounded-full ${
-                          includeExtraInTotals ? 'bg-accent' : 'bg-muted-foreground/40'
+                          includeExtraInTotals
+                            ? 'bg-accent'
+                            : 'bg-muted-foreground/40'
                         }`}
                       />
                       Extra в итогах
@@ -396,11 +471,16 @@ export default function IncomePage() {
             <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-1">
                 <CalendarDays className="w-3 h-3" />
-                <span className="uppercase tracking-wide">Период:</span>
+                <span className="uppercase tracking-wide">
+                  Период:
+                </span>
                 <span className="font-mono">{periodLabel}</span>
               </div>
               <div>
-                Записей: <span className="font-semibold">{filteredRows.length}</span>
+                Записей:{' '}
+                <span className="font-semibold">
+                  {filteredRows.length}
+                </span>
               </div>
             </div>
           </Card>
@@ -419,19 +499,27 @@ export default function IncomePage() {
                     <input
                       type="date"
                       value={dateFrom}
-                      onChange={(e) => handleDateFromChange(e.target.value)}
+                      onChange={(e) =>
+                        handleDateFromChange(e.target.value)
+                      }
                       className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
                     />
-                    <span className="text-muted-foreground text-xs px-1">→</span>
+                    <span className="text-muted-foreground text-xs px-1">
+                      →
+                    </span>
                     <input
                       type="date"
                       value={dateTo}
-                      onChange={(e) => handleDateToChange(e.target.value)}
+                      onChange={(e) =>
+                        handleDateToChange(e.target.value)
+                      }
                       className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
                     />
                   </div>
                   <div className="flex bg-input/30 rounded-md border border-border/30 p-0.5">
-                    {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map((p) => (
+                    {(
+                      ['today', 'week', 'month', 'all'] as DateRangePreset[]
+                    ).map((p) => (
                       <button
                         key={p}
                         onClick={() => setPreset(p)}
@@ -454,10 +542,14 @@ export default function IncomePage() {
               {/* Остальные фильтры */}
               <div className="flex flex-wrap items-end gap-2 w-full lg:w-auto">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">Компания</label>
+                  <label className="text-[10px] text-muted-foreground">
+                    Компания
+                  </label>
                   <select
                     value={companyFilter}
-                    onChange={(e) => setCompanyFilter(e.target.value)}
+                    onChange={(e) =>
+                      setCompanyFilter(e.target.value)
+                    }
                     className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground min-w-[130px]"
                   >
                     <option value="all">Все компании</option>
@@ -470,10 +562,39 @@ export default function IncomePage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">Смена</label>
+                  <label className="text-[10px] text-muted-foreground">
+                    Оператор
+                  </label>
+                  <select
+                    value={operatorFilter}
+                    onChange={(e) =>
+                      setOperatorFilter(
+                        e.target.value as OperatorFilter,
+                      )
+                    }
+                    className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground min-w-[130px]"
+                  >
+                    <option value="all">Все</option>
+                    <option value="none">Без оператора</option>
+                    {operators.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.short_name || o.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-muted-foreground">
+                    Смена
+                  </label>
                   <select
                     value={shiftFilter}
-                    onChange={(e) => setShiftFilter(e.target.value as ShiftFilter)}
+                    onChange={(e) =>
+                      setShiftFilter(
+                        e.target.value as ShiftFilter,
+                      )
+                    }
                     className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground"
                   >
                     <option value="all">Все</option>
@@ -483,10 +604,16 @@ export default function IncomePage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">Оплата</label>
+                  <label className="text-[10px] text-muted-foreground">
+                    Оплата
+                  </label>
                   <select
                     value={payFilter}
-                    onChange={(e) => setPayFilter(e.target.value as PayFilter)}
+                    onChange={(e) =>
+                      setPayFilter(
+                        e.target.value as PayFilter,
+                      )
+                    }
                     className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground"
                   >
                     <option value="all">Любая</option>
@@ -497,14 +624,18 @@ export default function IncomePage() {
                 </div>
 
                 <div className="flex flex-col gap-1 flex-1 min-w-[170px]">
-                  <label className="text-[10px] text-muted-foreground">Поиск</label>
+                  <label className="text-[10px] text-muted-foreground">
+                    Поиск
+                  </label>
                   <div className="relative">
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <input
                       type="text"
                       placeholder="Комментарий или зона..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={(e) =>
+                        setSearchTerm(e.target.value)
+                      }
                       className="w-full h-9 pl-8 pr-6 bg-input border border-border rounded text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-accent transition-colors"
                     />
                     {searchTerm && (
@@ -535,20 +666,31 @@ export default function IncomePage() {
                   <tr className="sticky top-0 z-10 border-b border-border bg-secondary/40 backdrop-blur text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                     <th className="px-4 py-3 text-left">Дата</th>
                     <th className="px-4 py-3 text-left">Компания</th>
+                    <th className="px-4 py-3 text-left">Оператор</th>
                     <th className="px-4 py-3 text-center">Смена</th>
                     <th className="px-4 py-3 text-left">Зона</th>
-                    <th className="px-4 py-3 text-right text-green-500">Нал</th>
-                    <th className="px-4 py-3 text-right text-blue-500">Kaspi</th>
-                    <th className="px-4 py-3 text-right text-purple-500">Карта</th>
-                    <th className="px-4 py-3 text-right text-foreground">Всего</th>
-                    <th className="px-4 py-3 text-left">Комментарий</th>
+                    <th className="px-4 py-3 text-right text-green-500">
+                      Нал
+                    </th>
+                    <th className="px-4 py-3 text-right text-blue-500">
+                      Kaspi
+                    </th>
+                    <th className="px-4 py-3 text-right text-purple-500">
+                      Карта
+                    </th>
+                    <th className="px-4 py-3 text-right text-foreground">
+                      Всего
+                    </th>
+                    <th className="px-4 py-3 text-left">
+                      Комментарий
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="text-sm">
                   {loading && (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={10}
                         className="px-6 py-10 text-center text-muted-foreground animate-pulse"
                       >
                         Загрузка данных...
@@ -564,14 +706,19 @@ export default function IncomePage() {
                         (row.card_amount || 0)
                       const company = companyMap.get(row.company_id)
                       const isExtra =
-                        company?.code === 'extra' || company?.name === 'F16 Extra'
+                        company?.code === 'extra' ||
+                        company?.name === 'F16 Extra'
 
                       return (
                         <tr
                           key={row.id}
-                          className={`border-b border-border/40 hover:bg-white/5 transition-colors ${
+                          className={`border-b border-border/40 hover:bg:white/5 transition-colors ${
                             idx % 2 === 0 ? 'bg-card/40' : ''
-                          } ${isExtra ? 'bg-yellow-500/5 border-l-2 border-l-yellow-500/50' : ''}`}
+                          } ${
+                            isExtra
+                              ? 'bg-yellow-500/5 border-l-2 border-l-yellow-500/50'
+                              : ''
+                          }`}
                         >
                           <td className="px-4 py-3 whitespace-nowrap text-muted-foreground font-mono text-xs">
                             {formatDate(row.date)}
@@ -583,6 +730,12 @@ export default function IncomePage() {
                                 EXTRA
                               </span>
                             )}
+                          </td>
+                          <td className="px-4 py-3 text-xs whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1">
+                              <UserCircle2 className="w-3.5 h-3.5 text-muted-foreground" />
+                              {operatorName(row.operator_id)}
+                            </span>
                           </td>
                           <td className="px-4 py-3 text-center">
                             {row.shift === 'day' ? (
@@ -596,24 +749,36 @@ export default function IncomePage() {
                           </td>
                           <td
                             className={`px-4 py-3 text-right font-mono ${
-                              row.cash_amount ? 'text-foreground' : 'text-muted-foreground/20'
+                              row.cash_amount
+                                ? 'text-foreground'
+                                : 'text-muted-foreground/20'
                             }`}
                           >
-                            {row.cash_amount ? formatMoney(row.cash_amount) : '—'}
+                            {row.cash_amount
+                              ? formatMoney(row.cash_amount)
+                              : '—'}
                           </td>
                           <td
                             className={`px-4 py-3 text-right font-mono ${
-                              row.kaspi_amount ? 'text-foreground' : 'text-muted-foreground/20'
+                              row.kaspi_amount
+                                ? 'text-foreground'
+                                : 'text-muted-foreground/20'
                             }`}
                           >
-                            {row.kaspi_amount ? formatMoney(row.kaspi_amount) : '—'}
+                            {row.kaspi_amount
+                              ? formatMoney(row.kaspi_amount)
+                              : '—'}
                           </td>
                           <td
                             className={`px-4 py-3 text-right font-mono ${
-                              row.card_amount ? 'text-foreground' : 'text-muted-foreground/20'
+                              row.card_amount
+                                ? 'text-foreground'
+                                : 'text-muted-foreground/20'
                             }`}
                           >
-                            {row.card_amount ? formatMoney(row.card_amount) : '—'}
+                            {row.card_amount
+                              ? formatMoney(row.card_amount)
+                              : '—'}
                           </td>
                           <td className="px-4 py-3 text-right font-bold text-accent font-mono bg-accent/5">
                             {formatMoney(total)}
@@ -627,10 +792,16 @@ export default function IncomePage() {
 
                   {!loading && !error && filteredRows.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-6 py-12 text-center text-muted-foreground">
+                      <td
+                        colSpan={10}
+                        className="px-6 py-12 text-center text-muted-foreground"
+                      >
                         <div className="flex flex-col items-center gap-2">
                           <Filter className="w-8 h-8 opacity-20" />
-                          <p>Записи не найдены. Попробуйте изменить фильтры.</p>
+                          <p>
+                            Записи не найдены. Попробуйте изменить
+                            фильтры.
+                          </p>
                         </div>
                       </td>
                     </tr>
