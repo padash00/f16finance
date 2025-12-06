@@ -18,7 +18,8 @@ import {
   Menu,
   X,
   BrainCircuit,
-  Landmark, // 👈 Налог 3%
+  Landmark,   // Налог 3%
+  ListChecks, // Правила зарплаты
 } from 'lucide-react'
 import { Button } from './ui/button'
 
@@ -36,7 +37,7 @@ const menuGroups = [
       { icon: TrendingUp, label: 'Доходы', href: '/income' },
       { icon: TrendingDown, label: 'Расходы', href: '/expenses' },
       { icon: Landmark, label: 'Налоги 3%', href: '/tax' },
-      { icon: CalendarClock, label: 'Зарплата', href: '/salary' }, // 💰 ЗАРПЛАТА
+      { icon: CalendarClock, label: 'Зарплата', href: '/salary' },
     ],
   },
   {
@@ -50,7 +51,8 @@ const menuGroups = [
     title: 'Система',
     items: [
       { icon: Tags, label: 'Категории', href: '/categories' },
-      { icon: User, label: 'Операторы', href: '/operators' }, // 👥 ОПЕРАТОРЫ
+      { icon: User, label: 'Операторы', href: '/operators' },
+      { icon: ListChecks, label: 'Правила зарплаты', href: '/salary/rules' },
       { icon: Settings, label: 'Настройки', href: '/settings' },
     ],
   },
@@ -138,7 +140,9 @@ export function Sidebar() {
             <User className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">Администратор</p>
+            <p className="text-sm font-medium text-white truncate">
+              Администратор
+            </p>
             <p className="text-[10px] text-muted-foreground truncate">
               admin@f16.kz
             </p>
