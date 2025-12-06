@@ -399,6 +399,7 @@ export default function DashboardPage() {
     const insight: AIInsight = {
       score,
       status,
+      status,
       summary,
       recommendation,
       margin,
@@ -453,7 +454,7 @@ export default function DashboardPage() {
       <Sidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
-          {/* Хедер + фильтры + быстрые действия */}
+          {/* Хедер + фильтры */}
           <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
@@ -492,43 +493,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Справа: быстрые кнопки + фильтры по датам */}
+            {/* Справа: Только фильтры по датам */}
             <div className="flex flex-col items-stretch gap-2 w-full xl:w-auto">
-              {/* Быстрые действия */}
-              <div className="flex flex-wrap gap-2 justify-end">
-                <Link href="/income/add">
-                  <Button
-                    size="sm"
-                    className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700 text-xs"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <DollarSign className="w-3 h-3" />
-                    <span>Доход</span>
-                  </Button>
-                </Link>
-                <Link href="/expenses/add">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 h-8 border-red-500/50 text-red-300 hover:bg-red-500/10 text-xs"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <TrendingDown className="w-3 h-3" />
-                    <span>Расход</span>
-                  </Button>
-                </Link>
-                <Link href="/operators">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 h-8 text-xs"
-                  >
-                    <Users className="w-3 h-3" />
-                    <span>Операторы</span>
-                  </Button>
-                </Link>
-              </div>
-
               {/* Фильтры по датам */}
               <div className="flex flex-col sm:flex-row items-center gap-2 w-full xl:w-auto">
                 <div className="bg-card/50 border border-border/50 rounded-lg p-1 flex items-center gap-1 w-full sm:w-auto justify-center">
