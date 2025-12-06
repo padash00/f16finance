@@ -18,7 +18,7 @@ import {
   Menu,
   X,
   BrainCircuit,
-  Landmark // 👈 ДОБАВИЛ ЭТОТ ИМПОРТ, ЧТОБЫ ИСЧЕЗЛА ОШИБКА
+  Landmark, // 👈 Налог 3%
 } from 'lucide-react'
 import { Button } from './ui/button'
 
@@ -28,36 +28,38 @@ const menuGroups = [
     items: [
       { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
       { icon: BrainCircuit, label: 'AI Советник', href: '/analysis' },
-    ]
+    ],
   },
   {
     title: 'Финансы',
     items: [
       { icon: TrendingUp, label: 'Доходы', href: '/income' },
       { icon: TrendingDown, label: 'Расходы', href: '/expenses' },
-      { icon: Landmark, label: 'Налоги 3%', href: '/tax' }, 
-    ]
+      { icon: Landmark, label: 'Налоги 3%', href: '/tax' },
+      { icon: CalendarClock, label: 'Зарплата', href: '/salary' }, // 💰 ЗАРПЛАТА
+    ],
   },
   {
     title: 'Аналитика',
     items: [
       { icon: BarChart3, label: 'Общие отчёты', href: '/reports' },
       { icon: CalendarRange, label: 'Недельный отчёт', href: '/weekly-report' },
-    ]
+    ],
   },
   {
     title: 'Система',
     items: [
       { icon: Tags, label: 'Категории', href: '/categories' },
+      { icon: User, label: 'Операторы', href: '/operators' }, // 👥 ОПЕРАТОРЫ
       { icon: Settings, label: 'Настройки', href: '/settings' },
-    ]
-  }
+    ],
+  },
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [isOpen, setIsOpen] = useState(false) 
+  const [isOpen, setIsOpen] = useState(false)
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -76,8 +78,11 @@ export function Sidebar() {
             F16 <span className="text-purple-500">Finance</span>
           </span>
         </div>
-        <button className="md:hidden text-muted-foreground" onClick={() => setIsOpen(false)}>
-            <X className="w-6 h-6" />
+        <button
+          className="md:hidden text-muted-foreground"
+          onClick={() => setIsOpen(false)}
+        >
+          <X className="w-6 h-6" />
         </button>
       </div>
 
@@ -93,9 +98,9 @@ export function Sidebar() {
                 const active = pathname === item.href
 
                 return (
-                  <Link 
-                    key={item.href} 
-                    href={item.href} 
+                  <Link
+                    key={item.href}
+                    href={item.href}
                     className="block"
                     onClick={() => setIsOpen(false)}
                   >
@@ -107,10 +112,16 @@ export function Sidebar() {
                             : 'text-muted-foreground hover:bg-white/5 hover:text-white'
                         }`}
                     >
-                      <Icon className={`w-4 h-4 transition-colors ${active ? 'text-white' : 'text-muted-foreground group-hover:text-white'}`} />
+                      <Icon
+                        className={`w-4 h-4 transition-colors ${
+                          active
+                            ? 'text-white'
+                            : 'text-muted-foreground group-hover:text-white'
+                        }`}
+                      />
                       <span className="text-sm">{item.label}</span>
                       {active && (
-                         <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_5px_white]" />
+                        <div className="ml-auto w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_5px_white]" />
                       )}
                     </div>
                   </Link>
@@ -123,19 +134,21 @@ export function Sidebar() {
 
       <div className="p-4 border-t border-white/10">
         <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-500 to-cyan-500 flex items-center justify-center text-white shadow-lg">
-                <User className="w-5 h-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">Администратор</p>
-                <p className="text-[10px] text-muted-foreground truncate">admin@f16.kz</p>
-            </div>
-            <button 
-                onClick={handleLogout}
-                className="text-muted-foreground hover:text-red-400 transition-colors p-2"
-            >
-                <LogOut className="w-4 h-4" />
-            </button>
+          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-500 to-cyan-500 flex items-center justify-center text-white shadow-lg">
+            <User className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white truncate">Администратор</p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              admin@f16.kz
+            </p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="text-muted-foreground hover:text-red-400 transition-colors p-2"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>
@@ -144,28 +157,31 @@ export function Sidebar() {
   return (
     <>
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#09090b] border-b border-white/10 z-40 flex items-center justify-between px-4">
-         <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">
-                F
-            </div>
-            <span className="font-bold text-white">F16</span>
-         </div>
-         <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)}>
-            <Menu className="w-6 h-6 text-white" />
-         </Button>
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">
+            F
+          </div>
+          <span className="font-bold text-white">F16</span>
+        </div>
+        <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)}>
+          <Menu className="w-6 h-6 text-white" />
+        </Button>
       </div>
 
       {isOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm md:hidden">
-            <div className="absolute top-0 left-0 bottom-0 w-3/4 max-w-xs bg-[#09090b] border-r border-white/10 shadow-2xl">
-                <NavContent />
-            </div>
-            <div className="absolute inset-0 -z-10" onClick={() => setIsOpen(false)} />
+          <div className="absolute top-0 left-0 bottom-0 w-3/4 max-w-xs bg-[#09090b] border-r border-white/10 shadow-2xl">
+            <NavContent />
+          </div>
+          <div
+            className="absolute inset-0 -z-10"
+            onClick={() => setIsOpen(false)}
+          />
         </div>
       )}
 
       <aside className="hidden md:flex w-64 bg-[#09090b] border-r border-white/10 h-screen sticky top-0 flex-col">
-         <NavContent />
+        <NavContent />
       </aside>
     </>
   )
