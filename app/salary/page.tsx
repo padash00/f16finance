@@ -546,8 +546,7 @@ export default function SalaryPage() {
             </Card>
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">Авто-бонусы</p>
-              <p className="text-2xl font-bold text-emer
-ald-400">
+              <p className="text-2xl font-bold text-emerald-400">
                 {formatMoney(totalBonus)}
               </p>
             </Card>
@@ -677,8 +676,8 @@ ald-400">
             </table>
           </Card>
 
-          {/* Форма добавления корректировки */}
-          {stats.operators.length > 0 && (
+          {/* Форма добавления корректировки – всегда все активные операторы */}
+          {operators.length > 0 && (
             <Card className="p-4 border-border bg-card/80">
               <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
                 <DollarSign className="w-4 h-4 text-emerald-400" />
@@ -699,11 +698,19 @@ ald-400">
                     className="w-full bg-input border border-border rounded-md px-2 py-1.5 text-xs"
                   >
                     <option value="">Не выбран</option>
-                    {stats.operators.map((op) => (
-                      <option key={op.operatorId} value={op.operatorId}>
-                        {op.operatorName}
-                      </option>
-                    ))}
+                    {operators
+                      .filter((op) => op.is_active)
+                      .sort((a, b) =>
+                        (a.short_name || a.name).localeCompare(
+                          b.short_name || b.name,
+                          'ru',
+                        ),
+                      )
+                      .map((op) => (
+                        <option key={op.id} value={op.id}>
+                          {op.short_name || op.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
 
