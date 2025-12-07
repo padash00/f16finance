@@ -47,7 +47,7 @@ type Operator = {
   id: string
   name: string
   short_name: string | null
-  is_active: boolean | null
+  is_active: boolean
 }
 
 type AggregatedShift = {
@@ -87,7 +87,7 @@ type OperatorWeekStat = {
   bonusSalary: number
   totalSalary: number        // база + авто-бонусы
   totalTurnover: number
-  autoDebts: number          // долги за неделю (из таблицы debts)
+  autoDebts: number          // долги из таблицы debts
   manualPlus: number         // ручные премии
   manualMinus: number        // ручные долги/штрафы
   finalSalary: number        // к выплате
@@ -112,7 +112,6 @@ const formatISO = (d: Date) =>
   )}-${String(d.getDate()).padStart(2, '0')}`
 
 export default function SalaryPage() {
-  // Текущая неделя по умолчанию
   const today = new Date()
   const monday = getMonday(today)
   const sunday = new Date(monday)
@@ -131,7 +130,7 @@ export default function SalaryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Форма добавления корректировки
+  // Форма корректировок
   const [adjOperatorId, setAdjOperatorId] = useState('')
   const [adjDate, setAdjDate] = useState(formatISO(today))
   const [adjKind, setAdjKind] = useState<AdjustmentKind>('debt')
@@ -158,7 +157,7 @@ export default function SalaryPage() {
     setDateTo(formatISO(sun))
   }
 
-  // Загрузка данных по диапазону
+  // Загрузка данных
   useEffect(() => {
     const load = async () => {
       setLoading(true)
@@ -245,11 +244,11 @@ export default function SalaryPage() {
     return map
   }, [rules])
 
-  // ВСЕ "активные" операторы (NULL тоже считаем активным)
-  const activeOperators = useMemo(
+  // Список операторов для селекта (все активные)
+  const operatorOptions = useMemo(
     () =>
       operators
-        .filter((op) => op.is_active !== false)
+        .filter((o) => o.is_active)
         .sort((a, b) =>
           (a.short_name || a.name).localeCompare(
             b.short_name || b.name,
@@ -271,7 +270,37 @@ export default function SalaryPage() {
     let totalTurnover = 0
     const DEFAULT_BASE = 8000
 
-    // 1. Собираем смены (оператор + компания + дата + смена)
+    // Создаём "пустую" строку оператора при необходимости
+    const ensureOperator = (
+      id: string | null,
+    ): OperatorWeekStat | null => {
+      if (!id) return null
+      let op = byOperator.get(id)
+      if (!op) {
+        const meta = operatorById[id]
+        const displayName =
+          meta?.short_name || meta?.name || 'Без имени'
+
+        op = {
+          operatorId: id,
+          operatorName: displayName,
+          shifts: 0,
+          basePerShift: DEFAULT_BASE,
+          baseSalary: 0,
+          bonusSalary: 0,
+          totalSalary: 0,
+          totalTurnover: 0,
+          autoDebts: 0,
+          manualPlus: 0,
+          manualMinus: 0,
+          finalSalary: 0,
+        }
+        byOperator.set(id, op)
+      }
+      return op
+    }
+
+    // 1. Собираем смены
     for (const row of incomes) {
       if (!row.operator_id) continue
 
@@ -279,7 +308,8 @@ export default function SalaryPage() {
       if (!company || !company.code) continue
       if (!['arena', 'ramen', 'extra'].includes(company.code)) continue
 
-      const shift: 'day' | 'night' = row.shift === 'night' ? 'night' : 'day'
+      const shift: 'day' | 'night' =
+        row.shift === 'night' ? 'night' : 'day'
 
       const total =
         Number(row.cash_amount || 0) +
@@ -309,11 +339,10 @@ export default function SalaryPage() {
       aggregated.set(key, ex)
     }
 
-    // 2. Считаем базу и авто-бонусы
+    // 2. Считаем базу и авто-бонусы по сменам
     for (const sh of aggregated.values()) {
       const keyRule = `${sh.companyCode}_${sh.shift}`
       const rule = rulesMap[keyRule]
-
       const basePerShift = rule?.base_per_shift ?? DEFAULT_BASE
 
       let bonus = 0
@@ -324,61 +353,27 @@ export default function SalaryPage() {
         bonus += rule.threshold2_bonus || 0
       }
 
-      let op = byOperator.get(sh.operatorId)
-      if (!op) {
-        op = {
-          operatorId: sh.operatorId,
-          operatorName: sh.operatorName,
-          shifts: 0,
-          basePerShift,
-          baseSalary: 0,
-          bonusSalary: 0,
-          totalSalary: 0,
-          totalTurnover: 0,
-          autoDebts: 0,
-          manualPlus: 0,
-          manualMinus: 0,
-          finalSalary: 0,
-        }
-      }
+      let op = ensureOperator(sh.operatorId)
+      if (!op) continue
 
+      op.basePerShift = basePerShift
       op.shifts += 1
       op.baseSalary += basePerShift
       op.bonusSalary += bonus
       op.totalSalary += basePerShift + bonus
       op.totalTurnover += sh.turnover
 
-      byOperator.set(sh.operatorId, op)
       totalTurnover += sh.turnover
     }
 
-    // Хелпер: создать запись оператора, если её ещё нет
-    const ensureOperator = (id: string): OperatorWeekStat | null => {
-      if (!id) return null
-      let op = byOperator.get(id)
-      if (!op) {
-        const meta = operatorById[id]
-        const displayName = meta?.short_name || meta?.name || 'Без имени'
-        op = {
-          operatorId: id,
-          operatorName: displayName,
-          shifts: 0,
-          basePerShift: DEFAULT_BASE,
-          baseSalary: 0,
-          bonusSalary: 0,
-          totalSalary: 0,
-          totalTurnover: 0,
-          autoDebts: 0,
-          manualPlus: 0,
-          manualMinus: 0,
-          finalSalary: 0,
-        }
-        byOperator.set(id, op)
-      }
-      return op
+    // 2а. Гарантируем, что все активные операторы есть в карте,
+    // даже если у них нет смен/корректировок/долгов
+    for (const o of operators) {
+      if (!o.is_active) continue
+      ensureOperator(o.id)
     }
 
-    // 3. Ручные корректировки (штрафы/премии)
+    // 3. Ручные корректировки
     for (const adj of adjustments) {
       const op = ensureOperator(adj.operator_id)
       if (!op) continue
@@ -393,10 +388,9 @@ export default function SalaryPage() {
       }
     }
 
-    // 4. Долги из таблицы debts за эту неделю
+    // 4. Долги за неделю из debts
     let totalDebts = 0
     for (const d of debts) {
-      if (!d.operator_id) continue
       const op = ensureOperator(d.operator_id)
       if (!op) continue
 
@@ -407,7 +401,7 @@ export default function SalaryPage() {
       totalDebts += amount
     }
 
-    // 5. Финальный пересчёт «к выплате»
+    // 5. Финальный пересчёт
     let totalSalary = 0
     for (const op of byOperator.values()) {
       op.finalSalary =
@@ -465,7 +459,6 @@ export default function SalaryPage() {
 
       setAdjustments((prev) => [...prev, data as AdjustmentRow])
 
-      // Сброс формы
       setAdjAmount('')
       setAdjComment('')
       setAdjKind('debt')
@@ -690,8 +683,8 @@ export default function SalaryPage() {
             </table>
           </Card>
 
-          {/* Форма добавления корректировки – все активные операторы */}
-          {activeOperators.length > 0 && (
+          {/* Форма корректировок */}
+          {operatorOptions.length > 0 && (
             <Card className="p-4 border-border bg-card/80">
               <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
                 <DollarSign className="w-4 h-4 text-emerald-400" />
@@ -712,7 +705,7 @@ export default function SalaryPage() {
                     className="w-full bg-input border border-border rounded-md px-2 py-1.5 text-xs"
                   >
                     <option value="">Не выбран</option>
-                    {activeOperators.map((op) => (
+                    {operatorOptions.map((op) => (
                       <option key={op.id} value={op.id}>
                         {op.short_name || op.name}
                       </option>
