@@ -47,7 +47,7 @@ type Operator = {
   id: string
   name: string
   short_name: string | null
-  is_active: boolean
+  is_active: boolean | null
 }
 
 type AggregatedShift = {
@@ -244,6 +244,20 @@ export default function SalaryPage() {
     }
     return map
   }, [rules])
+
+  // ВСЕ "активные" операторы (NULL тоже считаем активным)
+  const activeOperators = useMemo(
+    () =>
+      operators
+        .filter((op) => op.is_active !== false)
+        .sort((a, b) =>
+          (a.short_name || a.name).localeCompare(
+            b.short_name || b.name,
+            'ru',
+          ),
+        ),
+    [operators],
+  )
 
   // Основная математика
   const stats = useMemo(() => {
@@ -676,8 +690,8 @@ export default function SalaryPage() {
             </table>
           </Card>
 
-          {/* Форма добавления корректировки – всегда все активные операторы */}
-          {operators.length > 0 && (
+          {/* Форма добавления корректировки – все активные операторы */}
+          {activeOperators.length > 0 && (
             <Card className="p-4 border-border bg-card/80">
               <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
                 <DollarSign className="w-4 h-4 text-emerald-400" />
@@ -698,19 +712,11 @@ export default function SalaryPage() {
                     className="w-full bg-input border border-border rounded-md px-2 py-1.5 text-xs"
                   >
                     <option value="">Не выбран</option>
-                    {operators
-                      .filter((op) => op.is_active)
-                      .sort((a, b) =>
-                        (a.short_name || a.name).localeCompare(
-                          b.short_name || b.name,
-                          'ru',
-                        ),
-                      )
-                      .map((op) => (
-                        <option key={op.id} value={op.id}>
-                          {op.short_name || op.name}
-                        </option>
-                      ))}
+                    {activeOperators.map((op) => (
+                      <option key={op.id} value={op.id}>
+                        {op.short_name || op.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
