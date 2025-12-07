@@ -1,20 +1,18 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, FormEvent } from 'react'
+import Link from 'next/link'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
 import {
+  CalendarDays,
   ArrowLeft,
-  Settings2,
+  DollarSign,
+  Users2,
   AlertTriangle,
-  Check,
-  Plus,
 } from 'lucide-react'
-import Link from 'next/link'
-
-type Shift = 'day' | 'night'
 
 type Company = {
   id: string
@@ -22,173 +20,360 @@ type Company = {
   code: string | null
 }
 
-type RuleRow = {
-  id: number | null
+type IncomeRow = {
+  id: string
+  date: string
+  company_id: string
+  shift: 'day' | 'night' | null
+  cash_amount: number | null
+  kaspi_amount: number | null
+  card_amount: number | null
+  operator_id: string | null
+  operator_name: string | null
+}
+
+type SalaryRule = {
+  id: number
   company_code: string
-  shift_type: Shift
-  base_per_shift: number | null
+  shift_type: 'day' | 'night'
+  base_per_shift: number
   threshold1_turnover: number | null
   threshold1_bonus: number | null
   threshold2_turnover: number | null
   threshold2_bonus: number | null
-  is_active: boolean
 }
 
-const formatMoney = (v: number | null | undefined) =>
-  (v ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
+type AggregatedShift = {
+  operatorId: string
+  operatorName: string
+  companyCode: string
+  date: string
+  shift: 'day' | 'night'
+  turnover: number
+}
 
-export default function SalaryRulesPage() {
+type AdjustmentKind = 'debt' | 'fine' | 'bonus'
+
+type AdjustmentRow = {
+  id: number
+  operator_id: string
+  date: string
+  amount: number
+  kind: AdjustmentKind
+  comment: string | null
+}
+
+type OperatorWeekStat = {
+  operatorId: string
+  operatorName: string
+  shifts: number
+  basePerShift: number
+  baseSalary: number
+  bonusSalary: number
+  totalSalary: number       // база + авто-бонусы
+  totalTurnover: number
+  manualPlus: number        // ручные премии
+  manualMinus: number       // долги/штрафы
+  finalSalary: number       // к выплате
+}
+
+const formatMoney = (v: number) =>
+  v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
+
+const getMonday = (d: Date) => {
+  const date = new Date(d)
+  const day = date.getDay() || 7
+  if (day !== 1) {
+    date.setDate(date.getDate() - (day - 1))
+  }
+  return date
+}
+
+const formatISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    '0',
+  )}-${String(d.getDate()).padStart(2, '0')}`
+
+export default function SalaryPage() {
+  const today = new Date()
+  const monday = getMonday(today)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+
+  const [dateFrom, setDateFrom] = useState(formatISO(monday))
+  const [dateTo, setDateTo] = useState(formatISO(sunday))
+
   const [companies, setCompanies] = useState<Company[]>([])
-  const [rules, setRules] = useState<RuleRow[]>([])
+  const [incomes, setIncomes] = useState<IncomeRow[]>([])
+  const [rules, setRules] = useState<SalaryRule[]>([])
+  const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([])
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [savingRowIndex, setSavingRowIndex] = useState<number | null>(null)
-  const [adding, setAdding] = useState(false)
 
+  // Форма корректировок
+  const [adjOperatorId, setAdjOperatorId] = useState('')
+  const [adjDate, setAdjDate] = useState(formatISO(today))
+  const [adjKind, setAdjKind] = useState<AdjustmentKind>('debt')
+  const [adjAmount, setAdjAmount] = useState('')
+  const [adjComment, setAdjComment] = useState('')
+  const [adjSaving, setAdjSaving] = useState(false)
+
+  const setThisWeek = () => {
+    const now = new Date()
+    const mon = getMonday(now)
+    const sun = new Date(mon)
+    sun.setDate(mon.getDate() + 6)
+    setDateFrom(formatISO(mon))
+    setDateTo(formatISO(sun))
+  }
+
+  const setLastWeek = () => {
+    const now = new Date()
+    const mon = getMonday(now)
+    mon.setDate(mon.getDate() - 7)
+    const sun = new Date(mon)
+    sun.setDate(mon.getDate() + 6)
+    setDateFrom(formatISO(mon))
+    setDateTo(formatISO(sun))
+  }
+
+  // Загрузка данных
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       setError(null)
 
-      const [compRes, rulesRes] = await Promise.all([
+      const [compRes, incRes, rulesRes, adjRes] = await Promise.all([
         supabase.from('companies').select('id,name,code'),
+        supabase
+          .from('incomes')
+          .select(
+            'id,date,company_id,shift,cash_amount,kaspi_amount,card_amount,operator_id,operator_name',
+          )
+          .gte('date', dateFrom)
+          .lte('date', dateTo),
         supabase
           .from('operator_salary_rules')
           .select(
-            'id,company_code,shift_type,base_per_shift,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus,is_active',
+            'id,company_code,shift_type,base_per_shift,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus',
           )
-          .order('company_code', { ascending: true })
-          .order('shift_type', { ascending: true }),
+          .eq('is_active', true),
+        supabase
+          .from('operator_salary_adjustments')
+          .select('id,operator_id,date,amount,kind,comment')
+          .gte('date', dateFrom)
+          .lte('date', dateTo),
       ])
 
-      if (compRes.error || rulesRes.error) {
-        console.error('salary rules load error', {
-          compErr: compRes.error,
-          rulesErr: rulesRes.error,
-        })
-        setError('Ошибка загрузки правил зарплаты')
+      if (compRes.error || incRes.error || rulesRes.error || adjRes.error) {
+        console.error(
+          'Salary load error',
+          compRes.error,
+          incRes.error,
+          rulesRes.error,
+          adjRes.error,
+        )
+        setError('Ошибка загрузки данных для расчёта зарплаты')
         setLoading(false)
         return
       }
 
       setCompanies((compRes.data || []) as Company[])
-      setRules(
-        (rulesRes.data || []).map((r) => ({
-          ...r,
-          id: r.id as number,
-        })) as RuleRow[],
-      )
+      setIncomes((incRes.data || []) as IncomeRow[])
+      setRules((rulesRes.data || []) as SalaryRule[])
+      setAdjustments((adjRes.data || []) as AdjustmentRow[])
       setLoading(false)
     }
 
     load()
-  }, [])
+  }, [dateFrom, dateTo])
 
-  const companyCodes = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          companies
-            .map((c) => c.code)
-            .filter((c): c is string => Boolean(c)),
-        ),
-      ),
-    [companies],
-  )
+  const companyById = useMemo(() => {
+    const map: Record<string, Company> = {}
+    for (const c of companies) map[c.id] = c
+    return map
+  }, [companies])
 
-  const companyLabel = (code: string) => {
-    const company = companies.find((c) => c.code === code)
-    return company ? `${company.name} (${code})` : code
-  }
+  const rulesMap = useMemo(() => {
+    const map: Record<string, SalaryRule> = {}
+    for (const r of rules) {
+      const key = `${r.company_code}_${r.shift_type}`
+      map[key] = r
+    }
+    return map
+  }, [rules])
 
-  const updateField = <K extends keyof RuleRow>(
-    index: number,
-    field: K,
-    value: RuleRow[K],
-  ) => {
-    setRules((prev) =>
-      prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)),
+  // Основная математика
+  const stats = useMemo(() => {
+    if (!incomes.length) {
+      return {
+        operators: [] as OperatorWeekStat[],
+        totalSalary: 0,
+        totalTurnover: 0,
+      }
+    }
+
+    const aggregated = new Map<string, AggregatedShift>()
+
+    // 1. агрегируем смены
+    for (const row of incomes) {
+      if (!row.operator_id || !row.operator_name) continue
+
+      const company = companyById[row.company_id]
+      if (!company || !company.code) continue
+      if (!['arena', 'ramen', 'extra'].includes(company.code)) continue
+
+      const shift: 'day' | 'night' = row.shift === 'night' ? 'night' : 'day'
+
+      const total =
+        Number(row.cash_amount || 0) +
+        Number(row.kaspi_amount || 0) +
+        Number(row.card_amount || 0)
+
+      const key = `${row.operator_id}_${row.company_id}_${row.date}_${shift}`
+
+      const ex = aggregated.get(key) || {
+        operatorId: row.operator_id,
+        operatorName: row.operator_name,
+        companyCode: company.code,
+        date: row.date,
+        shift,
+        turnover: 0,
+      }
+
+      ex.turnover += total
+      aggregated.set(key, ex)
+    }
+
+    const byOperator = new Map<string, OperatorWeekStat>()
+    let totalTurnover = 0
+    const DEFAULT_BASE = 8000
+
+    // 2. считаем базу и авто-бонусы
+    for (const sh of aggregated.values()) {
+      const keyRule = `${sh.companyCode}_${sh.shift}`
+      const rule = rulesMap[keyRule]
+
+      const basePerShift = rule?.base_per_shift ?? DEFAULT_BASE
+
+      let bonus = 0
+      if (rule?.threshold1_turnover && sh.turnover >= rule.threshold1_turnover) {
+        bonus += rule.threshold1_bonus || 0
+      }
+      if (rule?.threshold2_turnover && sh.turnover >= rule.threshold2_turnover) {
+        bonus += rule.threshold2_bonus || 0
+      }
+
+      let op = byOperator.get(sh.operatorId)
+      if (!op) {
+        op = {
+          operatorId: sh.operatorId,
+          operatorName: sh.operatorName,
+          shifts: 0,
+          basePerShift,
+          baseSalary: 0,
+          bonusSalary: 0,
+          totalSalary: 0,
+          totalTurnover: 0,
+          manualPlus: 0,
+          manualMinus: 0,
+          finalSalary: 0,
+        }
+      }
+
+      op.shifts += 1
+      op.baseSalary += basePerShift
+      op.bonusSalary += bonus
+      op.totalSalary += basePerShift + bonus
+      op.totalTurnover += sh.turnover
+
+      byOperator.set(sh.operatorId, op)
+      totalTurnover += sh.turnover
+    }
+
+    // 3. ручные корректировки
+    for (const adj of adjustments) {
+      const op = byOperator.get(adj.operator_id)
+      if (!op) continue
+
+      const amount = Number(adj.amount || 0)
+      if (!Number.isFinite(amount) || amount <= 0) continue
+
+      if (adj.kind === 'bonus') {
+        op.manualPlus += amount
+      } else {
+        op.manualMinus += amount
+      }
+    }
+
+    // 4. финал
+    let totalSalary = 0
+    for (const op of byOperator.values()) {
+      op.finalSalary = op.totalSalary + op.manualPlus - op.manualMinus
+      totalSalary += op.finalSalary
+    }
+
+    const operators = Array.from(byOperator.values()).sort((a, b) =>
+      a.operatorName.localeCompare(b.operatorName, 'ru'),
     )
-  }
 
-  const parseNumber = (value: string) => {
-    if (value === '') return null
-    const n = Number(value.replace(',', '.').replace(/\s/g, ''))
-    return Number.isFinite(n) ? n : null
-  }
+    return { operators, totalSalary, totalTurnover }
+  }, [incomes, companyById, rulesMap, adjustments])
 
-  const handleSaveRow = async (index: number) => {
-    const row = rules[index]
-    if (!row.company_code) {
-      setError('Укажите компанию (code) для правила')
-      return
-    }
-    if (!row.shift_type) {
-      setError('Укажите смену (day/night) для правила')
-      return
-    }
+  // Добавление корректировки
+  const handleAddAdjustment = async (e: FormEvent) => {
+    e.preventDefault()
     setError(null)
-    setSavingRowIndex(index)
-
-    const payload = {
-      company_code: row.company_code,
-      shift_type: row.shift_type,
-      base_per_shift: row.base_per_shift ?? 0,
-      threshold1_turnover: row.threshold1_turnover,
-      threshold1_bonus: row.threshold1_bonus,
-      threshold2_turnover: row.threshold2_turnover,
-      threshold2_bonus: row.threshold2_bonus,
-      is_active: row.is_active,
-    }
 
     try {
-      if (row.id) {
-        const { error } = await supabase
-          .from('operator_salary_rules')
-          .update(payload)
-          .eq('id', row.id)
-        if (error) throw error
-      } else {
-        const { data, error } = await supabase
-          .from('operator_salary_rules')
-          .insert([payload])
-          .select()
-          .single()
-        if (error) throw error
-        setRules((prev) =>
-          prev.map((r, i) =>
-            i === index ? { ...r, id: data.id as number } : r,
-          ),
-        )
+      if (!adjOperatorId) throw new Error('Выберите оператора')
+      if (!adjDate) throw new Error('Выберите дату корректировки')
+
+      const amountNum = Number(
+        adjAmount.replace(',', '.').replace(/\s/g, ''),
+      )
+      if (!Number.isFinite(amountNum) || amountNum <= 0) {
+        throw new Error('Введите сумму корректировки')
       }
+
+      setAdjSaving(true)
+
+      const { data, error } = await supabase
+        .from('operator_salary_adjustments')
+        .insert([
+          {
+            operator_id: adjOperatorId,
+            date: adjDate,
+            amount: Math.round(amountNum),
+            kind: adjKind,
+            comment: adjComment.trim() || null,
+          },
+        ])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setAdjustments((prev) => [...prev, data as AdjustmentRow])
+
+      setAdjAmount('')
+      setAdjComment('')
+      setAdjKind('debt')
+      setAdjSaving(false)
     } catch (err: any) {
       console.error(err)
-      setError(
-        err.message || 'Ошибка при сохранении правила зарплаты',
-      )
-    } finally {
-      setSavingRowIndex(null)
+      setError(err.message || 'Ошибка при добавлении корректировки')
+      setAdjSaving(false)
     }
   }
 
-  const handleAddRow = () => {
-    setAdding(true)
-    setRules((prev) => [
-      ...prev,
-      {
-        id: null,
-        company_code: companyCodes[0] || 'arena',
-        shift_type: 'day',
-        base_per_shift: 8000,
-        threshold1_turnover: 120_000,
-        threshold1_bonus: 2000,
-        threshold2_turnover: 160_000,
-        threshold2_bonus: 2000,
-        is_active: true,
-      },
-    ])
-    setAdding(false)
-  }
+  const totalShifts = stats.operators.reduce((s, o) => s + o.shifts, 0)
+  const totalBase = stats.operators.reduce((s, o) => s + o.baseSalary, 0)
+  const totalBonus = stats.operators.reduce((s, o) => s + o.bonusSalary, 0)
+  const totalMinus = stats.operators.reduce((s, o) => s + o.manualMinus, 0)
+  const totalPlus = stats.operators.reduce((s, o) => s + o.manualPlus, 0)
 
   return (
     <div className="flex min-h-screen bg-[#050505] text-foreground">
@@ -198,118 +383,107 @@ export default function SalaryRulesPage() {
           {/* Хедер */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <Link href="/salary">
+              <Link href="/income">
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <ArrowLeft className="w-5 h-5" />
                 </Button>
               </Link>
               <div>
                 <h1 className="text-2xl font-bold flex items-center gap-2">
-                  <Settings2 className="w-6 h-6 text-emerald-400" />
-                  Правила расчёта зарплаты
+                  <Users2 className="w-6 h-6 text-emerald-400" />
+                  Зарплата операторов
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Таблица operator_salary_rules — одна строка = одна комбинация
-                  (компания + смена)
+                  База + авто-бонусы + корректировки (F16 Arena / Ramen / Extra)
                 </p>
               </div>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-2 text-xs"
-              onClick={handleAddRow}
-              disabled={adding}
-            >
-              <Plus className="w-4 h-4" />
-              Добавить правило
-            </Button>
+
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex gap-2">
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={setLastWeek}
+                  className="h-7 text-[11px]"
+                >
+                  Прошлая неделя
+                </Button>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={setThisWeek}
+                  className="h-7 text-[11px]"
+                >
+                  Эта неделя
+                </Button>
+              </div>
+              <div className="flex items-center gap-2 bg-card/40 border border-border/60 rounded-lg px-2 py-1">
+                <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="bg-transparent text-xs px-1 py-0.5 rounded outline-none"
+                />
+                <span className="text-[10px] text-muted-foreground">—</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="bg-transparent text-xs px-1 py-0.5 rounded outline-none"
+                />
+              </div>
+            </div>
           </div>
 
           {error && (
-            <Card className="p-3 border border-red-500/40 bg-red-950/30 text-sm text-red-200 flex items-center gap-2">
+            <Card className="p-4 border border-red-500/40 bg-red-950/30 text-sm text-red-200 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4" />
               {error}
             </Card>
           )}
 
-          {/* Подсказка по логике */}
-          <Card className="p-4 border-border bg-card/80 text-xs text-muted-foreground space-y-1.5">
-            <p>
-              <span className="font-semibold text-foreground">
-                base_per_shift
-              </span>{' '}
-              — оклад за смену.
-            </p>
-            <p>
-              Если{' '}
-              <span className="font-mono">
-                turnover ≥ threshold1_turnover
-              </span>
-              , добавляем{' '}
-              <span className="font-mono">threshold1_bonus</span>.
-            </p>
-            <p>
-              Если{' '}
-              <span className="font-mono">
-                turnover ≥ threshold2_turnover
-              </span>
-              , добавляем{' '}
-              <span className="font-mono">threshold2_bonus</span> сверху.
-            </p>
-            <p>
-              Итого зарплата за смену ={' '}
-              <span className="font-mono">
-                base_per_shift + bonus1 + bonus2
-              </span>
-              .
-            </p>
-          </Card>
+          {/* Сводка */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="p-4 border-border bg-card/70">
+              <p className="text-xs text-muted-foreground mb-1">Всего смен</p>
+              <p className="text-2xl font-bold">{totalShifts}</p>
+            </Card>
+            <Card className="p-4 border-border bg-card/70">
+              <p className="text-xs text-muted-foreground mb-1">База (оклад)</p>
+              <p className="text-2xl font-bold">{formatMoney(totalBase)}</p>
+            </Card>
+            <Card className="p-4 border-border bg-card/70">
+              <p className="text-xs text-muted-foreground mb-1">Авто-бонусы</p>
+              <p className="text-2xl font-bold text-emerald-400">
+                {formatMoney(totalBonus)}
+              </p>
+            </Card>
+            <Card className="p-4 border-border bg-card/70">
+              <p className="text-xs text-muted-foreground mb-1">
+                К выплате (после корректировок)
+              </p>
+              <p className="text-2xl font-bold text-sky-400">
+                {formatMoney(stats.totalSalary)}
+              </p>
+            </Card>
+          </div>
 
-          {/* Таблица правил */}
+          {/* Таблица операторов */}
           <Card className="p-4 border-border bg-card/80 overflow-x-auto">
             <table className="w-full text-xs md:text-sm border-collapse">
               <thead>
                 <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
-                  <th className="py-2 px-2 text-left">Компания</th>
-                  <th className="py-2 px-2 text-center">Смена</th>
-                  <th className="py-2 px-2 text-right">
-                    Оклад / смена
-                    <br />
-                    <span className="text-[10px] font-normal">
-                      base_per_shift
-                    </span>
-                  </th>
-                  <th className="py-2 px-2 text-right">
-                    Порог&nbsp;1
-                    <br />
-                    <span className="text-[10px] font-normal">
-                      threshold1_turnover
-                    </span>
-                  </th>
-                  <th className="py-2 px-2 text-right">
-                    Бонус&nbsp;1
-                    <br />
-                    <span className="text-[10px] font-normal">
-                      threshold1_bonus
-                    </span>
-                  </th>
-                  <th className="py-2 px-2 text-right">
-                    Порог&nbsp;2
-                    <br />
-                    <span className="text-[10px] font-normal">
-                      threshold2_turnover
-                    </span>
-                  </th>
-                  <th className="py-2 px-2 text-right">
-                    Бонус&nbsp;2
-                    <br />
-                    <span className="text-[10px] font-normal">
-                      threshold2_bonus
-                    </span>
-                  </th>
-                  <th className="py-2 px-2 text-center">Активно</th>
-                  <th className="py-2 px-2 text-right">Сохранить</th>
+                  <th className="py-2 text-left px-2">Оператор</th>
+                  <th className="py-2 text-center px-2">Смен</th>
+                  <th className="py-2 text-right px-2">Оклад / смена</th>
+                  <th className="py-2 text-right px-2">База</th>
+                  <th className="py-2 text-right px-2">Авто-бонус</th>
+                  <th className="py-2 text-right px-2">Корр. −</th>
+                  <th className="py-2 text-right px-2">Корр. +</th>
+                  <th className="py-2 text-right px-2">К выплате</th>
+                  <th className="py-2 text-right px-2 text-[10px]">Выручка</th>
                 </tr>
               </thead>
               <tbody>
@@ -324,186 +498,176 @@ export default function SalaryRulesPage() {
                   </tr>
                 )}
 
-                {!loading && rules.length === 0 && (
+                {!loading && stats.operators.length === 0 && (
                   <tr>
                     <td
                       colSpan={9}
                       className="py-6 text-center text-muted-foreground text-xs"
                     >
-                      Правил пока нет. Нажми «Добавить правило».
+                      Нет смен в выбранном периоде.
                     </td>
                   </tr>
                 )}
 
                 {!loading &&
-                  rules.map((r, index) => (
+                  stats.operators.map((op) => (
                     <tr
-                      key={r.id ?? `new-${index}`}
+                      key={op.operatorId}
                       className="border-t border-border/40 hover:bg-white/5"
                     >
-                      {/* Компания */}
-                      <td className="py-1.5 px-2">
-                        <select
-                          value={r.company_code}
-                          onChange={(e) =>
-                            updateField(index, 'company_code', e.target.value)
-                          }
-                          className="w-full bg-input border border-border rounded-md px-2 py-1 text-xs"
-                        >
-                          {companyCodes.length === 0 && (
-                            <option value={r.company_code}>
-                              {r.company_code || 'code'}
-                            </option>
-                          )}
-                          {companyCodes.map((code) => (
-                            <option key={code} value={code}>
-                              {companyLabel(code)}
-                            </option>
-                          ))}
-                        </select>
+                      <td className="py-1.5 px-2 font-medium">
+                        {op.operatorName}
                       </td>
-
-                      {/* Смена */}
-                      <td className="py-1.5 px-2 text-center">
-                        <select
-                          value={r.shift_type}
-                          onChange={(e) =>
-                            updateField(
-                              index,
-                              'shift_type',
-                              e.target.value as Shift,
-                            )
-                          }
-                          className="bg-input border border-border rounded-md px-2 py-1 text-xs"
-                        >
-                          <option value="day">День</option>
-                          <option value="night">Ночь</option>
-                        </select>
-                      </td>
-
-                      {/* base_per_shift */}
+                      <td className="py-1.5 px-2 text-center">{op.shifts}</td>
                       <td className="py-1.5 px-2 text-right">
-                        <input
-                          type="number"
-                          className="w-full bg-input border border-border rounded-md px-2 py-1 text-xs text-right"
-                          value={r.base_per_shift ?? ''}
-                          onChange={(e) =>
-                            updateField(
-                              index,
-                              'base_per_shift',
-                              parseNumber(e.target.value),
-                            )
-                          }
-                        />
-                        <div className="text-[10px] text-muted-foreground">
-                          {formatMoney(r.base_per_shift)}
-                        </div>
+                        {formatMoney(op.basePerShift)}
                       </td>
-
-                      {/* threshold1_turnover */}
                       <td className="py-1.5 px-2 text-right">
-                        <input
-                          type="number"
-                          className="w-full bg-input border border-border rounded-md px-2 py-1 text-xs text-right"
-                          value={r.threshold1_turnover ?? ''}
-                          onChange={(e) =>
-                            updateField(
-                              index,
-                              'threshold1_turnover',
-                              parseNumber(e.target.value),
-                            )
-                          }
-                        />
-                        <div className="text-[10px] text-muted-foreground">
-                          {formatMoney(r.threshold1_turnover)}
-                        </div>
+                        {formatMoney(op.baseSalary)}
                       </td>
-
-                      {/* threshold1_bonus */}
-                      <td className="py-1.5 px-2 text-right">
-                        <input
-                          type="number"
-                          className="w-full bg-input border border-border rounded-md px-2 py-1 text-xs text-right"
-                          value={r.threshold1_bonus ?? ''}
-                          onChange={(e) =>
-                            updateField(
-                              index,
-                              'threshold1_bonus',
-                              parseNumber(e.target.value),
-                            )
-                          }
-                        />
-                        <div className="text-[10px] text-muted-foreground">
-                          {formatMoney(r.threshold1_bonus)}
-                        </div>
+                      <td className="py-1.5 px-2 text-right text-emerald-300">
+                        {formatMoney(op.bonusSalary)}
                       </td>
-
-                      {/* threshold2_turnover */}
-                      <td className="py-1.5 px-2 text-right">
-                        <input
-                          type="number"
-                          className="w-full bg-input border border-border rounded-md px-2 py-1 text-xs text-right"
-                          value={r.threshold2_turnover ?? ''}
-                          onChange={(e) =>
-                            updateField(
-                              index,
-                              'threshold2_turnover',
-                              parseNumber(e.target.value),
-                            )
-                          }
-                        />
-                        <div className="text-[10px] text-muted-foreground">
-                          {formatMoney(r.threshold2_turnover)}
-                        </div>
+                      <td className="py-1.5 px-2 text-right text-red-300">
+                        {formatMoney(op.manualMinus)}
                       </td>
-
-                      {/* threshold2_bonus */}
-                      <td className="py-1.5 px-2 text-right">
-                        <input
-                          type="number"
-                          className="w-full bg-input border border-border rounded-md px-2 py-1 text-xs text-right"
-                          value={r.threshold2_bonus ?? ''}
-                          onChange={(e) =>
-                            updateField(
-                              index,
-                              'threshold2_bonus',
-                              parseNumber(e.target.value),
-                            )
-                          }
-                        />
-                        <div className="text-[10px] text-muted-foreground">
-                          {formatMoney(r.threshold2_bonus)}
-                        </div>
+                      <td className="py-1.5 px-2 text-right text-emerald-300">
+                        {formatMoney(op.manualPlus)}
                       </td>
-
-                      {/* is_active */}
-                      <td className="py-1.5 px-2 text-center">
-                        <input
-                          type="checkbox"
-                          checked={r.is_active}
-                          onChange={(e) =>
-                            updateField(index, 'is_active', e.target.checked)
-                          }
-                        />
+                      <td className="py-1.5 px-2 text-right font-semibold">
+                        {formatMoney(op.finalSalary)}
                       </td>
-
-                      {/* save */}
-                      <td className="py-1.5 px-2 text-right">
-                        <Button
-                          size="xs"
-                          className="h-7 px-3 text-[11px] gap-1"
-                          onClick={() => handleSaveRow(index)}
-                          disabled={savingRowIndex === index}
-                        >
-                          <Check className="w-3 h-3" />
-                          {savingRowIndex === index ? 'Сохранение...' : 'Сохранить'}
-                        </Button>
+                      <td className="py-1.5 px-2 text-right text-muted-foreground">
+                        {formatMoney(op.totalTurnover)}
                       </td>
                     </tr>
                   ))}
+
+                {!loading && stats.operators.length > 0 && (
+                  <tr className="border-t border-border mt-2">
+                    <td className="py-2 px-2 font-bold text-right" colSpan={3}>
+                      Итого:
+                    </td>
+                    <td className="py-2 px-2 text-right font-bold">
+                      {formatMoney(totalBase)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-bold text-emerald-300">
+                      {formatMoney(totalBonus)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-bold text-red-300">
+                      {formatMoney(totalMinus)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-bold text-emerald-300">
+                      {formatMoney(totalPlus)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-bold">
+                      {formatMoney(stats.totalSalary)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-bold text-sky-400">
+                      {formatMoney(stats.totalTurnover)}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </Card>
+
+          {/* Форма корректировок */}
+          {stats.operators.length > 0 && (
+            <Card className="p-4 border-border bg-card/80">
+              <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                <DollarSign className="w-4 h-4 text-emerald-400" />
+                Добавить долг / штраф / премию
+              </h3>
+
+              <form
+                onSubmit={handleAddAdjustment}
+                className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end"
+              >
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">
+                    Оператор
+                  </label>
+                  <select
+                    value={adjOperatorId}
+                    onChange={(e) => setAdjOperatorId(e.target.value)}
+                    className="w-full bg-input border border-border rounded-md px-2 py-1.5 text-xs"
+                  >
+                    <option value="">Не выбран</option>
+                    {stats.operators.map((op) => (
+                      <option key={op.operatorId} value={op.operatorId}>
+                        {op.operatorName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">
+                    Дата
+                  </label>
+                  <input
+                    type="date"
+                    value={adjDate}
+                    onChange={(e) => setAdjDate(e.target.value)}
+                    className="w-full bg-input border border-border rounded-md px-2 py-1.5 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">
+                    Тип
+                  </label>
+                  <select
+                    value={adjKind}
+                    onChange={(e) =>
+                      setAdjKind(e.target.value as AdjustmentKind)
+                    }
+                    className="w-full bg-input border border-border rounded-md px-2 py-1.5 text-xs"
+                  >
+                    <option value="debt">Долг (минус)</option>
+                    <option value="fine">Штраф (минус)</option>
+                    <option value="bonus">Премия (плюс)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">
+                    Сумма
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={adjAmount}
+                    onChange={(e) => setAdjAmount(e.target.value)}
+                    className="w-full bg-input border border-border rounded-md px-2 py-1.5 text-xs"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-[11px] text-muted-foreground mb-1 block">
+                    Комментарий
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      value={adjComment}
+                      onChange={(e) => setAdjComment(e.target.value)}
+                      className="flex-1 bg-input border border-border rounded-md px-2 py-1.5 text-xs"
+                      placeholder="Например: штраф за кассу −10к / премия за турнир..."
+                    />
+                    <Button
+                      type="submit"
+                      disabled={adjSaving}
+                      className="whitespace-nowrap h-9 text-xs"
+                    >
+                      {adjSaving ? 'Сохранение...' : 'Добавить'}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            </Card>
+          )}
         </div>
       </main>
     </div>
