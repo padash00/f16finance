@@ -29,6 +29,7 @@ type IncomeRow = {
   kaspi_amount: number | null
   card_amount: number | null
   operator_id: string | null
+  // оператор теперь НЕ обязателен в доходах
   operator_name: string | null
 }
 
@@ -41,6 +42,13 @@ type SalaryRule = {
   threshold1_bonus: number | null
   threshold2_turnover: number | null
   threshold2_bonus: number | null
+}
+
+type Operator = {
+  id: string
+  name: string
+  short_name: string | null
+  is_active: boolean
 }
 
 type AggregatedShift = {
@@ -70,11 +78,11 @@ type OperatorWeekStat = {
   basePerShift: number
   baseSalary: number
   bonusSalary: number
-  totalSalary: number       // база + авто-бонусы
+  totalSalary: number // база + авто-бонусы
   totalTurnover: number
-  manualPlus: number        // ручные премии
-  manualMinus: number       // долги/штрафы
-  finalSalary: number       // к выплате
+  manualPlus: number // ручные премии
+  manualMinus: number // долги/штрафы
+  finalSalary: number // к выплате
 }
 
 const formatMoney = (v: number) =>
@@ -82,7 +90,7 @@ const formatMoney = (v: number) =>
 
 const getMonday = (d: Date) => {
   const date = new Date(d)
-  const day = date.getDay() || 7
+  const day = date.getDay() || 7 // 1..7, где 1 = Пн
   if (day !== 1) {
     date.setDate(date.getDate() - (day - 1))
   }
@@ -96,6 +104,7 @@ const formatISO = (d: Date) =>
   )}-${String(d.getDate()).padStart(2, '0')}`
 
 export default function SalaryPage() {
+  // Текущая неделя по умолчанию
   const today = new Date()
   const monday = getMonday(today)
   const sunday = new Date(monday)
@@ -108,11 +117,12 @@ export default function SalaryPage() {
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [rules, setRules] = useState<SalaryRule[]>([])
   const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Форма корректировок
+  // Форма добавления корректировки
   const [adjOperatorId, setAdjOperatorId] = useState('')
   const [adjDate, setAdjDate] = useState(formatISO(today))
   const [adjKind, setAdjKind] = useState<AdjustmentKind>('debt')
@@ -139,13 +149,13 @@ export default function SalaryPage() {
     setDateTo(formatISO(sun))
   }
 
-  // Загрузка данных
+  // Загрузка данных по диапазону
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       setError(null)
 
-      const [compRes, incRes, rulesRes, adjRes] = await Promise.all([
+      const [compRes, incRes, rulesRes, adjRes, opsRes] = await Promise.all([
         supabase.from('companies').select('id,name,code'),
         supabase
           .from('incomes')
@@ -165,15 +175,25 @@ export default function SalaryPage() {
           .select('id,operator_id,date,amount,kind,comment')
           .gte('date', dateFrom)
           .lte('date', dateTo),
+        supabase
+          .from('operators')
+          .select('id,name,short_name,is_active'),
       ])
 
-      if (compRes.error || incRes.error || rulesRes.error || adjRes.error) {
+      if (
+        compRes.error ||
+        incRes.error ||
+        rulesRes.error ||
+        adjRes.error ||
+        opsRes.error
+      ) {
         console.error(
           'Salary load error',
           compRes.error,
           incRes.error,
           rulesRes.error,
           adjRes.error,
+          opsRes.error,
         )
         setError('Ошибка загрузки данных для расчёта зарплаты')
         setLoading(false)
@@ -184,6 +204,7 @@ export default function SalaryPage() {
       setIncomes((incRes.data || []) as IncomeRow[])
       setRules((rulesRes.data || []) as SalaryRule[])
       setAdjustments((adjRes.data || []) as AdjustmentRow[])
+      setOperators((opsRes.data || []) as Operator[])
       setLoading(false)
     }
 
@@ -216,10 +237,14 @@ export default function SalaryPage() {
     }
 
     const aggregated = new Map<string, AggregatedShift>()
+    const operatorById: Record<string, Operator> = {}
+    for (const o of operators) {
+      operatorById[o.id] = o
+    }
 
-    // 1. агрегируем смены
+    // 1. Собираем смены (оператор + компания + дата + смена)
     for (const row of incomes) {
-      if (!row.operator_id || !row.operator_name) continue
+      if (!row.operator_id) continue
 
       const company = companyById[row.company_id]
       if (!company || !company.code) continue
@@ -234,14 +259,22 @@ export default function SalaryPage() {
 
       const key = `${row.operator_id}_${row.company_id}_${row.date}_${shift}`
 
-      const ex = aggregated.get(key) || {
-        operatorId: row.operator_id,
-        operatorName: row.operator_name,
-        companyCode: company.code,
-        date: row.date,
-        shift,
-        turnover: 0,
-      }
+      const meta = operatorById[row.operator_id]
+      const displayName =
+        meta?.short_name ||
+        meta?.name ||
+        row.operator_name ||
+        'Без имени'
+
+      const ex =
+        aggregated.get(key) || {
+          operatorId: row.operator_id,
+          operatorName: displayName,
+          companyCode: company.code,
+          date: row.date,
+          shift,
+          turnover: 0,
+        }
 
       ex.turnover += total
       aggregated.set(key, ex)
@@ -251,7 +284,7 @@ export default function SalaryPage() {
     let totalTurnover = 0
     const DEFAULT_BASE = 8000
 
-    // 2. считаем базу и авто-бонусы
+    // 2. Считаем базу и авто-бонусы по правилам
     for (const sh of aggregated.values()) {
       const keyRule = `${sh.companyCode}_${sh.shift}`
       const rule = rulesMap[keyRule]
@@ -293,7 +326,7 @@ export default function SalaryPage() {
       totalTurnover += sh.turnover
     }
 
-    // 3. ручные корректировки
+    // 3. Накладываем ручные корректировки (долги/штрафы/премии)
     for (const adj of adjustments) {
       const op = byOperator.get(adj.operator_id)
       if (!op) continue
@@ -301,26 +334,33 @@ export default function SalaryPage() {
       const amount = Number(adj.amount || 0)
       if (!Number.isFinite(amount) || amount <= 0) continue
 
-      if (adj.kind === 'bonus') {
+      const isPlus = adj.kind === 'bonus'
+      if (isPlus) {
         op.manualPlus += amount
       } else {
         op.manualMinus += amount
       }
     }
 
-    // 4. финал
+    // 4. Финальный пересчёт «к выплате»
     let totalSalary = 0
     for (const op of byOperator.values()) {
       op.finalSalary = op.totalSalary + op.manualPlus - op.manualMinus
       totalSalary += op.finalSalary
     }
 
-    const operators = Array.from(byOperator.values()).sort((a, b) =>
+    const operatorsStats = Array.from(byOperator.values()).sort((a, b) =>
       a.operatorName.localeCompare(b.operatorName, 'ru'),
     )
 
-    return { operators, totalSalary, totalTurnover }
-  }, [incomes, companyById, rulesMap, adjustments])
+    return { operators: operatorsStats, totalSalary, totalTurnover }
+  }, [incomes, companies, rulesMap, adjustments, operators])
+
+  const totalShifts = stats.operators.reduce((s, o) => s + o.shifts, 0)
+  const totalBase = stats.operators.reduce((s, o) => s + o.baseSalary, 0)
+  const totalBonus = stats.operators.reduce((s, o) => s + o.bonusSalary, 0)
+  const totalMinus = stats.operators.reduce((s, o) => s + o.manualMinus, 0)
+  const totalPlus = stats.operators.reduce((s, o) => s + o.manualPlus, 0)
 
   // Добавление корректировки
   const handleAddAdjustment = async (e: FormEvent) => {
@@ -358,6 +398,7 @@ export default function SalaryPage() {
 
       setAdjustments((prev) => [...prev, data as AdjustmentRow])
 
+      // Сброс формы
       setAdjAmount('')
       setAdjComment('')
       setAdjKind('debt')
@@ -368,12 +409,6 @@ export default function SalaryPage() {
       setAdjSaving(false)
     }
   }
-
-  const totalShifts = stats.operators.reduce((s, o) => s + o.shifts, 0)
-  const totalBase = stats.operators.reduce((s, o) => s + o.baseSalary, 0)
-  const totalBonus = stats.operators.reduce((s, o) => s + o.bonusSalary, 0)
-  const totalMinus = stats.operators.reduce((s, o) => s + o.manualMinus, 0)
-  const totalPlus = stats.operators.reduce((s, o) => s + o.manualPlus, 0)
 
   return (
     <div className="flex min-h-screen bg-[#050505] text-foreground">
@@ -399,6 +434,7 @@ export default function SalaryPage() {
               </div>
             </div>
 
+            {/* Быстрый выбор недели + даты */}
             <div className="flex flex-col items-end gap-2">
               <div className="flex gap-2">
                 <Button
@@ -444,7 +480,7 @@ export default function SalaryPage() {
             </Card>
           )}
 
-          {/* Сводка */}
+          {/* Сводка по неделе */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">Всего смен</p>
@@ -572,7 +608,7 @@ export default function SalaryPage() {
             </table>
           </Card>
 
-          {/* Форма корректировок */}
+          {/* Форма добавления корректировки */}
           {stats.operators.length > 0 && (
             <Card className="p-4 border-border bg-card/80">
               <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
@@ -654,7 +690,7 @@ export default function SalaryPage() {
                       value={adjComment}
                       onChange={(e) => setAdjComment(e.target.value)}
                       className="flex-1 bg-input border border-border rounded-md px-2 py-1.5 text-xs"
-                      placeholder="Например: штраф за кассу −10к / премия за турнир..."
+                      placeholder="Например: штраф за кассу −10k / премия за турнир..."
                     />
                     <Button
                       type="submit"
