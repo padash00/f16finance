@@ -1,459 +1,480 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
 import {
   ArrowLeft,
+  AlertTriangle,
   Save,
   Plus,
-  Trash2,
-  Info,
+  CheckCircle2,
+  RefreshCw,
 } from 'lucide-react'
-import Link from 'next/link'
 
-type SalaryRule = {
-  key: string
-  label: string | null
-  description: string | null
-  value: number | null
+type SalaryRuleRow = {
+  id: number
+  company_code: string
+  shift_type: 'day' | 'night'
+  base_per_shift: number
+  threshold1_turnover: number | null
+  threshold1_bonus: number | null
+  threshold2_turnover: number | null
+  threshold2_bonus: number | null
+  is_active: boolean
+}
+
+const COMPANY_OPTIONS = [
+  { code: 'arena', label: 'F16 Arena' },
+  { code: 'ramen', label: 'F16 Ramen' },
+  { code: 'extra', label: 'F16 Extra' },
+]
+
+const formatMoney = (v: number | null) =>
+  (v ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })
+
+const parseNumber = (value: string) => {
+  if (!value) return null
+  const num = Number(value.replace(/\s/g, '').replace(',', '.'))
+  if (!Number.isFinite(num)) return null
+  return Math.round(num)
 }
 
 export default function SalaryRulesPage() {
-  const [rules, setRules] = useState<SalaryRule[]>([])
+  const [rows, setRows] = useState<SalaryRuleRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [savingKey, setSavingKey] = useState<string | null>(null)
+  const [savingId, setSavingId] = useState<number | null>(null)
+  const [adding, setAdding] = useState(false)
 
-  const [newRule, setNewRule] = useState<SalaryRule | null>(null)
+  const loadRules = async () => {
+    setLoading(true)
+    setError(null)
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      setError(null)
+    const { data, error } = await supabase
+      .from('operator_salary_rules')
+      .select(
+        'id,company_code,shift_type,base_per_shift,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus,is_active',
+      )
+      .order('company_code', { ascending: true })
+      .order('shift_type', { ascending: true })
 
-      const { data, error } = await supabase
-        .from('salary_rules')
-        .select('key, label, description, value')
-        .order('key')
-
-      if (error) {
-        console.error(error)
-        setError('Ошибка загрузки правил')
-      } else {
-        setRules((data || []) as SalaryRule[])
-      }
-
+    if (error) {
+      console.error(error)
+      setError('Не удалось загрузить правила зарплаты')
       setLoading(false)
+      return
     }
 
-    load()
+    setRows((data || []) as SalaryRuleRow[])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    loadRules()
   }, [])
 
-  const handleChange = (
-    key: string,
-    field: keyof SalaryRule,
-    value: string,
+  const handleFieldChange = (
+    id: number,
+    field: keyof SalaryRuleRow,
+    value: string | boolean,
   ) => {
-    setRules((prev) =>
+    setRows((prev) =>
       prev.map((r) =>
-        r.key === key
+        r.id === id
           ? {
               ...r,
               [field]:
-                field === 'value' ? (value === '' ? null : Number(value)) : value,
+                field === 'is_active'
+                  ? Boolean(value)
+                  : field === 'company_code' || field === 'shift_type'
+                  ? value
+                  : parseNumber(String(value)),
             }
           : r,
       ),
     )
   }
 
-  const handleSave = async (rule: SalaryRule) => {
-    setSavingKey(rule.key)
+  const handleSaveRow = async (row: SalaryRuleRow) => {
     setError(null)
+    setSavingId(row.id)
 
-    const { error } = await supabase
-      .from('salary_rules')
-      .update({
-        label: rule.label,
-        description: rule.description,
-        value: rule.value,
-      })
-      .eq('key', rule.key)
+    try {
+      const payload = {
+        company_code: row.company_code,
+        shift_type: row.shift_type,
+        base_per_shift: row.base_per_shift,
+        threshold1_turnover: row.threshold1_turnover,
+        threshold1_bonus: row.threshold1_bonus,
+        threshold2_turnover: row.threshold2_turnover,
+        threshold2_bonus: row.threshold2_bonus,
+        is_active: row.is_active,
+      }
 
-    if (error) {
-      console.error(error)
-      setError('Ошибка сохранения правила')
+      const { error } = await supabase
+        .from('operator_salary_rules')
+        .update(payload)
+        .eq('id', row.id)
+
+      if (error) throw error
+    } catch (err) {
+      console.error(err)
+      setError('Ошибка при сохранении правила')
+    } finally {
+      setSavingId(null)
     }
-
-    setSavingKey(null)
   }
 
-  const handleDelete = async (key: string) => {
-    if (!confirm('Удалить это правило?')) return
-
-    setSavingKey(key)
+  const handleAddRule = async () => {
     setError(null)
+    setAdding(true)
+    try {
+      const { data, error } = await supabase
+        .from('operator_salary_rules')
+        .insert([
+          {
+            company_code: 'arena',
+            shift_type: 'day',
+            base_per_shift: 8000,
+            threshold1_turnover: 130000,
+            threshold1_bonus: 2000,
+            threshold2_turnover: 160000,
+            threshold2_bonus: 2000,
+            is_active: true,
+          },
+        ])
+        .select()
+        .single()
 
-    const { error } = await supabase
-      .from('salary_rules')
-      .delete()
-      .eq('key', key)
-
-    if (error) {
-      console.error(error)
-      setError('Ошибка удаления правила')
-      setSavingKey(null)
-      return
+      if (error) throw error
+      setRows((prev) => [...prev, data as SalaryRuleRow])
+    } catch (err) {
+      console.error(err)
+      setError('Не удалось добавить новое правило')
+    } finally {
+      setAdding(false)
     }
-
-    setRules((prev) => prev.filter((r) => r.key !== key))
-    setSavingKey(null)
-  }
-
-  const handleAddNew = () => {
-    setNewRule({
-      key: '',
-      label: '',
-      description: '',
-      value: null,
-    })
-  }
-
-  const handleSaveNew = async () => {
-    if (!newRule) return
-    if (!newRule.key.trim()) {
-      alert('Нужен уникальный key (например, base_rate)')
-      return
-    }
-
-    setSavingKey(newRule.key)
-    setError(null)
-
-    const payload = {
-      key: newRule.key.trim(),
-      label: newRule.label || null,
-      description: newRule.description || null,
-      value: newRule.value ?? 0,
-    }
-
-    const { data, error } = await supabase
-      .from('salary_rules')
-      .insert(payload)
-      .select('key, label, description, value')
-      .single()
-
-    if (error) {
-      console.error(error)
-      setError('Ошибка добавления правила')
-      setSavingKey(null)
-      return
-    }
-
-    setRules((prev) => [...prev, data as SalaryRule])
-    setNewRule(null)
-    setSavingKey(null)
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-[#050505] text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-auto">
-        <div className="p-8 max-w-5xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
+        <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
+          {/* Хедер */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
               <Link href="/salary">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="mr-1 hidden md:inline-flex"
-                >
-                  <ArrowLeft className="w-4 h-4" />
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <ArrowLeft className="w-5 h-5" />
                 </Button>
               </Link>
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold">
+                <h1 className="text-2xl font-bold flex items-center gap-2">
                   Правила расчёта зарплаты
                 </h1>
-                <p className="text-muted-foreground text-sm mt-1">
-                  Таблица настроек, как в Excel: ключ, подпись, значение и описание.
-                  Эти значения используются в карточках операторов.
+                <p className="text-xs text-muted-foreground">
+                  Одна строка = одна комбинация (компания + смена).
+                  Оклад за смену + авто-бонусы по выручке.
                 </p>
               </div>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 text-xs"
-              onClick={handleAddNew}
-              disabled={!!newRule}
-            >
-              <Plus className="w-4 h-4" />
-              Новое правило
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={loadRules}
+                disabled={loading}
+                className="gap-1 text-xs"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Обновить
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleAddRule}
+                disabled={adding}
+                className="gap-1 text-xs"
+              >
+                <Plus className="w-4 h-4" />
+                Добавить правило
+              </Button>
+            </div>
           </div>
 
-          {/* Подсказка по ключам */}
-          <Card className="p-4 border-border bg-card/70 text-xs text-muted-foreground flex gap-3">
-            <Info className="w-4 h-4 mt-0.5 text-purple-400 shrink-0" />
-            <div className="space-y-1">
-              <p className="font-semibold text-foreground">
-                Рекомендуемые ключи для текущей схемы:
-              </p>
-              <ul className="list-disc list-inside space-y-0.5">
-                <li>
-                  <code className="text-[11px] bg-black/40 px-1.5 py-0.5 rounded">
-                    base_rate
-                  </code>{' '}
-                  — ставка за 1 смену (по умолчанию 8000).
-                </li>
-                <li>
-                  <code className="text-[11px] bg-black/40 px-1.5 py-0.5 rounded">
-                    bonus_120_threshold
-                  </code>{' '}
-                  — порог выручки для первого бонуса (120000).
-                </li>
-                <li>
-                  <code className="text-[11px] bg-black/40 px-1.5 py-0.5 rounded">
-                    bonus_120_value
-                  </code>{' '}
-                  — сумма первого бонуса.
-                </li>
-                <li>
-                  <code className="text-[11px] bg-black/40 px-1.5 py-0.5 rounded">
-                    bonus_160_threshold
-                  </code>{' '}
-                  — порог выручки для второго бонуса.
-                </li>
-                <li>
-                  <code className="text-[11px] bg-black/40 px-1.5 py-0.5 rounded">
-                    bonus_160_value
-                  </code>{' '}
-                  — сумма второго бонуса.
-                </li>
-              </ul>
-            </div>
+          <Card className="p-4 border-border bg-card/70 text-xs leading-relaxed">
+            <p>
+              <strong>base_per_shift</strong> — оклад за смену.
+            </p>
+            <p>
+              Если <code>turnover ≥ threshold1_turnover</code> → добавляем{' '}
+              <code>threshold1_bonus</code>.
+            </p>
+            <p>
+              Если <code>turnover ≥ threshold2_turnover</code> → добавляем{' '}
+              <code>threshold2_bonus</code> сверху.
+            </p>
+            <p className="mt-1">
+              Итого зарплата за смену = base_per_shift + bonus1 + bonus2.
+            </p>
           </Card>
 
           {error && (
-            <div className="border border-destructive/60 bg-destructive/10 text-destructive px-4 py-3 rounded text-sm">
+            <Card className="p-3 border border-red-500/40 bg-red-950/30 text-sm text-red-200 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
               {error}
-            </div>
+            </Card>
           )}
 
-          {/* Таблица правил */}
-          <Card className="border-border bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="sticky top-0 z-10 border-b border-border bg-secondary/40 backdrop-blur text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    <th className="px-4 py-3 text-left">Key</th>
-                    <th className="px-4 py-3 text-left">Название</th>
-                    <th className="px-4 py-3 text-right">Значение</th>
-                    <th className="px-4 py-3 text-left">Описание</th>
-                    <th className="px-4 py-3 text-right">Действия</th>
+          <Card className="p-0 border-border bg-card/80 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border bg-black/40 text-[10px] uppercase text-muted-foreground">
+                  <th className="px-3 py-2 text-left">Компания</th>
+                  <th className="px-3 py-2 text-left">Смена</th>
+                  <th className="px-3 py-2 text-right">
+                    Оклад / смена<br />
+                    <span className="font-normal text-[9px]">
+                      base_per_shift
+                    </span>
+                  </th>
+                  <th className="px-3 py-2 text-right">
+                    Порог 1<br />
+                    <span className="font-normal text-[9px]">
+                      threshold1_turnover
+                    </span>
+                  </th>
+                  <th className="px-3 py-2 text-right">
+                    Бонус 1<br />
+                    <span className="font-normal text-[9px]">
+                      threshold1_bonus
+                    </span>
+                  </th>
+                  <th className="px-3 py-2 text-right">
+                    Порог 2<br />
+                    <span className="font-normal text-[9px]">
+                      threshold2_turnover
+                    </span>
+                  </th>
+                  <th className="px-3 py-2 text-right">
+                    Бонус 2<br />
+                    <span className="font-normal text-[9px]">
+                      threshold2_bonus
+                    </span>
+                  </th>
+                  <th className="px-3 py-2 text-center">Активно</th>
+                  <th className="px-3 py-2 text-center">Сохранить</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="py-6 text-center text-muted-foreground"
+                    >
+                      Загрузка правил...
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="text-sm">
-                  {loading && (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="px-6 py-10 text-center text-muted-foreground"
-                      >
-                        Загрузка правил...
-                      </td>
-                    </tr>
-                  )}
+                )}
 
-                  {!loading &&
-                    rules.map((r, idx) => (
-                      <tr
-                        key={r.key}
-                        className={`border-b border-border/40 ${
-                          idx % 2 === 0 ? 'bg-card/40' : ''
-                        }`}
-                      >
-                        <td className="px-4 py-3 align-top">
-                          <input
-                            type="text"
-                            value={r.key}
-                            readOnly
-                            className="w-full bg-input border border-border/50 rounded px-2 py-1 text-xs text-muted-foreground cursor-not-allowed"
-                          />
-                        </td>
-                        <td className="px-4 py-3 align-top">
-                          <input
-                            type="text"
-                            value={r.label || ''}
-                            onChange={(e) =>
-                              handleChange(
-                                r.key,
-                                'label',
-                                e.target.value,
-                              )
-                            }
-                            className="w-full bg-input border border-border/50 rounded px-2 py-1 text-xs text-foreground"
-                            placeholder="Например: Ставка за смену"
-                          />
-                        </td>
-                        <td className="px-4 py-3 align-top text-right">
-                          <input
-                            type="number"
-                            value={r.value ?? ''}
-                            onChange={(e) =>
-                              handleChange(
-                                r.key,
-                                'value',
-                                e.target.value,
-                              )
-                            }
-                            className="w-full bg-input border border-border/50 rounded px-2 py-1 text-xs text-right text-foreground"
-                            placeholder="0"
-                          />
-                        </td>
-                        <td className="px-4 py-3 align-top">
-                          <textarea
-                            value={r.description || ''}
-                            onChange={(e) =>
-                              handleChange(
-                                r.key,
-                                'description',
-                                e.target.value,
-                              )
-                            }
-                            className="w-full bg-input border border-border/50 rounded px-2 py-1 text-xs text-foreground resize-y min-h-[40px]"
-                            placeholder="Пояснение, как применяется правило"
-                          />
-                        </td>
-                        <td className="px-4 py-3 align-top text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleSave(r)}
-                              disabled={savingKey === r.key}
-                            >
-                              <Save className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => handleDelete(r.key)}
-                              disabled={savingKey === r.key}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                {!loading && rows.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="py-6 text-center text-muted-foreground"
+                    >
+                      Правила не заданы.
+                    </td>
+                  </tr>
+                )}
 
-                  {/* Новое правило */}
-                  {newRule && (
-                    <tr className="border-t border-border bg-accent/5">
-                      <td className="px-4 py-3 align-top">
-                        <input
-                          type="text"
-                          value={newRule.key}
+                {!loading &&
+                  rows.map((row) => (
+                    <tr
+                      key={row.id}
+                      className="border-t border-border/40 hover:bg-white/5"
+                    >
+                      {/* Компания */}
+                      <td className="px-3 py-2">
+                        <select
+                          value={row.company_code}
                           onChange={(e) =>
-                            setNewRule({
-                              ...newRule,
-                              key: e.target.value,
-                            })
+                            handleFieldChange(
+                              row.id,
+                              'company_code',
+                              e.target.value,
+                            )
                           }
-                          className="w-full bg-input border border-border/50 rounded px-2 py-1 text-xs text-foreground"
-                          placeholder="Например: base_rate"
-                        />
+                          className="bg-input border border-border rounded px-2 py-1 text-xs"
+                        >
+                          {COMPANY_OPTIONS.map((c) => (
+                            <option key={c.code} value={c.code}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
                       </td>
-                      <td className="px-4 py-3 align-top">
-                        <input
-                          type="text"
-                          value={newRule.label || ''}
+
+                      {/* Смена */}
+                      <td className="px-3 py-2">
+                        <select
+                          value={row.shift_type}
                           onChange={(e) =>
-                            setNewRule({
-                              ...newRule,
-                              label: e.target.value,
-                            })
+                            handleFieldChange(
+                              row.id,
+                              'shift_type',
+                              e.target.value as 'day' | 'night',
+                            )
                           }
-                          className="w-full bg-input border border-border/50 rounded px-2 py-1 text-xs text-foreground"
-                          placeholder="Название правила"
-                        />
+                          className="bg-input border border-border rounded px-2 py-1 text-xs"
+                        >
+                          <option value="day">День</option>
+                          <option value="night">Ночь</option>
+                        </select>
                       </td>
-                      <td className="px-4 py-3 align-top text-right">
+
+                      {/* Оклад / смена */}
+                      <td className="px-3 py-2 text-right">
                         <input
                           type="number"
-                          value={newRule.value ?? ''}
-                          onChange={(e) =>
-                            setNewRule({
-                              ...newRule,
-                              value:
-                                e.target.value === ''
-                                  ? null
-                                  : Number(e.target.value),
-                            })
+                          className="w-24 bg-input border border-border rounded px-2 py-1 text-right text-xs"
+                          defaultValue={row.base_per_shift}
+                          onBlur={(e) =>
+                            handleFieldChange(
+                              row.id,
+                              'base_per_shift',
+                              e.target.value,
+                            )
                           }
-                          className="w-full bg-input border border-border/50 rounded px-2 py-1 text-xs text-right text-foreground"
-                          placeholder="0"
                         />
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <textarea
-                          value={newRule.description || ''}
-                          onChange={(e) =>
-                            setNewRule({
-                              ...newRule,
-                              description: e.target.value,
-                            })
-                          }
-                          className="w-full bg-input border border-border/50 rounded px-2 py-1 text-xs text-foreground resize-y min-h-[40px]"
-                          placeholder="Описание нового правила"
-                        />
-                      </td>
-                      <td className="px-4 py-3 align-top text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={handleSaveNew}
-                            disabled={savingKey === newRule.key}
-                          >
-                            <Save className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setNewRule(null)}
-                            disabled={savingKey === newRule.key}
-                          >
-                            <ArrowLeft className="w-4 h-4" />
-                          </Button>
+                        <div className="text-[9px] text-muted-foreground">
+                          {formatMoney(row.base_per_shift)} ₸
                         </div>
                       </td>
-                    </tr>
-                  )}
 
-                  {!loading && !rules.length && !newRule && (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="px-6 py-10 text-center text-muted-foreground"
-                      >
-                        Правил пока нет. Добавь базовые правила с помощью
-                        кнопки <span className="font-semibold">«Новое правило»</span>.
+                      {/* Порог 1 */}
+                      <td className="px-3 py-2 text-right">
+                        <input
+                          type="number"
+                          className="w-24 bg-input border border-border rounded px-2 py-1 text-right text-xs"
+                          defaultValue={row.threshold1_turnover ?? ''}
+                          onBlur={(e) =>
+                            handleFieldChange(
+                              row.id,
+                              'threshold1_turnover',
+                              e.target.value,
+                            )
+                          }
+                        />
+                        <div className="text-[9px] text-muted-foreground">
+                          {formatMoney(row.threshold1_turnover)} ₸
+                        </div>
+                      </td>
+
+                      {/* Бонус 1 */}
+                      <td className="px-3 py-2 text-right">
+                        <input
+                          type="number"
+                          className="w-20 bg-input border border-border rounded px-2 py-1 text-right text-xs"
+                          defaultValue={row.threshold1_bonus ?? ''}
+                          onBlur={(e) =>
+                            handleFieldChange(
+                              row.id,
+                              'threshold1_bonus',
+                              e.target.value,
+                            )
+                          }
+                        />
+                        <div className="text-[9px] text-muted-foreground">
+                          {formatMoney(row.threshold1_bonus)} ₸
+                        </div>
+                      </td>
+
+                      {/* Порог 2 */}
+                      <td className="px-3 py-2 text-right">
+                        <input
+                          type="number"
+                          className="w-24 bg-input border border-border rounded px-2 py-1 text-right text-xs"
+                          defaultValue={row.threshold2_turnover ?? ''}
+                          onBlur={(e) =>
+                            handleFieldChange(
+                              row.id,
+                              'threshold2_turnover',
+                              e.target.value,
+                            )
+                          }
+                        />
+                        <div className="text-[9px] text-muted-foreground">
+                          {formatMoney(row.threshold2_turnover)} ₸
+                        </div>
+                      </td>
+
+                      {/* Бонус 2 */}
+                      <td className="px-3 py-2 text-right">
+                        <input
+                          type="number"
+                          className="w-20 bg-input border border-border rounded px-2 py-1 text-right text-xs"
+                          defaultValue={row.threshold2_bonus ?? ''}
+                          onBlur={(e) =>
+                            handleFieldChange(
+                              row.id,
+                              'threshold2_bonus',
+                              e.target.value,
+                            )
+                          }
+                        />
+                        <div className="text-[9px] text-muted-foreground">
+                          {formatMoney(row.threshold2_bonus)} ₸
+                        </div>
+                      </td>
+
+                      {/* Активно */}
+                      <td className="px-3 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={row.is_active}
+                          onChange={(e) =>
+                            handleFieldChange(
+                              row.id,
+                              'is_active',
+                              e.target.checked,
+                            )
+                          }
+                        />
+                      </td>
+
+                      {/* Сохранить */}
+                      <td className="px-3 py-2 text-center">
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          disabled={savingId === row.id}
+                          onClick={() => handleSaveRow(row)}
+                          className="gap-1 text-[11px]"
+                        >
+                          {savingId === row.id ? (
+                            <>
+                              <Save className="w-3 h-3 animate-pulse" />
+                              Сохранение...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-3 h-3" />
+                              Сохранить
+                            </>
+                          )}
+                        </Button>
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  ))}
+              </tbody>
+            </table>
           </Card>
         </div>
       </main>
