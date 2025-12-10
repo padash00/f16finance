@@ -59,7 +59,7 @@ type AggregatedShift = {
   turnover: number
 }
 
-// ✅ добавили 'advance' как вид корректировки-минуса
+// ✅ виды корректировок
 type AdjustmentKind = 'debt' | 'fine' | 'bonus' | 'advance'
 
 type AdjustmentRow = {
@@ -90,8 +90,9 @@ type OperatorWeekStat = {
   totalTurnover: number
   autoDebts: number          // долги из таблицы debts
   manualPlus: number         // ручные премии
-  manualMinus: number        // ручные долги/штрафы/авансы
-  finalSalary: number        // к выплате
+  manualMinus: number        // ручные долги/штрафы (Только долг/штраф!)
+  advances: number           // авансы (отдельно, не считаются как "минус" корр.)
+  finalSalary: number        // к выплате (с учётом авансов)
 }
 
 const formatMoney = (v: number) =>
@@ -294,6 +295,7 @@ export default function SalaryPage() {
           autoDebts: 0,
           manualPlus: 0,
           manualMinus: 0,
+          advances: 0,
           finalSalary: 0,
         }
         byOperator.set(id, op)
@@ -367,8 +369,7 @@ export default function SalaryPage() {
       totalTurnover += sh.turnover
     }
 
-    // 2а. Гарантируем, что все активные операторы есть в карте,
-    // даже если у них нет смен/корректировок/долгов
+    // 2а. Гарантируем, что все активные операторы есть в карте
     for (const o of operators) {
       if (!o.is_active) continue
       ensureOperator(o.id)
@@ -383,9 +384,13 @@ export default function SalaryPage() {
       if (!Number.isFinite(amount) || amount <= 0) continue
 
       if (adj.kind === 'bonus') {
+        // Премия — в плюс
         op.manualPlus += amount
+      } else if (adj.kind === 'advance') {
+        // ✅ Аванс — отдельное поле, НЕ считается как "корр. −"
+        op.advances += amount
       } else {
-        // debt, fine, advance — всё идёт в минус
+        // debt / fine — это реальные минусы
         op.manualMinus += amount
       }
     }
@@ -407,7 +412,11 @@ export default function SalaryPage() {
     let totalSalary = 0
     for (const op of byOperator.values()) {
       op.finalSalary =
-        op.totalSalary + op.manualPlus - op.manualMinus - op.autoDebts
+        op.totalSalary +
+        op.manualPlus -
+        op.manualMinus -
+        op.autoDebts -
+        op.advances // ✅ аванс уменьшает "к выплате", но не попадает в "Корр. −"
       totalSalary += op.finalSalary
     }
 
@@ -424,6 +433,7 @@ export default function SalaryPage() {
   const totalAutoDebts = stats.operators.reduce((s, o) => s + o.autoDebts, 0)
   const totalMinus = stats.operators.reduce((s, o) => s + o.manualMinus, 0)
   const totalPlus = stats.operators.reduce((s, o) => s + o.manualPlus, 0)
+  const totalAdvances = stats.operators.reduce((s, o) => s + o.advances, 0)
 
   // Добавление корректировки
   const handleAddAdjustment = async (e: FormEvent) => {
@@ -491,8 +501,7 @@ export default function SalaryPage() {
                   Зарплата операторов
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  База + авто-бонусы + корректировки − долги (F16 Arena / Ramen
-                  / Extra)
+                  База + авто-бонусы + корректировки − долги − авансы (F16 Arena / Ramen / Extra)
                 </p>
               </div>
             </div>
@@ -561,7 +570,7 @@ export default function SalaryPage() {
             </Card>
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">
-                К выплате (после долгов и корректировок)
+                К выплате (после долгов, корректировок и авансов)
               </p>
               <p className="text-2xl font-bold text-sky-400">
                 {formatMoney(stats.totalSalary)}
@@ -588,6 +597,7 @@ export default function SalaryPage() {
                     Долги недели
                   </th>
                   <th className="py-2 text-right px-2">Корр. −</th>
+                  <th className="py-2 text-right px-2">Аванс</th>
                   <th className="py-2 text-right px-2">Корр. +</th>
                   <th className="py-2 text-right px-2">К выплате</th>
                   <th className="py-2 text-right px-2 text-[10px]">Выручка</th>
@@ -597,7 +607,7 @@ export default function SalaryPage() {
                 {loading && (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       className="py-6 text-center text-muted-foreground text-xs"
                     >
                       Загрузка...
@@ -608,7 +618,7 @@ export default function SalaryPage() {
                 {!loading && stats.operators.length === 0 && (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       className="py-6 text-center text-muted-foreground text-xs"
                     >
                       Нет данных в выбранном периоде.
@@ -641,6 +651,9 @@ export default function SalaryPage() {
                       <td className="py-1.5 px-2 text-right text-red-300">
                         {formatMoney(op.manualMinus)}
                       </td>
+                      <td className="py-1.5 px-2 text-right text-amber-300">
+                        {formatMoney(op.advances)}
+                      </td>
                       <td className="py-1.5 px-2 text-right text-emerald-300">
                         {formatMoney(op.manualPlus)}
                       </td>
@@ -669,6 +682,9 @@ export default function SalaryPage() {
                     </td>
                     <td className="py-2 px-2 text-right font-bold text-red-300">
                       {formatMoney(totalMinus)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-bold text-amber-300">
+                      {formatMoney(totalAdvances)}
                     </td>
                     <td className="py-2 px-2 text-right font-bold text-emerald-300">
                       {formatMoney(totalPlus)}
@@ -740,7 +756,7 @@ export default function SalaryPage() {
                   >
                     <option value="debt">Долг (минус)</option>
                     <option value="fine">Штраф (минус)</option>
-                    <option value="advance">Аванс (минус)</option>
+                    <option value="advance">Аванс (минус из выплаты)</option>
                     <option value="bonus">Премия (плюс)</option>
                   </select>
                 </div>
