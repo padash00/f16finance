@@ -59,7 +59,8 @@ type AggregatedShift = {
   turnover: number
 }
 
-type AdjustmentKind = 'debt' | 'fine' | 'bonus'
+// ✅ добавили 'advance' как вид корректировки-минуса
+type AdjustmentKind = 'debt' | 'fine' | 'bonus' | 'advance'
 
 type AdjustmentRow = {
   id: number
@@ -89,7 +90,7 @@ type OperatorWeekStat = {
   totalTurnover: number
   autoDebts: number          // долги из таблицы debts
   manualPlus: number         // ручные премии
-  manualMinus: number        // ручные долги/штрафы
+  manualMinus: number        // ручные долги/штрафы/авансы
   finalSalary: number        // к выплате
 }
 
@@ -384,6 +385,7 @@ export default function SalaryPage() {
       if (adj.kind === 'bonus') {
         op.manualPlus += amount
       } else {
+        // debt, fine, advance — всё идёт в минус
         op.manualMinus += amount
       }
     }
@@ -688,7 +690,7 @@ export default function SalaryPage() {
             <Card className="p-4 border-border bg-card/80">
               <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
                 <DollarSign className="w-4 h-4 text-emerald-400" />
-                Добавить долг / штраф / премию (ручная корректировка)
+                Добавить долг / штраф / премию / аванс (ручная корректировка)
               </h3>
 
               <form
@@ -738,6 +740,7 @@ export default function SalaryPage() {
                   >
                     <option value="debt">Долг (минус)</option>
                     <option value="fine">Штраф (минус)</option>
+                    <option value="advance">Аванс (минус)</option>
                     <option value="bonus">Премия (плюс)</option>
                   </select>
                 </div>
@@ -765,7 +768,7 @@ export default function SalaryPage() {
                       value={adjComment}
                       onChange={(e) => setAdjComment(e.target.value)}
                       className="flex-1 bg-input border border-border rounded-md px-2 py-1.5 text-xs"
-                      placeholder="Например: штраф за кассу −10k / премия за турнир..."
+                      placeholder="Например: аванс −20k / штраф за кассу −10k / премия за турнир..."
                     />
                     <Button
                       type="submit"
