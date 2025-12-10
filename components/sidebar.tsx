@@ -20,6 +20,7 @@ import {
   BrainCircuit,
   Landmark,   // Налоги 3%
   ListChecks, // Правила зарплаты
+  Users2,     // ✅ Аналитика операторов
 } from 'lucide-react'
 import { Button } from './ui/button'
 
@@ -45,6 +46,8 @@ const menuGroups = [
     items: [
       { icon: BarChart3, label: 'Общие отчёты', href: '/reports' },
       { icon: CalendarRange, label: 'Недельный отчёт', href: '/weekly-report' },
+      // ✅ новый пункт меню
+      { icon: Users2, label: 'Аналитика операторов', href: '/operator-analytics' },
     ],
   },
   {
