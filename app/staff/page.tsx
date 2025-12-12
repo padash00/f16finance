@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState, FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
-import { Users2, Plus, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Users2, Plus, ToggleLeft, ToggleRight, AlertTriangle } from 'lucide-react'
 
-type StaffRole = 'manager' | 'marketer' | 'owner' | 'other' | string
+type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
 
 type Staff = {
   id: string
@@ -23,18 +23,39 @@ type Staff = {
 const money = (v: number) =>
   v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 
+const parseAmount = (raw: string) => {
+  const n = Number(String(raw).replace(',', '.').replace(/\s/g, ''))
+  return Number.isFinite(n) ? n : NaN
+}
+
+const ROLE_LABEL: Record<StaffRole, string> = {
+  manager: 'Руководитель',
+  marketer: 'Маркетолог',
+  owner: 'Собственник',
+  other: 'Другое',
+}
+
 export default function StaffPage() {
   const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [fullName, setFullName] = useState('')
   const [shortName, setShortName] = useState('')
   const [role, setRole] = useState<StaffRole>('manager')
   const [monthlySalary, setMonthlySalary] = useState('')
-  const [saving, setSaving] = useState(false)
 
-  const load = async () => {
+  const roleOptions = useMemo(
+    () =>
+      (Object.keys(ROLE_LABEL) as StaffRole[]).map((key) => ({
+        value: key,
+        label: ROLE_LABEL[key],
+      })),
+    [],
+  )
+
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
 
@@ -46,32 +67,35 @@ export default function StaffPage() {
     if (error) {
       console.error(error)
       setError('Не удалось загрузить сотрудников (проверь RLS policies)')
+      setStaff([])
     } else {
       setStaff((data || []) as Staff[])
     }
+
     setLoading(false)
-  }
+  }, [])
 
   useEffect(() => {
     load()
-  }, [])
+  }, [load])
 
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
 
     try {
-      if (!fullName.trim()) throw new Error('Введите ФИО')
+      const name = fullName.trim()
+      if (!name) throw new Error('Введите ФИО')
 
-      const ms = Number(String(monthlySalary).replace(',', '.').replace(/\s/g, ''))
-      if (!Number.isFinite(ms) || ms < 0) throw new Error('Введите месячный оклад (0 или больше)')
+      const ms = parseAmount(monthlySalary)
+      if (!Number.isFinite(ms) || ms < 0) throw new Error('Введите оклад в месяц (0 или больше)')
 
       setSaving(true)
 
       const payload = {
-        full_name: fullName.trim(),
+        full_name: name,
         short_name: shortName.trim() || null,
-        role: role || null,
+        role, // В БД уйдёт строго manager/marketer/owner/other
         monthly_salary: Math.round(ms),
         is_active: true,
       }
@@ -89,10 +113,10 @@ export default function StaffPage() {
       setShortName('')
       setMonthlySalary('')
       setRole('manager')
-      setSaving(false)
     } catch (err: any) {
       console.error(err)
-      setError(err.message || 'Ошибка при добавлении сотрудника')
+      setError(err?.message || 'Ошибка при добавлении сотрудника')
+    } finally {
       setSaving(false)
     }
   }
@@ -108,6 +132,7 @@ export default function StaffPage() {
         .single()
 
       if (error) throw error
+
       setStaff((prev) => prev.map((x) => (x.id === row.id ? (data as Staff) : x)))
     } catch (err) {
       console.error(err)
@@ -131,23 +156,21 @@ export default function StaffPage() {
           </div>
 
           {error && (
-            <Card className="p-3 border border-red-500/40 bg-red-950/40 text-sm text-red-200">
+            <Card className="p-3 border border-red-500/40 bg-red-950/40 text-sm text-red-200 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
               {error}
             </Card>
           )}
 
           <Card className="p-4 border-border bg-card/80">
-            <form
-              onSubmit={handleAdd}
-              className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end"
-            >
+            <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
               <div className="md:col-span-2">
                 <label className="text-[11px] text-muted-foreground mb-1 block">ФИО</label>
                 <input
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm"
-                  placeholder="Напр.: Акбота"
+                  placeholder="Напр.: Сергей"
                 />
               </div>
 
@@ -157,7 +180,7 @@ export default function StaffPage() {
                   value={shortName}
                   onChange={(e) => setShortName(e.target.value)}
                   className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm"
-                  placeholder="Напр.: Акбота (рук.)"
+                  placeholder="Напр.: Сергей (маркет)"
                 />
               </div>
 
@@ -165,20 +188,19 @@ export default function StaffPage() {
                 <label className="text-[11px] text-muted-foreground mb-1 block">Роль</label>
                 <select
                   value={role}
-                  onChange={(e) => setRole(e.target.value)}
+                  onChange={(e) => setRole(e.target.value as StaffRole)}
                   className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm"
                 >
-                  <option value="manager">Руководитель</option>
-                  <option value="marketer">Маркетолог</option>
-                  <option value="owner">Собственник</option>
-                  <option value="other">Другое</option>
+                  {roleOptions.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label className="text-[11px] text-muted-foreground mb-1 block">
-                  Оклад в месяц
-                </label>
+                <label className="text-[11px] text-muted-foreground mb-1 block">Оклад в месяц</label>
                 <input
                   type="number"
                   min="0"
@@ -210,6 +232,7 @@ export default function StaffPage() {
                   <th className="py-2 px-2 text-left">Кратко</th>
                   <th className="py-2 px-2 text-left">Роль</th>
                   <th className="py-2 px-2 text-right">Оклад/мес</th>
+                  <th className="py-2 px-2 text-right">К выплате 1/15</th>
                   <th className="py-2 px-2 text-center">Статус</th>
                   <th className="py-2 px-2 text-right">Действие</th>
                 </tr>
@@ -217,7 +240,7 @@ export default function StaffPage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={6} className="py-4 text-center text-muted-foreground text-xs">
+                    <td colSpan={7} className="py-4 text-center text-muted-foreground text-xs">
                       Загрузка...
                     </td>
                   </tr>
@@ -225,49 +248,54 @@ export default function StaffPage() {
 
                 {!loading && staff.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-4 text-center text-muted-foreground text-xs">
+                    <td colSpan={7} className="py-4 text-center text-muted-foreground text-xs">
                       Сотрудников пока нет.
                     </td>
                   </tr>
                 )}
 
                 {!loading &&
-                  staff.map((s) => (
-                    <tr key={s.id} className="border-t border-border/40 hover:bg-white/5">
-                      <td className="py-1.5 px-2 font-medium">{s.full_name || '—'}</td>
-                      <td className="py-1.5 px-2">
-                        {s.short_name || <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="py-1.5 px-2">
-                        {s.role || <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="py-1.5 px-2 text-right">
-                        {money(Number(s.monthly_salary || 0))}
-                      </td>
-                      <td className="py-1.5 px-2 text-center">
-                        {s.is_active ? (
-                          <span className="text-emerald-400 text-[11px]">Активен</span>
-                        ) : (
-                          <span className="text-muted-foreground text-[11px]">Выключен</span>
-                        )}
-                      </td>
-                      <td className="py-1.5 px-2 text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => toggleActive(s)}
-                          className="h-8 w-8"
-                        >
+                  staff.map((s) => {
+                    const ms = Number(s.monthly_salary || 0)
+                    const half = Math.round(ms / 2)
+
+                    return (
+                      <tr key={s.id} className="border-t border-border/40 hover:bg-white/5">
+                        <td className="py-1.5 px-2 font-medium">{s.full_name || '—'}</td>
+                        <td className="py-1.5 px-2">
+                          {s.short_name || <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="py-1.5 px-2">
+                          {s.role ? ROLE_LABEL[s.role] : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="py-1.5 px-2 text-right">{money(ms)}</td>
+                        <td className="py-1.5 px-2 text-right text-emerald-300">{money(half)}</td>
+                        <td className="py-1.5 px-2 text-center">
                           {s.is_active ? (
-                            <ToggleRight className="w-4 h-4 text-emerald-400" />
+                            <span className="text-emerald-400 text-[11px]">Активен</span>
                           ) : (
-                            <ToggleLeft className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-muted-foreground text-[11px]">Выключен</span>
                           )}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-1.5 px-2 text-right">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => toggleActive(s)}
+                            className="h-8 w-8"
+                            title={s.is_active ? 'Выключить' : 'Включить'}
+                          >
+                            {s.is_active ? (
+                              <ToggleRight className="w-4 h-4 text-emerald-400" />
+                            ) : (
+                              <ToggleLeft className="w-4 h-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
               </tbody>
             </table>
           </Card>
