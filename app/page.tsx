@@ -9,7 +9,6 @@ import Link from 'next/link'
 import {
   TrendingUp,
   TrendingDown,
-  Percent,
   Zap,
   Clock,
   BarChart2,
@@ -19,8 +18,6 @@ import {
   Activity,
   CalendarDays,
   DollarSign,
-  Plus,
-  Users,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -89,27 +86,37 @@ type ChartPoint = {
   profit: number
 }
 
-// --- Вспомогательные функции ---
-const todayISO = () => {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+type FeedItem = {
+  id: string
+  date: string
+  company_id: string
+  kind: 'income' | 'expense'
+  title: string
+  amount: number
 }
 
+// --- Даты (локально, без UTC-сдвигов) ---
+const toISODateLocal = (d: Date) => {
+  const t = d.getTime() - d.getTimezoneOffset() * 60_000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+const fromISO = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
+}
+
+const todayISO = () => toISODateLocal(new Date())
+
 const addDaysISO = (iso: string, diff: number) => {
-  const d = new Date(iso + 'T00:00:00')
+  const d = fromISO(iso)
   d.setDate(d.getDate() + diff)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  return toISODateLocal(d)
 }
 
 const formatRuDate = (iso: string) => {
   if (!iso) return ''
-  const d = new Date(iso)
+  const d = fromISO(iso)
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 }
 
@@ -119,21 +126,13 @@ const getCurrentMonthBounds = () => {
   const m = now.getMonth()
   const firstDay = new Date(y, m, 1)
   const lastDay = new Date(y, m + 1, 0)
-
-  const fmt = (d: Date) => {
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-  return { start: fmt(firstDay), end: fmt(lastDay) }
+  return { start: toISODateLocal(firstDay), end: toISODateLocal(lastDay) }
 }
 
 const calculatePrevPeriod = (dateFrom: string, dateTo: string) => {
-  const dFrom = new Date(dateFrom + 'T00:00:00')
-  const dTo = new Date(dateTo + 'T00:00:00')
-  const durationDays =
-    Math.floor((dTo.getTime() - dFrom.getTime()) / (24 * 60 * 60 * 1000)) + 1
+  const dFrom = fromISO(dateFrom)
+  const dTo = fromISO(dateTo)
+  const durationDays = Math.floor((dTo.getTime() - dFrom.getTime()) / 86_400_000) + 1
   const prevTo = addDaysISO(dateFrom, -1)
   const prevFrom = addDaysISO(prevTo, -(durationDays - 1))
   return { prevFrom, prevTo, durationDays }
@@ -194,10 +193,14 @@ export default function DashboardPage() {
     setRangeType(type)
   }
 
+  // Загрузка: только нужные поля + prev period одним запросом
   useEffect(() => {
+    let alive = true
+
     const load = async () => {
       setLoading(true)
       setError(null)
+
       const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
 
       const [
@@ -205,20 +208,22 @@ export default function DashboardPage() {
         { data: incomeData, error: incomeErr },
         { data: expenseData, error: expenseErr },
       ] = await Promise.all([
-        supabase.from('companies').select('id, name, code').order('name'),
+        supabase.from('companies').select('id,name,code').order('name'),
         supabase
           .from('incomes')
-          .select('*')
+          .select('id,date,company_id,cash_amount,kaspi_amount,card_amount,comment')
           .gte('date', prevFrom)
           .lte('date', dateTo)
           .order('date', { ascending: false }),
         supabase
           .from('expenses')
-          .select('*')
+          .select('id,date,company_id,category,cash_amount,kaspi_amount,comment')
           .gte('date', prevFrom)
           .lte('date', dateTo)
           .order('date', { ascending: false }),
       ])
+
+      if (!alive) return
 
       if (compErr || incomeErr || expenseErr) {
         console.error('Dashboard load error', { compErr, incomeErr, expenseErr })
@@ -226,12 +231,17 @@ export default function DashboardPage() {
         setLoading(false)
         return
       }
+
       setCompanies((compData || []) as Company[])
       setIncomes((incomeData || []) as IncomeRow[])
       setExpenses((expenseData || []) as ExpenseRow[])
       setLoading(false)
     }
+
     load()
+    return () => {
+      alive = false
+    }
   }, [dateFrom, dateTo])
 
   const companyById = useMemo(() => {
@@ -247,11 +257,8 @@ export default function DashboardPage() {
   const analytics = useMemo(() => {
     const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
 
-    const getRange = (date: string): 'current' | 'previous' | null => {
-      if (date >= dateFrom && date <= dateTo) return 'current'
-      if (date >= prevFrom && date <= prevTo) return 'previous'
-      return null
-    }
+    const inCurrent = (date: string) => date >= dateFrom && date <= dateTo
+    const inPrev = (date: string) => date >= prevFrom && date <= prevTo
 
     const makeTotals = (): FinancialTotals => ({
       incomeCash: 0,
@@ -269,69 +276,68 @@ export default function DashboardPage() {
 
     const current: FinancialTotals = makeTotals()
     const previous: FinancialTotals = makeTotals()
+
+    // график — заранее все дни, чтобы не рвало линию
     const chartMap = new Map<string, ChartPoint>()
+    {
+      let d = fromISO(dateFrom)
+      const end = fromISO(dateTo)
+      while (d.getTime() <= end.getTime()) {
+        const iso = toISODateLocal(d)
+        chartMap.set(iso, { date: iso, income: 0, expense: 0, profit: 0 })
+        d.setDate(d.getDate() + 1)
+      }
+    }
 
     // Доходы
     for (const r of incomes) {
       if (!includeExtra && isExtraCompany(r.company_id)) continue
-      const range = getRange(r.date)
-      if (!range) continue
 
-      const target = range === 'current' ? current : previous
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
       const card = Number(r.card_amount || 0)
       const total = cash + kaspi + card
       if (total <= 0) continue
 
-      target.incomeTotal += total
-      target.incomeCash += cash
-      target.incomeKaspi += kaspi
-      target.incomeCard += card
+      if (inCurrent(r.date)) {
+        current.incomeTotal += total
+        current.incomeCash += cash
+        current.incomeKaspi += kaspi
+        current.incomeCard += card
 
-      if (range === 'current') {
-        const ex =
-          chartMap.get(r.date) || {
-            date: r.date,
-            income: 0,
-            expense: 0,
-            profit: 0,
-          }
-        ex.income += total
-        chartMap.set(r.date, ex)
+        const p = chartMap.get(r.date)
+        if (p) p.income += total
+      } else if (inPrev(r.date)) {
+        previous.incomeTotal += total
+        previous.incomeCash += cash
+        previous.incomeKaspi += kaspi
+        previous.incomeCard += card
       }
     }
 
     // Расходы
     for (const r of expenses) {
       if (!includeExtra && isExtraCompany(r.company_id)) continue
-      const range = getRange(r.date)
-      if (!range) continue
 
-      const target = range === 'current' ? current : previous
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
       const total = cash + kaspi
       if (total <= 0) continue
 
-      target.expenseTotal += total
-      target.expenseCash += cash
-      target.expenseKaspi += kaspi
+      if (inCurrent(r.date)) {
+        current.expenseTotal += total
+        current.expenseCash += cash
+        current.expenseKaspi += kaspi
 
-      if (range === 'current') {
-        const ex =
-          chartMap.get(r.date) || {
-            date: r.date,
-            income: 0,
-            expense: 0,
-            profit: 0,
-          }
-        ex.expense += total
-        chartMap.set(r.date, ex)
+        const p = chartMap.get(r.date)
+        if (p) p.expense += total
+      } else if (inPrev(r.date)) {
+        previous.expenseTotal += total
+        previous.expenseCash += cash
+        previous.expenseKaspi += kaspi
       }
     }
 
-    // Итоги
     const finalizeTotals = (t: FinancialTotals) => {
       t.profit = t.incomeTotal - t.expenseTotal
       t.netCash = t.incomeCash - t.expenseCash
@@ -342,30 +348,28 @@ export default function DashboardPage() {
     finalizeTotals(current)
     finalizeTotals(previous)
 
-    const margin =
-      current.incomeTotal > 0
-        ? (current.profit / current.incomeTotal) * 100
-        : 0
-
-    let efficiency = 0
-    if (current.expenseTotal > 0) {
-      efficiency = current.incomeTotal / current.expenseTotal
-    } else if (current.incomeTotal > 0) {
-      efficiency = 10
+    for (const p of chartMap.values()) {
+      p.profit = p.income - p.expense
     }
 
-    const incomeChange = getPercentageChange(
-      current.incomeTotal,
-      previous.incomeTotal,
-    )
+    const margin = current.incomeTotal > 0 ? (current.profit / current.incomeTotal) * 100 : 0
+
+    let efficiency = 0
+    if (current.expenseTotal > 0) efficiency = current.incomeTotal / current.expenseTotal
+    else if (current.incomeTotal > 0) efficiency = 10
+
+    const incomeChange = getPercentageChange(current.incomeTotal, previous.incomeTotal)
     const profitChange = getPercentageChange(current.profit, previous.profit)
 
+    // скоринг — чуть более адекватный
     let score = 50
-    if (margin > 20) score += 20
-    if (margin > 40) score += 10
-    if (incomeChange > 0) score += 10
+    if (margin > 10) score += 10
+    if (margin > 20) score += 15
+    if (margin > 35) score += 10
+    if (incomeChange > 0) score += 7
     if (profitChange > 0) score += 10
-    if (efficiency > 1.5) score += 10
+    if (efficiency > 1.2) score += 8
+    if (current.profit < 0) score -= 25
     score = Math.min(100, Math.max(0, score))
 
     let status: AIInsight['status'] = 'healthy'
@@ -375,30 +379,27 @@ export default function DashboardPage() {
     if (score >= 80) {
       status = 'excellent'
       summary = 'Отличные показатели: вы в плюсе и растёте.'
-      recommendation = 'Реинвестируйте часть прибыли в маркетинг или расширение.'
-    } else if (score >= 50) {
+      recommendation = 'Реинвестируйте часть прибыли в маркетинг/апгрейд и фиксируйте удачные решения.'
+    } else if (score >= 55) {
       status = 'healthy'
       summary = 'Устойчивая работа: прибыль есть, всё под контролем.'
-      recommendation = 'Ищите мелкие точки оптимизации, улучшайте маржу и загрузку.'
-    } else if (score >= 30) {
+      recommendation = 'Дожимайте маржу: смотрите, где “течёт” расход и где можно поднять чек.'
+    } else if (score >= 35) {
       status = 'warning'
       summary = 'Прибыль под давлением: расходы заметно съедают выручку.'
-      recommendation =
-        'Сделайте ревизию затрат, заморозьте ненужные расходы и сфокусируйтесь на самых прибыльных зонах.'
+      recommendation = 'Ревизия затрат + упор на самые прибыльные зоны. Ненужное — в морозилку.'
     } else {
       status = 'critical'
-      summary = 'Риск убытков: бизнес на грани минуса.'
-      recommendation =
-        'Срочно режьте лишние траты, поднимайте цены и увеличивайте загрузку ключевых зон.'
+      summary = 'Риск убытков: вы слишком близко к минусу.'
+      recommendation = 'Срочно режьте лишнее, проверьте цены/тарифы и поднимайте загрузку ключевых часов.'
     }
 
-    const chartData: ChartPoint[] = Array.from(chartMap.values())
-      .map((d) => ({ ...d, profit: d.income - d.expense }))
-      .sort((a, b) => a.date.localeCompare(b.date))
+    const chartData: ChartPoint[] = Array.from(chartMap.values()).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    )
 
     const insight: AIInsight = {
       score,
-      status,
       status,
       summary,
       recommendation,
@@ -406,26 +407,73 @@ export default function DashboardPage() {
       efficiency,
     }
 
-    return {
-      current,
-      previous,
-      chartData,
-      insight,
-    }
+    return { current, previous, chartData, insight }
   }, [incomes, expenses, dateFrom, dateTo, includeExtra, companyById])
 
   const { current, previous, chartData, insight } = analytics
 
-  const transactionsCount = useMemo(
-    () =>
-      incomes.filter(
-        (x) =>
-          (includeExtra || !isExtraCompany(x.company_id)) &&
-          x.date >= dateFrom &&
-          x.date <= dateTo,
-      ).length,
-    [incomes, dateFrom, dateTo, includeExtra, companyById],
-  )
+  const transactionsCount = useMemo(() => {
+    const inc = incomes.filter(
+      (x) =>
+        (includeExtra || !isExtraCompany(x.company_id)) &&
+        x.date >= dateFrom &&
+        x.date <= dateTo &&
+        (Number(x.cash_amount || 0) + Number(x.kaspi_amount || 0) + Number(x.card_amount || 0)) > 0,
+    ).length
+
+    const exp = expenses.filter(
+      (x) =>
+        (includeExtra || !isExtraCompany(x.company_id)) &&
+        x.date >= dateFrom &&
+        x.date <= dateTo &&
+        (Number(x.cash_amount || 0) + Number(x.kaspi_amount || 0)) > 0,
+    ).length
+
+    return inc + exp
+  }, [incomes, expenses, dateFrom, dateTo, includeExtra, companyById])
+
+  const feedItems = useMemo<FeedItem[]>(() => {
+    const items: FeedItem[] = []
+
+    for (const r of incomes) {
+      if (!includeExtra && isExtraCompany(r.company_id)) continue
+      if (r.date < dateFrom || r.date > dateTo) continue
+
+      const amount =
+        Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
+      if (amount <= 0) continue
+
+      items.push({
+        id: r.id,
+        date: r.date,
+        company_id: r.company_id,
+        kind: 'income',
+        title: r.comment || 'Продажа',
+        amount,
+      })
+    }
+
+    for (const r of expenses) {
+      if (!includeExtra && isExtraCompany(r.company_id)) continue
+      if (r.date < dateFrom || r.date > dateTo) continue
+
+      const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0)
+      if (amount <= 0) continue
+
+      items.push({
+        id: r.id,
+        date: r.date,
+        company_id: r.company_id,
+        kind: 'expense',
+        title: r.category || r.comment || 'Расход',
+        amount,
+      })
+    }
+
+    // дата desc, потом сумма desc
+    items.sort((a, b) => (b.date === a.date ? b.amount - a.amount : b.date.localeCompare(a.date)))
+    return items.slice(0, 7)
+  }, [incomes, expenses, dateFrom, dateTo, includeExtra, companyById])
 
   if (loading) {
     return (
@@ -464,13 +512,14 @@ export default function DashboardPage() {
               <p className="text-muted-foreground text-sm">
                 Умная аналитика по выручке, расходам и прибыли
               </p>
-              <div className="mt-2 text-[11px] text-muted-foreground flex items-center gap-2">
+
+              <div className="mt-2 text-[11px] text-muted-foreground flex flex-wrap items-center gap-2">
                 <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
-                  Основной бизнес: F16 Arena
+                  Период: <span className="text-foreground">{formatRuDate(dateFrom)}</span> —{' '}
+                  <span className="text-foreground">{formatRuDate(dateTo)}</span>
                 </span>
-                {companies.some(
-                  (c) => (c.code || '').toLowerCase() === 'extra',
-                ) && (
+
+                {companies.some((c) => (c.code || '').toLowerCase() === 'extra') && (
                   <button
                     type="button"
                     onClick={() => setIncludeExtra((v) => !v)}
@@ -479,23 +528,21 @@ export default function DashboardPage() {
                         ? 'border-red-400 text-red-400 bg-red-500/10'
                         : 'border-border text-muted-foreground hover:bg-white/5'
                     }`}
+                    title="Включать/исключать F16 Extra"
                   >
                     <span
                       className={`h-2 w-2 rounded-full ${
                         includeExtra ? 'bg-red-400' : 'bg-muted-foreground/50'
                       }`}
                     />
-                    {includeExtra
-                      ? 'Extra включён в расчёты'
-                      : 'Исключить F16 Extra из итогов'}
+                    {includeExtra ? 'Extra включён' : 'Extra исключён'}
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Справа: Только фильтры по датам */}
+            {/* Фильтры по датам */}
             <div className="flex flex-col items-stretch gap-2 w-full xl:w-auto">
-              {/* Фильтры по датам */}
               <div className="flex flex-col sm:flex-row items-center gap-2 w-full xl:w-auto">
                 <div className="bg-card/50 border border-border/50 rounded-lg p-1 flex items-center gap-1 w-full sm:w-auto justify-center">
                   <button
@@ -565,7 +612,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Блок 1: AI-инсайты + быстрое резюме */}
+          {/* Блок 1: AI-инсайты + резюме */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card
               className={`lg:col-span-2 p-6 border relative overflow-hidden ${
@@ -604,13 +651,16 @@ export default function DashboardPage() {
                         : 'Критично'}
                     </span>
                   </div>
+
                   <h2 className="text-2xl font-semibold leading-tight max-w-xl">
                     {insight.summary}
                   </h2>
+
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
                     <Zap className="w-4 h-4 text-yellow-400" />
                     Совет: {insight.recommendation}
                   </p>
+
                   <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
                     <span>
                       Маржа:{' '}
@@ -622,42 +672,29 @@ export default function DashboardPage() {
                       Рост выручки:{' '}
                       <span
                         className={
-                          getPercentageChange(
-                            current.incomeTotal,
-                            previous.incomeTotal,
-                          ) >= 0
+                          getPercentageChange(current.incomeTotal, previous.incomeTotal) >= 0
                             ? 'text-green-400'
                             : 'text-red-400'
                         }
                       >
-                        {fmtPctLabel(
-                          getPercentageChange(
-                            current.incomeTotal,
-                            previous.incomeTotal,
-                          ),
-                        )}
+                        {fmtPctLabel(getPercentageChange(current.incomeTotal, previous.incomeTotal))}
                       </span>
                     </span>
                     <span>
                       Рост прибыли:{' '}
                       <span
                         className={
-                          getPercentageChange(current.profit, previous.profit) >=
-                          0
+                          getPercentageChange(current.profit, previous.profit) >= 0
                             ? 'text-green-400'
                             : 'text-red-400'
                         }
                       >
-                        {fmtPctLabel(
-                          getPercentageChange(
-                            current.profit,
-                            previous.profit,
-                          ),
-                        )}
+                        {fmtPctLabel(getPercentageChange(current.profit, previous.profit))}
                       </span>
                     </span>
                   </div>
                 </div>
+
                 <div className="flex items-center gap-4 min-w-[140px]">
                   <div className="text-right">
                     <div className="text-4xl font-bold">{insight.score}</div>
@@ -667,13 +704,14 @@ export default function DashboardPage() {
                   </div>
                   {insight.score > 80 ? (
                     <CheckCircle2 className="w-10 h-10 text-green-500" />
-                  ) : insight.score > 50 ? (
+                  ) : insight.score > 55 ? (
                     <Activity className="w-10 h-10 text-purple-500" />
                   ) : (
                     <AlertTriangle className="w-10 h-10 text-yellow-500" />
                   )}
                 </div>
               </div>
+
               <div
                 className={`absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl -mr-20 -mt-20 opacity-20 pointer-events-none ${
                   insight.status === 'excellent'
@@ -688,12 +726,10 @@ export default function DashboardPage() {
             </Card>
 
             <div className="grid grid-cols-1 gap-4">
-              <Card className="p-4 border border-border bg-card flex flex-col justify-center relative overflow-hidden">
-                <div className="flex justify-between items-center z-10">
+              <Card className="p-4 border border-border bg-card flex flex-col justify-center">
+                <div className="flex justify-between items-center">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">
-                      Чистая прибыль
-                    </p>
+                    <p className="text-xs text-muted-foreground mb-1">Чистая прибыль</p>
                     <p className="text-2xl font-bold text-white">
                       {formatMoney(current.profit)} ₸
                     </p>
@@ -712,23 +748,18 @@ export default function DashboardPage() {
                     }`}
                   >
                     <div className="text-sm font-bold">
-                      {fmtPctLabel(
-                        getPercentageChange(
-                          current.profit,
-                          previous.profit,
-                        ),
-                      )}
+                      {fmtPctLabel(getPercentageChange(current.profit, previous.profit))}
                     </div>
                   </div>
                 </div>
+
                 <div className="mt-3 h-1 w-full bg-white/10 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-yellow-400 to-orange-500"
-                    style={{
-                      width: `${Math.min(100, Math.max(0, insight.margin))}%`,
-                    }}
+                    style={{ width: `${Math.min(100, Math.max(0, insight.margin))}%` }}
                   />
                 </div>
+
                 <p className="text-[10px] text-right mt-1 text-muted-foreground">
                   Маржа: {insight.margin.toFixed(1)}%
                 </p>
@@ -737,9 +768,7 @@ export default function DashboardPage() {
               <Card className="p-4 border border-border bg-card flex flex-col justify-center">
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">
-                      Коэф. эффективности
-                    </p>
+                    <p className="text-xs text-muted-foreground mb-1">Коэф. эффективности</p>
                     <p className="text-2xl font-bold text-white">
                       {insight.efficiency.toFixed(2)}x
                     </p>
@@ -747,19 +776,15 @@ export default function DashboardPage() {
                   <Zap className="w-6 h-6 text-purple-500 opacity-50" />
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  ROI: на 1₸ затрат →{' '}
-                  <span className="text-foreground">
-                    {insight.efficiency.toFixed(2)}₸
-                  </span>{' '}
-                  выручки
+                  На 1₸ затрат →{' '}
+                  <span className="text-foreground">{insight.efficiency.toFixed(2)}₸</span> выручки
                 </p>
               </Card>
             </div>
           </div>
 
-          {/* Блок 2: ключевые метрики (доход / расход / остатки) */}
+          {/* Блок 2: ключевые метрики */}
           <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-            {/* Общий доход */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors group">
               <div className="flex justify-between mb-2">
                 <span className="text-xs text-muted-foreground">Общий доход</span>
@@ -769,20 +794,13 @@ export default function DashboardPage() {
                 {formatMoney(current.incomeTotal)} ₸
               </div>
               <div className="text-[10px] text-muted-foreground mt-1">
-                Нал:{' '}
-                <span className="text-foreground">
-                  {formatMoney(current.incomeCash)}
-                </span>
+                Нал: <span className="text-foreground">{formatMoney(current.incomeCash)}</span>
               </div>
               <div className="text-[10px] text-muted-foreground">
-                Прошлый период:{' '}
-                <span className="text-foreground">
-                  {formatMoney(previous.incomeTotal)} ₸
-                </span>
+                Прошлый: <span className="text-foreground">{formatMoney(previous.incomeTotal)} ₸</span>
               </div>
             </Card>
 
-            {/* Общий расход */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors group">
               <div className="flex justify-between mb-2">
                 <span className="text-xs text-muted-foreground">Общий расход</span>
@@ -792,101 +810,70 @@ export default function DashboardPage() {
                 {formatMoney(current.expenseTotal)} ₸
               </div>
               <div className="text-[10px] text-muted-foreground mt-1">
-                Нал:{' '}
-                <span className="text-foreground">
-                  {formatMoney(current.expenseCash)}
-                </span>
+                Нал: <span className="text-foreground">{formatMoney(current.expenseCash)}</span>
               </div>
               <div className="text-[10px] text-muted-foreground">
-                Прошлый период:{' '}
-                <span className="text-foreground">
-                  {formatMoney(previous.expenseTotal)} ₸
-                </span>
+                Прошлый: <span className="text-foreground">{formatMoney(previous.expenseTotal)} ₸</span>
               </div>
             </Card>
 
-            {/* Безнал */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
               <div className="flex justify-between mb-2">
-                <span className="text-xs text-muted-foreground">
-                  Безнал (Kaspi + Card)
-                </span>
+                <span className="text-xs text-muted-foreground">Безнал (Kaspi + Card)</span>
                 <DollarSign className="w-4 h-4 text-blue-500 opacity-50" />
               </div>
               <div className="text-xl font-bold text-foreground">
                 {formatMoney(current.incomeKaspi + current.incomeCard)} ₸
               </div>
               <div className="text-[10px] text-muted-foreground mt-1">
-                {(
-                  current.incomeTotal > 0
-                    ? ((current.incomeKaspi + current.incomeCard) /
-                        current.incomeTotal) *
-                      100
-                    : 0
+                {(current.incomeTotal > 0
+                  ? ((current.incomeKaspi + current.incomeCard) / current.incomeTotal) * 100
+                  : 0
                 ).toFixed(0)}
                 % от выручки
               </div>
             </Card>
 
-            {/* Остаток нал */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
               <div className="flex justify-between mb-2">
                 <span className="text-xs text-muted-foreground">Остаток нал</span>
                 <BarChart2 className="w-4 h-4 text-emerald-500 opacity-50" />
               </div>
-              <div
-                className={`text-xl font-bold ${
-                  current.netCash >= 0 ? 'text-emerald-400' : 'text-red-400'
-                }`}
-              >
+              <div className={`text-xl font-bold ${current.netCash >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {formatMoney(current.netCash)} ₸
               </div>
-              <div className="text-[10px] text-muted-foreground mt-1">
-                Доход (нал) − Расход (нал)
-              </div>
+              <div className="text-[10px] text-muted-foreground mt-1">Доход(нал) − Расход(нал)</div>
             </Card>
 
-            {/* Остаток Kaspi/Card */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
               <div className="flex justify-between mb-2">
-                <span className="text-xs text-muted-foreground">
-                  Остаток Kaspi/Card
-                </span>
+                <span className="text-xs text-muted-foreground">Остаток Kaspi/Card</span>
                 <BarChart2 className="w-4 h-4 text-sky-500 opacity-50" />
               </div>
-              <div
-                className={`text-xl font-bold ${
-                  current.netKaspi >= 0 ? 'text-sky-400' : 'text-red-400'
-                }`}
-              >
+              <div className={`text-xl font-bold ${current.netKaspi >= 0 ? 'text-sky-400' : 'text-red-400'}`}>
                 {formatMoney(current.netKaspi)} ₸
               </div>
-              <div className="text-[10px] text-muted-foreground mt-1">
-                Kaspi + Card − Расход (Kaspi)
-              </div>
+              <div className="text-[10px] text-muted-foreground mt-1">Kaspi+Card − Расход(Kaspi)</div>
             </Card>
 
-            {/* Кол-во операций */}
             <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
               <div className="flex justify-between mb-2">
-                <span className="text-xs text-muted-foreground">Транзакций</span>
+                <span className="text-xs text-muted-foreground">Операций</span>
                 <BarChart2 className="w-4 h-4 text-gray-500 opacity-50" />
               </div>
               <div className="text-xl font-bold">{transactionsCount}</div>
-              <div className="text-[10px] text-muted-foreground mt-1">
-                Операций дохода за период
-              </div>
+              <div className="text-[10px] text-muted-foreground mt-1">Доход + расход за период</div>
             </Card>
           </div>
 
-          {/* Блок 3: график + лента операций */}
+          {/* Блок 3: график + лента */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* График */}
             <Card className="lg:col-span-2 p-6 border-border bg-card">
               <h3 className="text-sm font-semibold text-foreground mb-6 flex items-center gap-2">
                 <Activity className="w-4 h-4 text-purple-500" />
                 Дневная динамика (Доход / Расход / Прибыль)
               </h3>
+
               {chartData.length === 0 ? (
                 <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
                   Нет данных
@@ -896,25 +883,12 @@ export default function DashboardPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
                       <defs>
-                        <linearGradient
-                          id="colorProfit"
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop
-                            offset="5%"
-                            stopColor="#a855f7"
-                            stopOpacity={0.3}
-                          />
-                          <stop
-                            offset="95%"
-                            stopColor="#a855f7"
-                            stopOpacity={0}
-                          />
+                        <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
                         </linearGradient>
                       </defs>
+
                       <CartesianGrid
                         strokeDasharray="3 3"
                         opacity={0.1}
@@ -934,16 +908,15 @@ export default function DashboardPage() {
                         fontSize={10}
                         tickLine={false}
                         axisLine={false}
-                        tickFormatter={(v) => `${v / 1000}k`}
+                        tickFormatter={(v) => `${Math.round(v / 1000)}k`}
                       />
                       <Tooltip
                         {...tooltipStyles}
-                        formatter={(val: number) => [
-                          formatMoney(val) + ' ₸',
-                          '',
-                        ]}
+                        formatter={(val: number) => [formatMoney(val) + ' ₸', '']}
+                        labelFormatter={(label: string) => formatRuDate(label)}
                       />
                       <Legend />
+
                       <Area
                         type="monotone"
                         dataKey="profit"
@@ -977,7 +950,6 @@ export default function DashboardPage() {
               )}
             </Card>
 
-            {/* Лента событий */}
             <Card className="lg:col-span-1 p-0 border-border bg-card overflow-hidden flex flex-col">
               <div className="p-4 border-b border-white/5 bg-white/5">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -988,70 +960,47 @@ export default function DashboardPage() {
                   Последние операции дохода и расхода
                 </p>
               </div>
+
               <div className="flex-1 overflow-auto max-h-[320px] p-2 space-y-1">
-                {[...incomes, ...expenses]
-                  .filter(
-                    (op) =>
-                      (includeExtra || !isExtraCompany(op.company_id)) &&
-                      op.date >= dateFrom &&
-                      op.date <= dateTo,
-                  )
-                  .sort((a, b) => b.date.localeCompare(a.date))
-                  .slice(0, 7)
-                  .map((op: any) => {
-                    const isIncome = 'card_amount' in op
-                    const amount = isIncome
-                      ? (op.cash_amount || 0) +
-                        (op.kaspi_amount || 0) +
-                        (op.card_amount || 0)
-                      : (op.cash_amount || 0) + (op.kaspi_amount || 0)
-
-                    if (amount <= 0) return null
-
-                    return (
-                      <div
-                        key={op.id}
-                        className="group flex items-center justify-between p-3 hover:bg-white/5 rounded-lg transition-colors cursor-default"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-2 h-2 rounded-full ${
-                              isIncome
-                                ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]'
-                                : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
-                            }`}
-                          />
-                          <div className="flex flex-col">
-                            <span className="text-xs font-medium text-foreground/90">
-                              {op.category ||
-                                op.comment ||
-                                (isIncome ? 'Продажа' : 'Расход')}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {companyName(op.company_id)} •{' '}
-                              {formatRuDate(op.date)}
-                            </span>
-                          </div>
-                        </div>
-                        <span
-                          className={`text-xs font-bold font-mono ${
-                            isIncome ? 'text-green-400' : 'text-red-400'
+                {feedItems.length === 0 ? (
+                  <p className="text-xs text-center p-4 text-muted-foreground">Пусто</p>
+                ) : (
+                  feedItems.map((op) => (
+                    <div
+                      key={op.id}
+                      className="group flex items-center justify-between p-3 hover:bg-white/5 rounded-lg transition-colors cursor-default"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-2 h-2 rounded-full ${
+                            op.kind === 'income'
+                              ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]'
+                              : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
                           }`}
-                        >
-                          {isIncome ? '+' : '-'}
-                          {formatMoney(amount)}
-                        </span>
+                        />
+                        <div className="flex flex-col">
+                          <span className="text-xs font-medium text-foreground/90">
+                            {op.title}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {companyName(op.company_id)} • {formatRuDate(op.date)}
+                          </span>
+                        </div>
                       </div>
-                    )
-                  })}
-                {!loading &&
-                  incomes.length === 0 &&
-                  expenses.length === 0 && (
-                    <p className="text-xs text-center p-4 text-muted-foreground">
-                      Пусто
-                    </p>
-                  )}
+
+                      <span
+                        className={`text-xs font-bold font-mono ${
+                          op.kind === 'income' ? 'text-green-400' : 'text-red-400'
+                        }`}
+                      >
+                        {op.kind === 'income' ? '+' : '-'}
+                        {formatMoney(op.amount)}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
+
               <div className="p-3 border-t border-white/5 bg-white/[0.02]">
                 <Link href={`/income?from=${dateFrom}&to=${dateTo}`}>
                   <Button
