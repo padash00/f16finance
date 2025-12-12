@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, FormEvent } from 'react'
+import { useEffect, useMemo, useState, FormEvent, useCallback } from 'react'
 import Link from 'next/link'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
@@ -59,7 +59,6 @@ type AggregatedShift = {
   turnover: number
 }
 
-// ✅ виды корректировок
 type AdjustmentKind = 'debt' | 'fine' | 'bonus' | 'advance'
 
 type AdjustmentRow = {
@@ -86,32 +85,46 @@ type OperatorWeekStat = {
   basePerShift: number
   baseSalary: number
   bonusSalary: number
-  totalSalary: number        // база + авто-бонусы
+  totalSalary: number
   totalTurnover: number
-  autoDebts: number          // долги из таблицы debts
-  manualPlus: number         // ручные премии
-  manualMinus: number        // ручные долги/штрафы (Только долг/штраф!)
-  advances: number           // авансы (отдельно, не считаются как "минус" корр.)
-  finalSalary: number        // к выплате (с учётом авансов)
+  autoDebts: number
+  manualPlus: number
+  manualMinus: number
+  advances: number
+  finalSalary: number
 }
 
 const formatMoney = (v: number) =>
   v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 
+// --- Даты: локальный ISO без UTC-сдвигов ---
+const toISODateLocal = (d: Date) => {
+  const t = d.getTime() - d.getTimezoneOffset() * 60_000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+const fromISO = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
+}
+
 const getMonday = (d: Date) => {
   const date = new Date(d)
-  const day = date.getDay() || 7 // 1..7, где 1 = Пн
-  if (day !== 1) {
-    date.setDate(date.getDate() - (day - 1))
-  }
+  const day = date.getDay() || 7 // 1..7 (Пн..Вс)
+  if (day !== 1) date.setDate(date.getDate() - (day - 1))
   return date
 }
 
-const formatISO = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-    2,
-    '0',
-  )}-${String(d.getDate()).padStart(2, '0')}`
+const addDaysISO = (iso: string, diff: number) => {
+  const d = fromISO(iso)
+  d.setDate(d.getDate() + diff)
+  return toISODateLocal(d)
+}
+
+const parseAmount = (raw: string) => {
+  const n = Number(raw.replace(',', '.').replace(/\s/g, ''))
+  return Number.isFinite(n) ? n : NaN
+}
 
 export default function SalaryPage() {
   const today = new Date()
@@ -119,117 +132,151 @@ export default function SalaryPage() {
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
 
-  const [dateFrom, setDateFrom] = useState(formatISO(monday))
-  const [dateTo, setDateTo] = useState(formatISO(sunday))
+  const [dateFrom, setDateFrom] = useState(toISODateLocal(monday))
+  const [dateTo, setDateTo] = useState(toISODateLocal(sunday))
 
+  // Статика (грузим 1 раз)
   const [companies, setCompanies] = useState<Company[]>([])
-  const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [rules, setRules] = useState<SalaryRule[]>([])
-  const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
-  const [debts, setDebts] = useState<DebtRow[]>([])
+  const [staticLoading, setStaticLoading] = useState(true)
 
-  const [loading, setLoading] = useState(true)
+  // Динамика (по диапазону дат)
+  const [incomes, setIncomes] = useState<IncomeRow[]>([])
+  const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([])
+  const [debts, setDebts] = useState<DebtRow[]>([])
+  const [rangeLoading, setRangeLoading] = useState(true)
+
   const [error, setError] = useState<string | null>(null)
 
   // Форма корректировок
   const [adjOperatorId, setAdjOperatorId] = useState('')
-  const [adjDate, setAdjDate] = useState(formatISO(today))
+  const [adjDate, setAdjDate] = useState(toISODateLocal(today))
   const [adjKind, setAdjKind] = useState<AdjustmentKind>('debt')
   const [adjAmount, setAdjAmount] = useState('')
   const [adjComment, setAdjComment] = useState('')
   const [adjSaving, setAdjSaving] = useState(false)
 
-  const setThisWeek = () => {
+  // Если пользователь руками поставил кривой диапазон — подчиним
+  useEffect(() => {
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      setDateFrom(dateTo)
+      setDateTo(dateFrom)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFrom, dateTo])
+
+  const setThisWeek = useCallback(() => {
     const now = new Date()
     const mon = getMonday(now)
-    const sun = new Date(mon)
-    sun.setDate(mon.getDate() + 6)
-    setDateFrom(formatISO(mon))
-    setDateTo(formatISO(sun))
-  }
+    const from = toISODateLocal(mon)
+    const to = addDaysISO(from, 6)
+    setDateFrom(from)
+    setDateTo(to)
+  }, [])
 
-  const setLastWeek = () => {
+  const setLastWeek = useCallback(() => {
     const now = new Date()
     const mon = getMonday(now)
     mon.setDate(mon.getDate() - 7)
-    const sun = new Date(mon)
-    sun.setDate(mon.getDate() + 6)
-    setDateFrom(formatISO(mon))
-    setDateTo(formatISO(sun))
-  }
+    const from = toISODateLocal(mon)
+    const to = addDaysISO(from, 6)
+    setDateFrom(from)
+    setDateTo(to)
+  }, [])
 
-  // Загрузка данных
+  // 1) Статика — один раз
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
+    let alive = true
+
+    const loadStatic = async () => {
+      setStaticLoading(true)
       setError(null)
 
-      const [compRes, incRes, rulesRes, adjRes, opsRes, debtsRes] =
-        await Promise.all([
-          supabase.from('companies').select('id,name,code'),
-          supabase
-            .from('incomes')
-            .select(
-              'id,date,company_id,shift,cash_amount,kaspi_amount,card_amount,operator_id,operator_name',
-            )
-            .gte('date', dateFrom)
-            .lte('date', dateTo),
-          supabase
-            .from('operator_salary_rules')
-            .select(
-              'id,company_code,shift_type,base_per_shift,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus',
-            )
-            .eq('is_active', true),
-          supabase
-            .from('operator_salary_adjustments')
-            .select('id,operator_id,date,amount,kind,comment')
-            .gte('date', dateFrom)
-            .lte('date', dateTo),
-          supabase
-            .from('operators')
-            .select('id,name,short_name,is_active'),
-          supabase
-            .from('debts')
-            .select('id,operator_id,amount,week_start,status')
-            .gte('week_start', dateFrom)
-            .lte('week_start', dateTo)
-            .eq('status', 'active'),
-        ])
+      const [compRes, rulesRes, opsRes] = await Promise.all([
+        supabase.from('companies').select('id,name,code'),
+        supabase
+          .from('operator_salary_rules')
+          .select(
+            'id,company_code,shift_type,base_per_shift,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus',
+          )
+          .eq('is_active', true),
+        supabase.from('operators').select('id,name,short_name,is_active'),
+      ])
 
-      if (
-        compRes.error ||
-        incRes.error ||
-        rulesRes.error ||
-        adjRes.error ||
-        opsRes.error ||
-        debtsRes.error
-      ) {
-        console.error(
-          'Salary load error',
-          compRes.error,
-          incRes.error,
-          rulesRes.error,
-          adjRes.error,
-          opsRes.error,
-          debtsRes.error,
-        )
-        setError('Ошибка загрузки данных для расчёта зарплаты')
-        setLoading(false)
+      if (!alive) return
+
+      if (compRes.error || rulesRes.error || opsRes.error) {
+        console.error('Salary static load error', compRes.error, rulesRes.error, opsRes.error)
+        setError('Ошибка загрузки справочников (компании/правила/операторы)')
+        setStaticLoading(false)
         return
       }
 
       setCompanies((compRes.data || []) as Company[])
-      setIncomes((incRes.data || []) as IncomeRow[])
       setRules((rulesRes.data || []) as SalaryRule[])
-      setAdjustments((adjRes.data || []) as AdjustmentRow[])
       setOperators((opsRes.data || []) as Operator[])
-      setDebts((debtsRes.data || []) as DebtRow[])
-      setLoading(false)
+      setStaticLoading(false)
     }
 
-    load()
+    loadStatic()
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // 2) Данные диапазона — при смене дат
+  useEffect(() => {
+    let alive = true
+
+    const loadRange = async () => {
+      setRangeLoading(true)
+      setError(null)
+
+      const [incRes, adjRes, debtsRes] = await Promise.all([
+        supabase
+          .from('incomes')
+          .select(
+            'id,date,company_id,shift,cash_amount,kaspi_amount,card_amount,operator_id,operator_name',
+          )
+          .gte('date', dateFrom)
+          .lte('date', dateTo),
+        supabase
+          .from('operator_salary_adjustments')
+          .select('id,operator_id,date,amount,kind,comment')
+          .gte('date', dateFrom)
+          .lte('date', dateTo),
+        // week_start обычно = ПН. Под диапазон недели ок.
+        supabase
+          .from('debts')
+          .select('id,operator_id,amount,week_start,status')
+          .gte('week_start', dateFrom)
+          .lte('week_start', dateTo)
+          .eq('status', 'active'),
+      ])
+
+      if (!alive) return
+
+      if (incRes.error || adjRes.error || debtsRes.error) {
+        console.error('Salary range load error', incRes.error, adjRes.error, debtsRes.error)
+        setError('Ошибка загрузки данных для расчёта зарплаты')
+        setRangeLoading(false)
+        return
+      }
+
+      setIncomes((incRes.data || []) as IncomeRow[])
+      setAdjustments((adjRes.data || []) as AdjustmentRow[])
+      setDebts((debtsRes.data || []) as DebtRow[])
+      setRangeLoading(false)
+    }
+
+    loadRange()
+    return () => {
+      alive = false
+    }
   }, [dateFrom, dateTo])
+
+  const loading = staticLoading || rangeLoading
 
   const companyById = useMemo(() => {
     const map: Record<string, Company> = {}
@@ -239,10 +286,7 @@ export default function SalaryPage() {
 
   const rulesMap = useMemo(() => {
     const map: Record<string, SalaryRule> = {}
-    for (const r of rules) {
-      const key = `${r.company_code}_${r.shift_type}`
-      map[key] = r
-    }
+    for (const r of rules) map[`${r.company_code}_${r.shift_type}`] = r
     return map
   }, [rules])
 
@@ -251,37 +295,28 @@ export default function SalaryPage() {
     () =>
       operators
         .filter((o) => o.is_active)
-        .sort((a, b) =>
-          (a.short_name || a.name).localeCompare(
-            b.short_name || b.name,
-            'ru',
-          ),
-        ),
+        .sort((a, b) => (a.short_name || a.name).localeCompare(b.short_name || b.name, 'ru')),
     [operators],
   )
 
   // Основная математика
   const stats = useMemo(() => {
     const operatorById: Record<string, Operator> = {}
-    for (const o of operators) {
-      operatorById[o.id] = o
-    }
+    for (const o of operators) operatorById[o.id] = o
 
     const aggregated = new Map<string, AggregatedShift>()
     const byOperator = new Map<string, OperatorWeekStat>()
+
     let totalTurnover = 0
     const DEFAULT_BASE = 8000
 
-    // Создаём "пустую" строку оператора при необходимости
-    const ensureOperator = (
-      id: string | null,
-    ): OperatorWeekStat | null => {
+    const ensureOperator = (id: string | null): OperatorWeekStat | null => {
       if (!id) return null
+
       let op = byOperator.get(id)
       if (!op) {
         const meta = operatorById[id]
-        const displayName =
-          meta?.short_name || meta?.name || 'Без имени'
+        const displayName = meta?.short_name || meta?.name || 'Без имени'
 
         op = {
           operatorId: id,
@@ -303,36 +338,35 @@ export default function SalaryPage() {
       return op
     }
 
-    // 1. Собираем смены
+    // 1) Смены (агрегация)
     for (const row of incomes) {
       if (!row.operator_id) continue
 
       const company = companyById[row.company_id]
-      if (!company || !company.code) continue
-      if (!['arena', 'ramen', 'extra'].includes(company.code)) continue
+      const code = company?.code?.toLowerCase() || null
+      if (!code) continue
+      if (!['arena', 'ramen', 'extra'].includes(code)) continue
 
-      const shift: 'day' | 'night' =
-        row.shift === 'night' ? 'night' : 'day'
+      const shift: 'day' | 'night' = row.shift === 'night' ? 'night' : 'day'
 
       const total =
         Number(row.cash_amount || 0) +
         Number(row.kaspi_amount || 0) +
         Number(row.card_amount || 0)
 
-      const key = `${row.operator_id}_${row.company_id}_${row.date}_${shift}`
+      if (total <= 0) continue
 
       const meta = operatorById[row.operator_id]
       const displayName =
-        meta?.short_name ||
-        meta?.name ||
-        row.operator_name ||
-        'Без имени'
+        meta?.short_name || meta?.name || row.operator_name || 'Без имени'
+
+      const key = `${row.operator_id}_${code}_${row.date}_${shift}`
 
       const ex =
         aggregated.get(key) || {
           operatorId: row.operator_id,
           operatorName: displayName,
-          companyCode: company.code,
+          companyCode: code,
           date: row.date,
           shift,
           turnover: 0,
@@ -342,10 +376,9 @@ export default function SalaryPage() {
       aggregated.set(key, ex)
     }
 
-    // 2. Считаем базу и авто-бонусы по сменам
+    // 2) База + авто-бонусы
     for (const sh of aggregated.values()) {
-      const keyRule = `${sh.companyCode}_${sh.shift}`
-      const rule = rulesMap[keyRule]
+      const rule = rulesMap[`${sh.companyCode}_${sh.shift}`]
       const basePerShift = rule?.base_per_shift ?? DEFAULT_BASE
 
       let bonus = 0
@@ -356,7 +389,7 @@ export default function SalaryPage() {
         bonus += rule.threshold2_bonus || 0
       }
 
-      let op = ensureOperator(sh.operatorId)
+      const op = ensureOperator(sh.operatorId)
       if (!op) continue
 
       op.basePerShift = basePerShift
@@ -365,17 +398,16 @@ export default function SalaryPage() {
       op.bonusSalary += bonus
       op.totalSalary += basePerShift + bonus
       op.totalTurnover += sh.turnover
-
       totalTurnover += sh.turnover
     }
 
-    // 2а. Гарантируем, что все активные операторы есть в карте
+    // 2a) Все активные операторы — в таблицу (даже с нулями)
     for (const o of operators) {
       if (!o.is_active) continue
       ensureOperator(o.id)
     }
 
-    // 3. Ручные корректировки
+    // 3) Ручные корректировки
     for (const adj of adjustments) {
       const op = ensureOperator(adj.operator_id)
       if (!op) continue
@@ -383,19 +415,12 @@ export default function SalaryPage() {
       const amount = Number(adj.amount || 0)
       if (!Number.isFinite(amount) || amount <= 0) continue
 
-      if (adj.kind === 'bonus') {
-        // Премия — в плюс
-        op.manualPlus += amount
-      } else if (adj.kind === 'advance') {
-        // ✅ Аванс — отдельное поле, НЕ считается как "корр. −"
-        op.advances += amount
-      } else {
-        // debt / fine — это реальные минусы
-        op.manualMinus += amount
-      }
+      if (adj.kind === 'bonus') op.manualPlus += amount
+      else if (adj.kind === 'advance') op.advances += amount
+      else op.manualMinus += amount // debt/fine
     }
 
-    // 4. Долги за неделю из debts
+    // 4) Долги недели
     let totalDebts = 0
     for (const d of debts) {
       const op = ensureOperator(d.operator_id)
@@ -408,7 +433,7 @@ export default function SalaryPage() {
       totalDebts += amount
     }
 
-    // 5. Финальный пересчёт
+    // 5) Итог к выплате
     let totalSalary = 0
     for (const op of byOperator.values()) {
       op.finalSalary =
@@ -416,7 +441,8 @@ export default function SalaryPage() {
         op.manualPlus -
         op.manualMinus -
         op.autoDebts -
-        op.advances // ✅ аванс уменьшает "к выплате", но не попадает в "Корр. −"
+        op.advances
+
       totalSalary += op.finalSalary
     }
 
@@ -425,7 +451,7 @@ export default function SalaryPage() {
     )
 
     return { operators: operatorsStats, totalSalary, totalTurnover, totalDebts }
-  }, [incomes, companies, rulesMap, adjustments, operators, debts])
+  }, [incomes, companyById, rulesMap, adjustments, operators, debts])
 
   const totalShifts = stats.operators.reduce((s, o) => s + o.shifts, 0)
   const totalBase = stats.operators.reduce((s, o) => s + o.baseSalary, 0)
@@ -435,7 +461,6 @@ export default function SalaryPage() {
   const totalPlus = stats.operators.reduce((s, o) => s + o.manualPlus, 0)
   const totalAdvances = stats.operators.reduce((s, o) => s + o.advances, 0)
 
-  // Добавление корректировки
   const handleAddAdjustment = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -444,27 +469,25 @@ export default function SalaryPage() {
       if (!adjOperatorId) throw new Error('Выберите оператора')
       if (!adjDate) throw new Error('Выберите дату корректировки')
 
-      const amountNum = Number(
-        adjAmount.replace(',', '.').replace(/\s/g, ''),
-      )
+      const amountNum = parseAmount(adjAmount)
       if (!Number.isFinite(amountNum) || amountNum <= 0) {
         throw new Error('Введите сумму корректировки')
       }
 
       setAdjSaving(true)
 
+      const payload = {
+        operator_id: adjOperatorId,
+        date: adjDate,
+        amount: Math.round(amountNum),
+        kind: adjKind,
+        comment: adjComment.trim() || null,
+      }
+
       const { data, error } = await supabase
         .from('operator_salary_adjustments')
-        .insert([
-          {
-            operator_id: adjOperatorId,
-            date: adjDate,
-            amount: Math.round(amountNum),
-            kind: adjKind,
-            comment: adjComment.trim() || null,
-          },
-        ])
-        .select()
+        .insert([payload])
+        .select('id,operator_id,date,amount,kind,comment')
         .single()
 
       if (error) throw error
@@ -556,16 +579,16 @@ export default function SalaryPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">Всего смен</p>
-              <p className="text-2xl font-bold">{totalShifts}</p>
+              <p className="text-2xl font-bold">{loading ? '—' : totalShifts}</p>
             </Card>
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">База (оклад)</p>
-              <p className="text-2xl font-bold">{formatMoney(totalBase)}</p>
+              <p className="text-2xl font-bold">{loading ? '—' : formatMoney(totalBase)}</p>
             </Card>
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">Авто-бонусы</p>
               <p className="text-2xl font-bold text-emerald-400">
-                {formatMoney(totalBonus)}
+                {loading ? '—' : formatMoney(totalBonus)}
               </p>
             </Card>
             <Card className="p-4 border-border bg-card/70">
@@ -573,9 +596,9 @@ export default function SalaryPage() {
                 К выплате (после долгов, корректировок и авансов)
               </p>
               <p className="text-2xl font-bold text-sky-400">
-                {formatMoney(stats.totalSalary)}
+                {loading ? '—' : formatMoney(stats.totalSalary)}
               </p>
-              {totalAutoDebts > 0 && (
+              {!loading && totalAutoDebts > 0 && (
                 <p className="mt-1 text-[11px] text-red-300">
                   Включая долги недели: {formatMoney(totalAutoDebts)}
                 </p>
@@ -586,16 +609,14 @@ export default function SalaryPage() {
           {/* Таблица операторов */}
           <Card className="p-4 border-border bg-card/80 overflow-x-auto">
             <table className="w-full text-xs md:text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
+              <thead className="sticky top-0 bg-card/90 backdrop-blur border-b border-border">
+                <tr className="text-[11px] uppercase text-muted-foreground">
                   <th className="py-2 text-left px-2">Оператор</th>
                   <th className="py-2 text-center px-2">Смен</th>
                   <th className="py-2 text-right px-2">Оклад / смена</th>
                   <th className="py-2 text-right px-2">База</th>
                   <th className="py-2 text-right px-2">Авто-бонус</th>
-                  <th className="py-2 text-right px-2 text-red-300">
-                    Долги недели
-                  </th>
+                  <th className="py-2 text-right px-2 text-red-300">Долги недели</th>
                   <th className="py-2 text-right px-2">Корр. −</th>
                   <th className="py-2 text-right px-2">Аванс</th>
                   <th className="py-2 text-right px-2">Корр. +</th>
@@ -606,10 +627,7 @@ export default function SalaryPage() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td
-                      colSpan={11}
-                      className="py-6 text-center text-muted-foreground text-xs"
-                    >
+                    <td colSpan={11} className="py-6 text-center text-muted-foreground text-xs">
                       Загрузка...
                     </td>
                   </tr>
@@ -617,10 +635,7 @@ export default function SalaryPage() {
 
                 {!loading && stats.operators.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={11}
-                      className="py-6 text-center text-muted-foreground text-xs"
-                    >
+                    <td colSpan={11} className="py-6 text-center text-muted-foreground text-xs">
                       Нет данных в выбранном периоде.
                     </td>
                   </tr>
@@ -632,16 +647,10 @@ export default function SalaryPage() {
                       key={op.operatorId}
                       className="border-t border-border/40 hover:bg-white/5"
                     >
-                      <td className="py-1.5 px-2 font-medium">
-                        {op.operatorName}
-                      </td>
+                      <td className="py-1.5 px-2 font-medium">{op.operatorName}</td>
                       <td className="py-1.5 px-2 text-center">{op.shifts}</td>
-                      <td className="py-1.5 px-2 text-right">
-                        {formatMoney(op.basePerShift)}
-                      </td>
-                      <td className="py-1.5 px-2 text-right">
-                        {formatMoney(op.baseSalary)}
-                      </td>
+                      <td className="py-1.5 px-2 text-right">{formatMoney(op.basePerShift)}</td>
+                      <td className="py-1.5 px-2 text-right">{formatMoney(op.baseSalary)}</td>
                       <td className="py-1.5 px-2 text-right text-emerald-300">
                         {formatMoney(op.bonusSalary)}
                       </td>
@@ -667,13 +676,11 @@ export default function SalaryPage() {
                   ))}
 
                 {!loading && stats.operators.length > 0 && (
-                  <tr className="border-t border-border mt-2">
+                  <tr className="border-t border-border">
                     <td className="py-2 px-2 font-bold text-right" colSpan={3}>
                       Итого:
                     </td>
-                    <td className="py-2 px-2 text-right font-bold">
-                      {formatMoney(totalBase)}
-                    </td>
+                    <td className="py-2 px-2 text-right font-bold">{formatMoney(totalBase)}</td>
                     <td className="py-2 px-2 text-right font-bold text-emerald-300">
                       {formatMoney(totalBonus)}
                     </td>
@@ -749,9 +756,7 @@ export default function SalaryPage() {
                   </label>
                   <select
                     value={adjKind}
-                    onChange={(e) =>
-                      setAdjKind(e.target.value as AdjustmentKind)
-                    }
+                    onChange={(e) => setAdjKind(e.target.value as AdjustmentKind)}
                     className="w-full bg-input border border-border rounded-md px-2 py-1.5 text-xs"
                   >
                     <option value="debt">Долг (минус)</option>
@@ -784,7 +789,7 @@ export default function SalaryPage() {
                       value={adjComment}
                       onChange={(e) => setAdjComment(e.target.value)}
                       className="flex-1 bg-input border border-border rounded-md px-2 py-1.5 text-xs"
-                      placeholder="Например: аванс −20k / штраф за кассу −10k / премия за турнир..."
+                      placeholder="Аванс −20k / штраф за кассу −10k / премия за турнир..."
                     />
                     <Button
                       type="submit"
