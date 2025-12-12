@@ -6,23 +6,10 @@ import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
-import { ArrowLeft, Save, Plus, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Plus, Save, AlertTriangle, CheckCircle2 } from 'lucide-react'
 
-type EntityType = 'collective' | 'operator' | 'role'
-type RoleCode = 'marketing' | 'supervisor'
-
-type Company = {
-  id: string
-  name: string
-  code: string | null
-}
-
-type Operator = {
-  id: string
-  name: string
-  short_name: string | null
-  is_active: boolean
-}
+type Company = { id: string; name: string; code: string | null }
+type Operator = { id: string; name: string; short_name: string | null; is_active: boolean }
 
 type IncomeRow = {
   date: string
@@ -35,467 +22,380 @@ type IncomeRow = {
 }
 
 type KpiPlanRow = {
-  plan_key: string
-  month_start: string
-  entity_type: EntityType
+  id: number
+  period_start: string
+  period_type: string // 'month'
   company_code: string | null
-  operator_id: string | null
-  role_code: string | null
+  shift_type: string | null
+  owner_role: string // 'collective' | 'operator' | 'supervisor' | 'marketing'
+  owner_id: string | null
+
   turnover_target_month: number
   turnover_target_week: number
   shifts_target_month: number
   shifts_target_week: number
+
   meta: any | null
   is_locked: boolean
 }
 
-const formatMoney = (v: number) =>
-  (v || 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
-
-const parseIntSafe = (v: any): number => {
-  const s = String(v ?? '').replace(/\s/g, '').replace(',', '.')
-  const n = Number(s)
-  return Number.isFinite(n) ? Math.round(n) : 0
+const ROLE_LABELS: Record<string, string> = {
+  collective: 'Коллектив',
+  operator: 'Оператор',
+  supervisor: 'Руководитель операторов',
+  marketing: 'Маркетолог',
 }
 
-const parseFloatSafe = (v: any): number => {
-  const s = String(v ?? '').replace(/\s/g, '').replace(',', '.')
-  const n = Number(s)
-  return Number.isFinite(n) ? n : 0
+const COMPANY_LABELS: Record<string, string> = {
+  arena: 'F16 Arena',
+  ramen: 'F16 Ramen',
+  extra: 'F16 Extra',
 }
 
-const toMonthStartISO = (yyyyMm: string) => `${yyyyMm}-01`
+const fmtMoney = (v: number) => (v || 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
+const fmtNum = (v: number) => (Number.isFinite(v) ? v.toLocaleString('ru-RU') : '0')
 
-const monthKeyFromISODate = (iso: string) => iso.slice(0, 7) // YYYY-MM
-
-const addMonths = (yyyyMm: string, delta: number) => {
-  const [y, m] = yyyyMm.split('-').map(Number)
-  const d = new Date(y, m - 1 + delta, 1)
-  const yy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  return `${yy}-${mm}`
+function monthStartISO(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}-01`
 }
-
-const daysInMonth = (yyyyMm: string) => {
-  const [y, m] = yyyyMm.split('-').map(Number)
-  return new Date(y, m, 0).getDate()
+function addMonthsISO(isoMonthStart: string, delta: number) {
+  const d = new Date(isoMonthStart + 'T00:00:00')
+  d.setMonth(d.getMonth() + delta)
+  return monthStartISO(d)
 }
-
-const lastDayISO = (yyyyMm: string) => {
-  const [y, m] = yyyyMm.split('-').map(Number)
-  const d = new Date(y, m, 0)
-  const yy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yy}-${mm}-${dd}`
-}
-
-const planKey = (args: {
-  monthStart: string
-  entityType: EntityType
-  companyCode?: string | null
-  operatorId?: string | null
-  roleCode?: string | null
-}) => {
-  const c = args.companyCode || '-'
-  const o = args.operatorId || '-'
-  const r = args.roleCode || '-'
-  return `${args.monthStart}|${args.entityType}|${c}|${o}|${r}`
+function daysInMonth(isoMonthStart: string) {
+  const d = new Date(isoMonthStart + 'T00:00:00')
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
 }
 
 export default function KPIPlansPage() {
   const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-  // по умолчанию показываем следующий месяц (план обычно строим наперёд)
-  const [selectedMonth, setSelectedMonth] = useState(addMonths(currentMonth, 1)) // YYYY-MM
+  const [periodStart, setPeriodStart] = useState(monthStartISO(now))
+  const [growthPct, setGrowthPct] = useState(5)
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
   const [plans, setPlans] = useState<KpiPlanRow[]>([])
 
   const [loading, setLoading] = useState(true)
+  const [busyGen, setBusyGen] = useState(false)
+  const [busySave, setBusySave] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
-
-  const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(new Set())
-  const [savingAll, setSavingAll] = useState(false)
-  const [generating, setGenerating] = useState(false)
-
-  // рост к плану (в %)
-  const [growthPct, setGrowthPct] = useState(5) // 5% по умолчанию
-
-  const monthStart = useMemo(() => toMonthStartISO(selectedMonth), [selectedMonth])
+  const [success, setSuccess] = useState<string | null>(null)
 
   const companyById = useMemo(() => {
-    const map: Record<string, Company> = {}
-    for (const c of companies) map[c.id] = c
-    return map
+    const m: Record<string, Company> = {}
+    companies.forEach(c => (m[c.id] = c))
+    return m
   }, [companies])
 
-  const operatorById = useMemo(() => {
-    const map: Record<string, Operator> = {}
-    for (const o of operators) map[o.id] = o
-    return map
+  const operatorLabelById = useMemo(() => {
+    const m: Record<string, string> = {}
+    operators.forEach(o => (m[o.id] = o.short_name || o.name))
+    return m
   }, [operators])
 
-  const loadAll = async () => {
+  const reload = async () => {
     setLoading(true)
     setError(null)
-    setSuccessMsg(null)
+    setSuccess(null)
 
-    const [compRes, opsRes, planRes] = await Promise.all([
-      supabase.from('companies').select('id,name,code').order('name'),
-      supabase.from('operators').select('id,name,short_name,is_active').order('name'),
+    const [cRes, oRes, pRes] = await Promise.all([
+      supabase.from('companies').select('id,name,code'),
+      supabase.from('operators').select('id,name,short_name,is_active'),
       supabase
         .from('kpi_plans')
         .select(
-          'plan_key,month_start,entity_type,company_code,operator_id,role_code,turnover_target_month,turnover_target_week,shifts_target_month,shifts_target_week,meta,is_locked',
+          'id,period_start,period_type,company_code,shift_type,owner_role,owner_id,turnover_target_month,turnover_target_week,shifts_target_month,shifts_target_week,meta,is_locked',
         )
-        .eq('month_start', monthStart),
+        .eq('period_start', periodStart)
+        .eq('period_type', 'month')
+        .order('owner_role', { ascending: true })
+        .order('company_code', { ascending: true }),
     ])
 
-    if (compRes.error || opsRes.error || planRes.error) {
-      console.error(compRes.error, opsRes.error, planRes.error)
+    if (cRes.error || oRes.error || pRes.error) {
+      console.error(cRes.error, oRes.error, pRes.error)
       setError('Ошибка загрузки KPI планов')
       setLoading(false)
       return
     }
 
-    setCompanies((compRes.data || []) as Company[])
-    setOperators((opsRes.data || []) as Operator[])
-    setPlans((planRes.data || []) as KpiPlanRow[])
-    setDirtyKeys(new Set())
+    setCompanies((cRes.data || []) as Company[])
+    setOperators((oRes.data || []) as Operator[])
+    setPlans((pRes.data || []) as KpiPlanRow[])
     setLoading(false)
   }
 
   useEffect(() => {
-    loadAll()
+    reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthStart])
+  }, [periodStart])
 
-  const markDirty = (key: string) => {
-    setDirtyKeys((prev) => {
-      const next = new Set(prev)
-      next.add(key)
-      return next
-    })
-  }
+  // ===== генерация плана из 2 предыдущих месяцев =====
 
-  const handlePlanChange = (
-    key: string,
-    field: keyof KpiPlanRow,
-    value: string | boolean,
-  ) => {
-    setPlans((prev) =>
-      prev.map((p) => (p.plan_key === key ? ({ ...p, [field]: value } as any) : p)),
-    )
-    markDirty(key)
-    setSuccessMsg(null)
-  }
-
-  const handleSaveAll = async () => {
-    setError(null)
-    setSuccessMsg(null)
-    setSavingAll(true)
-
-    try {
-      const dirty = plans.filter((p) => dirtyKeys.has(p.plan_key))
-      if (dirty.length === 0) {
-        setSuccessMsg('Нечего сохранять')
-        return
-      }
-
-      const payload = dirty.map((p) => ({
-        plan_key: p.plan_key,
-        month_start: p.month_start,
-        entity_type: p.entity_type,
-        company_code: p.company_code,
-        operator_id: p.operator_id,
-        role_code: p.role_code,
-        turnover_target_month: parseIntSafe(p.turnover_target_month),
-        turnover_target_week: parseIntSafe(p.turnover_target_week),
-        shifts_target_month: parseIntSafe(p.shifts_target_month),
-        shifts_target_week: parseFloatSafe(p.shifts_target_week),
-        meta: p.meta ?? null,
-        is_locked: !!p.is_locked,
-        updated_at: new Date().toISOString(),
-      }))
-
-      const { error } = await supabase
-        .from('kpi_plans')
-        .upsert(payload, { onConflict: 'plan_key' })
-
-      if (error) throw error
-
-      setSuccessMsg('Сохранено')
-      await loadAll()
-    } catch (e: any) {
-      console.error(e)
-      setError(e.message || 'Ошибка сохранения')
-    } finally {
-      setSavingAll(false)
-    }
-  }
-
-  // ====== ГЕНЕРАЦИЯ ПЛАНА ИЗ 2 МЕСЯЦЕВ ДО ВЫБРАННОГО ======
   const handleGenerate = async () => {
     setError(null)
-    setSuccessMsg(null)
-    setGenerating(true)
+    setSuccess(null)
+    setBusyGen(true)
 
     try {
-      const baseM1 = addMonths(selectedMonth, -2) // например для Jan: Nov
-      const baseM2 = addMonths(selectedMonth, -1) // для Jan: Dec
+      const m1 = addMonthsISO(periodStart, -1)
+      const m2 = addMonthsISO(periodStart, -2)
+      const rangeFrom = m2
+      const rangeTo = periodStart // не включительно
 
-      const rangeFrom = `${baseM1}-01`
-      const rangeTo = lastDayISO(baseM2)
-
-      // берём доходы за 2 месяца
-      const { data: inc, error: incErr } = await supabase
+      const incRes = await supabase
         .from('incomes')
         .select('date,company_id,shift,cash_amount,kaspi_amount,card_amount,operator_id')
         .gte('date', rangeFrom)
-        .lte('date', rangeTo)
+        .lt('date', rangeTo)
 
-      if (incErr) throw incErr
+      if (incRes.error) throw incRes.error
+      const incomes = (incRes.data || []) as IncomeRow[]
 
-      // агрегаты:
-      // companyMonthTurnover[YYYY-MM][company_code] = turnover
-      const companyMonthTurnover: Record<string, Record<string, number>> = {}
-      const companyMonthShifts: Record<string, Record<string, number>> = {}
+      // Агрегация: оборот + смены (смена = оператор+компания+дата+shift)
+      type Agg = { turnover: number; shiftsSet: Set<string> }
+      const aggCompanyMonth = new Map<string, Agg>() // key: companyCode|month
+      const aggOpMonth = new Map<string, Agg>() // key: operatorId|companyCode|month
 
-      // companyOpTurnover[company_code][operator_id] = turnover(за 2 месяца суммарно)
-      const companyOpTurnover: Record<string, Record<string, number>> = {}
-      const companyOpShifts: Record<string, Record<string, number>> = {}
+      const getAgg = (map: Map<string, Agg>, key: string) => {
+        let a = map.get(key)
+        if (!a) {
+          a = { turnover: 0, shiftsSet: new Set() }
+          map.set(key, a)
+        }
+        return a
+      }
 
-      const shiftSeen = new Set<string>()
+      for (const r of incomes) {
+        const comp = companyById[r.company_id]
+        const code = comp?.code || null
+        if (!code || !['arena', 'ramen', 'extra'].includes(code)) continue
 
-      for (const row of (inc || []) as IncomeRow[]) {
-        const comp = companyById[row.company_id]
-        const code = comp?.code
-        if (!code) continue
-        if (!['arena', 'ramen', 'extra'].includes(code)) continue
+        const monthKey = r.date.slice(0, 7) + '-01'
+        const shift = r.shift === 'night' ? 'night' : 'day'
 
-        const mk = monthKeyFromISODate(row.date)
-        companyMonthTurnover[mk] ||= {}
-        companyMonthShifts[mk] ||= {}
-        companyMonthTurnover[mk][code] ||= 0
-        companyMonthShifts[mk][code] ||= 0
+        const turnover =
+          Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
 
-        const total =
-          Number(row.cash_amount || 0) +
-          Number(row.kaspi_amount || 0) +
-          Number(row.card_amount || 0)
+        const shiftKey = `${r.operator_id || 'no'}|${code}|${r.date}|${shift}`
 
-        companyMonthTurnover[mk][code] += total
+        const cAgg = getAgg(aggCompanyMonth, `${code}|${monthKey}`)
+        cAgg.turnover += turnover
+        cAgg.shiftsSet.add(shiftKey)
 
-        // смены считаем уникально как (operator_id + company + date + shift)
-        const shift = row.shift === 'night' ? 'night' : 'day'
-        const opId = row.operator_id
-        if (opId) {
-          const sk = `${opId}|${code}|${row.date}|${shift}`
-          if (!shiftSeen.has(sk)) {
-            shiftSeen.add(sk)
-            companyMonthShifts[mk][code] += 1
-
-            companyOpShifts[code] ||= {}
-            companyOpShifts[code][opId] ||= 0
-            companyOpShifts[code][opId] += 1
-          }
-
-          companyOpTurnover[code] ||= {}
-          companyOpTurnover[code][opId] ||= 0
-          companyOpTurnover[code][opId] += total
+        if (r.operator_id) {
+          const oAgg = getAgg(aggOpMonth, `${r.operator_id}|${code}|${monthKey}`)
+          oAgg.turnover += turnover
+          oAgg.shiftsSet.add(shiftKey)
         }
       }
 
-      const weeks = daysInMonth(selectedMonth) / 7
-      const growth = 1 + Math.max(0, Number(growthPct) || 0) / 100
+      const factor = 1 + Number(growthPct || 0) / 100
+      const weeks = daysInMonth(periodStart) / 7
 
-      const monthStartISO = toMonthStartISO(selectedMonth)
+      const avg2 = (a: number, b: number) => (a + b) / 2
 
-      const newRows: KpiPlanRow[] = []
+      const getMonthValCompany = (code: string, month: string) => {
+        const a = aggCompanyMonth.get(`${code}|${month}`)
+        return { turnover: a?.turnover || 0, shifts: a?.shiftsSet.size || 0 }
+      }
+      const getMonthValOp = (opId: string, code: string, month: string) => {
+        const a = aggOpMonth.get(`${opId}|${code}|${month}`)
+        return { turnover: a?.turnover || 0, shifts: a?.shiftsSet.size || 0 }
+      }
 
-      const companyCodes: string[] = ['arena', 'ramen', 'extra']
+      // 1) Коллектив по компаниям
+      const rows: Omit<KpiPlanRow, 'id'>[] = []
+      let totalTurnoverMonth = 0
 
-      // 1) коллективные планы по компаниям
-      for (const code of companyCodes) {
-        const t1 = companyMonthTurnover[baseM1]?.[code] || 0
-        const t2 = companyMonthTurnover[baseM2]?.[code] || 0
-        const s1 = companyMonthShifts[baseM1]?.[code] || 0
-        const s2 = companyMonthShifts[baseM2]?.[code] || 0
+      for (const code of ['arena', 'ramen', 'extra']) {
+        const a = getMonthValCompany(code, m2)
+        const b = getMonthValCompany(code, m1)
 
-        const avgTurnover = (t1 + t2) / 2
-        const avgShifts = (s1 + s2) / 2
+        const baseTurnover = avg2(a.turnover, b.turnover)
+        const baseShifts = avg2(a.shifts, b.shifts)
 
-        const targetMonth = Math.round(avgTurnover * growth)
-        const targetWeek = Math.round(targetMonth / weeks)
+        const tMonth = Math.round(baseTurnover * factor)
+        const sMonth = Math.round(baseShifts * factor)
 
-        const shiftsMonth = Math.round(avgShifts * growth)
-        const shiftsWeek = Number((shiftsMonth / weeks).toFixed(2))
+        totalTurnoverMonth += tMonth
 
-        newRows.push({
-          plan_key: planKey({ monthStart: monthStartISO, entityType: 'collective', companyCode: code }),
-          month_start: monthStartISO,
-          entity_type: 'collective',
+        rows.push({
+          period_start: periodStart,
+          period_type: 'month',
           company_code: code,
-          operator_id: null,
-          role_code: null,
-          turnover_target_month: targetMonth,
-          turnover_target_week: targetWeek,
-          shifts_target_month: shiftsMonth,
-          shifts_target_week: shiftsWeek,
-          meta: {
-            basisMonths: [baseM1, baseM2],
-            basisTurnover: { [baseM1]: t1, [baseM2]: t2, avg: avgTurnover },
-            basisShifts: { [baseM1]: s1, [baseM2]: s2, avg: avgShifts },
-            growthPct: growthPct,
-            source: 'auto',
-          },
+          shift_type: null,
+          owner_role: 'collective',
+          owner_id: null,
+          turnover_target_month: tMonth,
+          turnover_target_week: Math.round(tMonth / weeks),
+          shifts_target_month: sMonth,
+          shifts_target_week: Number((sMonth / weeks).toFixed(2)),
+          meta: { baseline: { m2, m1 }, growthPct },
           is_locked: false,
         })
       }
 
-      // 2) индивидуальные планы операторов (по доле внутри компании)
-      for (const code of companyCodes) {
-        const sum2m = (companyMonthTurnover[baseM1]?.[code] || 0) + (companyMonthTurnover[baseM2]?.[code] || 0)
-        const sum2mShifts = (companyMonthShifts[baseM1]?.[code] || 0) + (companyMonthShifts[baseM2]?.[code] || 0)
+      // 2) Личные по операторам (по компаниям)
+      const activeOps = operators.filter(o => o.is_active)
+      for (const op of activeOps) {
+        for (const code of ['arena', 'ramen', 'extra']) {
+          const a = getMonthValOp(op.id, code, m2)
+          const b = getMonthValOp(op.id, code, m1)
 
-        // берём target из коллективного (чтобы сумма операторов = план компании)
-        const collective = newRows.find(
-          (x) => x.entity_type === 'collective' && x.company_code === code,
-        )
-        const companyTargetMonth = collective?.turnover_target_month || 0
-        const companyTargetShiftsMonth = collective?.shifts_target_month || 0
+          const baseTurnover = avg2(a.turnover, b.turnover)
+          const baseShifts = avg2(a.shifts, b.shifts)
 
-        const opMap = companyOpTurnover[code] || {}
-        const opShiftMap = companyOpShifts[code] || {}
+          if (baseTurnover <= 0 && baseShifts <= 0) continue
 
-        for (const opId of Object.keys(opMap)) {
-          const opTurn2m = opMap[opId] || 0
-          const opShifts2m = opShiftMap[opId] || 0
+          const tMonth = Math.round(baseTurnover * factor)
+          const sMonth = Math.round(baseShifts * factor)
 
-          const share = sum2m > 0 ? opTurn2m / sum2m : 0
-          const shareSh = sum2mShifts > 0 ? opShifts2m / sum2mShifts : 0
-
-          const targetMonth = Math.round(companyTargetMonth * share)
-          const targetWeek = Math.round(targetMonth / weeks)
-
-          const shiftsMonth = Math.round(companyTargetShiftsMonth * shareSh)
-          const shiftsWeek = Number((shiftsMonth / weeks).toFixed(2))
-
-          newRows.push({
-            plan_key: planKey({
-              monthStart: monthStartISO,
-              entityType: 'operator',
-              companyCode: code,
-              operatorId: opId,
-            }),
-            month_start: monthStartISO,
-            entity_type: 'operator',
+          rows.push({
+            period_start: periodStart,
+            period_type: 'month',
             company_code: code,
-            operator_id: opId,
-            role_code: null,
-            turnover_target_month: targetMonth,
-            turnover_target_week: targetWeek,
-            shifts_target_month: shiftsMonth,
-            shifts_target_week: shiftsWeek,
-            meta: {
-              basisMonths: [baseM1, baseM2],
-              share: Number((share * 100).toFixed(2)),
-              shareShifts: Number((shareSh * 100).toFixed(2)),
-              source: 'auto',
-            },
+            shift_type: null,
+            owner_role: 'operator',
+            owner_id: op.id,
+            turnover_target_month: tMonth,
+            turnover_target_week: Math.round(tMonth / weeks),
+            shifts_target_month: sMonth,
+            shifts_target_week: Number((sMonth / weeks).toFixed(2)),
+            meta: { baseline: { m2, m1 }, growthPct },
             is_locked: false,
           })
         }
       }
 
-      // 3) роли (пока KPI от коллективного плана всех компаний)
-      const totalCollectiveMonth = newRows
-        .filter((x) => x.entity_type === 'collective')
-        .reduce((s, x) => s + (x.turnover_target_month || 0), 0)
-
-      const roleDefaults: Array<{ role: RoleCode; base: number }> = [
-        { role: 'supervisor', base: 220000 }, // ты хотел 220к
-        { role: 'marketing', base: 50000 },   // ты хотел 50к
-      ]
-
-      for (const rd of roleDefaults) {
-        newRows.push({
-          plan_key: planKey({
-            monthStart: monthStartISO,
-            entityType: 'role',
-            roleCode: rd.role,
-          }),
-          month_start: monthStartISO,
-          entity_type: 'role',
+      // 3) Роли (руководитель/маркетолог) = общий план
+      for (const role of ['supervisor', 'marketing']) {
+        rows.push({
+          period_start: periodStart,
+          period_type: 'month',
           company_code: null,
-          operator_id: null,
-          role_code: rd.role,
-          turnover_target_month: totalCollectiveMonth,
-          turnover_target_week: Math.round(totalCollectiveMonth / weeks),
+          shift_type: null,
+          owner_role: role,
+          owner_id: null,
+          turnover_target_month: totalTurnoverMonth,
+          turnover_target_week: Math.round(totalTurnoverMonth / weeks),
           shifts_target_month: 0,
           shifts_target_week: 0,
-          meta: {
-            baseSalary: rd.base,
-            // бонусы можно потом детализировать:
-            bonusRules: [
-              { pctFrom: 100, bonus: 0 },
-              { pctFrom: 110, bonus: 50000 },
-              { pctFrom: 120, bonus: 100000 },
-            ],
-            source: 'auto',
-          },
+          meta: { note: 'Отвечает за выполнение коллективного плана', baseline: { m2, m1 }, growthPct },
           is_locked: false,
         })
       }
 
-      // UPSERT
-      const { error: upErr } = await supabase
+      // удаляем только НЕ locked (чтобы “замороженные” планы не затирались)
+      const delRes = await supabase
         .from('kpi_plans')
-        .upsert(
-          newRows.map((p) => ({
-            ...p,
-            updated_at: new Date().toISOString(),
-          })),
-          { onConflict: 'plan_key' },
-        )
+        .delete()
+        .eq('period_start', periodStart)
+        .eq('period_type', 'month')
+        .eq('is_locked', false)
 
-      if (upErr) throw upErr
+      if (delRes.error) throw delRes.error
 
-      setSuccessMsg(`План сгенерирован для ${selectedMonth} из ${baseM1} + ${baseM2}`)
-      await loadAll()
+      const insRes = await supabase.from('kpi_plans').insert(rows).select()
+      if (insRes.error) throw insRes.error
+
+      setSuccess(`План сгенерирован: ${rows.length} строк`)
+      await reload()
     } catch (e: any) {
       console.error(e)
-      setError(e.message || 'Ошибка генерации плана')
+      setError(e?.message || 'Ошибка генерации')
     } finally {
-      setGenerating(false)
+      setBusyGen(false)
     }
   }
 
-  // ===== UI группировка =====
-  const collectivePlans = plans.filter((p) => p.entity_type === 'collective')
-  const operatorPlans = plans.filter((p) => p.entity_type === 'operator')
-  const rolePlans = plans.filter((p) => p.entity_type === 'role')
+  // ===== редактирование + сохранение =====
+
+  const [dirtyIds, setDirtyIds] = useState<Set<number>>(new Set())
+
+  const markDirty = (id: number) => {
+    setDirtyIds(prev => {
+      const n = new Set(prev)
+      n.add(id)
+      return n
+    })
+  }
+
+  const updateField = (id: number, field: keyof KpiPlanRow, value: any) => {
+    setPlans(prev => prev.map(p => (p.id === id ? ({ ...p, [field]: value } as KpiPlanRow) : p)))
+    markDirty(id)
+  }
+
+  const handleSave = async () => {
+    setError(null)
+    setSuccess(null)
+    setBusySave(true)
+    try {
+      const ids = Array.from(dirtyIds)
+      for (const id of ids) {
+        const row = plans.find(p => p.id === id)
+        if (!row) continue
+
+        const payload = {
+          turnover_target_month: Number(row.turnover_target_month || 0),
+          turnover_target_week: Number(row.turnover_target_week || 0),
+          shifts_target_month: Number(row.shifts_target_month || 0),
+          shifts_target_week: Number(row.shifts_target_week || 0),
+          is_locked: !!row.is_locked,
+          meta: row.meta || null,
+        }
+
+        const { error } = await supabase.from('kpi_plans').update(payload).eq('id', id)
+        if (error) throw error
+      }
+
+      setDirtyIds(new Set())
+      setSuccess('Сохранено')
+      await reload()
+    } catch (e: any) {
+      console.error(e)
+      setError(e?.message || 'Ошибка сохранения')
+    } finally {
+      setBusySave(false)
+    }
+  }
+
+  // ===== UI helpers =====
+
+  const rowsSorted = useMemo(() => {
+    const rank: Record<string, number> = { collective: 0, operator: 1, supervisor: 2, marketing: 3 }
+    return [...plans].sort((a, b) => {
+      const ra = rank[a.owner_role] ?? 99
+      const rb = rank[b.owner_role] ?? 99
+      if (ra !== rb) return ra - rb
+      const ca = a.company_code || ''
+      const cb = b.company_code || ''
+      if (ca !== cb) return ca.localeCompare(cb, 'ru')
+      const na = a.owner_id ? (operatorLabelById[a.owner_id] || '') : ''
+      const nb = b.owner_id ? (operatorLabelById[b.owner_id] || '') : ''
+      return na.localeCompare(nb, 'ru')
+    })
+  }, [plans, operatorLabelById])
 
   const totals = useMemo(() => {
-    const totalMonth = collectivePlans.reduce((s, x) => s + (x.turnover_target_month || 0), 0)
-    const totalWeek = collectivePlans.reduce((s, x) => s + (x.turnover_target_week || 0), 0)
-    const shiftsMonth = collectivePlans.reduce((s, x) => s + (x.shifts_target_month || 0), 0)
-    return { totalMonth, totalWeek, shiftsMonth }
-  }, [collectivePlans])
+    const collective = rowsSorted.filter(r => r.owner_role === 'collective')
+    const turnover = collective.reduce((s, r) => s + Number(r.turnover_target_month || 0), 0)
+    const shifts = collective.reduce((s, r) => s + Number(r.shifts_target_month || 0), 0)
+    return { turnover, shifts, rows: rowsSorted.length }
+  }, [rowsSorted])
 
   return (
     <div className="flex min-h-screen bg-[#050505] text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
-          {/* Header */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <Link href="/salary">
+              <Link href="/">
                 <Button variant="ghost" size="icon" className="rounded-full">
                   <ArrowLeft className="w-5 h-5" />
                 </Button>
@@ -503,53 +403,42 @@ export default function KPIPlansPage() {
               <div>
                 <h1 className="text-2xl font-bold">KPI планы (коллектив + личные)</h1>
                 <p className="text-xs text-muted-foreground">
-                  Генерация плана: берём 2 месяца до выбранного месяца и строим план по выручке/сменам.
+                  Генерация берёт 2 предыдущих месяца от выбранного месяца и строит план по выручке/сменам.
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 bg-card/40 border border-border/60 rounded-lg px-2 py-1">
-                <span className="text-[11px] text-muted-foreground">Месяц:</span>
+                <span className="text-xs text-muted-foreground">Месяц</span>
                 <input
                   type="month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  value={periodStart.slice(0, 7)}
+                  onChange={(e) => setPeriodStart(e.target.value + '-01')}
                   className="bg-transparent text-xs px-1 py-0.5 rounded outline-none"
                 />
               </div>
 
               <div className="flex items-center gap-2 bg-card/40 border border-border/60 rounded-lg px-2 py-1">
-                <span className="text-[11px] text-muted-foreground">Рост %:</span>
+                <span className="text-xs text-muted-foreground">Рост %</span>
                 <input
                   type="number"
-                  value={growthPct}
                   min={0}
                   max={50}
-                  onChange={(e) => setGrowthPct(parseIntSafe(e.target.value))}
-                  className="bg-transparent text-xs px-1 py-0.5 rounded outline-none w-[70px] text-right"
+                  value={growthPct}
+                  onChange={(e) => setGrowthPct(Number(e.target.value || 0))}
+                  className="bg-transparent text-xs px-1 py-0.5 rounded outline-none w-16 text-right"
                 />
               </div>
 
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleGenerate}
-                disabled={generating}
-                className="gap-2"
-              >
+              <Button onClick={handleGenerate} disabled={busyGen} className="gap-2">
                 <Plus className="w-4 h-4" />
-                {generating ? 'Генерирую…' : 'Сгенерировать план'}
+                {busyGen ? 'Генерирую…' : 'Сгенерировать план'}
               </Button>
 
-              <Button
-                size="sm"
-                onClick={handleSaveAll}
-                disabled={savingAll || dirtyKeys.size === 0}
-                className="gap-2"
-              >
+              <Button onClick={handleSave} disabled={busySave || dirtyIds.size === 0} className="gap-2" variant="outline">
                 <Save className="w-4 h-4" />
-                {savingAll ? 'Сохраняю…' : `Сохранить (${dirtyKeys.size})`}
+                {busySave ? 'Сохраняю…' : `Сохранить (${dirtyIds.size})`}
               </Button>
             </div>
           </div>
@@ -559,158 +448,122 @@ export default function KPIPlansPage() {
               <AlertTriangle className="w-4 h-4" /> {error}
             </Card>
           )}
-
-          {successMsg && (
+          {success && (
             <Card className="p-3 border border-emerald-500/40 bg-emerald-950/30 text-sm flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4" /> {successMsg}
+              <CheckCircle2 className="w-4 h-4" /> {success}
             </Card>
           )}
 
-          {/* Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">Коллективный план (месяц)</p>
-              <p className="text-2xl font-bold text-sky-300">{formatMoney(totals.totalMonth)}</p>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Неделя: {formatMoney(totals.totalWeek)}
-              </p>
+              <p className="text-2xl font-bold text-sky-400">{fmtMoney(totals.turnover)}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Строк планов: {totals.rows}</p>
             </Card>
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">Смены (коллектив)</p>
-              <p className="text-2xl font-bold">{totals.shiftsMonth}</p>
+              <p className="text-2xl font-bold">{fmtNum(totals.shifts)}</p>
             </Card>
             <Card className="p-4 border-border bg-card/70">
-              <p className="text-xs text-muted-foreground mb-1">Строк планов</p>
-              <p className="text-2xl font-bold">{plans.length}</p>
+              <p className="text-xs text-muted-foreground mb-1">Дней в месяце</p>
+              <p className="text-2xl font-bold">{daysInMonth(periodStart)}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Недели ≈ {(daysInMonth(periodStart) / 7).toFixed(2)}
+              </p>
             </Card>
           </div>
 
-          {/* Table */}
-          <Card className="p-4 border-border bg-card/80 overflow-x-auto">
+          <Card className="p-0 border-border bg-card/80 overflow-x-auto">
             <table className="w-full text-xs md:text-sm border-collapse">
               <thead>
                 <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
-                  <th className="py-2 text-left px-2">Тип</th>
-                  <th className="py-2 text-left px-2">Компания</th>
-                  <th className="py-2 text-left px-2">Кто</th>
-                  <th className="py-2 text-right px-2">План месяц</th>
-                  <th className="py-2 text-right px-2">План неделя</th>
-                  <th className="py-2 text-right px-2">Смены мес</th>
-                  <th className="py-2 text-right px-2">Смены нед</th>
-                  <th className="py-2 text-center px-2">Lock</th>
+                  <th className="px-3 py-2 text-left">Тип</th>
+                  <th className="px-3 py-2 text-left">Компания</th>
+                  <th className="px-3 py-2 text-left">Кто</th>
+                  <th className="px-3 py-2 text-right">План месяц</th>
+                  <th className="px-3 py-2 text-right">План неделя</th>
+                  <th className="px-3 py-2 text-right">Смены мес</th>
+                  <th className="px-3 py-2 text-right">Смены нед</th>
+                  <th className="px-3 py-2 text-center">LOCK</th>
                 </tr>
               </thead>
+
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={8} className="py-6 text-center text-muted-foreground text-xs">
+                    <td colSpan={8} className="py-6 text-center text-muted-foreground">
                       Загрузка…
                     </td>
                   </tr>
                 )}
 
-                {!loading && plans.length === 0 && (
+                {!loading && rowsSorted.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="py-6 text-center text-muted-foreground text-xs">
-                      Нет планов на этот месяц. Нажми «Сгенерировать план».
+                    <td colSpan={8} className="py-6 text-center text-muted-foreground">
+                      Планов нет. Нажми “Сгенерировать план”.
                     </td>
                   </tr>
                 )}
 
                 {!loading &&
-                  [...collectivePlans, ...operatorPlans, ...rolePlans].map((p) => {
-                    const companyName =
-                      p.company_code === 'arena'
-                        ? 'F16 Arena'
-                        : p.company_code === 'ramen'
-                          ? 'F16 Ramen'
-                          : p.company_code === 'extra'
-                            ? 'F16 Extra'
-                            : p.company_code || '—'
-
+                  rowsSorted.map((r) => {
                     const who =
-                      p.entity_type === 'operator'
-                        ? (operatorById[p.operator_id || '']?.short_name ||
-                            operatorById[p.operator_id || '']?.name ||
-                            p.operator_id ||
-                            '—')
-                        : p.entity_type === 'role'
-                          ? p.role_code === 'marketing'
-                            ? 'Маркетолог'
-                            : p.role_code === 'supervisor'
-                              ? 'Руководитель операторов'
-                              : p.role_code
-                          : 'Коллектив'
+                      r.owner_role === 'operator'
+                        ? (r.owner_id ? (operatorLabelById[r.owner_id] || 'Оператор') : 'Оператор')
+                        : (ROLE_LABELS[r.owner_role] || r.owner_role)
 
-                    const typeLabel =
-                      p.entity_type === 'collective'
-                        ? 'Коллектив'
-                        : p.entity_type === 'operator'
-                          ? 'Оператор'
-                          : 'Роль'
+                    const comp = r.company_code ? (COMPANY_LABELS[r.company_code] || r.company_code) : '—'
 
                     return (
-                      <tr key={p.plan_key} className="border-t border-border/40 hover:bg-white/5">
-                        <td className="py-1.5 px-2">{typeLabel}</td>
-                        <td className="py-1.5 px-2">{companyName}</td>
-                        <td className="py-1.5 px-2 font-medium">{who}</td>
+                      <tr key={r.id} className="border-t border-border/40 hover:bg-white/5">
+                        <td className="px-3 py-2 font-medium">{ROLE_LABELS[r.owner_role] || r.owner_role}</td>
+                        <td className="px-3 py-2">{comp}</td>
+                        <td className="px-3 py-2">{who}</td>
 
-                        <td className="py-1.5 px-2 text-right">
+                        <td className="px-3 py-2 text-right">
                           <input
                             type="number"
-                            disabled={p.is_locked}
-                            value={p.turnover_target_month}
-                            onChange={(e) =>
-                              handlePlanChange(p.plan_key, 'turnover_target_month', e.target.value)
-                            }
-                            className="w-[140px] bg-input border border-border rounded px-2 py-1 text-right text-xs"
+                            className="bg-input border border-border rounded px-2 py-1 text-right text-xs w-40"
+                            value={r.turnover_target_month ?? 0}
+                            onChange={(e) => updateField(r.id, 'turnover_target_month', Number(e.target.value || 0))}
+                          />
+                          <div className="text-[10px] text-muted-foreground">{fmtMoney(Number(r.turnover_target_month || 0))}</div>
+                        </td>
+
+                        <td className="px-3 py-2 text-right">
+                          <input
+                            type="number"
+                            className="bg-input border border-border rounded px-2 py-1 text-right text-xs w-32"
+                            value={r.turnover_target_week ?? 0}
+                            onChange={(e) => updateField(r.id, 'turnover_target_week', Number(e.target.value || 0))}
+                          />
+                          <div className="text-[10px] text-muted-foreground">{fmtMoney(Number(r.turnover_target_week || 0))}</div>
+                        </td>
+
+                        <td className="px-3 py-2 text-right">
+                          <input
+                            type="number"
+                            className="bg-input border border-border rounded px-2 py-1 text-right text-xs w-20"
+                            value={r.shifts_target_month ?? 0}
+                            onChange={(e) => updateField(r.id, 'shifts_target_month', Number(e.target.value || 0))}
                           />
                         </td>
 
-                        <td className="py-1.5 px-2 text-right">
-                          <input
-                            type="number"
-                            disabled={p.is_locked}
-                            value={p.turnover_target_week}
-                            onChange={(e) =>
-                              handlePlanChange(p.plan_key, 'turnover_target_week', e.target.value)
-                            }
-                            className="w-[140px] bg-input border border-border rounded px-2 py-1 text-right text-xs"
-                          />
-                        </td>
-
-                        <td className="py-1.5 px-2 text-right">
-                          <input
-                            type="number"
-                            disabled={p.is_locked}
-                            value={p.shifts_target_month}
-                            onChange={(e) =>
-                              handlePlanChange(p.plan_key, 'shifts_target_month', e.target.value)
-                            }
-                            className="w-[90px] bg-input border border-border rounded px-2 py-1 text-right text-xs"
-                          />
-                        </td>
-
-                        <td className="py-1.5 px-2 text-right">
+                        <td className="px-3 py-2 text-right">
                           <input
                             type="number"
                             step="0.01"
-                            disabled={p.is_locked}
-                            value={p.shifts_target_week}
-                            onChange={(e) =>
-                              handlePlanChange(p.plan_key, 'shifts_target_week', e.target.value)
-                            }
-                            className="w-[90px] bg-input border border-border rounded px-2 py-1 text-right text-xs"
+                            className="bg-input border border-border rounded px-2 py-1 text-right text-xs w-20"
+                            value={r.shifts_target_week ?? 0}
+                            onChange={(e) => updateField(r.id, 'shifts_target_week', Number(e.target.value || 0))}
                           />
                         </td>
 
-                        <td className="py-1.5 px-2 text-center">
+                        <td className="px-3 py-2 text-center">
                           <input
                             type="checkbox"
-                            checked={p.is_locked}
-                            onChange={(e) =>
-                              handlePlanChange(p.plan_key, 'is_locked', e.target.checked)
-                            }
+                            checked={!!r.is_locked}
+                            onChange={(e) => updateField(r.id, 'is_locked', e.target.checked)}
                           />
                         </td>
                       </tr>
