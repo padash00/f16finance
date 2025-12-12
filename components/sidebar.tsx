@@ -15,12 +15,13 @@ import {
   CalendarRange,
   LogOut,
   User,
+  Users,      // ✅ Staff
   Menu,
   X,
   BrainCircuit,
   Landmark,   // Налоги 3%
   ListChecks, // Правила зарплаты
-  Users2,     // ✅ Аналитика операторов
+  Users2,     // Аналитика операторов
 } from 'lucide-react'
 import { Button } from './ui/button'
 
@@ -46,7 +47,6 @@ const menuGroups = [
     items: [
       { icon: BarChart3, label: 'Общие отчёты', href: '/reports' },
       { icon: CalendarRange, label: 'Недельный отчёт', href: '/weekly-report' },
-      // ✅ новый пункт меню
       { icon: Users2, label: 'Аналитика операторов', href: '/operator-analytics' },
     ],
   },
@@ -55,6 +55,7 @@ const menuGroups = [
     items: [
       { icon: Tags, label: 'Категории', href: '/categories' },
       { icon: User, label: 'Операторы', href: '/operators' },
+      { icon: Users, label: 'Сотрудники', href: '/staff' }, // ✅ НОВОЕ
       { icon: ListChecks, label: 'Правила зарплаты', href: '/salary/rules' },
       { icon: Settings, label: 'Настройки', href: '/settings' },
     ],
@@ -65,6 +66,11 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
+
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/'
+    return pathname === href || pathname.startsWith(href + '/')
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -100,7 +106,7 @@ export function Sidebar() {
             <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon
-                const active = pathname === item.href
+                const active = isActive(item.href)
 
                 return (
                   <Link
@@ -143,16 +149,13 @@ export function Sidebar() {
             <User className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">
-              Администратор
-            </p>
-            <p className="text-[10px] text-muted-foreground truncate">
-              admin@f16.kz
-            </p>
+            <p className="text-sm font-medium text-white truncate">Администратор</p>
+            <p className="text-[10px] text-muted-foreground truncate">admin@f16.kz</p>
           </div>
           <button
             onClick={handleLogout}
             className="text-muted-foreground hover:text-red-400 transition-colors p-2"
+            title="Выйти"
           >
             <LogOut className="w-4 h-4" />
           </button>
