@@ -6,55 +6,37 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
+import { calculateForecast } from '@/lib/kpiEngine' // <--- ИМПОРТ МОЗГА
 import {
   Save,
   Wand2,
   RefreshCcw,
   Lock,
   Unlock,
-  Loader2,
   AlertTriangle,
   CheckCircle2,
   TrendingUp
 } from 'lucide-react'
 
-// --- 1. UTILS & HELPERS ---
+// --- 1. UTILS & TYPES ---
 
 const money = (v: number) =>
   (v ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })
 
-// Метод Хольта (экспоненциальное сглаживание)
-function holtForecast(series: number[], alpha = 0.6, beta = 0.2) {
-  if (series.length === 0) return 0
-  if (series.length === 1) return Math.max(0, series[0])
-
-  let L = series[0]
-  let T = series[1] - series[0]
-
-  for (let i = 1; i < series.length; i++) {
-    const y = series[i]
-    const prevL = L
-    L = alpha * y + (1 - alpha) * (L + T)
-    T = beta * (L - prevL) + (1 - beta) * T
-  }
-  return Math.max(0, Math.round(L + T))
-}
-
+// Вспомогательная функция для дат выборки
 function getMonthDates(targetIso: string) {
   // targetIso: '2025-01-01'
   const target = new Date(targetIso)
   const prev1 = new Date(target.getFullYear(), target.getMonth() - 1, 1) // Dec
   const prev2 = new Date(target.getFullYear(), target.getMonth() - 2, 1) // Nov
   
-  // Диапазон для выборки данных (с 1 ноября по конец декабря)
+  // Диапазон для выборки данных (с 1 числа N-2 по конец N-1)
   const fetchStart = new Date(prev2.getFullYear(), prev2.getMonth(), 1).toISOString().split('T')[0]
   const fetchEndObj = new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0)
   const fetchEnd = fetchEndObj.toISOString().split('T')[0]
 
   return { target, prev1, prev2, fetchStart, fetchEnd }
 }
-
-// --- 2. TYPES ---
 
 type KpiRow = {
   plan_key: string
@@ -71,9 +53,9 @@ type KpiRow = {
   is_locked: boolean
 }
 
-type OperatorMap = Record<string, string> // id -> name
+type OperatorMap = Record<string, string>
 
-// --- 3. CUSTOM HOOK (Business Logic) ---
+// --- 2. CUSTOM HOOK (Logic) ---
 
 function useKpiManager(monthStart: string) {
   const [rows, setRows] = useState<KpiRow[]>([])
@@ -81,7 +63,7 @@ function useKpiManager(monthStart: string) {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<{ type: 'error' | 'success', msg: string } | null>(null)
 
-  // Load existing plans
+  // A. Load existing plans
   const load = useCallback(async () => {
     setLoading(true)
     setStatus(null)
@@ -102,11 +84,11 @@ function useKpiManager(monthStart: string) {
 
     setRows(plans as KpiRow[])
 
-    // 2. Грузим имена операторов (лениво, только нужные ID)
+    // 2. Грузим имена операторов (лениво)
     const opIds = Array.from(new Set(plans?.map((r: any) => r.operator_id).filter(Boolean)))
     if (opIds.length > 0) {
       const { data: ops } = await supabase
-        .from('operators') // или incomes, если берем исторические имена
+        .from('operators')
         .select('id, name')
         .in('id', opIds)
       
@@ -118,13 +100,13 @@ function useKpiManager(monthStart: string) {
     setLoading(false)
   }, [monthStart])
 
-  // Generate Logic
+  // B. Generate Logic
   const generate = async () => {
     setLoading(true)
     setStatus(null)
     
     try {
-      const { prev1, prev2, fetchStart, fetchEnd } = getMonthDates(monthStart)
+      const { target, prev1, prev2, fetchStart, fetchEnd } = getMonthDates(monthStart)
       
       // 1. Fetch Incomes
       const { data: incomes, error } = await supabase
@@ -136,19 +118,21 @@ function useKpiManager(monthStart: string) {
       if (error) throw error
 
       // 2. Aggregate Data
-      const now = new Date()
-      const isPrev1Current = prev1.getMonth() === now.getMonth() && prev1.getFullYear() === now.getFullYear()
-      const scalePrev1 = isPrev1Current 
-        ? new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0).getDate() / Math.max(1, now.getDate())
-        : 1
-
-      // Структуры для агрегации
+      // Нам нужно собрать "сырые" суммы за N-1 и N-2, чтобы скормить их в engine
       type Agg = { t2: number, t1: number, s2: number, s1: number, ops: Record<string, {t: number, s: number}> }
       const stats: Record<string, Agg> = {} // by company_code
 
       const getKey = (d: string) => d.slice(0, 7) // YYYY-MM
       const k1 = prev1.toISOString().slice(0, 7)
       const k2 = prev2.toISOString().slice(0, 7)
+
+      // Предварительно рассчитываем scalePrev1 ТОЛЬКО для весов операторов
+      // (сам прогноз считается внутри engine, но веса нужно масштабировать здесь, чтобы декабрьские работники не просели)
+      const now = new Date()
+      const isPrev1Current = prev1.getMonth() === now.getMonth() && prev1.getFullYear() === now.getFullYear()
+      const scalePrev1ForWeights = isPrev1Current 
+        ? new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0).getDate() / Math.max(1, now.getDate())
+        : 1
 
       incomes?.forEach((inc: any) => {
         const code = inc.companies?.code || 'other'
@@ -167,28 +151,33 @@ function useKpiManager(monthStart: string) {
           stats[code].s1 += 1
         }
 
-        // Операторы (считаем общую сумму за 2 месяца для веса)
+        // Агрегация по операторам (для вычисления долей)
         if (inc.operator_id) {
            if (!stats[code].ops[inc.operator_id]) stats[code].ops[inc.operator_id] = { t: 0, s: 0 }
-           // Для веса оператора масштабируем M1, чтобы не занижать вес тех, кто работал в этом месяце
-           const weight = isM1 ? (amount * scalePrev1) : amount
+           
+           // Масштабируем вклад оператора в N-1, чтобы уравнять шансы с N-2
+           const weight = isM1 ? (amount * scalePrev1ForWeights) : amount
+           
            stats[code].ops[inc.operator_id].t += weight
            stats[code].ops[inc.operator_id].s += 1
         }
       })
 
-      // 3. Build Plans
+      // 3. Build Plans using kpiEngine
       const newRows: KpiRow[] = []
       
       Object.entries(stats).forEach(([code, d]) => {
-        // Forecast Company
-        const t1Scaled = d.t1 * scalePrev1
-        const s1Scaled = d.s1 * scalePrev1
+        // --- PROGNOZ (ENGINE) ---
+        // Считаем выручку
+        const turnoverCalc = calculateForecast(target, d.t1, d.t2)
+        const targetT = turnoverCalc.forecast
+
+        // Считаем смены (Shifts) через тот же движок!
+        // Смены тоже линейно зависят от времени, так что метод подходит.
+        const shiftsCalc = calculateForecast(target, d.s1, d.s2)
+        const targetS = shiftsCalc.forecast
         
-        const targetT = holtForecast([d.t2, t1Scaled])
-        const targetS = Math.round(holtForecast([d.s2, s1Scaled]))
-        
-        // A. Collective
+        // A. Collective Row
         newRows.push({
           plan_key: `${monthStart}|collective|${code}`,
           month_start: monthStart,
@@ -197,22 +186,27 @@ function useKpiManager(monthStart: string) {
           operator_id: null,
           role_code: null,
           turnover_target_month: targetT,
-          turnover_target_week: Math.round(targetT / 4.34),
+          turnover_target_week: Math.round(targetT / 4.345),
           shifts_target_month: targetS,
-          shifts_target_week: Number((targetS / 4.34).toFixed(2)),
-          meta: { method: 'holt', prev2: d.t2, prev1_scaled: Math.round(t1Scaled) },
+          shifts_target_week: Number((targetS / 4.345).toFixed(2)),
+          meta: { 
+            method: 'holt_v2', 
+            prev2: d.t2, 
+            prev1_est: turnoverCalc.prev1Estimated // сохраняем оценку N-1 для UI
+          },
           is_locked: false
         })
 
-        // B. Operators (Distribute by share)
+        // B. Operators (Распределение по доле)
         const totalOpWeight = Object.values(d.ops).reduce((acc, v) => acc + v.t, 0)
         
         Object.entries(d.ops).forEach(([opId, opData]) => {
-           if (opData.t < 1000) return // Skip trash
+           if (opData.t < 1000) return // Игнорируем мусор
 
            const share = opData.t / totalOpWeight
            const opTarget = Math.round(targetT * share)
-           const opShifts = Math.round(targetS * share) // Или лучше брать среднее смен? Пусть пока доля.
+           // Смены операторам тоже ставим по доле от общих смен (простой и честный вариант)
+           const opShifts = Math.round(targetS * share)
 
            newRows.push({
             plan_key: `${monthStart}|operator|${code}|${opId}`,
@@ -222,10 +216,13 @@ function useKpiManager(monthStart: string) {
             operator_id: opId,
             role_code: null,
             turnover_target_month: opTarget,
-            turnover_target_week: Math.round(opTarget / 4.34),
+            turnover_target_week: Math.round(opTarget / 4.345),
             shifts_target_month: opShifts,
-            shifts_target_week: Number((opShifts / 4.34).toFixed(2)),
-            meta: { share: (share * 100).toFixed(1) + '%', hist_val: Math.round(opData.t) },
+            shifts_target_week: Number((opShifts / 4.345).toFixed(2)),
+            meta: { 
+              share: (share * 100).toFixed(1) + '%', 
+              hist_val: Math.round(opData.t) 
+            },
             is_locked: false
            })
         })
@@ -246,7 +243,7 @@ function useKpiManager(monthStart: string) {
             operator_id: null,
             role_code: role,
             turnover_target_month: globalTotal,
-            turnover_target_week: Math.round(globalTotal / 4.34),
+            turnover_target_week: Math.round(globalTotal / 4.345),
             shifts_target_month: 0,
             shifts_target_week: 0,
             meta: { note: 'Global total' },
@@ -254,13 +251,13 @@ function useKpiManager(monthStart: string) {
         })
       })
 
-      // Merge with locks (не перезаписываем залоченные)
+      // Merge with locks
       setRows(prev => {
         const lockedMap = new Map(prev.filter(r => r.is_locked).map(r => [r.plan_key, r]))
         return newRows.map(newRow => lockedMap.get(newRow.plan_key) || newRow)
       })
 
-      setStatus({ type: 'success', msg: 'План сгенерирован (Holt method)' })
+      setStatus({ type: 'success', msg: 'План сгенерирован (KPI Engine)' })
 
       // Подгрузим имена для новых операторов
       const newOpIds = newRows.map(r => r.operator_id).filter(Boolean) as string[]
@@ -279,7 +276,7 @@ function useKpiManager(monthStart: string) {
     }
   }
 
-  // Save Logic
+  // C. Save Logic
   const save = async () => {
     setLoading(true)
     const { error } = await supabase.from('kpi_plans').upsert(rows, { onConflict: 'plan_key' })
@@ -295,7 +292,7 @@ function useKpiManager(monthStart: string) {
   return { rows, operatorNames, loading, status, load, generate, save, updateRow }
 }
 
-// --- 4. UI COMPONENTS ---
+// --- 3. UI COMPONENTS ---
 
 const SmartInput = ({ 
   value, meta, locked, onChange 
@@ -310,17 +307,17 @@ const SmartInput = ({
             const n = Number(e.target.value.replace(/[^\d]/g, ''))
             onChange(n)
         }}
-        className={`w-32 bg-transparent text-right border-b border-transparent hover:border-white/20 focus:border-indigo-500 outline-none transition-colors text-sm ${locked ? 'opacity-50 cursor-not-allowed' : ''}`}
+        className={`w-32 bg-transparent text-right border-b border-transparent hover:border-white/20 focus:border-indigo-500 outline-none transition-colors text-sm ${locked ? 'opacity-50 cursor-not-allowed text-zinc-500' : 'text-zinc-100'}`}
       />
       <div className="text-[10px] text-muted-foreground flex gap-2">
-         {meta?.prev1_scaled && <span title="Прогноз базы (прошлый мес)">База: {money(meta.prev1_scaled)}</span>}
+         {meta?.prev1_est && <span title="Прогноз базы (прошлый мес)">База: {money(meta.prev1_est)}</span>}
          {meta?.share && <span title="Историческая доля выручки">Доля: {meta.share}</span>}
       </div>
     </div>
   )
 }
 
-// --- 5. MAIN PAGE ---
+// --- 4. MAIN PAGE ---
 
 export default function KPIPlansPage() {
   const [month, setMonth] = useState(() => {
@@ -333,7 +330,6 @@ export default function KPIPlansPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Группировка для рендера
   const groupedData = useMemo(() => {
     const groups: Record<string, KpiRow[]> = {}
     const roles: KpiRow[] = []
@@ -409,7 +405,7 @@ export default function KPIPlansPage() {
           ) : (
             <div className="space-y-10">
               
-              {/* 1. Группы по компаниям */}
+              {/* 1. Companies */}
               {Object.entries(groupedData.groups).sort().map(([code, items]) => {
                 const collective = items.find(i => i.entity_type === 'collective')
                 const operators = items.filter(i => i.entity_type === 'operator')
@@ -418,7 +414,7 @@ export default function KPIPlansPage() {
                 return (
                   <section key={code} className="space-y-3">
                     <div className="flex items-center gap-3">
-                       <h2 className="text-xl font-bold capitalize text-zinc-200">{code}</h2>
+                       <h2 className="text-xl font-bold capitalize text-zinc-200">F16 {code}</h2>
                        <div className="h-px flex-1 bg-white/5" />
                        {collective && (
                          <span className="text-xs font-mono text-zinc-500">
@@ -438,7 +434,6 @@ export default function KPIPlansPage() {
                            </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                           {/* Collective Row */}
                            {collective && (
                              <RowItem 
                                row={collective} 
@@ -447,7 +442,6 @@ export default function KPIPlansPage() {
                                onChange={updateRow} 
                              />
                            )}
-                           {/* Operators Rows */}
                            {operators.map(op => (
                              <RowItem 
                                key={op.plan_key}
@@ -463,10 +457,10 @@ export default function KPIPlansPage() {
                 )
               })}
 
-              {/* 2. Роли */}
+              {/* 2. Roles */}
               {groupedData.roles.length > 0 && (
                  <section className="space-y-3">
-                    <h2 className="text-lg font-bold text-zinc-400">Роли и Менеджмент</h2>
+                    <h2 className="text-lg font-bold text-zinc-400">Менеджмент</h2>
                     <Card className="bg-[#0A0A0A] border-white/5">
                       <table className="w-full text-sm">
                         <tbody className="divide-y divide-white/5">
@@ -491,7 +485,6 @@ export default function KPIPlansPage() {
   )
 }
 
-// Sub-component for clean render
 function RowItem({ row, name, isMain, onChange }: { row: KpiRow, name: string, isMain?: boolean, onChange: any }) {
   return (
     <tr className={`group hover:bg-white/[0.02] transition-colors ${isMain ? 'bg-indigo-500/5' : ''}`}>
@@ -506,7 +499,7 @@ function RowItem({ row, name, isMain, onChange }: { row: KpiRow, name: string, i
           value={row.turnover_target_month} 
           meta={row.meta} 
           locked={row.is_locked}
-          onChange={v => onChange(row.plan_key, { turnover_target_month: v, turnover_target_week: Math.round(v/4.34) })}
+          onChange={v => onChange(row.plan_key, { turnover_target_month: v, turnover_target_week: Math.round(v/4.345) })}
         />
       </td>
       <td className="px-4 py-2 text-right">
@@ -515,7 +508,7 @@ function RowItem({ row, name, isMain, onChange }: { row: KpiRow, name: string, i
             disabled={row.is_locked}
             value={row.shifts_target_month}
             onChange={e => onChange(row.plan_key, { shifts_target_month: Number(e.target.value) })}
-            className="w-16 bg-transparent text-right border-b border-transparent focus:border-white/20 outline-none text-zinc-400"
+            className={`w-16 bg-transparent text-right border-b border-transparent focus:border-white/20 outline-none ${row.is_locked ? 'text-zinc-500 cursor-not-allowed' : 'text-zinc-400'}`}
          />
       </td>
       <td className="px-4 py-2 text-center">
