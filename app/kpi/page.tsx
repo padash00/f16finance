@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
+import { calculateForecast, CompanyCode } from '@/lib/kpiEngine' // <--- ИМПОРТ МОЗГА
 import {
   CalendarDays,
   TrendingUp,
@@ -21,18 +22,12 @@ const money = (v: number) =>
 const formatMonthLabel = (d: Date) =>
   d.toLocaleString('ru-RU', { month: 'long', year: 'numeric' })
 
-type CompanyCode = 'arena' | 'ramen' | 'extra'
 const COMPANIES: CompanyCode[] = ['arena', 'ramen', 'extra']
 
-type ForecastMetrics = {
-  rawTotal: number
-  estimatedTotal: number
-  isPartial: boolean
-}
-
-type CompanyForecast = {
+// Типы для UI (структура ответа хука)
+type CompanyStats = {
   prev2: number
-  prev1: ForecastMetrics
+  prev1: { rawTotal: number; estimatedTotal: number; isPartial: boolean }
   forecast: number
   trend: number
 }
@@ -40,36 +35,18 @@ type CompanyForecast = {
 function monthKey(d: Date) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}` // YYYY-MM
+  return `${y}-${m}`
 }
 
 function daysInMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
 }
 
-// Holt (двойное экспон. сглаживание)
-function holtForecast(series: number[], alpha = 0.6, beta = 0.2): number {
-  if (series.length === 0) return 0
-  if (series.length === 1) return Math.max(0, Math.round(series[0]))
-
-  let L = series[0]
-  let T = series[1] - series[0]
-
-  for (let i = 1; i < series.length; i++) {
-    const y = series[i]
-    const oldL = L
-    L = alpha * y + (1 - alpha) * (L + T)
-    T = beta * (L - oldL) + (1 - beta) * T
-  }
-
-  return Math.max(0, Math.round(L + T))
-}
-
 // ---------------- Hook ----------------
 
 function useKpiForecast(targetMonthStartISO: string) {
   const [loading, setLoading] = useState(true)
-  const [data, setData] = useState<Record<CompanyCode, CompanyForecast> | null>(null)
+  const [data, setData] = useState<Record<CompanyCode, CompanyStats> | null>(null)
   const [totals, setTotals] = useState({ prev2: 0, prev1: 0, forecast: 0 })
   const [isAnyPartial, setIsAnyPartial] = useState(false)
 
@@ -77,16 +54,17 @@ function useKpiForecast(targetMonthStartISO: string) {
     async function fetchAndCalculate() {
       setLoading(true)
 
-      const target = new Date(targetMonthStartISO) // YYYY-MM-01
-      const prev1 = new Date(target.getFullYear(), target.getMonth() - 1, 1) // N-1
-      const prev2 = new Date(target.getFullYear(), target.getMonth() - 2, 1) // N-2
+      const targetDate = new Date(targetMonthStartISO) // На какой месяц строим (Январь)
+      const prev1Date = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1) // N-1 (Декабрь)
+      const prev2Date = new Date(targetDate.getFullYear(), targetDate.getMonth() - 2, 1) // N-2 (Ноябрь)
 
-      const startISO = `${monthKey(prev2)}-01`
-      const endISO = new Date(target.getFullYear(), target.getMonth(), 0) // last day of N-1
+      // Границы выборки: С 1-го числа N-2 по конец N-1
+      const startISO = `${monthKey(prev2Date)}-01`
+      const endISO = new Date(prev1Date.getFullYear(), prev1Date.getMonth() + 1, 0)
         .toISOString()
         .slice(0, 10)
 
-      // ВАЖНО: правильный join через FK company_id -> companies.id
+      // 1. Загружаем данные
       const { data: rows, error } = await supabase
         .from('incomes')
         .select('date, cash_amount, kaspi_amount, card_amount, company_id, companies:company_id (code)')
@@ -99,22 +77,23 @@ function useKpiForecast(targetMonthStartISO: string) {
         return
       }
 
-      const k1 = monthKey(prev1)
-      const k2 = monthKey(prev2)
+      // 2. Агрегируем суммы по месяцам и компаниям
+      const k1 = monthKey(prev1Date)
+      const k2 = monthKey(prev2Date)
 
       const sums: Record<string, Record<CompanyCode, number>> = {
         [k1]: { arena: 0, ramen: 0, extra: 0 },
         [k2]: { arena: 0, ramen: 0, extra: 0 },
       }
 
-      // агрегация по месяцам
       for (const r of rows || []) {
         const d = new Date((r as any).date)
         const key = monthKey(d)
-        const code = (r as any).companies?.code as CompanyCode | undefined
+        // @ts-ignore
+        const code = (r.companies?.code || '').toLowerCase() as CompanyCode
 
-        if (!sums[key]) continue
-        if (!code || !COMPANIES.includes(code)) continue
+        if (!sums[key]) continue // Защита от дат вне диапазона (редко)
+        if (!COMPANIES.includes(code)) continue
 
         const amount =
           Number((r as any).cash_amount || 0) +
@@ -124,18 +103,9 @@ function useKpiForecast(targetMonthStartISO: string) {
         sums[key][code] += amount
       }
 
-      const now = new Date()
-
-      const isCurrentMonth = (mStart: Date) =>
-        mStart.getFullYear() === now.getFullYear() && mStart.getMonth() === now.getMonth()
-
-      const totalDaysPrev1 = daysInMonth(prev1)
-      const passedDays = Math.min(totalDaysPrev1, Math.max(1, now.getDate()))
-
-      const result: Record<CompanyCode, CompanyForecast> = {
-        arena: { prev2: 0, prev1: { rawTotal: 0, estimatedTotal: 0, isPartial: false }, forecast: 0, trend: 0 },
-        ramen: { prev2: 0, prev1: { rawTotal: 0, estimatedTotal: 0, isPartial: false }, forecast: 0, trend: 0 },
-        extra: { prev2: 0, prev1: { rawTotal: 0, estimatedTotal: 0, isPartial: false }, forecast: 0, trend: 0 },
+      // 3. Считаем прогноз через единый ENGINE
+      const result: Record<CompanyCode, CompanyStats> = {
+        arena: null as any, ramen: null as any, extra: null as any
       }
 
       let totalPrev2 = 0
@@ -147,29 +117,24 @@ function useKpiForecast(targetMonthStartISO: string) {
         const val2 = sums[k2][code]
         const val1Raw = sums[k1][code]
 
-        let val1Estimated = val1Raw
-        let partial = false
-
-        // если N-1 это текущий месяц — экстраполируем до конца месяца
-        if (isCurrentMonth(prev1) && passedDays < totalDaysPrev1) {
-          val1Estimated = Math.round((val1Raw / passedDays) * totalDaysPrev1)
-          partial = true
-          anyPartial = true
-        }
-
-        const forecast = holtForecast([val2, val1Estimated])
-        const trend = val1Estimated > 0 ? ((forecast - val1Estimated) / val1Estimated) * 100 : 0
+        // !!! MAGIC HAPPENS HERE !!!
+        const calc = calculateForecast(targetDate, val1Raw, val2)
 
         result[code] = {
           prev2: val2,
-          prev1: { rawTotal: val1Raw, estimatedTotal: val1Estimated, isPartial: partial },
-          forecast,
-          trend,
+          prev1: { 
+            rawTotal: val1Raw, 
+            estimatedTotal: calc.prev1Estimated, 
+            isPartial: calc.isPartial 
+          },
+          forecast: calc.forecast,
+          trend: calc.trend,
         }
 
         totalPrev2 += val2
-        totalPrev1 += val1Estimated
-        totalForecast += forecast
+        totalPrev1 += calc.prev1Estimated
+        totalForecast += calc.forecast
+        if (calc.isPartial) anyPartial = true
       }
 
       setData(result)
@@ -184,7 +149,7 @@ function useKpiForecast(targetMonthStartISO: string) {
   return { loading, data, totals, isAnyPartial }
 }
 
-// ---------------- Page ----------------
+// ---------------- Page Component ----------------
 
 export default function KPIPage() {
   const defaultMonth = useMemo(() => {
@@ -203,15 +168,18 @@ export default function KPIPage() {
   }
 
   const targetLabel = formatMonthLabel(new Date(`${targetMonth}-01`))
-  const trendTotal =
-    totals.prev1 > 0 ? ((totals.forecast - totals.prev1) / totals.prev1) * 100 : 0
+  
+  // Тренд общего итога
+  const trendTotal = totals.prev1 > 0 
+    ? ((totals.forecast - totals.prev1) / totals.prev1) * 100 
+    : 0
 
+  // Вспомогательные расчеты
   const weeks = 4.345
   const perCompanyPerWeek = totals.forecast / COMPANIES.length / weeks
-
-  // смена — грубая оценка: 2 смены/день * дней в месяце
-  const targetDate = new Date(`${targetMonth}-01`)
-  const shiftsInMonth = daysInMonth(targetDate) * 2
+  
+  const targetDateObj = new Date(`${targetMonth}-01`)
+  const shiftsInMonth = daysInMonth(targetDateObj) * 2 // Грубо: дней * 2 смены
   const perCompanyPerShift = totals.forecast / COMPANIES.length / shiftsInMonth
 
   return (
@@ -228,7 +196,7 @@ export default function KPIPage() {
                 Прогноз выручки
               </h1>
               <p className="text-zinc-400 mt-1">
-                Holt на основе двух предыдущих месяцев. Данные берём из <code>incomes</code>.
+                Использует <b>kpiEngine</b> (Holt&apos;s Linear). Источник данных: <code>incomes</code>.
               </p>
             </div>
 
@@ -252,6 +220,8 @@ export default function KPIPage() {
             <>
               {/* Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                {/* Card N-2 */}
                 <Card className="p-5 bg-zinc-900/50 border-zinc-800 flex flex-col justify-between">
                   <span className="text-xs font-medium uppercase text-zinc-500">
                     База ({monthLabel(-2)})
@@ -259,6 +229,7 @@ export default function KPIPage() {
                   <div className="text-2xl font-bold text-zinc-300 mt-2">{money(totals.prev2)}</div>
                 </Card>
 
+                {/* Card N-1 */}
                 <Card className="p-5 bg-zinc-900/50 border-zinc-800 flex flex-col justify-between relative overflow-hidden">
                   <div className="flex justify-between items-start">
                     <span className="text-xs font-medium uppercase text-zinc-500">
@@ -273,11 +244,12 @@ export default function KPIPage() {
                   <div className="text-2xl font-bold text-zinc-300 mt-2">{money(totals.prev1)}</div>
                   {isAnyPartial && (
                     <p className="text-[10px] text-zinc-500 mt-1">
-                      (Месяц не закрыт → экстраполяция до конца)
+                      (Факт на сегодня меньше, экстраполяция до конца месяца)
                     </p>
                   )}
                 </Card>
 
+                {/* Card Forecast */}
                 <Card className="p-5 bg-gradient-to-br from-indigo-950/40 to-zinc-900 border-indigo-500/30 flex flex-col justify-between shadow-lg shadow-indigo-900/10">
                   <span className="text-xs font-medium uppercase text-indigo-300">Цель: {targetLabel}</span>
                   <div className="text-3xl font-bold text-white mt-2 tracking-tight">{money(totals.forecast)}</div>
@@ -287,11 +259,7 @@ export default function KPIPage() {
                     ) : (
                       <TrendingDown className="w-4 h-4 text-rose-400" />
                     )}
-                    <span
-                      className={`text-xs font-medium ${
-                        totals.forecast >= totals.prev1 ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
+                    <span className={`text-xs font-medium ${totals.forecast >= totals.prev1 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {trendTotal >= 0 ? '+' : ''}
                       {trendTotal.toFixed(1)}% к прошлому мес.
                     </span>
@@ -364,7 +332,7 @@ export default function KPIPage() {
                 </div>
               </Card>
 
-              {/* Helper breakdown */}
+              {/* Info Block */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-zinc-500">
                 <div className="p-4 rounded border border-zinc-800 bg-zinc-900/30">
                   <h3 className="text-zinc-300 font-semibold mb-2 flex items-center gap-2">
@@ -384,10 +352,12 @@ export default function KPIPage() {
                 </div>
 
                 <div className="p-4 rounded border border-zinc-800 bg-zinc-900/30">
-                  <h3 className="text-zinc-300 font-semibold mb-2">Почему может быть ниже?</h3>
+                  <h3 className="text-zinc-300 font-semibold mb-2">Как работает Engine?</h3>
                   <p className="leading-relaxed">
-                    1) Если join компаний неверный — часть доходов не попадает в выборку. 2) Если месяц N-1 не закрыт,
-                    экстраполяция считает темп первых дней. 3) Holt сглаживает тренд и не даёт “лететь в космос”.
+                    Этот экран использует общую библиотеку <code>lib/kpiEngine.ts</code>. 
+                    Если N-1 (прошлый месяц) еще не закрыт, мы экстраполируем его текущие показатели 
+                    до полного месяца, чтобы алгоритм Хольта не получал заниженные данные. 
+                    Те же алгоритмы используются при генерации детального плана.
                   </p>
                 </div>
               </div>
