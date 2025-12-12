@@ -16,11 +16,12 @@ type Staff = {
   email: string | null
   role: StaffRole | null
   short_name: string | null
-  weekly_salary: number | null
+  monthly_salary: number | null
   is_active: boolean
 }
 
-const money = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
+const money = (v: number) =>
+  v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 
 export default function StaffPage() {
   const [staff, setStaff] = useState<Staff[]>([])
@@ -30,7 +31,7 @@ export default function StaffPage() {
   const [fullName, setFullName] = useState('')
   const [shortName, setShortName] = useState('')
   const [role, setRole] = useState<StaffRole>('manager')
-  const [weeklySalary, setWeeklySalary] = useState('')
+  const [monthlySalary, setMonthlySalary] = useState('')
   const [saving, setSaving] = useState(false)
 
   const load = async () => {
@@ -39,7 +40,7 @@ export default function StaffPage() {
 
     const { data, error } = await supabase
       .from('staff')
-      .select('id,full_name,phone,email,role,short_name,weekly_salary,is_active')
+      .select('id,full_name,phone,email,role,short_name,monthly_salary,is_active')
       .order('full_name')
 
     if (error) {
@@ -62,8 +63,8 @@ export default function StaffPage() {
     try {
       if (!fullName.trim()) throw new Error('Введите ФИО')
 
-      const ws = Number(String(weeklySalary).replace(',', '.').replace(/\s/g, ''))
-      if (!Number.isFinite(ws) || ws < 0) throw new Error('Введите недельный оклад (0 или больше)')
+      const ms = Number(String(monthlySalary).replace(',', '.').replace(/\s/g, ''))
+      if (!Number.isFinite(ms) || ms < 0) throw new Error('Введите месячный оклад (0 или больше)')
 
       setSaving(true)
 
@@ -71,14 +72,14 @@ export default function StaffPage() {
         full_name: fullName.trim(),
         short_name: shortName.trim() || null,
         role: role || null,
-        weekly_salary: Math.round(ws),
+        monthly_salary: Math.round(ms),
         is_active: true,
       }
 
       const { data, error } = await supabase
         .from('staff')
         .insert([payload])
-        .select('id,full_name,phone,email,role,short_name,weekly_salary,is_active')
+        .select('id,full_name,phone,email,role,short_name,monthly_salary,is_active')
         .single()
 
       if (error) throw error
@@ -86,7 +87,7 @@ export default function StaffPage() {
       setStaff((prev) => [...prev, data as Staff])
       setFullName('')
       setShortName('')
-      setWeeklySalary('')
+      setMonthlySalary('')
       setRole('manager')
       setSaving(false)
     } catch (err: any) {
@@ -103,7 +104,7 @@ export default function StaffPage() {
         .from('staff')
         .update({ is_active: !row.is_active })
         .eq('id', row.id)
-        .select('id,full_name,phone,email,role,short_name,weekly_salary,is_active')
+        .select('id,full_name,phone,email,role,short_name,monthly_salary,is_active')
         .single()
 
       if (error) throw error
@@ -122,9 +123,9 @@ export default function StaffPage() {
           <div className="flex items-center gap-3">
             <Users2 className="w-7 h-7 text-emerald-400" />
             <div>
-              <h1 className="text-2xl font-bold">Сотрудники (фикс. зарплата)</h1>
+              <h1 className="text-2xl font-bold">Сотрудники (месячный оклад)</h1>
               <p className="text-xs text-muted-foreground">
-                Руководитель / Маркетолог / Ты — считаются по окладу за неделю + корректировки
+                Выплата: 1-го и 15-го числа (месячный оклад делится на 2)
               </p>
             </div>
           </div>
@@ -136,7 +137,10 @@ export default function StaffPage() {
           )}
 
           <Card className="p-4 border-border bg-card/80">
-            <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+            <form
+              onSubmit={handleAdd}
+              className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end"
+            >
               <div className="md:col-span-2">
                 <label className="text-[11px] text-muted-foreground mb-1 block">ФИО</label>
                 <input
@@ -172,19 +176,25 @@ export default function StaffPage() {
               </div>
 
               <div>
-                <label className="text-[11px] text-muted-foreground mb-1 block">Оклад за неделю</label>
+                <label className="text-[11px] text-muted-foreground mb-1 block">
+                  Оклад в месяц
+                </label>
                 <input
                   type="number"
                   min="0"
-                  value={weeklySalary}
-                  onChange={(e) => setWeeklySalary(e.target.value)}
+                  value={monthlySalary}
+                  onChange={(e) => setMonthlySalary(e.target.value)}
                   className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm"
                   placeholder="0"
                 />
               </div>
 
               <div className="flex justify-end md:col-span-5">
-                <Button type="submit" disabled={saving || !fullName.trim()} className="h-10 px-4 text-sm flex items-center gap-2">
+                <Button
+                  type="submit"
+                  disabled={saving || !fullName.trim()}
+                  className="h-10 px-4 text-sm flex items-center gap-2"
+                >
                   <Plus className="w-4 h-4" />
                   {saving ? 'Сохранение...' : 'Добавить'}
                 </Button>
@@ -199,7 +209,7 @@ export default function StaffPage() {
                   <th className="py-2 px-2 text-left">ФИО</th>
                   <th className="py-2 px-2 text-left">Кратко</th>
                   <th className="py-2 px-2 text-left">Роль</th>
-                  <th className="py-2 px-2 text-right">Оклад/нед</th>
+                  <th className="py-2 px-2 text-right">Оклад/мес</th>
                   <th className="py-2 px-2 text-center">Статус</th>
                   <th className="py-2 px-2 text-right">Действие</th>
                 </tr>
@@ -225,9 +235,15 @@ export default function StaffPage() {
                   staff.map((s) => (
                     <tr key={s.id} className="border-t border-border/40 hover:bg-white/5">
                       <td className="py-1.5 px-2 font-medium">{s.full_name || '—'}</td>
-                      <td className="py-1.5 px-2">{s.short_name || <span className="text-muted-foreground">—</span>}</td>
-                      <td className="py-1.5 px-2">{s.role || <span className="text-muted-foreground">—</span>}</td>
-                      <td className="py-1.5 px-2 text-right">{money(Number(s.weekly_salary || 0))}</td>
+                      <td className="py-1.5 px-2">
+                        {s.short_name || <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="py-1.5 px-2">
+                        {s.role || <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="py-1.5 px-2 text-right">
+                        {money(Number(s.monthly_salary || 0))}
+                      </td>
                       <td className="py-1.5 px-2 text-center">
                         {s.is_active ? (
                           <span className="text-emerald-400 text-[11px]">Активен</span>
@@ -236,7 +252,13 @@ export default function StaffPage() {
                         )}
                       </td>
                       <td className="py-1.5 px-2 text-right">
-                        <Button type="button" variant="ghost" size="icon" onClick={() => toggleActive(s)} className="h-8 w-8">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => toggleActive(s)}
+                          className="h-8 w-8"
+                        >
                           {s.is_active ? (
                             <ToggleRight className="w-4 h-4 text-emerald-400" />
                           ) : (
