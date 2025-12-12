@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useDeferredValue } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sidebar } from '@/components/sidebar'
@@ -17,6 +17,8 @@ import {
   X,
   CalendarDays,
   UserCircle2,
+  Trophy,
+  MapPin,
 } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -55,92 +57,87 @@ type PayFilter = 'all' | 'cash' | 'kaspi' | 'card'
 type DateRangePreset = 'today' | 'week' | 'month' | 'all'
 type OperatorFilter = 'all' | 'none' | string
 
-// --- Хелперы ---
-const todayISO = () => {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+// --- Даты без UTC-косяков ---
+const toISODateLocal = (d: Date) => {
+  const t = d.getTime() - d.getTimezoneOffset() * 60_000
+  return new Date(t).toISOString().slice(0, 10)
 }
+const parseISODateSafe = (iso: string) => new Date(`${iso}T12:00:00`)
+
+const todayISO = () => toISODateLocal(new Date())
 
 const addDaysISO = (iso: string, diff: number) => {
-  const d = new Date(iso)
-  d.setDate(d.getDate() + diff)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  const base = iso ? parseISODateSafe(iso) : parseISODateSafe(todayISO())
+  base.setDate(base.getDate() + diff)
+  return toISODateLocal(base)
 }
 
-const formatMoney = (v: number | null | undefined) =>
-  (v ?? 0).toLocaleString('ru-RU')
+const formatMoney = (v: number | null | undefined) => (v ?? 0).toLocaleString('ru-RU')
 
 const formatDate = (value: string) => {
   if (!value) return ''
-  const d = new Date(value)
-  return d.toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+  const d = parseISODateSafe(value)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 const formatIsoToRu = (iso: string | '') => {
   if (!iso) return '…'
-  const d = new Date(iso)
+  const d = parseISODateSafe(iso)
   if (Number.isNaN(d.getTime())) return '…'
-  return d.toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+const escapeCSV = (v: any, sep = ';') => {
+  const s = String(v ?? '')
+  const needs = s.includes(sep) || s.includes('"') || s.includes('\n') || s.includes('\r')
+  const safe = s.replace(/"/g, '""')
+  return needs ? `"${safe}"` : safe
 }
 
 export default function IncomePage() {
+  const LIMIT = 2000
+
   // Данные
   const [rows, setRows] = useState<IncomeRow[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
+  const [hitLimit, setHitLimit] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Фильтры
   const [dateFrom, setDateFrom] = useState(todayISO())
   const [dateTo, setDateTo] = useState(todayISO())
-  const [activePreset, setActivePreset] =
-    useState<DateRangePreset | null>('today')
+  const [activePreset, setActivePreset] = useState<DateRangePreset | null>('today')
 
   const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
-  const [operatorFilter, setOperatorFilter] =
-    useState<OperatorFilter>('all')
+  const [operatorFilter, setOperatorFilter] = useState<OperatorFilter>('all')
   const [shiftFilter, setShiftFilter] = useState<ShiftFilter>('all')
   const [payFilter, setPayFilter] = useState<PayFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
-  const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
+  const deferredSearch = useDeferredValue(searchTerm)
 
-  // 1. Загрузка компаний и операторов
+  const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
+  const [hideExtraRows, setHideExtraRows] = useState(false)
+
+  // 1) Рефы
   useEffect(() => {
     const fetchRefs = async () => {
       const [compRes, opRes] = await Promise.all([
-        supabase
-          .from('companies')
-          .select('id, name, code')
-          .order('name', { ascending: true }),
+        supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
         supabase
           .from('operators')
           .select('id, name, short_name, is_active')
           .eq('is_active', true)
           .order('name'),
       ])
-
       if (!compRes.error && compRes.data) setCompanies(compRes.data)
       if (!opRes.error && opRes.data) setOperators(opRes.data)
     }
     fetchRefs()
   }, [])
 
-  // Мапы
   const companyMap = useMemo(() => {
     const map = new Map<string, Company>()
     for (const c of companies) map.set(c.id, c)
@@ -153,10 +150,7 @@ export default function IncomePage() {
     return map
   }, [operators])
 
-  const companyName = useCallback(
-    (companyId: string) => companyMap.get(companyId)?.name ?? '—',
-    [companyMap],
-  )
+  const companyName = useCallback((companyId: string) => companyMap.get(companyId)?.name ?? '—', [companyMap])
 
   const operatorName = useCallback(
     (operatorId: string | null) => {
@@ -168,19 +162,22 @@ export default function IncomePage() {
     [operatorMap],
   )
 
-  // ID Extra компании
   const extraCompanyId = useMemo(() => {
-    const extra = companies.find(
-      (c) => c.code === 'extra' || c.name === 'F16 Extra',
-    )
+    const extra = companies.find((c) => c.code === 'extra' || c.name === 'F16 Extra')
     return extra?.id ?? null
   }, [companies])
 
-  // 2. Загрузка доходов
+  const isExtraRow = useCallback(
+    (r: IncomeRow) => !!extraCompanyId && r.company_id === extraCompanyId,
+    [extraCompanyId],
+  )
+
+  // 2) Загрузка доходов
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
       setError(null)
+      setHitLimit(false)
 
       const t0 = performance.now()
 
@@ -196,91 +193,109 @@ export default function IncomePage() {
       if (companyFilter !== 'all') query = query.eq('company_id', companyFilter)
       if (shiftFilter !== 'all') query = query.eq('shift', shiftFilter)
 
-      if (operatorFilter === 'none') {
-        query = query.is('operator_id', null)
-      } else if (operatorFilter !== 'all') {
-        query = query.eq('operator_id', operatorFilter)
-      }
+      if (operatorFilter === 'none') query = query.is('operator_id', null)
+      else if (operatorFilter !== 'all') query = query.eq('operator_id', operatorFilter)
 
       if (payFilter === 'cash') query = query.gt('cash_amount', 0)
       if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
       if (payFilter === 'card') query = query.gt('card_amount', 0)
 
-      // ограничение по строкам, чтобы "Всё" не душило
-      query = query.limit(1000)
+      query = query.limit(LIMIT)
 
       const { data, error } = await query
 
       const t1 = performance.now()
-      console.log(
-        `incomes query time: ${(t1 - t0).toFixed(
-          0,
-        )} ms, rows: ${data?.length ?? 0}`,
-      )
+      console.log(`incomes query time: ${(t1 - t0).toFixed(0)} ms, rows: ${data?.length ?? 0}`)
 
       if (error) {
         console.error('Error loading incomes:', error)
         setError('Ошибка при загрузке данных')
+        setRows([])
       } else {
-        setRows((data || []) as IncomeRow[])
+        const list = (data || []) as IncomeRow[]
+        setRows(list)
+        setHitLimit(list.length >= LIMIT)
       }
 
       setLoading(false)
     }
 
     loadData()
-  }, [
-    dateFrom,
-    dateTo,
-    companyFilter,
-    shiftFilter,
-    payFilter,
-    operatorFilter,
-  ])
+  }, [dateFrom, dateTo, companyFilter, shiftFilter, payFilter, operatorFilter])
 
-  // 3. Локальный поиск (коммент, зона, оператор, компания)
-  const filteredRows = useMemo(() => {
-    if (!searchTerm) return rows
-    const lowerTerm = searchTerm.toLowerCase()
+  // 3) Поиск + скрытие Extra (локально)
+  const visibleRows = useMemo(() => {
+    let base = rows
 
-    return rows.filter((r) => {
+    if (hideExtraRows && extraCompanyId) {
+      base = base.filter((r) => r.company_id !== extraCompanyId)
+    }
+
+    const q = deferredSearch.trim().toLowerCase()
+    if (!q) return base
+
+    return base.filter((r) => {
       const comment = r.comment?.toLowerCase() ?? ''
       const zone = r.zone?.toLowerCase() ?? ''
       const op = operatorName(r.operator_id).toLowerCase()
       const comp = companyName(r.company_id).toLowerCase()
-
-      return (
-        comment.includes(lowerTerm) ||
-        zone.includes(lowerTerm) ||
-        op.includes(lowerTerm) ||
-        comp.includes(lowerTerm)
-      )
+      return comment.includes(q) || zone.includes(q) || op.includes(q) || comp.includes(q)
     })
-  }, [rows, searchTerm, operatorName, companyName])
+  }, [rows, deferredSearch, operatorName, companyName, hideExtraRows, extraCompanyId])
 
-  // Итоги
-  const totals = useMemo(() => {
+  // Итоги + аналитика
+  const analytics = useMemo(() => {
     let cash = 0
     let kaspi = 0
     let card = 0
+    let dayTotal = 0
+    let nightTotal = 0
 
-    for (const r of filteredRows) {
-      if (
-        companyFilter === 'all' &&
-        !includeExtraInTotals &&
-        extraCompanyId &&
-        r.company_id === extraCompanyId
-      ) {
-        continue
-      }
+    const byOperator: Record<string, number> = {}
+    const byZone: Record<string, number> = {}
 
-      cash += Number(r.cash_amount || 0)
-      kaspi += Number(r.kaspi_amount || 0)
-      card += Number(r.card_amount || 0)
+    for (const r of visibleRows) {
+      if (companyFilter === 'all' && !includeExtraInTotals && isExtraRow(r)) continue
+
+      const rowCash = Number(r.cash_amount || 0)
+      const rowKaspi = Number(r.kaspi_amount || 0)
+      const rowCard = Number(r.card_amount || 0)
+      const rowTotal = rowCash + rowKaspi + rowCard
+
+      cash += rowCash
+      kaspi += rowKaspi
+      card += rowCard
+
+      if (r.shift === 'day') dayTotal += rowTotal
+      else nightTotal += rowTotal
+
+      const opKey = operatorName(r.operator_id)
+      byOperator[opKey] = (byOperator[opKey] || 0) + rowTotal
+
+      const z = (r.zone || '—').trim() || '—'
+      byZone[z] = (byZone[z] || 0) + rowTotal
     }
 
-    return { cash, kaspi, card, total: cash + kaspi + card }
-  }, [filteredRows, companyFilter, includeExtraInTotals, extraCompanyId])
+    const total = cash + kaspi + card
+    const avg = visibleRows.length ? Math.round(total / visibleRows.length) : 0
+
+    const topOperator = Object.entries(byOperator).sort((a, b) => b[1] - a[1])[0] || ['—', 0]
+    const topZone = Object.entries(byZone).sort((a, b) => b[1] - a[1])[0] || ['—', 0]
+
+    return {
+      cash,
+      kaspi,
+      card,
+      total,
+      avg,
+      dayTotal,
+      nightTotal,
+      topOperatorName: topOperator[0],
+      topOperatorAmount: topOperator[1],
+      topZoneName: topZone[0],
+      topZoneAmount: topZone[1],
+    }
+  }, [visibleRows, companyFilter, includeExtraInTotals, isExtraRow, operatorName])
 
   // Пресеты дат
   const setPreset = (preset: DateRangePreset) => {
@@ -305,18 +320,30 @@ export default function IncomePage() {
     }
   }
 
-  // Меняем даты руками — сбрасываем пресет
   const handleDateFromChange = (value: string) => {
     setDateFrom(value)
     setActivePreset(null)
   }
-
   const handleDateToChange = (value: string) => {
     setDateTo(value)
     setActivePreset(null)
   }
 
-  // === ЭКСПОРТ ДЛЯ EXCEL (с разделителем ;) ===
+  const resetFilters = () => {
+    const t = todayISO()
+    setDateFrom(t)
+    setDateTo(t)
+    setActivePreset('today')
+    setCompanyFilter('all')
+    setOperatorFilter('all')
+    setShiftFilter('all')
+    setPayFilter('all')
+    setSearchTerm('')
+    setIncludeExtraInTotals(false)
+    setHideExtraRows(false)
+  }
+
+  // Экспорт (то, что видно)
   const downloadCSV = () => {
     const SEP = ';'
 
@@ -333,44 +360,39 @@ export default function IncomePage() {
       'Комментарий',
     ]
 
+    const exportRows = visibleRows.filter((r) => {
+      if (companyFilter === 'all' && !includeExtraInTotals && isExtraRow(r)) return false
+      return true
+    })
+
     const csvContent = [
       headers.join(SEP),
-      ...filteredRows.map((r) => {
-        const total =
-          (r.cash_amount || 0) +
-          (r.kaspi_amount || 0) +
-          (r.card_amount || 0)
-
-        const safeComment = (r.comment || '').replace(/"/g, '""')
-
+      ...exportRows.map((r) => {
+        const total = (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.card_amount || 0)
         return [
-          r.date,
-          companyName(r.company_id),
-          operatorName(r.operator_id),
-          r.shift,
-          r.zone ?? '',
-          r.cash_amount ?? 0,
-          r.kaspi_amount ?? 0,
-          r.card_amount ?? 0,
-          total,
-          `"${safeComment}"`,
+          escapeCSV(r.date, SEP),
+          escapeCSV(companyName(r.company_id), SEP),
+          escapeCSV(operatorName(r.operator_id), SEP),
+          escapeCSV(r.shift, SEP),
+          escapeCSV(r.zone ?? '', SEP),
+          escapeCSV(r.cash_amount ?? 0, SEP),
+          escapeCSV(r.kaspi_amount ?? 0, SEP),
+          escapeCSV(r.card_amount ?? 0, SEP),
+          escapeCSV(total, SEP),
+          escapeCSV(r.comment ?? '', SEP),
         ].join(SEP)
       }),
     ].join('\n')
 
-    const blob = new Blob(['\uFEFF' + csvContent], {
-      type: 'text/csv;charset=utf-8;',
-    })
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = `incomes_${new Date().toISOString().slice(0, 10)}.csv`
+    link.download = `incomes_${toISODateLocal(new Date())}.csv`
     link.click()
   }
 
   const periodLabel =
-    dateFrom || dateTo
-      ? `${formatIsoToRu(dateFrom)} — ${formatIsoToRu(dateTo)}`
-      : 'Весь период'
+    dateFrom || dateTo ? `${formatIsoToRu(dateFrom)} — ${formatIsoToRu(dateTo)}` : 'Весь период'
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -380,28 +402,33 @@ export default function IncomePage() {
           {/* Шапка */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">
-                Журнал доходов
-              </h1>
-              <p className="text-muted-foreground mt-1 text-sm">
-                История операций и быстрый анализ по периодам
-              </p>
+              <h1 className="text-3xl font-bold text-foreground">Журнал доходов</h1>
+              <p className="text-muted-foreground mt-1 text-sm">История операций и анализ по фильтрам</p>
             </div>
+
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
+                onClick={resetFilters}
+                className="gap-2 text-xs"
+                title="Сбросить фильтры"
+              >
+                <X className="w-4 h-4" /> Сброс
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={downloadCSV}
-                disabled={filteredRows.length === 0}
+                disabled={visibleRows.length === 0}
                 className="gap-2 text-xs"
               >
                 <Download className="w-4 h-4" /> Экспорт
               </Button>
+
               <Link href="/income/add">
-                <Button
-                  size="sm"
-                  className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 text-xs"
-                >
+                <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 text-xs">
                   <Plus className="w-4 h-4" /> Добавить
                 </Button>
               </Link>
@@ -414,84 +441,105 @@ export default function IncomePage() {
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <Banknote className="w-4 h-4" />
-                  <span className="text-xs uppercase tracking-wide">
-                    Наличные
-                  </span>
+                  <span className="text-xs uppercase tracking-wide">Наличные</span>
                 </div>
-                <div className="text-xl font-bold text-foreground">
-                  {formatMoney(totals.cash)} ₸
-                </div>
+                <div className="text-xl font-bold text-foreground">{formatMoney(analytics.cash)} ₸</div>
               </Card>
+
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <Smartphone className="w-4 h-4" />
-                  <span className="text-xs uppercase tracking-wide">
-                    Kaspi
-                  </span>
+                  <span className="text-xs uppercase tracking-wide">Kaspi</span>
                 </div>
-                <div className="text-xl font-bold text-foreground">
-                  {formatMoney(totals.kaspi)} ₸
-                </div>
+                <div className="text-xl font-bold text-foreground">{formatMoney(analytics.kaspi)} ₸</div>
               </Card>
+
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <CreditCard className="w-4 h-4" />
-                  <span className="text-xs uppercase tracking-wide">
-                    Карта
+                  <span className="text-xs uppercase tracking-wide">Карта</span>
+                </div>
+                <div className="text-xl font-bold text-foreground">{formatMoney(analytics.card)} ₸</div>
+              </Card>
+
+              <Card className="p-4 border border-accent/60 bg-accent/10 flex flex-col justify-center relative overflow-hidden">
+                <div className="text-[11px] text-muted-foreground mb-1 uppercase tracking-wider">Всего по фильтру</div>
+                <div className="text-2xl font-bold text-accent">{formatMoney(analytics.total)} ₸</div>
+
+                <div className="mt-1 text-[10px] text-muted-foreground flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
+                      includeExtraInTotals ? 'border-accent text-accent bg-accent/10' : 'border-border text-muted-foreground'
+                    } cursor-pointer select-none`}
+                    onClick={() => setIncludeExtraInTotals((v) => !v)}
+                    title="Влияет на итоги/экспорт"
+                  >
+                    <span className={`h-2 w-2 rounded-full ${includeExtraInTotals ? 'bg-accent' : 'bg-muted-foreground/40'}`} />
+                    Extra в итогах
+                  </span>
+
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
+                      hideExtraRows ? 'border-yellow-500 text-yellow-500 bg-yellow-500/10' : 'border-border text-muted-foreground'
+                    } cursor-pointer select-none`}
+                    onClick={() => setHideExtraRows((v) => !v)}
+                    title="Скрывает строки Extra"
+                  >
+                    <span className={`h-2 w-2 rounded-full ${hideExtraRows ? 'bg-yellow-500' : 'bg-muted-foreground/40'}`} />
+                    Скрыть Extra
                   </span>
                 </div>
-                <div className="text-xl font-bold text-foreground">
-                  {formatMoney(totals.card)} ₸
-                </div>
-              </Card>
-              <Card className="p-4 border border-accent/60 bg-accent/10 flex flex-col justify-center relative overflow-hidden">
-                <div className="text-[11px] text-muted-foreground mb-1 uppercase tracking-wider">
-                  Всего по фильтру
-                </div>
-                <div className="text-2xl font-bold text-accent">
-                  {formatMoney(totals.total)} ₸
-                </div>
-                {companyFilter === 'all' && (
-                  <div className="mt-1 text-[10px] text-muted-foreground flex items-center gap-2">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
-                        includeExtraInTotals
-                          ? 'border-accent text-accent bg-accent/10'
-                          : 'border-border text-muted-foreground'
-                      } cursor-pointer select-none`}
-                      onClick={() =>
-                        setIncludeExtraInTotals((v) => !v)
-                      }
-                    >
-                      <span
-                        className={`h-2 w-2 rounded-full ${
-                          includeExtraInTotals
-                            ? 'bg-accent'
-                            : 'bg-muted-foreground/40'
-                        }`}
-                      />
-                      Extra в итогах
-                    </span>
-                  </div>
-                )}
               </Card>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-1">
                 <CalendarDays className="w-3 h-3" />
-                <span className="uppercase tracking-wide">
-                  Период:
-                </span>
+                <span className="uppercase tracking-wide">Период:</span>
                 <span className="font-mono">{periodLabel}</span>
               </div>
               <div>
-                Записей:{' '}
-                <span className="font-semibold">
-                  {filteredRows.length}
-                </span>
+                Записей: <span className="font-semibold">{visibleRows.length}</span>
+                {analytics.total > 0 && (
+                  <>
+                    {' '}
+                    • Средний чек: <span className="font-semibold">{formatMoney(analytics.avg)} ₸</span>
+                  </>
+                )}
               </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+              <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/30 px-3 py-2">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Trophy className="w-4 h-4" />
+                  Топ оператор
+                </div>
+                <div className="text-xs">
+                  <span className="text-foreground font-semibold">{analytics.topOperatorName}</span>{' '}
+                  <span className="text-muted-foreground">•</span>{' '}
+                  <span className="text-accent font-bold">{formatMoney(analytics.topOperatorAmount)} ₸</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/30 px-3 py-2">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <MapPin className="w-4 h-4" />
+                  Топ зона
+                </div>
+                <div className="text-xs">
+                  <span className="text-foreground font-semibold">{analytics.topZoneName}</span>{' '}
+                  <span className="text-muted-foreground">•</span>{' '}
+                  <span className="text-accent font-bold">{formatMoney(analytics.topZoneAmount)} ₸</span>
+                </div>
+              </div>
+            </div>
+
+            {hitLimit && (
+              <div className="text-[11px] text-yellow-500/90 pt-1">
+                Показаны первые {LIMIT} строк (ограничение). Для “Всё за год” лучше добавить пагинацию/серверную агрегацию.
+              </div>
+            )}
           </Card>
 
           {/* Фильтры */}
@@ -499,43 +547,32 @@ export default function IncomePage() {
             <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-end">
               {/* Даты */}
               <div className="flex flex-col gap-2 w-full lg:w-auto">
-                <label className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">
-                  Период
-                </label>
+                <label className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">Период</label>
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="relative flex items-center bg-input/50 rounded-md border border-border/50 px-2 py-1">
                     <CalendarDays className="w-3.5 h-3.5 text-muted-foreground mr-1.5" />
                     <input
                       type="date"
                       value={dateFrom}
-                      onChange={(e) =>
-                        handleDateFromChange(e.target.value)
-                      }
+                      onChange={(e) => handleDateFromChange(e.target.value)}
                       className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
                     />
-                    <span className="text-muted-foreground text-xs px-1">
-                      →
-                    </span>
+                    <span className="text-muted-foreground text-xs px-1">→</span>
                     <input
                       type="date"
                       value={dateTo}
-                      onChange={(e) =>
-                        handleDateToChange(e.target.value)
-                      }
+                      onChange={(e) => handleDateToChange(e.target.value)}
                       className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
                     />
                   </div>
+
                   <div className="flex bg-input/30 rounded-md border border-border/30 p-0.5">
-                    {(
-                      ['today', 'week', 'month', 'all'] as DateRangePreset[]
-                    ).map((p) => (
+                    {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map((p) => (
                       <button
                         key={p}
                         onClick={() => setPreset(p)}
                         className={`px-3 py-1 text-[10px] rounded transition-colors ${
-                          activePreset === p
-                            ? 'bg-accent text-accent-foreground'
-                            : 'hover:bg-white/10 text-muted-foreground'
+                          activePreset === p ? 'bg-accent text-accent-foreground' : 'hover:bg-white/10 text-muted-foreground'
                         }`}
                       >
                         {p === 'today' && 'Сегодня'}
@@ -551,14 +588,10 @@ export default function IncomePage() {
               {/* Остальные фильтры */}
               <div className="flex flex-wrap items-end gap-2 w-full lg:w-auto">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">
-                    Компания
-                  </label>
+                  <label className="text-[10px] text-muted-foreground">Компания</label>
                   <select
                     value={companyFilter}
-                    onChange={(e) =>
-                      setCompanyFilter(e.target.value)
-                    }
+                    onChange={(e) => setCompanyFilter(e.target.value)}
                     className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground min-w-[130px]"
                   >
                     <option value="all">Все компании</option>
@@ -571,16 +604,10 @@ export default function IncomePage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">
-                    Оператор
-                  </label>
+                  <label className="text-[10px] text-muted-foreground">Оператор</label>
                   <select
                     value={operatorFilter}
-                    onChange={(e) =>
-                      setOperatorFilter(
-                        e.target.value as OperatorFilter,
-                      )
-                    }
+                    onChange={(e) => setOperatorFilter(e.target.value as OperatorFilter)}
                     className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground min-w-[150px]"
                   >
                     <option value="all">Все</option>
@@ -594,16 +621,10 @@ export default function IncomePage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">
-                    Смена
-                  </label>
+                  <label className="text-[10px] text-muted-foreground">Смена</label>
                   <select
                     value={shiftFilter}
-                    onChange={(e) =>
-                      setShiftFilter(
-                        e.target.value as ShiftFilter,
-                      )
-                    }
+                    onChange={(e) => setShiftFilter(e.target.value as ShiftFilter)}
                     className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground"
                   >
                     <option value="all">Все</option>
@@ -613,16 +634,10 @@ export default function IncomePage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">
-                    Оплата
-                  </label>
+                  <label className="text-[10px] text-muted-foreground">Оплата</label>
                   <select
                     value={payFilter}
-                    onChange={(e) =>
-                      setPayFilter(
-                        e.target.value as PayFilter,
-                      )
-                    }
+                    onChange={(e) => setPayFilter(e.target.value as PayFilter)}
                     className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground"
                   >
                     <option value="all">Любая</option>
@@ -632,25 +647,22 @@ export default function IncomePage() {
                   </select>
                 </div>
 
-                <div className="flex flex-col gap-1 flex-1 min-w-[170px]">
-                  <label className="text-[10px] text-muted-foreground">
-                    Поиск
-                  </label>
+                <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+                  <label className="text-[10px] text-muted-foreground">Поиск</label>
                   <div className="relative">
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <input
                       type="text"
                       placeholder="Комментарий / зона / оператор / компания..."
                       value={searchTerm}
-                      onChange={(e) =>
-                        setSearchTerm(e.target.value)
-                      }
+                      onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full h-9 pl-8 pr-6 bg-input border border-border rounded text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-accent transition-colors"
                     />
                     {searchTerm && (
                       <button
                         onClick={() => setSearchTerm('')}
                         className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                        type="button"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -678,60 +690,40 @@ export default function IncomePage() {
                     <th className="px-4 py-3 text-left">Оператор</th>
                     <th className="px-4 py-3 text-center">Смена</th>
                     <th className="px-4 py-3 text-left">Зона</th>
-                    <th className="px-4 py-3 text-right text-green-500">
-                      Нал
-                    </th>
-                    <th className="px-4 py-3 text-right text-blue-500">
-                      Kaspi
-                    </th>
-                    <th className="px-4 py-3 text-right text-purple-500">
-                      Карта
-                    </th>
-                    <th className="px-4 py-3 text-right text-foreground">
-                      Всего
-                    </th>
-                    <th className="px-4 py-3 text-left">
-                      Комментарий
-                    </th>
+                    <th className="px-4 py-3 text-right text-green-500">Нал</th>
+                    <th className="px-4 py-3 text-right text-blue-500">Kaspi</th>
+                    <th className="px-4 py-3 text-right text-purple-500">Карта</th>
+                    <th className="px-4 py-3 text-right text-foreground">Всего</th>
+                    <th className="px-4 py-3 text-left">Комментарий</th>
                   </tr>
                 </thead>
+
                 <tbody className="text-sm">
                   {loading && (
                     <tr>
-                      <td
-                        colSpan={10}
-                        className="px-6 py-10 text-center text-muted-foreground animate-pulse"
-                      >
+                      <td colSpan={10} className="px-6 py-10 text-center text-muted-foreground animate-pulse">
                         Загрузка данных...
                       </td>
                     </tr>
                   )}
 
                   {!loading &&
-                    filteredRows.map((row, idx) => {
-                      const total =
-                        (row.cash_amount || 0) +
-                        (row.kaspi_amount || 0) +
-                        (row.card_amount || 0)
+                    visibleRows.map((row, idx) => {
+                      const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.card_amount || 0)
                       const company = companyMap.get(row.company_id)
-                      const isExtra =
-                        company?.code === 'extra' ||
-                        company?.name === 'F16 Extra'
+                      const isExtra = (company?.code === 'extra' || company?.name === 'F16 Extra') ?? false
 
                       return (
                         <tr
                           key={row.id}
                           className={`border-b border-border/40 hover:bg-white/5 transition-colors ${
                             idx % 2 === 0 ? 'bg-card/40' : ''
-                          } ${
-                            isExtra
-                              ? 'bg-yellow-500/5 border-l-2 border-l-yellow-500/50'
-                              : ''
-                          }`}
+                          } ${isExtra ? 'bg-yellow-500/5 border-l-2 border-l-yellow-500/50' : ''}`}
                         >
                           <td className="px-4 py-3 whitespace-nowrap text-muted-foreground font-mono text-xs">
                             {formatDate(row.date)}
                           </td>
+
                           <td className="px-4 py-3 font-medium whitespace-nowrap">
                             {company?.name ?? '—'}
                             {isExtra && (
@@ -740,12 +732,14 @@ export default function IncomePage() {
                               </span>
                             )}
                           </td>
+
                           <td className="px-4 py-3 text-xs whitespace-nowrap">
                             <span className="inline-flex items-center gap-1">
                               <UserCircle2 className="w-3.5 h-3.5 text-muted-foreground" />
                               {operatorName(row.operator_id)}
                             </span>
                           </td>
+
                           <td className="px-4 py-3 text-center">
                             {row.shift === 'day' ? (
                               <Sun className="w-4 h-4 text-yellow-400 inline" />
@@ -753,45 +747,37 @@ export default function IncomePage() {
                               <Moon className="w-4 h-4 text-blue-400 inline" />
                             )}
                           </td>
-                          <td className="px-4 py-3 text-xs text-muted-foreground">
-                            {row.zone || '—'}
-                          </td>
+
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{row.zone || '—'}</td>
+
                           <td
                             className={`px-4 py-3 text-right font-mono ${
-                              row.cash_amount
-                                ? 'text-foreground'
-                                : 'text-muted-foreground/20'
+                              row.cash_amount ? 'text-foreground' : 'text-muted-foreground/20'
                             }`}
                           >
-                            {row.cash_amount
-                              ? formatMoney(row.cash_amount)
-                              : '—'}
+                            {row.cash_amount ? formatMoney(row.cash_amount) : '—'}
                           </td>
+
                           <td
                             className={`px-4 py-3 text-right font-mono ${
-                              row.kaspi_amount
-                                ? 'text-foreground'
-                                : 'text-muted-foreground/20'
+                              row.kaspi_amount ? 'text-foreground' : 'text-muted-foreground/20'
                             }`}
                           >
-                            {row.kaspi_amount
-                              ? formatMoney(row.kaspi_amount)
-                              : '—'}
+                            {row.kaspi_amount ? formatMoney(row.kaspi_amount) : '—'}
                           </td>
+
                           <td
                             className={`px-4 py-3 text-right font-mono ${
-                              row.card_amount
-                                ? 'text-foreground'
-                                : 'text-muted-foreground/20'
+                              row.card_amount ? 'text-foreground' : 'text-muted-foreground/20'
                             }`}
                           >
-                            {row.card_amount
-                              ? formatMoney(row.card_amount)
-                              : '—'}
+                            {row.card_amount ? formatMoney(row.card_amount) : '—'}
                           </td>
+
                           <td className="px-4 py-3 text-right font-bold text-accent font-mono bg-accent/5">
                             {formatMoney(total)}
                           </td>
+
                           <td className="px-4 py-3 text-xs text-muted-foreground max-w-[220px] truncate">
                             {row.comment || '—'}
                           </td>
@@ -799,18 +785,12 @@ export default function IncomePage() {
                       )
                     })}
 
-                  {!loading && !error && filteredRows.length === 0 && (
+                  {!loading && !error && visibleRows.length === 0 && (
                     <tr>
-                      <td
-                        colSpan={10}
-                        className="px-6 py-12 text-center text-muted-foreground"
-                      >
+                      <td colSpan={10} className="px-6 py-12 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
                           <Filter className="w-8 h-8 opacity-20" />
-                          <p>
-                            Записи не найдены. Попробуйте изменить
-                            фильтры.
-                          </p>
+                          <p>Записи не найдены. Попробуйте изменить фильтры.</p>
                         </div>
                       </td>
                     </tr>
