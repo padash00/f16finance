@@ -1,8 +1,22 @@
+'use client'
+
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { AlertTriangle, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { supabase } from "@/lib/supabaseClient"
 
 export default function UnauthorizedPage() {
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    // чистим сессию
+    await supabase.auth.signOut()
+    // отправляем на логин
+    router.push("/login")
+    router.refresh()
+  }
+
   return (
     <div className="min-h-screen bg-[#050505] text-foreground flex items-center justify-center px-4">
       <div className="w-full max-w-md">
@@ -16,8 +30,7 @@ export default function UnauthorizedPage() {
           </h1>
 
           <p className="text-sm text-muted-foreground">
-            У вас нет прав для просмотра этого раздела.  
-            Если вы считаете, что это ошибка — свяжитесь с владельцем системы
+            У вас нет прав для просмотра этого раздела. Если вы считаете, что это ошибка — свяжитесь с владельцем системы
             или администратором.
           </p>
 
@@ -28,13 +41,16 @@ export default function UnauthorizedPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2 mt-2">
-              <Link href="/login" className="flex-1">
-                <Button className="w-full" variant="default">
-                  Войти в систему
-                </Button>
-              </Link>
+              {/* Кнопка: сначала выходим, потом на логин */}
+              <Button
+                onClick={handleLogout}
+                className="flex-1 h-9 text-sm font-medium bg-[#d7ff00] text-black hover:bg-[#c4f000]"
+              >
+                Выйти и войти снова
+              </Button>
+
               <Link href="/" className="flex-1">
-                <Button className="w-full" variant="outline">
+                <Button className="w-full h-9 text-sm" variant="outline">
                   На главную
                 </Button>
               </Link>
