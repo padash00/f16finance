@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
-import { calculateForecast } from '@/lib/kpiEngine' // <--- ИМПОРТ МОЗГА
+import { calculateForecast } from '@/lib/kpiEngine' // Импорт "мозга"
 import {
   Save,
   Wand2,
@@ -18,24 +18,36 @@ import {
   TrendingUp
 } from 'lucide-react'
 
-// --- 1. UTILS & TYPES ---
+// --- 1. UTILS ---
 
 const money = (v: number) =>
   (v ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })
 
-// Вспомогательная функция для дат выборки
-function getMonthDates(targetIso: string) {
-  // targetIso: '2025-01-01'
-  const target = new Date(targetIso)
-  const prev1 = new Date(target.getFullYear(), target.getMonth() - 1, 1) // Dec
-  const prev2 = new Date(target.getFullYear(), target.getMonth() - 2, 1) // Nov
-  
-  // Диапазон для выборки данных (с 1 числа N-2 по конец N-1)
-  const fetchStart = new Date(prev2.getFullYear(), prev2.getMonth(), 1).toISOString().split('T')[0]
-  const fetchEndObj = new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0)
-  const fetchEnd = fetchEndObj.toISOString().split('T')[0]
+// !!! ВАЖНО: Безопасное создание ключа YYYY-MM без сдвига часовых поясов !!!
+function getMonthKey(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
+}
 
-  return { target, prev1, prev2, fetchStart, fetchEnd }
+function getForecastDates(targetMonthStart: string) {
+  // targetMonthStart = "2026-01-01"
+  const target = new Date(targetMonthStart)
+  
+  // N-1 (Декабрь)
+  const prev1 = new Date(target.getFullYear(), target.getMonth() - 1, 1)
+  // N-2 (Ноябрь)
+  const prev2 = new Date(target.getFullYear(), target.getMonth() - 2, 1)
+
+  // Границы для fetch (с 1-го числа N-2 до конца N-1)
+  // Используем YYYY-MM-DD вручную, чтобы избежать проблем с UTC
+  const startStr = `${getMonthKey(prev2)}-01`
+  
+  // Конец месяца N-1
+  const endOfPrev1 = new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0)
+  const endStr = `${endOfPrev1.getFullYear()}-${String(endOfPrev1.getMonth()+1).padStart(2,'0')}-${String(endOfPrev1.getDate()).padStart(2,'0')}`
+
+  return { target, prev1, prev2, fetchStart: startStr, fetchEnd: endStr }
 }
 
 type KpiRow = {
@@ -55,7 +67,7 @@ type KpiRow = {
 
 type OperatorMap = Record<string, string>
 
-// --- 2. CUSTOM HOOK (Logic) ---
+// --- 2. LOGIC HOOK ---
 
 function useKpiManager(monthStart: string) {
   const [rows, setRows] = useState<KpiRow[]>([])
@@ -63,12 +75,11 @@ function useKpiManager(monthStart: string) {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<{ type: 'error' | 'success', msg: string } | null>(null)
 
-  // A. Load existing plans
+  // Загрузка существующих планов
   const load = useCallback(async () => {
     setLoading(true)
     setStatus(null)
     
-    // 1. Грузим планы
     const { data: plans, error } = await supabase
       .from('kpi_plans')
       .select('*')
@@ -77,14 +88,14 @@ function useKpiManager(monthStart: string) {
       .order('company_code')
 
     if (error) {
-      setStatus({ type: 'error', msg: 'Ошибка загрузки планов' })
+      setStatus({ type: 'error', msg: 'Ошибка загрузки' })
       setLoading(false)
       return
     }
 
     setRows(plans as KpiRow[])
 
-    // 2. Грузим имена операторов (лениво)
+    // Подгрузка имен
     const opIds = Array.from(new Set(plans?.map((r: any) => r.operator_id).filter(Boolean)))
     if (opIds.length > 0) {
       const { data: ops } = await supabase
@@ -100,15 +111,15 @@ function useKpiManager(monthStart: string) {
     setLoading(false)
   }, [monthStart])
 
-  // B. Generate Logic
+  // ГЕНЕРАЦИЯ
   const generate = async () => {
     setLoading(true)
     setStatus(null)
     
     try {
-      const { target, prev1, prev2, fetchStart, fetchEnd } = getMonthDates(monthStart)
+      const { target, prev1, prev2, fetchStart, fetchEnd } = getForecastDates(monthStart)
       
-      // 1. Fetch Incomes
+      // 1. Запрос данных
       const { data: incomes, error } = await supabase
         .from('incomes')
         .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code), operator_id')
@@ -117,29 +128,31 @@ function useKpiManager(monthStart: string) {
       
       if (error) throw error
 
-      // 2. Aggregate Data
-      // Нам нужно собрать "сырые" суммы за N-1 и N-2, чтобы скормить их в engine
+      // 2. Агрегация
+      // ключи: "2025-11", "2025-12"
+      const k1 = getMonthKey(prev1) // N-1
+      const k2 = getMonthKey(prev2) // N-2
+
       type Agg = { t2: number, t1: number, s2: number, s1: number, ops: Record<string, {t: number, s: number}> }
-      const stats: Record<string, Agg> = {} // by company_code
+      const stats: Record<string, Agg> = {}
 
-      const getKey = (d: string) => d.slice(0, 7) // YYYY-MM
-      const k1 = prev1.toISOString().slice(0, 7)
-      const k2 = prev2.toISOString().slice(0, 7)
-
-      // Предварительно рассчитываем scalePrev1 ТОЛЬКО для весов операторов
-      // (сам прогноз считается внутри engine, но веса нужно масштабировать здесь, чтобы декабрьские работники не просели)
+      // Для веса операторов (чтобы не обидеть тех, кто работал в неполном месяце)
       const now = new Date()
       const isPrev1Current = prev1.getMonth() === now.getMonth() && prev1.getFullYear() === now.getFullYear()
-      const scalePrev1ForWeights = isPrev1Current 
-        ? new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0).getDate() / Math.max(1, now.getDate())
-        : 1
+      const scaleWeight = isPrev1Current 
+         ? new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0).getDate() / Math.max(1, now.getDate())
+         : 1
 
       incomes?.forEach((inc: any) => {
         const code = inc.companies?.code || 'other'
         if (!stats[code]) stats[code] = { t2: 0, t1: 0, s2: 0, s1: 0, ops: {} }
         
         const amount = (inc.cash_amount || 0) + (inc.kaspi_amount || 0) + (inc.card_amount || 0)
-        const mKey = getKey(inc.date)
+        
+        // Исправлено: безопасное получение ключа месяца из строки даты
+        const d = new Date(inc.date)
+        const mKey = getMonthKey(d)
+
         const isM1 = mKey === k1
         const isM2 = mKey === k2
 
@@ -151,33 +164,31 @@ function useKpiManager(monthStart: string) {
           stats[code].s1 += 1
         }
 
-        // Агрегация по операторам (для вычисления долей)
-        if (inc.operator_id) {
+        if (inc.operator_id && (isM1 || isM2)) {
            if (!stats[code].ops[inc.operator_id]) stats[code].ops[inc.operator_id] = { t: 0, s: 0 }
            
-           // Масштабируем вклад оператора в N-1, чтобы уравнять шансы с N-2
-           const weight = isM1 ? (amount * scalePrev1ForWeights) : amount
+           // Если это текущий месяц, скейлим вес оператора, чтобы доля считалась справедливо
+           const w = isM1 ? (amount * scaleWeight) : amount
            
-           stats[code].ops[inc.operator_id].t += weight
+           stats[code].ops[inc.operator_id].t += w
            stats[code].ops[inc.operator_id].s += 1
         }
       })
 
-      // 3. Build Plans using kpiEngine
+      // 3. Создание планов
       const newRows: KpiRow[] = []
       
       Object.entries(stats).forEach(([code, d]) => {
-        // --- PROGNOZ (ENGINE) ---
-        // Считаем выручку
-        const turnoverCalc = calculateForecast(target, d.t1, d.t2)
-        const targetT = turnoverCalc.forecast
+        // --- ДВИЖОК KPI ---
+        // Считаем прогноз по выручке
+        const turnCalc = calculateForecast(target, d.t1, d.t2)
+        const targetT = turnCalc.forecast
 
-        // Считаем смены (Shifts) через тот же движок!
-        // Смены тоже линейно зависят от времени, так что метод подходит.
+        // Считаем прогноз по сменам (тот же Holt)
         const shiftsCalc = calculateForecast(target, d.s1, d.s2)
-        const targetS = shiftsCalc.forecast
+        const targetS = shiftsCalc.forecast // Округлим при записи
         
-        // A. Collective Row
+        // A. Collective
         newRows.push({
           plan_key: `${monthStart}|collective|${code}`,
           month_start: monthStart,
@@ -190,22 +201,21 @@ function useKpiManager(monthStart: string) {
           shifts_target_month: targetS,
           shifts_target_week: Number((targetS / 4.345).toFixed(2)),
           meta: { 
-            method: 'holt_v2', 
-            prev2: d.t2, 
-            prev1_est: turnoverCalc.prev1Estimated // сохраняем оценку N-1 для UI
+             prev2: d.t2, 
+             prev1_est: turnCalc.prev1Estimated,
+             trend: turnCalc.trend.toFixed(1)
           },
           is_locked: false
         })
 
-        // B. Operators (Распределение по доле)
+        // B. Operators
         const totalOpWeight = Object.values(d.ops).reduce((acc, v) => acc + v.t, 0)
         
         Object.entries(d.ops).forEach(([opId, opData]) => {
-           if (opData.t < 1000) return // Игнорируем мусор
+           if (opData.t < 1000) return
 
            const share = opData.t / totalOpWeight
            const opTarget = Math.round(targetT * share)
-           // Смены операторам тоже ставим по доле от общих смен (простой и честный вариант)
            const opShifts = Math.round(targetS * share)
 
            newRows.push({
@@ -220,8 +230,8 @@ function useKpiManager(monthStart: string) {
             shifts_target_month: opShifts,
             shifts_target_week: Number((opShifts / 4.345).toFixed(2)),
             meta: { 
-              share: (share * 100).toFixed(1) + '%', 
-              hist_val: Math.round(opData.t) 
+               share: (share * 100).toFixed(1) + '%', 
+               hist_val: Math.round(opData.t) 
             },
             is_locked: false
            })
@@ -251,15 +261,15 @@ function useKpiManager(monthStart: string) {
         })
       })
 
-      // Merge with locks
+      // Объединяем, сохраняя локи
       setRows(prev => {
         const lockedMap = new Map(prev.filter(r => r.is_locked).map(r => [r.plan_key, r]))
         return newRows.map(newRow => lockedMap.get(newRow.plan_key) || newRow)
       })
 
-      setStatus({ type: 'success', msg: 'План сгенерирован (KPI Engine)' })
+      setStatus({ type: 'success', msg: 'План пересчитан (KPI Engine Sync)' })
 
-      // Подгрузим имена для новых операторов
+      // Догружаем имена
       const newOpIds = newRows.map(r => r.operator_id).filter(Boolean) as string[]
       if (newOpIds.length) {
          const { data: names } = await supabase.from('operators').select('id, name').in('id', newOpIds)
@@ -276,13 +286,13 @@ function useKpiManager(monthStart: string) {
     }
   }
 
-  // C. Save Logic
+  // SAVE
   const save = async () => {
     setLoading(true)
     const { error } = await supabase.from('kpi_plans').upsert(rows, { onConflict: 'plan_key' })
     setLoading(false)
     if (error) setStatus({ type: 'error', msg: 'Ошибка сохранения' })
-    else setStatus({ type: 'success', msg: 'Все изменения сохранены' })
+    else setStatus({ type: 'success', msg: 'Сохранено' })
   }
 
   const updateRow = (key: string, patch: Partial<KpiRow>) => {
@@ -294,26 +304,59 @@ function useKpiManager(monthStart: string) {
 
 // --- 3. UI COMPONENTS ---
 
-const SmartInput = ({ 
-  value, meta, locked, onChange 
-}: { value: number, meta: any, locked: boolean, onChange: (v: number) => void }) => {
+const SmartInput = ({ value, meta, locked, onChange }: any) => {
   return (
     <div className="flex flex-col items-end gap-0.5">
       <input
         type="text"
         disabled={locked}
         value={money(value)}
-        onChange={e => {
-            const n = Number(e.target.value.replace(/[^\d]/g, ''))
-            onChange(n)
-        }}
+        onChange={e => onChange(Number(e.target.value.replace(/[^\d]/g, '')))}
         className={`w-32 bg-transparent text-right border-b border-transparent hover:border-white/20 focus:border-indigo-500 outline-none transition-colors text-sm ${locked ? 'opacity-50 cursor-not-allowed text-zinc-500' : 'text-zinc-100'}`}
       />
       <div className="text-[10px] text-muted-foreground flex gap-2">
-         {meta?.prev1_est && <span title="Прогноз базы (прошлый мес)">База: {money(meta.prev1_est)}</span>}
-         {meta?.share && <span title="Историческая доля выручки">Доля: {meta.share}</span>}
+         {meta?.prev1_est && <span title="База">База: {money(meta.prev1_est)}</span>}
+         {meta?.share && <span title="Доля">Доля: {meta.share}</span>}
       </div>
     </div>
+  )
+}
+
+function RowItem({ row, name, isMain, onChange }: any) {
+  return (
+    <tr className={`group hover:bg-white/[0.02] transition-colors ${isMain ? 'bg-indigo-500/5' : ''}`}>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-3">
+          {isMain ? <TrendingUp className="w-4 h-4 text-indigo-400" /> : <div className="w-1.5 h-1.5 rounded-full bg-zinc-700" />}
+          <span className={isMain ? 'font-medium text-indigo-100' : 'text-zinc-300'}>{name}</span>
+        </div>
+      </td>
+      <td className="px-4 py-2 text-right">
+        <SmartInput 
+          value={row.turnover_target_month} 
+          meta={row.meta} 
+          locked={row.is_locked}
+          onChange={(v: number) => onChange(row.plan_key, { turnover_target_month: v, turnover_target_week: Math.round(v/4.345) })}
+        />
+      </td>
+      <td className="px-4 py-2 text-right">
+         <input 
+            type="number"
+            disabled={row.is_locked}
+            value={row.shifts_target_month}
+            onChange={e => onChange(row.plan_key, { shifts_target_month: Number(e.target.value) })}
+            className={`w-16 bg-transparent text-right border-b border-transparent focus:border-white/20 outline-none ${row.is_locked ? 'text-zinc-500' : 'text-zinc-400'}`}
+         />
+      </td>
+      <td className="px-4 py-2 text-center">
+        <button 
+          onClick={() => onChange(row.plan_key, { is_locked: !row.is_locked })}
+          className={`p-2 rounded hover:bg-white/10 ${row.is_locked ? 'text-amber-500' : 'text-zinc-600'}`}
+        >
+          {row.is_locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+        </button>
+      </td>
+    </tr>
   )
 }
 
@@ -323,7 +366,7 @@ export default function KPIPlansPage() {
   const [month, setMonth] = useState(() => {
     const d = new Date()
     d.setMonth(d.getMonth() + 1)
-    return d.toISOString().slice(0, 7) + '-01'
+    return d.toISOString().slice(0, 7) + '-01' // YYYY-MM-01
   })
 
   const { rows, operatorNames, loading, status, load, generate, save, updateRow } = useKpiManager(month)
@@ -337,11 +380,11 @@ export default function KPIPlansPage() {
     rows.forEach(r => {
       if (r.entity_type === 'role') {
         roles.push(r)
-        return
+      } else {
+        const key = r.company_code || 'unknown'
+        if (!groups[key]) groups[key] = []
+        groups[key].push(r)
       }
-      const key = r.company_code || 'unknown'
-      if (!groups[key]) groups[key] = []
-      groups[key].push(r)
     })
     return { groups, roles }
   }, [rows])
@@ -357,7 +400,6 @@ export default function KPIPlansPage() {
       <main className="flex-1 overflow-auto p-6 md:p-10">
         <div className="max-w-5xl mx-auto space-y-8">
           
-          {/* Header Controls */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-6 border-b border-white/5">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Планирование KPI</h1>
@@ -374,38 +416,23 @@ export default function KPIPlansPage() {
                  className="bg-transparent border-none text-sm px-3 outline-none text-white"
                />
                <div className="w-px h-6 bg-white/10" />
-               
-               <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
-                 <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-               </Button>
-               
-               <Button variant="secondary" size="sm" onClick={generate} disabled={loading}>
-                 <Wand2 className="w-4 h-4 mr-2 text-indigo-400" />
-                 Генерировать
-               </Button>
-               
-               <Button size="sm" onClick={save} disabled={loading} className="bg-indigo-600 hover:bg-indigo-500 text-white">
-                 <Save className="w-4 h-4 mr-2" />
-                 Сохранить
-               </Button>
+               <Button variant="ghost" size="sm" onClick={load} disabled={loading}><RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></Button>
+               <Button variant="secondary" size="sm" onClick={generate} disabled={loading}><Wand2 className="w-4 h-4 mr-2 text-indigo-400" /> Генерировать</Button>
+               <Button size="sm" onClick={save} disabled={loading} className="bg-indigo-600 hover:bg-indigo-500 text-white"><Save className="w-4 h-4 mr-2" /> Сохранить</Button>
             </div>
           </div>
 
-          {/* Status Bar */}
           {status && (
-            <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${status.type === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+            <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${status.type === 'error' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
                {status.type === 'error' ? <AlertTriangle className="w-4 h-4"/> : <CheckCircle2 className="w-4 h-4"/>}
                {status.msg}
             </div>
           )}
 
-          {/* Content */}
           {loading && rows.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground">Загрузка...</div>
           ) : (
             <div className="space-y-10">
-              
-              {/* 1. Companies */}
               {Object.entries(groupedData.groups).sort().map(([code, items]) => {
                 const collective = items.find(i => i.entity_type === 'collective')
                 const operators = items.filter(i => i.entity_type === 'operator')
@@ -416,13 +443,8 @@ export default function KPIPlansPage() {
                     <div className="flex items-center gap-3">
                        <h2 className="text-xl font-bold capitalize text-zinc-200">F16 {code}</h2>
                        <div className="h-px flex-1 bg-white/5" />
-                       {collective && (
-                         <span className="text-xs font-mono text-zinc-500">
-                           Цель: {money(collective.turnover_target_month)}
-                         </span>
-                       )}
+                       {collective && <span className="text-xs font-mono text-zinc-500">Цель: {money(collective.turnover_target_month)}</span>}
                     </div>
-
                     <Card className="bg-[#0A0A0A] border-white/5 overflow-hidden">
                       <table className="w-full text-sm">
                         <thead className="bg-white/[0.02] text-xs text-muted-foreground uppercase">
@@ -434,44 +456,22 @@ export default function KPIPlansPage() {
                            </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                           {collective && (
-                             <RowItem 
-                               row={collective} 
-                               name="Команда (Общая цель)" 
-                               isMain 
-                               onChange={updateRow} 
-                             />
-                           )}
-                           {operators.map(op => (
-                             <RowItem 
-                               key={op.plan_key}
-                               row={op}
-                               name={operatorNames[op.operator_id || ''] || op.operator_id || 'ID?'}
-                               onChange={updateRow}
-                             />
-                           ))}
+                           {collective && <RowItem row={collective} name="Команда (Общая цель)" isMain onChange={updateRow} />}
+                           {operators.map(op => <RowItem key={op.plan_key} row={op} name={operatorNames[op.operator_id || ''] || op.operator_id || 'ID?'} onChange={updateRow} />)}
                         </tbody>
                       </table>
                     </Card>
                   </section>
                 )
               })}
-
-              {/* 2. Roles */}
+              
               {groupedData.roles.length > 0 && (
                  <section className="space-y-3">
                     <h2 className="text-lg font-bold text-zinc-400">Менеджмент</h2>
                     <Card className="bg-[#0A0A0A] border-white/5">
                       <table className="w-full text-sm">
                         <tbody className="divide-y divide-white/5">
-                          {groupedData.roles.map(r => (
-                             <RowItem 
-                               key={r.plan_key}
-                               row={r}
-                               name={r.role_code === 'supervisor' ? 'Руководитель' : 'Маркетолог'}
-                               onChange={updateRow}
-                             />
-                          ))}
+                          {groupedData.roles.map(r => <RowItem key={r.plan_key} row={r} name={r.role_code === 'supervisor' ? 'Руководитель' : 'Маркетолог'} onChange={updateRow} />)}
                         </tbody>
                       </table>
                     </Card>
@@ -482,43 +482,5 @@ export default function KPIPlansPage() {
         </div>
       </main>
     </div>
-  )
-}
-
-function RowItem({ row, name, isMain, onChange }: { row: KpiRow, name: string, isMain?: boolean, onChange: any }) {
-  return (
-    <tr className={`group hover:bg-white/[0.02] transition-colors ${isMain ? 'bg-indigo-500/5' : ''}`}>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-3">
-          {isMain ? <TrendingUp className="w-4 h-4 text-indigo-400" /> : <div className="w-1.5 h-1.5 rounded-full bg-zinc-700" />}
-          <span className={isMain ? 'font-medium text-indigo-100' : 'text-zinc-300'}>{name}</span>
-        </div>
-      </td>
-      <td className="px-4 py-2 text-right">
-        <SmartInput 
-          value={row.turnover_target_month} 
-          meta={row.meta} 
-          locked={row.is_locked}
-          onChange={v => onChange(row.plan_key, { turnover_target_month: v, turnover_target_week: Math.round(v/4.345) })}
-        />
-      </td>
-      <td className="px-4 py-2 text-right">
-         <input 
-            type="number"
-            disabled={row.is_locked}
-            value={row.shifts_target_month}
-            onChange={e => onChange(row.plan_key, { shifts_target_month: Number(e.target.value) })}
-            className={`w-16 bg-transparent text-right border-b border-transparent focus:border-white/20 outline-none ${row.is_locked ? 'text-zinc-500 cursor-not-allowed' : 'text-zinc-400'}`}
-         />
-      </td>
-      <td className="px-4 py-2 text-center">
-        <button 
-          onClick={() => onChange(row.plan_key, { is_locked: !row.is_locked })}
-          className={`p-2 rounded hover:bg-white/10 ${row.is_locked ? 'text-amber-500' : 'text-zinc-600'}`}
-        >
-          {row.is_locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-        </button>
-      </td>
-    </tr>
   )
 }
