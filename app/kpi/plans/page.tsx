@@ -22,6 +22,12 @@ type KpiRow = {
   meta: any
 }
 
+type IncomeNameRow = {
+  operator_id: string | null
+  operator_name: string | null
+  date: string
+}
+
 const ruMoney = (n: number) =>
   (n ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 
@@ -32,13 +38,14 @@ const weeksInMonth = (monthStartISO: string) => {
   return days / 7
 }
 
-function toMonthStart(date = new Date()) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
+const monthStartMinus = (monthStartISO: string, minusMonths: number) => {
+  const d = new Date(monthStartISO + 'T00:00:00')
+  const x = new Date(d.getFullYear(), d.getMonth() - minusMonths, 1)
+  const y = x.getFullYear()
+  const m = String(x.getMonth() + 1).padStart(2, '0')
   return `${y}-${m}-01`
 }
 
-// инпут с пробелами (как ты хотел “понятные цифры”)
 function MoneyInput({
   value,
   disabled,
@@ -82,7 +89,7 @@ function MoneyInput({
 }
 
 export default function KpiPlansPage() {
-  const [monthStart, setMonthStart] = useState(() => toMonthStart(new Date(2026, 0, 1))) // можно поставить текущий месяц
+  const [monthStart, setMonthStart] = useState('2026-01-01')
   const [growthPct, setGrowthPct] = useState(5)
 
   const [rows, setRows] = useState<KpiRow[]>([])
@@ -93,7 +100,69 @@ export default function KpiPlansPage() {
   const [error, setError] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
 
+  const [operatorNames, setOperatorNames] = useState<Record<string, string>>({})
+
   const w = useMemo(() => weeksInMonth(monthStart), [monthStart])
+
+  const mergedRows = useMemo(() => {
+    return rows.map((r) => ({ ...r, ...(dirty[r.plan_key] || {}) }))
+  }, [rows, dirty])
+
+  const summary = useMemo(() => {
+    const collect = mergedRows.filter((r) => r.entity_type === 'collective')
+    const totalMonth = collect.reduce(
+      (s, r) => s + (r.turnover_target_month || 0),
+      0,
+    )
+    const totalWeek = Math.round(totalMonth / (w || 1))
+    const shifts = mergedRows
+      .filter((r) => r.entity_type === 'operator')
+      .reduce((s, r) => s + (r.shifts_target_month || 0), 0)
+
+    return { totalMonth, totalWeek, shifts, rows: mergedRows.length }
+  }, [mergedRows, w])
+
+  const setField = (plan_key: string, patch: Partial<KpiRow>) => {
+    setDirty((prev) => ({
+      ...prev,
+      [plan_key]: { ...(prev[plan_key] || {}), ...patch },
+    }))
+  }
+
+  const loadOperatorNamesFromIncomes = async (operatorIds: string[]) => {
+    if (operatorIds.length === 0) {
+      setOperatorNames({})
+      return
+    }
+
+    // берём 2 месяца ДО выбранного месяца (как ты и хотел)
+    const fromDate = monthStartMinus(monthStart, 2)
+
+    // вытаскиваем последние имена (по дате DESC)
+    const { data, error } = await supabase
+      .from('incomes')
+      .select('operator_id, operator_name, date')
+      .in('operator_id', operatorIds)
+      .gte('date', fromDate)
+      .lt('date', monthStart)
+      .order('date', { ascending: false })
+      .limit(5000)
+
+    if (error) {
+      console.error('loadOperatorNamesFromIncomes error', error)
+      // не роняем страницу, просто без имён
+      return
+    }
+
+    const map: Record<string, string> = {}
+    for (const r of (data || []) as IncomeNameRow[]) {
+      if (!r.operator_id) continue
+      if (map[r.operator_id]) continue // уже взяли самое свежее
+      const name = (r.operator_name || '').trim()
+      if (name) map[r.operator_id] = name
+    }
+    setOperatorNames(map)
+  }
 
   const load = async () => {
     setLoading(true)
@@ -118,7 +187,18 @@ export default function KpiPlansPage() {
       return
     }
 
-    setRows((data || []) as KpiRow[])
+    const list = (data || []) as KpiRow[]
+    setRows(list)
+
+    const ids = Array.from(
+      new Set(
+        list
+          .filter((r) => r.entity_type === 'operator' && r.operator_id)
+          .map((r) => r.operator_id!) as string[],
+      ),
+    )
+    await loadOperatorNamesFromIncomes(ids)
+
     setLoading(false)
   }
 
@@ -126,28 +206,6 @@ export default function KpiPlansPage() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthStart])
-
-  const mergedRows = useMemo(() => {
-    return rows.map((r) => ({
-      ...r,
-      ...(dirty[r.plan_key] || {}),
-    }))
-  }, [rows, dirty])
-
-  const summary = useMemo(() => {
-    const collect = mergedRows.filter((r) => r.entity_type === 'collective')
-    const totalMonth = collect.reduce((s, r) => s + (r.turnover_target_month || 0), 0)
-    const totalWeek = Math.round(totalMonth / (w || 1))
-    const shifts = mergedRows
-      .filter((r) => r.entity_type === 'operator')
-      .reduce((s, r) => s + (r.shifts_target_month || 0), 0)
-
-    return { totalMonth, totalWeek, shifts, rows: mergedRows.length }
-  }, [mergedRows, w])
-
-  const setField = (plan_key: string, patch: Partial<KpiRow>) => {
-    setDirty((prev) => ({ ...prev, [plan_key]: { ...(prev[plan_key] || {}), ...patch } }))
-  }
 
   const saveAll = async () => {
     setError(null)
@@ -165,12 +223,12 @@ export default function KpiPlansPage() {
       return
     }
 
-    // аккуратно пересчитаем weekly из monthly (чтобы было единообразно)
+    // weekly считаем от monthly (единая логика)
     const normalized = updates.map((u) => {
       const month = Number(u.turnover_target_month ?? 0)
       const shiftsMonth = Number(u.shifts_target_month ?? 0)
       const weekTurn = Math.round(month / (w || 1))
-      const weekShifts = Number(((shiftsMonth / (w || 1)) as number).toFixed(2))
+      const weekShifts = Number((shiftsMonth / (w || 1)).toFixed(2))
 
       return {
         plan_key: u.plan_key,
@@ -182,7 +240,9 @@ export default function KpiPlansPage() {
       }
     })
 
-    const { error } = await supabase.from('kpi_plans').upsert(normalized, { onConflict: 'plan_key' })
+    const { error } = await supabase
+      .from('kpi_plans')
+      .upsert(normalized, { onConflict: 'plan_key' })
 
     setSaving(false)
 
@@ -224,13 +284,29 @@ export default function KpiPlansPage() {
     return 'Роль'
   }
 
-  const who = (r: KpiRow) => {
+  const companyTitle = (code: string | null) => {
+    if (code === 'arena') return 'F16 Arena'
+    if (code === 'ramen') return 'F16 Ramen'
+    if (code === 'extra') return 'F16 Extra'
+    return code || '—'
+  }
+
+  const whoTitle = (r: KpiRow) => {
     if (r.entity_type === 'role') {
       if (r.role_code === 'supervisor') return 'Руководитель операторов'
       if (r.role_code === 'marketing') return 'Маркетолог'
       return r.role_code || '—'
     }
-    return '—'
+
+    if (r.entity_type === 'operator') {
+      const id = r.operator_id || ''
+      const name = id ? operatorNames[id] : ''
+      if (name) return name
+      // fallback
+      return id ? `Оператор ${id.slice(0, 8)}` : '—'
+    }
+
+    return 'Коллектив'
   }
 
   return (
@@ -241,9 +317,13 @@ export default function KpiPlansPage() {
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold">KPI планы (коллектив + личные)</h1>
+              <h1 className="text-2xl font-bold">
+                KPI планы (коллектив + личные)
+              </h1>
               <p className="text-xs text-muted-foreground">
-                Генерация берёт <b>2 предыдущих месяца</b> и строит цели на выбранный месяц.
+                Генерация берёт <b>2 предыдущих месяца</b> и строит цели на
+                выбранный месяц. Имена операторов берём из{' '}
+                <code>incomes.operator_name</code>.
               </p>
             </div>
 
@@ -268,12 +348,22 @@ export default function KpiPlansPage() {
                 />
               </div>
 
-              <Button size="sm" className="gap-2" onClick={generate} disabled={generating}>
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={generate}
+                disabled={generating}
+              >
                 <Wand2 className="w-4 h-4" />
                 {generating ? 'Генерирую…' : 'Сгенерировать план'}
               </Button>
 
-              <Button size="sm" className="gap-2" onClick={saveAll} disabled={saving}>
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={saveAll}
+                disabled={saving}
+              >
                 <Save className="w-4 h-4" />
                 {saving ? 'Сохраняю…' : `Сохранить (${Object.keys(dirty).length})`}
               </Button>
@@ -295,7 +385,9 @@ export default function KpiPlansPage() {
           {/* Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Card className="p-4 border-border bg-card/70">
-              <div className="text-xs text-muted-foreground">Коллективный план (месяц)</div>
+              <div className="text-xs text-muted-foreground">
+                Коллективный план (месяц)
+              </div>
               <div className="text-2xl font-bold">{ruMoney(summary.totalMonth)}</div>
               <div className="text-xs text-muted-foreground mt-1">
                 Неделя: {ruMoney(summary.totalWeek)}
@@ -357,18 +449,15 @@ export default function KpiPlansPage() {
                     <tr key={r.plan_key} className="border-t border-border/40 hover:bg-white/5">
                       <td className="px-3 py-2">{label(r)}</td>
 
-                      <td className="px-3 py-2">
-                        {r.company_code === 'arena'
-                          ? 'F16 Arena'
-                          : r.company_code === 'ramen'
-                            ? 'F16 Ramen'
-                            : r.company_code === 'extra'
-                              ? 'F16 Extra'
-                              : r.company_code || '—'}
-                      </td>
+                      <td className="px-3 py-2">{companyTitle(r.company_code)}</td>
 
                       <td className="px-3 py-2">
-                        {r.entity_type === 'operator' ? r.operator_id?.slice(0, 8) : who(r)}
+                        <div className="font-medium">{whoTitle(r)}</div>
+                        {r.entity_type === 'operator' && r.operator_id && (
+                          <div className="text-[10px] text-muted-foreground">
+                            id: {r.operator_id}
+                          </div>
+                        )}
                       </td>
 
                       <td className="px-3 py-2">
@@ -390,14 +479,18 @@ export default function KpiPlansPage() {
                           type="number"
                           value={r.shifts_target_month ?? 0}
                           onChange={(e) =>
-                            setField(r.plan_key, { shifts_target_month: Number(e.target.value || 0) })
+                            setField(r.plan_key, {
+                              shifts_target_month: Number(e.target.value || 0),
+                            })
                           }
                           className="bg-input border border-border rounded px-2 py-1 text-right text-xs w-[110px] disabled:opacity-60"
                         />
                       </td>
 
                       <td className="px-3 py-2 text-right">
-                        <div className="text-xs font-semibold">{Number((r.shifts_target_month / (w || 1)).toFixed(2))}</div>
+                        <div className="text-xs font-semibold">
+                          {Number((r.shifts_target_month / (w || 1)).toFixed(2))}
+                        </div>
                         <div className="text-[10px] text-muted-foreground">авто из “смены мес”</div>
                       </td>
 
@@ -415,7 +508,7 @@ export default function KpiPlansPage() {
           </Card>
 
           <Card className="p-4 border-border bg-card/70 text-xs text-muted-foreground leading-relaxed">
-            <b>LOCK</b> — если включишь, генератор больше не перезапишет строку. (И да, это не баг — это защита от “ой, я нажал”.)
+            <b>LOCK</b> — если включишь, генератор больше не перезапишет строку.
           </Card>
         </div>
       </main>
