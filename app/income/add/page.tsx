@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, FormEvent } from 'react'
+import { useEffect, useMemo, useState, FormEvent, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -39,13 +39,12 @@ type Operator = {
 type ShiftType = 'day' | 'night'
 type ZoneType = 'pc' | 'ps5' | 'vr' | 'ramen' | 'other'
 
-const getToday = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-    2,
-    '0',
-  )}-${String(d.getDate()).padStart(2, '0')}`
+// --- даты без UTC-сдвига ---
+const toISODateLocal = (d: Date) => {
+  const t = d.getTime() - d.getTimezoneOffset() * 60_000
+  return new Date(t).toISOString().slice(0, 10)
 }
+const getTodayISO = () => toISODateLocal(new Date())
 
 const parseAmount = (v: string) => {
   if (!v) return 0
@@ -56,8 +55,7 @@ const parseAmount = (v: string) => {
 export default function AddIncomePage() {
   const router = useRouter()
 
-  const today = useMemo(() => getToday(), [])
-  const [date, setDate] = useState(today)
+  const [date, setDate] = useState(getTodayISO())
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
@@ -68,12 +66,12 @@ export default function AddIncomePage() {
 
   const [shift, setShift] = useState<ShiftType>('day')
 
-  // Поля для обычных компаний
+  // Обычные компании
   const [cash, setCash] = useState('')
   const [kaspi, setKaspi] = useState('')
   const [card, setCard] = useState('')
 
-  // Поля для Extra
+  // Extra
   const [ps5Amount, setPs5Amount] = useState('')
   const [vrAmount, setVrAmount] = useState('')
 
@@ -81,31 +79,39 @@ export default function AddIncomePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // ---- загрузка справочников ----
   useEffect(() => {
     const load = async () => {
       setLoadingMeta(true)
-      const [{ data: compData, error: compErr }, { data: opData, error: opErr }] =
-        await Promise.all([
-          supabase.from('companies').select('id, name, code').order('name'),
-          supabase
-            .from('operators')
-            .select('id, name, short_name, is_active')
-            .eq('is_active', true)
-            .order('name'),
-        ])
+      setError(null)
 
-      if (compErr || opErr) {
-        console.error('Income add load error', { compErr, opErr })
+      const [compRes, opRes] = await Promise.all([
+        supabase.from('companies').select('id, name, code').order('name'),
+        supabase
+          .from('operators')
+          .select('id, name, short_name, is_active')
+          .eq('is_active', true)
+          .order('name'),
+      ])
+
+      if (compRes.error || opRes.error) {
+        console.error('Income add load error', {
+          compErr: compRes.error,
+          opErr: opRes.error,
+        })
         setError('Не удалось загрузить компании/операторов')
+        setCompanies(compRes.data || [])
+        setOperators(opRes.data || [])
       } else {
-        setCompanies(compData || [])
-        setOperators(opData || [])
-        if (compData && compData.length > 0) {
-          setCompanyId(compData[0].id)
-        }
+        setCompanies(compRes.data || [])
+        setOperators(opRes.data || [])
+
+        if (compRes.data?.length) setCompanyId(compRes.data[0].id)
       }
+
       setLoadingMeta(false)
     }
+
     load()
   }, [])
 
@@ -113,34 +119,69 @@ export default function AddIncomePage() {
     () => companies.find((c) => c.id === companyId) || null,
     [companies, companyId],
   )
+
   const isExtra = selectedCompany?.code === 'extra'
   const isArena = selectedCompany?.code === 'arena'
   const isRamen = selectedCompany?.code === 'ramen'
 
-  const getZone = (): ZoneType => {
+  const getZone = useCallback((): ZoneType => {
     if (isArena) return 'pc'
     if (isRamen) return 'ramen'
     return 'other'
-  }
+  }, [isArena, isRamen])
+
+  // ---- умный сброс полей при смене компании ----
+  useEffect(() => {
+    setError(null)
+    setComment((v) => v) // не трогаем
+
+    // чтобы не мешались суммы между режимами
+    setCash('')
+    setKaspi('')
+    setCard('')
+    setPs5Amount('')
+    setVrAmount('')
+  }, [companyId])
+
+  // ---- валидация (для дизейбла кнопки и норм ошибок) ----
+  const validation = useMemo(() => {
+    if (!companyId) return { ok: false, msg: 'Выберите компанию' }
+    if (!operatorId) return { ok: false, msg: 'Выберите оператора смены' }
+    if (!date) return { ok: false, msg: 'Выберите дату' }
+    if (!operators.length) return { ok: false, msg: 'Нет активных операторов' }
+
+    if (isExtra) {
+      const ps5 = parseAmount(ps5Amount)
+      const vr = parseAmount(vrAmount)
+      if (ps5 <= 0 && vr <= 0) return { ok: false, msg: 'Укажите сумму для PS5 или VR' }
+      return { ok: true, msg: '' }
+    }
+
+    const c = parseAmount(cash)
+    const k = parseAmount(kaspi)
+    const cd = parseAmount(card)
+    if (c <= 0 && k <= 0 && cd <= 0) return { ok: false, msg: 'Введите сумму дохода' }
+
+    return { ok: true, msg: '' }
+  }, [companyId, operatorId, date, operators.length, isExtra, ps5Amount, vrAmount, cash, kaspi, card])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
+
     setError(null)
     setSaving(true)
 
     try {
-      if (!companyId) throw new Error('Выберите компанию')
-      if (!operatorId) throw new Error('Выберите оператора смены')
+      if (!validation.ok) throw new Error(validation.msg)
 
-      // Extra (виртуальная выручка по зонам)
       if (isExtra) {
         const ps5 = parseAmount(ps5Amount)
         const vr = parseAmount(vrAmount)
 
-        if (ps5 <= 0 && vr <= 0)
-          throw new Error('Укажите сумму для PS5 или VR')
-
         const rows: any[] = []
+        const baseComment = comment.trim()
+
         if (ps5 > 0) {
           rows.push({
             date,
@@ -151,7 +192,7 @@ export default function AddIncomePage() {
             cash_amount: ps5,
             kaspi_amount: 0,
             card_amount: 0,
-            comment: comment ? `${comment} (PS5)` : 'PS5',
+            comment: baseComment ? `${baseComment} • PS5` : 'PS5',
             is_virtual: true,
           })
         }
@@ -165,7 +206,7 @@ export default function AddIncomePage() {
             cash_amount: vr,
             kaspi_amount: 0,
             card_amount: 0,
-            comment: comment ? `${comment} (VR)` : 'VR',
+            comment: baseComment ? `${baseComment} • VR` : 'VR',
             is_virtual: true,
           })
         }
@@ -173,13 +214,9 @@ export default function AddIncomePage() {
         const { error } = await supabase.from('incomes').insert(rows)
         if (error) throw error
       } else {
-        // Обычные точки: реальные деньги
         const cashVal = parseAmount(cash)
         const kaspiVal = parseAmount(kaspi)
         const cardVal = parseAmount(card)
-
-        if (cashVal <= 0 && kaspiVal <= 0 && cardVal <= 0)
-          throw new Error('Введите сумму дохода')
 
         const { error } = await supabase.from('incomes').insert([
           {
@@ -191,17 +228,18 @@ export default function AddIncomePage() {
             cash_amount: cashVal,
             kaspi_amount: kaspiVal,
             card_amount: cardVal,
-            comment: comment || null,
+            comment: comment.trim() || null,
             is_virtual: false,
           },
         ])
+
         if (error) throw error
       }
 
       router.push('/income')
     } catch (err: any) {
       console.error(err)
-      setError(err.message || 'Ошибка при сохранении')
+      setError(err?.message || 'Ошибка при сохранении')
       setSaving(false)
     }
   }
@@ -223,9 +261,7 @@ export default function AddIncomePage() {
       >
         <Icon className={`w-6 h-6 ${active ? 'text-accent' : ''}`} />
         <span className="text-xs font-bold text-center">{c.name}</span>
-        {active && (
-          <div className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full animate-pulse" />
-        )}
+        {active && <div className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full animate-pulse" />}
       </div>
     )
   }
@@ -244,18 +280,20 @@ export default function AddIncomePage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                Новая запись
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                Внесение выручки в кассу
-              </p>
+              <h1 className="text-2xl font-bold text-foreground">Новая запись</h1>
+              <p className="text-xs text-muted-foreground">Внесение выручки в кассу</p>
             </div>
           </div>
 
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg text-sm flex items-center gap-2">
               <span className="text-lg">⚠️</span> {error}
+            </div>
+          )}
+
+          {!error && !validation.ok && (
+            <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 rounded-lg text-sm flex items-center gap-2">
+              <span className="text-lg">⚠️</span> {validation.msg}
             </div>
           )}
 
@@ -268,9 +306,7 @@ export default function AddIncomePage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="relative">
-                  <label className="text-xs text-muted-foreground mb-1.5 block ml-1">
-                    Дата
-                  </label>
+                  <label className="text-xs text-muted-foreground mb-1.5 block ml-1">Дата</label>
                   <div className="relative">
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
@@ -283,9 +319,7 @@ export default function AddIncomePage() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block ml-1">
-                    Смена
-                  </label>
+                  <label className="text-xs text-muted-foreground mb-1.5 block ml-1">Смена</label>
                   <div className="grid grid-cols-2 bg-input/50 p-1 rounded-lg border border-border">
                     <button
                       type="button"
@@ -315,13 +349,9 @@ export default function AddIncomePage() {
 
               {/* Компания */}
               <div>
-                <label className="text-xs text-muted-foreground mb-2 block ml-1">
-                  Точка (Компания)
-                </label>
+                <label className="text-xs text-muted-foreground mb-2 block ml-1">Точка (Компания)</label>
                 {loadingMeta ? (
-                  <div className="text-sm text-muted-foreground animate-pulse">
-                    Загрузка списка...
-                  </div>
+                  <div className="text-sm text-muted-foreground animate-pulse">Загрузка списка...</div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {companies.map((c) => (
@@ -333,17 +363,11 @@ export default function AddIncomePage() {
 
               {/* Оператор */}
               <div>
-                <label className="text-xs text-muted-foreground mb-2 block ml-1">
-                  Оператор смены
-                </label>
+                <label className="text-xs text-muted-foreground mb-2 block ml-1">Оператор смены</label>
                 {loadingMeta ? (
-                  <div className="text-xs text-muted-foreground">
-                    Загрузка операторов...
-                  </div>
+                  <div className="text-xs text-muted-foreground">Загрузка операторов...</div>
                 ) : operators.length === 0 ? (
-                  <p className="text-xs text-yellow-500">
-                    Операторов нет. Добавьте их в разделе «Операторы».
-                  </p>
+                  <p className="text-xs text-yellow-500">Операторов нет. Добавьте их в разделе «Операторы».</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {operators.map((op) => {
@@ -372,11 +396,7 @@ export default function AddIncomePage() {
             {/* 2. Суммы */}
             <Card className="p-5 border-border bg-card neon-glow relative overflow-hidden">
               <div className="absolute -right-6 -top-6 opacity-[0.03] pointer-events-none">
-                {isExtra ? (
-                  <Gamepad2 className="w-48 h-48" />
-                ) : (
-                  <Wallet className="w-48 h-48" />
-                )}
+                {isExtra ? <Gamepad2 className="w-48 h-48" /> : <Wallet className="w-48 h-48" />}
               </div>
 
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
@@ -388,10 +408,10 @@ export default function AddIncomePage() {
                   <>
                     <div>
                       <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                        <Gamepad2 className="w-4 h-4 text-purple-500" />{' '}
-                        PlayStation 5
+                        <Gamepad2 className="w-4 h-4 text-purple-500" /> PlayStation 5
                       </label>
                       <input
+                        inputMode="numeric"
                         type="number"
                         placeholder="0"
                         min="0"
@@ -400,11 +420,13 @@ export default function AddIncomePage() {
                         className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all"
                       />
                     </div>
+
                     <div>
                       <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
                         <Eye className="w-4 h-4 text-cyan-500" /> VR Зона
                       </label>
                       <input
+                        inputMode="numeric"
                         type="number"
                         placeholder="0"
                         min="0"
@@ -418,10 +440,10 @@ export default function AddIncomePage() {
                   <>
                     <div>
                       <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                        <Wallet className="w-4 h-4 text-green-500" /> Наличные
-                        (Cash)
+                        <Wallet className="w-4 h-4 text-green-500" /> Наличные (Cash)
                       </label>
                       <input
+                        inputMode="numeric"
                         type="number"
                         placeholder="0"
                         min="0"
@@ -430,12 +452,13 @@ export default function AddIncomePage() {
                         className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-green-500 focus:ring-1 focus:ring-green-500/50 transition-all"
                       />
                     </div>
+
                     <div>
                       <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-red-500" /> Kaspi
-                        QR
+                        <CreditCard className="w-4 h-4 text-red-500" /> Kaspi QR
                       </label>
                       <input
+                        inputMode="numeric"
                         type="number"
                         placeholder="0"
                         min="0"
@@ -444,28 +467,28 @@ export default function AddIncomePage() {
                         className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-red-500 focus:ring-1 focus:ring-red-500/50 transition-all"
                       />
                     </div>
-                    {/* Если понадобится карта – раскомментируешь */}
-                    {/* <div>
-                      <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-blue-500" /> Карта
+
+                    {/* Логика карты уже готова — хочешь, просто покажи поле */}
+                    <div className="sm:col-span-2">
+                      <label className="text-xs text-muted-foreground mb-1.5 block">
+                        Карта (если используете) — можно оставить 0
                       </label>
                       <input
+                        inputMode="numeric"
                         type="number"
                         placeholder="0"
                         min="0"
                         value={card}
                         onChange={(e) => setCard(e.target.value)}
-                        className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-blue-500 transition-all"
+                        className="w-full bg-input border border-border rounded-lg py-2.5 px-4 text-sm focus:border-accent transition-colors"
                       />
-                    </div> */}
+                    </div>
                   </>
                 )}
               </div>
 
               <div className="mt-6">
-                <label className="text-xs text-muted-foreground mb-1.5 block">
-                  Комментарий (необязательно)
-                </label>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Комментарий (необязательно)</label>
                 <textarea
                   rows={2}
                   value={comment}
@@ -479,18 +502,16 @@ export default function AddIncomePage() {
             {/* Кнопки */}
             <div className="flex gap-4 pt-2">
               <Link href="/income" className="flex-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-12 border-border hover:bg-white/5"
-                >
+                <Button type="button" variant="outline" className="w-full h-12 border-border hover:bg-white/5">
                   Отмена
                 </Button>
               </Link>
+
               <Button
                 type="submit"
-                disabled={saving}
-                className="flex-[2] h-12 bg-accent text-accent-foreground hover:bg-accent/90 text-base font-medium shadow-[0_0_20px_rgba(168,85,247,0.4)]"
+                disabled={saving || !validation.ok}
+                className="flex-[2] h-12 bg-accent text-accent-foreground hover:bg-accent/90 text-base font-medium shadow-[0_0_20px_rgba(168,85,247,0.4)] disabled:opacity-60"
+                title={!validation.ok ? validation.msg : ''}
               >
                 {saving ? (
                   'Сохранение...'
