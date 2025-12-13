@@ -19,6 +19,7 @@ import {
   UserCircle2,
   Trophy,
   MapPin,
+  TrendingUp, // <--- 1. Добавил иконку
 } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -407,6 +408,13 @@ export default function IncomePage() {
             </div>
 
             <div className="flex gap-2">
+              {/* --- 2. НОВАЯ КНОПКА АНАЛИТИКИ --- */}
+              <Link href="/income/analytics">
+                <Button variant="outline" size="sm" className="gap-2 text-xs border-accent/30 hover:bg-accent/5">
+                  <TrendingUp className="w-4 h-4" /> Аналитика
+                </Button>
+              </Link>
+              
               <Button
                 variant="outline"
                 size="sm"
