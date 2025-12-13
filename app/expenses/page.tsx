@@ -17,6 +17,7 @@ import {
   CalendarDays,
   ChevronDown,
   RefreshCw,
+  BarChart3, // ✅ добавил
 } from 'lucide-react'
 
 // ================== TYPES ==================
@@ -133,10 +134,7 @@ export default function ExpensesPage() {
   // ================== INIT: COMPANIES ==================
   useEffect(() => {
     const fetchCompanies = async () => {
-      const { data, error } = await supabase
-        .from('companies')
-        .select('id, name, code')
-        .order('name')
+      const { data, error } = await supabase.from('companies').select('id, name, code').order('name')
       if (!error && data) setCompanies(data as Company[])
     }
     fetchCompanies()
@@ -192,16 +190,16 @@ export default function ExpensesPage() {
       // search (server side)
       const term = searchDebounced
       if (term.length >= SEARCH_MIN_LEN) {
-        // OR: comment ilike OR category ilike
-        // Важно: экранируем % и , не нужно — supabase сам нормально, но мы не вставляем кавычки.
         q = q.or(`comment.ilike.%${term}%,category.ilike.%${term}%`)
       }
 
       // sort
       if (sortMode === 'date_desc') q = q.order('date', { ascending: false })
       if (sortMode === 'date_asc') q = q.order('date', { ascending: true })
-      if (sortMode === 'amount_desc') q = q.order('cash_amount', { ascending: false }).order('kaspi_amount', { ascending: false })
-      if (sortMode === 'amount_asc') q = q.order('cash_amount', { ascending: true }).order('kaspi_amount', { ascending: true })
+      if (sortMode === 'amount_desc')
+        q = q.order('cash_amount', { ascending: false }).order('kaspi_amount', { ascending: false })
+      if (sortMode === 'amount_asc')
+        q = q.order('cash_amount', { ascending: true }).order('kaspi_amount', { ascending: true })
 
       return q
     },
@@ -220,7 +218,6 @@ export default function ExpensesPage() {
       }
 
       try {
-        // жесткий лимит, чтоб не превратить Supabase в кладбище
         if (targetPage * PAGE_SIZE >= MAX_ROWS_HARD_LIMIT) {
           setHasMore(false)
           return
@@ -230,11 +227,12 @@ export default function ExpensesPage() {
 
         // если пришёл старый ответ — игнорируем
         if (myReqId !== reqIdRef.current) return
-
         if (error) throw error
 
         const pageRows = (data || []) as ExpenseRow[]
-        setHasMore(pageRows.length === PAGE_SIZE && (targetPage + 1) * PAGE_SIZE < MAX_ROWS_HARD_LIMIT)
+        setHasMore(
+          pageRows.length === PAGE_SIZE && (targetPage + 1) * PAGE_SIZE < MAX_ROWS_HARD_LIMIT
+        )
 
         if (mode === 'replace') {
           setRows(pageRows)
@@ -363,7 +361,6 @@ export default function ExpensesPage() {
           escapeCSV(r.comment ?? ''),
         ].join(SEP)
       }),
-      // итоговая строка
       ['', 'ИТОГО', '', analytics.cash, analytics.kaspi, analytics.total, ''].map(escapeCSV).join(SEP),
     ].join('\n')
 
@@ -409,8 +406,19 @@ export default function ExpensesPage() {
                 <Download className="w-4 h-4" /> Экспорт
               </Button>
 
+              {/* ✅ КНОПКА АНАЛИЗА */}
+              <Link href="/expenses/analysis">
+                <Button variant="outline" size="sm" className="gap-2 text-xs">
+                  <BarChart3 className="w-4 h-4" />
+                  Анализ
+                </Button>
+              </Link>
+
               <Link href="/expenses/add">
-                <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 text-xs">
+                <Button
+                  size="sm"
+                  className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 text-xs"
+                >
                   <Plus className="w-4 h-4" /> Добавить
                 </Button>
               </Link>
