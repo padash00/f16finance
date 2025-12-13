@@ -1,33 +1,27 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   RefreshCw,
-  Download,
   CalendarDays,
-  Banknote,
-  Smartphone,
-  Tag,
-  Filter,
   ArrowLeft,
-  BarChart3,
-  PieChart as PieIcon,
+  TrendingDown,
   TrendingUp,
-  AlertCircle,
+  Wallet,
+  PieChart as PieIcon,
   Search,
-  LayoutGrid
+  ArrowUpRight
 } from 'lucide-react'
 
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -35,8 +29,7 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend,
-  ReferenceLine
+  Legend
 } from 'recharts'
 
 // ================== TYPES ==================
@@ -50,482 +43,317 @@ type ExpenseRow = {
   comment: string | null
 }
 
-type Company = {
-  id: string
-  name: string
-  code?: string | null
-}
-
-type PayFilter = 'all' | 'cash' | 'kaspi'
-type DateRangePreset = 'today' | 'week' | 'month' | 'year' | 'all'
-type GroupBy = 'day' | 'week' | 'month'
+type Company = { id: string; name: string; code?: string | null }
+type TimeRange = 'week' | 'month' | 'year' | 'all'
 
 // ================== CONFIG ==================
-const PAGE_SIZE = 500
-const MAX_ROWS_HARD_LIMIT = 5000 // Увеличим лимит для хорошего анализа
-const COLORS = ['#2563eb', '#db2777', '#ea580c', '#16a34a', '#9333ea', '#eab308', '#06b6d4', '#64748b']
+const COLORS = ['#3b82f6', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6', '#6366f1']
+const MAX_ROWS = 5000
 
-// ================== DATE HELPERS ==================
-const toISODateLocal = (d: Date) => {
-  const t = d.getTime() - d.getTimezoneOffset() * 60_000
-  return new Date(t).toISOString().slice(0, 10)
+// ================== HELPERS ==================
+const toISO = (d: Date) => {
+    const t = d.getTime() - d.getTimezoneOffset() * 60_000
+    return new Date(t).toISOString().slice(0, 10)
 }
-const parseISODateSafe = (iso: string) => new Date(`${iso}T12:00:00`)
-const todayISO = () => toISODateLocal(new Date())
+const parseDate = (iso: string) => new Date(`${iso}T12:00:00`)
+const formatMoney = (v: number) => Math.round(v).toLocaleString('ru-RU')
 
-const addDaysISO = (iso: string, diff: number) => {
-  const d = parseISODateSafe(iso)
-  d.setDate(d.getDate() + diff)
-  return toISODateLocal(d)
-}
-
-const getStartOfYear = () => toISODateLocal(new Date(new Date().getFullYear(), 0, 1))
-
-const formatMoney = (v: number | null | undefined) => Math.round(v ?? 0).toLocaleString('ru-RU')
-
-const formatDateLabel = (iso: string, groupBy: GroupBy) => {
-    const d = parseISODateSafe(iso)
-    if (groupBy === 'month') return d.toLocaleDateString('ru-RU', { month: 'short', year: '2-digit' })
-    if (groupBy === 'week') return `Нед. ${d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`
-    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
-}
-
-// ================== COMPONENTS ==================
-
-// Простая тепловая карта (Grid Heatmap)
-const Heatmap = ({ data, maxVal }: { data: { date: string; value: number }[], maxVal: number }) => {
-    if (!data.length) return <div className="text-muted-foreground text-sm">Нет данных</div>
+const getDateRange = (range: TimeRange) => {
+    const today = new Date()
+    const tIso = toISO(today)
+    let from = new Date()
     
-    // Генерируем сетку последних 60 дней (или из данных)
-    return (
-        <div className="flex flex-wrap gap-1">
-            {data.map((item) => {
-                const opacity = item.value > 0 ? 0.2 + (item.value / maxVal) * 0.8 : 0.1
-                const colorClass = item.value > 0 ? `bg-red-500` : `bg-secondary`
-                return (
-                    <div 
-                        key={item.date} 
-                        className={`w-3 h-3 rounded-sm ${colorClass} transition-all hover:scale-125 cursor-pointer`}
-                        style={{ opacity: item.value > 0 ? opacity : 1 }}
-                        title={`${item.date}: ${formatMoney(item.value)}`}
-                    />
-                )
-            })}
-        </div>
-    )
+    if (range === 'week') from.setDate(today.getDate() - 7)
+    if (range === 'month') from.setDate(today.getDate() - 30)
+    if (range === 'year') from.setFullYear(today.getFullYear(), 0, 1)
+    if (range === 'all') from = new Date('2023-01-01')
+
+    return { from: toISO(from), to: tIso }
 }
 
-export default function ExpensesAnalysisPage() {
-  // ================== STATE ==================
+export default function ExpensesDashboard() {
+  // Data
   const [rows, setRows] = useState<ExpenseRow[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
   // Filters
-  const [dateFrom, setDateFrom] = useState(getStartOfYear())
-  const [dateTo, setDateTo] = useState(todayISO())
-  const [activePreset, setActivePreset] = useState<DateRangePreset | null>('year')
-
-  const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
-  const [categoryFilter, setCategoryFilter] = useState<'all' | string>('all')
-  const [groupBy, setGroupBy] = useState<GroupBy>('month')
-  const [searchTerm, setSearchTerm] = useState('')
-
-  // ================== INIT ==================
+  const [range, setRange] = useState<TimeRange>('month')
+  const [companyId, setCompanyId] = useState<string>('all')
+  
+  // ================== LOAD ==================
   useEffect(() => {
-    const fetchCompanies = async () => {
-      const { data } = await supabase.from('companies').select('id, name, code').order('name')
-      if (data) setCompanies(data as Company[])
-    }
-    fetchCompanies()
+    supabase.from('companies').select('id, name, code').order('name').then(({data}) => {
+        if(data) setCompanies(data)
+    })
   }, [])
 
-  const companyMap = useMemo(() => {
-    const map = new Map<string, Company>()
-    for (const c of companies) map.set(c.id, c)
-    return map
-  }, [companies])
-
-  const companyName = useCallback((id: string) => companyMap.get(id)?.name ?? '—', [companyMap])
-  const extraCompanyId = useMemo(() => companies.find(c => c.code === 'extra' || c.name.includes('Extra'))?.id, [companies])
-
-  // ================== DATA LOADING ==================
   const loadData = useCallback(async () => {
     setLoading(true)
-    setError(null)
-    try {
-        let q = supabase
-            .from('expenses')
-            .select('id, date, company_id, category, cash_amount, kaspi_amount, comment')
-            .gte('date', dateFrom)
-            .lte('date', dateTo)
-            .order('date', { ascending: true })
-            .limit(MAX_ROWS_HARD_LIMIT)
+    const { from, to } = getDateRange(range)
+    
+    let q = supabase
+        .from('expenses')
+        .select('id, date, company_id, category, cash_amount, kaspi_amount, comment')
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: true })
+        .limit(MAX_ROWS)
 
-        if (companyFilter !== 'all') q = q.eq('company_id', companyFilter)
-        if (categoryFilter !== 'all') q = q.eq('category', categoryFilter)
-        if (searchTerm.length > 2) q = q.ilike('comment', `%${searchTerm}%`)
+    if (companyId !== 'all') q = q.eq('company_id', companyId)
 
-        const { data, error } = await q
-        if (error) throw error
-        setRows(data as ExpenseRow[])
-    } catch (e: any) {
-        console.error(e)
-        setError('Ошибка загрузки данных')
-    } finally {
-        setLoading(false)
-    }
-  }, [dateFrom, dateTo, companyFilter, categoryFilter, searchTerm])
+    const { data } = await q
+    if (data) setRows(data as ExpenseRow[])
+    setLoading(false)
+  }, [range, companyId])
 
   useEffect(() => { loadData() }, [loadData])
 
-  // ================== SMART ANALYTICS ENGINE ==================
-  const analytics = useMemo(() => {
-    // 1. Фильтрация
-    const cleanRows = rows.filter(r => r.company_id !== extraCompanyId) // Исключаем Extra по дефолту для точности
+  // ================== ANALYTICS ==================
+  const stats = useMemo(() => {
+    const extraId = companies.find(c => c.code === 'extra' || c.name.includes('Extra'))?.id
+    // Фильтруем Extra если выбрано "Все компании", чтобы не портить статистику
+    const cleanRows = (companyId === 'all' && extraId) 
+        ? rows.filter(r => r.company_id !== extraId) 
+        : rows
+
+    let total = 0
+    let cash = 0
+    let kaspi = 0
     
-    let totalSum = 0
-    const byCategory: Record<string, number> = {}
-    const byDate: Record<string, Record<string, number>> = {} // date -> { total: 0, cat1: 100, cat2: 200 }
-    const dailyTotals: { date: string, value: number }[] = []
+    const catMap: Record<string, number> = {}
+    const dateMap: Record<string, number> = {}
     
-    // Группировка для графиков
+    // Для списка топ транзакций
+    const transactions = cleanRows.map(r => ({
+        ...r,
+        sum: (r.cash_amount||0) + (r.kaspi_amount||0)
+    })).sort((a,b) => b.sum - a.sum)
+
     cleanRows.forEach(r => {
         const sum = (r.cash_amount || 0) + (r.kaspi_amount || 0)
-        totalSum += sum
+        total += sum
+        cash += (r.cash_amount || 0)
+        kaspi += (r.kaspi_amount || 0)
 
-        // Категории
-        const cat = r.category || 'Прочее'
-        byCategory[cat] = (byCategory[cat] || 0) + sum
+        const cat = r.category || 'Без категории'
+        catMap[cat] = (catMap[cat] || 0) + sum
 
-        // Временная шкала (Stacked Data)
-        let key = r.date
-        if (groupBy === 'month') key = r.date.slice(0, 7) // YYYY-MM
-        else if (groupBy === 'week') {
-            const d = parseISODateSafe(r.date)
-            const day = d.getDay() || 7
-            d.setDate(d.getDate() - day + 1)
-            key = toISODateLocal(d)
-        }
-
-        if (!byDate[key]) byDate[key] = { date: key, total: 0 }
-        byDate[key].total += sum
-        byDate[key][cat] = (byDate[key][cat] || 0) + sum
-
-        // Heatmap data (всегда по дням)
-        if (groupBy === 'day') {
-           // если группировка по дням, используем уже агрегированные данные графика
-        }
+        // Группировка по дням для графика
+        dateMap[r.date] = (dateMap[r.date] || 0) + sum
     })
-    
-    // Преобразуем для Heatmap (отдельный проход для чистоты, если group != day)
-    const heatmapMap: Record<string, number> = {}
-    cleanRows.forEach(r => {
-         const sum = (r.cash_amount || 0) + (r.kaspi_amount || 0)
-         heatmapMap[r.date] = (heatmapMap[r.date] || 0) + sum
-    })
-    const heatmapData = Object.entries(heatmapMap).map(([date, value]) => ({ date, value })).sort((a,b) => a.date.localeCompare(b.date))
-    const maxDailySpend = Math.max(...heatmapData.map(d => d.value), 0)
 
-    // Преобразуем для Stacked Chart
-    const timelineData = Object.values(byDate)
-        .sort((a, b) => (a.date as string).localeCompare(b.date as string))
-        .map(item => ({
-            ...item,
-            label: formatDateLabel(item.date as string, groupBy)
+    // График (массив)
+    const chartData = Object.entries(dateMap)
+        .sort((a,b) => a[0].localeCompare(b[0]))
+        .map(([date, val]) => ({
+            date: parseDate(date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' }),
+            value: val
         }))
 
-    // Топ категорий (ABC)
-    const sortedCats = Object.entries(byCategory)
+    // Категории (массив для Pie)
+    const catData = Object.entries(catMap)
         .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
+        .sort((a,b) => b.value - a.value)
 
-    const categoriesList = sortedCats.map(c => c.name)
-
-    // "Умные" метрики
-    const avgSpend = timelineData.length ? totalSum / timelineData.length : 0
-    const topSpenderDay = heatmapData.length ? heatmapData.reduce((prev, current) => (prev.value > current.value) ? prev : current) : null
-
-    return {
-        totalSum,
-        timelineData,
-        heatmapData,
-        maxDailySpend,
-        sortedCats,
-        categoriesList,
-        avgSpend,
-        topSpenderDay,
-        cleanRowCount: cleanRows.length
-    }
-  }, [rows, extraCompanyId, groupBy])
-
-  // ================== HANDLERS ==================
-  const setPreset = (p: DateRangePreset) => {
-    setActivePreset(p)
-    const t = todayISO()
-    if (p === 'today') { setDateFrom(t); setDateTo(t); setGroupBy('day') }
-    if (p === 'week') { setDateFrom(addDaysISO(t, -6)); setDateTo(t); setGroupBy('day') }
-    if (p === 'month') { setDateFrom(addDaysISO(t, -29)); setDateTo(t); setGroupBy('week') }
-    if (p === 'year') { setDateFrom(getStartOfYear()); setDateTo(t); setGroupBy('month') }
-    if (p === 'all') { setDateFrom('2023-01-01'); setDateTo(t); setGroupBy('month') }
-  }
-
-  // Цвета для категорий в графике (циклически)
-  const getCatColor = (index: number) => COLORS[index % COLORS.length]
+    return { total, cash, kaspi, chartData, catData, topTransactions: transactions.slice(0, 5) }
+  }, [rows, companies, companyId])
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <main className="flex-1 overflow-auto p-4 md:p-8 space-y-6">
+      <main className="flex-1 overflow-auto p-4 md:p-8 space-y-8">
         
-        {/* Header */}
+        {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                    <Link href="/expenses" className="hover:text-primary"><ArrowLeft className="w-4 h-4" /></Link>
-                    <span className="text-sm">Аналитика финансов</span>
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight">Умный анализ расходов</h1>
+                 <Link href="/expenses" className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1 mb-1 transition-colors">
+                    <ArrowLeft className="w-4 h-4" /> Назад к журналу
+                 </Link>
+                 <h1 className="text-3xl font-bold tracking-tight">Дашборд расходов</h1>
             </div>
-            <div className="flex gap-2">
-                 <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
-                    <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Обновить
-                 </Button>
-                 {/* Кнопка экспорта (можно добавить логику CSV как раньше) */}
-                 <Button variant="ghost" size="sm"><Download className="w-4 h-4" /></Button>
+
+            {/* FILTERS */}
+            <div className="flex flex-wrap gap-2 items-center bg-card p-1 rounded-lg border border-border/50">
+                <select 
+                    value={companyId} 
+                    onChange={e => setCompanyId(e.target.value)}
+                    className="bg-transparent text-sm h-8 px-2 outline-none border-r border-border/50 mr-2 min-w-[120px]"
+                >
+                    <option value="all">Все компании</option>
+                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+
+                {['week', 'month', 'year', 'all'].map((r) => (
+                    <button
+                        key={r}
+                        onClick={() => setRange(r as TimeRange)}
+                        className={`px-3 py-1 text-xs rounded-md transition-all ${
+                            range === r ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-secondary'
+                        }`}
+                    >
+                        {r === 'week' && 'Неделя'}
+                        {r === 'month' && 'Месяц'}
+                        {r === 'year' && 'Год'}
+                        {r === 'all' && 'Всё время'}
+                    </button>
+                ))}
+                
+                <Button variant="ghost" size="icon" className="h-8 w-8 ml-1" onClick={loadData}>
+                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`}/>
+                </Button>
             </div>
         </div>
 
-        {/* Controls */}
-        <Card className="p-4 bg-card neon-glow border-border/60">
-            <div className="flex flex-col xl:flex-row gap-6 justify-between">
-                
-                {/* Time Controls */}
-                <div className="space-y-2">
-                    <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Период анализа</label>
-                    <div className="flex flex-wrap gap-2 items-center">
-                        <div className="flex items-center bg-secondary/50 rounded-md p-1 border border-border/50">
-                             <CalendarDays className="w-4 h-4 text-muted-foreground ml-2 mr-2" />
-                             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-transparent text-sm w-28 outline-none" />
-                             <span className="text-muted-foreground mx-1">-</span>
-                             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-transparent text-sm w-28 outline-none" />
-                        </div>
-                        <div className="flex bg-secondary/30 rounded-md p-1 gap-1">
-                            {['week', 'month', 'year', 'all'].map((p) => (
-                                <button 
-                                    key={p} 
-                                    onClick={() => setPreset(p as DateRangePreset)}
-                                    className={`px-3 py-1 text-xs rounded-sm transition-all ${activePreset === p ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-background text-muted-foreground'}`}
-                                >
-                                    {p === 'week' && '7 дн'}
-                                    {p === 'month' && '30 дн'}
-                                    {p === 'year' && 'Год'}
-                                    {p === 'all' && 'Всё'}
-                                </button>
-                            ))}
-                        </div>
+        {/* --- BIG NUMBERS (KPI) --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="p-6 border-l-4 border-l-red-500 bg-gradient-to-br from-card to-background shadow-sm">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-sm font-medium text-muted-foreground">Всего расходов</p>
+                        <h2 className="text-3xl font-bold mt-2">{formatMoney(stats.total)} <span className="text-lg text-muted-foreground font-normal">₸</span></h2>
+                    </div>
+                    <div className="p-3 bg-red-500/10 rounded-full">
+                        <Wallet className="w-6 h-6 text-red-500" />
                     </div>
                 </div>
+            </Card>
 
-                {/* Group & Filter Controls */}
-                <div className="space-y-2 flex-1">
-                    <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Параметры</label>
-                    <div className="flex flex-wrap gap-3">
-                         <div className="flex flex-col">
-                            <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)} className="h-9 bg-input border border-border rounded px-3 text-xs w-32">
-                                <option value="day">По дням</option>
-                                <option value="week">По неделям</option>
-                                <option value="month">По месяцам</option>
-                            </select>
-                         </div>
-                         <div className="flex flex-col">
-                            <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} className="h-9 bg-input border border-border rounded px-3 text-xs w-40">
-                                <option value="all">Все компании</option>
-                                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                         </div>
-                         <div className="relative flex-1 min-w-[200px]">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                            <input 
-                                placeholder="Поиск по комментарию..." 
-                                value={searchTerm} 
-                                onChange={e => setSearchTerm(e.target.value)} 
-                                className="w-full h-9 pl-9 pr-4 bg-input border border-border rounded text-xs placeholder:text-muted-foreground/50" 
+            <Card className="p-6 bg-card/60">
+                 <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-foreground" />
+                    <p className="text-xs font-medium text-muted-foreground uppercase">Наличные</p>
+                 </div>
+                 <div className="text-xl font-bold">{formatMoney(stats.cash)} ₸</div>
+            </Card>
+
+            <Card className="p-6 bg-card/60">
+                 <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-muted-foreground" />
+                    <p className="text-xs font-medium text-muted-foreground uppercase">Kaspi</p>
+                 </div>
+                 <div className="text-xl font-bold">{formatMoney(stats.kaspi)} ₸</div>
+            </Card>
+        </div>
+
+        {/* --- MAIN CHART (AREA) --- */}
+        <Card className="p-6 border-border shadow-sm">
+            <div className="flex items-center gap-2 mb-6">
+                <TrendingUp className="w-5 h-5 text-primary" />
+                <h3 className="text-lg font-semibold">Динамика затрат</h3>
+            </div>
+            <div className="h-[300px] w-full">
+                {stats.chartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={stats.chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
+                            <XAxis dataKey="date" tick={{fontSize: 12, fill: '#888'}} axisLine={false} tickLine={false} tickMargin={10} minTickGap={30} />
+                            <YAxis hide />
+                            <Tooltip 
+                                contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
+                                formatter={(val: number) => [formatMoney(val) + ' ₸', 'Сумма']}
                             />
-                         </div>
-                    </div>
-                </div>
+                            <Area 
+                                type="monotone" 
+                                dataKey="value" 
+                                stroke="hsl(var(--primary))" 
+                                strokeWidth={3} 
+                                fillOpacity={1} 
+                                fill="url(#colorVal)" 
+                            />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="h-full flex items-center justify-center text-muted-foreground">Нет данных за этот период</div>
+                )}
             </div>
         </Card>
 
-        {/* --- KPI BLOCK --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-5 border-l-4 border-l-primary bg-card/50">
-                <div className="text-xs text-muted-foreground uppercase font-bold mb-1">Всего расходов</div>
-                <div className="text-2xl font-bold tracking-tight">{formatMoney(analytics.totalSum)} ₸</div>
-                <div className="text-[10px] text-muted-foreground mt-2">за выбранный период</div>
-            </Card>
+        {/* --- BOTTOM ROW: CATEGORIES & TOP TRANSACTIONS --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* 1. CATEGORIES (DONUT + LIST) */}
+            <Card className="p-6 flex flex-col">
+                <div className="flex items-center gap-2 mb-4">
+                    <PieIcon className="w-5 h-5 text-muted-foreground" />
+                    <h3 className="font-semibold">Куда уходят деньги?</h3>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                    {/* Donut */}
+                    <div className="w-[180px] h-[180px] relative">
+                         <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={stats.catData}
+                                    innerRadius={55}
+                                    outerRadius={80}
+                                    paddingAngle={2}
+                                    dataKey="value"
+                                >
+                                    {stats.catData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
+                                    ))}
+                                </Pie>
+                                <Tooltip formatter={(val:number) => formatMoney(val) + ' ₸'} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <span className="text-xs font-bold text-muted-foreground">{stats.catData.length} кат.</span>
+                        </div>
+                    </div>
 
-            <Card className="p-5 border-l-4 border-l-orange-500 bg-card/50">
-                <div className="text-xs text-muted-foreground uppercase font-bold mb-1">Средний расход</div>
-                <div className="text-2xl font-bold tracking-tight">{formatMoney(analytics.avgSpend)} ₸</div>
-                <div className="text-[10px] text-muted-foreground mt-2">в {groupBy === 'day' ? 'день' : groupBy === 'week' ? 'неделю' : 'месяц'}</div>
-            </Card>
-
-            <Card className="p-5 border-l-4 border-l-pink-500 bg-card/50">
-                <div className="text-xs text-muted-foreground uppercase font-bold mb-1">Топ категория</div>
-                <div className="text-xl font-bold tracking-tight truncate">{analytics.sortedCats[0]?.name || '—'}</div>
-                <div className="text-[10px] text-muted-foreground mt-2">
-                    {formatMoney(analytics.sortedCats[0]?.value)} ₸ ({((analytics.sortedCats[0]?.value / analytics.totalSum)*100).toFixed(1)}%)
+                    {/* List */}
+                    <div className="flex-1 w-full space-y-3 max-h-[240px] overflow-y-auto pr-2 custom-scrollbar">
+                        {stats.catData.map((c, i) => (
+                            <div key={c.name} className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                                    <span className="truncate max-w-[120px] text-muted-foreground">{c.name}</span>
+                                </div>
+                                <div className="font-medium">{formatMoney(c.value)}</div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </Card>
 
-            <Card className="p-5 border-l-4 border-l-red-600 bg-card/50 relative overflow-hidden">
-                <div className="text-xs text-muted-foreground uppercase font-bold mb-1">Пик расходов</div>
-                <div className="text-xl font-bold tracking-tight">{analytics.topSpenderDay ? formatMoney(analytics.topSpenderDay.value) : 0} ₸</div>
-                <div className="text-[10px] text-muted-foreground mt-2">
-                   Дата: {analytics.topSpenderDay ? formatDateLabel(analytics.topSpenderDay.date, 'day') : '—'}
+            {/* 2. TOP TRANSACTIONS (LIST) */}
+            <Card className="p-6 flex flex-col">
+                <div className="flex items-center gap-2 mb-4">
+                    <ArrowUpRight className="w-5 h-5 text-red-500" />
+                    <h3 className="font-semibold">Топ 5 крупных трат</h3>
                 </div>
-                <AlertCircle className="absolute right-4 top-4 w-8 h-8 text-red-500/20" />
+
+                <div className="space-y-4">
+                    {stats.topTransactions.map((t) => (
+                        <div key={t.id} className="flex items-center justify-between pb-3 border-b border-border/40 last:border-0 last:pb-0">
+                            <div className="flex flex-col gap-0.5 overflow-hidden">
+                                <span className="font-medium truncate">{t.comment || 'Без комментария'}</span>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <span>{parseDate(t.date).toLocaleDateString('ru-RU')}</span>
+                                    <span>•</span>
+                                    <span className="bg-secondary px-1.5 py-0.5 rounded text-[10px]">{t.category || 'Прочее'}</span>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <div className="font-bold text-red-400">-{formatMoney(t.sum)} ₸</div>
+                                <div className="text-[10px] text-muted-foreground">{t.cash_amount ? 'Нал' : 'Kaspi'}</div>
+                            </div>
+                        </div>
+                    ))}
+                    {stats.topTransactions.length === 0 && (
+                        <div className="text-center text-muted-foreground text-sm py-10">Нет записей</div>
+                    )}
+                </div>
             </Card>
         </div>
-
-        {/* --- CHARTS TABS --- */}
-        <Tabs defaultValue="structure" className="w-full space-y-4">
-            <TabsList className="bg-secondary/40">
-                <TabsTrigger value="structure" className="gap-2"><LayoutGrid className="w-4 h-4"/> Структура (Stacked)</TabsTrigger>
-                <TabsTrigger value="heatmap" className="gap-2"><CalendarDays className="w-4 h-4"/> Тепловая карта</TabsTrigger>
-                <TabsTrigger value="categories" className="gap-2"><PieIcon className="w-4 h-4"/> Рейтинг категорий</TabsTrigger>
-            </TabsList>
-
-            {/* TAB 1: STACKED BAR CHART (Главный анализ) */}
-            <TabsContent value="structure">
-                <Card className="p-6 border-border">
-                    <div className="flex justify-between items-center mb-6">
-                        <div>
-                            <h3 className="text-lg font-semibold flex items-center gap-2">
-                                <BarChart3 className="w-5 h-5 text-primary" />
-                                Динамика по категориям
-                            </h3>
-                            <p className="text-sm text-muted-foreground">Показывает, из чего состояли расходы в каждый период</p>
-                        </div>
-                        {/* Легенда */}
-                        <div className="flex flex-wrap gap-2 max-w-md justify-end">
-                            {analytics.categoriesList.slice(0, 6).map((cat, i) => (
-                                <div key={cat} className="flex items-center gap-1 text-[10px]">
-                                    <span className="w-2 h-2 rounded-full" style={{backgroundColor: getCatColor(i)}} />
-                                    {cat}
-                                </div>
-                            ))}
-                            {analytics.categoriesList.length > 6 && <span className="text-[10px] text-muted-foreground">...и др.</span>}
-                        </div>
-                    </div>
-                    
-                    <div className="h-[400px] w-full">
-                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={analytics.timelineData} margin={{top: 20, right: 0, left: 0, bottom: 0}}>
-                                <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                                <XAxis dataKey="label" tick={{fontSize: 11}} axisLine={false} tickLine={false} />
-                                <YAxis tick={{fontSize: 11}} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
-                                <Tooltip 
-                                    cursor={{fill: 'hsl(var(--muted)/0.2)'}}
-                                    contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px'}}
-                                    formatter={(val: number) => formatMoney(val) + ' ₸'}
-                                />
-                                {analytics.categoriesList.map((cat, index) => (
-                                    <Bar 
-                                        key={cat} 
-                                        dataKey={cat} 
-                                        stackId="a" 
-                                        fill={getCatColor(index)} 
-                                        radius={[0,0,0,0]} // Прямоугольные для стека
-                                    />
-                                ))}
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </Card>
-            </TabsContent>
-
-            {/* TAB 2: HEATMAP */}
-            <TabsContent value="heatmap">
-                <Card className="p-6 border-border">
-                    <h3 className="text-lg font-semibold mb-2">Интенсивность расходов</h3>
-                    <p className="text-sm text-muted-foreground mb-6">Чем краснее ячейка, тем больше денег было потрачено в этот день.</p>
-                    
-                    <div className="space-y-2">
-                         <Heatmap data={analytics.heatmapData} maxVal={analytics.maxDailySpend} />
-                    </div>
-                    <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>Меньше</span>
-                        <div className="flex gap-1">
-                             <div className="w-3 h-3 bg-secondary rounded-sm"></div>
-                             <div className="w-3 h-3 bg-red-500 opacity-20 rounded-sm"></div>
-                             <div className="w-3 h-3 bg-red-500 opacity-50 rounded-sm"></div>
-                             <div className="w-3 h-3 bg-red-500 opacity-100 rounded-sm"></div>
-                        </div>
-                        <span>Больше</span>
-                    </div>
-                </Card>
-            </TabsContent>
-
-            {/* TAB 3: CATEGORIES PARETO */}
-            <TabsContent value="categories">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <Card className="p-6 border-border">
-                         <h3 className="text-lg font-semibold mb-4">Топ затратных категорий</h3>
-                         <div className="h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={analytics.sortedCats}
-                                        dataKey="value"
-                                        nameKey="name"
-                                        cx="50%" cy="50%"
-                                        innerRadius={60}
-                                        outerRadius={100}
-                                        paddingAngle={2}
-                                    >
-                                        {analytics.sortedCats.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={getCatColor(index)} stroke="hsl(var(--background))" strokeWidth={2} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip formatter={(val:number) => formatMoney(val) + ' ₸'} />
-                                    <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" />
-                                </PieChart>
-                            </ResponsiveContainer>
-                         </div>
-                    </Card>
-
-                    <Card className="p-6 border-border overflow-auto h-[380px]">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-muted-foreground border-b border-border">
-                                <tr>
-                                    <th className="pb-2 pl-2">Категория</th>
-                                    <th className="pb-2 text-right">Сумма</th>
-                                    <th className="pb-2 text-right">%</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {analytics.sortedCats.map((c, i) => (
-                                    <tr key={c.name} className="border-b border-border/40 hover:bg-secondary/20">
-                                        <td className="py-2 pl-2 flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full" style={{backgroundColor: getCatColor(i)}} />
-                                            {c.name}
-                                        </td>
-                                        <td className="py-2 text-right font-medium">{formatMoney(c.value)}</td>
-                                        <td className="py-2 text-right text-muted-foreground">
-                                            {((c.value / analytics.totalSum) * 100).toFixed(1)}%
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </Card>
-                </div>
-            </TabsContent>
-        </Tabs>
 
       </main>
     </div>
