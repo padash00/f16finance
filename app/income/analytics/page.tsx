@@ -1,9 +1,27 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import { supabase } from '@/lib/supabaseClient'
+import { cn } from '@/lib/utils'
+
+import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Sidebar } from '@/components/sidebar'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+
+import type { DateRange } from 'react-day-picker'
+import { format } from 'date-fns'
+import { ru } from 'date-fns/locale'
+
 import {
   CalendarDays,
   ArrowLeft,
@@ -12,10 +30,9 @@ import {
   BarChart3,
   RefreshCcw,
   CalendarRange,
-  Info
+  Info,
+  Check,
 } from 'lucide-react'
-import Link from 'next/link'
-import { supabase } from '@/lib/supabaseClient'
 
 // --- Типы ---
 type IncomeRow = {
@@ -43,11 +60,10 @@ const formatMoney = (v: number) => Math.round(v).toLocaleString('ru-RU')
 const getDayType = (dateStr: string): 'weekday' | 'weekend' => {
   const d = parseISODateSafe(dateStr)
   const day = d.getDay()
-  return (day === 0 || day === 5 || day === 6) ? 'weekend' : 'weekday'
+  return day === 0 || day === 5 || day === 6 ? 'weekend' : 'weekday'
 }
 
-// --- “Умная” статистика без массива values[] ---
-// Welford online variance
+// --- “Умная” статистика без массива values[] (Welford) ---
 type StatBucket = {
   sum: number
   count: number
@@ -60,8 +76,6 @@ const newBucket = (): StatBucket => ({ sum: 0, count: 0, mean: 0, m2: 0 })
 const pushValue = (b: StatBucket, x: number) => {
   b.sum += x
   b.count += 1
-
-  // Welford
   const delta = x - b.mean
   b.mean += delta / b.count
   const delta2 = x - b.mean
@@ -70,24 +84,17 @@ const pushValue = (b: StatBucket, x: number) => {
 
 const finalize = (b: StatBucket) => {
   const avg = b.count > 0 ? b.mean : 0
-
-  // population variance (как у тебя было: / n)
-  const variance = b.count > 1 ? (b.m2 / b.count) : 0
-  // если захочешь sample variance:
-  // const variance = b.count > 1 ? (b.m2 / (b.count - 1)) : 0
-
+  const variance = b.count > 1 ? b.m2 / b.count : 0 // population variance
   const stdDev = Math.sqrt(variance)
+  const stability = avg === 0 ? 0 : Math.max(0, 1 - stdDev / avg) * 100
+  return { avg, stdDev, stability, sum: b.sum, count: b.count }
+}
 
-  // Индекс стабильности (0-100%)
-  const stability = avg === 0 ? 0 : Math.max(0, 1 - (stdDev / avg)) * 100
-
-  return {
-    avg,
-    stdDev,
-    stability,
-    sum: b.sum,
-    count: b.count
-  }
+const rangeLabel = (from?: Date, to?: Date) => {
+  if (!from && !to) return 'Выберите период'
+  if (from && !to) return format(from, 'dd.MM.yyyy', { locale: ru })
+  if (!from && to) return format(to, 'dd.MM.yyyy', { locale: ru })
+  return `${format(from!, 'dd.MM.yyyy', { locale: ru })} — ${format(to!, 'dd.MM.yyyy', { locale: ru })}`
 }
 
 export default function AnalyticsPage() {
@@ -102,8 +109,9 @@ export default function AnalyticsPage() {
   const [company, setCompany] = useState<CompanyCode>('all')
 
   const lastReqId = useRef(0)
+  const [rangeOpen, setRangeOpen] = useState(false)
 
-  // Авто-валидация диапазона: если from > to — аккуратно меняем местами
+  // защита: если from > to — меняем местами
   useEffect(() => {
     if (!dateFrom || !dateTo) return
     if (dateFrom > dateTo) {
@@ -131,7 +139,6 @@ export default function AnalyticsPage() {
 
     const { data, error } = await query
 
-    // защита от гонок: если пришёл старый ответ — игнорируем
     if (reqId !== lastReqId.current) return
 
     if (error) {
@@ -149,13 +156,40 @@ export default function AnalyticsPage() {
     loadData()
   }, [loadData])
 
+  const selectedRange: DateRange | undefined = useMemo(() => {
+    const from = dateFrom ? parseISODateSafe(dateFrom) : undefined
+    const to = dateTo ? parseISODateSafe(dateTo) : undefined
+    if (!from && !to) return undefined
+    return { from, to }
+  }, [dateFrom, dateTo])
+
+  const setPreset = (days: number | 'ytd') => {
+    const today = new Date()
+    let from: Date
+    let to: Date = today
+
+    if (days === 'ytd') {
+      from = new Date(today.getFullYear(), 0, 1)
+    } else {
+      from = new Date(today)
+      from.setDate(from.getDate() - (days - 1))
+    }
+
+    setDateFrom(toISODateLocal(from))
+    setDateTo(toISODateLocal(to))
+    setRangeOpen(false)
+  }
+
   const stats = useMemo(() => {
-    const monthsMap = new Map<string, {
-      monthKey: string
-      monthName: string
-      weekday: StatBucket
-      weekend: StatBucket
-    }>()
+    const monthsMap = new Map<
+      string,
+      {
+        monthKey: string
+        monthName: string
+        weekday: StatBucket
+        weekend: StatBucket
+      }
+    >()
 
     const globalWd = newBucket()
     const globalWe = newBucket()
@@ -174,16 +208,12 @@ export default function AnalyticsPage() {
           monthKey,
           monthName: mName.charAt(0).toUpperCase() + mName.slice(1),
           weekday: newBucket(),
-          weekend: newBucket()
+          weekend: newBucket(),
         })
       }
 
       const m = monthsMap.get(monthKey)!
-
-      // месяц
       pushValue(m[type], total)
-
-      // глобал
       if (type === 'weekday') pushValue(globalWd, total)
       else pushValue(globalWe, total)
     }
@@ -195,10 +225,10 @@ export default function AnalyticsPage() {
       finalGlobalWd.avg > 0 ? (finalGlobalWe.avg / finalGlobalWd.avg).toFixed(2) : '—'
 
     const sortedMonths = Array.from(monthsMap.values())
-      .map(m => ({
+      .map((m) => ({
         ...m,
         wdStats: finalize(m.weekday),
-        weStats: finalize(m.weekend)
+        weStats: finalize(m.weekend),
       }))
       .sort((a, b) => b.monthKey.localeCompare(a.monthKey))
 
@@ -206,18 +236,24 @@ export default function AnalyticsPage() {
       global: {
         weekday: finalGlobalWd,
         weekend: finalGlobalWe,
-        multiplier
+        multiplier,
       },
-      months: sortedMonths
+      months: sortedMonths,
     }
   }, [rows])
+
+  const companyLabel = (c: CompanyCode) => {
+    if (c === 'all') return 'Все'
+    if (c === 'arena') return 'Arena'
+    if (c === 'ramen') return 'Ramen'
+    return 'Extra'
+  }
 
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-8 space-y-8">
-
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -231,63 +267,139 @@ export default function AnalyticsPage() {
                 Глубокий анализ: Будни (Пн-Чт) vs Выходные (Пт-Вс)
               </p>
               {errorText && (
-                <p className="text-sm text-red-400 ml-7 mt-2">
-                  {errorText}
-                </p>
+                <p className="text-sm text-red-400 ml-7 mt-2">{errorText}</p>
               )}
             </div>
 
-            {/* Filters */}
-            <div className="flex items-center gap-3">
-              {/* Company filter */}
-              <div className="flex items-center bg-card border border-border rounded-lg px-3 py-2 gap-2">
-                <span className="text-xs text-muted-foreground">Компания:</span>
-                <select
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value as CompanyCode)}
-                  className="bg-transparent text-sm outline-none"
-                >
-                  <option value="all">Все</option>
-                  <option value="arena">Arena</option>
-                  <option value="ramen">Ramen</option>
-                  <option value="extra">Extra</option>
-                </select>
+            {/* ✅ НОРМАЛЬНАЯ ПАНЕЛЬ ФИЛЬТРОВ */}
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card/50 backdrop-blur px-2 py-2">
+              {/* Company */}
+              <div className="flex items-center gap-2 px-2">
+                <span className="text-xs text-muted-foreground">Компания</span>
+                <Select value={company} onValueChange={(v) => setCompany(v as CompanyCode)}>
+                  <SelectTrigger className="h-9 w-[160px] bg-background/30 border-border/60">
+                    <SelectValue placeholder="Выберите" />
+                  </SelectTrigger>
+                  <SelectContent className="min-w-[180px]">
+                    <SelectItem value="all">
+                      <span className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-foreground/40" />
+                        Все
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="arena">
+                      <span className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-blue-500" />
+                        Arena
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="ramen">
+                      <span className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                        Ramen
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="extra">
+                      <span className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-purple-500" />
+                        Extra
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* Date filters */}
-              <div className="flex items-center bg-card border border-border rounded-lg p-1">
-                <div className="flex items-center px-3 py-2 gap-2 border-r border-border/50">
-                  <CalendarRange className="w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={e => setDateFrom(e.target.value)}
-                    className="bg-transparent text-sm outline-none w-[110px]"
-                  />
-                  <span className="text-muted-foreground">-</span>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={e => setDateTo(e.target.value)}
-                    className="bg-transparent text-sm outline-none w-[110px]"
-                  />
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={loadData}
-                  className="h-9 w-9 text-muted-foreground hover:text-accent"
-                  title="Обновить"
-                >
-                  <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                </Button>
+              <div className="h-8 w-px bg-border/50 hidden md:block" />
+
+              {/* Date range */}
+              <div className="flex items-center gap-2 px-2">
+                <span className="text-xs text-muted-foreground">Период</span>
+
+                <Popover open={rangeOpen} onOpenChange={setRangeOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      className="h-9 justify-between gap-2 bg-background/30 border border-border/60 hover:bg-background/40"
+                    >
+                      <CalendarRange className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-mono text-sm">
+                        {rangeLabel(selectedRange?.from, selectedRange?.to)}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+
+                  <PopoverContent className="w-auto p-3" align="end">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="text-xs text-muted-foreground">
+                        Выбрано: <b className="text-foreground">{rangeLabel(selectedRange?.from, selectedRange?.to)}</b>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setPreset(7)}>
+                          7д
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setPreset(30)}>
+                          30д
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setPreset('ytd')}>
+                          YTD
+                        </Button>
+                      </div>
+                    </div>
+
+                    <Calendar
+                      mode="range"
+                      selected={selectedRange}
+                      onSelect={(r) => {
+                        if (!r) return
+                        if (r.from) setDateFrom(toISODateLocal(r.from))
+                        if (r.to) setDateTo(toISODateLocal(r.to))
+                        // Закрываем только когда диапазон полный
+                        if (r.from && r.to) setRangeOpen(false)
+                      }}
+                      numberOfMonths={2}
+                      locale={ru}
+                      initialFocus
+                      className="rounded-md border border-border/40"
+                    />
+
+                    <div className="mt-2 flex items-center justify-between">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2"
+                        onClick={() => {
+                          setDateFrom(toISODateLocal(startOfYear))
+                          setDateTo(toISODateLocal(new Date()))
+                          setRangeOpen(false)
+                        }}
+                      >
+                        Сброс
+                      </Button>
+
+                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Check className="h-3.5 w-3.5" />
+                        {companyLabel(company)}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
+
+              {/* Refresh */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={loadData}
+                className="h-9 w-9 rounded-lg border border-border/40 bg-background/20 hover:bg-background/30"
+                title="Обновить"
+              >
+                <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} />
+              </Button>
             </div>
           </div>
 
           {/* --- KPI BLOCK --- */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
             {/* 1. Будние дни */}
             <Card className="relative overflow-hidden p-6 border-l-4 border-l-blue-500 bg-card/50">
               <div className="flex justify-between items-start mb-4">
@@ -304,11 +416,10 @@ export default function AnalyticsPage() {
               </div>
 
               <div className="mt-4 pt-4 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
-                <span>Смен в базе: <b className="text-foreground">{stats.global.weekday.count}</b></span>
-                <span
-                  className="flex items-center gap-1"
-                  title={`σ=${formatMoney(stats.global.weekday.stdDev)} ₸`}
-                >
+                <span>
+                  Смен в базе: <b className="text-foreground">{stats.global.weekday.count}</b>
+                </span>
+                <span title={`σ=${formatMoney(stats.global.weekday.stdDev)} ₸`}>
                   Стабильность:{' '}
                   <b className={stats.global.weekday.stability > 70 ? 'text-green-500' : 'text-yellow-500'}>
                     {Math.round(stats.global.weekday.stability)}%
@@ -333,11 +444,10 @@ export default function AnalyticsPage() {
               </div>
 
               <div className="mt-4 pt-4 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
-                <span>Смен в базе: <b className="text-foreground">{stats.global.weekend.count}</b></span>
-                <span
-                  className="flex items-center gap-1"
-                  title={`σ=${formatMoney(stats.global.weekend.stdDev)} ₸`}
-                >
+                <span>
+                  Смен в базе: <b className="text-foreground">{stats.global.weekend.count}</b>
+                </span>
+                <span title={`σ=${formatMoney(stats.global.weekend.stdDev)} ₸`}>
                   Стабильность:{' '}
                   <b className={stats.global.weekend.stability > 70 ? 'text-green-500' : 'text-yellow-500'}>
                     {Math.round(stats.global.weekend.stability)}%
@@ -369,10 +479,7 @@ export default function AnalyticsPage() {
                   <div
                     className="h-full bg-purple-500"
                     style={{
-                      width: `${Math.min(
-                        100,
-                        (stats.global.weekend.avg / (stats.global.weekday.avg || 1)) * 30
-                      )}%`
+                      width: `${Math.min(100, (stats.global.weekend.avg / (stats.global.weekday.avg || 1)) * 30)}%`,
                     }}
                   />
                 </div>
@@ -393,12 +500,10 @@ export default function AnalyticsPage() {
               </h2>
               <div className="text-[10px] text-muted-foreground flex gap-4">
                 <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-blue-500" />
-                  Будни
+                  <div className="w-2 h-2 rounded-full bg-blue-500" />Будни
                 </span>
                 <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-purple-500" />
-                  Выходные
+                  <div className="w-2 h-2 rounded-full bg-purple-500" />Выходные
                 </span>
               </div>
             </div>
@@ -421,61 +526,60 @@ export default function AnalyticsPage() {
                         Загрузка данных...
                       </td>
                     </tr>
-                  ) : stats.months.map((m) => (
-                    <tr key={m.monthKey} className="border-b border-border/30 hover:bg-white/5 transition-colors group">
-                      <td className="px-6 py-4 font-medium text-foreground">
-                        {m.monthName}
-                        <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
-                          {m.wdStats.count + m.weStats.count} смен
-                        </div>
-                      </td>
+                  ) : (
+                    stats.months.map((m) => (
+                      <tr key={m.monthKey} className="border-b border-border/30 hover:bg-white/5 transition-colors group">
+                        <td className="px-6 py-4 font-medium text-foreground">
+                          {m.monthName}
+                          <div className="text-[10px] text-muted-foreground font-normal mt-0.5">
+                            {m.wdStats.count + m.weStats.count} смен
+                          </div>
+                        </td>
 
-                      {/* Будни */}
-                      <td className="px-6 py-4 text-right">
-                        <div className="font-mono text-blue-200">{formatMoney(m.wdStats.avg)}</div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5" title={`σ=${formatMoney(m.wdStats.stdDev)} ₸`}>
-                          Стаб: {Math.round(m.wdStats.stability)}%
-                        </div>
-                      </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="font-mono text-blue-200">{formatMoney(m.wdStats.avg)}</div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5" title={`σ=${formatMoney(m.wdStats.stdDev)} ₸`}>
+                            Стаб: {Math.round(m.wdStats.stability)}%
+                          </div>
+                        </td>
 
-                      {/* Выходные */}
-                      <td className="px-6 py-4 text-right relative">
-                        <div className="absolute inset-y-2 right-2 w-1 bg-purple-500/10 rounded-full">
-                          <div
-                            className="absolute bottom-0 w-full bg-purple-500 rounded-full transition-all"
-                            style={{
-                              height: `${Math.min(
-                                100,
-                                (m.weStats.avg / (stats.global.weekend.avg || 1)) * 60
-                              )}%`
-                            }}
-                          />
-                        </div>
-                        <div className="font-mono font-bold text-purple-300 pr-3">{formatMoney(m.weStats.avg)}</div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5 pr-3" title={`σ=${formatMoney(m.weStats.stdDev)} ₸`}>
-                          Стаб: {Math.round(m.weStats.stability)}%
-                        </div>
-                      </td>
+                        <td className="px-6 py-4 text-right relative">
+                          <div className="absolute inset-y-2 right-2 w-1 bg-purple-500/10 rounded-full">
+                            <div
+                              className="absolute bottom-0 w-full bg-purple-500 rounded-full transition-all"
+                              style={{
+                                height: `${Math.min(100, (m.weStats.avg / (stats.global.weekend.avg || 1)) * 60)}%`,
+                              }}
+                            />
+                          </div>
+                          <div className="font-mono font-bold text-purple-300 pr-3">{formatMoney(m.weStats.avg)}</div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5 pr-3" title={`σ=${formatMoney(m.weStats.stdDev)} ₸`}>
+                            Стаб: {Math.round(m.weStats.stability)}%
+                          </div>
+                        </td>
 
-                      {/* Множитель */}
-                      <td className="px-6 py-4 text-right font-mono">
-                        {m.wdStats.avg > 0 ? (
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            (m.weStats.avg / m.wdStats.avg) > 2.5
-                              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                              : 'bg-secondary text-muted-foreground'
-                          }`}>
-                            x{(m.weStats.avg / m.wdStats.avg).toFixed(1)}
-                          </span>
-                        ) : '—'}
-                      </td>
+                        <td className="px-6 py-4 text-right font-mono">
+                          {m.wdStats.avg > 0 ? (
+                            <span
+                              className={`px-2 py-1 rounded text-xs ${
+                                m.weStats.avg / m.wdStats.avg > 2.5
+                                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                  : 'bg-secondary text-muted-foreground'
+                              }`}
+                            >
+                              x{(m.weStats.avg / m.wdStats.avg).toFixed(1)}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
 
-                      {/* Итого */}
-                      <td className="px-6 py-4 text-right font-bold text-accent font-mono">
-                        {formatMoney(m.wdStats.sum + m.weStats.sum)}
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="px-6 py-4 text-right font-bold text-accent font-mono">
+                          {formatMoney(m.wdStats.sum + m.weStats.sum)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
