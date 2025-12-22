@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,115 +8,24 @@ import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabaseClient'
 import { calculateForecast } from '@/lib/kpiEngine'
 import {
-  Save,
-  Wand2,
   RefreshCcw,
-  Lock,
-  Unlock,
-  AlertTriangle,
+  Wand2,
+  Save,
   CheckCircle2,
-  TrendingUp,
+  XCircle,
+  AlertTriangle,
   CalendarDays,
+  Target,
   Wallet,
 } from 'lucide-react'
 
-// -------------------- НАСТРОЙКИ ЗП --------------------
-// База: 8000 ₸ за 1 смену
-const SHIFT_BASE = 8000
-
-// KPI бонус на МЕСЯЦ при выполнении плана (операторы + руководитель + маркетолог)
+// ================== НАСТРОЙКИ ==================
 const KPI_BONUS_RATE = 0.2
-
-// Оклады менеджмента
 const SUPERVISOR_SALARY = 250_000
 const MARKETING_SALARY = 500_000
 
-// Бонусы по сменам (по факту выручки в одной смене)
-// ВАЖНО: у тебя нет shift_type day/night в incomes, поэтому считаю по "дневным" порогам.
-// Если добавишь shift_type — допишем за 2 минуты.
-const SHIFT_BONUS_RULES: Record<
-  string,
-  { t1: number; b1: number; t2: number; b2: number }
-> = {
-  arena: { t1: 130_000, b1: 2_000, t2: 160_000, b2: 2_000 },
-  ramen: { t1: 80_000, b1: 2_000, t2: 100_000, b2: 2_000 },
-}
-
-// Extra: честное правило вместо “всем по 5к хоть один раз вышел”
-// Если суммарно по Extra за неделю >= 120k → каждый оператор получает +5000 за КАЖДУЮ свою смену в этой неделе.
-const EXTRA_WEEK_THRESHOLD = 120_000
-const EXTRA_BONUS_PER_SHIFT = 5_000
-
-// -------------------- UTILS --------------------
-
-const money = (v: number) => (v ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })
-
-function getMonthKey(d: Date) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}`
-}
-
-function iso(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function startOfMonth(monthStart: string) {
-  return new Date(monthStart)
-}
-function endOfMonth(monthStart: string) {
-  const d = new Date(monthStart)
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0)
-}
-
-// Недели внутри месяца (Пн–Вс). Для зарплаты неделя нужна обязательно.
-function getWeeksInMonth(monthStart: string) {
-  const start = startOfMonth(monthStart)
-  const end = endOfMonth(monthStart)
-
-  // делаем старт недели = Понедельник
-  const d = new Date(start)
-  const dow = (d.getDay() + 6) % 7 // 0=Пн ... 6=Вс
-  d.setDate(d.getDate() - dow)
-
-  const weeks: { label: string; start: string; end: string }[] = []
-  while (d <= end) {
-    const ws = new Date(d)
-    const we = new Date(d)
-    we.setDate(we.getDate() + 6)
-
-    // режем в рамки месяца
-    const clippedStart = ws < start ? start : ws
-    const clippedEnd = we > end ? end : we
-
-    weeks.push({
-      label: `${iso(clippedStart)} — ${iso(clippedEnd)}`,
-      start: iso(clippedStart),
-      end: iso(clippedEnd),
-    })
-
-    d.setDate(d.getDate() + 7)
-  }
-  return weeks
-}
-
-function getForecastDates(targetMonthStart: string) {
-  const target = new Date(targetMonthStart)
-  const prev1 = new Date(target.getFullYear(), target.getMonth() - 1, 1)
-  const prev2 = new Date(target.getFullYear(), target.getMonth() - 2, 1)
-
-  const startStr = `${getMonthKey(prev2)}-01`
-  const endOfPrev1 = new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0)
-  const endStr = iso(endOfPrev1)
-
-  return { target, prev1, prev2, fetchStart: startStr, fetchEnd: endStr }
-}
-
-function monthKeyFromDateStr(dateStr: string) {
-  return String(dateStr || '').slice(0, 7)
-}
-
-// -------------------- TYPES --------------------
+const COMPANIES = ['arena', 'ramen', 'extra'] as const
+type CompanyCode = (typeof COMPANIES)[number]
 
 type KpiRow = {
   plan_key: string
@@ -133,173 +42,251 @@ type KpiRow = {
   is_locked: boolean
 }
 
-type OperatorMap = Record<string, string>
+// ================== UTILS ==================
+const money = (v: number) => (v ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 
-type FactAgg = {
-  turnover: number
-  shifts: number
-  shiftBonus: number
+function iso(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-// ключи агрегации
-const keyOp = (company: string, opId: string) => `${company}::${opId}`
-const keyCompany = (company: string) => `COMP::${company}`
-
-// бонус по одной смене
-function calcShiftBonus(company: string, shiftTurnover: number) {
-  const rule = SHIFT_BONUS_RULES[company]
-  if (!rule) return 0
-  let b = 0
-  if (shiftTurnover >= rule.t1) b += rule.b1
-  if (shiftTurnover >= rule.t2) b += rule.b2
-  return b
+// ВАЖНО: безопасный парс YYYY-MM-DD без UTC-сдвигов
+function parseLocalDate(dateStr: string) {
+  const [y, m, d] = String(dateStr).slice(0, 10).split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
 }
 
-// -------------------- LOGIC HOOK --------------------
+function startOfMonth(monthStartISO: string) {
+  return parseLocalDate(monthStartISO)
+}
+function endOfMonth(monthStartISO: string) {
+  const s = parseLocalDate(monthStartISO)
+  return new Date(s.getFullYear(), s.getMonth() + 1, 0)
+}
 
-function useKpiManager(monthStart: string, weekRange: { start: string; end: string }) {
-  const [rows, setRows] = useState<KpiRow[]>([])
-  const [operatorNames, setOperatorNames] = useState<OperatorMap>({})
+function getMonthKey(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
+}
+
+function getForecastDates(targetMonthStart: string) {
+  const target = parseLocalDate(targetMonthStart)
+  const prev1 = new Date(target.getFullYear(), target.getMonth() - 1, 1) // N-1
+  const prev2 = new Date(target.getFullYear(), target.getMonth() - 2, 1) // N-2
+
+  const fetchStart = `${getMonthKey(prev2)}-01`
+  const endPrev1 = new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0)
+  const fetchEnd = iso(endPrev1)
+  return { target, prev1, prev2, fetchStart, fetchEnd }
+}
+
+// Недели внутри месяца (Пн–Вс)
+function getWeeksInMonth(monthStartISO: string) {
+  const start = startOfMonth(monthStartISO)
+  const end = endOfMonth(monthStartISO)
+
+  // откатываемся на понедельник
+  const d = new Date(start)
+  const dow = (d.getDay() + 6) % 7 // 0=Пн ... 6=Вс
+  d.setDate(d.getDate() - dow)
+
+  const weeks: { label: string; start: string; end: string }[] = []
+  while (d <= end) {
+    const ws = new Date(d)
+    const we = new Date(d)
+    we.setDate(we.getDate() + 6)
+
+    const clippedStart = ws < start ? start : ws
+    const clippedEnd = we > end ? end : we
+
+    weeks.push({
+      label: `${iso(clippedStart)} — ${iso(clippedEnd)}`,
+      start: iso(clippedStart),
+      end: iso(clippedEnd),
+    })
+
+    d.setDate(d.getDate() + 7)
+  }
+  return weeks
+}
+
+// Команды: Пн–Чт = weekday, Пт–Вс = weekend
+function isWeekdayTeam(dateStr: string) {
+  const d = parseLocalDate(dateStr)
+  const day = d.getDay() // 0=Вс,1=Пн,...6=Сб
+  // Пн(1) Вт(2) Ср(3) Чт(4)
+  return day >= 1 && day <= 4
+}
+
+type TeamKey = 'weekday' | 'weekend'
+type TeamAgg = { fact: number; plan: number; pct: number; ok: boolean }
+type CompanyKpi = {
+  company: CompanyCode
+  week: Record<TeamKey, TeamAgg>
+  month: TeamAgg
+}
+
+function pct(fact: number, plan: number) {
+  if (!plan || plan <= 0) return 0
+  return (fact / plan) * 100
+}
+
+// ================== MAIN PAGE ==================
+export default function KPIStatusPage() {
+  const [monthStart, setMonthStart] = useState(() => {
+    const d = new Date()
+    d.setMonth(d.getMonth() + 1)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    return `${y}-${m}-01`
+  })
+
+  const weeks = useMemo(() => getWeeksInMonth(monthStart), [monthStart])
+  const [weekIdx, setWeekIdx] = useState(0)
+  useEffect(() => setWeekIdx(0), [monthStart])
+
+  const weekRange = weeks[weekIdx] || weeks[0]
+
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<{ type: 'error' | 'success'; msg: string } | null>(null)
 
-  // Факты
-  const [factWeek, setFactWeek] = useState<Map<string, FactAgg>>(new Map())
-  const [factMonth, setFactMonth] = useState<Map<string, FactAgg>>(new Map())
-  const [factMonthGlobal, setFactMonthGlobal] = useState(0)
+  const [collectivePlans, setCollectivePlans] = useState<Record<CompanyCode, { week: number; month: number }>>({
+    arena: { week: 0, month: 0 },
+    ramen: { week: 0, month: 0 },
+    extra: { week: 0, month: 0 },
+  })
 
-  // Загрузка планов
-  const load = useCallback(async () => {
+  const [weekdayShare, setWeekdayShare] = useState<Record<CompanyCode, number>>({
+    arena: 4 / 7,
+    ramen: 4 / 7,
+    extra: 4 / 7,
+  })
+
+  const [factsWeek, setFactsWeek] = useState<Record<CompanyCode, Record<TeamKey, number>>>({
+    arena: { weekday: 0, weekend: 0 },
+    ramen: { weekday: 0, weekend: 0 },
+    extra: { weekday: 0, weekend: 0 },
+  })
+
+  const [factsMonth, setFactsMonth] = useState<Record<CompanyCode, number>>({
+    arena: 0,
+    ramen: 0,
+    extra: 0,
+  })
+
+  const loadAll = useCallback(async () => {
+    if (!weekRange?.start) return
     setLoading(true)
     setStatus(null)
 
-    const { data: plans, error } = await supabase
-      .from('kpi_plans')
-      .select('*')
-      .eq('month_start', monthStart)
-      .order('entity_type')
-      .order('company_code')
+    try {
+      // 1) Планы из kpi_plans (collective)
+      const { data: plans, error: ep } = await supabase
+        .from('kpi_plans')
+        .select('*')
+        .eq('month_start', monthStart)
+        .eq('entity_type', 'collective')
 
-    if (error) {
-      setStatus({ type: 'error', msg: 'Ошибка загрузки планов' })
-      setLoading(false)
-      return
-    }
+      if (ep) throw ep
 
-    setRows(plans as KpiRow[])
+      const p: any = { arena: { week: 0, month: 0 }, ramen: { week: 0, month: 0 }, extra: { week: 0, month: 0 } }
+      ;(plans as KpiRow[] | null)?.forEach((r) => {
+        const c = String(r.company_code || '').toLowerCase() as CompanyCode
+        if (!COMPANIES.includes(c)) return
+        p[c] = { week: Number(r.turnover_target_week || 0), month: Number(r.turnover_target_month || 0) }
+      })
+      setCollectivePlans(p)
 
-    const opIds = Array.from(new Set(plans?.map((r: any) => r.operator_id).filter(Boolean)))
-    if (opIds.length > 0) {
-      const { data: ops } = await supabase.from('operators').select('id, name').in('id', opIds)
-      const map: OperatorMap = {}
-      ops?.forEach((o: any) => (map[o.id] = o.name))
-      setOperatorNames((prev) => ({ ...prev, ...map }))
-    }
+      // 2) Факты: неделя + месяц
+      const mStart = iso(startOfMonth(monthStart))
+      const mEnd = iso(endOfMonth(monthStart))
 
-    setLoading(false)
-  }, [monthStart])
+      const { data: incomesMonth, error: em } = await supabase
+        .from('incomes')
+        .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
+        .gte('date', mStart)
+        .lte('date', mEnd)
 
-  // ФАКТЫ по доходам (неделя и месяц) + бонусы по сменам
-  const loadFacts = useCallback(async () => {
-    // месяц
-    const mStart = iso(startOfMonth(monthStart))
-    const mEnd = iso(endOfMonth(monthStart))
+      if (em) throw em
 
-    // неделя (в рамках месяца)
-    const wStart = weekRange.start
-    const wEnd = weekRange.end
+      const { data: incomesWeek, error: ew } = await supabase
+        .from('incomes')
+        .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
+        .gte('date', weekRange.start)
+        .lte('date', weekRange.end)
 
-    // грузим месяц (одним запросом)
-    const { data: incomesMonth, error: em } = await supabase
-      .from('incomes')
-      .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code), operator_id')
-      .gte('date', mStart)
-      .lte('date', mEnd)
+      if (ew) throw ew
 
-    if (em) {
-      console.error(em)
-      setStatus({ type: 'error', msg: 'Ошибка загрузки факта (месяц)' })
-      return
-    }
-
-    // грузим неделю
-    const { data: incomesWeek, error: ew } = await supabase
-      .from('incomes')
-      .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code), operator_id')
-      .gte('date', wStart)
-      .lte('date', wEnd)
-
-    if (ew) {
-      console.error(ew)
-      setStatus({ type: 'error', msg: 'Ошибка загрузки факта (неделя)' })
-      return
-    }
-
-    const agg = (rows: any[]) => {
-      const map = new Map<string, FactAgg>()
-      const add = (k: string, amount: number, shiftBonus: number) => {
-        const cur = map.get(k) || { turnover: 0, shifts: 0, shiftBonus: 0 }
-        cur.turnover += amount
-        cur.shifts += 1
-        cur.shiftBonus += shiftBonus
-        map.set(k, cur)
+      const weekAgg: any = {
+        arena: { weekday: 0, weekend: 0 },
+        ramen: { weekday: 0, weekend: 0 },
+        extra: { weekday: 0, weekend: 0 },
       }
 
-      // Для Extra-недели нужен общий turnover по компании, чтобы включить +5000/смена
-      const extraTurnoverTotal = rows
-        .filter((r) => String(r.companies?.code || '').toLowerCase() === 'extra')
-        .reduce((s, r) => {
-          const amount =
-            Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
-          return s + amount
-        }, 0)
-
-      const extraBonusEnabled = extraTurnoverTotal >= EXTRA_WEEK_THRESHOLD
-
-      for (const r of rows || []) {
-        const company = String(r.companies?.code || '').toLowerCase()
-        const opId = String(r.operator_id || '')
-        if (!company) continue
-
+      ;(incomesWeek as any[] | null)?.forEach((r) => {
+        const c = String(r.companies?.code || '').toLowerCase() as CompanyCode
+        if (!COMPANIES.includes(c)) return
         const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
+        const team: TeamKey = isWeekdayTeam(r.date) ? 'weekday' : 'weekend'
+        weekAgg[c][team] += amount
+      })
 
-        // бонусы по смене
-        let bonus = 0
-        bonus += calcShiftBonus(company, amount)
+      const monthAgg: any = { arena: 0, ramen: 0, extra: 0 }
+      ;(incomesMonth as any[] | null)?.forEach((r) => {
+        const c = String(r.companies?.code || '').toLowerCase() as CompanyCode
+        if (!COMPANIES.includes(c)) return
+        const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
+        monthAgg[c] += amount
+      })
 
-        // Extra: если порог недели выполнен → +5000 за смену
-        // (для месяца считаем так же по каждой неделе нельзя одним махом, поэтому в месяце считаем только shiftBonus rules arena/ramen.
-        // Extra месячный бонус будет только KPI 20% + базовая. Это ок. Если хочешь Extra-месяц по неделям — сделаем второй проход.)
-        if (company === 'extra' && extraBonusEnabled) bonus += EXTRA_BONUS_PER_SHIFT
+      setFactsWeek(weekAgg)
+      setFactsMonth(monthAgg)
 
-        // агрегируем по оператору
-        if (opId) add(keyOp(company, opId), amount, bonus)
+      // 3) Доля плана на Пн–Чт / Пт–Вс (чтобы честно делить недельный план на команды)
+      // Берём историю из N-2..N-1 (как и генерация)
+      const { fetchStart, fetchEnd } = getForecastDates(monthStart)
 
-        // агрегируем по компании (для коллективного факта)
-        add(keyCompany(company), amount, 0)
+      const { data: hist, error: eh } = await supabase
+        .from('incomes')
+        .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
+        .gte('date', fetchStart)
+        .lte('date', fetchEnd)
+
+      if (eh) throw eh
+
+      const wShare: any = { arena: { wd: 0, we: 0 }, ramen: { wd: 0, we: 0 }, extra: { wd: 0, we: 0 } }
+
+      ;(hist as any[] | null)?.forEach((r) => {
+        const c = String(r.companies?.code || '').toLowerCase() as CompanyCode
+        if (!COMPANIES.includes(c)) return
+        const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
+        const team: TeamKey = isWeekdayTeam(r.date) ? 'weekday' : 'weekend'
+        if (team === 'weekday') wShare[c].wd += amount
+        else wShare[c].we += amount
+      })
+
+      const res: any = { arena: 4 / 7, ramen: 4 / 7, extra: 4 / 7 }
+      for (const c of COMPANIES) {
+        const total = wShare[c].wd + wShare[c].we
+        res[c] = total > 0 ? wShare[c].wd / total : 4 / 7
       }
+      setWeekdayShare(res)
 
-      const global = Array.from(map.entries())
-        .filter(([k]) => k.startsWith('COMP::'))
-        .reduce((s, [, v]) => s + v.turnover, 0)
-
-      return { map, global }
+      setStatus({ type: 'success', msg: 'Данные обновлены' })
+    } catch (e: any) {
+      console.error(e)
+      setStatus({ type: 'error', msg: e?.message || 'Ошибка загрузки' })
+    } finally {
+      setLoading(false)
     }
-
-    const w = agg(incomesWeek as any[])
-    const m = agg(incomesMonth as any[])
-
-    setFactWeek(w.map)
-    setFactMonth(m.map)
-    setFactMonthGlobal(m.global)
-  }, [monthStart, weekRange.start, weekRange.end])
+  }, [monthStart, weekRange?.start, weekRange?.end])
 
   useEffect(() => {
-    loadFacts()
-  }, [loadFacts])
+    loadAll()
+  }, [loadAll])
 
-  // ГЕНЕРАЦИЯ ПЛАНОВ (оставил твою логику как есть)
-  const generate = async () => {
+  // Генерация планов: ТОЛЬКО collective + roles (без операторов)
+  const generatePlans = useCallback(async () => {
     setLoading(true)
     setStatus(null)
 
@@ -308,7 +295,7 @@ function useKpiManager(monthStart: string, weekRange: { start: string; end: stri
 
       const { data: incomes, error } = await supabase
         .from('incomes')
-        .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code), operator_id')
+        .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
         .gte('date', fetchStart)
         .lte('date', fetchEnd)
 
@@ -317,94 +304,47 @@ function useKpiManager(monthStart: string, weekRange: { start: string; end: stri
       const k1 = getMonthKey(prev1)
       const k2 = getMonthKey(prev2)
 
-      type Agg = { t2: number; t1: number; s2: number; s1: number; ops: Record<string, { t: number; s: number }> }
-      const stats: Record<string, Agg> = {}
+      const sums: Record<CompanyCode, { t1: number; t2: number }> = {
+        arena: { t1: 0, t2: 0 },
+        ramen: { t1: 0, t2: 0 },
+        extra: { t1: 0, t2: 0 },
+      }
 
-      const now = new Date()
-      const isPrev1Current = prev1.getMonth() === now.getMonth() && prev1.getFullYear() === now.getFullYear()
-      const scaleWeight = isPrev1Current
-        ? new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0).getDate() / Math.max(1, now.getDate())
-        : 1
+      ;(incomes as any[] | null)?.forEach((r) => {
+        const c = String(r.companies?.code || '').toLowerCase() as CompanyCode
+        if (!COMPANIES.includes(c)) return
 
-      incomes?.forEach((inc: any) => {
-        const code = String(inc.companies?.code || 'other').toLowerCase()
-        if (!stats[code]) stats[code] = { t2: 0, t1: 0, s2: 0, s1: 0, ops: {} }
+        const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
+        const mKey = String(r.date).slice(0, 7)
 
-        const amount = (inc.cash_amount || 0) + (inc.kaspi_amount || 0) + (inc.card_amount || 0)
-
-        const mKey = monthKeyFromDateStr(inc.date)
-        const isM1 = mKey === k1
-        const isM2 = mKey === k2
-
-        if (isM2) {
-          stats[code].t2 += amount
-          stats[code].s2 += 1
-        } else if (isM1) {
-          stats[code].t1 += amount
-          stats[code].s1 += 1
-        }
-
-        if (inc.operator_id && (isM1 || isM2)) {
-          if (!stats[code].ops[inc.operator_id]) stats[code].ops[inc.operator_id] = { t: 0, s: 0 }
-          const w = isM1 ? amount * scaleWeight : amount
-          stats[code].ops[inc.operator_id].t += w
-          stats[code].ops[inc.operator_id].s += 1
-        }
+        if (mKey === k2) sums[c].t2 += amount
+        if (mKey === k1) sums[c].t1 += amount
       })
 
       const newRows: KpiRow[] = []
 
-      Object.entries(stats).forEach(([code, d]) => {
-        const turnCalc = calculateForecast(target, d.t1, d.t2)
-        const targetT = Math.round(turnCalc.forecast)
-
-        const shiftsCalc = calculateForecast(target, d.s1, d.s2)
-        const targetS = Math.round(shiftsCalc.forecast)
+      for (const c of COMPANIES) {
+        const calc = calculateForecast(target, sums[c].t1, sums[c].t2)
+        const targetMonth = Math.round(calc.forecast)
+        const targetWeek = Math.round(targetMonth / 4.345)
 
         newRows.push({
-          plan_key: `${monthStart}|collective|${code}`,
+          plan_key: `${monthStart}|collective|${c}`,
           month_start: monthStart,
           entity_type: 'collective',
-          company_code: code,
+          company_code: c,
           operator_id: null,
           role_code: null,
-          turnover_target_month: targetT,
-          turnover_target_week: Math.round(targetT / 4.345),
-          shifts_target_month: targetS,
-          shifts_target_week: Number((targetS / 4.345).toFixed(2)),
-          meta: { prev2: Math.round(d.t2), prev1_est: Math.round(turnCalc.prev1Estimated), trend: turnCalc.trend.toFixed(1) },
+          turnover_target_month: targetMonth,
+          turnover_target_week: targetWeek,
+          shifts_target_month: 0,
+          shifts_target_week: 0,
+          meta: { prev2: Math.round(sums[c].t2), prev1_est: Math.round(calc.prev1Estimated), trend: calc.trend.toFixed(1) },
           is_locked: false,
         })
+      }
 
-        const totalOpWeight = Object.values(d.ops).reduce((acc, v) => acc + v.t, 0)
-
-        Object.entries(d.ops).forEach(([opId, opData]) => {
-          if (opData.t < 1000) return
-
-          const share = totalOpWeight > 0 ? opData.t / totalOpWeight : 0
-          const opTarget = Math.round(targetT * share)
-          const opShifts = Math.round(targetS * share)
-
-          newRows.push({
-            plan_key: `${monthStart}|operator|${code}|${opId}`,
-            month_start: monthStart,
-            entity_type: 'operator',
-            company_code: code,
-            operator_id: opId,
-            role_code: null,
-            turnover_target_month: opTarget,
-            turnover_target_week: Math.round(opTarget / 4.345),
-            shifts_target_month: opShifts,
-            shifts_target_week: Number((opShifts / 4.345).toFixed(2)),
-            meta: { share: (share * 100).toFixed(1) + '%', hist_val: Math.round(opData.t) },
-            is_locked: false,
-          })
-        })
-      })
-
-      const globalTotal = newRows
-        .filter((r) => r.entity_type === 'collective')
-        .reduce((sum, r) => sum + r.turnover_target_month, 0)
+      const globalTotal = newRows.reduce((s, r) => s + r.turnover_target_month, 0)
 
       ;['supervisor', 'marketing'].forEach((role) => {
         newRows.push({
@@ -423,265 +363,86 @@ function useKpiManager(monthStart: string, weekRange: { start: string; end: stri
         })
       })
 
-      setRows((prev) => {
-        const lockedMap = new Map(prev.filter((r) => r.is_locked).map((r) => [r.plan_key, r]))
-        return newRows.map((newRow) => lockedMap.get(newRow.plan_key) || newRow)
-      })
+      const { error: up } = await supabase.from('kpi_plans').upsert(newRows, { onConflict: 'plan_key' })
+      if (up) throw up
 
-      setStatus({ type: 'success', msg: 'План пересчитан' })
+      setStatus({ type: 'success', msg: 'Планы сгенерированы' })
+      await loadAll()
     } catch (e: any) {
       console.error(e)
       setStatus({ type: 'error', msg: e?.message || 'Ошибка генерации' })
     } finally {
       setLoading(false)
-      // после генерации обновим факт
-      loadFacts()
     }
-  }
+  }, [monthStart, loadAll])
 
-  const save = async () => {
-    setLoading(true)
-    const { error } = await supabase.from('kpi_plans').upsert(rows, { onConflict: 'plan_key' })
-    setLoading(false)
-    if (error) setStatus({ type: 'error', msg: 'Ошибка сохранения' })
-    else setStatus({ type: 'success', msg: 'Сохранено' })
-  }
+  // Визуальная таблица KPI
+  const table: CompanyKpi[] = useMemo(() => {
+    const out: CompanyKpi[] = []
 
-  const updateRow = (key: string, patch: Partial<KpiRow>) => {
-    setRows((prev) => prev.map((r) => (r.plan_key === key ? { ...r, ...patch } : r)))
-  }
+    for (const c of COMPANIES) {
+      const weekPlanTotal = collectivePlans[c]?.week || 0
+      const share = weekdayShare[c] ?? 4 / 7
 
-  return {
-    rows,
-    operatorNames,
-    loading,
-    status,
-    load,
-    generate,
-    save,
-    updateRow,
-    factWeek,
-    factMonth,
-    factMonthGlobal,
-  }
-}
+      const planWeekday = Math.round(weekPlanTotal * share)
+      const planWeekend = Math.max(0, weekPlanTotal - planWeekday)
 
-// -------------------- UI COMPONENTS --------------------
+      const factWeekday = factsWeek[c]?.weekday || 0
+      const factWeekend = factsWeek[c]?.weekend || 0
 
-function ProgressBadge({ fact, plan }: { fact: number; plan: number }) {
-  const p = plan > 0 ? (fact / plan) * 100 : 0
-  const ok = p >= 100
-  return (
-    <Badge className={ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}>
-      {p.toFixed(0)}%
+      const monthPlan = collectivePlans[c]?.month || 0
+      const monthFact = factsMonth[c] || 0
+
+      const w1 = pct(factWeekday, planWeekday)
+      const w2 = pct(factWeekend, planWeekend)
+      const m = pct(monthFact, monthPlan)
+
+      out.push({
+        company: c,
+        week: {
+          weekday: { fact: factWeekday, plan: planWeekday, pct: w1, ok: factWeekday >= planWeekday && planWeekday > 0 },
+          weekend: { fact: factWeekend, plan: planWeekend, pct: w2, ok: factWeekend >= planWeekend && planWeekend > 0 },
+        },
+        month: { fact: monthFact, plan: monthPlan, pct: m, ok: monthFact >= monthPlan && monthPlan > 0 },
+      })
+    }
+    return out
+  }, [collectivePlans, weekdayShare, factsWeek, factsMonth])
+
+  const totals = useMemo(() => {
+    const monthPlan = table.reduce((s, r) => s + r.month.plan, 0)
+    const monthFact = table.reduce((s, r) => s + r.month.fact, 0)
+    const ok = monthPlan > 0 && monthFact >= monthPlan
+    const supervisorBonus = ok ? Math.round(SUPERVISOR_SALARY * KPI_BONUS_RATE) : 0
+    const marketingBonus = ok ? Math.round(MARKETING_SALARY * KPI_BONUS_RATE) : 0
+    return { monthPlan, monthFact, ok, supervisorBonus, marketingBonus }
+  }, [table])
+
+  const StatusBadge = ({ ok }: { ok: boolean }) => (
+    <Badge className={ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}>
+      {ok ? (
+        <span className="inline-flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> выполнен</span>
+      ) : (
+        <span className="inline-flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> не выполнен</span>
+      )}
     </Badge>
-  )
-}
-
-const SmartInput = ({ value, meta, locked, onChange }: any) => {
-  return (
-    <div className="flex flex-col items-end gap-0.5">
-      <input
-        type="text"
-        disabled={locked}
-        value={money(value)}
-        onChange={(e) => onChange(Number(e.target.value.replace(/[^\d]/g, '')))}
-        className={`w-32 bg-transparent text-right border-b border-transparent hover:border-white/20 focus:border-indigo-500 outline-none transition-colors text-sm ${
-          locked ? 'opacity-50 cursor-not-allowed text-zinc-500' : 'text-zinc-100'
-        }`}
-      />
-      <div className="text-[10px] text-muted-foreground flex gap-2">
-        {meta?.prev1_est && <span title="База">База: {money(meta.prev1_est)}</span>}
-        {meta?.share && <span title="Доля">Доля: {meta.share}</span>}
-      </div>
-    </div>
-  )
-}
-
-function RowItem({
-  row,
-  name,
-  isMain,
-  onChange,
-  weekFact,
-  monthFact,
-  weekSalary,
-  monthSalary,
-  weekBonus,
-  monthBonus,
-}: any) {
-  return (
-    <tr className={`group hover:bg-white/[0.02] transition-colors ${isMain ? 'bg-indigo-500/5' : ''}`}>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-3">
-          {isMain ? <TrendingUp className="w-4 h-4 text-indigo-400" /> : <div className="w-1.5 h-1.5 rounded-full bg-zinc-700" />}
-          <span className={isMain ? 'font-medium text-indigo-100' : 'text-zinc-300'}>{name}</span>
-        </div>
-      </td>
-
-      {/* НЕДЕЛЯ */}
-      <td className="px-4 py-2 text-right text-zinc-300 font-mono">
-        {money(weekFact || 0)}
-      </td>
-      <td className="px-4 py-2 text-right">
-        <span className="text-zinc-500 font-mono">{money(row.turnover_target_week || 0)}</span>
-      </td>
-      <td className="px-4 py-2 text-center">
-        <ProgressBadge fact={weekFact || 0} plan={row.turnover_target_week || 0} />
-      </td>
-      <td className="px-4 py-2 text-right text-emerald-400 font-mono">
-        +{money(weekBonus || 0)}
-      </td>
-      <td className="px-4 py-2 text-right text-white font-mono">
-        {money(weekSalary || 0)}
-      </td>
-
-      {/* МЕСЯЦ */}
-      <td className="px-4 py-2 text-right text-zinc-300 font-mono">
-        {money(monthFact || 0)}
-      </td>
-      <td className="px-4 py-2 text-right">
-        <SmartInput
-          value={row.turnover_target_month}
-          meta={row.meta}
-          locked={row.is_locked}
-          onChange={(v: number) =>
-            onChange(row.plan_key, { turnover_target_month: v, turnover_target_week: Math.round(v / 4.345) })
-          }
-        />
-      </td>
-      <td className="px-4 py-2 text-center">
-        <ProgressBadge fact={monthFact || 0} plan={row.turnover_target_month || 0} />
-      </td>
-      <td className="px-4 py-2 text-right text-emerald-400 font-mono">
-        +{money(monthBonus || 0)}
-      </td>
-      <td className="px-4 py-2 text-right text-white font-mono">
-        {money(monthSalary || 0)}
-      </td>
-
-      <td className="px-4 py-2 text-center">
-        <button
-          onClick={() => onChange(row.plan_key, { is_locked: !row.is_locked })}
-          className={`p-2 rounded hover:bg-white/10 ${row.is_locked ? 'text-amber-500' : 'text-zinc-600'}`}
-        >
-          {row.is_locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-        </button>
-      </td>
-    </tr>
-  )
-}
-
-// -------------------- MAIN PAGE --------------------
-
-export default function KPIPlansPage() {
-  const [month, setMonth] = useState(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() + 1)
-    return d.toISOString().slice(0, 7) + '-01'
-  })
-
-  const weeks = useMemo(() => getWeeksInMonth(month), [month])
-  const [weekIdx, setWeekIdx] = useState(0)
-
-  useEffect(() => {
-    setWeekIdx(0)
-  }, [month])
-
-  const weekRange = weeks[weekIdx] || weeks[0]
-
-  const {
-    rows,
-    operatorNames,
-    loading,
-    status,
-    load,
-    generate,
-    save,
-    updateRow,
-    factWeek,
-    factMonth,
-    factMonthGlobal,
-  } = useKpiManager(month, weekRange)
-
-  useEffect(() => {
-    load()
-  }, [load])
-
-  const groupedData = useMemo(() => {
-    const groups: Record<string, KpiRow[]> = {}
-    const roles: KpiRow[] = []
-
-    rows.forEach((r) => {
-      if (r.entity_type === 'role') roles.push(r)
-      else {
-        const key = r.company_code || 'unknown'
-        if (!groups[key]) groups[key] = []
-        groups[key].push(r)
-      }
-    })
-
-    return { groups, roles }
-  }, [rows])
-
-  const globalPlanMonth = useMemo(() => {
-    const roleRow = rows.find((r) => r.entity_type === 'role' && r.role_code === 'supervisor')
-    return roleRow?.turnover_target_month || rows.filter((r) => r.entity_type === 'collective').reduce((s, r) => s + (r.turnover_target_month || 0), 0)
-  }, [rows])
-
-  const globalAchieved = globalPlanMonth > 0 ? factMonthGlobal >= globalPlanMonth : false
-
-  const supervisorMonthBonus = globalAchieved ? Math.round(SUPERVISOR_SALARY * KPI_BONUS_RATE) : 0
-  const marketingMonthBonus = globalAchieved ? Math.round(MARKETING_SALARY * KPI_BONUS_RATE) : 0
-
-  // Зарплата оператора: база = смены * 8000 + shiftBonus (arena/ramen + extra week-rule) + KPI-бонус (20% базы) если месячный план выполнен
-  const calcOperatorPay = useCallback(
-    (company: string, opId: string, planWeek: number, planMonth: number) => {
-      const wk = factWeek.get(keyOp(company, opId)) || { turnover: 0, shifts: 0, shiftBonus: 0 }
-      const mo = factMonth.get(keyOp(company, opId)) || { turnover: 0, shifts: 0, shiftBonus: 0 }
-
-      // неделя: база + бонусы смен
-      const weekBase = wk.shifts * SHIFT_BASE
-      const weekSalary = weekBase + wk.shiftBonus
-
-      // месяц: база + бонусы смен (arena/ramen) + KPI бонус 20% от базы при выполнении плана месяца
-      const monthBase = mo.shifts * SHIFT_BASE
-      const monthKpiBonus = planMonth > 0 && mo.turnover >= planMonth ? Math.round(monthBase * KPI_BONUS_RATE) : 0
-      const monthSalary = monthBase + mo.shiftBonus + monthKpiBonus
-
-      return {
-        weekFact: wk.turnover,
-        monthFact: mo.turnover,
-        weekBonus: wk.shiftBonus,
-        monthBonus: mo.shiftBonus + monthKpiBonus,
-        weekSalary,
-        monthSalary,
-      }
-    },
-    [factWeek, factMonth]
   )
 
   return (
     <div className="flex min-h-screen bg-[#050505] text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-auto p-6 md:p-10">
-        <div className="max-w-7xl mx-auto space-y-8">
+        <div className="max-w-6xl mx-auto space-y-8">
+
           {/* HEADER */}
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 pb-6 border-b border-white/5">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-5 pb-6 border-b border-white/5">
             <div className="space-y-2">
               <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-                <Wallet className="w-7 h-7 text-indigo-400" />
-                KPI + Зарплата (неделя/месяц)
+                <Target className="w-7 h-7 text-indigo-400" />
+                KPI Табло (2 команды + месяц)
               </h1>
-
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <Badge variant="secondary" className="font-mono">Неделя: {weekRange?.label || '-'}</Badge>
-                <Badge variant="secondary" className="font-mono">Месяц: {month.slice(0, 7)}</Badge>
-              </div>
-
-              <div className="text-xs text-muted-foreground leading-relaxed">
-                <b>Неделя:</b> смены*8000 + бонусы смен (Arena/Ramen) + Extra (если неделя ≥ {money(EXTRA_WEEK_THRESHOLD)} → +{money(EXTRA_BONUS_PER_SHIFT)} за смену).<br/>
-                <b>Месяц:</b> смены*8000 + бонусы смен + KPI-бонус {Math.round(KPI_BONUS_RATE*100)}% от базы, если план месяца выполнен.
+              <div className="text-xs text-muted-foreground">
+                Неделя = <b>Пн–Чт</b> и <b>Пт–Вс</b> ✅/❌. Месяц = общий KPI ✅/❌.
               </div>
             </div>
 
@@ -690,8 +451,8 @@ export default function KPIPlansPage() {
                 <span className="text-xs text-muted-foreground">Месяц</span>
                 <input
                   type="month"
-                  value={month.slice(0, 7)}
-                  onChange={(e) => setMonth(e.target.value + '-01')}
+                  value={monthStart.slice(0, 7)}
+                  onChange={(e) => setMonthStart(e.target.value + '-01')}
                   className="bg-transparent border-none text-sm px-2 outline-none text-white"
                 />
               </div>
@@ -715,27 +476,20 @@ export default function KPIPlansPage() {
 
               <div className="w-px h-8 bg-white/10 hidden md:block" />
 
-              <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
+              <Button variant="ghost" size="sm" onClick={loadAll} disabled={loading}>
                 <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
-              <Button variant="secondary" size="sm" onClick={generate} disabled={loading}>
+              <Button variant="secondary" size="sm" onClick={generatePlans} disabled={loading}>
                 <Wand2 className="w-4 h-4 mr-2 text-indigo-400" /> Генерировать
-              </Button>
-              <Button size="sm" onClick={save} disabled={loading} className="bg-indigo-600 hover:bg-indigo-500 text-white">
-                <Save className="w-4 h-4 mr-2" /> Сохранить
               </Button>
             </div>
           </div>
 
           {/* STATUS */}
           {status && (
-            <div
-              className={`p-3 rounded-lg text-sm flex items-center gap-2 ${
-                status.type === 'error'
-                  ? 'bg-red-500/10 text-red-400'
-                  : 'bg-emerald-500/10 text-emerald-400'
-              }`}
-            >
+            <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${
+              status.type === 'error' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
+            }`}>
               {status.type === 'error' ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
               {status.msg}
             </div>
@@ -745,139 +499,131 @@ export default function KPIPlansPage() {
           <Card className="p-4 bg-[#0A0A0A] border-white/5">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="space-y-1">
-                <div className="text-sm text-zinc-200 font-semibold">Месячный KPI менеджмента</div>
+                <div className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-indigo-400" />
+                  Месячный KPI менеджмента (общий)
+                </div>
                 <div className="text-xs text-muted-foreground">
-                  Факт месяца: <b className="text-zinc-200 font-mono">{money(factMonthGlobal)} ₸</b> /
-                  План: <b className="text-zinc-200 font-mono">{money(globalPlanMonth)} ₸</b>{' '}
-                  <ProgressBadge fact={factMonthGlobal} plan={globalPlanMonth} />
+                  Факт: <b className="text-zinc-200">{money(totals.monthFact)}</b> / План: <b className="text-zinc-200">{money(totals.monthPlan)}</b>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
+                <StatusBadge ok={totals.ok} />
                 <Badge variant="secondary" className="font-mono">
-                  Руководитель: {money(SUPERVISOR_SALARY)} + {money(supervisorMonthBonus)} = {money(SUPERVISOR_SALARY + supervisorMonthBonus)}
+                  Руководитель: {money(SUPERVISOR_SALARY)} {totals.ok ? `+ ${money(totals.supervisorBonus)}` : '+ 0 ₸'} = {money(SUPERVISOR_SALARY + totals.supervisorBonus)}
                 </Badge>
                 <Badge variant="secondary" className="font-mono">
-                  Маркетолог: {money(MARKETING_SALARY)} + {money(marketingMonthBonus)} = {money(MARKETING_SALARY + marketingMonthBonus)}
+                  Маркетолог: {money(MARKETING_SALARY)} {totals.ok ? `+ ${money(totals.marketingBonus)}` : '+ 0 ₸'} = {money(MARKETING_SALARY + totals.marketingBonus)}
                 </Badge>
               </div>
             </div>
           </Card>
 
-          {/* TABLES */}
-          {loading && rows.length === 0 ? (
-            <div className="text-center py-20 text-muted-foreground">Загрузка...</div>
-          ) : (
-            <div className="space-y-10">
-              {Object.entries(groupedData.groups)
-                .sort()
-                .map(([code, items]) => {
-                  const company = String(code || '').toLowerCase()
-                  const collective = items.find((i) => i.entity_type === 'collective')
-                  const operators = items
-                    .filter((i) => i.entity_type === 'operator')
-                    .sort((a, b) => (b.turnover_target_month || 0) - (a.turnover_target_month || 0))
+          {/* TABLE KPI */}
+          <Card className="bg-[#0A0A0A] border-white/5 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[1100px]">
+                <thead className="bg-white/[0.02] text-xs text-muted-foreground uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-3">Точка</th>
 
-                  const companyWeekFact = factWeek.get(keyCompany(company))?.turnover || 0
-                  const companyMonthFact = factMonth.get(keyCompany(company))?.turnover || 0
+                    <th className="text-center px-4 py-3" colSpan={4}>Неделя — Команда Пн–Чт</th>
+                    <th className="text-center px-4 py-3" colSpan={4}>Неделя — Команда Пт–Вс</th>
 
-                  return (
-                    <section key={code} className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <h2 className="text-xl font-bold capitalize text-zinc-200">F16 {code}</h2>
-                        <div className="h-px flex-1 bg-white/5" />
+                    <th className="text-center px-4 py-3" colSpan={4}>Месяц (общий)</th>
+                  </tr>
+                  <tr className="border-t border-white/5">
+                    <th className="text-left px-4 py-3"></th>
 
-                        {collective && (
-                          <div className="flex flex-wrap gap-2 items-center">
-                            <Badge variant="secondary" className="font-mono text-xs">
-                              Факт нед: {money(companyWeekFact)}
-                            </Badge>
-                            <Badge variant="secondary" className="font-mono text-xs">
-                              Факт мес: {money(companyMonthFact)}
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
+                    <th className="text-right px-4 py-3">Факт</th>
+                    <th className="text-right px-4 py-3">План</th>
+                    <th className="text-right px-4 py-3">%</th>
+                    <th className="text-center px-4 py-3">Статус</th>
 
-                      <Card className="bg-[#0A0A0A] border-white/5 overflow-hidden">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm min-w-[1200px]">
-                            <thead className="bg-white/[0.02] text-xs text-muted-foreground uppercase">
-                              <tr>
-                                <th className="text-left px-4 py-3 font-medium">Сотрудник</th>
+                    <th className="text-right px-4 py-3">Факт</th>
+                    <th className="text-right px-4 py-3">План</th>
+                    <th className="text-right px-4 py-3">%</th>
+                    <th className="text-center px-4 py-3">Статус</th>
 
-                                <th className="text-right px-4 py-3 font-medium">Факт нед</th>
-                                <th className="text-right px-4 py-3 font-medium">План нед</th>
-                                <th className="text-center px-4 py-3 font-medium">%</th>
-                                <th className="text-right px-4 py-3 font-medium">Бонус нед</th>
-                                <th className="text-right px-4 py-3 font-medium text-white">ЗП нед</th>
+                    <th className="text-right px-4 py-3">Факт</th>
+                    <th className="text-right px-4 py-3">План</th>
+                    <th className="text-right px-4 py-3">%</th>
+                    <th className="text-center px-4 py-3">Статус</th>
+                  </tr>
+                </thead>
 
-                                <th className="text-right px-4 py-3 font-medium">Факт мес</th>
-                                <th className="text-right px-4 py-3 font-medium">План мес</th>
-                                <th className="text-center px-4 py-3 font-medium">%</th>
-                                <th className="text-right px-4 py-3 font-medium">Бонус мес</th>
-                                <th className="text-right px-4 py-3 font-medium text-white">ЗП мес</th>
+                <tbody className="divide-y divide-white/5">
+                  {table.map((r) => (
+                    <tr key={r.company} className="hover:bg-white/[0.02]">
+                      <td className="px-4 py-3 font-medium text-zinc-200 capitalize">F16 {r.company}</td>
 
-                                <th className="text-center px-4 py-3 w-16">Lock</th>
-                              </tr>
-                            </thead>
+                      {/* Weekday team */}
+                      <td className="px-4 py-3 text-right font-mono text-zinc-200">{money(r.week.weekday.fact)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-500">{money(r.week.weekday.plan)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-500">{r.week.weekday.plan ? r.week.weekday.pct.toFixed(0) + '%' : '—'}</td>
+                      <td className="px-4 py-3 text-center"><StatusBadge ok={r.week.weekday.ok} /></td>
 
-                            <tbody className="divide-y divide-white/5">
-                              {/* Командная цель */}
-                              {collective && (
-                                <RowItem
-                                  row={collective}
-                                  name="Команда (общая цель)"
-                                  isMain
-                                  onChange={updateRow}
-                                  weekFact={companyWeekFact}
-                                  monthFact={companyMonthFact}
-                                  weekBonus={0}
-                                  monthBonus={0}
-                                  weekSalary={0}
-                                  monthSalary={0}
-                                />
-                              )}
+                      {/* Weekend team */}
+                      <td className="px-4 py-3 text-right font-mono text-zinc-200">{money(r.week.weekend.fact)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-500">{money(r.week.weekend.plan)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-500">{r.week.weekend.plan ? r.week.weekend.pct.toFixed(0) + '%' : '—'}</td>
+                      <td className="px-4 py-3 text-center"><StatusBadge ok={r.week.weekend.ok} /></td>
 
-                              {/* Операторы */}
-                              {operators.map((op) => {
-                                const opId = String(op.operator_id || '')
-                                const pay = calcOperatorPay(company, opId, op.turnover_target_week, op.turnover_target_month)
+                      {/* Month */}
+                      <td className="px-4 py-3 text-right font-mono text-zinc-200">{money(r.month.fact)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-500">{money(r.month.plan)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-500">{r.month.plan ? r.month.pct.toFixed(0) + '%' : '—'}</td>
+                      <td className="px-4 py-3 text-center"><StatusBadge ok={r.month.ok} /></td>
+                    </tr>
+                  ))}
 
-                                const opName = operatorNames[opId] || opId || 'ID?'
+                  {/* TOTAL */}
+                  <tr className="bg-indigo-500/5">
+                    <td className="px-4 py-3 font-semibold text-indigo-100">ИТОГО</td>
 
-                                return (
-                                  <RowItem
-                                    key={op.plan_key}
-                                    row={op}
-                                    name={opName}
-                                    isMain={false}
-                                    onChange={updateRow}
-                                    weekFact={pay.weekFact}
-                                    monthFact={pay.monthFact}
-                                    weekBonus={pay.weekBonus}
-                                    monthBonus={pay.monthBonus}
-                                    weekSalary={pay.weekSalary}
-                                    monthSalary={pay.monthSalary}
-                                  />
-                                )
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </Card>
+                    {/* totals week split считаем от фактов; план недели = сумма планов компаний, тоже делим по долям компаний */}
+                    {(() => {
+                      const factWd = table.reduce((s, r) => s + r.week.weekday.fact, 0)
+                      const planWd = table.reduce((s, r) => s + r.week.weekday.plan, 0)
+                      const okWd = planWd > 0 && factWd >= planWd
 
-                      {/* подсказка по Extra */}
-                      {company === 'extra' && (
-                        <div className="text-xs text-muted-foreground">
-                          Extra правило: если неделя по Extra ≥ <b className="text-zinc-200">{money(EXTRA_WEEK_THRESHOLD)} ₸</b> → каждый получает <b className="text-zinc-200">{money(EXTRA_BONUS_PER_SHIFT)} ₸</b> за каждую свою смену.
-                        </div>
-                      )}
-                    </section>
-                  )
-                })}
+                      const factWe = table.reduce((s, r) => s + r.week.weekend.fact, 0)
+                      const planWe = table.reduce((s, r) => s + r.week.weekend.plan, 0)
+                      const okWe = planWe > 0 && factWe >= planWe
+
+                      const factM = totals.monthFact
+                      const planM = totals.monthPlan
+                      const okM = totals.ok
+
+                      return (
+                        <>
+                          <td className="px-4 py-3 text-right font-mono text-zinc-200">{money(factWd)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-zinc-500">{money(planWd)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-zinc-500">{planWd ? (pct(factWd, planWd)).toFixed(0) + '%' : '—'}</td>
+                          <td className="px-4 py-3 text-center"><StatusBadge ok={okWd} /></td>
+
+                          <td className="px-4 py-3 text-right font-mono text-zinc-200">{money(factWe)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-zinc-500">{money(planWe)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-zinc-500">{planWe ? (pct(factWe, planWe)).toFixed(0) + '%' : '—'}</td>
+                          <td className="px-4 py-3 text-center"><StatusBadge ok={okWe} /></td>
+
+                          <td className="px-4 py-3 text-right font-mono text-zinc-200">{money(factM)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-zinc-500">{money(planM)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-zinc-500">{planM ? (pct(factM, planM)).toFixed(0) + '%' : '—'}</td>
+                          <td className="px-4 py-3 text-center"><StatusBadge ok={okM} /></td>
+                        </>
+                      )
+                    })()}
+                  </tr>
+                </tbody>
+              </table>
             </div>
-          )}
+          </Card>
+
+          <div className="text-xs text-muted-foreground">
+            Примечание: недельный план делится между командами по фактической доле выручки <b>Пн–Чт</b> и <b>Пт–Вс</b> из истории (N-2..N-1).
+          </div>
         </div>
       </main>
     </div>
