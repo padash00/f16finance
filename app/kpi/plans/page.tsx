@@ -55,10 +55,6 @@ type IncomeRow = {
   kaspi_amount: number | null
   card_amount: number | null
   operator_id: string | null
-  // опционально: если у тебя есть (если нет — просто игнор)
-  is_night?: boolean | null
-  shift_type?: string | null
-  shift_kind?: string | null
   companies?: { code?: string | null } | null
 }
 
@@ -167,11 +163,9 @@ function getCompanyCode(r: IncomeRow): CompanyCode | null {
   return (COMPANIES as readonly string[]).includes(c) ? (c as CompanyCode) : null
 }
 
-function isNightShift(r: IncomeRow): boolean {
-  if (r.is_night === true) return true
-  const s = String(r.shift_type || r.shift_kind || '').toLowerCase()
-  if (!s) return false
-  return s.includes('night') || s.includes('ноч')
+// ✅ Сейчас у тебя в incomes нет поля "ночь/день", поэтому считаем ВСЕ смены дневными.
+function isNightShift(_r: IncomeRow): boolean {
+  return false
 }
 
 // Пороговые бонусы
@@ -191,14 +185,12 @@ function thresholdBonusForShift(company: CompanyCode, amount: number, night: boo
   }
 
   if (company === 'ramen') {
-    // по твоим словам: день и ночь одинаково
     let b = 0
     if (amount >= 80_000) b += 2_000
     if (amount >= 100_000) b += 2_000
     return b
   }
 
-  // extra — пока без порогов (если добавишь — допишем)
   return 0
 }
 
@@ -227,7 +219,6 @@ export default function KPIStatusAndPayoutPage() {
     extra: { week: 0, month: 0 },
   })
 
-  // доля недельного плана на Пн–Чт (считаем по истории)
   const [weekdayShare, setWeekdayShare] = useState<Record<CompanyCode, number>>({
     arena: 4 / 7,
     ramen: 4 / 7,
@@ -250,14 +241,13 @@ export default function KPIStatusAndPayoutPage() {
   const [monthRows, setMonthRows] = useState<IncomeRow[]>([])
   const [operatorNames, setOperatorNames] = useState<OperatorMap>({})
 
-  // ======= LOAD (plans + facts + operator names) =======
   const loadAll = useCallback(async () => {
     if (!weekRange?.start) return
     setLoading(true)
     setStatus(null)
 
     try {
-      // 1) Планы из kpi_plans (collective)
+      // 1) Планы collective
       const { data: plans, error: ep } = await supabase
         .from('kpi_plans')
         .select('*')
@@ -274,13 +264,16 @@ export default function KPIStatusAndPayoutPage() {
       })
       setCollectivePlans(p)
 
-      // 2) Факты: неделя + месяц + строки (с operator_id)
+      // 2) Факты неделя + месяц
       const mStart = iso(startOfMonth(monthStart))
       const mEnd = iso(endOfMonth(monthStart))
 
+      // ✅ ВАЖНО: select только из реальных колонок
+      const selectIncome = 'date, cash_amount, kaspi_amount, card_amount, operator_id, companies!inner(code)'
+
       const { data: incomesMonth, error: em } = await supabase
         .from('incomes')
-        .select('date, cash_amount, kaspi_amount, card_amount, operator_id, is_night, shift_type, shift_kind, companies!inner(code)')
+        .select(selectIncome)
         .gte('date', mStart)
         .lte('date', mEnd)
 
@@ -288,7 +281,7 @@ export default function KPIStatusAndPayoutPage() {
 
       const { data: incomesWeek, error: ew } = await supabase
         .from('incomes')
-        .select('date, cash_amount, kaspi_amount, card_amount, operator_id, is_night, shift_type, shift_kind, companies!inner(code)')
+        .select(selectIncome)
         .gte('date', weekRange.start)
         .lte('date', weekRange.end)
 
@@ -299,7 +292,6 @@ export default function KPIStatusAndPayoutPage() {
       setWeekRows(weekList)
       setMonthRows(monthList)
 
-      // агрегат фактов по неделе
       const weekAgg: any = {
         arena: { weekday: 0, weekend: 0 },
         ramen: { weekday: 0, weekend: 0 },
@@ -315,7 +307,6 @@ export default function KPIStatusAndPayoutPage() {
       })
       setFactsWeek(weekAgg)
 
-      // агрегат фактов по месяцу
       const monthAgg: any = { arena: 0, ramen: 0, extra: 0 }
       monthList.forEach((r: IncomeRow) => {
         const c = getCompanyCode(r)
@@ -324,7 +315,7 @@ export default function KPIStatusAndPayoutPage() {
       })
       setFactsMonth(monthAgg)
 
-      // 3) Доля Пн–Чт / Пт–Вс по истории N-2..N-1 (для честного деления недельного плана)
+      // 3) Доля Пн–Чт / Пт–Вс по истории (N-2..N-1)
       const { fetchStart, fetchEnd } = getForecastDates(monthStart)
 
       const { data: hist, error: eh } = await supabase
@@ -352,7 +343,7 @@ export default function KPIStatusAndPayoutPage() {
       }
       setWeekdayShare(shareRes)
 
-      // 4) Имена операторов (по всем operator_id за неделю+месяц)
+      // 4) Имена операторов
       const ids = new Set<string>()
       weekList.forEach((r: IncomeRow) => r.operator_id && ids.add(r.operator_id))
       monthList.forEach((r: IncomeRow) => r.operator_id && ids.add(r.operator_id))
@@ -520,51 +511,54 @@ export default function KPIStatusAndPayoutPage() {
   }, [collectivePlans, weekdayShare, factsWeek])
 
   // ======= PAY CALC =======
-  const buildTeamPay = useCallback((team: TeamKey): PayRow[] => {
-    const rows = weekRows.filter((r) => (isWeekdayTeam(r.date) ? 'weekday' : 'weekend') === team)
+  const buildTeamPay = useCallback(
+    (team: TeamKey) => {
+      const rows = weekRows.filter((r) => (isWeekdayTeam(r.date) ? 'weekday' : 'weekend') === team)
 
-    const map = new Map<string, { shifts: number; turnover: number; thresholdBonus: number }>()
-    for (const r of rows) {
-      const opId = r.operator_id
-      const c = getCompanyCode(r)
-      if (!opId || !c) continue
+      const map = new Map<string, { shifts: number; turnover: number; thresholdBonus: number }>()
+      for (const r of rows) {
+        const opId = r.operator_id
+        const c = getCompanyCode(r)
+        if (!opId || !c) continue
 
-      const amount = getAmount(r)
-      const night = isNightShift(r)
-      const b = thresholdBonusForShift(c, amount, night)
+        const amount = getAmount(r)
+        const night = isNightShift(r)
+        const b = thresholdBonusForShift(c, amount, night)
 
-      const cur = map.get(opId) || { shifts: 0, turnover: 0, thresholdBonus: 0 }
-      cur.shifts += 1
-      cur.turnover += amount
-      cur.thresholdBonus += b
-      map.set(opId, cur)
-    }
-
-    const pool = teamPools[team] || 0
-    const totalShifts = Array.from(map.values()).reduce((s, v) => s + v.shifts, 0)
-
-    const out: PayRow[] = Array.from(map.entries()).map(([opId, v]) => {
-      const name = operatorNames[opId] || opId
-      const basePay = v.shifts * SHIFT_BASE_PAY
-      const teamBonus = totalShifts > 0 ? Math.round(pool * (v.shifts / totalShifts)) : 0
-      const total = basePay + v.thresholdBonus + teamBonus
-      return {
-        operator_id: opId,
-        name,
-        shifts: v.shifts,
-        turnover: Math.round(v.turnover),
-        basePay,
-        thresholdBonus: v.thresholdBonus,
-        teamBonus,
-        total,
+        const cur = map.get(opId) || { shifts: 0, turnover: 0, thresholdBonus: 0 }
+        cur.shifts += 1
+        cur.turnover += amount
+        cur.thresholdBonus += b
+        map.set(opId, cur)
       }
-    })
 
-    out.sort((a, b) => b.total - a.total)
-    return out
-  }, [weekRows, teamPools, operatorNames])
+      const pool = teamPools[team] || 0
+      const totalShifts = Array.from(map.values()).reduce((s, v) => s + v.shifts, 0)
 
-  const buildMonthPay = useCallback((): PayRow[] => {
+      const out: PayRow[] = Array.from(map.entries()).map(([opId, v]) => {
+        const name = operatorNames[opId] || opId
+        const basePay = v.shifts * SHIFT_BASE_PAY
+        const teamBonus = totalShifts > 0 ? Math.round(pool * (v.shifts / totalShifts)) : 0
+        const total = basePay + v.thresholdBonus + teamBonus
+        return {
+          operator_id: opId,
+          name,
+          shifts: v.shifts,
+          turnover: Math.round(v.turnover),
+          basePay,
+          thresholdBonus: v.thresholdBonus,
+          teamBonus,
+          total,
+        }
+      })
+
+      out.sort((a, b) => b.total - a.total)
+      return out
+    },
+    [weekRows, teamPools, operatorNames]
+  )
+
+  const buildMonthPay = useCallback(() => {
     const map = new Map<string, { shifts: number; turnover: number; thresholdBonus: number }>()
     for (const r of monthRows) {
       const opId = r.operator_id
@@ -622,11 +616,21 @@ export default function KPIStatusAndPayoutPage() {
   }, [payWeekday, payWeekend, payMonth])
 
   const StatusBadge = ({ ok }: { ok: boolean }) => (
-    <Badge className={ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}>
+    <Badge
+      className={
+        ok
+          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+          : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+      }
+    >
       {ok ? (
-        <span className="inline-flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> выполнен</span>
+        <span className="inline-flex items-center gap-1">
+          <CheckCircle2 className="w-3.5 h-3.5" /> выполнен
+        </span>
       ) : (
-        <span className="inline-flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> не выполнен</span>
+        <span className="inline-flex items-center gap-1">
+          <XCircle className="w-3.5 h-3.5" /> не выполнен
+        </span>
       )}
     </Badge>
   )
@@ -636,8 +640,6 @@ export default function KPIStatusAndPayoutPage() {
       <Sidebar />
       <main className="flex-1 overflow-auto p-6 md:p-10">
         <div className="max-w-6xl mx-auto space-y-8">
-
-          {/* HEADER */}
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-5 pb-6 border-b border-white/5">
             <div className="space-y-2">
               <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
@@ -645,7 +647,7 @@ export default function KPIStatusAndPayoutPage() {
                 KPI Табло + выплаты (неделя / месяц)
               </h1>
               <div className="text-xs text-muted-foreground">
-                Неделя = Пн–Чт и Пт–Вс. Выплаты считаются автоматически: база + пороги + бонус команды (если есть).
+                Ошибка про is_night убрана. Сейчас все смены считаются дневными (пока не добавим поле).
               </div>
             </div>
 
@@ -688,17 +690,17 @@ export default function KPIStatusAndPayoutPage() {
             </div>
           </div>
 
-          {/* STATUS */}
           {status && (
-            <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${
-              status.type === 'error' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
-            }`}>
+            <div
+              className={`p-3 rounded-lg text-sm flex items-center gap-2 ${
+                status.type === 'error' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
+              }`}
+            >
               {status.type === 'error' ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
               {status.msg}
             </div>
           )}
 
-          {/* MANAGEMENT KPI */}
           <Card className="p-4 bg-[#0A0A0A] border-white/5">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="space-y-1">
@@ -707,32 +709,40 @@ export default function KPIStatusAndPayoutPage() {
                   Месячный KPI менеджмента (общий)
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Факт: <b className="text-zinc-200">{money(totals.monthFact)}</b> / План: <b className="text-zinc-200">{money(totals.monthPlan)}</b>
+                  Факт: <b className="text-zinc-200">{money(totals.monthFact)}</b> / План:{' '}
+                  <b className="text-zinc-200">{money(totals.monthPlan)}</b>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
                 <StatusBadge ok={totals.ok} />
                 <Badge variant="secondary" className="font-mono">
-                  Руководитель: {money(SUPERVISOR_SALARY)} {totals.ok ? `+ ${money(totals.supervisorBonus)}` : '+ 0 ₸'} = {money(SUPERVISOR_SALARY + totals.supervisorBonus)}
+                  Руководитель: {money(SUPERVISOR_SALARY)} {totals.ok ? `+ ${money(totals.supervisorBonus)}` : '+ 0 ₸'} ={' '}
+                  {money(SUPERVISOR_SALARY + totals.supervisorBonus)}
                 </Badge>
                 <Badge variant="secondary" className="font-mono">
-                  Маркетолог: {money(MARKETING_SALARY)} {totals.ok ? `+ ${money(totals.marketingBonus)}` : '+ 0 ₸'} = {money(MARKETING_SALARY + totals.marketingBonus)}
+                  Маркетолог: {money(MARKETING_SALARY)} {totals.ok ? `+ ${money(totals.marketingBonus)}` : '+ 0 ₸'} ={' '}
+                  {money(MARKETING_SALARY + totals.marketingBonus)}
                 </Badge>
               </div>
             </div>
           </Card>
 
-          {/* KPI TABLE */}
           <Card className="bg-[#0A0A0A] border-white/5 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[1100px]">
                 <thead className="bg-white/[0.02] text-xs text-muted-foreground uppercase">
                   <tr>
                     <th className="text-left px-4 py-3">Точка</th>
-                    <th className="text-center px-4 py-3" colSpan={4}>Неделя — Пн–Чт</th>
-                    <th className="text-center px-4 py-3" colSpan={4}>Неделя — Пт–Вс</th>
-                    <th className="text-center px-4 py-3" colSpan={4}>Месяц (общий)</th>
+                    <th className="text-center px-4 py-3" colSpan={4}>
+                      Неделя — Пн–Чт
+                    </th>
+                    <th className="text-center px-4 py-3" colSpan={4}>
+                      Неделя — Пт–Вс
+                    </th>
+                    <th className="text-center px-4 py-3" colSpan={4}>
+                      Месяц (общий)
+                    </th>
                   </tr>
                   <tr className="border-t border-white/5">
                     <th className="text-left px-4 py-3"></th>
@@ -761,18 +771,28 @@ export default function KPIStatusAndPayoutPage() {
 
                       <td className="px-4 py-3 text-right font-mono text-zinc-200">{money(r.week.weekday.fact)}</td>
                       <td className="px-4 py-3 text-right font-mono text-zinc-500">{money(r.week.weekday.plan)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-zinc-500">{r.week.weekday.plan ? r.week.weekday.pct.toFixed(0) + '%' : '—'}</td>
-                      <td className="px-4 py-3 text-center"><StatusBadge ok={r.week.weekday.ok} /></td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-500">
+                        {r.week.weekday.plan ? r.week.weekday.pct.toFixed(0) + '%' : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <StatusBadge ok={r.week.weekday.ok} />
+                      </td>
 
                       <td className="px-4 py-3 text-right font-mono text-zinc-200">{money(r.week.weekend.fact)}</td>
                       <td className="px-4 py-3 text-right font-mono text-zinc-500">{money(r.week.weekend.plan)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-zinc-500">{r.week.weekend.plan ? r.week.weekend.pct.toFixed(0) + '%' : '—'}</td>
-                      <td className="px-4 py-3 text-center"><StatusBadge ok={r.week.weekend.ok} /></td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-500">
+                        {r.week.weekend.plan ? r.week.weekend.pct.toFixed(0) + '%' : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <StatusBadge ok={r.week.weekend.ok} />
+                      </td>
 
                       <td className="px-4 py-3 text-right font-mono text-zinc-200">{money(r.month.fact)}</td>
                       <td className="px-4 py-3 text-right font-mono text-zinc-500">{money(r.month.plan)}</td>
                       <td className="px-4 py-3 text-right font-mono text-zinc-500">{r.month.plan ? r.month.pct.toFixed(0) + '%' : '—'}</td>
-                      <td className="px-4 py-3 text-center"><StatusBadge ok={r.month.ok} /></td>
+                      <td className="px-4 py-3 text-center">
+                        <StatusBadge ok={r.month.ok} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -780,7 +800,6 @@ export default function KPIStatusAndPayoutPage() {
             </div>
           </Card>
 
-          {/* WEEK PAYOUTS */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="p-4 bg-[#0A0A0A] border-white/5">
               <div className="flex items-center justify-between gap-3">
@@ -788,13 +807,11 @@ export default function KPIStatusAndPayoutPage() {
                   <Users className="w-4 h-4 text-indigo-400" />
                   <div className="font-semibold text-zinc-200">Выплаты за неделю — Команда Пн–Чт</div>
                 </div>
-                <Badge variant="secondary" className="font-mono">
-                  Фонд команды: {money(teamPools.weekday)}
-                </Badge>
+                <Badge variant="secondary" className="font-mono">Фонд команды: {money(teamPools.weekday)}</Badge>
               </div>
 
               <div className="text-xs text-muted-foreground mt-1">
-                Итого к выплате: <b className="text-zinc-200">{money(payTotals.week.weekday.total)}</b> (база {money(payTotals.week.weekday.base)} + пороги {money(payTotals.week.weekday.thr)} + команда {money(payTotals.week.weekday.team)})
+                Итого к выплате: <b className="text-zinc-200">{money(payTotals.week.weekday.total)}</b>
               </div>
 
               <div className="mt-3 overflow-x-auto">
@@ -833,13 +850,11 @@ export default function KPIStatusAndPayoutPage() {
                   <Users className="w-4 h-4 text-indigo-400" />
                   <div className="font-semibold text-zinc-200">Выплаты за неделю — Команда Пт–Вс</div>
                 </div>
-                <Badge variant="secondary" className="font-mono">
-                  Фонд команды: {money(teamPools.weekend)}
-                </Badge>
+                <Badge variant="secondary" className="font-mono">Фонд команды: {money(teamPools.weekend)}</Badge>
               </div>
 
               <div className="text-xs text-muted-foreground mt-1">
-                Итого к выплате: <b className="text-zinc-200">{money(payTotals.week.weekend.total)}</b> (база {money(payTotals.week.weekend.base)} + пороги {money(payTotals.week.weekend.thr)} + команда {money(payTotals.week.weekend.team)})
+                Итого к выплате: <b className="text-zinc-200">{money(payTotals.week.weekend.total)}</b>
               </div>
 
               <div className="mt-3 overflow-x-auto">
@@ -873,7 +888,6 @@ export default function KPIStatusAndPayoutPage() {
             </Card>
           </div>
 
-          {/* MONTH PAYOUTS */}
           <Card className="p-4 bg-[#0A0A0A] border-white/5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
@@ -881,7 +895,7 @@ export default function KPIStatusAndPayoutPage() {
                 <div className="font-semibold text-zinc-200">Выплаты за месяц (операторы)</div>
               </div>
               <Badge variant="secondary" className="font-mono">
-                Итого: {money(payTotals.month.total)} (база {money(payTotals.month.base)} + пороги {money(payTotals.month.thr)})
+                Итого: {money(payTotals.month.total)}
               </Badge>
             </div>
 
@@ -918,7 +932,7 @@ export default function KPIStatusAndPayoutPage() {
           </Card>
 
           <div className="text-xs text-muted-foreground">
-            Бонус команды (неделя) = {Math.round(TEAM_POOL_RATE * 100)}% от перевыполнения плана команды и делится по сменам.
+            Бонус команды (неделя) = {Math.round(TEAM_POOL_RATE * 100)}% от перевыполнения и делится по сменам.
           </div>
         </div>
       </main>
