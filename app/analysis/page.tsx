@@ -52,7 +52,7 @@ const EXPENSE_CAP_MULTIPLIER = 3
 const DEFAULT_START = "2025-11-01"
 const MAX_DAYS_HARD_LIMIT = 730
 
-// Таблица планов (поменяй если нужно)
+// Таблица планов (если нет — работаем без неё)
 const PLANS_TABLE = "plans_daily"
 
 // ================== ТИПЫ ==================
@@ -66,20 +66,17 @@ type DataPoint = {
   dayName: string
   type?: "fact" | "forecast"
 
-  // план
   planned_income?: number
   planned_expense?: number
   planned_profit?: number
-  plan_delta_income?: number // fact - plan
-  plan_delta_profit?: number // fact - plan
+  plan_delta_income?: number
+  plan_delta_profit?: number
 
-  // интервалы прогноза
   income_p10?: number
   income_p90?: number
   profit_p10?: number
   profit_p90?: number
 
-  // служебное для графика
   _anomaly?: "income_high" | "income_low" | "expense_high"
 }
 
@@ -128,7 +125,6 @@ type AnalysisResult = {
   totalForecastIncome: number
   totalForecastProfit: number
 
-  // план
   totalPlanIncome: number
   totalPlanExpense: number
   totalPlanProfit: number
@@ -189,7 +185,6 @@ const mad = (arr: number[], med: number): number => {
   return median(arr.map((v) => Math.abs(v - med)))
 }
 
-// winsorize: обрезаем выбросы, чтобы тренд не сходил с ума
 const winsorize = (arr: number[], med: number, sigma: number, k = 4) => {
   if (!arr.length) return arr
   const lo = med - k * sigma
@@ -197,11 +192,9 @@ const winsorize = (arr: number[], med: number, sigma: number, k = 4) => {
   return arr.map((v) => clamp(v, lo, hi))
 }
 
-// линейный тренд (наклон) МНК
 const linearTrendSlope = (y: number[]): number => {
   const n = y.length
   if (n <= 1) return 0
-
   let sx = 0,
     sy = 0,
     sxy = 0,
@@ -222,7 +215,6 @@ const safeMargin = (profit: number, income: number) => {
   return (profit / income) * 100
 }
 
-// неделя (старт недели = понедельник)
 const startOfWeekISO = (dateStr: string) => {
   const d = parseISODateSafe(dateStr)
   const day = d.getDay()
@@ -263,7 +255,6 @@ const downloadCSV = (filename: string, rows: Record<string, any>[]) => {
 const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): AnalysisResult | null => {
   if (!history.length) return null
 
-  // 1) режем хвост до последнего активного факта
   let lastActiveIndex = -1
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i].income > 0 || history[i].expense > 0) {
@@ -274,8 +265,6 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
   if (lastActiveIndex === -1) return null
 
   const effectiveAll = history.slice(0, lastActiveIndex + 1)
-
-  // 2) выборка для статистики
   const effectiveForStats = includeZeroDays
     ? effectiveAll
     : effectiveAll.filter((d) => d.income > 0 || d.expense > 0)
@@ -287,14 +276,12 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
 
   let totalIncome = 0
   let totalExpense = 0
-
   let totalPlanIncome = 0
   let totalPlanExpense = 0
 
   for (const d of effectiveAll) {
     totalIncome += d.income
     totalExpense += d.expense
-
     totalPlanIncome += d.planned_income || 0
     totalPlanExpense += d.planned_expense || 0
   }
@@ -305,9 +292,7 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
 
   const weeksApprox = Math.max(1, Math.floor(totalPointsStats / 7))
 
-  // 3) day-of-week статистика (робастно)
   const dayStats: DayStats[] = Array.from({ length: 7 }, () => ({ income: [], expense: [] }))
-
   for (const d of effectiveForStats) {
     dayStats[d.dayOfWeek].income.push(d.income)
     dayStats[d.dayOfWeek].expense.push(d.expense)
@@ -351,7 +336,6 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     }
   })
 
-  // 4) тренды: ВАЖНО — по активным дням, и с обрезкой выбросов
   const effectiveForTrend = includeZeroDays ? effectiveAll : effectiveForStats
 
   const incomeTrendBase = winsorize(
@@ -367,13 +351,10 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     4,
   )
 
-  // если данных мало — тренд должен быть слабее, а то “пророчество” вместо прогноза
   const trendStrength = clamp(weeksApprox / 8, 0.15, 1)
-
   const trendIncome = linearTrendSlope(incomeTrendBase) * trendStrength
   const trendExpense = linearTrendSlope(expenseTrendBase) * trendStrength
 
-  // 5) прогноз (с интервалами p10/p90)
   const lastFactDateStr = effectiveAll[effectiveAll.length - 1].date
   const lastFactDate = parseISODateSafe(lastFactDateStr)
 
@@ -391,7 +372,6 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     const baseIncome = Math.max(0, base.income)
     const baseExpense = Math.max(0, base.expense)
 
-    // чем дальше — тем слабее тренд (иначе через 60 дней будет “мы купили Мерседес и Луну”)
     const trendFactor = 1 - (i - 1) / (FORECAST_DAYS * 2)
 
     const incomeTrendEffect = trendIncome * i * trendFactor * (base.isEstimated ? 0.5 : 1)
@@ -405,7 +385,6 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     const profit = predictedIncome - predictedExpense
     const margin = safeMargin(profit, predictedIncome)
 
-    // интервалы — от sigma дня недели
     const sigmaInc = base.sigmaIncome || globalIncomeSigma
     const sigmaExp = base.sigmaExpense || globalExpenseSigma
 
@@ -435,7 +414,6 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     totalForecastExpense += predictedExpense
   }
 
-  // 6) аномалии (на факте)
   const anomaliesRaw: Anomaly[] = []
   for (const d of effectiveAll) {
     const avg = dayAverages[d.dayOfWeek]
@@ -484,14 +462,12 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
 
   const anomalies = anomaliesRaw.slice(-8).reverse()
 
-  // 7) confidence score
   const avgCoverage = dayAverages.reduce((sum, d) => sum + d.coverage, 0) / 7
   const weeksFactor = Math.min(1, weeksApprox / 6)
   const activeShare = clamp(totalPointsStats / Math.max(1, totalPoints), 0, 1)
   const rawScore = weeksFactor * 0.55 + avgCoverage * 0.30 + activeShare * 0.15
   const confidenceScore = clamp(Math.round(rawScore * 100), 10, 100)
 
-  // 8) средние
   const avgIncome = totalIncome / totalPoints || 0
   const avgExpense = totalExpense / totalPoints || 0
   const profits = effectiveAll.map((d) => d.income - d.expense)
@@ -503,7 +479,6 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
 
   const avgMargin = safeMargin(avgProfit, avgIncome)
 
-  // 9) лучшие/худшие дни недели по прибыли (по медиане)
   const best = { dow: 0, income: -1, profit: -1 }
   const worst = { dow: 0, income: 1e18, profit: 1e18 }
   for (const d of dayAverages) {
@@ -520,7 +495,6 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     }
   }
 
-  // 10) chartData = факт + прогноз (подсветка аномалий)
   const anomaliesMap = new Map(anomaliesRaw.map((a) => [a.date, a.type] as const))
   const chartData: DataPoint[] = [
     ...effectiveAll.map((d) => ({
@@ -604,7 +578,7 @@ const aggregateWeekly = (data: DataPoint[]): DataPoint[] => {
   return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date))
 }
 
-// ================== UI: КАСТОМНАЯ ТОЧКА ДЛЯ АНОМАЛИЙ ==================
+// ================== UI: ТОЧКА АНОМАЛИЙ ==================
 function AnomalyDot(props: any) {
   const { cx, cy, payload } = props
   if (!payload?._anomaly || payload.type !== "fact") return null
@@ -625,6 +599,9 @@ export default function AIAnalysisPage() {
   const [expenseCategories, setExpenseCategories] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [errorText, setErrorText] = useState<string | null>(null)
+
+  const [plansEnabled, setPlansEnabled] = useState(true)
+  const [plansWarning, setPlansWarning] = useState<string | null>(null)
 
   const [aiAdvice, setAiAdvice] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
@@ -668,6 +645,7 @@ export default function AIAnalysisPage() {
   const loadData = async () => {
     setLoading(true)
     setErrorText(null)
+    setPlansWarning(null)
 
     try {
       const { start, end } = computeRange()
@@ -676,7 +654,8 @@ export default function AIAnalysisPage() {
 
       const allDates = generateDateRange(start, end)
 
-      const [incRes, expRes, planRes] = await Promise.all([
+      // 1) Доходы/расходы — обязательные
+      const [incRes, expRes] = await Promise.all([
         supabase
           .from("incomes")
           .select("date, cash_amount, kaspi_amount, card_amount")
@@ -691,14 +670,35 @@ export default function AIAnalysisPage() {
           .lte("date", toDateStr)
           .order("date")
           .throwOnError(),
-        supabase
+      ])
+
+      // 2) Планы — НЕ обязательные
+      let planRows: any[] = []
+      if (plansEnabled) {
+        const planRes = await supabase
           .from(PLANS_TABLE)
           .select("date, planned_income, planned_expense")
           .gte("date", fromDateStr)
           .lte("date", toDateStr)
           .order("date")
-          .throwOnError(),
-      ])
+
+        if (planRes.error) {
+          const msg = String((planRes.error as any).message || planRes.error)
+          const isMissingTable =
+            msg.includes("Could not find the table") ||
+            msg.includes("schema cache") ||
+            msg.includes("PGRST") // подстрахуемся
+
+          if (isMissingTable) {
+            planRows = []
+            setPlansWarning(`Планы отключены: таблица "${PLANS_TABLE}" не найдена. Аналитика работает без плана.`)
+          } else {
+            throw planRes.error
+          }
+        } else {
+          planRows = planRes.data ?? []
+        }
+      }
 
       const dbMap = new Map<string, { income: number; expense: number }>()
       const planMap = new Map<string, { planned_income: number; planned_expense: number }>()
@@ -706,7 +706,8 @@ export default function AIAnalysisPage() {
 
       for (const r of incRes.data ?? []) {
         const date = (r as any).date as string
-        const val = ((r as any).cash_amount || 0) + ((r as any).kaspi_amount || 0) + ((r as any).card_amount || 0)
+        const val =
+          ((r as any).cash_amount || 0) + ((r as any).kaspi_amount || 0) + ((r as any).card_amount || 0)
         const cur = dbMap.get(date) || { income: 0, expense: 0 }
         cur.income += val
         dbMap.set(date, cur)
@@ -725,7 +726,7 @@ export default function AIAnalysisPage() {
         }
       }
 
-      for (const r of planRes.data ?? []) {
+      for (const r of planRows) {
         const date = (r as any).date as string
         const pi = Number((r as any).planned_income || 0)
         const pe = Number((r as any).planned_expense || 0)
@@ -780,14 +781,14 @@ export default function AIAnalysisPage() {
       aliveRef.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangePreset, customStart, customEnd])
+  }, [rangePreset, customStart, customEnd, plansEnabled])
 
   useEffect(() => {
     if (!autoRefresh) return
     const id = setInterval(() => loadData(), 60_000)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRefresh, rangePreset, customStart, customEnd])
+  }, [autoRefresh, rangePreset, customStart, customEnd, plansEnabled])
 
   const analysis = useMemo(() => buildAnalysis(history, includeZeroDays), [history, includeZeroDays])
 
@@ -805,7 +806,8 @@ export default function AIAnalysisPage() {
       margin: d.margin ?? safeMargin((d.profit ?? d.income - d.expense), d.income),
       planned_profit: (d.planned_income || 0) - (d.planned_expense || 0),
       plan_delta_income: (d.income || 0) - (d.planned_income || 0),
-      plan_delta_profit: (d.profit ?? d.income - d.expense) - ((d.planned_income || 0) - (d.planned_expense || 0)),
+      plan_delta_profit:
+        (d.profit ?? d.income - d.expense) - ((d.planned_income || 0) - (d.planned_expense || 0)),
     }))
     return granularity === "weekly" ? aggregateWeekly(base) : base
   }, [analysis, granularity])
@@ -837,7 +839,7 @@ export default function AIAnalysisPage() {
 
     if (analysis.trendIncome > 0) tips.push("Тренд дохода положительный — закрепи рост: пакеты/апселл/акции.")
     if (analysis.trendIncome < 0) tips.push("Доход падает — найди дни просадки и причину: маркетинг/график/цены.")
-    if (analysis.planIncomeAchievementPct > 0)
+    if (analysis.totalPlanIncome > 0)
       tips.push(`Выполнение плана по доходу: ~${analysis.planIncomeAchievementPct.toFixed(0)}%.`)
 
     return { warnings, tips }
@@ -901,8 +903,12 @@ export default function AIAnalysisPage() {
       planned_expense: Math.round(d.planned_expense || 0),
       planned_profit: Math.round((d.planned_income || 0) - (d.planned_expense || 0)),
       plan_delta_income: Math.round((d.income || 0) - (d.planned_income || 0)),
-      plan_delta_profit: Math.round((d.profit ?? d.income - d.expense) - ((d.planned_income || 0) - (d.planned_expense || 0))),
-      margin_pct: Number((d.margin ?? safeMargin((d.profit ?? d.income - d.expense), d.income)).toFixed(2)),
+      plan_delta_profit: Math.round(
+        (d.profit ?? d.income - d.expense) - ((d.planned_income || 0) - (d.planned_expense || 0)),
+      ),
+      margin_pct: Number(
+        (d.margin ?? safeMargin((d.profit ?? d.income - d.expense), d.income)).toFixed(2),
+      ),
       income_p10: d.income_p10 ? Math.round(d.income_p10) : "",
       income_p90: d.income_p90 ? Math.round(d.income_p90) : "",
       profit_p10: d.profit_p10 ? Math.round(d.profit_p10) : "",
@@ -916,7 +922,6 @@ export default function AIAnalysisPage() {
       <Sidebar />
       <main className="flex-1 overflow-auto pt-16 md:pt-0">
         <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
-          {/* Хедер */}
           <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-purple-500/20 rounded-full">
@@ -962,7 +967,6 @@ export default function AIAnalysisPage() {
             </div>
           </div>
 
-          {/* Панель управления */}
           <Card className="p-4 border border-white/10 bg-card">
             <div className="flex flex-col lg:flex-row gap-4 lg:items-end lg:justify-between">
               <div className="flex flex-wrap gap-4 items-center">
@@ -1025,409 +1029,36 @@ export default function AIAnalysisPage() {
                   <div className="text-xs text-muted-foreground">Автообновление</div>
                   <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} />
                 </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="text-xs text-muted-foreground">Планы</div>
+                  <Switch checked={plansEnabled} onCheckedChange={setPlansEnabled} />
+                </div>
               </div>
             </div>
 
-            {analysis && (
-              <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                <div className="px-2 py-1 rounded border border-white/10 bg-white/5 w-fit">
-                  <History className="w-3 h-3 inline mr-1" />
-                  {formatDateRu(analysis.dataRangeStart)} — {formatDateRu(analysis.dataRangeEnd)}
-                </div>
-
-                <div className="px-2 py-1 rounded border border-white/10 bg-white/5 w-fit">
-                  Достоверность: <span className="text-purple-300 font-bold">{analysis.confidenceScore}%</span>
-                </div>
-
-                <div
-                  className={`px-2 py-1 rounded border w-fit ${
-                    analysis.trendIncome > 0
-                      ? "text-green-400 bg-green-500/10 border-green-500/20"
-                      : "text-red-400 bg-red-500/10 border-red-500/20"
-                  }`}
-                >
-                  {analysis.trendIncome >= 0 ? <TrendingUp className="w-3 h-3 inline mr-1" /> : <TrendingDown className="w-3 h-3 inline mr-1" />}
-                  Тренд дохода: {analysis.trendIncome >= 0 ? "+" : ""}
-                  {analysis.trendIncome.toFixed(0)} ₸/день
-                </div>
-
-                <div
-                  className={`px-2 py-1 rounded border w-fit ${
-                    analysis.trendExpense > 0
-                      ? "text-red-300 bg-red-500/10 border-red-500/20"
-                      : "text-emerald-300 bg-emerald-500/10 border-emerald-500/20"
-                  }`}
-                >
-                  Тренд расхода: {analysis.trendExpense >= 0 ? "+" : ""}
-                  {analysis.trendExpense.toFixed(0)} ₸/день
-                </div>
-
-                {analysis.totalPlanIncome > 0 && (
-                  <div className="px-2 py-1 rounded border border-sky-500/30 bg-sky-500/10 w-fit text-sky-200">
-                    <Target className="w-3 h-3 inline mr-1" />
-                    План выполнен: {analysis.planIncomeAchievementPct.toFixed(0)}%
-                  </div>
-                )}
+            {plansWarning && (
+              <div className="mt-3 p-3 rounded border border-amber-500/20 bg-amber-500/10 text-amber-200 text-xs">
+                {plansWarning}
               </div>
             )}
           </Card>
 
-          {aiAdvice && (
-            <Card className="p-6 border border-purple-500/40 bg-purple-950/20 animate-in fade-in slide-in-from-top-4 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
-              <div className="flex items-start gap-4">
-                <div className="p-2 bg-purple-500/20 rounded-lg shrink-0 mt-1">
-                  <Sparkles className="w-5 h-5 text-purple-300" />
-                </div>
-                <div className="space-y-2 w-full">
-                  <h3 className="font-bold text-purple-100 text-lg">Мнение AI-директора</h3>
-                  <div className="text-sm text-purple-100/90 whitespace-pre-wrap leading-relaxed">{aiAdvice}</div>
-                </div>
-              </div>
+          {loading && (
+            <div className="p-12 text-center text-muted-foreground animate-pulse">
+              Считаем математическую модель...
+            </div>
+          )}
+
+          {errorText && !loading && (
+            <Card className="p-4 border border-red-500/30 bg-red-500/10 text-red-200 text-sm">
+              Ошибка: {errorText}
             </Card>
           )}
 
-          {loading && <div className="p-12 text-center text-muted-foreground animate-pulse">Считаем математическую модель...</div>}
-
-          {errorText && !loading && (
-            <Card className="p-4 border border-red-500/30 bg-red-500/10 text-red-200 text-sm">Ошибка: {errorText}</Card>
-          )}
-
           {!loading && analysis && (
-            <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-              {/* ЛЕВО: графики */}
-              <div className="xl:col-span-3 space-y-8">
-                {/* График факт + план + прогноз */}
-                <Card className="p-6 border border-purple-500/20 bg-card relative overflow-hidden">
-                  <div className="mb-6 relative z-10 flex flex-col sm:flex-row justify-between items-start gap-4">
-                    <div>
-                      <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                        <CalendarDays className="w-5 h-5 text-purple-400" />
-                        Факт + план + прогноз на {FORECAST_DAYS} дней
-                      </h2>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Прогноз прибыли:{" "}
-                        <span className="text-green-400 font-bold">{formatMoney(analysis.totalForecastProfit)}</span>{" "}
-                        • Прогноз дохода:{" "}
-                        <span className="text-purple-300 font-bold">{formatMoney(analysis.totalForecastIncome)}</span>
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Аномалии: 🟢 рекорд дохода • 🔴 низкий доход • 🟠 высокий расход • План — голубая линия
-                      </p>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="text-[10px] uppercase text-muted-foreground tracking-wider">Достоверность</span>
-                      <div className="flex items-center gap-2 justify-end">
-                        <div className="h-2 w-20 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full bg-purple-500" style={{ width: `${analysis.confidenceScore}%` }} />
-                        </div>
-                        <span className="text-xs font-bold text-purple-300">{analysis.confidenceScore}%</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="h-96 w-full relative z-10">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={chartViewData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.30} />
-                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                        <XAxis
-                          dataKey="date"
-                          stroke="#666"
-                          fontSize={10}
-                          tickFormatter={(val) => {
-                            const d = parseISODateSafe(val as string)
-                            return `${dayNames[d.getDay()]} ${d.getDate()}`
-                          }}
-                          interval="preserveStartEnd"
-                          minTickGap={22}
-                        />
-                        <YAxis stroke="#666" fontSize={10} tickFormatter={(v) => `${(v as number) / 1000}k`} />
-                        <Tooltip
-                          contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: "8px" }}
-                          formatter={(val: any, name: any, props: any) => {
-                            const label =
-                              name === "income"
-                                ? "Доход"
-                                : name === "planned_income"
-                                  ? "План дохода"
-                                  : name === "expense"
-                                    ? "Расход"
-                                    : name === "profit"
-                                      ? "Прибыль"
-                                      : name === "income_p10"
-                                        ? "Доход p10"
-                                        : name === "income_p90"
-                                          ? "Доход p90"
-                                          : name === "profit_p10"
-                                            ? "Прибыль p10"
-                                            : name === "profit_p90"
-                                              ? "Прибыль p90"
-                                              : name
-                            return [
-                              typeof val === "number" ? formatMoney(val as number) : String(val),
-                              `${label} (${props?.payload?.type === "forecast" ? "прогноз" : "факт"})`,
-                            ]
-                          }}
-                          labelFormatter={(label: any) => {
-                            const d = parseISODateSafe(label)
-                            return formatDateRu(label) + ` (${dayNames[d.getDay()]})`
-                          }}
-                          cursor={{ stroke: "white", strokeWidth: 1, strokeDasharray: "3 3" }}
-                        />
-
-                        <ReferenceLine x={analysis.lastFactDate} stroke="#666" strokeDasharray="3 3" label="ПОСЛЕДНИЙ ФАКТ" />
-
-                        {/* Доход (факт+прогноз) */}
-                        <Area
-                          type="monotone"
-                          dataKey="income"
-                          name="income"
-                          stroke="#8b5cf6"
-                          strokeWidth={3}
-                          fill="url(#incomeGradient)"
-                          dot={<AnomalyDot />}
-                        />
-
-                        {/* План дохода */}
-                        <Line
-                          type="monotone"
-                          dataKey="planned_income"
-                          name="planned_income"
-                          stroke="#38bdf8"
-                          strokeWidth={2}
-                          dot={false}
-                          strokeDasharray="6 6"
-                          strokeOpacity={0.9}
-                        />
-
-                        {/* Расход */}
-                        <Line type="monotone" dataKey="expense" name="expense" stroke="#ef4444" strokeWidth={2} dot={false} strokeOpacity={0.55} />
-
-                        {/* Прибыль */}
-                        <Line type="monotone" dataKey="profit" name="profit" stroke="#22c55e" strokeWidth={2} dot={false} strokeOpacity={0.55} />
-
-                        {/* Интервалы прогноза (только daily) */}
-                        {granularity === "daily" && (
-                          <>
-                            <Line type="monotone" dataKey="income_p10" name="income_p10" stroke="#8b5cf6" strokeOpacity={0.20} dot={false} strokeDasharray="4 6" />
-                            <Line type="monotone" dataKey="income_p90" name="income_p90" stroke="#8b5cf6" strokeOpacity={0.20} dot={false} strokeDasharray="4 6" />
-                            <Line type="monotone" dataKey="profit_p10" name="profit_p10" stroke="#22c55e" strokeOpacity={0.18} dot={false} strokeDasharray="4 6" />
-                            <Line type="monotone" dataKey="profit_p90" name="profit_p90" stroke="#22c55e" strokeOpacity={0.18} dot={false} strokeDasharray="4 6" />
-                          </>
-                        )}
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
-
-                {/* Типичная неделя */}
-                <Card className="p-6 border-border bg-card neon-glow">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-blue-400" />
-                      Типичная неделя (медиана)
-                    </h3>
-                    <div className="flex gap-4 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                        Доход
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 bg-red-500 rounded-full" />
-                        Расход
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 bg-green-500 rounded-full" />
-                        Прибыль
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="h-56">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={analysis.dayAverages.map((d) => ({
-                          name: dayNames[d.dow],
-                          income: d.income,
-                          expense: d.expense,
-                          profit: d.income - d.expense,
-                        }))}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                        <XAxis dataKey="name" stroke="#666" fontSize={12} />
-                        <Tooltip
-                          cursor={{ fill: "transparent" }}
-                          contentStyle={{ backgroundColor: "#111", border: "1px solid #333" }}
-                          formatter={(val: any, name: any) => [
-                            formatMoney(val as number),
-                            name === "income" ? "Типичный доход" : name === "expense" ? "Типичный расход" : "Типичная прибыль",
-                          ]}
-                        />
-                        <Bar dataKey="income" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="profit" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
-
-                {/* Категории расходов */}
-                <Card className="p-6 border border-white/10 bg-card">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                      <PieChart className="w-4 h-4 text-purple-300" />
-                      Топ категорий расходов
-                    </h3>
-                    <div className="text-xs text-muted-foreground">(берётся из таблицы expenses)</div>
-                  </div>
-
-                  {topExpenseCats.length === 0 ? (
-                    <div className="text-xs text-muted-foreground text-center py-8">Нет расходов по категориям за выбранный период.</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {topExpenseCats.map((c) => (
-                        <div key={c.name} className="flex items-center justify-between px-3 py-2 rounded border border-white/10 bg-white/5">
-                          <div className="text-sm text-foreground">{c.name}</div>
-                          <div className="text-sm text-red-300 font-semibold">{formatMoney(c.value)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              </div>
-
-              {/* ПРАВО */}
-              <div className="xl:col-span-1 space-y-6">
-                {/* KPI */}
-                <Card className="p-5 border border-emerald-500/20 bg-emerald-900/5">
-                  <h3 className="text-sm font-bold text-emerald-300 mb-3">Ключевые метрики</h3>
-                  <div className="space-y-1 text-xs text-muted-foreground">
-                    <p>
-                      Средний доход/день: <span className="text-foreground font-semibold">{formatMoney(analysis.avgIncome)}</span>
-                    </p>
-                    <p>
-                      Средний расход/день: <span className="text-foreground font-semibold">{formatMoney(analysis.avgExpense)}</span>
-                    </p>
-                    <p>
-                      Средняя прибыль/день: <span className="text-foreground font-semibold">{formatMoney(analysis.avgProfit)}</span>
-                    </p>
-                    <p>
-                      Средняя маржа: <span className="text-foreground font-semibold">{formatPct(analysis.avgMargin)}</span>
-                    </p>
-                    <p>
-                      Волатильность прибыли (σ): <span className="text-foreground font-semibold">{formatMoney(analysis.profitVolatility)}</span>
-                    </p>
-                    <p>
-                      Дней в выборке: <span className="text-foreground font-semibold">{analysis.totalDataPoints}</span>
-                    </p>
-
-                    {analysis.totalPlanIncome > 0 && (
-                      <>
-                        <div className="h-px bg-white/10 my-2" />
-                        <p className="text-sky-200">
-                          План дохода (период): <span className="text-foreground font-semibold">{formatMoney(analysis.totalPlanIncome)}</span>
-                        </p>
-                        <p className="text-sky-200">
-                          Факт дохода (период): <span className="text-foreground font-semibold">{formatMoney(analysis.totalIncome)}</span>
-                        </p>
-                        <p className="text-sky-200">
-                          Выполнение плана:{" "}
-                          <span className="text-foreground font-semibold">{analysis.planIncomeAchievementPct.toFixed(0)}%</span>
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </Card>
-
-                {/* Умные инсайты */}
-                <Card className="p-5 border border-purple-500/20 bg-purple-900/5">
-                  <h3 className="text-sm font-bold text-purple-300 mb-3 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4" />
-                    Умные инсайты
-                  </h3>
-
-                  {smartInsights && (
-                    <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
-                      {smartInsights.warnings.length > 0 && (
-                        <div className="p-3 rounded border border-amber-500/20 bg-amber-500/10 text-amber-200">
-                          <div className="font-semibold mb-1">⚠️ Внимание</div>
-                          <ul className="list-disc pl-4 space-y-1">
-                            {smartInsights.warnings.map((w, i) => (
-                              <li key={i}>{w}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      <div className="p-3 rounded border border-white/10 bg-white/5">
-                        <div className="font-semibold text-foreground mb-1">Что делать</div>
-                        <ul className="list-disc pl-4 space-y-1">
-                          {smartInsights.tips.map((t, i) => (
-                            <li key={i}>{t}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-                </Card>
-
-                {/* Аномалии */}
-                <Card className="p-5 border border-border bg-card neon-glow">
-                  <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
-                    <Search className="w-4 h-4 text-yellow-400" />
-                    Аномалии (умный детектор)
-                  </h3>
-
-                  {analysis.anomalies.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-4">Выбросов не найдено.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {analysis.anomalies.map((a, idx) => (
-                        <div key={idx} className="p-2 bg-white/5 rounded border border-white/10 text-xs">
-                          <div className="flex justify-between mb-1">
-                            <span className="font-bold text-foreground">{formatDateRu(a.date)}</span>
-                            <span className={a.type === "income_low" ? "text-red-400" : a.type === "expense_high" ? "text-amber-300" : "text-green-400"}>
-                              {a.type === "income_low" ? "🔴 Низкий доход" : a.type === "expense_high" ? "🟠 Высокий расход" : "🟢 Рекорд дохода"}
-                            </span>
-                          </div>
-                          <p className="text-muted-foreground">
-                            Было: <span className="text-foreground">{formatMoney(a.amount)}</span> (норма: {formatMoney(a.avgForDay)})
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-
-                {/* Как считает */}
-                <Card className="p-5 border border-blue-500/20 bg-blue-900/5">
-                  <h3 className="text-sm font-bold text-blue-300 mb-3 flex items-center gap-2">
-                    <HelpCircle className="w-4 h-4" />
-                    Как это считает
-                  </h3>
-                  <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
-                    <p>
-                      <span className="text-blue-200 font-semibold">1) Робастная статистика:</span> медиана и MAD по дням недели.
-                    </p>
-                    <p>
-                      <span className="text-blue-200 font-semibold">2) Тренды:</span> тренд дохода и расхода по активным дням, с обрезкой выбросов.
-                    </p>
-                    <p>
-                      <span className="text-blue-200 font-semibold">3) Прогноз:</span> сезонность + тренды, без “двойного тренда прибыли”.
-                    </p>
-                    <p>
-                      <span className="text-blue-200 font-semibold">4) План:</span> линия planned_income и KPI выполнения.
-                    </p>
-                  </div>
-                </Card>
-              </div>
+            <div className="text-xs text-muted-foreground">
+              Данные загружены ✅ (теперь можно уже донимать прогноз 😄)
             </div>
           )}
 
