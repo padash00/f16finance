@@ -22,6 +22,7 @@ import {
   Download,
   SlidersHorizontal,
   PieChart,
+  Target,
 } from "lucide-react"
 import {
   ResponsiveContainer,
@@ -37,7 +38,6 @@ import {
   Area,
 } from "recharts"
 
-// Если у тебя этих UI-компонентов нет — скажи, заменю на обычные кнопки/селекты
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
@@ -50,7 +50,10 @@ const MIN_EXPENSE_ANOMALY_ABS = 10_000
 const EXPENSE_CAP_MULTIPLIER = 3
 
 const DEFAULT_START = "2025-11-01"
-const MAX_DAYS_HARD_LIMIT = 730 // защита от “бесконечной” истории
+const MAX_DAYS_HARD_LIMIT = 730
+
+// Таблица планов (поменяй если нужно)
+const PLANS_TABLE = "plans_daily"
 
 // ================== ТИПЫ ==================
 type DataPoint = {
@@ -59,15 +62,16 @@ type DataPoint = {
   expense: number
   profit: number
   margin: number // %
-
-  // "план" (модельное значение) — будет и на факте, и на прогнозе
-  plan_income?: number
-  plan_profit?: number
-  plan_margin?: number
-
   dayOfWeek: number
   dayName: string
   type?: "fact" | "forecast"
+
+  // план
+  planned_income?: number
+  planned_expense?: number
+  planned_profit?: number
+  plan_delta_income?: number // fact - plan
+  plan_delta_profit?: number // fact - plan
 
   // интервалы прогноза
   income_p10?: number
@@ -113,7 +117,7 @@ type AnalysisResult = {
   dataRangeEnd: string
   lastFactDate: string
   trendIncome: number
-  trendProfit: number
+  trendExpense: number
   avgIncome: number
   avgExpense: number
   avgProfit: number
@@ -124,6 +128,12 @@ type AnalysisResult = {
   totalForecastIncome: number
   totalForecastProfit: number
 
+  // план
+  totalPlanIncome: number
+  totalPlanExpense: number
+  totalPlanProfit: number
+  planIncomeAchievementPct: number
+
   bestDow: { dow: number; income: number; profit: number }
   worstDow: { dow: number; income: number; profit: number }
 }
@@ -133,7 +143,7 @@ type Granularity = "daily" | "weekly"
 
 const dayNames = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"]
 
-// ================== УТИЛИТЫ (ДАТЫ БЕЗ UTC-БОЛИ) ==================
+// ================== УТИЛИТЫ ==================
 const toISODateLocal = (d: Date) => {
   const t = d.getTime() - d.getTimezoneOffset() * 60_000
   return new Date(t).toISOString().slice(0, 10)
@@ -179,6 +189,14 @@ const mad = (arr: number[], med: number): number => {
   return median(arr.map((v) => Math.abs(v - med)))
 }
 
+// winsorize: обрезаем выбросы, чтобы тренд не сходил с ума
+const winsorize = (arr: number[], med: number, sigma: number, k = 4) => {
+  if (!arr.length) return arr
+  const lo = med - k * sigma
+  const hi = med + k * sigma
+  return arr.map((v) => clamp(v, lo, hi))
+}
+
 // линейный тренд (наклон) МНК
 const linearTrendSlope = (y: number[]): number => {
   const n = y.length
@@ -207,8 +225,8 @@ const safeMargin = (profit: number, income: number) => {
 // неделя (старт недели = понедельник)
 const startOfWeekISO = (dateStr: string) => {
   const d = parseISODateSafe(dateStr)
-  const day = d.getDay() // 0..6 (вс..сб)
-  const diffToMon = (day + 6) % 7 // вс=6, пн=0...
+  const day = d.getDay()
+  const diffToMon = (day + 6) % 7
   d.setDate(d.getDate() - diffToMon)
   return toISODateLocal(d)
 }
@@ -223,7 +241,6 @@ const downloadCSV = (filename: string, rows: Record<string, any>[]) => {
         .map((h) => {
           const val = r[h]
           const s = val === null || val === undefined ? "" : String(val)
-          // экранирование
           if (s.includes(",") || s.includes('"') || s.includes("\n")) {
             return `"${s.replaceAll('"', '""')}"`
           }
@@ -258,7 +275,7 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
 
   const effectiveAll = history.slice(0, lastActiveIndex + 1)
 
-  // 2) выборка для статистики: либо все дни, либо только “активные” (без нулей)
+  // 2) выборка для статистики
   const effectiveForStats = includeZeroDays
     ? effectiveAll
     : effectiveAll.filter((d) => d.income > 0 || d.expense > 0)
@@ -270,10 +287,21 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
 
   let totalIncome = 0
   let totalExpense = 0
+
+  let totalPlanIncome = 0
+  let totalPlanExpense = 0
+
   for (const d of effectiveAll) {
     totalIncome += d.income
     totalExpense += d.expense
+
+    totalPlanIncome += d.planned_income || 0
+    totalPlanExpense += d.planned_expense || 0
   }
+
+  const totalPlanProfit = totalPlanIncome - totalPlanExpense
+  const planIncomeAchievementPct =
+    totalPlanIncome > 0 ? clamp((totalIncome / totalPlanIncome) * 100, 0, 999) : 0
 
   const weeksApprox = Math.max(1, Math.floor(totalPointsStats / 7))
 
@@ -323,11 +351,27 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     }
   })
 
-  // 4) тренды по всем дням (факт)
-  const yIncome = effectiveAll.map((d) => d.income)
-  const yProfit = effectiveAll.map((d) => d.income - d.expense)
-  const trendIncome = linearTrendSlope(yIncome)
-  const trendProfit = linearTrendSlope(yProfit)
+  // 4) тренды: ВАЖНО — по активным дням, и с обрезкой выбросов
+  const effectiveForTrend = includeZeroDays ? effectiveAll : effectiveForStats
+
+  const incomeTrendBase = winsorize(
+    effectiveForTrend.map((d) => d.income),
+    globalIncomeMed,
+    globalIncomeSigma,
+    4,
+  )
+  const expenseTrendBase = winsorize(
+    effectiveForTrend.map((d) => d.expense),
+    globalExpenseMed,
+    globalExpenseSigma,
+    4,
+  )
+
+  // если данных мало — тренд должен быть слабее, а то “пророчество” вместо прогноза
+  const trendStrength = clamp(weeksApprox / 8, 0.15, 1)
+
+  const trendIncome = linearTrendSlope(incomeTrendBase) * trendStrength
+  const trendExpense = linearTrendSlope(expenseTrendBase) * trendStrength
 
   // 5) прогноз (с интервалами p10/p90)
   const lastFactDateStr = effectiveAll[effectiveAll.length - 1].date
@@ -347,19 +391,21 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     const baseIncome = Math.max(0, base.income)
     const baseExpense = Math.max(0, base.expense)
 
+    // чем дальше — тем слабее тренд (иначе через 60 дней будет “мы купили Мерседес и Луну”)
     const trendFactor = 1 - (i - 1) / (FORECAST_DAYS * 2)
+
     const incomeTrendEffect = trendIncome * i * trendFactor * (base.isEstimated ? 0.5 : 1)
-    const profitTrendEffect = trendProfit * i * trendFactor * (base.isEstimated ? 0.5 : 1)
+    const expenseTrendEffect = trendExpense * i * trendFactor * (base.isEstimated ? 0.5 : 1)
 
     const predictedIncome = Math.max(0, baseIncome + incomeTrendEffect)
 
     const expenseCap = (globalExpenseMed || baseExpense || 0) * EXPENSE_CAP_MULTIPLIER
-    const predictedExpense = Math.min(Math.max(0, baseExpense), expenseCap)
+    const predictedExpense = clamp(baseExpense + expenseTrendEffect, 0, expenseCap)
 
-    const profit = predictedIncome - predictedExpense + profitTrendEffect * 0.25 // мягко, чтобы не улетал
+    const profit = predictedIncome - predictedExpense
     const margin = safeMargin(profit, predictedIncome)
 
-    // интервалы — грубо, но честно: от sigma дня недели
+    // интервалы — от sigma дня недели
     const sigmaInc = base.sigmaIncome || globalIncomeSigma
     const sigmaExp = base.sigmaExpense || globalExpenseSigma
 
@@ -376,9 +422,6 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
       expense: predictedExpense,
       profit,
       margin,
-      plan_income: predictedIncome,
-      plan_profit: profit,
-      plan_margin: margin,
       dayOfWeek: dow,
       dayName: dayNames[dow],
       type: "forecast",
@@ -441,9 +484,9 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
 
   const anomalies = anomaliesRaw.slice(-8).reverse()
 
-  // 7) confidence score (длина истории + равномерность + доля активных)
+  // 7) confidence score
   const avgCoverage = dayAverages.reduce((sum, d) => sum + d.coverage, 0) / 7
-  const weeksFactor = Math.min(1, weeksApprox / 6) // 6 недель = отлично
+  const weeksFactor = Math.min(1, weeksApprox / 6)
   const activeShare = clamp(totalPointsStats / Math.max(1, totalPoints), 0, 1)
   const rawScore = weeksFactor * 0.55 + avgCoverage * 0.30 + activeShare * 0.15
   const confidenceScore = clamp(Math.round(rawScore * 100), 10, 100)
@@ -477,36 +520,14 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     }
   }
 
-  // 10) chartData = факт + прогноз
-  // ✅ добавляем plan_* для факта тоже (чтобы сравнивать план vs факт за любой день)
+  // 10) chartData = факт + прогноз (подсветка аномалий)
   const anomaliesMap = new Map(anomaliesRaw.map((a) => [a.date, a.type] as const))
-  const lastIdx = effectiveAll.length - 1
-
   const chartData: DataPoint[] = [
-    ...effectiveAll.map((d, idx) => {
-      const base = dayAverages[d.dayOfWeek]
-      const baseIncome = Math.max(0, base.income)
-      const baseExpense = Math.max(0, base.expense)
-
-      const rel = idx - lastIdx // прошлое = отрицательное, последний факт = 0
-
-      const planIncome = Math.max(0, baseIncome + trendIncome * rel)
-
-      const expenseCap = (globalExpenseMed || baseExpense || 0) * EXPENSE_CAP_MULTIPLIER
-      const planExpense = Math.min(Math.max(0, baseExpense), expenseCap)
-
-      const planProfit = planIncome - planExpense + trendProfit * rel * 0.25
-      const planMargin = safeMargin(planProfit, planIncome)
-
-      return {
-        ...d,
-        type: "fact" as const,
-        _anomaly: anomaliesMap.get(d.date),
-        plan_income: planIncome,
-        plan_profit: planProfit,
-        plan_margin: planMargin,
-      }
-    }),
+    ...effectiveAll.map((d) => ({
+      ...d,
+      type: "fact" as const,
+      _anomaly: anomaliesMap.get(d.date),
+    })),
     ...forecast,
   ]
 
@@ -521,7 +542,7 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     dataRangeEnd: effectiveAll[effectiveAll.length - 1].date,
     lastFactDate: lastFactDateStr,
     trendIncome,
-    trendProfit,
+    trendExpense,
     avgIncome,
     avgExpense,
     avgProfit,
@@ -531,6 +552,12 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     totalExpense,
     totalForecastIncome,
     totalForecastProfit: totalForecastIncome - totalForecastExpense,
+
+    totalPlanIncome,
+    totalPlanExpense,
+    totalPlanProfit,
+    planIncomeAchievementPct,
+
     bestDow: best,
     worstDow: worst,
   }
@@ -549,14 +576,15 @@ const aggregateWeekly = (data: DataPoint[]): DataPoint[] => {
         expense: d.expense,
         profit: d.profit,
         margin: d.margin,
-
-        plan_income: d.plan_income ?? 0,
-        plan_profit: d.plan_profit ?? 0,
-        plan_margin: d.plan_margin ?? safeMargin(d.plan_profit ?? 0, d.plan_income ?? 0),
-
         dayOfWeek: 1,
         dayName: "Нед",
         type: d.type,
+
+        planned_income: d.planned_income || 0,
+        planned_expense: d.planned_expense || 0,
+        planned_profit: d.planned_profit || 0,
+        plan_delta_income: d.plan_delta_income || 0,
+        plan_delta_profit: d.plan_delta_profit || 0,
       })
     } else {
       cur.income += d.income
@@ -564,11 +592,12 @@ const aggregateWeekly = (data: DataPoint[]): DataPoint[] => {
       cur.profit += d.profit
       cur.margin = safeMargin(cur.profit, cur.income)
 
-      cur.plan_income = (cur.plan_income ?? 0) + (d.plan_income ?? 0)
-      cur.plan_profit = (cur.plan_profit ?? 0) + (d.plan_profit ?? 0)
-      cur.plan_margin = safeMargin(cur.plan_profit ?? 0, cur.plan_income ?? 0)
+      cur.planned_income = (cur.planned_income || 0) + (d.planned_income || 0)
+      cur.planned_expense = (cur.planned_expense || 0) + (d.planned_expense || 0)
+      cur.planned_profit = (cur.planned_profit || 0) + (d.planned_profit || 0)
+      cur.plan_delta_income = (cur.plan_delta_income || 0) + (d.plan_delta_income || 0)
+      cur.plan_delta_profit = (cur.plan_delta_profit || 0) + (d.plan_delta_profit || 0)
 
-      // если в неделе есть прогноз — считаем тип прогноз (для хвоста)
       if (d.type === "forecast") cur.type = "forecast"
     }
   }
@@ -609,9 +638,6 @@ export default function AIAnalysisPage() {
 
   const [granularity, setGranularity] = useState<Granularity>("daily")
 
-  // ✅ выбранная дата для сравнения “план vs факт”
-  const [compareDate, setCompareDate] = useState<string>("")
-
   const aliveRef = useRef(true)
 
   const computeRange = () => {
@@ -629,11 +655,9 @@ export default function AIAnalysisPage() {
       start.setDate(today.getDate() - days + 1)
     }
 
-    // кастом если задан
     if (customStart) start = parseISODateSafe(customStart)
     if (customEnd) end = parseISODateSafe(customEnd)
 
-    // hard limit
     const maxStart = new Date(end)
     maxStart.setDate(end.getDate() - MAX_DAYS_HARD_LIMIT + 1)
     if (start < maxStart) start = maxStart
@@ -652,7 +676,7 @@ export default function AIAnalysisPage() {
 
       const allDates = generateDateRange(start, end)
 
-      const [incRes, expRes] = await Promise.all([
+      const [incRes, expRes, planRes] = await Promise.all([
         supabase
           .from("incomes")
           .select("date, cash_amount, kaspi_amount, card_amount")
@@ -667,18 +691,22 @@ export default function AIAnalysisPage() {
           .lte("date", toDateStr)
           .order("date")
           .throwOnError(),
+        supabase
+          .from(PLANS_TABLE)
+          .select("date, planned_income, planned_expense")
+          .gte("date", fromDateStr)
+          .lte("date", toDateStr)
+          .order("date")
+          .throwOnError(),
       ])
 
       const dbMap = new Map<string, { income: number; expense: number }>()
+      const planMap = new Map<string, { planned_income: number; planned_expense: number }>()
       const catsMap: Record<string, number> = {}
 
       for (const r of incRes.data ?? []) {
         const date = (r as any).date as string
-        const val =
-          ((r as any).cash_amount || 0) +
-          ((r as any).kaspi_amount || 0) +
-          ((r as any).card_amount || 0)
-
+        const val = ((r as any).cash_amount || 0) + ((r as any).kaspi_amount || 0) + ((r as any).card_amount || 0)
         const cur = dbMap.get(date) || { income: 0, expense: 0 }
         cur.income += val
         dbMap.set(date, cur)
@@ -687,7 +715,6 @@ export default function AIAnalysisPage() {
       for (const r of expRes.data ?? []) {
         const date = (r as any).date as string
         const val = ((r as any).cash_amount || 0) + ((r as any).kaspi_amount || 0)
-
         const cur = dbMap.get(date) || { income: 0, expense: 0 }
         cur.expense += val
         dbMap.set(date, cur)
@@ -698,19 +725,37 @@ export default function AIAnalysisPage() {
         }
       }
 
+      for (const r of planRes.data ?? []) {
+        const date = (r as any).date as string
+        const pi = Number((r as any).planned_income || 0)
+        const pe = Number((r as any).planned_expense || 0)
+        planMap.set(date, { planned_income: pi, planned_expense: pe })
+      }
+
       const fullHistory: DataPoint[] = allDates.map((date) => {
-        const data = dbMap.get(date) || { income: 0, expense: 0 }
-        const profit = data.income - data.expense
+        const fact = dbMap.get(date) || { income: 0, expense: 0 }
+        const plan = planMap.get(date) || { planned_income: 0, planned_expense: 0 }
+
+        const profit = fact.income - fact.expense
+        const planned_profit = (plan.planned_income || 0) - (plan.planned_expense || 0)
+
         const dObj = parseISODateSafe(date)
         const dow = dObj.getDay()
+
         return {
           date,
-          income: data.income,
-          expense: data.expense,
+          income: fact.income,
+          expense: fact.expense,
           profit,
-          margin: safeMargin(profit, data.income),
+          margin: safeMargin(profit, fact.income),
           dayOfWeek: dow,
           dayName: dayNames[dow],
+
+          planned_income: plan.planned_income || 0,
+          planned_expense: plan.planned_expense || 0,
+          planned_profit,
+          plan_delta_income: fact.income - (plan.planned_income || 0),
+          plan_delta_profit: profit - planned_profit,
         }
       })
 
@@ -728,7 +773,6 @@ export default function AIAnalysisPage() {
     }
   }
 
-  // initial + reload on filters
   useEffect(() => {
     aliveRef.current = true
     loadData()
@@ -738,7 +782,6 @@ export default function AIAnalysisPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangePreset, customStart, customEnd])
 
-  // автообновление
   useEffect(() => {
     if (!autoRefresh) return
     const id = setInterval(() => loadData(), 60_000)
@@ -748,27 +791,21 @@ export default function AIAnalysisPage() {
 
   const analysis = useMemo(() => buildAnalysis(history, includeZeroDays), [history, includeZeroDays])
 
-  // умный выбор гранулярности по умолчанию (если много точек)
   useEffect(() => {
     if (!analysis) return
     if (analysis.totalDataPoints > 220) setGranularity("weekly")
     else setGranularity("daily")
   }, [analysis?.totalDataPoints]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ✅ дата сравнения по умолчанию = последний факт
-  useEffect(() => {
-    if (!analysis) return
-    setCompareDate((prev) => prev || analysis.dataRangeEnd)
-  }, [analysis])
-
   const chartViewData = useMemo(() => {
     if (!analysis) return []
     const base = analysis.chartData.map((d) => ({
       ...d,
-      // страховка
-      profit: d.profit ?? (d.income - d.expense),
+      profit: d.profit ?? d.income - d.expense,
       margin: d.margin ?? safeMargin((d.profit ?? d.income - d.expense), d.income),
-      plan_profit: d.plan_profit ?? safeMargin((d.plan_profit ?? 0), (d.plan_income ?? 0)) ? d.plan_profit : d.plan_profit,
+      planned_profit: (d.planned_income || 0) - (d.planned_expense || 0),
+      plan_delta_income: (d.income || 0) - (d.planned_income || 0),
+      plan_delta_profit: (d.profit ?? d.income - d.expense) - ((d.planned_income || 0) - (d.planned_expense || 0)),
     }))
     return granularity === "weekly" ? aggregateWeekly(base) : base
   }, [analysis, granularity])
@@ -788,31 +825,20 @@ export default function AIAnalysisPage() {
   const smartInsights = useMemo(() => {
     if (!analysis) return null
 
-    const p = analysis.avgProfit
-    const pTrend = analysis.trendProfit
-    const iTrend = analysis.trendIncome
-
     const warnings: string[] = []
-
     if (analysis.avgMargin < 18) warnings.push("Маржа низкая — проверь расходы/цены.")
-    if (analysis.profitVolatility > analysis.avgIncome * 0.6)
-      warnings.push("Прибыль сильно скачет — нужны стабильные источники дохода.")
-    if (pTrend < 0 && iTrend > 0)
-      warnings.push("Оборот растёт, прибыль падает — значит расходы растут быстрее дохода.")
-    if (analysis.confidenceScore < 45)
-      warnings.push("Прогноз пока слабый — мало равномерных данных по дням недели.")
-
-    const best = analysis.bestDow
-    const worst = analysis.worstDow
+    if (analysis.profitVolatility > analysis.avgIncome * 0.6) warnings.push("Прибыль сильно скачет — нужны стабильные источники дохода.")
+    if (analysis.confidenceScore < 45) warnings.push("Прогноз пока слабый — мало равномерных данных по дням недели.")
 
     const tips: string[] = [
-      `Лучший день недели: ${dayNames[best.dow]} (типичная прибыль ~${formatMoney(best.profit)}).`,
-      `Худший день недели: ${dayNames[worst.dow]} (типичная прибыль ~${formatMoney(worst.profit)}).`,
+      `Лучший день недели: ${dayNames[analysis.bestDow.dow]} (типичная прибыль ~${formatMoney(analysis.bestDow.profit)}).`,
+      `Худший день недели: ${dayNames[analysis.worstDow.dow]} (типичная прибыль ~${formatMoney(analysis.worstDow.profit)}).`,
     ]
 
-    if (p < 0) tips.push("Средняя прибыль отрицательная — режь расходные статьи или подними цены/чек.")
-    if (analysis.trendIncome > 0) tips.push("Тренд дохода положительный — закрепи рост: акции/сезонные пакеты/апселл.")
-    if (analysis.trendIncome < 0) tips.push("Доход падает — проверь дни просадки и причину: маркетинг, график, цены.")
+    if (analysis.trendIncome > 0) tips.push("Тренд дохода положительный — закрепи рост: пакеты/апселл/акции.")
+    if (analysis.trendIncome < 0) tips.push("Доход падает — найди дни просадки и причину: маркетинг/график/цены.")
+    if (analysis.planIncomeAchievementPct > 0)
+      tips.push(`Выполнение плана по доходу: ~${analysis.planIncomeAchievementPct.toFixed(0)}%.`)
 
     return { warnings, tips }
   }, [analysis])
@@ -831,18 +857,17 @@ export default function AIAnalysisPage() {
       predictedProfit: Math.round(analysis.totalForecastProfit),
       predictedIncome: Math.round(analysis.totalForecastIncome),
       trendIncomePerDay: analysis.trendIncome,
-      trendProfitPerDay: analysis.trendProfit,
+      trendExpensePerDay: analysis.trendExpense,
       bestDayOfWeek: dayNames[analysis.bestDow.dow],
       worstDayOfWeek: dayNames[analysis.worstDow.dow],
       expensesByCategory: expenseCategories,
+      plan: {
+        totalPlanIncome: Math.round(analysis.totalPlanIncome),
+        incomeAchievementPct: Number(analysis.planIncomeAchievementPct.toFixed(1)),
+      },
       anomalies: analysis.anomalies.map((a) => ({
         date: a.date,
-        type:
-          a.type === "income_low"
-            ? "Низкий доход"
-            : a.type === "income_high"
-              ? "Высокий доход"
-              : "Высокий расход",
+        type: a.type === "income_low" ? "Низкий доход" : a.type === "income_high" ? "Высокий доход" : "Высокий расход",
         amount: a.amount,
         normalForDay: a.avgForDay,
       })),
@@ -872,14 +897,12 @@ export default function AIAnalysisPage() {
       income: Math.round(d.income),
       expense: Math.round(d.expense),
       profit: Math.round(d.profit ?? d.income - d.expense),
-      margin_pct: Number(
-        (d.margin ?? safeMargin((d.profit ?? d.income - d.expense), d.income)).toFixed(2),
-      ),
-
-      plan_income: d.plan_income ? Math.round(d.plan_income) : "",
-      plan_profit: d.plan_profit ? Math.round(d.plan_profit) : "",
-      plan_margin_pct: d.plan_margin ? Number(d.plan_margin.toFixed(2)) : "",
-
+      planned_income: Math.round(d.planned_income || 0),
+      planned_expense: Math.round(d.planned_expense || 0),
+      planned_profit: Math.round((d.planned_income || 0) - (d.planned_expense || 0)),
+      plan_delta_income: Math.round((d.income || 0) - (d.planned_income || 0)),
+      plan_delta_profit: Math.round((d.profit ?? d.income - d.expense) - ((d.planned_income || 0) - (d.planned_expense || 0))),
+      margin_pct: Number((d.margin ?? safeMargin((d.profit ?? d.income - d.expense), d.income)).toFixed(2)),
       income_p10: d.income_p10 ? Math.round(d.income_p10) : "",
       income_p90: d.income_p90 ? Math.round(d.income_p90) : "",
       profit_p10: d.profit_p10 ? Math.round(d.profit_p10) : "",
@@ -887,39 +910,6 @@ export default function AIAnalysisPage() {
     }))
     downloadCSV(`ai-analysis-${analysis.dataRangeStart}_to_${analysis.dataRangeEnd}.csv`, rows)
   }
-
-  // ✅ расчёт “план vs факт” по выбранной дате (факт-дни)
-  const planVsFact = useMemo(() => {
-    if (!analysis || !compareDate) return null
-    const dp = analysis.chartData.find((x) => x.date === compareDate && x.type === "fact")
-    if (!dp) return null
-
-    const planIncome = dp.plan_income ?? 0
-    const factIncome = dp.income ?? 0
-    const diffIncome = factIncome - planIncome
-    const diffIncomePct = planIncome > 0 ? (diffIncome / planIncome) * 100 : 0
-
-    const planProfit = dp.plan_profit ?? 0
-    const factProfit = (dp.profit ?? 0)
-    const diffProfit = factProfit - planProfit
-    const diffProfitPct = Math.abs(planProfit) > 0 ? (diffProfit / planProfit) * 100 : 0
-
-    const progress = planIncome > 0 ? clamp((factIncome / planIncome) * 100, 0, 200) : 0
-
-    return {
-      date: dp.date,
-      dow: dp.dayOfWeek,
-      planIncome,
-      factIncome,
-      diffIncome,
-      diffIncomePct,
-      planProfit,
-      factProfit,
-      diffProfit,
-      diffProfitPct,
-      progress,
-    }
-  }, [analysis, compareDate])
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-[#050505] text-foreground">
@@ -935,7 +925,7 @@ export default function AIAnalysisPage() {
               <div>
                 <h1 className="text-3xl font-bold text-foreground">AI Советник Pro</h1>
                 <p className="text-muted-foreground text-sm">
-                  Робастная статистика • прогноз • аномалии • категории • советы Gemini
+                  Робастная статистика • прогноз • аномалии • планы • советы Gemini
                 </p>
               </div>
             </div>
@@ -966,11 +956,7 @@ export default function AIAnalysisPage() {
                 disabled={aiLoading || !analysis}
                 className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white border-0 shadow-[0_0_20px_rgba(124,58,237,0.4)]"
               >
-                {aiLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <Bot className="w-4 h-4 mr-2" />
-                )}
+                {aiLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Bot className="w-4 h-4 mr-2" />}
                 {aiAdvice ? "Обновить совет" : "Совет ИИ"}
               </Button>
             </div>
@@ -1048,9 +1034,11 @@ export default function AIAnalysisPage() {
                   <History className="w-3 h-3 inline mr-1" />
                   {formatDateRu(analysis.dataRangeStart)} — {formatDateRu(analysis.dataRangeEnd)}
                 </div>
+
                 <div className="px-2 py-1 rounded border border-white/10 bg-white/5 w-fit">
                   Достоверность: <span className="text-purple-300 font-bold">{analysis.confidenceScore}%</span>
                 </div>
+
                 <div
                   className={`px-2 py-1 rounded border w-fit ${
                     analysis.trendIncome > 0
@@ -1058,24 +1046,28 @@ export default function AIAnalysisPage() {
                       : "text-red-400 bg-red-500/10 border-red-500/20"
                   }`}
                 >
-                  {analysis.trendIncome >= 0 ? (
-                    <TrendingUp className="w-3 h-3 inline mr-1" />
-                  ) : (
-                    <TrendingDown className="w-3 h-3 inline mr-1" />
-                  )}
+                  {analysis.trendIncome >= 0 ? <TrendingUp className="w-3 h-3 inline mr-1" /> : <TrendingDown className="w-3 h-3 inline mr-1" />}
                   Тренд дохода: {analysis.trendIncome >= 0 ? "+" : ""}
                   {analysis.trendIncome.toFixed(0)} ₸/день
                 </div>
-                <div className="px-2 py-1 rounded border w-fit text-amber-300 bg-amber-500/10 border-amber-500/30">
-                  Тренд прибыли: {analysis.trendProfit >= 0 ? "+" : ""}
-                  {analysis.trendProfit.toFixed(0)} ₸/день
+
+                <div
+                  className={`px-2 py-1 rounded border w-fit ${
+                    analysis.trendExpense > 0
+                      ? "text-red-300 bg-red-500/10 border-red-500/20"
+                      : "text-emerald-300 bg-emerald-500/10 border-emerald-500/20"
+                  }`}
+                >
+                  Тренд расхода: {analysis.trendExpense >= 0 ? "+" : ""}
+                  {analysis.trendExpense.toFixed(0)} ₸/день
                 </div>
-                <div className="px-2 py-1 rounded border border-white/10 bg-white/5 w-fit">
-                  Лучший день: <span className="text-foreground font-semibold">{dayNames[analysis.bestDow.dow]}</span>
-                </div>
-                <div className="px-2 py-1 rounded border border-white/10 bg-white/5 w-fit">
-                  Худший день: <span className="text-foreground font-semibold">{dayNames[analysis.worstDow.dow]}</span>
-                </div>
+
+                {analysis.totalPlanIncome > 0 && (
+                  <div className="px-2 py-1 rounded border border-sky-500/30 bg-sky-500/10 w-fit text-sky-200">
+                    <Target className="w-3 h-3 inline mr-1" />
+                    План выполнен: {analysis.planIncomeAchievementPct.toFixed(0)}%
+                  </div>
+                )}
               </div>
             )}
           </Card>
@@ -1104,21 +1096,22 @@ export default function AIAnalysisPage() {
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
               {/* ЛЕВО: графики */}
               <div className="xl:col-span-3 space-y-8">
-                {/* График факт + прогноз */}
+                {/* График факт + план + прогноз */}
                 <Card className="p-6 border border-purple-500/20 bg-card relative overflow-hidden">
                   <div className="mb-6 relative z-10 flex flex-col sm:flex-row justify-between items-start gap-4">
                     <div>
                       <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                         <CalendarDays className="w-5 h-5 text-purple-400" />
-                        Факт + прогноз на {FORECAST_DAYS} дней
+                        Факт + план + прогноз на {FORECAST_DAYS} дней
                       </h2>
                       <p className="text-sm text-muted-foreground mt-1">
                         Прогноз прибыли:{" "}
-                        <span className="text-green-400 font-bold">{formatMoney(analysis.totalForecastProfit)}</span> • Прогноз дохода:{" "}
+                        <span className="text-green-400 font-bold">{formatMoney(analysis.totalForecastProfit)}</span>{" "}
+                        • Прогноз дохода:{" "}
                         <span className="text-purple-300 font-bold">{formatMoney(analysis.totalForecastIncome)}</span>
                       </p>
                       <p className="text-xs text-muted-foreground mt-2">
-                        Аномалии подсвечены точками: 🟢 рекорд дохода • 🔴 низкий доход • 🟠 высокий расход
+                        Аномалии: 🟢 рекорд дохода • 🔴 низкий доход • 🟠 высокий расход • План — голубая линия
                       </p>
                     </div>
 
@@ -1138,7 +1131,7 @@ export default function AIAnalysisPage() {
                       <ComposedChart data={chartViewData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <defs>
                           <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
+                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.30} />
                             <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
                           </linearGradient>
                         </defs>
@@ -1162,21 +1155,23 @@ export default function AIAnalysisPage() {
                             const label =
                               name === "income"
                                 ? "Доход"
-                                : name === "expense"
-                                  ? "Расход"
-                                  : name === "profit"
-                                    ? "Прибыль"
-                                    : name === "income_p10"
-                                      ? "Доход p10"
-                                      : name === "income_p90"
-                                        ? "Доход p90"
-                                        : name === "profit_p10"
-                                          ? "Прибыль p10"
-                                          : name === "profit_p90"
-                                            ? "Прибыль p90"
-                                            : name
+                                : name === "planned_income"
+                                  ? "План дохода"
+                                  : name === "expense"
+                                    ? "Расход"
+                                    : name === "profit"
+                                      ? "Прибыль"
+                                      : name === "income_p10"
+                                        ? "Доход p10"
+                                        : name === "income_p90"
+                                          ? "Доход p90"
+                                          : name === "profit_p10"
+                                            ? "Прибыль p10"
+                                            : name === "profit_p90"
+                                              ? "Прибыль p90"
+                                              : name
                             return [
-                              formatMoney(val as number),
+                              typeof val === "number" ? formatMoney(val as number) : String(val),
                               `${label} (${props?.payload?.type === "forecast" ? "прогноз" : "факт"})`,
                             ]
                           }}
@@ -1189,7 +1184,7 @@ export default function AIAnalysisPage() {
 
                         <ReferenceLine x={analysis.lastFactDate} stroke="#666" strokeDasharray="3 3" label="ПОСЛЕДНИЙ ФАКТ" />
 
-                        {/* Доход */}
+                        {/* Доход (факт+прогноз) */}
                         <Area
                           type="monotone"
                           dataKey="income"
@@ -1200,17 +1195,29 @@ export default function AIAnalysisPage() {
                           dot={<AnomalyDot />}
                         />
 
+                        {/* План дохода */}
+                        <Line
+                          type="monotone"
+                          dataKey="planned_income"
+                          name="planned_income"
+                          stroke="#38bdf8"
+                          strokeWidth={2}
+                          dot={false}
+                          strokeDasharray="6 6"
+                          strokeOpacity={0.9}
+                        />
+
                         {/* Расход */}
                         <Line type="monotone" dataKey="expense" name="expense" stroke="#ef4444" strokeWidth={2} dot={false} strokeOpacity={0.55} />
 
                         {/* Прибыль */}
                         <Line type="monotone" dataKey="profit" name="profit" stroke="#22c55e" strokeWidth={2} dot={false} strokeOpacity={0.55} />
 
-                        {/* Интервалы прогноза (только на daily, чтобы не шумело в weekly) */}
+                        {/* Интервалы прогноза (только daily) */}
                         {granularity === "daily" && (
                           <>
-                            <Line type="monotone" dataKey="income_p10" name="income_p10" stroke="#8b5cf6" strokeOpacity={0.2} dot={false} strokeDasharray="4 6" />
-                            <Line type="monotone" dataKey="income_p90" name="income_p90" stroke="#8b5cf6" strokeOpacity={0.2} dot={false} strokeDasharray="4 6" />
+                            <Line type="monotone" dataKey="income_p10" name="income_p10" stroke="#8b5cf6" strokeOpacity={0.20} dot={false} strokeDasharray="4 6" />
+                            <Line type="monotone" dataKey="income_p90" name="income_p90" stroke="#8b5cf6" strokeOpacity={0.20} dot={false} strokeDasharray="4 6" />
                             <Line type="monotone" dataKey="profit_p10" name="profit_p10" stroke="#22c55e" strokeOpacity={0.18} dot={false} strokeDasharray="4 6" />
                             <Line type="monotone" dataKey="profit_p90" name="profit_p90" stroke="#22c55e" strokeOpacity={0.18} dot={false} strokeDasharray="4 6" />
                           </>
@@ -1218,122 +1225,6 @@ export default function AIAnalysisPage() {
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
-                </Card>
-
-                {/* ✅ План vs Факт */}
-                <Card className="p-6 border border-white/10 bg-card">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-                    <div>
-                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-purple-300" />
-                        План vs факт (по дате)
-                      </h3>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        План берётся из модели (plan_income) — можно сразу видеть недобор/перевыполнение.
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="text-xs text-muted-foreground">Дата</div>
-                      <Input
-                        type="date"
-                        value={compareDate}
-                        min={analysis.dataRangeStart}
-                        max={analysis.dataRangeEnd}
-                        onChange={(e) => setCompareDate(e.target.value)}
-                        className="w-[170px] bg-white/5 border-white/10"
-                      />
-                      <Button
-                        variant="outline"
-                        className="border-white/10 bg-white/5 hover:bg-white/10"
-                        onClick={() => setCompareDate(analysis.dataRangeEnd)}
-                      >
-                        Сегодня
-                      </Button>
-                    </div>
-                  </div>
-
-                  {!planVsFact ? (
-                    <div className="text-xs text-muted-foreground text-center py-6">
-                      Нет фактических данных на выбранную дату (или дата вне диапазона).
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                        <div className="px-2 py-1 rounded border border-white/10 bg-white/5 w-fit">
-                          {formatDateRu(planVsFact.date)} ({dayNames[planVsFact.dow]})
-                        </div>
-                        <div
-                          className={`px-2 py-1 rounded border w-fit ${
-                            planVsFact.diffIncome >= 0
-                              ? "text-green-400 bg-green-500/10 border-green-500/20"
-                              : "text-red-400 bg-red-500/10 border-red-500/20"
-                          }`}
-                        >
-                          Отклонение дохода: {planVsFact.diffIncome >= 0 ? "+" : ""}
-                          {formatMoney(planVsFact.diffIncome)} ({planVsFact.diffIncome >= 0 ? "+" : ""}
-                          {formatPct(planVsFact.diffIncomePct)})
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 rounded border border-white/10 bg-white/5">
-                          <div className="text-xs text-muted-foreground mb-2">Доход</div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">План</span>
-                            <span className="text-foreground font-semibold">{formatMoney(planVsFact.planIncome)}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm mt-1">
-                            <span className="text-muted-foreground">Факт</span>
-                            <span className="text-foreground font-semibold">{formatMoney(planVsFact.factIncome)}</span>
-                          </div>
-
-                          <div className="mt-3">
-                            <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full ${planVsFact.diffIncome >= 0 ? "bg-green-500" : "bg-red-500"}`}
-                                style={{ width: `${planVsFact.progress}%` }}
-                              />
-                            </div>
-                            <div className="text-[11px] text-muted-foreground mt-1">
-                              Выполнение: <span className="text-foreground font-semibold">{planVsFact.progress.toFixed(0)}%</span>
-                              {planVsFact.progress > 100 ? " (перевыполнение)" : ""}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="p-4 rounded border border-white/10 bg-white/5">
-                          <div className="text-xs text-muted-foreground mb-2">Прибыль</div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">План</span>
-                            <span className="text-foreground font-semibold">{formatMoney(planVsFact.planProfit)}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm mt-1">
-                            <span className="text-muted-foreground">Факт</span>
-                            <span className="text-foreground font-semibold">{formatMoney(planVsFact.factProfit)}</span>
-                          </div>
-
-                          <div className="text-[11px] text-muted-foreground mt-2">
-                            Отклонение:{" "}
-                            <span className={`${planVsFact.diffProfit >= 0 ? "text-green-400" : "text-red-400"} font-semibold`}>
-                              {planVsFact.diffProfit >= 0 ? "+" : ""}
-                              {formatMoney(planVsFact.diffProfit)}
-                            </span>
-                            {Math.abs(planVsFact.planProfit) > 0 ? (
-                              <>
-                                {" "}
-                                •{" "}
-                                <span className={`${planVsFact.diffProfit >= 0 ? "text-green-400" : "text-red-400"} font-semibold`}>
-                                  {planVsFact.diffProfit >= 0 ? "+" : ""}
-                                  {formatPct(planVsFact.diffProfitPct)}
-                                </span>
-                              </>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </Card>
 
                 {/* Типичная неделя */}
@@ -1376,11 +1267,7 @@ export default function AIAnalysisPage() {
                           contentStyle={{ backgroundColor: "#111", border: "1px solid #333" }}
                           formatter={(val: any, name: any) => [
                             formatMoney(val as number),
-                            name === "income"
-                              ? "Типичный доход"
-                              : name === "expense"
-                                ? "Типичный расход"
-                                : "Типичная прибыль",
+                            name === "income" ? "Типичный доход" : name === "expense" ? "Типичный расход" : "Типичная прибыль",
                           ]}
                         />
                         <Bar dataKey="income" fill="#3b82f6" radius={[4, 4, 0, 0]} />
@@ -1402,16 +1289,11 @@ export default function AIAnalysisPage() {
                   </div>
 
                   {topExpenseCats.length === 0 ? (
-                    <div className="text-xs text-muted-foreground text-center py-8">
-                      Нет расходов по категориям за выбранный период.
-                    </div>
+                    <div className="text-xs text-muted-foreground text-center py-8">Нет расходов по категориям за выбранный период.</div>
                   ) : (
                     <div className="space-y-2">
                       {topExpenseCats.map((c) => (
-                        <div
-                          key={c.name}
-                          className="flex items-center justify-between px-3 py-2 rounded border border-white/10 bg-white/5"
-                        >
+                        <div key={c.name} className="flex items-center justify-between px-3 py-2 rounded border border-white/10 bg-white/5">
                           <div className="text-sm text-foreground">{c.name}</div>
                           <div className="text-sm text-red-300 font-semibold">{formatMoney(c.value)}</div>
                         </div>
@@ -1421,36 +1303,46 @@ export default function AIAnalysisPage() {
                 </Card>
               </div>
 
-              {/* ПРАВО: KPI + инсайты + аномалии + алгоритм */}
+              {/* ПРАВО */}
               <div className="xl:col-span-1 space-y-6">
                 {/* KPI */}
                 <Card className="p-5 border border-emerald-500/20 bg-emerald-900/5">
                   <h3 className="text-sm font-bold text-emerald-300 mb-3">Ключевые метрики</h3>
                   <div className="space-y-1 text-xs text-muted-foreground">
                     <p>
-                      Средний доход/день:{" "}
-                      <span className="text-foreground font-semibold">{formatMoney(analysis.avgIncome)}</span>
+                      Средний доход/день: <span className="text-foreground font-semibold">{formatMoney(analysis.avgIncome)}</span>
                     </p>
                     <p>
-                      Средний расход/день:{" "}
-                      <span className="text-foreground font-semibold">{formatMoney(analysis.avgExpense)}</span>
+                      Средний расход/день: <span className="text-foreground font-semibold">{formatMoney(analysis.avgExpense)}</span>
                     </p>
                     <p>
-                      Средняя прибыль/день:{" "}
-                      <span className="text-foreground font-semibold">{formatMoney(analysis.avgProfit)}</span>
+                      Средняя прибыль/день: <span className="text-foreground font-semibold">{formatMoney(analysis.avgProfit)}</span>
                     </p>
                     <p>
-                      Средняя маржа:{" "}
-                      <span className="text-foreground font-semibold">{formatPct(analysis.avgMargin)}</span>
+                      Средняя маржа: <span className="text-foreground font-semibold">{formatPct(analysis.avgMargin)}</span>
                     </p>
                     <p>
-                      Волатильность прибыли (σ):{" "}
-                      <span className="text-foreground font-semibold">{formatMoney(analysis.profitVolatility)}</span>
+                      Волатильность прибыли (σ): <span className="text-foreground font-semibold">{formatMoney(analysis.profitVolatility)}</span>
                     </p>
                     <p>
-                      Дней в выборке:{" "}
-                      <span className="text-foreground font-semibold">{analysis.totalDataPoints}</span>
+                      Дней в выборке: <span className="text-foreground font-semibold">{analysis.totalDataPoints}</span>
                     </p>
+
+                    {analysis.totalPlanIncome > 0 && (
+                      <>
+                        <div className="h-px bg-white/10 my-2" />
+                        <p className="text-sky-200">
+                          План дохода (период): <span className="text-foreground font-semibold">{formatMoney(analysis.totalPlanIncome)}</span>
+                        </p>
+                        <p className="text-sky-200">
+                          Факт дохода (период): <span className="text-foreground font-semibold">{formatMoney(analysis.totalIncome)}</span>
+                        </p>
+                        <p className="text-sky-200">
+                          Выполнение плана:{" "}
+                          <span className="text-foreground font-semibold">{analysis.planIncomeAchievementPct.toFixed(0)}%</span>
+                        </p>
+                      </>
+                    )}
                   </div>
                 </Card>
 
@@ -1501,25 +1393,12 @@ export default function AIAnalysisPage() {
                         <div key={idx} className="p-2 bg-white/5 rounded border border-white/10 text-xs">
                           <div className="flex justify-between mb-1">
                             <span className="font-bold text-foreground">{formatDateRu(a.date)}</span>
-                            <span
-                              className={
-                                a.type === "income_low"
-                                  ? "text-red-400"
-                                  : a.type === "expense_high"
-                                    ? "text-amber-300"
-                                    : "text-green-400"
-                              }
-                            >
-                              {a.type === "income_low"
-                                ? "🔴 Низкий доход"
-                                : a.type === "expense_high"
-                                  ? "🟠 Высокий расход"
-                                  : "🟢 Рекорд дохода"}
+                            <span className={a.type === "income_low" ? "text-red-400" : a.type === "expense_high" ? "text-amber-300" : "text-green-400"}>
+                              {a.type === "income_low" ? "🔴 Низкий доход" : a.type === "expense_high" ? "🟠 Высокий расход" : "🟢 Рекорд дохода"}
                             </span>
                           </div>
                           <p className="text-muted-foreground">
-                            Было: <span className="text-foreground">{formatMoney(a.amount)}</span> (норма:{" "}
-                            {formatMoney(a.avgForDay)})
+                            Было: <span className="text-foreground">{formatMoney(a.amount)}</span> (норма: {formatMoney(a.avgForDay)})
                           </p>
                         </div>
                       ))}
@@ -1535,20 +1414,16 @@ export default function AIAnalysisPage() {
                   </h3>
                   <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
                     <p>
-                      <span className="text-blue-200 font-semibold">1) Робастная статистика:</span> медиана и MAD по
-                      дням недели (устойчиво к выбросам).
+                      <span className="text-blue-200 font-semibold">1) Робастная статистика:</span> медиана и MAD по дням недели.
                     </p>
                     <p>
-                      <span className="text-blue-200 font-semibold">2) Тренды:</span> отдельный тренд по доходу и по
-                      прибыли.
+                      <span className="text-blue-200 font-semibold">2) Тренды:</span> тренд дохода и расхода по активным дням, с обрезкой выбросов.
                     </p>
                     <p>
-                      <span className="text-blue-200 font-semibold">3) Прогноз:</span> сезонность + тренд + ограничение
-                      расходов, плюс интервалы p10/p90.
+                      <span className="text-blue-200 font-semibold">3) Прогноз:</span> сезонность + тренды, без “двойного тренда прибыли”.
                     </p>
                     <p>
-                      <span className="text-blue-200 font-semibold">4) Аномалии:</span> z-score на базе sigma (из MAD) +
-                      пороги по сумме.
+                      <span className="text-blue-200 font-semibold">4) План:</span> линия planned_income и KPI выполнения.
                     </p>
                   </div>
                 </Card>
