@@ -84,8 +84,8 @@ type DebtRow = {
 type PayoutRow = {
   id: number
   operator_id: string
-  date: string // week start (понедельник)
-  shift: string
+  week_start: string // понедельник
+  shift: string // всегда заполнено (например 'week')
   is_paid: boolean
   paid_at: string | null
   comment: string | null
@@ -286,10 +286,11 @@ export default function SalaryPage() {
           .lte('week_start', dateTo)
           .eq('status', 'active'),
 
+        // ✅ ВАЖНО: payouts по week_start + shift
         supabase
           .from('operator_salary_payouts')
-          .select('id,operator_id,date,shift,is_paid,paid_at,comment,created_at')
-          .eq('date', weekStartISO)
+          .select('id,operator_id,week_start,shift,is_paid,paid_at,comment,created_at')
+          .eq('week_start', weekStartISO)
           .eq('shift', PAYOUT_SHIFT),
       ])
 
@@ -467,7 +468,7 @@ export default function SalaryPage() {
       else op.manualMinus += amount // debt/fine
     }
 
-    // 4) Долги недели
+    // 4) Долги недели (из debts)
     for (const d of debts) {
       const op = ensureOperator(d.operator_id)
       if (!op) continue
@@ -561,18 +562,19 @@ export default function SalaryPage() {
       const existing = payoutByOperator.get(operatorId)
       const nextPaid = !Boolean(existing?.is_paid)
 
+      // ✅ ВАЖНО: week_start + shift НЕ NULL
       const payload = {
         operator_id: operatorId,
-        date: weekStartISO,
-        shift: PAYOUT_SHIFT, // ✅ НЕ NULL
+        week_start: weekStartISO,
+        shift: PAYOUT_SHIFT,
         is_paid: nextPaid,
         paid_at: nextPaid ? new Date().toISOString() : null,
       }
 
       const { data, error } = await supabase
         .from('operator_salary_payouts')
-        .upsert([payload], { onConflict: 'operator_id,date' })
-        .select('id,operator_id,date,shift,is_paid,paid_at,comment,created_at')
+        .upsert([payload], { onConflict: 'operator_id,week_start' })
+        .select('id,operator_id,week_start,shift,is_paid,paid_at,comment,created_at')
         .single()
 
       if (error) throw error
@@ -616,8 +618,7 @@ export default function SalaryPage() {
                   База + авто-бонусы + корректировки − долги − авансы (F16 Arena / Ramen / Extra)
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Неделя оплаты:{' '}
-                  <span className="font-semibold">{formatIsoRu(weekStartISO)}</span>
+                  Неделя оплаты: <span className="font-semibold">{formatIsoRu(weekStartISO)}</span>
                   {!loading && (
                     <>
                       {'  '}• Оплачено:{' '}
