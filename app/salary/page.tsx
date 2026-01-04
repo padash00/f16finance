@@ -81,11 +81,12 @@ type DebtRow = {
   status: string | null
 }
 
+// ВАЖНО: выплаты — это оператор + неделя (+ shift фиксированный)
 type PayoutRow = {
   id: number
   operator_id: string
-  week_start: string // понедельник
-  shift: string // всегда заполнено (например 'week')
+  week_start: string
+  shift: string
   is_paid: boolean
   paid_at: string | null
   comment: string | null
@@ -100,15 +101,12 @@ type OperatorWeekStat = {
   baseSalary: number
   bonusSalary: number
   totalSalary: number
-  totalTurnover: number
   autoDebts: number
   manualPlus: number
   manualMinus: number
   advances: number
   finalSalary: number
 }
-
-const PAYOUT_SHIFT = 'week'
 
 const formatMoney = (v: number) =>
   v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
@@ -156,13 +154,13 @@ export default function SalaryPage() {
   const [dateFrom, setDateFrom] = useState(toISODateLocal(monday))
   const [dateTo, setDateTo] = useState(toISODateLocal(sunday))
 
-  // Статика (грузим 1 раз)
+  // Статика
   const [companies, setCompanies] = useState<Company[]>([])
   const [rules, setRules] = useState<SalaryRule[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
   const [staticLoading, setStaticLoading] = useState(true)
 
-  // Динамика (по диапазону дат)
+  // Динамика
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([])
   const [debts, setDebts] = useState<DebtRow[]>([])
@@ -182,7 +180,7 @@ export default function SalaryPage() {
   // Оплата
   const [payingOperatorId, setPayingOperatorId] = useState<string | null>(null)
 
-  // Если пользователь руками поставил кривой диапазон — подчиним
+  // если кривой диапазон
   useEffect(() => {
     if (dateFrom && dateTo && dateFrom > dateTo) {
       setDateFrom(dateTo)
@@ -210,13 +208,15 @@ export default function SalaryPage() {
     setDateTo(to)
   }, [])
 
-  // Неделя оплаты = понедельник от dateFrom
+  // неделя оплаты = понедельник от dateFrom
   const weekStartISO = useMemo(() => {
     if (!dateFrom) return toISODateLocal(getMonday(new Date()))
     return toISODateLocal(getMonday(fromISO(dateFrom)))
   }, [dateFrom])
 
-  // 1) Статика — один раз
+  const loading = staticLoading || rangeLoading
+
+  // 1) Статика
   useEffect(() => {
     let alive = true
 
@@ -256,7 +256,19 @@ export default function SalaryPage() {
     }
   }, [])
 
-  // 2) Данные диапазона — при смене дат
+  const companyById = useMemo(() => {
+    const map: Record<string, Company> = {}
+    for (const c of companies) map[c.id] = c
+    return map
+  }, [companies])
+
+  const rulesMap = useMemo(() => {
+    const map: Record<string, SalaryRule> = {}
+    for (const r of rules) map[`${r.company_code}_${r.shift_type}`] = r
+    return map
+  }, [rules])
+
+  // 2) Диапазон
   useEffect(() => {
     let alive = true
 
@@ -286,12 +298,12 @@ export default function SalaryPage() {
           .lte('week_start', dateTo)
           .eq('status', 'active'),
 
-        // ✅ ВАЖНО: payouts по week_start + shift
+        // выплаты за неделю
         supabase
           .from('operator_salary_payouts')
           .select('id,operator_id,week_start,shift,is_paid,paid_at,comment,created_at')
           .eq('week_start', weekStartISO)
-          .eq('shift', PAYOUT_SHIFT),
+          .eq('shift', 'all'),
       ])
 
       if (!alive) return
@@ -322,28 +334,14 @@ export default function SalaryPage() {
     }
   }, [dateFrom, dateTo, weekStartISO])
 
-  const loading = staticLoading || rangeLoading
-
-  const companyById = useMemo(() => {
-    const map: Record<string, Company> = {}
-    for (const c of companies) map[c.id] = c
-    return map
-  }, [companies])
-
-  const rulesMap = useMemo(() => {
-    const map: Record<string, SalaryRule> = {}
-    for (const r of rules) map[`${r.company_code}_${r.shift_type}`] = r
-    return map
-  }, [rules])
-
-  // Статус оплаты по оператору за неделю
+  // Статус оплаты по оператору
   const payoutByOperator = useMemo(() => {
     const map = new Map<string, PayoutRow>()
     for (const p of payouts) map.set(p.operator_id, p)
     return map
   }, [payouts])
 
-  // Список операторов для селекта (все активные)
+  // Список операторов для селекта
   const operatorOptions = useMemo(
     () =>
       operators
@@ -378,7 +376,6 @@ export default function SalaryPage() {
           baseSalary: 0,
           bonusSalary: 0,
           totalSalary: 0,
-          totalTurnover: 0,
           autoDebts: 0,
           manualPlus: 0,
           manualMinus: 0,
@@ -402,7 +399,9 @@ export default function SalaryPage() {
       const shift: 'day' | 'night' = row.shift === 'night' ? 'night' : 'day'
 
       const total =
-        Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0)
+        Number(row.cash_amount || 0) +
+        Number(row.kaspi_amount || 0) +
+        Number(row.card_amount || 0)
 
       if (total <= 0) continue
 
@@ -446,10 +445,9 @@ export default function SalaryPage() {
       op.baseSalary += basePerShift
       op.bonusSalary += bonus
       op.totalSalary += basePerShift + bonus
-      op.totalTurnover += sh.turnover
     }
 
-    // 2a) Все активные операторы — в таблицу (даже с нулями)
+    // 2a) Все активные операторы — в таблицу
     for (const o of operators) {
       if (!o.is_active) continue
       ensureOperator(o.id)
@@ -468,7 +466,7 @@ export default function SalaryPage() {
       else op.manualMinus += amount // debt/fine
     }
 
-    // 4) Долги недели (из debts)
+    // 4) Долги недели (авто)
     for (const d of debts) {
       const op = ensureOperator(d.operator_id)
       if (!op) continue
@@ -479,7 +477,7 @@ export default function SalaryPage() {
       op.autoDebts += amount
     }
 
-    // 5) Итог к выплате
+    // 5) Итог
     let totalSalary = 0
     for (const op of byOperator.values()) {
       op.finalSalary = op.totalSalary + op.manualPlus - op.manualMinus - op.autoDebts - op.advances
@@ -562,18 +560,17 @@ export default function SalaryPage() {
       const existing = payoutByOperator.get(operatorId)
       const nextPaid = !Boolean(existing?.is_paid)
 
-      // ✅ ВАЖНО: week_start + shift НЕ NULL
       const payload = {
         operator_id: operatorId,
         week_start: weekStartISO,
-        shift: PAYOUT_SHIFT,
+        shift: 'all',
         is_paid: nextPaid,
         paid_at: nextPaid ? new Date().toISOString() : null,
       }
 
       const { data, error } = await supabase
         .from('operator_salary_payouts')
-        .upsert([payload], { onConflict: 'operator_id,week_start' })
+        .upsert([payload], { onConflict: 'operator_id,week_start,shift' })
         .select('id,operator_id,week_start,shift,is_paid,paid_at,comment,created_at')
         .single()
 
@@ -597,10 +594,9 @@ export default function SalaryPage() {
   return (
     <div className="flex min-h-screen bg-[#050505] text-foreground">
       <Sidebar />
-
       <main className="flex-1 overflow-auto">
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-          {/* Header */}
+          {/* Хедер */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <Link href="/income">
@@ -608,17 +604,17 @@ export default function SalaryPage() {
                   <ArrowLeft className="w-5 h-5" />
                 </Button>
               </Link>
-
               <div>
                 <h1 className="text-2xl font-bold flex items-center gap-2">
                   <Users2 className="w-6 h-6 text-emerald-400" />
                   Зарплата операторов
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  База + авто-бонусы + корректировки − долги − авансы (F16 Arena / Ramen / Extra)
+                  База + авто-бонусы + корректировки − долги − авансы
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Неделя оплаты: <span className="font-semibold">{formatIsoRu(weekStartISO)}</span>
+                  Неделя оплаты:{' '}
+                  <span className="font-semibold">{formatIsoRu(weekStartISO)}</span>
                   {!loading && (
                     <>
                       {'  '}• Оплачено:{' '}
@@ -631,27 +627,16 @@ export default function SalaryPage() {
               </div>
             </div>
 
-            {/* Date controls */}
+            {/* Быстрый выбор недели + даты */}
             <div className="flex flex-col items-end gap-2">
               <div className="flex gap-2">
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={setLastWeek}
-                  className="h-7 text-[11px]"
-                >
+                <Button size="xs" variant="outline" onClick={setLastWeek} className="h-7 text-[11px]">
                   Прошлая неделя
                 </Button>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={setThisWeek}
-                  className="h-7 text-[11px]"
-                >
+                <Button size="xs" variant="outline" onClick={setThisWeek} className="h-7 text-[11px]">
                   Эта неделя
                 </Button>
               </div>
-
               <div className="flex items-center gap-2 bg-card/40 border border-border/60 rounded-lg px-2 py-1">
                 <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
                 <input
@@ -678,25 +663,22 @@ export default function SalaryPage() {
             </Card>
           )}
 
-          {/* Summary */}
+          {/* Сводка */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">Всего смен</p>
               <p className="text-2xl font-bold">{loading ? '—' : totalShifts}</p>
             </Card>
-
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">База (оклад)</p>
               <p className="text-2xl font-bold">{loading ? '—' : formatMoney(totalBase)}</p>
             </Card>
-
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">Авто-бонусы</p>
               <p className="text-2xl font-bold text-emerald-400">
                 {loading ? '—' : formatMoney(totalBonus)}
               </p>
             </Card>
-
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">К выплате (итог)</p>
               <p className="text-2xl font-bold text-sky-400">
@@ -710,10 +692,10 @@ export default function SalaryPage() {
             </Card>
           </div>
 
-          {/* Table */}
+          {/* Таблица */}
           <Card className="border-border bg-card/80 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1200px] border-collapse text-xs md:text-sm">
+              <table className="w-full min-w-[1100px] text-xs md:text-sm border-collapse">
                 <thead className="sticky top-0 z-10 bg-[#0b0b0b]/95 backdrop-blur border-b border-border">
                   <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                     <th className="py-3 px-3 text-left">Оператор</th>
@@ -733,7 +715,7 @@ export default function SalaryPage() {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={11} className="py-10 text-center text-muted-foreground">
+                      <td colSpan={11} className="py-8 text-center text-muted-foreground text-xs">
                         Загрузка...
                       </td>
                     </tr>
@@ -741,7 +723,7 @@ export default function SalaryPage() {
 
                   {!loading && stats.operators.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="py-10 text-center text-muted-foreground">
+                      <td colSpan={11} className="py-8 text-center text-muted-foreground text-xs">
                         Нет данных в выбранном периоде.
                       </td>
                     </tr>
@@ -764,25 +746,33 @@ export default function SalaryPage() {
                         >
                           <td className="py-3 px-3 font-semibold">{op.operatorName}</td>
                           <td className="py-3 px-3 text-center">{op.shifts}</td>
+
                           <td className="py-3 px-3 text-right font-medium">
                             {formatMoney(op.basePerShift)}
                           </td>
+
                           <td className="py-3 px-3 text-right">{formatMoney(op.baseSalary)}</td>
+
                           <td className="py-3 px-3 text-right text-emerald-300">
                             {formatMoney(op.bonusSalary)}
                           </td>
+
                           <td className="py-3 px-3 text-right text-red-300">
                             {formatMoney(op.autoDebts)}
                           </td>
+
                           <td className="py-3 px-3 text-right text-red-300">
                             {formatMoney(op.manualMinus)}
                           </td>
+
                           <td className="py-3 px-3 text-right text-amber-300">
                             {formatMoney(op.advances)}
                           </td>
+
                           <td className="py-3 px-3 text-right text-emerald-300">
                             {formatMoney(op.manualPlus)}
                           </td>
+
                           <td
                             className={[
                               'py-3 px-3 text-right font-bold',
@@ -830,35 +820,26 @@ export default function SalaryPage() {
                       <td className="py-3 px-3 font-bold text-right" colSpan={2}>
                         Итого:
                       </td>
-
                       <td className="py-3 px-3 text-right font-bold">—</td>
-
                       <td className="py-3 px-3 text-right font-bold">{formatMoney(totalBase)}</td>
-
                       <td className="py-3 px-3 text-right font-bold text-emerald-300">
                         {formatMoney(totalBonus)}
                       </td>
-
                       <td className="py-3 px-3 text-right font-bold text-red-300">
                         {formatMoney(totalAutoDebts)}
                       </td>
-
                       <td className="py-3 px-3 text-right font-bold text-red-300">
                         {formatMoney(totalMinus)}
                       </td>
-
                       <td className="py-3 px-3 text-right font-bold text-amber-300">
                         {formatMoney(totalAdvances)}
                       </td>
-
                       <td className="py-3 px-3 text-right font-bold text-emerald-300">
                         {formatMoney(totalPlus)}
                       </td>
-
                       <td className="py-3 px-3 text-right font-bold text-sky-200">
                         {formatMoney(stats.totalSalary)}
                       </td>
-
                       <td className="py-3 px-3 text-center text-[11px] text-muted-foreground">
                         {paidCount}/{stats.operators.length}
                       </td>
@@ -869,18 +850,15 @@ export default function SalaryPage() {
             </div>
           </Card>
 
-          {/* Form корректировок */}
+          {/* Форма корректировок */}
           {operatorOptions.length > 0 && (
             <Card className="p-4 border-border bg-card/80">
               <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
                 <DollarSign className="w-4 h-4 text-emerald-400" />
-                Добавить долг / штраф / премию / аванс (ручная корректировка)
+                Добавить долг / штраф / премию / аванс
               </h3>
 
-              <form
-                onSubmit={handleAddAdjustment}
-                className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end"
-              >
+              <form onSubmit={handleAddAdjustment} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
                 <div>
                   <label className="text-[11px] text-muted-foreground mb-1 block">Оператор</label>
                   <select
@@ -940,7 +918,7 @@ export default function SalaryPage() {
                       value={adjComment}
                       onChange={(e) => setAdjComment(e.target.value)}
                       className="flex-1 bg-input border border-border rounded-md px-2 py-1.5 text-xs"
-                      placeholder="Аванс −20k / штраф −10k / премия за турнир..."
+                      placeholder="Аванс −20k / штраф −10k / премия..."
                     />
                     <Button type="submit" disabled={adjSaving} className="whitespace-nowrap h-9 text-xs">
                       {adjSaving ? 'Сохранение...' : 'Добавить'}
