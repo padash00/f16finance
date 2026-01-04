@@ -13,7 +13,7 @@ import {
   Users2,
   AlertTriangle,
   CheckCircle2,
-  Circle,
+  XCircle,
   Loader2,
 } from 'lucide-react'
 
@@ -84,11 +84,12 @@ type DebtRow = {
 type PayoutRow = {
   id: number
   operator_id: string
-  week_start: string
-  amount: number
+  date: string // week start (понедельник)
+  shift: string | null
   is_paid: boolean
   paid_at: string | null
   comment: string | null
+  created_at: string
 }
 
 type OperatorWeekStat = {
@@ -105,10 +106,6 @@ type OperatorWeekStat = {
   manualMinus: number
   advances: number
   finalSalary: number
-
-  // payout
-  isPaid: boolean
-  paidAt: string | null
 }
 
 const formatMoney = (v: number) =>
@@ -143,6 +140,11 @@ const parseAmount = (raw: string) => {
   return Number.isFinite(n) ? n : NaN
 }
 
+const formatIsoRu = (iso: string) => {
+  const d = fromISO(iso)
+  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
 export default function SalaryPage() {
   const today = new Date()
   const monday = getMonday(today)
@@ -151,10 +153,6 @@ export default function SalaryPage() {
 
   const [dateFrom, setDateFrom] = useState(toISODateLocal(monday))
   const [dateTo, setDateTo] = useState(toISODateLocal(sunday))
-
-  // week_start всегда нормализуем к понедельнику (для выплат)
-  const weekStart = useMemo(() => toISODateLocal(getMonday(fromISO(dateFrom))), [dateFrom])
-  const weekEnd = useMemo(() => addDaysISO(weekStart, 6), [weekStart])
 
   // Статика (грузим 1 раз)
   const [companies, setCompanies] = useState<Company[]>([])
@@ -171,9 +169,6 @@ export default function SalaryPage() {
 
   const [error, setError] = useState<string | null>(null)
 
-  // Выплата (локальная блокировка кнопки по оператору)
-  const [payoutBusy, setPayoutBusy] = useState<Record<string, boolean>>({})
-
   // Форма корректировок
   const [adjOperatorId, setAdjOperatorId] = useState('')
   const [adjDate, setAdjDate] = useState(toISODateLocal(today))
@@ -181,6 +176,9 @@ export default function SalaryPage() {
   const [adjAmount, setAdjAmount] = useState('')
   const [adjComment, setAdjComment] = useState('')
   const [adjSaving, setAdjSaving] = useState(false)
+
+  // Оплата
+  const [payingOperatorId, setPayingOperatorId] = useState<string | null>(null)
 
   // Если пользователь руками поставил кривой диапазон — подчиним
   useEffect(() => {
@@ -209,6 +207,12 @@ export default function SalaryPage() {
     setDateFrom(from)
     setDateTo(to)
   }, [])
+
+  // Неделя оплаты = понедельник от dateFrom (даже если выбрал криво)
+  const weekStartISO = useMemo(() => {
+    if (!dateFrom) return toISODateLocal(getMonday(new Date()))
+    return toISODateLocal(getMonday(fromISO(dateFrom)))
+  }, [dateFrom])
 
   // 1) Статика — один раз
   useEffect(() => {
@@ -250,7 +254,7 @@ export default function SalaryPage() {
     }
   }, [])
 
-  // 2) Данные диапазона — при смене дат + выплаты по week_start
+  // 2) Данные диапазона — при смене дат
   useEffect(() => {
     let alive = true
 
@@ -258,7 +262,7 @@ export default function SalaryPage() {
       setRangeLoading(true)
       setError(null)
 
-      const [incRes, adjRes, debtsRes, payoutRes] = await Promise.all([
+      const [incRes, adjRes, debtsRes, payoutsRes] = await Promise.all([
         supabase
           .from('incomes')
           .select(
@@ -278,22 +282,17 @@ export default function SalaryPage() {
           .gte('week_start', dateFrom)
           .lte('week_start', dateTo)
           .eq('status', 'active'),
-        // выплаты: считаем на одну неделю (weekStart)
+        // статусы оплаты по текущей неделе (weekStartISO)
         supabase
           .from('operator_salary_payouts')
-          .select('id,operator_id,week_start,amount,is_paid,paid_at,comment')
-          .eq('week_start', weekStart),
+          .select('id,operator_id,date,shift,is_paid,paid_at,comment,created_at')
+          .eq('date', weekStartISO),
       ])
 
       if (!alive) return
 
-      if (incRes.error || adjRes.error || debtsRes.error || payoutRes.error) {
-        console.error('Salary range load error', {
-          incErr: incRes.error,
-          adjErr: adjRes.error,
-          debtsErr: debtsRes.error,
-          payoutErr: payoutRes.error,
-        })
+      if (incRes.error || adjRes.error || debtsRes.error || payoutsRes.error) {
+        console.error('Salary range load error', incRes.error, adjRes.error, debtsRes.error, payoutsRes.error)
         setError('Ошибка загрузки данных для расчёта зарплаты')
         setRangeLoading(false)
         return
@@ -302,7 +301,7 @@ export default function SalaryPage() {
       setIncomes((incRes.data || []) as IncomeRow[])
       setAdjustments((adjRes.data || []) as AdjustmentRow[])
       setDebts((debtsRes.data || []) as DebtRow[])
-      setPayouts((payoutRes.data || []) as PayoutRow[])
+      setPayouts((payoutsRes.data || []) as PayoutRow[])
       setRangeLoading(false)
     }
 
@@ -310,7 +309,7 @@ export default function SalaryPage() {
     return () => {
       alive = false
     }
-  }, [dateFrom, dateTo, weekStart])
+  }, [dateFrom, dateTo, weekStartISO])
 
   const loading = staticLoading || rangeLoading
 
@@ -326,11 +325,10 @@ export default function SalaryPage() {
     return map
   }, [rules])
 
+  // Статус оплаты по оператору за неделю
   const payoutByOperator = useMemo(() => {
-    const map: Record<string, PayoutRow> = {}
-    for (const p of payouts) {
-      map[p.operator_id] = p
-    }
+    const map = new Map<string, PayoutRow>()
+    for (const p of payouts) map.set(p.operator_id, p)
     return map
   }, [payouts])
 
@@ -362,7 +360,6 @@ export default function SalaryPage() {
         const meta = operatorById[id]
         const displayName = meta?.short_name || meta?.name || 'Без имени'
 
-        const paid = payoutByOperator[id]
         op = {
           operatorId: id,
           operatorName: displayName,
@@ -377,8 +374,6 @@ export default function SalaryPage() {
           manualMinus: 0,
           advances: 0,
           finalSalary: 0,
-          isPaid: Boolean(paid?.is_paid),
-          paidAt: paid?.paid_at ?? null,
         }
         byOperator.set(id, op)
       }
@@ -468,6 +463,7 @@ export default function SalaryPage() {
     }
 
     // 4) Долги недели
+    let totalDebts = 0
     for (const d of debts) {
       const op = ensureOperator(d.operator_id)
       if (!op) continue
@@ -476,6 +472,7 @@ export default function SalaryPage() {
       if (!Number.isFinite(amount) || amount <= 0) continue
 
       op.autoDebts += amount
+      totalDebts += amount
     }
 
     // 5) Итог к выплате
@@ -495,8 +492,8 @@ export default function SalaryPage() {
       a.operatorName.localeCompare(b.operatorName, 'ru'),
     )
 
-    return { operators: operatorsStats, totalSalary, totalTurnover }
-  }, [incomes, companyById, rulesMap, adjustments, operators, debts, payoutByOperator])
+    return { operators: operatorsStats, totalSalary, totalTurnover, totalDebts }
+  }, [incomes, companyById, rulesMap, adjustments, operators, debts])
 
   const totalShifts = stats.operators.reduce((s, o) => s + o.shifts, 0)
   const totalBase = stats.operators.reduce((s, o) => s + o.baseSalary, 0)
@@ -506,7 +503,14 @@ export default function SalaryPage() {
   const totalPlus = stats.operators.reduce((s, o) => s + o.manualPlus, 0)
   const totalAdvances = stats.operators.reduce((s, o) => s + o.advances, 0)
 
-  const paidCount = stats.operators.filter((o) => o.isPaid).length
+  const paidCount = useMemo(() => {
+    let n = 0
+    for (const op of stats.operators) {
+      const p = payoutByOperator.get(op.operatorId)
+      if (p?.is_paid) n++
+    }
+    return n
+  }, [stats.operators, payoutByOperator])
 
   const handleAddAdjustment = async (e: FormEvent) => {
     e.preventDefault()
@@ -552,70 +556,42 @@ export default function SalaryPage() {
     }
   }
 
-  const togglePaid = async (operatorId: string, finalSalary: number, currentPaid: boolean) => {
-    if (!operatorId) return
-    if (!Number.isFinite(finalSalary) || finalSalary <= 0) return
-
+  const togglePaid = async (operatorId: string) => {
     setError(null)
-    setPayoutBusy((p) => ({ ...p, [operatorId]: true }))
+    setPayingOperatorId(operatorId)
 
     try {
-      if (!currentPaid) {
-        // отметить как оплачено (upsert)
-        const payload = {
-          operator_id: operatorId,
-          week_start: weekStart,
-          amount: Math.round(finalSalary),
-          is_paid: true,
-          paid_at: new Date().toISOString(),
-          comment: null,
-        }
+      const existing = payoutByOperator.get(operatorId)
+      const nextPaid = !Boolean(existing?.is_paid)
 
-        const { data, error } = await supabase
-          .from('operator_salary_payouts')
-          .upsert([payload], { onConflict: 'operator_id,week_start' })
-          .select('id,operator_id,week_start,amount,is_paid,paid_at,comment')
-          .single()
-
-        if (error) throw error
-
-        setPayouts((prev) => {
-          const next = prev.filter((x) => x.operator_id !== operatorId)
-          next.push(data as PayoutRow)
-          return next
-        })
-      } else {
-        // снять отметку (оставим запись, но is_paid=false)
-        const { data, error } = await supabase
-          .from('operator_salary_payouts')
-          .upsert(
-            [
-              {
-                operator_id: operatorId,
-                week_start: weekStart,
-                amount: Math.round(finalSalary),
-                is_paid: false,
-                paid_at: null,
-              },
-            ],
-            { onConflict: 'operator_id,week_start' },
-          )
-          .select('id,operator_id,week_start,amount,is_paid,paid_at,comment')
-          .single()
-
-        if (error) throw error
-
-        setPayouts((prev) => {
-          const next = prev.filter((x) => x.operator_id !== operatorId)
-          next.push(data as PayoutRow)
-          return next
-        })
+      const payload = {
+        operator_id: operatorId,
+        date: weekStartISO,
+        shift: null as any,
+        is_paid: nextPaid,
+        paid_at: nextPaid ? new Date().toISOString() : null,
       }
+
+      const { data, error } = await supabase
+        .from('operator_salary_payouts')
+        .upsert([payload], { onConflict: 'operator_id,date' })
+        .select('id,operator_id,date,shift,is_paid,paid_at,comment,created_at')
+        .single()
+
+      if (error) throw error
+
+      setPayouts((prev) => {
+        const next = [...prev]
+        const idx = next.findIndex((p) => p.operator_id === operatorId)
+        if (idx >= 0) next[idx] = data as PayoutRow
+        else next.push(data as PayoutRow)
+        return next
+      })
     } catch (e: any) {
       console.error(e)
-      setError(e.message || 'Не удалось обновить статус выплаты')
+      setError(e.message || 'Ошибка при обновлении статуса оплаты')
     } finally {
-      setPayoutBusy((p) => ({ ...p, [operatorId]: false }))
+      setPayingOperatorId(null)
     }
   }
 
@@ -623,7 +599,7 @@ export default function SalaryPage() {
     <div className="flex min-h-screen bg-[#050505] text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-auto">
-        <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
+        <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
           {/* Хедер */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -641,11 +617,7 @@ export default function SalaryPage() {
                   База + авто-бонусы + корректировки − долги − авансы (F16 Arena / Ramen / Extra)
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Неделя выплат: <span className="font-mono">{weekStart}</span> —{' '}
-                  <span className="font-mono">{weekEnd}</span>{' '}
-                  <span className="ml-2 text-muted-foreground/70">
-                    (выплачено: {paidCount}/{stats.operators.length})
-                  </span>
+                  Неделя оплаты: <span className="font-semibold">{formatIsoRu(weekStartISO)}</span>
                 </p>
               </div>
             </div>
@@ -711,6 +683,12 @@ export default function SalaryPage() {
               <p className="text-2xl font-bold text-emerald-400">
                 {loading ? '—' : formatMoney(totalBonus)}
               </p>
+              {!loading && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Оплачено: <span className="font-semibold text-emerald-300">{paidCount}</span> /{' '}
+                  {stats.operators.length}
+                </p>
+              )}
             </Card>
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">
@@ -743,7 +721,7 @@ export default function SalaryPage() {
                   <th className="py-2 text-right px-2">Корр. +</th>
                   <th className="py-2 text-right px-2">К выплате</th>
                   <th className="py-2 text-right px-2 text-[10px]">Выручка</th>
-                  <th className="py-2 text-center px-2">Выплачено</th>
+                  <th className="py-2 text-center px-2">Оплата</th>
                 </tr>
               </thead>
               <tbody>
@@ -765,8 +743,8 @@ export default function SalaryPage() {
 
                 {!loading &&
                   stats.operators.map((op) => {
-                    const busy = Boolean(payoutBusy[op.operatorId])
-                    const canPay = Number.isFinite(op.finalSalary) && op.finalSalary > 0
+                    const payout = payoutByOperator.get(op.operatorId)
+                    const isPaid = Boolean(payout?.is_paid)
 
                     return (
                       <tr
@@ -802,27 +780,27 @@ export default function SalaryPage() {
                         <td className="py-1.5 px-2 text-center">
                           <Button
                             size="xs"
-                            variant={op.isPaid ? 'secondary' : 'outline'}
-                            disabled={!canPay || busy}
-                            onClick={() => togglePaid(op.operatorId, op.finalSalary, op.isPaid)}
-                            className="gap-2"
-                            title={
-                              op.isPaid
-                                ? op.paidAt
-                                  ? `Оплачено: ${new Date(op.paidAt).toLocaleString('ru-RU')}`
-                                  : 'Оплачено'
-                                : 'Отметить как оплачено'
-                            }
+                            variant={isPaid ? 'outline' : 'default'}
+                            onClick={() => togglePaid(op.operatorId)}
+                            disabled={payingOperatorId === op.operatorId}
+                            className={`h-7 text-[11px] gap-1 ${
+                              isPaid ? 'border-emerald-500/40 text-emerald-300' : ''
+                            }`}
                           >
-                            {busy ? (
+                            {payingOperatorId === op.operatorId ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : op.isPaid ? (
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : isPaid ? (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
                             ) : (
-                              <Circle className="w-3.5 h-3.5" />
+                              <XCircle className="w-3.5 h-3.5" />
                             )}
-                            {op.isPaid ? 'Да' : 'Нет'}
+                            {isPaid ? 'Оплачено' : 'Не оплачено'}
                           </Button>
+                          {isPaid && payout?.paid_at && (
+                            <div className="text-[10px] text-muted-foreground mt-1">
+                              {new Date(payout.paid_at).toLocaleString('ru-RU')}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )
