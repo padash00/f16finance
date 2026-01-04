@@ -12,6 +12,9 @@ import {
   DollarSign,
   Users2,
   AlertTriangle,
+  CheckCircle2,
+  Circle,
+  Loader2,
 } from 'lucide-react'
 
 type Company = {
@@ -78,6 +81,16 @@ type DebtRow = {
   status: string | null
 }
 
+type PayoutRow = {
+  id: number
+  operator_id: string
+  week_start: string
+  amount: number
+  is_paid: boolean
+  paid_at: string | null
+  comment: string | null
+}
+
 type OperatorWeekStat = {
   operatorId: string
   operatorName: string
@@ -92,6 +105,10 @@ type OperatorWeekStat = {
   manualMinus: number
   advances: number
   finalSalary: number
+
+  // payout
+  isPaid: boolean
+  paidAt: string | null
 }
 
 const formatMoney = (v: number) =>
@@ -135,6 +152,10 @@ export default function SalaryPage() {
   const [dateFrom, setDateFrom] = useState(toISODateLocal(monday))
   const [dateTo, setDateTo] = useState(toISODateLocal(sunday))
 
+  // week_start всегда нормализуем к понедельнику (для выплат)
+  const weekStart = useMemo(() => toISODateLocal(getMonday(fromISO(dateFrom))), [dateFrom])
+  const weekEnd = useMemo(() => addDaysISO(weekStart, 6), [weekStart])
+
   // Статика (грузим 1 раз)
   const [companies, setCompanies] = useState<Company[]>([])
   const [rules, setRules] = useState<SalaryRule[]>([])
@@ -145,9 +166,13 @@ export default function SalaryPage() {
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([])
   const [debts, setDebts] = useState<DebtRow[]>([])
+  const [payouts, setPayouts] = useState<PayoutRow[]>([])
   const [rangeLoading, setRangeLoading] = useState(true)
 
   const [error, setError] = useState<string | null>(null)
+
+  // Выплата (локальная блокировка кнопки по оператору)
+  const [payoutBusy, setPayoutBusy] = useState<Record<string, boolean>>({})
 
   // Форма корректировок
   const [adjOperatorId, setAdjOperatorId] = useState('')
@@ -225,7 +250,7 @@ export default function SalaryPage() {
     }
   }, [])
 
-  // 2) Данные диапазона — при смене дат
+  // 2) Данные диапазона — при смене дат + выплаты по week_start
   useEffect(() => {
     let alive = true
 
@@ -233,7 +258,7 @@ export default function SalaryPage() {
       setRangeLoading(true)
       setError(null)
 
-      const [incRes, adjRes, debtsRes] = await Promise.all([
+      const [incRes, adjRes, debtsRes, payoutRes] = await Promise.all([
         supabase
           .from('incomes')
           .select(
@@ -253,12 +278,22 @@ export default function SalaryPage() {
           .gte('week_start', dateFrom)
           .lte('week_start', dateTo)
           .eq('status', 'active'),
+        // выплаты: считаем на одну неделю (weekStart)
+        supabase
+          .from('operator_salary_payouts')
+          .select('id,operator_id,week_start,amount,is_paid,paid_at,comment')
+          .eq('week_start', weekStart),
       ])
 
       if (!alive) return
 
-      if (incRes.error || adjRes.error || debtsRes.error) {
-        console.error('Salary range load error', incRes.error, adjRes.error, debtsRes.error)
+      if (incRes.error || adjRes.error || debtsRes.error || payoutRes.error) {
+        console.error('Salary range load error', {
+          incErr: incRes.error,
+          adjErr: adjRes.error,
+          debtsErr: debtsRes.error,
+          payoutErr: payoutRes.error,
+        })
         setError('Ошибка загрузки данных для расчёта зарплаты')
         setRangeLoading(false)
         return
@@ -267,6 +302,7 @@ export default function SalaryPage() {
       setIncomes((incRes.data || []) as IncomeRow[])
       setAdjustments((adjRes.data || []) as AdjustmentRow[])
       setDebts((debtsRes.data || []) as DebtRow[])
+      setPayouts((payoutRes.data || []) as PayoutRow[])
       setRangeLoading(false)
     }
 
@@ -274,7 +310,7 @@ export default function SalaryPage() {
     return () => {
       alive = false
     }
-  }, [dateFrom, dateTo])
+  }, [dateFrom, dateTo, weekStart])
 
   const loading = staticLoading || rangeLoading
 
@@ -289,6 +325,14 @@ export default function SalaryPage() {
     for (const r of rules) map[`${r.company_code}_${r.shift_type}`] = r
     return map
   }, [rules])
+
+  const payoutByOperator = useMemo(() => {
+    const map: Record<string, PayoutRow> = {}
+    for (const p of payouts) {
+      map[p.operator_id] = p
+    }
+    return map
+  }, [payouts])
 
   // Список операторов для селекта (все активные)
   const operatorOptions = useMemo(
@@ -318,6 +362,7 @@ export default function SalaryPage() {
         const meta = operatorById[id]
         const displayName = meta?.short_name || meta?.name || 'Без имени'
 
+        const paid = payoutByOperator[id]
         op = {
           operatorId: id,
           operatorName: displayName,
@@ -332,6 +377,8 @@ export default function SalaryPage() {
           manualMinus: 0,
           advances: 0,
           finalSalary: 0,
+          isPaid: Boolean(paid?.is_paid),
+          paidAt: paid?.paid_at ?? null,
         }
         byOperator.set(id, op)
       }
@@ -421,7 +468,6 @@ export default function SalaryPage() {
     }
 
     // 4) Долги недели
-    let totalDebts = 0
     for (const d of debts) {
       const op = ensureOperator(d.operator_id)
       if (!op) continue
@@ -430,7 +476,6 @@ export default function SalaryPage() {
       if (!Number.isFinite(amount) || amount <= 0) continue
 
       op.autoDebts += amount
-      totalDebts += amount
     }
 
     // 5) Итог к выплате
@@ -450,8 +495,8 @@ export default function SalaryPage() {
       a.operatorName.localeCompare(b.operatorName, 'ru'),
     )
 
-    return { operators: operatorsStats, totalSalary, totalTurnover, totalDebts }
-  }, [incomes, companyById, rulesMap, adjustments, operators, debts])
+    return { operators: operatorsStats, totalSalary, totalTurnover }
+  }, [incomes, companyById, rulesMap, adjustments, operators, debts, payoutByOperator])
 
   const totalShifts = stats.operators.reduce((s, o) => s + o.shifts, 0)
   const totalBase = stats.operators.reduce((s, o) => s + o.baseSalary, 0)
@@ -460,6 +505,8 @@ export default function SalaryPage() {
   const totalMinus = stats.operators.reduce((s, o) => s + o.manualMinus, 0)
   const totalPlus = stats.operators.reduce((s, o) => s + o.manualPlus, 0)
   const totalAdvances = stats.operators.reduce((s, o) => s + o.advances, 0)
+
+  const paidCount = stats.operators.filter((o) => o.isPaid).length
 
   const handleAddAdjustment = async (e: FormEvent) => {
     e.preventDefault()
@@ -505,11 +552,78 @@ export default function SalaryPage() {
     }
   }
 
+  const togglePaid = async (operatorId: string, finalSalary: number, currentPaid: boolean) => {
+    if (!operatorId) return
+    if (!Number.isFinite(finalSalary) || finalSalary <= 0) return
+
+    setError(null)
+    setPayoutBusy((p) => ({ ...p, [operatorId]: true }))
+
+    try {
+      if (!currentPaid) {
+        // отметить как оплачено (upsert)
+        const payload = {
+          operator_id: operatorId,
+          week_start: weekStart,
+          amount: Math.round(finalSalary),
+          is_paid: true,
+          paid_at: new Date().toISOString(),
+          comment: null,
+        }
+
+        const { data, error } = await supabase
+          .from('operator_salary_payouts')
+          .upsert([payload], { onConflict: 'operator_id,week_start' })
+          .select('id,operator_id,week_start,amount,is_paid,paid_at,comment')
+          .single()
+
+        if (error) throw error
+
+        setPayouts((prev) => {
+          const next = prev.filter((x) => x.operator_id !== operatorId)
+          next.push(data as PayoutRow)
+          return next
+        })
+      } else {
+        // снять отметку (оставим запись, но is_paid=false)
+        const { data, error } = await supabase
+          .from('operator_salary_payouts')
+          .upsert(
+            [
+              {
+                operator_id: operatorId,
+                week_start: weekStart,
+                amount: Math.round(finalSalary),
+                is_paid: false,
+                paid_at: null,
+              },
+            ],
+            { onConflict: 'operator_id,week_start' },
+          )
+          .select('id,operator_id,week_start,amount,is_paid,paid_at,comment')
+          .single()
+
+        if (error) throw error
+
+        setPayouts((prev) => {
+          const next = prev.filter((x) => x.operator_id !== operatorId)
+          next.push(data as PayoutRow)
+          return next
+        })
+      }
+    } catch (e: any) {
+      console.error(e)
+      setError(e.message || 'Не удалось обновить статус выплаты')
+    } finally {
+      setPayoutBusy((p) => ({ ...p, [operatorId]: false }))
+    }
+  }
+
   return (
     <div className="flex min-h-screen bg-[#050505] text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-auto">
-        <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
+        <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
           {/* Хедер */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -525,6 +639,13 @@ export default function SalaryPage() {
                 </h1>
                 <p className="text-xs text-muted-foreground">
                   База + авто-бонусы + корректировки − долги − авансы (F16 Arena / Ramen / Extra)
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Неделя выплат: <span className="font-mono">{weekStart}</span> —{' '}
+                  <span className="font-mono">{weekEnd}</span>{' '}
+                  <span className="ml-2 text-muted-foreground/70">
+                    (выплачено: {paidCount}/{stats.operators.length})
+                  </span>
                 </p>
               </div>
             </div>
@@ -622,12 +743,13 @@ export default function SalaryPage() {
                   <th className="py-2 text-right px-2">Корр. +</th>
                   <th className="py-2 text-right px-2">К выплате</th>
                   <th className="py-2 text-right px-2 text-[10px]">Выручка</th>
+                  <th className="py-2 text-center px-2">Выплачено</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={11} className="py-6 text-center text-muted-foreground text-xs">
+                    <td colSpan={12} className="py-6 text-center text-muted-foreground text-xs">
                       Загрузка...
                     </td>
                   </tr>
@@ -635,45 +757,76 @@ export default function SalaryPage() {
 
                 {!loading && stats.operators.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="py-6 text-center text-muted-foreground text-xs">
+                    <td colSpan={12} className="py-6 text-center text-muted-foreground text-xs">
                       Нет данных в выбранном периоде.
                     </td>
                   </tr>
                 )}
 
                 {!loading &&
-                  stats.operators.map((op) => (
-                    <tr
-                      key={op.operatorId}
-                      className="border-t border-border/40 hover:bg-white/5"
-                    >
-                      <td className="py-1.5 px-2 font-medium">{op.operatorName}</td>
-                      <td className="py-1.5 px-2 text-center">{op.shifts}</td>
-                      <td className="py-1.5 px-2 text-right">{formatMoney(op.basePerShift)}</td>
-                      <td className="py-1.5 px-2 text-right">{formatMoney(op.baseSalary)}</td>
-                      <td className="py-1.5 px-2 text-right text-emerald-300">
-                        {formatMoney(op.bonusSalary)}
-                      </td>
-                      <td className="py-1.5 px-2 text-right text-red-300">
-                        {formatMoney(op.autoDebts)}
-                      </td>
-                      <td className="py-1.5 px-2 text-right text-red-300">
-                        {formatMoney(op.manualMinus)}
-                      </td>
-                      <td className="py-1.5 px-2 text-right text-amber-300">
-                        {formatMoney(op.advances)}
-                      </td>
-                      <td className="py-1.5 px-2 text-right text-emerald-300">
-                        {formatMoney(op.manualPlus)}
-                      </td>
-                      <td className="py-1.5 px-2 text-right font-semibold">
-                        {formatMoney(op.finalSalary)}
-                      </td>
-                      <td className="py-1.5 px-2 text-right text-muted-foreground">
-                        {formatMoney(op.totalTurnover)}
-                      </td>
-                    </tr>
-                  ))}
+                  stats.operators.map((op) => {
+                    const busy = Boolean(payoutBusy[op.operatorId])
+                    const canPay = Number.isFinite(op.finalSalary) && op.finalSalary > 0
+
+                    return (
+                      <tr
+                        key={op.operatorId}
+                        className="border-t border-border/40 hover:bg-white/5"
+                      >
+                        <td className="py-1.5 px-2 font-medium">{op.operatorName}</td>
+                        <td className="py-1.5 px-2 text-center">{op.shifts}</td>
+                        <td className="py-1.5 px-2 text-right">{formatMoney(op.basePerShift)}</td>
+                        <td className="py-1.5 px-2 text-right">{formatMoney(op.baseSalary)}</td>
+                        <td className="py-1.5 px-2 text-right text-emerald-300">
+                          {formatMoney(op.bonusSalary)}
+                        </td>
+                        <td className="py-1.5 px-2 text-right text-red-300">
+                          {formatMoney(op.autoDebts)}
+                        </td>
+                        <td className="py-1.5 px-2 text-right text-red-300">
+                          {formatMoney(op.manualMinus)}
+                        </td>
+                        <td className="py-1.5 px-2 text-right text-amber-300">
+                          {formatMoney(op.advances)}
+                        </td>
+                        <td className="py-1.5 px-2 text-right text-emerald-300">
+                          {formatMoney(op.manualPlus)}
+                        </td>
+                        <td className="py-1.5 px-2 text-right font-semibold">
+                          {formatMoney(op.finalSalary)}
+                        </td>
+                        <td className="py-1.5 px-2 text-right text-muted-foreground">
+                          {formatMoney(op.totalTurnover)}
+                        </td>
+
+                        <td className="py-1.5 px-2 text-center">
+                          <Button
+                            size="xs"
+                            variant={op.isPaid ? 'secondary' : 'outline'}
+                            disabled={!canPay || busy}
+                            onClick={() => togglePaid(op.operatorId, op.finalSalary, op.isPaid)}
+                            className="gap-2"
+                            title={
+                              op.isPaid
+                                ? op.paidAt
+                                  ? `Оплачено: ${new Date(op.paidAt).toLocaleString('ru-RU')}`
+                                  : 'Оплачено'
+                                : 'Отметить как оплачено'
+                            }
+                          >
+                            {busy ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : op.isPaid ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Circle className="w-3.5 h-3.5" />
+                            )}
+                            {op.isPaid ? 'Да' : 'Нет'}
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
 
                 {!loading && stats.operators.length > 0 && (
                   <tr className="border-t border-border">
@@ -701,6 +854,9 @@ export default function SalaryPage() {
                     </td>
                     <td className="py-2 px-2 text-right font-bold text-sky-400">
                       {formatMoney(stats.totalTurnover)}
+                    </td>
+                    <td className="py-2 px-2 text-center text-[11px] text-muted-foreground">
+                      {paidCount}/{stats.operators.length}
                     </td>
                   </tr>
                 )}
