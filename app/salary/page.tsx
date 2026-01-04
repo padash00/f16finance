@@ -208,7 +208,7 @@ export default function SalaryPage() {
     setDateTo(to)
   }, [])
 
-  // Неделя оплаты = понедельник от dateFrom (даже если выбрал криво)
+  // Неделя оплаты = понедельник от dateFrom
   const weekStartISO = useMemo(() => {
     if (!dateFrom) return toISODateLocal(getMonday(new Date()))
     return toISODateLocal(getMonday(fromISO(dateFrom)))
@@ -275,14 +275,12 @@ export default function SalaryPage() {
           .select('id,operator_id,date,amount,kind,comment')
           .gte('date', dateFrom)
           .lte('date', dateTo),
-        // week_start обычно = ПН. Под диапазон недели ок.
         supabase
           .from('debts')
           .select('id,operator_id,amount,week_start,status')
           .gte('week_start', dateFrom)
           .lte('week_start', dateTo)
           .eq('status', 'active'),
-        // статусы оплаты по текущей неделе (weekStartISO)
         supabase
           .from('operator_salary_payouts')
           .select('id,operator_id,date,shift,is_paid,paid_at,comment,created_at')
@@ -292,7 +290,13 @@ export default function SalaryPage() {
       if (!alive) return
 
       if (incRes.error || adjRes.error || debtsRes.error || payoutsRes.error) {
-        console.error('Salary range load error', incRes.error, adjRes.error, debtsRes.error, payoutsRes.error)
+        console.error(
+          'Salary range load error',
+          incRes.error,
+          adjRes.error,
+          debtsRes.error,
+          payoutsRes.error,
+        )
         setError('Ошибка загрузки данных для расчёта зарплаты')
         setRangeLoading(false)
         return
@@ -399,8 +403,7 @@ export default function SalaryPage() {
       if (total <= 0) continue
 
       const meta = operatorById[row.operator_id]
-      const displayName =
-        meta?.short_name || meta?.name || row.operator_name || 'Без имени'
+      const displayName = meta?.short_name || meta?.name || row.operator_name || 'Без имени'
 
       const key = `${row.operator_id}_${code}_${row.date}_${shift}`
 
@@ -478,13 +481,7 @@ export default function SalaryPage() {
     // 5) Итог к выплате
     let totalSalary = 0
     for (const op of byOperator.values()) {
-      op.finalSalary =
-        op.totalSalary +
-        op.manualPlus -
-        op.manualMinus -
-        op.autoDebts -
-        op.advances
-
+      op.finalSalary = op.totalSalary + op.manualPlus - op.manualMinus - op.autoDebts - op.advances
       totalSalary += op.finalSalary
     }
 
@@ -599,7 +596,8 @@ export default function SalaryPage() {
     <div className="flex min-h-screen bg-[#050505] text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-auto">
-        <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
+        {/* Растянул контейнер */}
+        <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
           {/* Хедер */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -618,6 +616,14 @@ export default function SalaryPage() {
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-1">
                   Неделя оплаты: <span className="font-semibold">{formatIsoRu(weekStartISO)}</span>
+                  {!loading && (
+                    <>
+                      {'  '}• Оплачено:{' '}
+                      <span className="font-semibold text-emerald-300">
+                        {paidCount}/{stats.operators.length}
+                      </span>
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -625,20 +631,10 @@ export default function SalaryPage() {
             {/* Быстрый выбор недели + даты */}
             <div className="flex flex-col items-end gap-2">
               <div className="flex gap-2">
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={setLastWeek}
-                  className="h-7 text-[11px]"
-                >
+                <Button size="xs" variant="outline" onClick={setLastWeek} className="h-7 text-[11px]">
                   Прошлая неделя
                 </Button>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={setThisWeek}
-                  className="h-7 text-[11px]"
-                >
+                <Button size="xs" variant="outline" onClick={setThisWeek} className="h-7 text-[11px]">
                   Эта неделя
                 </Button>
               </div>
@@ -668,7 +664,7 @@ export default function SalaryPage() {
             </Card>
           )}
 
-          {/* Сводка по неделе */}
+          {/* Сводка */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">Всего смен</p>
@@ -683,17 +679,9 @@ export default function SalaryPage() {
               <p className="text-2xl font-bold text-emerald-400">
                 {loading ? '—' : formatMoney(totalBonus)}
               </p>
-              {!loading && (
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Оплачено: <span className="font-semibold text-emerald-300">{paidCount}</span> /{' '}
-                  {stats.operators.length}
-                </p>
-              )}
             </Card>
             <Card className="p-4 border-border bg-card/70">
-              <p className="text-xs text-muted-foreground mb-1">
-                К выплате (после долгов, корректировок и авансов)
-              </p>
+              <p className="text-xs text-muted-foreground mb-1">К выплате (итог)</p>
               <p className="text-2xl font-bold text-sky-400">
                 {loading ? '—' : formatMoney(stats.totalSalary)}
               </p>
@@ -705,141 +693,173 @@ export default function SalaryPage() {
             </Card>
           </div>
 
-          {/* Таблица операторов */}
-          <Card className="p-4 border-border bg-card/80 overflow-x-auto">
-            <table className="w-full text-xs md:text-sm border-collapse">
-              <thead className="sticky top-0 bg-card/90 backdrop-blur border-b border-border">
-                <tr className="text-[11px] uppercase text-muted-foreground">
-                  <th className="py-2 text-left px-2">Оператор</th>
-                  <th className="py-2 text-center px-2">Смен</th>
-                  <th className="py-2 text-right px-2">Оклад / смена</th>
-                  <th className="py-2 text-right px-2">База</th>
-                  <th className="py-2 text-right px-2">Авто-бонус</th>
-                  <th className="py-2 text-right px-2 text-red-300">Долги недели</th>
-                  <th className="py-2 text-right px-2">Корр. −</th>
-                  <th className="py-2 text-right px-2">Аванс</th>
-                  <th className="py-2 text-right px-2">Корр. +</th>
-                  <th className="py-2 text-right px-2">К выплате</th>
-                  <th className="py-2 text-right px-2 text-[10px]">Выручка</th>
-                  <th className="py-2 text-center px-2">Оплата</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && (
-                  <tr>
-                    <td colSpan={12} className="py-6 text-center text-muted-foreground text-xs">
-                      Загрузка...
-                    </td>
+          {/* Таблица операторов (красивее + шире) */}
+          <Card className="border-border bg-card/80 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1100px] text-xs md:text-sm border-collapse">
+                <thead className="sticky top-0 z-10 bg-[#0b0b0b]/95 backdrop-blur border-b border-border">
+                  <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <th className="py-3 px-3 text-left">Оператор</th>
+                    <th className="py-3 px-3 text-center">Смен</th>
+                    <th className="py-3 px-3 text-right">Оклад</th>
+                    <th className="py-3 px-3 text-right">База</th>
+                    <th className="py-3 px-3 text-right">Авто-бонус</th>
+                    <th className="py-3 px-3 text-right text-red-300">Долги за неделю</th>
+                    <th className="py-3 px-3 text-right text-red-300">Долги</th>
+                    <th className="py-3 px-3 text-right text-amber-300">Аванс</th>
+                    <th className="py-3 px-3 text-right text-emerald-300">Премия</th>
+                    <th className="py-3 px-3 text-right">К выплате</th>
+                    <th className="py-3 px-3 text-center">Оплата</th>
                   </tr>
-                )}
+                </thead>
 
-                {!loading && stats.operators.length === 0 && (
-                  <tr>
-                    <td colSpan={12} className="py-6 text-center text-muted-foreground text-xs">
-                      Нет данных в выбранном периоде.
-                    </td>
-                  </tr>
-                )}
+                <tbody>
+                  {loading && (
+                    <tr>
+                      <td colSpan={11} className="py-8 text-center text-muted-foreground text-xs">
+                        Загрузка...
+                      </td>
+                    </tr>
+                  )}
 
-                {!loading &&
-                  stats.operators.map((op) => {
-                    const payout = payoutByOperator.get(op.operatorId)
-                    const isPaid = Boolean(payout?.is_paid)
+                  {!loading && stats.operators.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="py-8 text-center text-muted-foreground text-xs">
+                        Нет данных в выбранном периоде.
+                      </td>
+                    </tr>
+                  )}
 
-                    return (
-                      <tr
-                        key={op.operatorId}
-                        className="border-t border-border/40 hover:bg-white/5"
-                      >
-                        <td className="py-1.5 px-2 font-medium">{op.operatorName}</td>
-                        <td className="py-1.5 px-2 text-center">{op.shifts}</td>
-                        <td className="py-1.5 px-2 text-right">{formatMoney(op.basePerShift)}</td>
-                        <td className="py-1.5 px-2 text-right">{formatMoney(op.baseSalary)}</td>
-                        <td className="py-1.5 px-2 text-right text-emerald-300">
-                          {formatMoney(op.bonusSalary)}
-                        </td>
-                        <td className="py-1.5 px-2 text-right text-red-300">
-                          {formatMoney(op.autoDebts)}
-                        </td>
-                        <td className="py-1.5 px-2 text-right text-red-300">
-                          {formatMoney(op.manualMinus)}
-                        </td>
-                        <td className="py-1.5 px-2 text-right text-amber-300">
-                          {formatMoney(op.advances)}
-                        </td>
-                        <td className="py-1.5 px-2 text-right text-emerald-300">
-                          {formatMoney(op.manualPlus)}
-                        </td>
-                        <td className="py-1.5 px-2 text-right font-semibold">
-                          {formatMoney(op.finalSalary)}
-                        </td>
-                        <td className="py-1.5 px-2 text-right text-muted-foreground">
-                          {formatMoney(op.totalTurnover)}
-                        </td>
+                  {!loading &&
+                    stats.operators.map((op, idx) => {
+                      const payout = payoutByOperator.get(op.operatorId)
+                      const isPaid = Boolean(payout?.is_paid)
+                      const isNeg = op.finalSalary < 0
 
-                        <td className="py-1.5 px-2 text-center">
-                          <Button
-                            size="xs"
-                            variant={isPaid ? 'outline' : 'default'}
-                            onClick={() => togglePaid(op.operatorId)}
-                            disabled={payingOperatorId === op.operatorId}
-                            className={`h-7 text-[11px] gap-1 ${
-                              isPaid ? 'border-emerald-500/40 text-emerald-300' : ''
-                            }`}
+                      return (
+                        <tr
+                          key={op.operatorId}
+                          className={[
+                            'border-t border-border/40',
+                            idx % 2 === 0 ? 'bg-white/[0.02]' : 'bg-transparent',
+                            'hover:bg-white/[0.05] transition-colors',
+                          ].join(' ')}
+                        >
+                          <td className="py-3 px-3 font-semibold">{op.operatorName}</td>
+                          <td className="py-3 px-3 text-center">{op.shifts}</td>
+
+                          {/* Оклад = оклад/смена */}
+                          <td className="py-3 px-3 text-right font-medium">
+                            {formatMoney(op.basePerShift)}
+                          </td>
+
+                          <td className="py-3 px-3 text-right">{formatMoney(op.baseSalary)}</td>
+
+                          <td className="py-3 px-3 text-right text-emerald-300">
+                            {formatMoney(op.bonusSalary)}
+                          </td>
+
+                          <td className="py-3 px-3 text-right text-red-300">
+                            {formatMoney(op.autoDebts)}
+                          </td>
+
+                          <td className="py-3 px-3 text-right text-red-300">
+                            {formatMoney(op.manualMinus)}
+                          </td>
+
+                          <td className="py-3 px-3 text-right text-amber-300">
+                            {formatMoney(op.advances)}
+                          </td>
+
+                          <td className="py-3 px-3 text-right text-emerald-300">
+                            {formatMoney(op.manualPlus)}
+                          </td>
+
+                          <td
+                            className={[
+                              'py-3 px-3 text-right font-bold',
+                              isNeg ? 'text-red-200' : 'text-foreground',
+                            ].join(' ')}
                           >
-                            {payingOperatorId === op.operatorId ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : isPaid ? (
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                            ) : (
-                              <XCircle className="w-3.5 h-3.5" />
-                            )}
-                            {isPaid ? 'Оплачено' : 'Не оплачено'}
-                          </Button>
-                          {isPaid && payout?.paid_at && (
-                            <div className="text-[10px] text-muted-foreground mt-1">
-                              {new Date(payout.paid_at).toLocaleString('ru-RU')}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
+                            {formatMoney(op.finalSalary)}
+                          </td>
 
-                {!loading && stats.operators.length > 0 && (
-                  <tr className="border-t border-border">
-                    <td className="py-2 px-2 font-bold text-right" colSpan={3}>
-                      Итого:
-                    </td>
-                    <td className="py-2 px-2 text-right font-bold">{formatMoney(totalBase)}</td>
-                    <td className="py-2 px-2 text-right font-bold text-emerald-300">
-                      {formatMoney(totalBonus)}
-                    </td>
-                    <td className="py-2 px-2 text-right font-bold text-red-300">
-                      {formatMoney(totalAutoDebts)}
-                    </td>
-                    <td className="py-2 px-2 text-right font-bold text-red-300">
-                      {formatMoney(totalMinus)}
-                    </td>
-                    <td className="py-2 px-2 text-right font-bold text-amber-300">
-                      {formatMoney(totalAdvances)}
-                    </td>
-                    <td className="py-2 px-2 text-right font-bold text-emerald-300">
-                      {formatMoney(totalPlus)}
-                    </td>
-                    <td className="py-2 px-2 text-right font-bold">
-                      {formatMoney(stats.totalSalary)}
-                    </td>
-                    <td className="py-2 px-2 text-right font-bold text-sky-400">
-                      {formatMoney(stats.totalTurnover)}
-                    </td>
-                    <td className="py-2 px-2 text-center text-[11px] text-muted-foreground">
-                      {paidCount}/{stats.operators.length}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                          <td className="py-3 px-3 text-center">
+                            <Button
+                              size="xs"
+                              onClick={() => togglePaid(op.operatorId)}
+                              disabled={payingOperatorId === op.operatorId}
+                              className={[
+                                'h-8 px-3 rounded-full text-[11px] font-semibold gap-1',
+                                'shadow-sm',
+                                isPaid
+                                  ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/20'
+                                  : 'bg-yellow-400/20 text-yellow-200 border border-yellow-400/35 hover:bg-yellow-400/25',
+                              ].join(' ')}
+                              variant="ghost"
+                            >
+                              {payingOperatorId === op.operatorId ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : isPaid ? (
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              ) : (
+                                <XCircle className="w-3.5 h-3.5" />
+                              )}
+                              {isPaid ? 'Оплачено' : 'Не оплачено'}
+                            </Button>
+
+                            {isPaid && payout?.paid_at && (
+                              <div className="text-[10px] text-muted-foreground mt-1">
+                                {new Date(payout.paid_at).toLocaleString('ru-RU')}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+
+                  {!loading && stats.operators.length > 0 && (
+                    <tr className="border-t border-border bg-white/[0.03]">
+                      <td className="py-3 px-3 font-bold text-right" colSpan={2}>
+                        Итого:
+                      </td>
+
+                      <td className="py-3 px-3 text-right font-bold">{/* Оклад/смена не суммируем */}—</td>
+
+                      <td className="py-3 px-3 text-right font-bold">{formatMoney(totalBase)}</td>
+
+                      <td className="py-3 px-3 text-right font-bold text-emerald-300">
+                        {formatMoney(totalBonus)}
+                      </td>
+
+                      <td className="py-3 px-3 text-right font-bold text-red-300">
+                        {formatMoney(totalAutoDebts)}
+                      </td>
+
+                      <td className="py-3 px-3 text-right font-bold text-red-300">
+                        {formatMoney(totalMinus)}
+                      </td>
+
+                      <td className="py-3 px-3 text-right font-bold text-amber-300">
+                        {formatMoney(totalAdvances)}
+                      </td>
+
+                      <td className="py-3 px-3 text-right font-bold text-emerald-300">
+                        {formatMoney(totalPlus)}
+                      </td>
+
+                      <td className="py-3 px-3 text-right font-bold text-sky-200">
+                        {formatMoney(stats.totalSalary)}
+                      </td>
+
+                      <td className="py-3 px-3 text-center text-[11px] text-muted-foreground">
+                        {paidCount}/{stats.operators.length}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </Card>
 
           {/* Форма корректировок */}
@@ -855,9 +875,7 @@ export default function SalaryPage() {
                 className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end"
               >
                 <div>
-                  <label className="text-[11px] text-muted-foreground mb-1 block">
-                    Оператор
-                  </label>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">Оператор</label>
                   <select
                     value={adjOperatorId}
                     onChange={(e) => setAdjOperatorId(e.target.value)}
@@ -873,9 +891,7 @@ export default function SalaryPage() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] text-muted-foreground mb-1 block">
-                    Дата
-                  </label>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">Дата</label>
                   <input
                     type="date"
                     value={adjDate}
@@ -885,9 +901,7 @@ export default function SalaryPage() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] text-muted-foreground mb-1 block">
-                    Тип
-                  </label>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">Тип</label>
                   <select
                     value={adjKind}
                     onChange={(e) => setAdjKind(e.target.value as AdjustmentKind)}
@@ -901,9 +915,7 @@ export default function SalaryPage() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] text-muted-foreground mb-1 block">
-                    Сумма
-                  </label>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">Сумма</label>
                   <input
                     type="number"
                     min="0"
@@ -915,9 +927,7 @@ export default function SalaryPage() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="text-[11px] text-muted-foreground mb-1 block">
-                    Комментарий
-                  </label>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">Комментарий</label>
                   <div className="flex gap-2">
                     <input
                       value={adjComment}
@@ -925,11 +935,7 @@ export default function SalaryPage() {
                       className="flex-1 bg-input border border-border rounded-md px-2 py-1.5 text-xs"
                       placeholder="Аванс −20k / штраф за кассу −10k / премия за турнир..."
                     />
-                    <Button
-                      type="submit"
-                      disabled={adjSaving}
-                      className="whitespace-nowrap h-9 text-xs"
-                    >
+                    <Button type="submit" disabled={adjSaving} className="whitespace-nowrap h-9 text-xs">
                       {adjSaving ? 'Сохранение...' : 'Добавить'}
                     </Button>
                   </div>
