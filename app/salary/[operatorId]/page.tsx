@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
@@ -10,13 +10,14 @@ import {
   ArrowLeft,
   CalendarDays,
   Banknote,
-  Smartphone,
-  CreditCard,
   Sun,
   Moon,
   UserCircle2,
   TrendingUp,
   Settings2,
+  CheckCircle2,
+  Circle,
+  Loader2,
 } from 'lucide-react'
 
 type Shift = 'day' | 'night'
@@ -57,7 +58,7 @@ type SalaryRule = {
 type DateRangePreset = 'month' | 'week' | 'all'
 
 type AggregatedShift = {
-  id: string
+  id: string // `${date}_${shift}`
   date: string
   shift: Shift
   totalIncome: number
@@ -69,34 +70,45 @@ type AggregatedShift = {
   salary: number
 }
 
+type PayoutRow = {
+  id: number
+  operator_id: string
+  date: string
+  shift: Shift
+  is_paid: boolean
+  paid_at: string | null
+  comment: string | null
+}
+
 type PageProps = {
   params: { operatorId: string }
 }
 
-// helpers
-const todayISO = () => {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+// ---------- helpers (без UTC-сдвигов) ----------
+const toISODateLocal = (d: Date) => {
+  const t = d.getTime() - d.getTimezoneOffset() * 60_000
+  return new Date(t).toISOString().slice(0, 10)
 }
 
+const fromISODateLocal = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
+}
+
+const todayISO = () => toISODateLocal(new Date())
+
 const addDaysISO = (iso: string, diff: number) => {
-  const d = new Date(iso)
+  const d = fromISODateLocal(iso || todayISO())
   d.setDate(d.getDate() + diff)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  return toISODateLocal(d)
 }
 
 const formatMoney = (v: number | null | undefined) =>
   (v ?? 0).toLocaleString('ru-RU')
 
-const formatDate = (value: string) => {
-  if (!value) return ''
-  const d = new Date(value)
+const formatDate = (iso: string) => {
+  if (!iso) return ''
+  const d = fromISODateLocal(iso)
   return d.toLocaleDateString('ru-RU', {
     day: '2-digit',
     month: '2-digit',
@@ -106,7 +118,7 @@ const formatDate = (value: string) => {
 
 const formatIsoToRu = (iso: string | '') => {
   if (!iso) return '…'
-  const d = new Date(iso)
+  const d = fromISODateLocal(iso)
   if (Number.isNaN(d.getTime())) return '…'
   return d.toLocaleDateString('ru-RU', {
     day: '2-digit',
@@ -122,12 +134,16 @@ export default function OperatorSalaryPage({ params }: PageProps) {
   const [companies, setCompanies] = useState<Company[]>([])
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [rules, setRules] = useState<SalaryRule[]>([])
+  const [payouts, setPayouts] = useState<PayoutRow[]>([])
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -29))
   const [dateTo, setDateTo] = useState(todayISO())
-  const [preset, setPreset] = useState<DateRangePreset>('month')
+  const [preset, setPreset] = useState<DateRangePreset | null>('month')
+
+  const [updatingKey, setUpdatingKey] = useState<string | null>(null)
 
   // reference maps
   const companyMap = useMemo(() => {
@@ -145,23 +161,38 @@ export default function OperatorSalaryPage({ params }: PageProps) {
     return map
   }, [rules])
 
+  // payout map
+  const payoutMap = useMemo(() => {
+    const map = new Map<string, PayoutRow>()
+    for (const p of payouts) {
+      map.set(`${p.date}_${p.shift}`, p)
+    }
+    return map
+  }, [payouts])
+
   const baseRate = rulesMap.get('base_rate') ?? 8000
   const bonus120Threshold = rulesMap.get('bonus_120_threshold') ?? 120_000
   const bonus120Value = rulesMap.get('bonus_120_value') ?? 2000
   const bonus160Threshold = rulesMap.get('bonus_160_threshold') ?? 160_000
   const bonus160Value = rulesMap.get('bonus_160_value') ?? 2000
 
-  // load operator + companies + rules + incomes
+  // load operator + companies + rules + incomes + payouts
   useEffect(() => {
+    let alive = true
+
     const load = async () => {
       setLoading(true)
       setError(null)
+
+      const from = dateFrom || '1900-01-01'
+      const to = dateTo || '2999-12-31'
 
       const [
         { data: opData, error: opErr },
         { data: compData, error: compErr },
         { data: rulesData, error: rulesErr },
         { data: incomeData, error: incomeErr },
+        { data: payoutData, error: payoutErr },
       ] = await Promise.all([
         supabase
           .from('operators')
@@ -169,20 +200,25 @@ export default function OperatorSalaryPage({ params }: PageProps) {
           .eq('id', operatorId)
           .single(),
         supabase.from('companies').select('id, name, code').order('name'),
-        supabase
-          .from('salary_rules')
-          .select('key, label, description, value')
-          .order('key'),
+        supabase.from('salary_rules').select('key, label, description, value').order('key'),
         supabase
           .from('incomes')
           .select(
             'id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, card_amount, comment',
           )
           .eq('operator_id', operatorId)
-          .gte('date', dateFrom || '1900-01-01')
-          .lte('date', dateTo || '2999-12-31')
+          .gte('date', from)
+          .lte('date', to)
           .order('date', { ascending: false }),
+        supabase
+          .from('operator_salary_payouts')
+          .select('id, operator_id, date, shift, is_paid, paid_at, comment')
+          .eq('operator_id', operatorId)
+          .gte('date', from)
+          .lte('date', to),
       ])
+
+      if (!alive) return
 
       if (opErr) {
         console.error(opErr)
@@ -191,11 +227,12 @@ export default function OperatorSalaryPage({ params }: PageProps) {
         return
       }
 
-      if (compErr || rulesErr || incomeErr) {
+      if (compErr || rulesErr || incomeErr || payoutErr) {
         console.error('Error loading operator salary data', {
           compErr,
           rulesErr,
           incomeErr,
+          payoutErr,
         })
         setError('Ошибка при загрузке данных')
         setLoading(false)
@@ -206,10 +243,14 @@ export default function OperatorSalaryPage({ params }: PageProps) {
       setCompanies((compData || []) as Company[])
       setRules((rulesData || []) as SalaryRule[])
       setIncomes((incomeData || []) as IncomeRow[])
+      setPayouts((payoutData || []) as PayoutRow[])
       setLoading(false)
     }
 
     load()
+    return () => {
+      alive = false
+    }
   }, [operatorId, dateFrom, dateTo])
 
   // aggregated shifts
@@ -247,64 +288,45 @@ export default function OperatorSalaryPage({ params }: PageProps) {
       agg.kaspi += kaspi
       agg.card += card
 
-      if (r.zone && !agg.zones.includes(r.zone)) {
-        agg.zones.push(r.zone)
-      }
-      if (r.comment && !agg.comments.includes(r.comment)) {
-        agg.comments.push(r.comment)
-      }
+      if (r.zone && !agg.zones.includes(r.zone)) agg.zones.push(r.zone)
+      if (r.comment && !agg.comments.includes(r.comment)) agg.comments.push(r.comment)
     }
 
-    const result: AggregatedShift[] = Array.from(map.entries()).map(
-      ([key, agg]) => {
-        let salary = baseRate
+    const result: AggregatedShift[] = Array.from(map.entries()).map(([key, agg]) => {
+      let salary = baseRate
+      if (agg.totalIncome >= bonus120Threshold) salary += bonus120Value
+      if (agg.totalIncome >= bonus160Threshold) salary += bonus160Value
 
-        if (agg.totalIncome >= bonus120Threshold) {
-          salary += bonus120Value
-        }
-        if (agg.totalIncome >= bonus160Threshold) {
-          salary += bonus160Value
-        }
-
-        return {
-          id: key,
-          date: agg.date,
-          shift: agg.shift,
-          totalIncome: agg.totalIncome,
-          cash: agg.cash,
-          kaspi: agg.kaspi,
-          card: agg.card,
-          zones: agg.zones,
-          comments: agg.comments,
-          salary,
-        }
-      },
-    )
+      return {
+        id: key,
+        date: agg.date,
+        shift: agg.shift,
+        totalIncome: agg.totalIncome,
+        cash: agg.cash,
+        kaspi: agg.kaspi,
+        card: agg.card,
+        zones: agg.zones,
+        comments: agg.comments,
+        salary,
+      }
+    })
 
     result.sort((a, b) => a.date.localeCompare(b.date) || (a.shift > b.shift ? 1 : -1))
-
     return result
-  }, [
-    incomes,
-    baseRate,
-    bonus120Threshold,
-    bonus120Value,
-    bonus160Threshold,
-    bonus160Value,
-  ])
+  }, [incomes, baseRate, bonus120Threshold, bonus120Value, bonus160Threshold, bonus160Value])
 
   const totals = useMemo(() => {
     const totalShifts = shifts.length
-    const totalRevenue = shifts.reduce(
-      (sum, s) => sum + s.totalIncome,
-      0,
-    )
+    const totalRevenue = shifts.reduce((sum, s) => sum + s.totalIncome, 0)
     const totalSalary = shifts.reduce((sum, s) => sum + s.salary, 0)
 
-    const avgRevenuePerShift =
-      totalShifts > 0 ? totalRevenue / totalShifts : 0
-    const avgSalaryPerShift =
-      totalShifts > 0 ? totalSalary / totalShifts : 0
+    const avgRevenuePerShift = totalShifts > 0 ? totalRevenue / totalShifts : 0
+    const avgSalaryPerShift = totalShifts > 0 ? totalSalary / totalShifts : 0
+
+    const paidCount = shifts.reduce((acc, s) => {
+      const p = payoutMap.get(s.id)
+      return acc + (p?.is_paid ? 1 : 0)
+    }, 0)
 
     return {
       totalShifts,
@@ -312,8 +334,9 @@ export default function OperatorSalaryPage({ params }: PageProps) {
       totalSalary,
       avgRevenuePerShift,
       avgSalaryPerShift,
+      paidCount,
     }
-  }, [shifts])
+  }, [shifts, payoutMap])
 
   const handlePreset = (p: DateRangePreset) => {
     const today = todayISO()
@@ -331,13 +354,51 @@ export default function OperatorSalaryPage({ params }: PageProps) {
     }
   }
 
-  const periodLabel =
-    dateFrom || dateTo
-      ? `${formatIsoToRu(dateFrom)} — ${formatIsoToRu(dateTo)}`
-      : 'Весь период'
+  const togglePaid = useCallback(
+    async (s: AggregatedShift) => {
+      setError(null)
+      setUpdatingKey(s.id)
 
-  const baseLabel =
-    rules.find((r) => r.key === 'base_rate')?.label || 'Ставка за смену'
+      try {
+        const current = payoutMap.get(s.id)
+        const nextPaid = !(current?.is_paid ?? false)
+
+        const payload = {
+          operator_id: operatorId,
+          date: s.date,
+          shift: s.shift,
+          is_paid: nextPaid,
+          paid_at: nextPaid ? new Date().toISOString() : null,
+        }
+
+        const { data, error } = await supabase
+          .from('operator_salary_payouts')
+          .upsert(payload, { onConflict: 'operator_id,date,shift' })
+          .select('id, operator_id, date, shift, is_paid, paid_at, comment')
+          .single()
+
+        if (error) throw error
+
+        setPayouts((prev) => {
+          const key = `${data.date}_${data.shift}`
+          const next = prev.filter((x) => `${x.date}_${x.shift}` !== key)
+          next.push(data as PayoutRow)
+          return next
+        })
+      } catch (e: any) {
+        console.error(e)
+        setError(e.message || 'Не удалось обновить статус оплаты')
+      } finally {
+        setUpdatingKey(null)
+      }
+    },
+    [operatorId, payoutMap],
+  )
+
+  const periodLabel =
+    dateFrom || dateTo ? `${formatIsoToRu(dateFrom)} — ${formatIsoToRu(dateTo)}` : 'Весь период'
+
+  const baseLabel = rules.find((r) => r.key === 'base_rate')?.label || 'Ставка за смену'
 
   if (loading) {
     return (
@@ -376,11 +437,7 @@ export default function OperatorSalaryPage({ params }: PageProps) {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start gap-3">
               <Link href="/salary">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="mr-1 hidden md:inline-flex"
-                >
+                <Button variant="ghost" size="icon" className="mr-1 hidden md:inline-flex">
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
               </Link>
@@ -404,11 +461,7 @@ export default function OperatorSalaryPage({ params }: PageProps) {
 
             <div className="flex flex-wrap gap-2 justify-end">
               <Link href="/salary/rules">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 text-xs"
-                >
+                <Button variant="outline" size="sm" className="gap-2 text-xs">
                   <Settings2 className="w-4 h-4" />
                   Правила зарплаты
                 </Button>
@@ -422,9 +475,7 @@ export default function OperatorSalaryPage({ params }: PageProps) {
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <Banknote className="w-4 h-4" />
-                  <span className="text-xs uppercase tracking-wide">
-                    Всего зарплата
-                  </span>
+                  <span className="text-xs uppercase tracking-wide">Всего зарплата</span>
                 </div>
                 <div className="text-xl md:text-2xl font-bold text-foreground">
                   {formatMoney(totals.totalSalary)} ₸
@@ -434,36 +485,26 @@ export default function OperatorSalaryPage({ params }: PageProps) {
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <TrendingUp className="w-4 h-4" />
-                  <span className="text-xs uppercase tracking-wide">
-                    Выручка
-                  </span>
+                  <span className="text-xs uppercase tracking-wide">Выручка</span>
                 </div>
                 <div className="text-xl md:text-2xl font-bold text-foreground">
                   {formatMoney(totals.totalRevenue)} ₸
                 </div>
                 <div className="text-[10px] text-muted-foreground">
                   В среднем за смену:{' '}
-                  <span className="font-semibold">
-                    {formatMoney(totals.avgRevenuePerShift)} ₸
-                  </span>
+                  <span className="font-semibold">{formatMoney(totals.avgRevenuePerShift)} ₸</span>
                 </div>
               </Card>
 
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <CalendarDays className="w-4 h-4" />
-                  <span className="text-xs uppercase tracking-wide">
-                    Кол-во смен
-                  </span>
+                  <span className="text-xs uppercase tracking-wide">Кол-во смен</span>
                 </div>
-                <div className="text-xl md:text-2xl font-bold text-foreground">
-                  {totals.totalShifts}
-                </div>
+                <div className="text-xl md:text-2xl font-bold text-foreground">{totals.totalShifts}</div>
                 <div className="text-[10px] text-muted-foreground">
                   Средняя зарплата за смену:{' '}
-                  <span className="font-semibold">
-                    {formatMoney(totals.avgSalaryPerShift)} ₸
-                  </span>
+                  <span className="font-semibold">{formatMoney(totals.avgSalaryPerShift)} ₸</span>
                 </div>
               </Card>
 
@@ -473,16 +514,18 @@ export default function OperatorSalaryPage({ params }: PageProps) {
                 </div>
                 <div className="text-xs space-y-1 text-foreground">
                   <div>
-                    <span className="font-semibold">{baseLabel}</span>:{' '}
-                    {formatMoney(baseRate)} ₸
+                    <span className="font-semibold">{baseLabel}</span>: {formatMoney(baseRate)} ₸
                   </div>
                   <div>
-                    Бонус ≥ {formatMoney(bonus120Threshold)} ₸:{' '}
-                    {formatMoney(bonus120Value)} ₸
+                    Бонус ≥ {formatMoney(bonus120Threshold)} ₸: {formatMoney(bonus120Value)} ₸
                   </div>
                   <div>
-                    Бонус ≥ {formatMoney(bonus160Threshold)} ₸:{' '}
-                    {formatMoney(bonus160Value)} ₸
+                    Бонус ≥ {formatMoney(bonus160Threshold)} ₸: {formatMoney(bonus160Value)} ₸
+                  </div>
+
+                  <div className="pt-2 text-[11px] text-muted-foreground">
+                    Оплачено смен: <span className="font-semibold text-foreground">{totals.paidCount}</span> /{' '}
+                    <span className="font-semibold text-foreground">{totals.totalShifts}</span>
                   </div>
                 </div>
               </Card>
@@ -491,16 +534,11 @@ export default function OperatorSalaryPage({ params }: PageProps) {
             <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-1">
                 <CalendarDays className="w-3 h-3" />
-                <span className="uppercase tracking-wide">
-                  Период:
-                </span>
+                <span className="uppercase tracking-wide">Период:</span>
                 <span className="font-mono">{periodLabel}</span>
               </div>
               <div>
-                Смен:{' '}
-                <span className="font-semibold">
-                  {totals.totalShifts}
-                </span>
+                Смен: <span className="font-semibold">{totals.totalShifts}</span>
               </div>
             </div>
           </Card>
@@ -520,41 +558,38 @@ export default function OperatorSalaryPage({ params }: PageProps) {
                       value={dateFrom}
                       onChange={(e) => {
                         setDateFrom(e.target.value)
-                        setPreset(null as any)
+                        setPreset(null)
                       }}
                       className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
                     />
-                    <span className="text-muted-foreground text-xs px-1">
-                      →
-                    </span>
+                    <span className="text-muted-foreground text-xs px-1">→</span>
                     <input
                       type="date"
                       value={dateTo}
                       onChange={(e) => {
                         setDateTo(e.target.value)
-                        setPreset(null as any)
+                        setPreset(null)
                       }}
                       className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
                     />
                   </div>
+
                   <div className="flex bg-input/30 rounded-md border border-border/30 p-0.5">
-                    {(['week', 'month', 'all'] as DateRangePreset[]).map(
-                      (p) => (
-                        <button
-                          key={p}
-                          onClick={() => handlePreset(p)}
-                          className={`px-3 py-1 text-[10px] rounded transition-colors ${
-                            preset === p
-                              ? 'bg-accent text-accent-foreground'
-                              : 'hover:bg-white/10 text-muted-foreground'
-                          }`}
-                        >
-                          {p === 'week' && 'Неделя'}
-                          {p === 'month' && '30 дн.'}
-                          {p === 'all' && 'Всё'}
-                        </button>
-                      ),
-                    )}
+                    {(['week', 'month', 'all'] as DateRangePreset[]).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => handlePreset(p)}
+                        className={`px-3 py-1 text-[10px] rounded transition-colors ${
+                          preset === p
+                            ? 'bg-accent text-accent-foreground'
+                            : 'hover:bg-white/10 text-muted-foreground'
+                        }`}
+                      >
+                        {p === 'week' && 'Неделя'}
+                        {p === 'month' && '30 дн.'}
+                        {p === 'all' && 'Всё'}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -570,94 +605,117 @@ export default function OperatorSalaryPage({ params }: PageProps) {
                     <th className="px-4 py-3 text-left">Дата</th>
                     <th className="px-4 py-3 text-center">Смена</th>
                     <th className="px-4 py-3 text-left">Зоны</th>
-                    <th className="px-4 py-3 text-right text-green-500">
-                      Нал
-                    </th>
-                    <th className="px-4 py-3 text-right text-blue-500">
-                      Kaspi
-                    </th>
-                    <th className="px-4 py-3 text-right text-purple-500">
-                      Карта
-                    </th>
+                    <th className="px-4 py-3 text-right text-green-500">Нал</th>
+                    <th className="px-4 py-3 text-right text-blue-500">Kaspi</th>
+                    <th className="px-4 py-3 text-right text-purple-500">Карта</th>
                     <th className="px-4 py-3 text-right">Выручка</th>
                     <th className="px-4 py-3 text-right">Зарплата</th>
                     <th className="px-4 py-3 text-left">Комментарии</th>
+                    <th className="px-4 py-3 text-center">Оплата</th>
                   </tr>
                 </thead>
+
                 <tbody className="text-sm">
                   {shifts.length === 0 && (
                     <tr>
-                      <td
-                        colSpan={9}
-                        className="px-6 py-10 text-center text-muted-foreground"
-                      >
+                      <td colSpan={10} className="px-6 py-10 text-center text-muted-foreground">
                         Нет смен за выбранный период.
                       </td>
                     </tr>
                   )}
 
-                  {shifts.map((s, idx) => (
-                    <tr
-                      key={s.id}
-                      className={`border-b border-border/40 hover:bg-white/5 transition-colors ${
-                        idx % 2 === 0 ? 'bg-card/40' : ''
-                      }`}
-                    >
-                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground font-mono text-xs">
-                        {formatDate(s.date)}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {s.shift === 'day' ? (
-                          <Sun className="w-4 h-4 text-yellow-400 inline" />
-                        ) : (
-                          <Moon className="w-4 h-4 text-blue-400 inline" />
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">
-                        {s.zones.length
-                          ? s.zones.join(', ')
-                          : '—'}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-right font-mono ${
-                          s.cash
-                            ? 'text-foreground'
-                            : 'text-muted-foreground/20'
+                  {shifts.map((s, idx) => {
+                    const pay = payoutMap.get(s.id)
+                    const isPaid = pay?.is_paid ?? false
+                    const busy = updatingKey === s.id
+
+                    return (
+                      <tr
+                        key={s.id}
+                        className={`border-b border-border/40 hover:bg-white/5 transition-colors ${
+                          idx % 2 === 0 ? 'bg-card/40' : ''
                         }`}
                       >
-                        {s.cash ? formatMoney(s.cash) : '—'}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-right font-mono ${
-                          s.kaspi
-                            ? 'text-foreground'
-                            : 'text-muted-foreground/20'
-                        }`}
-                      >
-                        {s.kaspi ? formatMoney(s.kaspi) : '—'}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-right font-mono ${
-                          s.card
-                            ? 'text-foreground'
-                            : 'text-muted-foreground/20'
-                        }`}
-                      >
-                        {s.card ? formatMoney(s.card) : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono">
-                        {formatMoney(s.totalIncome)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold text-accent bg-accent/5">
-                        {formatMoney(s.salary)}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground max-w-[260px]">
-                        {s.comments.length
-                          ? s.comments.join(' | ')
-                          : '—'}
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="px-4 py-3 whitespace-nowrap text-muted-foreground font-mono text-xs">
+                          {formatDate(s.date)}
+                        </td>
+
+                        <td className="px-4 py-3 text-center">
+                          {s.shift === 'day' ? (
+                            <Sun className="w-4 h-4 text-yellow-400 inline" />
+                          ) : (
+                            <Moon className="w-4 h-4 text-blue-400 inline" />
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {s.zones.length ? s.zones.join(', ') : '—'}
+                        </td>
+
+                        <td
+                          className={`px-4 py-3 text-right font-mono ${
+                            s.cash ? 'text-foreground' : 'text-muted-foreground/20'
+                          }`}
+                        >
+                          {s.cash ? formatMoney(s.cash) : '—'}
+                        </td>
+
+                        <td
+                          className={`px-4 py-3 text-right font-mono ${
+                            s.kaspi ? 'text-foreground' : 'text-muted-foreground/20'
+                          }`}
+                        >
+                          {s.kaspi ? formatMoney(s.kaspi) : '—'}
+                        </td>
+
+                        <td
+                          className={`px-4 py-3 text-right font-mono ${
+                            s.card ? 'text-foreground' : 'text-muted-foreground/20'
+                          }`}
+                        >
+                          {s.card ? formatMoney(s.card) : '—'}
+                        </td>
+
+                        <td className="px-4 py-3 text-right font-mono">{formatMoney(s.totalIncome)}</td>
+
+                        <td className="px-4 py-3 text-right font-mono font-semibold text-accent bg-accent/5">
+                          {formatMoney(s.salary)}
+                        </td>
+
+                        <td className="px-4 py-3 text-xs text-muted-foreground max-w-[260px]">
+                          {s.comments.length ? s.comments.join(' | ') : '—'}
+                        </td>
+
+                        <td className="px-4 py-3 text-center">
+                          <Button
+                            size="xs"
+                            variant={isPaid ? 'default' : 'outline'}
+                            className={`gap-2 ${isPaid ? 'bg-emerald-600 hover:bg-emerald-600/90' : ''}`}
+                            disabled={busy}
+                            onClick={() => togglePaid(s)}
+                            title={isPaid ? 'Отметить как НЕ оплачено' : 'Отметить как ОПЛАЧЕНО'}
+                          >
+                            {busy ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : isPaid ? (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            ) : (
+                              <Circle className="w-3.5 h-3.5" />
+                            )}
+                            <span className="text-[11px]">
+                              {isPaid ? 'Оплачено' : 'Не оплачено'}
+                            </span>
+                          </Button>
+
+                          {pay?.paid_at && isPaid && (
+                            <div className="text-[10px] text-muted-foreground mt-1">
+                              {new Date(pay.paid_at).toLocaleString('ru-RU')}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
