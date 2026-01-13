@@ -63,7 +63,6 @@ export default function AddIncomePage() {
   const [operatorId, setOperatorId] = useState('')
 
   const [loadingMeta, setLoadingMeta] = useState(true)
-
   const [shift, setShift] = useState<ShiftType>('day')
 
   // Обычные компании
@@ -107,7 +106,6 @@ export default function AddIncomePage() {
       } else {
         setCompanies(compRes.data || [])
         setOperators(opRes.data || [])
-
         if (compRes.data?.length) setCompanyId(compRes.data[0].id)
       }
 
@@ -135,9 +133,8 @@ export default function AddIncomePage() {
   // ---- умный сброс полей при смене компании ----
   useEffect(() => {
     setError(null)
-    setComment((v) => v) // не трогаем
+    setComment((v) => v)
 
-    // чтобы не мешались суммы между режимами
     setCash('')
     setKaspi('')
     setCard('')
@@ -156,14 +153,8 @@ export default function AddIncomePage() {
     if (!operators.length) return { ok: false, msg: 'Нет активных операторов' }
 
     if (isExtra) {
-      const pCash = parseAmount(ps5Cash)
-      const pKaspi = parseAmount(ps5Kaspi)
-      const vCash = parseAmount(vrCash)
-      const vKaspi = parseAmount(vrKaspi)
-
-      const ps5Total = pCash + pKaspi
-      const vrTotal = vCash + vKaspi
-
+      const ps5Total = parseAmount(ps5Cash) + parseAmount(ps5Kaspi)
+      const vrTotal = parseAmount(vrCash) + parseAmount(vrKaspi)
       if (ps5Total <= 0 && vrTotal <= 0) return { ok: false, msg: 'Укажите сумму (Нал или Kaspi) для PS5 или VR' }
       return { ok: true, msg: '' }
     }
@@ -195,10 +186,7 @@ export default function AddIncomePage() {
         const rows: any[] = []
         const baseComment = comment.trim()
 
-        const ps5Total = pCash + pKaspi
-        const vrTotal = vCash + vKaspi
-
-        if (ps5Total > 0) {
+        if (pCash + pKaspi > 0) {
           rows.push({
             date,
             company_id: companyId,
@@ -213,7 +201,7 @@ export default function AddIncomePage() {
           })
         }
 
-        if (vrTotal > 0) {
+        if (vCash + vKaspi > 0) {
           rows.push({
             date,
             company_id: companyId,
@@ -231,10 +219,6 @@ export default function AddIncomePage() {
         const { error } = await supabase.from('incomes').insert(rows)
         if (error) throw error
       } else {
-        const cashVal = parseAmount(cash)
-        const kaspiVal = parseAmount(kaspi)
-        const cardVal = parseAmount(card)
-
         const { error } = await supabase.from('incomes').insert([
           {
             date,
@@ -242,14 +226,13 @@ export default function AddIncomePage() {
             operator_id: operatorId,
             shift,
             zone: getZone(),
-            cash_amount: cashVal,
-            kaspi_amount: kaspiVal,
-            card_amount: cardVal,
+            cash_amount: parseAmount(cash),
+            kaspi_amount: parseAmount(kaspi),
+            card_amount: parseAmount(card),
             comment: comment.trim() || null,
             is_virtual: false,
           },
         ])
-
         if (error) throw error
       }
 
@@ -358,7 +341,7 @@ export default function AddIncomePage() {
                           : 'text-muted-foreground hover:text-white'
                       }`}
                     >
-                      <Moon className="w-4 h-4 /> Ночь
+                      <Moon className="w-4 h-4" /> Ночь
                     </button>
                   </div>
                 </div>
