@@ -71,9 +71,11 @@ export default function AddIncomePage() {
   const [kaspi, setKaspi] = useState('')
   const [card, setCard] = useState('')
 
-  // Extra
-  const [ps5Amount, setPs5Amount] = useState('')
-  const [vrAmount, setVrAmount] = useState('')
+  // Extra: PS5 и VR отдельно по НАЛ и KASPI
+  const [ps5Cash, setPs5Cash] = useState('')
+  const [ps5Kaspi, setPs5Kaspi] = useState('')
+  const [vrCash, setVrCash] = useState('')
+  const [vrKaspi, setVrKaspi] = useState('')
 
   const [comment, setComment] = useState('')
   const [saving, setSaving] = useState(false)
@@ -139,11 +141,14 @@ export default function AddIncomePage() {
     setCash('')
     setKaspi('')
     setCard('')
-    setPs5Amount('')
-    setVrAmount('')
+
+    setPs5Cash('')
+    setPs5Kaspi('')
+    setVrCash('')
+    setVrKaspi('')
   }, [companyId])
 
-  // ---- валидация (для дизейбла кнопки и норм ошибок) ----
+  // ---- валидация ----
   const validation = useMemo(() => {
     if (!companyId) return { ok: false, msg: 'Выберите компанию' }
     if (!operatorId) return { ok: false, msg: 'Выберите оператора смены' }
@@ -151,9 +156,15 @@ export default function AddIncomePage() {
     if (!operators.length) return { ok: false, msg: 'Нет активных операторов' }
 
     if (isExtra) {
-      const ps5 = parseAmount(ps5Amount)
-      const vr = parseAmount(vrAmount)
-      if (ps5 <= 0 && vr <= 0) return { ok: false, msg: 'Укажите сумму для PS5 или VR' }
+      const pCash = parseAmount(ps5Cash)
+      const pKaspi = parseAmount(ps5Kaspi)
+      const vCash = parseAmount(vrCash)
+      const vKaspi = parseAmount(vrKaspi)
+
+      const ps5Total = pCash + pKaspi
+      const vrTotal = vCash + vKaspi
+
+      if (ps5Total <= 0 && vrTotal <= 0) return { ok: false, msg: 'Укажите сумму (Нал или Kaspi) для PS5 или VR' }
       return { ok: true, msg: '' }
     }
 
@@ -163,7 +174,7 @@ export default function AddIncomePage() {
     if (c <= 0 && k <= 0 && cd <= 0) return { ok: false, msg: 'Введите сумму дохода' }
 
     return { ok: true, msg: '' }
-  }, [companyId, operatorId, date, operators.length, isExtra, ps5Amount, vrAmount, cash, kaspi, card])
+  }, [companyId, operatorId, date, operators.length, isExtra, ps5Cash, ps5Kaspi, vrCash, vrKaspi, cash, kaspi, card])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -176,35 +187,41 @@ export default function AddIncomePage() {
       if (!validation.ok) throw new Error(validation.msg)
 
       if (isExtra) {
-        const ps5 = parseAmount(ps5Amount)
-        const vr = parseAmount(vrAmount)
+        const pCash = parseAmount(ps5Cash)
+        const pKaspi = parseAmount(ps5Kaspi)
+        const vCash = parseAmount(vrCash)
+        const vKaspi = parseAmount(vrKaspi)
 
         const rows: any[] = []
         const baseComment = comment.trim()
 
-        if (ps5 > 0) {
+        const ps5Total = pCash + pKaspi
+        const vrTotal = vCash + vKaspi
+
+        if (ps5Total > 0) {
           rows.push({
             date,
             company_id: companyId,
             operator_id: operatorId,
             shift,
             zone: 'ps5',
-            cash_amount: ps5,
-            kaspi_amount: 0,
+            cash_amount: pCash,
+            kaspi_amount: pKaspi,
             card_amount: 0,
             comment: baseComment ? `${baseComment} • PS5` : 'PS5',
             is_virtual: true,
           })
         }
-        if (vr > 0) {
+
+        if (vrTotal > 0) {
           rows.push({
             date,
             company_id: companyId,
             operator_id: operatorId,
             shift,
             zone: 'vr',
-            cash_amount: vr,
-            kaspi_amount: 0,
+            cash_amount: vCash,
+            kaspi_amount: vKaspi,
             card_amount: 0,
             comment: baseComment ? `${baseComment} • VR` : 'VR',
             is_virtual: true,
@@ -341,7 +358,7 @@ export default function AddIncomePage() {
                           : 'text-muted-foreground hover:text-white'
                       }`}
                     >
-                      <Moon className="w-4 h-4" /> Ночь
+                      <Moon className="w-4 h-4 /> Ночь
                     </button>
                   </div>
                 </div>
@@ -403,89 +420,136 @@ export default function AddIncomePage() {
                 {isExtra ? 'Выручка по зонам (Extra)' : 'Суммы выручки'}
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {isExtra ? (
-                  <>
-                    <div>
-                      <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                        <Gamepad2 className="w-4 h-4 text-purple-500" /> PlayStation 5
-                      </label>
-                      <input
-                        inputMode="numeric"
-                        type="number"
-                        placeholder="0"
-                        min="0"
-                        value={ps5Amount}
-                        onChange={(e) => setPs5Amount(e.target.value)}
-                        className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all"
-                      />
+              {isExtra ? (
+                <div className="space-y-6">
+                  {/* PS5 */}
+                  <div className="rounded-xl border border-border/60 bg-background/20 p-4">
+                    <div className="flex items-center gap-2 mb-3 text-xs text-foreground">
+                      <Gamepad2 className="w-4 h-4 text-purple-500" />
+                      <span className="font-semibold">PlayStation 5</span>
                     </div>
 
-                    <div>
-                      <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                        <Eye className="w-4 h-4 text-cyan-500" /> VR Зона
-                      </label>
-                      <input
-                        inputMode="numeric"
-                        type="number"
-                        placeholder="0"
-                        min="0"
-                        value={vrAmount}
-                        onChange={(e) => setVrAmount(e.target.value)}
-                        className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 transition-all"
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
+                          <Wallet className="w-4 h-4 text-green-500" /> Наличные
+                        </label>
+                        <input
+                          inputMode="numeric"
+                          type="number"
+                          placeholder="0"
+                          min="0"
+                          value={ps5Cash}
+                          onChange={(e) => setPs5Cash(e.target.value)}
+                          className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-green-500 focus:ring-1 focus:ring-green-500/50 transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
+                          <CreditCard className="w-4 h-4 text-red-500" /> Kaspi QR
+                        </label>
+                        <input
+                          inputMode="numeric"
+                          type="number"
+                          placeholder="0"
+                          min="0"
+                          value={ps5Kaspi}
+                          onChange={(e) => setPs5Kaspi(e.target.value)}
+                          className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-red-500 focus:ring-1 focus:ring-red-500/50 transition-all"
+                        />
+                      </div>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                        <Wallet className="w-4 h-4 text-green-500" /> Наличные (Cash)
-                      </label>
-                      <input
-                        inputMode="numeric"
-                        type="number"
-                        placeholder="0"
-                        min="0"
-                        value={cash}
-                        onChange={(e) => setCash(e.target.value)}
-                        className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-green-500 focus:ring-1 focus:ring-green-500/50 transition-all"
-                      />
+                  </div>
+
+                  {/* VR */}
+                  <div className="rounded-xl border border-border/60 bg-background/20 p-4">
+                    <div className="flex items-center gap-2 mb-3 text-xs text-foreground">
+                      <Eye className="w-4 h-4 text-cyan-500" />
+                      <span className="font-semibold">VR Зона</span>
                     </div>
 
-                    <div>
-                      <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-red-500" /> Kaspi QR
-                      </label>
-                      <input
-                        inputMode="numeric"
-                        type="number"
-                        placeholder="0"
-                        min="0"
-                        value={kaspi}
-                        onChange={(e) => setKaspi(e.target.value)}
-                        className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-red-500 focus:ring-1 focus:ring-red-500/50 transition-all"
-                      />
-                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
+                          <Wallet className="w-4 h-4 text-green-500" /> Наличные
+                        </label>
+                        <input
+                          inputMode="numeric"
+                          type="number"
+                          placeholder="0"
+                          min="0"
+                          value={vrCash}
+                          onChange={(e) => setVrCash(e.target.value)}
+                          className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-green-500 focus:ring-1 focus:ring-green-500/50 transition-all"
+                        />
+                      </div>
 
-                    {/* Логика карты уже готова — хочешь, просто покажи поле */}
-                    <div className="sm:col-span-2">
-                      <label className="text-xs text-muted-foreground mb-1.5 block">
-                        Карта (если используете) — можно оставить 0
-                      </label>
-                      <input
-                        inputMode="numeric"
-                        type="number"
-                        placeholder="0"
-                        min="0"
-                        value={card}
-                        onChange={(e) => setCard(e.target.value)}
-                        className="w-full bg-input border border-border rounded-lg py-2.5 px-4 text-sm focus:border-accent transition-colors"
-                      />
+                      <div>
+                        <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
+                          <CreditCard className="w-4 h-4 text-red-500" /> Kaspi QR
+                        </label>
+                        <input
+                          inputMode="numeric"
+                          type="number"
+                          placeholder="0"
+                          min="0"
+                          value={vrKaspi}
+                          onChange={(e) => setVrKaspi(e.target.value)}
+                          className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-red-500 focus:ring-1 focus:ring-red-500/50 transition-all"
+                        />
+                      </div>
                     </div>
-                  </>
-                )}
-              </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-green-500" /> Наличные (Cash)
+                    </label>
+                    <input
+                      inputMode="numeric"
+                      type="number"
+                      placeholder="0"
+                      min="0"
+                      value={cash}
+                      onChange={(e) => setCash(e.target.value)}
+                      className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-green-500 focus:ring-1 focus:ring-green-500/50 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-red-500" /> Kaspi QR
+                    </label>
+                    <input
+                      inputMode="numeric"
+                      type="number"
+                      placeholder="0"
+                      min="0"
+                      value={kaspi}
+                      onChange={(e) => setKaspi(e.target.value)}
+                      className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-red-500 focus:ring-1 focus:ring-red-500/50 transition-all"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-xs text-muted-foreground mb-1.5 block">
+                      Карта (если используете) — можно оставить 0
+                    </label>
+                    <input
+                      inputMode="numeric"
+                      type="number"
+                      placeholder="0"
+                      min="0"
+                      value={card}
+                      onChange={(e) => setCard(e.target.value)}
+                      className="w-full bg-input border border-border rounded-lg py-2.5 px-4 text-sm focus:border-accent transition-colors"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="mt-6">
                 <label className="text-xs text-muted-foreground mb-1.5 block">Комментарий (необязательно)</label>
