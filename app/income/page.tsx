@@ -19,7 +19,7 @@ import {
   UserCircle2,
   Trophy,
   MapPin,
-  TrendingUp, // <--- 1. Добавил иконку
+  TrendingUp,
 } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -96,6 +96,16 @@ const escapeCSV = (v: any, sep = ';') => {
   return needs ? `"${safe}"` : safe
 }
 
+// Надёжно определяем Extra (чтобы не зависеть от точного совпадения)
+const isExtraCompany = (c?: Company | null) => {
+  const code = String(c?.code ?? '').toLowerCase().trim()
+  const name = String(c?.name ?? '').toLowerCase().trim()
+  return code === 'extra' || name.includes('extra')
+}
+
+// Снимаем хвостики " • PS5/VR" чтобы комментарий в агрегированной строке был нормальный
+const stripExtraSuffix = (s: string) => s.replace(/\s*•\s*(PS5|VR)\s*$/i, '').trim()
+
 export default function IncomePage() {
   const LIMIT = 2000
 
@@ -164,7 +174,7 @@ export default function IncomePage() {
   )
 
   const extraCompanyId = useMemo(() => {
-    const extra = companies.find((c) => c.code === 'extra' || c.name === 'F16 Extra')
+    const extra = companies.find((c) => isExtraCompany(c))
     return extra?.id ?? null
   }, [companies])
 
@@ -184,9 +194,7 @@ export default function IncomePage() {
 
       let query = supabase
         .from('incomes')
-        .select(
-          'id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, card_amount, comment',
-        )
+        .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, card_amount, comment')
         .order('date', { ascending: false })
 
       if (dateFrom) query = query.gte('date', dateFrom)
@@ -224,8 +232,8 @@ export default function IncomePage() {
     loadData()
   }, [dateFrom, dateTo, companyFilter, shiftFilter, payFilter, operatorFilter])
 
-  // 3) Поиск + скрытие Extra (локально)
-  const visibleRows = useMemo(() => {
+  // 3) Локальные фильтры (поиск + скрыть Extra)
+  const filteredRows = useMemo(() => {
     let base = rows
 
     if (hideExtraRows && extraCompanyId) {
@@ -244,7 +252,71 @@ export default function IncomePage() {
     })
   }, [rows, deferredSearch, operatorName, companyName, hideExtraRows, extraCompanyId])
 
-  // Итоги + аналитика
+  // 4) ГРУППИРУЕМ Extra в ОДНУ строку (PS5+VR), не трогая БД
+  const displayRows = useMemo(() => {
+    if (!extraCompanyId) return filteredRows
+
+    const out: IncomeRow[] = []
+    const aggs = new Map<
+      string,
+      {
+        row: IncomeRow
+        comments: Set<string>
+      }
+    >()
+
+    for (const r of filteredRows) {
+      if (r.company_id !== extraCompanyId) {
+        out.push(r)
+        continue
+      }
+
+      // Группируем по дате+смене+оператору (обычно Extra вводится так)
+      const key = `${r.date}|${r.shift}|${r.operator_id ?? 'none'}|${r.company_id}`
+
+      const cleanComment = stripExtraSuffix(r.comment ?? '')
+      const cmt = cleanComment.length ? cleanComment : ''
+
+      const cash = Number(r.cash_amount || 0)
+      const kaspi = Number(r.kaspi_amount || 0)
+      const card = Number(r.card_amount || 0)
+
+      const existing = aggs.get(key)
+      if (!existing) {
+        const newRow: IncomeRow = {
+          id: `extra-${key}`, // виртуальный id для UI
+          date: r.date,
+          company_id: r.company_id,
+          operator_id: r.operator_id,
+          shift: r.shift,
+          zone: 'Extra', // <- одна строка "Extra"
+          cash_amount: cash,
+          kaspi_amount: kaspi,
+          card_amount: card,
+          comment: cmt || null,
+        }
+
+        const comments = new Set<string>()
+        if (cmt) comments.add(cmt)
+
+        aggs.set(key, { row: newRow, comments })
+        out.push(newRow)
+      } else {
+        existing.row.cash_amount = Number(existing.row.cash_amount || 0) + cash
+        existing.row.kaspi_amount = Number(existing.row.kaspi_amount || 0) + kaspi
+        existing.row.card_amount = Number(existing.row.card_amount || 0) + card
+
+        if (cmt) existing.comments.add(cmt)
+
+        const merged = Array.from(existing.comments).filter(Boolean)
+        existing.row.comment = merged.length ? merged.join(' | ') : null
+      }
+    }
+
+    return out
+  }, [filteredRows, extraCompanyId])
+
+  // Итоги + аналитика (считаем по displayRows, чтобы “Записей” и “средний чек” совпадали с таблицей)
   const analytics = useMemo(() => {
     let cash = 0
     let kaspi = 0
@@ -255,7 +327,7 @@ export default function IncomePage() {
     const byOperator: Record<string, number> = {}
     const byZone: Record<string, number> = {}
 
-    for (const r of visibleRows) {
+    for (const r of displayRows) {
       if (companyFilter === 'all' && !includeExtraInTotals && isExtraRow(r)) continue
 
       const rowCash = Number(r.cash_amount || 0)
@@ -278,7 +350,7 @@ export default function IncomePage() {
     }
 
     const total = cash + kaspi + card
-    const avg = visibleRows.length ? Math.round(total / visibleRows.length) : 0
+    const avg = displayRows.length ? Math.round(total / displayRows.length) : 0
 
     const topOperator = Object.entries(byOperator).sort((a, b) => b[1] - a[1])[0] || ['—', 0]
     const topZone = Object.entries(byZone).sort((a, b) => b[1] - a[1])[0] || ['—', 0]
@@ -296,7 +368,7 @@ export default function IncomePage() {
       topZoneName: topZone[0],
       topZoneAmount: topZone[1],
     }
-  }, [visibleRows, companyFilter, includeExtraInTotals, isExtraRow, operatorName])
+  }, [displayRows, companyFilter, includeExtraInTotals, isExtraRow, operatorName])
 
   // Пресеты дат
   const setPreset = (preset: DateRangePreset) => {
@@ -344,24 +416,13 @@ export default function IncomePage() {
     setHideExtraRows(false)
   }
 
-  // Экспорт (то, что видно)
+  // Экспорт (то, что видно в таблице)
   const downloadCSV = () => {
     const SEP = ';'
 
-    const headers = [
-      'Дата',
-      'Компания',
-      'Оператор',
-      'Смена',
-      'Зона',
-      'Cash',
-      'Kaspi',
-      'Card',
-      'Итого',
-      'Комментарий',
-    ]
+    const headers = ['Дата', 'Компания', 'Оператор', 'Смена', 'Зона', 'Cash', 'Kaspi', 'Card', 'Итого', 'Комментарий']
 
-    const exportRows = visibleRows.filter((r) => {
+    const exportRows = displayRows.filter((r) => {
       if (companyFilter === 'all' && !includeExtraInTotals && isExtraRow(r)) return false
       return true
     })
@@ -392,8 +453,7 @@ export default function IncomePage() {
     link.click()
   }
 
-  const periodLabel =
-    dateFrom || dateTo ? `${formatIsoToRu(dateFrom)} — ${formatIsoToRu(dateTo)}` : 'Весь период'
+  const periodLabel = dateFrom || dateTo ? `${formatIsoToRu(dateFrom)} — ${formatIsoToRu(dateTo)}` : 'Весь период'
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -408,20 +468,13 @@ export default function IncomePage() {
             </div>
 
             <div className="flex gap-2">
-              {/* --- 2. НОВАЯ КНОПКА АНАЛИТИКИ --- */}
               <Link href="/income/analytics">
                 <Button variant="outline" size="sm" className="gap-2 text-xs border-accent/30 hover:bg-accent/5">
                   <TrendingUp className="w-4 h-4" /> Аналитика
                 </Button>
               </Link>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={resetFilters}
-                className="gap-2 text-xs"
-                title="Сбросить фильтры"
-              >
+
+              <Button variant="outline" size="sm" onClick={resetFilters} className="gap-2 text-xs" title="Сбросить фильтры">
                 <X className="w-4 h-4" /> Сброс
               </Button>
 
@@ -429,7 +482,7 @@ export default function IncomePage() {
                 variant="outline"
                 size="sm"
                 onClick={downloadCSV}
-                disabled={visibleRows.length === 0}
+                disabled={displayRows.length === 0}
                 className="gap-2 text-xs"
               >
                 <Download className="w-4 h-4" /> Экспорт
@@ -507,7 +560,7 @@ export default function IncomePage() {
                 <span className="font-mono">{periodLabel}</span>
               </div>
               <div>
-                Записей: <span className="font-semibold">{visibleRows.length}</span>
+                Записей: <span className="font-semibold">{displayRows.length}</span>
                 {analytics.total > 0 && (
                   <>
                     {' '}
@@ -716,10 +769,10 @@ export default function IncomePage() {
                   )}
 
                   {!loading &&
-                    visibleRows.map((row, idx) => {
+                    displayRows.map((row, idx) => {
                       const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.card_amount || 0)
                       const company = companyMap.get(row.company_id)
-                      const isExtra = (company?.code === 'extra' || company?.name === 'F16 Extra') ?? false
+                      const isExtra = isExtraCompany(company)
 
                       return (
                         <tr
@@ -793,7 +846,7 @@ export default function IncomePage() {
                       )
                     })}
 
-                  {!loading && !error && visibleRows.length === 0 && (
+                  {!loading && !error && displayRows.length === 0 && (
                     <tr>
                       <td colSpan={10} className="px-6 py-12 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
