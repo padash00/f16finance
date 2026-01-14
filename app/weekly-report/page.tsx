@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,17 +17,21 @@ import {
 } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
 
-// --- Типы ---
+// =====================
+// TYPES
+// =====================
 type Company = { id: string; name: string; code: string | null }
 
-type IncomeSlim = {
+type IncomeRow = {
+  date: string
   company_id: string
   cash_amount: number | null
   kaspi_amount: number | null
   card_amount: number | null
 }
 
-type ExpenseSlim = {
+type ExpenseRow = {
+  date: string
   company_id: string
   category: string | null
   cash_amount: number | null
@@ -37,61 +41,73 @@ type ExpenseSlim = {
 type Totals = {
   incomeCash: number
   incomeKaspi: number
+  incomeCard: number
+  incomeNonCash: number
   incomeTotal: number
+
   expenseCash: number
   expenseKaspi: number
   expenseTotal: number
+
   profit: number
 
-  // extra отдельно
+  // extra (за выбранную неделю)
   extraTotal: number
 
   // по компаниям (без extra)
-  statsByCompany: Record<string, { cash: number; kaspi: number }>
+  statsByCompany: Record<string, { cash: number; nonCash: number; total: number }>
 
-  // топ расходов
+  // топ расходов (за неделю)
   expenseCategories: { name: string; value: number }[]
 
-  // prev week
+  // прошл. неделя (для сравнения)
   prev: {
     incomeTotal: number
     expenseTotal: number
     profit: number
   }
 
-  // проценты
   change: {
     income: string
     expense: string
     profit: string
   }
 
-  // “умные” показатели
   metrics: {
     expenseRate: number // % расходов от выручки
-    cashShare: number   // % налички в выручке
-    netCash: number     // incomeCash - expenseCash
-    netKaspi: number    // incomeKaspi - expenseKaspi
+    cashShare: number // % налички в выручке
+    netCash: number // incomeCash - expenseCash
+    netNonCash: number // incomeNonCash - expenseKaspi
     topExpenseName: string | null
     topExpenseShare: number
   }
 }
 
-// --- Даты (локально, без UTC-сдвигов) ---
+// =====================
+// DATE HELPERS (локально, без UTC-сдвигов)
+// =====================
 const toISODateLocal = (d: Date) => {
   const t = d.getTime() - d.getTimezoneOffset() * 60_000
   return new Date(t).toISOString().slice(0, 10)
 }
+
 const fromISO = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, (m || 1) - 1, d || 1)
 }
+
 const getTodayISO = () => toISODateLocal(new Date())
 
-// Получаем понедельник-воскресенье (локально)
+const addDaysISO = (iso: string, diff: number) => {
+  const d = fromISO(iso)
+  d.setDate(d.getDate() + diff)
+  return toISODateLocal(d)
+}
+
+// Пн—Вс для выбранной даты (локально)
 const getWeekBounds = (dateISO: string) => {
   const d = fromISO(dateISO)
-  const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay() // 1=Пн ... 7=Вс
+  const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay() // 1..7
 
   const monday = new Date(d)
   monday.setDate(d.getDate() - (dayOfWeek - 1))
@@ -101,9 +117,6 @@ const getWeekBounds = (dateISO: string) => {
 
   return { start: toISODateLocal(monday), end: toISODateLocal(sunday) }
 }
-
-const formatKzt = (value: number) =>
-  value.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 
 const formatRangeTitle = (start: string, end: string) => {
   const d1 = fromISO(start)
@@ -119,17 +132,34 @@ const pctChange = (current: number, previous: number) => {
   return `${change > 0 ? '+' : ''}${change.toFixed(1)}%`
 }
 
+// =====================
+// COMPONENT
+// =====================
 export default function WeeklyReportPage() {
-  const today = getTodayISO()
-  const bounds = getWeekBounds(today)
+  const moneyFmt = useMemo(() => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }), [])
+  const formatKzt = (v: number) => `${moneyFmt.format(Math.round(v))} ₸`
 
-  const [startDate, setStartDate] = useState(bounds.start)
-  const [endDate, setEndDate] = useState(bounds.end)
+  // today + current week bounds (фиксируем на рендер, не дергаем каждую секунду)
+  const todayISO = useMemo(() => getTodayISO(), [])
+  const currentWeek = useMemo(() => getWeekBounds(todayISO), [todayISO])
+
+  // выбранная неделя
+  const [startDate, setStartDate] = useState(currentWeek.start)
+  const [endDate, setEndDate] = useState(currentWeek.end)
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
-  const [totals, setTotals] = useState<Totals | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // улучшение: включать Extra в общий итог по желанию
+  const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
+
+  // raw data (2 запроса, без 5 штук)
+  const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([])
+  const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([])
+
+  // защита от гонок при быстром листании недель
+  const reqIdRef = useRef(0)
 
   const extraCompanyId = useMemo(() => {
     const c = companies.find(
@@ -143,32 +173,38 @@ export default function WeeklyReportPage() {
     [companies],
   )
 
-  const isCurrentWeek = useMemo(() => startDate === getWeekBounds(today).start, [startDate, today])
+  const isCurrentWeek = useMemo(() => startDate === currentWeek.start, [startDate, currentWeek.start])
 
-  // --- НАВИГАЦИЯ ---
+  // запрет будущих недель (чтоб не листали в пустоту)
+  const canGoNext = useMemo(() => {
+    // следующая неделя стартует через +7 дней
+    const nextStart = addDaysISO(startDate, 7)
+    // разрешаем только если nextStart <= currentWeek.start (т.е. не в будущее)
+    return nextStart <= currentWeek.start
+  }, [startDate, currentWeek.start])
+
+  // =====================
+  // NAVIGATION
+  // =====================
   const handleCurrentWeek = () => {
-    const { start, end } = getWeekBounds(today)
-    setStartDate(start)
-    setEndDate(end)
+    setStartDate(currentWeek.start)
+    setEndDate(currentWeek.end)
   }
 
   const shiftWeek = (direction: -1 | 1) => {
-    const d = fromISO(startDate)
-    d.setDate(d.getDate() + direction * 7)
-    const iso = toISODateLocal(d)
-    const { start, end } = getWeekBounds(iso)
+    if (direction === 1 && !canGoNext) return
+    const nextStart = addDaysISO(startDate, direction * 7)
+    const { start, end } = getWeekBounds(nextStart)
     setStartDate(start)
     setEndDate(end)
   }
 
-  // 1) Компании — один раз
+  // =====================
+  // LOAD COMPANIES (once)
+  // =====================
   useEffect(() => {
     const loadCompanies = async () => {
-      const { data, error } = await supabase
-        .from('companies')
-        .select('id,name,code')
-        .order('name')
-
+      const { data, error } = await supabase.from('companies').select('id,name,code').order('name')
       if (error) {
         console.error(error)
         setError('Не удалось загрузить компании')
@@ -179,203 +215,235 @@ export default function WeeklyReportPage() {
     loadCompanies()
   }, [])
 
-  // 2) Неделя + предыдущая неделя
+  // =====================
+  // LOAD DATA (2 queries total)
+  // Берём диапазон: prevWeekStart .. endDate
+  // =====================
   useEffect(() => {
     const load = async () => {
       if (!companies.length) return
 
+      const myId = ++reqIdRef.current
       setLoading(true)
       setError(null)
 
-      const prevStart = toISODateLocal(new Date(fromISO(startDate).setDate(fromISO(startDate).getDate() - 7)))
-      const prevEnd = toISODateLocal(new Date(fromISO(endDate).setDate(fromISO(endDate).getDate() - 7)))
+      const rangeFrom = addDaysISO(startDate, -7) // прошл. неделя старт
+      const rangeTo = endDate
 
-      // main (без extra)
-      const incomeMainQ = supabase
+      const incomeQ = supabase
         .from('incomes')
-        .select('company_id,cash_amount,kaspi_amount,card_amount')
-        .gte('date', startDate)
-        .lte('date', endDate)
+        .select('date,company_id,cash_amount,kaspi_amount,card_amount')
+        .gte('date', rangeFrom)
+        .lte('date', rangeTo)
 
-      const expenseMainQ = supabase
+      const expenseQ = supabase
         .from('expenses')
-        .select('company_id,category,cash_amount,kaspi_amount')
-        .gte('date', startDate)
-        .lte('date', endDate)
+        .select('date,company_id,category,cash_amount,kaspi_amount')
+        .gte('date', rangeFrom)
+        .lte('date', rangeTo)
 
-      const incomePrevQ = supabase
-        .from('incomes')
-        .select('company_id,cash_amount,kaspi_amount,card_amount')
-        .gte('date', prevStart)
-        .lte('date', prevEnd)
-
-      const expensePrevQ = supabase
-        .from('expenses')
-        .select('company_id,category,cash_amount,kaspi_amount')
-        .gte('date', prevStart)
-        .lte('date', prevEnd)
-
-      // extra отдельно (только доход, как у тебя)
-      let incomeExtraQ = null as any
-      if (extraCompanyId) {
-        incomeMainQ.neq('company_id', extraCompanyId)
-        expenseMainQ.neq('company_id', extraCompanyId)
-        incomePrevQ.neq('company_id', extraCompanyId)
-        expensePrevQ.neq('company_id', extraCompanyId)
-
-        incomeExtraQ = supabase
-          .from('incomes')
-          .select('company_id,cash_amount,kaspi_amount,card_amount')
-          .gte('date', startDate)
-          .lte('date', endDate)
-          .eq('company_id', extraCompanyId)
-      }
-
-      const [
-        incMainRes,
-        expMainRes,
-        incPrevRes,
-        expPrevRes,
-        incExtraRes,
-      ] = await Promise.all([
-        incomeMainQ,
-        expenseMainQ,
-        incomePrevQ,
-        expensePrevQ,
-        incomeExtraQ ? incomeExtraQ : Promise.resolve({ data: [], error: null }),
+      const [{ data: inc, error: incErr }, { data: exp, error: expErr }] = await Promise.all([
+        incomeQ,
+        expenseQ,
       ])
 
-      if (incMainRes.error || expMainRes.error || incPrevRes.error || expPrevRes.error || incExtraRes.error) {
-        console.error({
-          incMainErr: incMainRes.error,
-          expMainErr: expMainRes.error,
-          incPrevErr: incPrevRes.error,
-          expPrevErr: expPrevRes.error,
-          incExtraErr: incExtraRes.error,
-        })
+      // stale response guard
+      if (myId !== reqIdRef.current) return
+
+      if (incErr || expErr) {
+        console.error({ incErr, expErr })
         setError('Не удалось загрузить данные недели')
         setLoading(false)
         return
       }
 
-      const incomes = (incMainRes.data || []) as IncomeSlim[]
-      const expenses = (expMainRes.data || []) as ExpenseSlim[]
-      const incomesPrev = (incPrevRes.data || []) as IncomeSlim[]
-      const expensesPrev = (expPrevRes.data || []) as ExpenseSlim[]
-      const incomesExtra = (incExtraRes.data || []) as IncomeSlim[]
-
-      // init
-      let iCash = 0, iKaspi = 0, eCash = 0, eKaspi = 0, extra = 0
-      const companyStats: Record<string, { cash: number; kaspi: number }> = {}
-      const catMap = new Map<string, number>()
-
-      for (const c of activeCompanies) companyStats[c.id] = { cash: 0, kaspi: 0 }
-
-      // доходы
-      for (const r of incomes) {
-        const cash = Number(r.cash_amount || 0)
-        const kaspi = Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
-        if (cash + kaspi <= 0) continue
-
-        iCash += cash
-        iKaspi += kaspi
-
-        if (companyStats[r.company_id]) {
-          companyStats[r.company_id].cash += cash
-          companyStats[r.company_id].kaspi += kaspi
-        }
-      }
-
-      // extra
-      for (const r of incomesExtra) {
-        const cash = Number(r.cash_amount || 0)
-        const kaspi = Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
-        extra += cash + kaspi
-      }
-
-      // расходы
-      for (const r of expenses) {
-        const cash = Number(r.cash_amount || 0)
-        const kaspi = Number(r.kaspi_amount || 0)
-        const total = cash + kaspi
-        if (total <= 0) continue
-
-        eCash += cash
-        eKaspi += kaspi
-
-        const catName = r.category || 'Без категории'
-        catMap.set(catName, (catMap.get(catName) || 0) + total)
-      }
-
-      const expenseCategories = Array.from(catMap.entries())
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 10)
-
-      // prev totals
-      let pIncome = 0, pExpense = 0
-      for (const r of incomesPrev) {
-        const cash = Number(r.cash_amount || 0)
-        const kaspi = Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
-        pIncome += cash + kaspi
-      }
-      for (const r of expensesPrev) {
-        const cash = Number(r.cash_amount || 0)
-        const kaspi = Number(r.kaspi_amount || 0)
-        pExpense += cash + kaspi
-      }
-      const pProfit = pIncome - pExpense
-
-      const incomeTotal = iCash + iKaspi
-      const expenseTotal = eCash + eKaspi
-      const profit = incomeTotal - expenseTotal
-
-      const topExpense = expenseCategories[0] || null
-      const expenseRate = incomeTotal > 0 ? (expenseTotal / incomeTotal) * 100 : 0
-      const cashShare = incomeTotal > 0 ? (iCash / incomeTotal) * 100 : 0
-      const netCash = iCash - eCash
-      const netKaspi = iKaspi - eKaspi
-      const topExpenseShare = expenseTotal > 0 && topExpense ? (topExpense.value / expenseTotal) * 100 : 0
-
-      setTotals({
-        incomeCash: iCash,
-        incomeKaspi: iKaspi,
-        incomeTotal,
-        expenseCash: eCash,
-        expenseKaspi: eKaspi,
-        expenseTotal,
-        profit,
-        extraTotal: extra,
-        statsByCompany: companyStats,
-        expenseCategories,
-        prev: { incomeTotal: pIncome, expenseTotal: pExpense, profit: pProfit },
-        change: {
-          income: pctChange(incomeTotal, pIncome),
-          expense: pctChange(expenseTotal, pExpense),
-          profit: pctChange(profit, pProfit),
-        },
-        metrics: {
-          expenseRate,
-          cashShare,
-          netCash,
-          netKaspi,
-          topExpenseName: topExpense?.name ?? null,
-          topExpenseShare,
-        },
-      })
-
+      setIncomeRows((inc || []) as IncomeRow[])
+      setExpenseRows((exp || []) as ExpenseRow[])
       setLoading(false)
     }
 
     load()
-  }, [startDate, endDate, companies.length, extraCompanyId, activeCompanies])
+  }, [companies.length, startDate, endDate])
 
+  // =====================
+  // PROCESS TOTALS
+  // =====================
+  const totals = useMemo<Totals | null>(() => {
+    if (!companies.length) return null
+
+    const prevStart = addDaysISO(startDate, -7)
+    const prevEnd = addDaysISO(endDate, -7)
+
+    // current totals (main)
+    let iCash = 0
+    let iKaspi = 0
+    let iCard = 0
+    let eCash = 0
+    let eKaspi = 0
+
+    // extra
+    let extraTotal = 0
+
+    // prev totals (main)
+    let pIncome = 0
+    let pExpense = 0
+
+    // company stats (без extra)
+    const statsByCompany: Record<string, { cash: number; nonCash: number; total: number }> = {}
+    for (const c of activeCompanies) statsByCompany[c.id] = { cash: 0, nonCash: 0, total: 0 }
+
+    // categories (текущая неделя)
+    const catMap = new Map<string, number>()
+
+    const isExtra = (companyId: string) => !!extraCompanyId && companyId === extraCompanyId
+    const inCurrentWeek = (iso: string) => iso >= startDate && iso <= endDate
+    const inPrevWeek = (iso: string) => iso >= prevStart && iso <= prevEnd
+
+    // incomes
+    for (const r of incomeRows) {
+      const cash = Number(r.cash_amount || 0)
+      const kaspi = Number(r.kaspi_amount || 0)
+      const card = Number(r.card_amount || 0)
+      const total = cash + kaspi + card
+      if (total <= 0) continue
+
+      const extra = isExtra(r.company_id)
+
+      // prev week aggregation (for comparisons)
+      if (inPrevWeek(r.date)) {
+        // по умолчанию extra НЕ сравниваем (как было у тебя), но если включили — тогда включаем
+        if (!extra || includeExtraInTotals) pIncome += total
+        continue
+      }
+
+      // current week aggregation
+      if (!inCurrentWeek(r.date)) continue
+
+      if (extra) {
+        extraTotal += total
+        if (!includeExtraInTotals) continue
+        // если включили extra — он идёт в общий итог как обычная выручка (но без companyStats)
+      }
+
+      iCash += cash
+      iKaspi += kaspi
+      iCard += card
+
+      // company stats только для “активных” компаний (без extra)
+      const s = statsByCompany[r.company_id]
+      if (s) {
+        s.cash += cash
+        s.nonCash += kaspi + card
+        s.total += total
+      }
+    }
+
+    // expenses
+    for (const r of expenseRows) {
+      const cash = Number(r.cash_amount || 0)
+      const kaspi = Number(r.kaspi_amount || 0)
+      const total = cash + kaspi
+      if (total <= 0) continue
+
+      const extra = isExtra(r.company_id)
+
+      // prev week
+      if (inPrevWeek(r.date)) {
+        if (!extra || includeExtraInTotals) pExpense += total
+        continue
+      }
+
+      // current week
+      if (!inCurrentWeek(r.date)) continue
+
+      // если extra выключен — расходы extra тоже не портят общую картину
+      if (extra && !includeExtraInTotals) continue
+
+      eCash += cash
+      eKaspi += kaspi
+
+      const catName = r.category || 'Без категории'
+      catMap.set(catName, (catMap.get(catName) || 0) + total)
+    }
+
+    const incomeNonCash = iKaspi + iCard
+    const incomeTotal = iCash + incomeNonCash
+    const expenseTotal = eCash + eKaspi
+    const profit = incomeTotal - expenseTotal
+
+    const pProfit = pIncome - pExpense
+
+    const expenseCategories = Array.from(catMap.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10)
+
+    const topExpense = expenseCategories[0] || null
+    const expenseRate = incomeTotal > 0 ? (expenseTotal / incomeTotal) * 100 : 0
+    const cashShare = incomeTotal > 0 ? (iCash / incomeTotal) * 100 : 0
+    const netCash = iCash - eCash
+    const netNonCash = incomeNonCash - eKaspi
+    const topExpenseShare =
+      expenseTotal > 0 && topExpense ? (topExpense.value / expenseTotal) * 100 : 0
+
+    return {
+      incomeCash: iCash,
+      incomeKaspi: iKaspi,
+      incomeCard: iCard,
+      incomeNonCash,
+      incomeTotal,
+
+      expenseCash: eCash,
+      expenseKaspi: eKaspi,
+      expenseTotal,
+
+      profit,
+
+      extraTotal,
+      statsByCompany,
+      expenseCategories,
+
+      prev: {
+        incomeTotal: pIncome,
+        expenseTotal: pExpense,
+        profit: pProfit,
+      },
+
+      change: {
+        income: pctChange(incomeTotal, pIncome),
+        expense: pctChange(expenseTotal, pExpense),
+        profit: pctChange(profit, pProfit),
+      },
+
+      metrics: {
+        expenseRate,
+        cashShare,
+        netCash,
+        netNonCash,
+        topExpenseName: topExpense?.name ?? null,
+        topExpenseShare,
+      },
+    }
+  }, [
+    companies.length,
+    activeCompanies,
+    extraCompanyId,
+    includeExtraInTotals,
+    startDate,
+    endDate,
+    incomeRows,
+    expenseRows,
+  ])
+
+  // =====================
+  // UI
+  // =====================
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-8 max-w-7xl mx-auto space-y-6">
-          {/* Заголовок + навигация */}
+          {/* Header + nav */}
           <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
@@ -396,7 +464,7 @@ export default function WeeklyReportPage() {
                 <ChevronLeft className="w-5 h-5" />
               </Button>
 
-              <div className="px-2 text-center min-w-[160px]">
+              <div className="px-2 text-center min-w-[170px]">
                 <span className="text-sm font-bold text-foreground block">
                   {formatRangeTitle(startDate, endDate)}
                 </span>
@@ -409,7 +477,9 @@ export default function WeeklyReportPage() {
                 variant="ghost"
                 size="icon"
                 onClick={() => shiftWeek(1)}
-                className="hover:bg-white/10 w-8 h-8"
+                disabled={!canGoNext}
+                className="hover:bg-white/10 w-8 h-8 disabled:opacity-40 disabled:hover:bg-transparent"
+                title={!canGoNext ? 'Будущие недели закрыты. Мы же не ванги.' : 'Следующая неделя'}
               >
                 <ChevronRight className="w-5 h-5" />
               </Button>
@@ -441,46 +511,79 @@ export default function WeeklyReportPage() {
 
           {!loading && totals && (
             <>
-              {/* “умная строка” */}
+              {/* Toggle Extra */}
+              {extraCompanyId && (
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIncludeExtraInTotals((v) => !v)}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] ${
+                      includeExtraInTotals
+                        ? 'border-red-400 text-red-400 bg-red-500/10'
+                        : 'border-border text-muted-foreground hover:bg-white/5'
+                    }`}
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        includeExtraInTotals ? 'bg-red-400' : 'bg-muted-foreground/50'
+                      }`}
+                    />
+                    {includeExtraInTotals ? 'F16 Extra включён в итоги' : 'F16 Extra НЕ включать в итоги'}
+                  </button>
+
+                  {!includeExtraInTotals && totals.extraTotal > 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      Extra отдельно: <span className="text-foreground font-semibold">{formatKzt(totals.extraTotal)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Smart line */}
               <Card className="p-4 border-border bg-card neon-glow">
                 <div className="flex flex-wrap gap-3 text-xs">
                   <span className="px-2 py-1 rounded-full border border-border/60 text-muted-foreground">
-                    Расходы/выручка: <b className={totals.metrics.expenseRate > 80 ? 'text-red-300' : 'text-foreground'}>
+                    Расходы/выручка:{' '}
+                    <b className={totals.metrics.expenseRate > 80 ? 'text-red-300' : 'text-foreground'}>
                       {totals.metrics.expenseRate.toFixed(1)}%
                     </b>
                   </span>
+
                   <span className="px-2 py-1 rounded-full border border-border/60 text-muted-foreground">
                     Доля налички: <b className="text-foreground">{totals.metrics.cashShare.toFixed(1)}%</b>
                   </span>
+
                   <span className="px-2 py-1 rounded-full border border-border/60 text-muted-foreground">
-                    Сальдо нал: <b className={totals.metrics.netCash >= 0 ? 'text-emerald-300' : 'text-red-300'}>
+                    Сальдо нал:{' '}
+                    <b className={totals.metrics.netCash >= 0 ? 'text-emerald-300' : 'text-red-300'}>
                       {formatKzt(totals.metrics.netCash)}
                     </b>
                   </span>
+
                   <span className="px-2 py-1 rounded-full border border-border/60 text-muted-foreground">
-                    Сальдо Kaspi: <b className={totals.metrics.netKaspi >= 0 ? 'text-emerald-300' : 'text-red-300'}>
-                      {formatKzt(totals.metrics.netKaspi)}
+                    Сальдо безнал:{' '}
+                    <b className={totals.metrics.netNonCash >= 0 ? 'text-emerald-300' : 'text-red-300'}>
+                      {formatKzt(totals.metrics.netNonCash)}
                     </b>
                   </span>
+
                   {totals.metrics.topExpenseName && (
                     <span className="px-2 py-1 rounded-full border border-border/60 text-muted-foreground">
                       Топ расход: <b className="text-foreground">{totals.metrics.topExpenseName}</b>{' '}
-                      <span className="text-muted-foreground">
-                        ({totals.metrics.topExpenseShare.toFixed(1)}%)
-                      </span>
+                      <span className="text-muted-foreground">({totals.metrics.topExpenseShare.toFixed(1)}%)</span>
                     </span>
                   )}
                 </div>
               </Card>
 
-              {/* Главные цифры */}
+              {/* Main cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* ДОХОДЫ */}
+                {/* INCOME */}
                 <Card className="p-5 border-border bg-card neon-glow">
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
-                        Общий Доход
+                        Общий доход
                       </p>
                       <h2 className="text-3xl font-bold text-green-400 mt-1">
                         {formatKzt(totals.incomeTotal)}
@@ -501,10 +604,9 @@ export default function WeeklyReportPage() {
                       <span className="flex items-center gap-1 text-muted-foreground">
                         <Wallet className="w-3 h-3" /> Наличные
                       </span>
-                      <span className="font-mono text-foreground">
-                        {formatKzt(totals.incomeCash)}
-                      </span>
+                      <span className="font-mono text-foreground">{formatKzt(totals.incomeCash)}</span>
                     </div>
+
                     <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden flex">
                       <div
                         className="h-full bg-green-500"
@@ -518,24 +620,38 @@ export default function WeeklyReportPage() {
                           width: `${totals.incomeTotal > 0 ? (totals.incomeKaspi / totals.incomeTotal) * 100 : 0}%`,
                         }}
                       />
+                      <div
+                        className="h-full bg-indigo-500"
+                        style={{
+                          width: `${totals.incomeTotal > 0 ? (totals.incomeCard / totals.incomeTotal) * 100 : 0}%`,
+                        }}
+                      />
                     </div>
+
                     <div className="flex justify-between text-xs">
                       <span className="flex items-center gap-1 text-muted-foreground">
-                        <CreditCard className="w-3 h-3" /> Kaspi / QR
+                        <CreditCard className="w-3 h-3" /> Безнал (Kaspi + Карта)
                       </span>
-                      <span className="font-mono text-foreground">
-                        {formatKzt(totals.incomeKaspi)}
-                      </span>
+                      <span className="font-mono text-foreground">{formatKzt(totals.incomeNonCash)}</span>
+                    </div>
+
+                    <div className="flex justify-between text-[11px] text-muted-foreground">
+                      <span>Kaspi</span>
+                      <span className="font-mono text-foreground">{formatKzt(totals.incomeKaspi)}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-muted-foreground">
+                      <span>Карта</span>
+                      <span className="font-mono text-foreground">{formatKzt(totals.incomeCard)}</span>
                     </div>
                   </div>
                 </Card>
 
-                {/* РАСХОДЫ */}
+                {/* EXPENSE */}
                 <Card className="p-5 border-border bg-card neon-glow">
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
-                        Общий Расход
+                        Общий расход
                       </p>
                       <h2 className="text-3xl font-bold text-red-400 mt-1">
                         {formatKzt(totals.expenseTotal)}
@@ -556,10 +672,9 @@ export default function WeeklyReportPage() {
                       <span className="flex items-center gap-1 text-muted-foreground">
                         <Wallet className="w-3 h-3" /> Наличные
                       </span>
-                      <span className="font-mono text-foreground">
-                        {formatKzt(totals.expenseCash)}
-                      </span>
+                      <span className="font-mono text-foreground">{formatKzt(totals.expenseCash)}</span>
                     </div>
+
                     <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden flex">
                       <div
                         className="h-full bg-red-500"
@@ -574,26 +689,25 @@ export default function WeeklyReportPage() {
                         }}
                       />
                     </div>
+
                     <div className="flex justify-between text-xs">
                       <span className="flex items-center gap-1 text-muted-foreground">
                         <CreditCard className="w-3 h-3" /> Kaspi
                       </span>
-                      <span className="font-mono text-foreground">
-                        {formatKzt(totals.expenseKaspi)}
-                      </span>
+                      <span className="font-mono text-foreground">{formatKzt(totals.expenseKaspi)}</span>
+                    </div>
+
+                    <div className="text-[11px] text-muted-foreground">
+                      * Если хочешь “расходы по карте” — добавим `card_amount` в expenses.
                     </div>
                   </div>
                 </Card>
 
-                {/* ПРИБЫЛЬ */}
+                {/* PROFIT */}
                 <Card className="p-5 border border-accent/50 bg-accent/5 neon-glow flex flex-col justify-between">
                   <div>
-                    <p className="text-xs text-accent/80 uppercase tracking-wider font-bold">
-                      Чистая Прибыль
-                    </p>
-                    <h2 className="text-4xl font-bold text-yellow-400 mt-2">
-                      {formatKzt(totals.profit)}
-                    </h2>
+                    <p className="text-xs text-accent/80 uppercase tracking-wider font-bold">Чистая прибыль</p>
+                    <h2 className="text-4xl font-bold text-yellow-400 mt-2">{formatKzt(totals.profit)}</h2>
 
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-3">
                       <span>Δ к прошлой неделе</span>
@@ -601,75 +715,75 @@ export default function WeeklyReportPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-4 border-t border-accent/20">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground">
-                        F16 Extra (не включено)
-                      </span>
-                      <span className="text-sm font-bold text-purple-400">
-                        {formatKzt(totals.extraTotal)}
-                      </span>
+                  {extraCompanyId && (
+                    <div className="mt-4 pt-4 border-t border-accent/20">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-muted-foreground">
+                          F16 Extra {includeExtraInTotals ? '(включено)' : '(не включено)'}
+                        </span>
+                        <span className="text-sm font-bold text-purple-400">{formatKzt(totals.extraTotal)}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </Card>
               </div>
 
-              {/* Деталка */}
+              {/* Details */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                {/* Таблица по компаниям */}
+                {/* By company */}
                 <Card className="lg:col-span-2 p-6 border-border bg-card neon-glow">
-                  <h3 className="text-sm font-bold text-foreground mb-4">
-                    Разбивка по точкам
-                  </h3>
+                  <h3 className="text-sm font-bold text-foreground mb-4">Разбивка по точкам</h3>
+
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-white/10 text-xs text-muted-foreground uppercase">
                           <th className="px-4 py-3 text-left">Точка</th>
                           <th className="px-4 py-3 text-right text-green-500">Нал</th>
-                          <th className="px-4 py-3 text-right text-blue-500">Kaspi</th>
+                          <th className="px-4 py-3 text-right text-blue-500">Безнал</th>
                           <th className="px-4 py-3 text-right text-foreground">Всего</th>
+                          <th className="px-4 py-3 text-right text-muted-foreground">Доля</th>
                         </tr>
                       </thead>
+
                       <tbody>
                         {activeCompanies.map((c) => {
-                          const stats = totals.statsByCompany[c.id] || { cash: 0, kaspi: 0 }
-                          const total = stats.cash + stats.kaspi
+                          const s = totals.statsByCompany[c.id] || { cash: 0, nonCash: 0, total: 0 }
+                          const share = totals.incomeTotal > 0 ? (s.total / totals.incomeTotal) * 100 : 0
+
                           return (
                             <tr
                               key={c.id}
                               className="border-b border-white/5 hover:bg-white/5 transition-colors"
                             >
                               <td className="px-4 py-3 font-medium">{c.name}</td>
-                              <td className="px-4 py-3 text-right opacity-80">
-                                {formatKzt(stats.cash)}
-                              </td>
-                              <td className="px-4 py-3 text-right opacity-80">
-                                {formatKzt(stats.kaspi)}
-                              </td>
-                              <td className="px-4 py-3 text-right font-bold">
-                                {formatKzt(total)}
+                              <td className="px-4 py-3 text-right opacity-80">{formatKzt(s.cash)}</td>
+                              <td className="px-4 py-3 text-right opacity-80">{formatKzt(s.nonCash)}</td>
+                              <td className="px-4 py-3 text-right font-bold">{formatKzt(s.total)}</td>
+                              <td className="px-4 py-3 text-right text-muted-foreground">
+                                {share.toFixed(1)}%
                               </td>
                             </tr>
                           )
                         })}
-                        <tr className="bg-yellow-500/5">
-                          <td className="px-4 py-3 font-medium text-yellow-500">
-                            F16 Extra
-                          </td>
-                          <td className="px-4 py-3 text-right text-muted-foreground text-xs" colSpan={2}>
-                            отдельный учет
-                          </td>
-                          <td className="px-4 py-3 text-right font-bold text-yellow-500">
-                            {formatKzt(totals.extraTotal)}
-                          </td>
-                        </tr>
+
+                        {extraCompanyId && (
+                          <tr className="bg-yellow-500/5">
+                            <td className="px-4 py-3 font-medium text-yellow-500">F16 Extra</td>
+                            <td className="px-4 py-3 text-right text-muted-foreground text-xs" colSpan={3}>
+                              {includeExtraInTotals ? 'включено в итоги' : 'отдельный учёт'}
+                            </td>
+                            <td className="px-4 py-3 text-right font-bold text-yellow-500">
+                              {formatKzt(totals.extraTotal)}
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
                 </Card>
 
-                {/* График расходов */}
+                {/* Expense chart */}
                 <Card className="lg:col-span-1 p-6 border-border bg-card neon-glow">
                   <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
                     <PieChart className="w-4 h-4 text-red-400" /> Куда ушли деньги?
@@ -691,17 +805,20 @@ export default function WeeklyReportPage() {
                           <YAxis
                             type="category"
                             dataKey="name"
-                            width={100}
+                            width={110}
                             tick={{ fill: '#888', fontSize: 10 }}
                           />
                           <Tooltip
                             cursor={{ fill: 'transparent' }}
                             contentStyle={{ backgroundColor: '#111', border: '1px solid #333' }}
-                            formatter={(val: number) => [formatKzt(val), 'Сумма']}
+                            formatter={(val: any) => [formatKzt(Number(val)), 'Сумма']}
                           />
                           <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} barSize={20}>
                             {totals.expenseCategories.map((_, index) => (
-                              <Cell key={`cell-${index}`} fill={index === 0 ? '#ef4444' : '#ef444480'} />
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={index === 0 ? '#ef4444' : '#ef444480'}
+                              />
                             ))}
                           </Bar>
                         </BarChart>
