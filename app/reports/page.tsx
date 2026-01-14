@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { supabase } from '@/lib/supabaseClient'
 import {
   Filter,
   TrendingUp,
@@ -12,10 +13,9 @@ import {
   PieChart as PieIcon,
   CalendarDays,
 } from 'lucide-react'
-import { supabase } from '@/lib/supabaseClient'
+import type { ElementType } from 'react'
 import {
   ResponsiveContainer,
-  Line,
   CartesianGrid,
   XAxis,
   YAxis,
@@ -27,10 +27,13 @@ import {
   Pie,
   Cell,
   ComposedChart,
+  Line,
+  ReferenceLine,
 } from 'recharts'
-import type { ElementType } from 'react'
 
-// --- Типы данных ---
+// =====================
+// TYPES
+// =====================
 type IncomeRow = {
   id: string
   date: string
@@ -59,16 +62,6 @@ type Company = {
 
 type GroupMode = 'day' | 'week' | 'month' | 'year'
 
-type Aggregation = {
-  income: number
-  expense: number
-  profit: number
-}
-
-type TimeAggregation = Aggregation & {
-  label: string
-}
-
 type FinancialTotals = {
   incomeCash: number
   incomeNonCash: number
@@ -94,7 +87,33 @@ type DatePreset =
   | 'currentYear'
   | 'prevYear'
 
-// --- date helpers (локально, без UTC-подлянок) ---
+type TimeAggregation = {
+  label: string
+  sortISO: string
+  income: number
+  expense: number
+  profit: number
+  incomeCash: number
+  incomeNonCash: number
+  expenseCash: number
+  expenseKaspi: number
+}
+
+// =====================
+// CONSTS
+// =====================
+const PIE_COLORS = ['#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ef4444', '#06b6d4', '#f97316']
+
+const groupLabelMap: Record<GroupMode, string> = {
+  day: 'по дням',
+  week: 'по неделям',
+  month: 'по месяцам',
+  year: 'по годам',
+}
+
+// =====================
+// DATE HELPERS (локально, без UTC-подлянок)
+// =====================
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
 const toISODateLocal = (d: Date) => {
@@ -117,6 +136,8 @@ const addDaysISO = (iso: string, diff: number) => {
 
 const formatDate = (d: Date) => toISODateLocal(d)
 
+const daysInMonth = (y: number, m0: number) => new Date(y, m0 + 1, 0).getDate()
+
 const calculatePrevPeriod = (dateFrom: string, dateTo: string) => {
   const dFrom = fromISO(dateFrom)
   const dTo = fromISO(dateTo)
@@ -134,11 +155,10 @@ const getPercentageChange = (current: number, previous: number) => {
   return `${change > 0 ? '+' : ''}${change.toFixed(1)}%`
 }
 
-// ✅ ISO week key (правильные недели)
+// ISO week key (правильные недели)
 const getISOWeekKey = (isoDate: string) => {
   const d = fromISO(isoDate)
   d.setHours(0, 0, 0, 0)
-  // четверг текущей недели определяет ISO-year
   d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7))
   const isoYear = d.getFullYear()
 
@@ -156,13 +176,29 @@ const getISOWeekKey = (isoDate: string) => {
 const getMonthKey = (isoDate: string) => isoDate.slice(0, 7)
 const getYearKey = (isoDate: string) => isoDate.slice(0, 4)
 
-const groupLabelMap: Record<GroupMode, string> = {
-  day: 'по дням',
-  week: 'по неделям',
-  month: 'по месяцам',
-  year: 'по годам',
+const getISOWeekStartISO = (isoDate: string) => {
+  const d = fromISO(isoDate)
+  d.setHours(0, 0, 0, 0)
+  const day = d.getDay()
+  const diffToMonday = (day + 6) % 7
+  d.setDate(d.getDate() - diffToMonday)
+  return toISODateLocal(d)
 }
 
+// =====================
+// MONEY / NUMBER FORMAT
+// =====================
+const formatCompact = (n: number) => {
+  const abs = Math.abs(n)
+  if (abs >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (abs >= 1_000) return `${(n / 1_000).toFixed(0)}k`
+  return `${Math.round(n)}`
+}
+
+// =====================
+// COMPONENT
+// =====================
 export default function ReportsPage() {
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
@@ -178,14 +214,27 @@ export default function ReportsPage() {
   const [groupMode, setGroupMode] = useState<GroupMode>('day')
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
 
-  // ✅ Map’ы вместо find() в циклах
+  // “Показать дубли” (чтобы не просто пугать цифрой)
+  const [showDuplicates, setShowDuplicates] = useState(false)
+
+  // UX-фишка: выбранная категория (для подсветки/сводки), totals НЕ ломаем
+  const [focusCategory, setFocusCategory] = useState<string | null>(null)
+
+  // защита от гонок запросов
+  const reqIdRef = useRef(0)
+
+  // formatters
+  const moneyFmt = useMemo(
+    () => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }),
+    [],
+  )
+  const formatMoney = useCallback((v: number) => moneyFmt.format(v), [moneyFmt])
+
+  // company maps
   const companyById = useMemo(() => {
     const m = new Map<string, { name: string; code: string }>()
     for (const c of companies) {
-      m.set(c.id, {
-        name: c.name,
-        code: (c.code || '').toLowerCase(),
-      })
+      m.set(c.id, { name: c.name, code: (c.code || '').toLowerCase() })
     }
     return m
   }, [companies])
@@ -199,18 +248,30 @@ export default function ReportsPage() {
     return null
   }, [companies])
 
-  // ✅ защита от dateFrom > dateTo
+  const companyName = useCallback(
+    (id: string) => companyById.get(id)?.name ?? '—',
+    [companyById],
+  )
+  const companyCode = useCallback(
+    (id: string | null | undefined) => (id ? companyById.get(id)?.code ?? '' : ''),
+    [companyById],
+  )
+
+  // аккуратная защита от dateFrom > dateTo
   useEffect(() => {
-    if (dateFrom > dateTo) {
-      setDateFrom(dateTo)
-      setDateTo(dateFrom)
-    }
+    if (dateFrom <= dateTo) return
+    // swap
+    setDateFrom(dateTo)
+    setDateTo(dateFrom)
   }, [dateFrom, dateTo])
 
-  // 1) грузим компании один раз
+  // 1) load companies once
   useEffect(() => {
     const loadCompanies = async () => {
-      const { data, error } = await supabase.from('companies').select('id,name,code').order('name')
+      const { data, error } = await supabase
+        .from('companies')
+        .select('id,name,code')
+        .order('name')
       if (error) {
         console.error('Companies load error', error)
         setError('Не удалось загрузить список компаний')
@@ -221,39 +282,123 @@ export default function ReportsPage() {
     loadCompanies()
   }, [])
 
-  // 2) ✅ грузим доходы/расходы ТОЛЬКО нужный диапазон + прошлый период
+  // presets
+  const applyPreset = useCallback(
+    (preset: DatePreset) => {
+      const today = todayISO()
+      const todayDate = fromISO(today)
+
+      let from = dateFrom
+      let to = dateTo
+
+      switch (preset) {
+        case 'today':
+          from = today
+          to = today
+          break
+        case 'yesterday': {
+          const y = addDaysISO(today, -1)
+          from = y
+          to = y
+          break
+        }
+        case 'last7':
+          from = addDaysISO(today, -6)
+          to = today
+          break
+        case 'prevWeek': {
+          const d = new Date(todayDate)
+          const day = d.getDay()
+          const diffToMonday = (day + 6) % 7
+          const currentMonday = new Date(d)
+          currentMonday.setDate(d.getDate() - diffToMonday)
+          const prevMonday = new Date(currentMonday)
+          prevMonday.setDate(currentMonday.getDate() - 7)
+          const prevSunday = new Date(prevMonday)
+          prevSunday.setDate(prevMonday.getDate() + 6)
+          from = formatDate(prevMonday)
+          to = formatDate(prevSunday)
+          break
+        }
+        case 'last30':
+          from = addDaysISO(today, -29)
+          to = today
+          break
+        case 'currentMonth': {
+          const y = todayDate.getFullYear()
+          const m = todayDate.getMonth()
+          from = formatDate(new Date(y, m, 1))
+          to = formatDate(new Date(y, m + 1, 0))
+          break
+        }
+        case 'prevMonth': {
+          const y = todayDate.getFullYear()
+          const m = todayDate.getMonth() - 1
+          from = formatDate(new Date(y, m, 1))
+          to = formatDate(new Date(y, m + 1, 0))
+          break
+        }
+        case 'currentYear': {
+          const y = todayDate.getFullYear()
+          from = `${y}-01-01`
+          to = `${y}-12-31`
+          break
+        }
+        case 'prevYear': {
+          const y = todayDate.getFullYear() - 1
+          from = `${y}-01-01`
+          to = `${y}-12-31`
+          break
+        }
+        case 'custom':
+          return
+      }
+
+      setDateFrom(from)
+      setDateTo(to)
+    },
+    [dateFrom, dateTo],
+  )
+
+  const handlePresetChange = (value: DatePreset) => {
+    setDatePreset(value)
+    if (value !== 'custom') applyPreset(value)
+  }
+
+  // 2) load incomes/expenses for current + previous in one request range
   useEffect(() => {
+    if (!companies.length) return
+
     const loadRange = async () => {
+      const myReqId = ++reqIdRef.current
+
       setLoading(true)
       setError(null)
 
       const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
-
-      // один диапазон покрывает current+previous
       const rangeFrom = prevFrom
       const rangeTo = dateTo
 
-      const incomeQ = supabase
+      let incomeQ = supabase
         .from('incomes')
         .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,card_amount')
         .gte('date', rangeFrom)
         .lte('date', rangeTo)
 
-      const expenseQ = supabase
+      let expenseQ = supabase
         .from('expenses')
         .select('id,date,company_id,category,cash_amount,kaspi_amount')
         .gte('date', rangeFrom)
         .lte('date', rangeTo)
 
-      // фильтр по компании
       if (companyFilter !== 'all') {
-        incomeQ.eq('company_id', companyFilter)
-        expenseQ.eq('company_id', companyFilter)
+        incomeQ = incomeQ.eq('company_id', companyFilter)
+        expenseQ = expenseQ.eq('company_id', companyFilter)
       } else {
-        // если "все", но Extra не учитываем — режем это на сервере (если знаем id)
+        // если все, но Extra НЕ учитывать — режем на сервере (если знаем id)
         if (!includeExtraInTotals && extraCompanyId) {
-          incomeQ.neq('company_id', extraCompanyId)
-          expenseQ.neq('company_id', extraCompanyId)
+          incomeQ = incomeQ.neq('company_id', extraCompanyId)
+          expenseQ = expenseQ.neq('company_id', extraCompanyId)
         }
       }
 
@@ -261,6 +406,9 @@ export default function ReportsPage() {
         incomeQ,
         expenseQ,
       ])
+
+      // stale response guard
+      if (myReqId !== reqIdRef.current) return
 
       if (incErr || expErr) {
         console.error('Reports load error:', { incErr, expErr })
@@ -274,99 +422,13 @@ export default function ReportsPage() {
       setLoading(false)
     }
 
-    // не дергаем пока компании не загрузились (чтобы extraCompanyId был известен)
-    if (!companies.length) return
     loadRange()
-  }, [companies.length, dateFrom, dateTo, companyFilter, includeExtraInTotals, extraCompanyId])
+  }, [companies, dateFrom, dateTo, companyFilter, includeExtraInTotals, extraCompanyId])
 
-  const companyName = (id: string) => companyById.get(id)?.name ?? '—'
-  const companyCode = (id: string | null | undefined) => (id ? companyById.get(id)?.code ?? '' : '')
-
-  // Применение пресета дат
-  const applyPreset = (preset: DatePreset) => {
-    const today = todayISO()
-    const todayDate = fromISO(today)
-
-    let from = dateFrom
-    let to = dateTo
-
-    switch (preset) {
-      case 'today':
-        from = today
-        to = today
-        break
-      case 'yesterday': {
-        const y = addDaysISO(today, -1)
-        from = y
-        to = y
-        break
-      }
-      case 'last7':
-        from = addDaysISO(today, -6)
-        to = today
-        break
-      case 'prevWeek': {
-        const d = new Date(todayDate)
-        const day = d.getDay()
-        const diffToMonday = (day + 6) % 7
-        const currentMonday = new Date(d)
-        currentMonday.setDate(d.getDate() - diffToMonday)
-        const prevMonday = new Date(currentMonday)
-        prevMonday.setDate(currentMonday.getDate() - 7)
-        const prevSunday = new Date(prevMonday)
-        prevSunday.setDate(prevMonday.getDate() + 6)
-        from = formatDate(prevMonday)
-        to = formatDate(prevSunday)
-        break
-      }
-      case 'last30':
-        from = addDaysISO(today, -29)
-        to = today
-        break
-      case 'currentMonth': {
-        const y = todayDate.getFullYear()
-        const m = todayDate.getMonth()
-        const start = new Date(y, m, 1)
-        const end = new Date(y, m + 1, 0)
-        from = formatDate(start)
-        to = formatDate(end)
-        break
-      }
-      case 'prevMonth': {
-        const y = todayDate.getFullYear()
-        const m = todayDate.getMonth() - 1
-        const start = new Date(y, m, 1)
-        const end = new Date(y, m + 1, 0)
-        from = formatDate(start)
-        to = formatDate(end)
-        break
-      }
-      case 'currentYear': {
-        const y = todayDate.getFullYear()
-        from = `${y}-01-01`
-        to = `${y}-12-31`
-        break
-      }
-      case 'prevYear': {
-        const y = todayDate.getFullYear() - 1
-        from = `${y}-01-01`
-        to = `${y}-12-31`
-        break
-      }
-      case 'custom':
-        return
-    }
-
-    setDateFrom(from)
-    setDateTo(to)
-  }
-
-  const handlePresetChange = (value: DatePreset) => {
-    setDatePreset(value)
-    if (value !== 'custom') applyPreset(value)
-  }
-
-  const processedData = useMemo(() => {
+  // =====================
+  // PROCESSING
+  // =====================
+  const processed = useMemo(() => {
     const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
 
     const baseTotals: FinancialTotals = {
@@ -382,109 +444,148 @@ export default function ReportsPage() {
       totalBalance: 0,
     }
 
-    const financialTotals: FinancialTotals = { ...baseTotals }
-    const financialTotalsPrev: FinancialTotals = { ...baseTotals }
+    const totalsCur: FinancialTotals = { ...baseTotals }
+    const totalsPrev: FinancialTotals = { ...baseTotals }
 
     const expenseByCategoryMap = new Map<string, number>()
-    const incomeByCompanyMap = new Map<string, number>()
+    const incomeByCompanyMap = new Map<
+      string,
+      { companyId: string; name: string; value: number }
+    >()
+
     const chartDataMap = new Map<string, TimeAggregation>()
-    const shiftAgg: { day: number; night: number } = { day: 0, night: 0 }
 
-    // ✅ детектор возможных дублей (одинаковая запись по суммам/датам/смене/компании)
-    let duplicateHits = 0
+    // дубль-детектор + примеры
     const signatureCount = new Map<string, number>()
+    const signatureExample = new Map<
+      string,
+      { date: string; companyId: string; shift: string; cash: number; kaspi: number; card: number }
+    >()
 
-    const getKey = (iso: string): { key: string; label: string } => {
-      if (groupMode === 'day') return { key: iso, label: iso }
-      if (groupMode === 'week') {
-        const wk = getISOWeekKey(iso)
-        return { key: wk, label: wk }
-      }
-      if (groupMode === 'month') {
-        const mk = getMonthKey(iso)
-        return { key: mk, label: mk }
-      }
-      const y = getYearKey(iso)
-      return { key: y, label: y }
-    }
-
-    const getRange = (date: string) => {
-      if (date >= dateFrom && date <= dateTo) return 'current'
-      if (date >= prevFrom && date <= prevTo) return 'previous'
+    const getRange = (iso: string) => {
+      if (iso >= dateFrom && iso <= dateTo) return 'current'
+      if (iso >= prevFrom && iso <= prevTo) return 'previous'
       return null
     }
 
-    // ДОХОДЫ
+    const getKey = (iso: string): { key: string; label: string; sortISO: string } => {
+      if (groupMode === 'day') return { key: iso, label: iso, sortISO: iso }
+
+      if (groupMode === 'week') {
+        const wk = getISOWeekKey(iso)
+        const start = getISOWeekStartISO(iso)
+        return { key: wk, label: wk, sortISO: start }
+      }
+
+      if (groupMode === 'month') {
+        const mk = getMonthKey(iso)
+        return { key: mk, label: mk, sortISO: `${mk}-01` }
+      }
+
+      const y = getYearKey(iso)
+      return { key: y, label: y, sortISO: `${y}-01-01` }
+    }
+
+    const maybeSkipExtra = (companyId: string) => {
+      if (companyFilter !== 'all') return false
+      if (includeExtraInTotals) return false
+      const code = companyCode(companyId)
+      return code === 'extra'
+    }
+
+    // INCOMES
     for (const r of incomes) {
       const range = getRange(r.date)
       if (!range) continue
-
-      // если всё-таки надо “все” и Extra исключен — перестрахуемся (на случай если extraCompanyId не нашли)
-      if (companyFilter === 'all' && !includeExtraInTotals) {
-        const code = companyCode(r.company_id)
-        if (code === 'extra') continue
-      }
+      if (maybeSkipExtra(r.company_id)) continue
 
       const cash = Number(r.cash_amount || 0)
       const nonCash = Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
       const total = cash + nonCash
       if (total <= 0) continue
 
-      const target = range === 'current' ? financialTotals : financialTotalsPrev
-      target.incomeCash += cash
-      target.incomeNonCash += nonCash
-      target.totalIncome += total
+      const tgt = range === 'current' ? totalsCur : totalsPrev
+      tgt.incomeCash += cash
+      tgt.incomeNonCash += nonCash
+      tgt.totalIncome += total
 
       if (range === 'current') {
-        if (r.shift === 'day') shiftAgg.day += total
-        if (r.shift === 'night') shiftAgg.night += total
+        const { key, label, sortISO } = getKey(r.date)
+        const bucket =
+          chartDataMap.get(key) || ({
+            label,
+            sortISO,
+            income: 0,
+            expense: 0,
+            profit: 0,
+            incomeCash: 0,
+            incomeNonCash: 0,
+            expenseCash: 0,
+            expenseKaspi: 0,
+          } as TimeAggregation)
 
-        const { key, label } = getKey(r.date)
-        const bucket = chartDataMap.get(key) || { income: 0, expense: 0, profit: 0, label }
         bucket.income += total
+        bucket.incomeCash += cash
+        bucket.incomeNonCash += nonCash
         chartDataMap.set(key, bucket)
 
-        const cName = companyName(r.company_id) || 'Неизвестно'
-        incomeByCompanyMap.set(cName, (incomeByCompanyMap.get(cName) || 0) + total)
+        const name = companyName(r.company_id) || 'Неизвестно'
+        const cur = incomeByCompanyMap.get(r.company_id)
+        if (!cur) incomeByCompanyMap.set(r.company_id, { companyId: r.company_id, name, value: total })
+        else cur.value += total
 
-        // дубль-сигнатура
         const sig = `${r.date}|${r.company_id}|${r.shift}|${cash}|${Number(r.kaspi_amount || 0)}|${Number(r.card_amount || 0)}`
         signatureCount.set(sig, (signatureCount.get(sig) || 0) + 1)
+        if (!signatureExample.has(sig)) {
+          signatureExample.set(sig, {
+            date: r.date,
+            companyId: r.company_id,
+            shift: r.shift,
+            cash,
+            kaspi: Number(r.kaspi_amount || 0),
+            card: Number(r.card_amount || 0),
+          })
+        }
       }
     }
 
-    // подсчет дублей
-    for (const n of signatureCount.values()) {
-      if (n > 1) duplicateHits += n - 1
-    }
-
-    // РАСХОДЫ
+    // EXPENSES
     for (const r of expenses) {
       const range = getRange(r.date)
       if (!range) continue
-
-      if (companyFilter === 'all' && !includeExtraInTotals) {
-        const code = companyCode(r.company_id)
-        if (code === 'extra') continue
-      }
+      if (maybeSkipExtra(r.company_id)) continue
 
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
       const total = cash + kaspi
       if (total <= 0) continue
 
-      const target = range === 'current' ? financialTotals : financialTotalsPrev
-      target.expenseCash += cash
-      target.expenseKaspi += kaspi
-      target.totalExpense += total
+      const tgt = range === 'current' ? totalsCur : totalsPrev
+      tgt.expenseCash += cash
+      tgt.expenseKaspi += kaspi
+      tgt.totalExpense += total
 
       if (range === 'current') {
-        const categoryKey = r.category || 'Без категории'
-        expenseByCategoryMap.set(categoryKey, (expenseByCategoryMap.get(categoryKey) || 0) + total)
+        const category = r.category || 'Без категории'
+        expenseByCategoryMap.set(category, (expenseByCategoryMap.get(category) || 0) + total)
 
-        const { key, label } = getKey(r.date)
-        const bucket = chartDataMap.get(key) || { income: 0, expense: 0, profit: 0, label }
+        const { key, label, sortISO } = getKey(r.date)
+        const bucket =
+          chartDataMap.get(key) || ({
+            label,
+            sortISO,
+            income: 0,
+            expense: 0,
+            profit: 0,
+            incomeCash: 0,
+            incomeNonCash: 0,
+            expenseCash: 0,
+            expenseKaspi: 0,
+          } as TimeAggregation)
+
         bucket.expense += total
+        bucket.expenseCash += cash
+        bucket.expenseKaspi += kaspi
         chartDataMap.set(key, bucket)
       }
     }
@@ -497,65 +598,117 @@ export default function ReportsPage() {
       return t
     }
 
-    finalizeTotals(financialTotals)
-    finalizeTotals(financialTotalsPrev)
+    finalizeTotals(totalsCur)
+    finalizeTotals(totalsPrev)
 
     for (const agg of chartDataMap.values()) {
       agg.profit = agg.income - agg.expense
     }
 
+    // duplicates
+    let duplicateHits = 0
+    const duplicateList: Array<{ count: number; text: string }> = []
+    for (const [sig, n] of signatureCount.entries()) {
+      if (n <= 1) continue
+      duplicateHits += n - 1
+      const ex = signatureExample.get(sig)
+      if (!ex) continue
+      const cname = companyName(ex.companyId)
+      duplicateList.push({
+        count: n,
+        text: `${ex.date} • ${cname} • ${ex.shift} • нал ${ex.cash} • kaspi ${ex.kaspi} • карта ${ex.card}`,
+      })
+    }
+    duplicateList.sort((a, b) => b.count - a.count)
+
     return {
-      financialTotals,
-      financialTotalsPrev,
+      totalsCur,
+      totalsPrev,
+      chartDataMap,
       expenseByCategoryMap,
       incomeByCompanyMap,
-      chartDataMap,
-      shiftAgg,
       duplicateHits,
+      duplicateList: duplicateList.slice(0, 20),
     }
   }, [
     incomes,
     expenses,
     dateFrom,
     dateTo,
-    companyFilter,
     groupMode,
+    companyFilter,
     includeExtraInTotals,
-    companyById,
+    companyName,
+    companyCode,
   ])
 
-  const totals = processedData.financialTotals
-  const totalsPrev = processedData.financialTotalsPrev
+  const totals = processed.totalsCur
+  const totalsPrev = processed.totalsPrev
 
-  const chartData = useMemo(
-    () =>
-      Array.from(processedData.chartDataMap.values())
-        .map((v) => ({ ...v, label: v.label || '' }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    [processedData],
-  )
+  const chartData = useMemo(() => {
+    return Array.from(processed.chartDataMap.values()).sort((a, b) =>
+      a.sortISO.localeCompare(b.sortISO),
+    )
+  }, [processed.chartDataMap])
 
-  const expenseByCategoryData = useMemo(
-    () =>
-      Array.from(processedData.expenseByCategoryMap.entries())
-        .map(([name, amount]) => ({ name, amount }))
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 10),
-    [processedData],
-  )
+  const expenseByCategoryData = useMemo(() => {
+    return Array.from(processed.expenseByCategoryMap.entries())
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 10)
+  }, [processed.expenseByCategoryMap])
 
   const incomeByCompanyData = useMemo(() => {
-    const COLORS = ['#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ef4444', '#06b6d4', '#f97316']
-    return Array.from(processedData.incomeByCompanyMap.entries())
-      .map(([name, value], index) => ({
-        name,
-        value,
-        fill: COLORS[index % COLORS.length],
+    return Array.from(processed.incomeByCompanyMap.values())
+      .map((x, idx) => ({
+        companyId: x.companyId,
+        name: x.name,
+        value: x.value,
+        fill: PIE_COLORS[idx % PIE_COLORS.length],
       }))
       .sort((a, b) => b.value - a.value)
-  }, [processedData])
+  }, [processed.incomeByCompanyMap])
 
-  const formatMoney = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
+  // ТОП периодов по прибыли/расходам (управленческий кайф без доп. БД)
+  const topProfitPeriods = useMemo(() => {
+    const arr = [...chartData]
+    arr.sort((a, b) => b.profit - a.profit)
+    return arr.slice(0, 5)
+  }, [chartData])
+
+  const topExpensePeriods = useMemo(() => {
+    const arr = [...chartData]
+    arr.sort((a, b) => b.expense - a.expense)
+    return arr.slice(0, 5)
+  }, [chartData])
+
+  // Forecast (показываем только когда выбран “Тек. месяц” — иначе это гадание на кофейной гуще)
+  const forecast = useMemo(() => {
+    if (datePreset !== 'currentMonth') return null
+
+    const dTo = fromISO(dateTo)
+    const y = dTo.getFullYear()
+    const m = dTo.getMonth()
+    const dim = daysInMonth(y, m)
+
+    const dayOfMonth = dTo.getDate()
+    const remaining = Math.max(0, dim - dayOfMonth)
+
+    // считаем “дневной темп” по текущему периоду (dateFrom..dateTo)
+    const daysRange =
+      Math.floor((fromISO(dateTo).getTime() - fromISO(dateFrom).getTime()) / 86400000) + 1
+
+    if (daysRange <= 0) return null
+
+    const avgIncome = totals.totalIncome / daysRange
+    const avgProfit = totals.profit / daysRange
+
+    return {
+      remainingDays: remaining,
+      forecastIncome: Math.round(totals.totalIncome + avgIncome * remaining),
+      forecastProfit: Math.round(totals.profit + avgProfit * remaining),
+    }
+  }, [datePreset, dateFrom, dateTo, totals.totalIncome, totals.profit])
 
   const resetFilters = () => {
     setDatePreset('last7')
@@ -563,8 +716,11 @@ export default function ReportsPage() {
     setCompanyFilter('all')
     setGroupMode('day')
     setIncludeExtraInTotals(false)
+    setFocusCategory(null)
+    setShowDuplicates(false)
   }
 
+  // Tooltip styles
   const tooltipStyles = {
     contentStyle: {
       backgroundColor: '#09090b',
@@ -572,9 +728,64 @@ export default function ReportsPage() {
       borderRadius: 8,
       color: '#fff',
     },
-    labelStyle: { color: '#ffffff', fontWeight: 600 },
+    labelStyle: { color: '#ffffff', fontWeight: 700 },
     itemStyle: { color: '#ffffff' },
   } as const
+
+  // Custom tooltip for composed chart (показывает разбивку)
+  const ComposedTooltip = ({
+    active,
+    payload,
+    label,
+  }: {
+    active?: boolean
+    payload?: any[]
+    label?: string
+  }) => {
+    if (!active || !payload || !payload.length) return null
+    const p = payload[0]?.payload as TimeAggregation | undefined
+    if (!p) return null
+
+    return (
+      <div
+        style={{
+          background: '#09090b',
+          border: '1px solid #3f3f46',
+          borderRadius: 10,
+          padding: 12,
+          color: '#fff',
+          minWidth: 240,
+        }}
+      >
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>{label}</div>
+
+        <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 6 }}>
+          Доход: <b>{formatMoney(p.income)} ₸</b>
+        </div>
+        <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 10 }}>
+          <span style={{ opacity: 0.85 }}>
+            нал {formatMoney(p.incomeCash)} • безнал {formatMoney(p.incomeNonCash)}
+          </span>
+        </div>
+
+        <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 6 }}>
+          Расход: <b>{formatMoney(p.expense)} ₸</b>
+        </div>
+        <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 10 }}>
+          <span style={{ opacity: 0.85 }}>
+            нал {formatMoney(p.expenseCash)} • kaspi {formatMoney(p.expenseKaspi)}
+          </span>
+        </div>
+
+        <div style={{ fontSize: 12 }}>
+          Прибыль:{' '}
+          <b style={{ color: p.profit >= 0 ? '#eab308' : '#ef4444' }}>
+            {formatMoney(p.profit)} ₸
+          </b>
+        </div>
+      </div>
+    )
+  }
 
   const TrendCard = ({
     title,
@@ -594,14 +805,11 @@ export default function ReportsPage() {
     const change = getPercentageChange(current, previous)
     const positiveTrend = isExpense ? current <= previous : current >= previous
     const trendClass =
-      change === '—'
-        ? 'text-muted-foreground'
-        : positiveTrend
-        ? 'text-green-400'
-        : 'text-red-400'
+      change === '—' ? 'text-muted-foreground' : positiveTrend ? 'text-green-400' : 'text-red-400'
     const TrendIcon = change === '—' ? Icon : positiveTrend ? TrendingUp : TrendingDown
+
     const formatValue = (value: number) =>
-      value.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ' + unit
+      moneyFmt.format(value) + (unit ? ` ${unit}` : '')
 
     return (
       <Card className="p-4 border border-border bg-card neon-glow flex flex-col justify-between">
@@ -609,9 +817,11 @@ export default function ReportsPage() {
           <p className="text-xs text-muted-foreground">{title}</p>
           <TrendIcon className={`w-4 h-4 ${trendClass}`} />
         </div>
+
         <p className="text-2xl font-bold text-foreground mb-1">
           {unit === '%' ? current.toFixed(1) + unit : formatValue(current)}
         </p>
+
         <div className={`text-sm font-semibold ${trendClass}`}>
           {change}
           <span className="text-xs text-muted-foreground ml-1">
@@ -639,9 +849,7 @@ export default function ReportsPage() {
     return (
       <div className="flex min-h-screen bg-background">
         <Sidebar />
-        <main className="flex-1 flex items-center justify-center text-red-400">
-          {error}
-        </main>
+        <main className="flex-1 flex items-center justify-center text-red-400">{error}</main>
       </div>
     )
   }
@@ -649,27 +857,46 @@ export default function ReportsPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
+
       <main className="flex-1 overflow-auto">
         <div className="p-8 space-y-8">
-          {/* ШАПКА */}
+          {/* HEADER */}
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-foreground">Отчёты</h1>
-              <p className="text-muted-foreground mt-2">
-                Выручка, расходы и прибыль по выбранному периоду
-              </p>
+              <p className="text-muted-foreground mt-2">Выручка, расходы и прибыль по выбранному периоду</p>
             </div>
           </div>
 
-          {/* ⚠️ Дубли */}
-          {processedData.duplicateHits > 0 && (
+          {/* DUPLICATES */}
+          {processed.duplicateHits > 0 && (
             <div className="p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-sm">
-              ⚠️ Найдены возможные дубликаты доходов: <b>{processedData.duplicateHits}</b> записей.
-              Проверь: одинаковые дата/компания/смена/суммы.
+              ⚠️ Найдены возможные дубликаты доходов: <b>{processed.duplicateHits}</b>.{' '}
+              <button
+                className="underline underline-offset-4 hover:opacity-80 ml-1"
+                onClick={() => setShowDuplicates((v) => !v)}
+              >
+                {showDuplicates ? 'Скрыть' : 'Показать'}
+              </button>
+
+              {showDuplicates && (
+                <div className="mt-3 space-y-1 text-[12px] text-yellow-200/90">
+                  {processed.duplicateList.length ? (
+                    processed.duplicateList.map((x, idx) => (
+                      <div key={idx} className="flex gap-2">
+                        <span className="font-bold">×{x.count}</span>
+                        <span className="opacity-90">{x.text}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div>Примеров нет (но это редкий зверь).</div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
-          {/* ФИЛЬТРЫ */}
+          {/* FILTERS */}
           <Card className="p-6 border-border bg-card neon-glow space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -682,11 +909,12 @@ export default function ReportsPage() {
             </div>
 
             <div className="flex flex-col lg:flex-row gap-4 justify-between">
-              {/* Даты + пресеты */}
+              {/* dates */}
               <div className="flex flex-col gap-2">
                 <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">
                   Период
                 </span>
+
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center bg-input/50 rounded-md border border-border/50 px-2 py-1">
                     <CalendarDays className="w-3.5 h-3.5 text-muted-foreground mr-1.5" />
@@ -712,38 +940,31 @@ export default function ReportsPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-1 bg-input/30 rounded-md border border-border/30 p-0.5">
-                    {(
-                      [
-                        'today',
-                        'yesterday',
-                        'last7',
-                        'last30',
-                        'currentMonth',
-                        'prevMonth',
-                      ] as DatePreset[]
-                    ).map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => handlePresetChange(p)}
-                        className={`px-2 py-1 text-[10px] rounded transition-colors ${
-                          datePreset === p
-                            ? 'bg-accent text-accent-foreground'
-                            : 'hover:bg-white/10 text-muted-foreground'
-                        }`}
-                      >
-                        {p === 'today' && 'Сегодня'}
-                        {p === 'yesterday' && 'Вчера'}
-                        {p === 'last7' && '7 дн.'}
-                        {p === 'last30' && '30 дн.'}
-                        {p === 'currentMonth' && 'Тек. месяц'}
-                        {p === 'prevMonth' && 'Прош. месяц'}
-                      </button>
-                    ))}
+                    {(['today', 'yesterday', 'last7', 'last30', 'currentMonth', 'prevMonth'] as DatePreset[]).map(
+                      (p) => (
+                        <button
+                          key={p}
+                          onClick={() => handlePresetChange(p)}
+                          className={`px-2 py-1 text-[10px] rounded transition-colors ${
+                            datePreset === p
+                              ? 'bg-accent text-accent-foreground'
+                              : 'hover:bg-white/10 text-muted-foreground'
+                          }`}
+                        >
+                          {p === 'today' && 'Сегодня'}
+                          {p === 'yesterday' && 'Вчера'}
+                          {p === 'last7' && '7 дн.'}
+                          {p === 'last30' && '30 дн.'}
+                          {p === 'currentMonth' && 'Тек. месяц'}
+                          {p === 'prevMonth' && 'Прош. месяц'}
+                        </button>
+                      ),
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Компания + группировка + Extra */}
+              {/* company + group */}
               <div className="flex flex-col lg:items-end gap-2">
                 <div className="flex flex-wrap gap-2 justify-between lg:justify-end">
                   <div className="flex flex-col gap-1">
@@ -751,7 +972,7 @@ export default function ReportsPage() {
                     <select
                       value={companyFilter}
                       onChange={(e) => setCompanyFilter(e.target.value)}
-                      className="bg-input border border-border rounded px-3 py-2 text-xs text-foreground min-w-[160px]"
+                      className="bg-input border border-border rounded px-3 py-2 text-xs text-foreground min-w-[180px]"
                     >
                       <option value="all">Все компании</option>
                       {companies.map((c) => (
@@ -807,67 +1028,46 @@ export default function ReportsPage() {
             </div>
           </Card>
 
-          {/* ВЫРУЧКА / РАСХОДЫ / ОСТАТКИ */}
+          {/* TOTALS */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Выручка */}
             <Card className="p-4 border-border bg-card neon-glow">
-              <p className="text-xs font-semibold text-green-400 mb-2 uppercase tracking-wide">
-                Выручка
-              </p>
+              <p className="text-xs font-semibold text-green-400 mb-2 uppercase tracking-wide">Выручка</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-1">Наличные</p>
-                  <p className="text-xl font-bold text-green-400">
-                    {formatMoney(totals.incomeCash)} ₸
-                  </p>
+                  <p className="text-xl font-bold text-green-400">{formatMoney(totals.incomeCash)} ₸</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-1">Kaspi + Карта</p>
-                  <p className="text-xl font-bold text-green-400">
-                    {formatMoney(totals.incomeNonCash)} ₸
-                  </p>
+                  <p className="text-xl font-bold text-green-400">{formatMoney(totals.incomeNonCash)} ₸</p>
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-border/60">
                 <p className="text-[10px] text-muted-foreground mb-1">ВСЕГО ВЫРУЧКА</p>
-                <p className="text-2xl font-bold text-green-400">
-                  {formatMoney(totals.totalIncome)} ₸
-                </p>
+                <p className="text-2xl font-bold text-green-400">{formatMoney(totals.totalIncome)} ₸</p>
               </div>
             </Card>
 
-            {/* Расходы */}
             <Card className="p-4 border-border bg-card neon-glow">
-              <p className="text-xs font-semibold text-red-400 mb-2 uppercase tracking-wide">
-                Расходы
-              </p>
+              <p className="text-xs font-semibold text-red-400 mb-2 uppercase tracking-wide">Расходы</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-1">Наличные</p>
-                  <p className="text-xl font-bold text-red-400">
-                    {formatMoney(totals.expenseCash)} ₸
-                  </p>
+                  <p className="text-xl font-bold text-red-400">{formatMoney(totals.expenseCash)} ₸</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-1">Kaspi (безнал)</p>
-                  <p className="text-xl font-bold text-red-400">
-                    {formatMoney(totals.expenseKaspi)} ₸
-                  </p>
+                  <p className="text-xl font-bold text-red-400">{formatMoney(totals.expenseKaspi)} ₸</p>
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-border/60">
                 <p className="text-[10px] text-muted-foreground mb-1">ВСЕГО РАСХОДЫ</p>
-                <p className="text-2xl font-bold text-red-400">
-                  {formatMoney(totals.totalExpense)} ₸
-                </p>
+                <p className="text-2xl font-bold text-red-400">{formatMoney(totals.totalExpense)} ₸</p>
               </div>
             </Card>
 
-            {/* Остатки и прибыль */}
             <Card className="p-4 border-border bg-card neon-glow border-accent/60">
-              <p className="text-xs font-semibold text-accent mb-2 uppercase tracking-wide">
-                Остатки и прибыль
-              </p>
+              <p className="text-xs font-semibold text-accent mb-2 uppercase tracking-wide">Остатки и прибыль</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-1">Остаток (нал)</p>
@@ -891,13 +1091,29 @@ export default function ReportsPage() {
             </Card>
           </div>
 
-          {/* ИНТЕЛЛЕКТУАЛЬНЫЙ АНАЛИЗ */}
+          {/* INTEL ANALYSIS */}
           <Card className="p-6 border-border bg-card neon-glow">
-            <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-accent" />
-              Интеллектуальный анализ
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-accent" />
+                Интеллектуальный анализ
+              </h2>
+
+              {forecast && forecast.remainingDays > 0 && (
+                <div className="text-xs text-muted-foreground">
+                  Прогноз до конца месяца (ещё {forecast.remainingDays} дн.):{' '}
+                  <span className="text-foreground font-semibold">
+                    выручка ~ {formatMoney(forecast.forecastIncome)} ₸
+                  </span>{' '}
+                  •{' '}
+                  <span className="text-foreground font-semibold">
+                    прибыль ~ {formatMoney(forecast.forecastProfit)} ₸
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <TrendCard
                 title="Динамика общей выручки"
                 current={totals.totalIncome}
@@ -921,18 +1137,77 @@ export default function ReportsPage() {
             </div>
           </Card>
 
-          {/* СТРУКТУРА РАСХОДОВ / ВЫРУЧКИ */}
+          {/* MANAGEMENT: TOP PERIODS */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="p-6 border-border bg-card neon-glow">
+              <h3 className="text-sm font-semibold text-foreground mb-4">
+                Топ-5 периодов по прибыли ({groupLabelMap[groupMode]})
+              </h3>
+              <div className="space-y-2">
+                {topProfitPeriods.map((p) => (
+                  <div
+                    key={p.label}
+                    className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2"
+                  >
+                    <div className="text-xs text-muted-foreground">{p.label}</div>
+                    <div className={`text-sm font-bold ${p.profit >= 0 ? 'text-yellow-400' : 'text-red-500'}`}>
+                      {formatMoney(p.profit)} ₸
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="p-6 border-border bg-card neon-glow">
+              <h3 className="text-sm font-semibold text-foreground mb-4">
+                Топ-5 периодов по расходам ({groupLabelMap[groupMode]})
+              </h3>
+              <div className="space-y-2">
+                {topExpensePeriods.map((p) => (
+                  <div
+                    key={p.label}
+                    className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2"
+                  >
+                    <div className="text-xs text-muted-foreground">{p.label}</div>
+                    <div className="text-sm font-bold text-red-400">{formatMoney(p.expense)} ₸</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          {/* STRUCTURE */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="p-6 border-border bg-card neon-glow flex flex-col">
-              <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                <TrendingDown className="w-4 h-4 text-red-400" />
-                Топ-10 категорий расходов
-              </h3>
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <TrendingDown className="w-4 h-4 text-red-400" />
+                  Топ-10 категорий расходов (кликни категорию)
+                </h3>
+
+                {focusCategory && (
+                  <button
+                    className="text-[11px] text-muted-foreground underline underline-offset-4 hover:opacity-80"
+                    onClick={() => setFocusCategory(null)}
+                  >
+                    Сбросить категорию
+                  </button>
+                )}
+              </div>
+
+              {focusCategory && (
+                <div className="mb-3 text-xs text-muted-foreground">
+                  Выбрано: <span className="text-foreground font-semibold">{focusCategory}</span>{' '}
+                  • сумма:{' '}
+                  <span className="text-foreground font-semibold">
+                    {formatMoney(processed.expenseByCategoryMap.get(focusCategory) || 0)} ₸
+                  </span>
+                </div>
+              )}
+
               <div className="h-80">
                 {expenseByCategoryData.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-muted-foreground">
-                    Нет данных
-                  </div>
+                  <div className="h-full flex items-center justify-center text-muted-foreground">Нет данных</div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
@@ -941,13 +1216,26 @@ export default function ReportsPage() {
                       margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" opacity={0.2} stroke="#555" />
-                      <XAxis type="number" stroke="#ccc" />
-                      <YAxis type="category" dataKey="name" stroke="#ccc" width={120} />
+                      <XAxis
+                        type="number"
+                        stroke="#ccc"
+                        tickFormatter={(v) => formatCompact(Number(v))}
+                      />
+                      <YAxis type="category" dataKey="name" stroke="#ccc" width={140} />
                       <Tooltip
                         {...tooltipStyles}
-                        formatter={(value: any) => [`${Number(value).toLocaleString('ru-RU')} ₸`, 'Сумма']}
+                        formatter={(value: any) => [`${moneyFmt.format(Number(value))} ₸`, 'Сумма']}
                       />
-                      <Bar dataKey="amount" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                      <Bar
+                        dataKey="amount"
+                        fill="#ef4444"
+                        radius={[0, 4, 4, 0]}
+                        onClick={(d: any) => {
+                          const name = d?.payload?.name
+                          if (!name) return
+                          setFocusCategory((cur) => (cur === name ? null : name))
+                        }}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -957,13 +1245,12 @@ export default function ReportsPage() {
             <Card className="p-6 border-border bg-card neon-glow flex flex-col">
               <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                 <PieIcon className="w-4 h-4 text-blue-400" />
-                Структура выручки по компаниям
+                Структура выручки по компаниям (клик — фильтр)
               </h3>
+
               <div className="h-80">
                 {incomeByCompanyData.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-muted-foreground">
-                    Нет данных
-                  </div>
+                  <div className="h-full flex items-center justify-center text-muted-foreground">Нет данных</div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -975,6 +1262,11 @@ export default function ReportsPage() {
                         outerRadius={120}
                         paddingAngle={5}
                         dataKey="value"
+                        onClick={(d: any) => {
+                          const id = d?.payload?.companyId
+                          if (!id) return
+                          setCompanyFilter(id)
+                        }}
                       >
                         {incomeByCompanyData.map((entry, index) => (
                           <Cell
@@ -985,6 +1277,7 @@ export default function ReportsPage() {
                           />
                         ))}
                       </Pie>
+
                       <Tooltip
                         contentStyle={{
                           backgroundColor: '#09090b',
@@ -995,46 +1288,58 @@ export default function ReportsPage() {
                         itemStyle={{ color: '#fff' }}
                         formatter={(value: number) => [`${formatMoney(value)} ₸`, 'Выручка']}
                       />
-                      <Legend
-                        layout="vertical"
-                        verticalAlign="middle"
-                        align="right"
-                        iconType="circle"
-                      />
+
+                      <Legend layout="vertical" verticalAlign="middle" align="right" iconType="circle" />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
               </div>
+
+              {companyFilter !== 'all' && (
+                <div className="mt-3 text-xs text-muted-foreground">
+                  Фильтр по компании включён.{' '}
+                  <button
+                    className="underline underline-offset-4 hover:opacity-80"
+                    onClick={() => setCompanyFilter('all')}
+                  >
+                    Сбросить
+                  </button>
+                </div>
+              )}
             </Card>
           </div>
 
-          {/* ГРАФИК ПО ВРЕМЕНИ: ДОХОД / РАСХОД / ПРИБЫЛЬ */}
+          {/* TIME CHART */}
           <Card className="p-6 border-border bg-card neon-glow">
             <h3 className="text-sm font-semibold text-foreground mb-4">
               Динамика: доход / расход / прибыль ({groupLabelMap[groupMode]})
             </h3>
+
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} stroke="#555" />
                   <XAxis dataKey="label" stroke="#ccc" />
-                  <YAxis stroke="#ccc" />
-                  <Tooltip
-                    {...tooltipStyles}
-                    formatter={(value: any, name: any) => [
-                      `${Number(value).toLocaleString('ru-RU')} ₸`,
-                      name === 'income' ? 'Доход' : name === 'expense' ? 'Расход' : 'Прибыль',
-                    ]}
-                  />
+                  <YAxis stroke="#ccc" tickFormatter={(v) => formatCompact(Number(v))} />
+                  <ReferenceLine y={0} stroke="rgba(255,255,255,0.18)" />
+
+                  <Tooltip content={<ComposedTooltip />} />
                   <Legend
                     wrapperStyle={{ color: '#fff', fontSize: 12 }}
-                    formatter={(value) => (value === 'income' ? 'Доход' : value === 'expense' ? 'Расход' : 'Прибыль')}
+                    formatter={(value) =>
+                      value === 'income' ? 'Доход' : value === 'expense' ? 'Расход' : 'Прибыль'
+                    }
                   />
+
                   <Bar dataKey="income" name="income" fill="#22c55e" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="expense" name="expense" fill="#ef4444" radius={[4, 4, 0, 0]} />
                   <Line type="monotone" dataKey="profit" name="profit" stroke="#eab308" strokeWidth={3} dot={{ r: 4 }} />
                 </ComposedChart>
               </ResponsiveContainer>
+            </div>
+
+            <div className="mt-3 text-[11px] text-muted-foreground">
+              Да, я специально добавил линию “0”. Она честнее, чем некоторые отчёты.
             </div>
           </Card>
         </div>
