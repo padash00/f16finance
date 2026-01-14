@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
@@ -26,7 +26,6 @@ type IncomeRow = {
   is_virtual: boolean | null
 }
 
-// те же виды корректировок, что и на зарплате
 type AdjustmentKind = 'debt' | 'fine' | 'bonus' | 'advance'
 
 type AdjustmentRow = {
@@ -56,23 +55,22 @@ type Operator = {
 type OperatorAnalyticsRow = {
   operatorId: string
   operatorName: string
-  shifts: number // ✅ уникальные смены (не строки)
+
+  shifts: number // уникальные смены
   days: number
+
   totalTurnover: number
   avgPerShift: number
   share: number
 
-  autoDebts: number // debts
-  manualMinus: number // debt/fine
-  manualPlus: number // bonus
-  advances: number // advance (для инфы)
-  netEffect: number // bonus - (debt+fine) - debts (без авансов)
+  autoDebts: number
+  manualMinus: number
+  manualPlus: number
+  advances: number
+  netEffect: number
 }
 
 type SortKey = 'turnover' | 'avg' | 'penalties' | 'net'
-
-const formatMoney = (v: number) =>
-  v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 
 const toISODateLocal = (d: Date) => {
   const t = d.getTime() - d.getTimezoneOffset() * 60_000
@@ -80,7 +78,6 @@ const toISODateLocal = (d: Date) => {
 }
 
 const fromISO = (iso: string) => {
-  // iso YYYY-MM-DD -> Date local safe
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, (m || 1) - 1, d || 1)
 }
@@ -95,12 +92,13 @@ const getMonday = (d: Date) => {
 
 const mondayISOOf = (iso: string) => toISODateLocal(getMonday(fromISO(iso)))
 
+const formatMoney = (v: number, fmt: Intl.NumberFormat) => `${fmt.format(Math.round(v || 0))} ₸`
+
 export default function OperatorAnalyticsPage() {
-  // --- период по умолчанию: текущая неделя ---
-  const [dateFrom, setDateFrom] = useState(() => {
-    const mon = getMonday(new Date())
-    return toISODateLocal(mon)
-  })
+  const moneyFmt = useMemo(() => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }), [])
+
+  // период по умолчанию: текущая неделя
+  const [dateFrom, setDateFrom] = useState(() => toISODateLocal(getMonday(new Date())))
   const [dateTo, setDateTo] = useState(() => {
     const mon = getMonday(new Date())
     const sun = new Date(mon)
@@ -108,13 +106,17 @@ export default function OperatorAnalyticsPage() {
     return toISODateLocal(sun)
   })
 
+  // static data
   const [companies, setCompanies] = useState<Company[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
+
+  // range data
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([])
-  const [operators, setOperators] = useState<Operator[]>([])
   const [debts, setDebts] = useState<DebtRow[]>([])
 
   const [loading, setLoading] = useState(true)
+  const [staticLoading, setStaticLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // фильтры компаний
@@ -125,6 +127,16 @@ export default function OperatorAnalyticsPage() {
   // сортировка + поиск
   const [sortKey, setSortKey] = useState<SortKey>('turnover')
   const [search, setSearch] = useState('')
+
+  // защита от “гонок” запросов
+  const reqIdRef = useRef(0)
+
+  // защита от dateFrom > dateTo (swap)
+  useEffect(() => {
+    if (dateFrom <= dateTo) return
+    setDateFrom(dateTo)
+    setDateTo(dateFrom)
+  }, [dateFrom, dateTo])
 
   const setThisWeek = () => {
     const now = new Date()
@@ -153,88 +165,160 @@ export default function OperatorAnalyticsPage() {
     return set
   }, [includeArena, includeRamen, includeExtra])
 
+  const companyById = useMemo(() => {
+    const m = new Map<string, Company>()
+    for (const c of companies) m.set(c.id, c)
+    return m
+  }, [companies])
+
+  const operatorById = useMemo(() => {
+    const m = new Map<string, Operator>()
+    for (const o of operators) m.set(o.id, o)
+    return m
+  }, [operators])
+
+  const selectedCompanyIds = useMemo(() => {
+    if (!companies.length) return []
+    return companies
+      .filter((c) => allowedCodes.has((c.code || '').toLowerCase()))
+      .map((c) => c.id)
+  }, [companies, allowedCodes])
+
+  // 1) грузим компании + операторов один раз
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
+    const loadStatic = async () => {
+      setStaticLoading(true)
       setError(null)
 
-      // ✅ долги берём по week_start (понедельники), иначе кастомные даты ломают выборку
-      const wsFrom = mondayISOOf(dateFrom)
-      const wsTo = mondayISOOf(dateTo)
-
-      const [compRes, incRes, adjRes, opsRes, debtsRes] = await Promise.all([
+      const [compRes, opsRes] = await Promise.all([
         supabase.from('companies').select('id,name,code'),
-        supabase
-          .from('incomes')
-          .select(
-            'id,date,company_id,shift,cash_amount,kaspi_amount,card_amount,operator_id,is_virtual',
-          )
-          .gte('date', dateFrom)
-          .lte('date', dateTo),
-        supabase
-          .from('operator_salary_adjustments')
-          .select('id,operator_id,date,amount,kind,comment')
-          .gte('date', dateFrom)
-          .lte('date', dateTo),
-        supabase
-          .from('operators')
-          .select('id,name,short_name,is_active')
-          .eq('is_active', true)
-          .order('name'),
-        supabase
-          .from('debts')
-          .select('id,operator_id,amount,week_start,status')
-          .gte('week_start', wsFrom)
-          .lte('week_start', wsTo)
-          .eq('status', 'active'),
+        supabase.from('operators').select('id,name,short_name,is_active').eq('is_active', true).order('name'),
       ])
 
-      const anyErr =
-        compRes.error || incRes.error || adjRes.error || opsRes.error || debtsRes.error
-
-      if (anyErr) {
-        console.error('OperatorAnalytics load error', {
+      if (compRes.error || opsRes.error) {
+        console.error('OperatorAnalytics static load error', {
           compErr: compRes.error,
-          incErr: incRes.error,
-          adjErr: adjRes.error,
           opsErr: opsRes.error,
-          debtsErr: debtsRes.error,
         })
-        setError('Ошибка загрузки данных (проверь Supabase / таблицы)')
+        setError('Ошибка загрузки справочников (companies/operators)')
+        setCompanies((compRes.data || []) as Company[])
+        setOperators((opsRes.data || []) as Operator[])
+        setStaticLoading(false)
+        return
       }
 
       setCompanies((compRes.data || []) as Company[])
+      setOperators((opsRes.data || []) as Operator[])
+      setStaticLoading(false)
+    }
+
+    loadStatic()
+  }, [])
+
+  // 2) грузим данные периода (incomes/adjustments/debts) при смене дат/фильтров компаний
+  useEffect(() => {
+    const loadRange = async () => {
+      // если справочники ещё не готовы — не дергаем диапазонные запросы
+      if (staticLoading) return
+
+      const myId = ++reqIdRef.current
+      setLoading(true)
+      setError(null)
+
+      // debts берём по week_start (понедельники), иначе кастомные даты ломают выборку
+      const wsFrom = mondayISOOf(dateFrom)
+      const wsTo = mondayISOOf(dateTo)
+
+      // если вообще ничего не выбрано по компаниям — выручку просто делаем пустой
+      const shouldFetchIncomes = selectedCompanyIds.length > 0
+
+      const incomesQ = shouldFetchIncomes
+        ? supabase
+            .from('incomes')
+            .select('id,date,company_id,shift,cash_amount,kaspi_amount,card_amount,operator_id,is_virtual')
+            .gte('date', dateFrom)
+            .lte('date', dateTo)
+            .in('company_id', selectedCompanyIds)
+        : null
+
+      // корректировки — только по активным операторам (чтоб “мертвые души” не всплывали)
+      const operatorIds = operators.map((o) => o.id)
+      const adjQ =
+        operatorIds.length > 0
+          ? supabase
+              .from('operator_salary_adjustments')
+              .select('id,operator_id,date,amount,kind,comment')
+              .gte('date', dateFrom)
+              .lte('date', dateTo)
+              .in('operator_id', operatorIds)
+          : supabase
+              .from('operator_salary_adjustments')
+              .select('id,operator_id,date,amount,kind,comment')
+              .gte('date', dateFrom)
+              .lte('date', dateTo)
+
+      const debtsQ =
+        operatorIds.length > 0
+          ? supabase
+              .from('debts')
+              .select('id,operator_id,amount,week_start,status')
+              .gte('week_start', wsFrom)
+              .lte('week_start', wsTo)
+              .eq('status', 'active')
+              .in('operator_id', operatorIds)
+          : supabase
+              .from('debts')
+              .select('id,operator_id,amount,week_start,status')
+              .gte('week_start', wsFrom)
+              .lte('week_start', wsTo)
+              .eq('status', 'active')
+
+      const [incRes, adjRes, debtsRes] = await Promise.all([
+        incomesQ ? incomesQ : Promise.resolve({ data: [], error: null } as any),
+        adjQ,
+        debtsQ,
+      ])
+
+      if (myId !== reqIdRef.current) return // устаревший ответ
+
+      if (incRes.error || adjRes.error || debtsRes.error) {
+        console.error('OperatorAnalytics range load error', {
+          incErr: incRes.error,
+          adjErr: adjRes.error,
+          debtsErr: debtsRes.error,
+        })
+        setError('Ошибка загрузки данных периода (incomes/adjustments/debts)')
+      }
+
       setIncomes((incRes.data || []) as IncomeRow[])
       setAdjustments((adjRes.data || []) as AdjustmentRow[])
-      setOperators((opsRes.data || []) as Operator[])
       setDebts((debtsRes.data || []) as DebtRow[])
 
       setLoading(false)
     }
 
-    load()
-  }, [dateFrom, dateTo])
+    loadRange()
+  }, [dateFrom, dateTo, selectedCompanyIds.join('|'), operators, staticLoading])
 
-  // Основная аналитика (умная)
   const analytics = useMemo(() => {
-    const companyById: Record<string, Company> = {}
-    for (const c of companies) companyById[c.id] = c
-
-    const operatorById: Record<string, Operator> = {}
-    for (const o of operators) operatorById[o.id] = o
-
+    // быстрые структуры
     const byOperator = new Map<string, OperatorAnalyticsRow>()
     const daysByOperator = new Map<string, Set<string>>()
-    const shiftsByOperator = new Map<string, Set<string>>() // ✅ уникальные смены
+    const shiftsByOperator = new Map<string, Set<string>>() // уникальные смены
 
     let totalTurnover = 0
+    let totalAutoDebts = 0
+    let totalMinus = 0
+    let totalPlus = 0
+    let totalAdvances = 0
 
     const ensureOp = (id: string | null): OperatorAnalyticsRow | null => {
       if (!id) return null
+      const meta = operatorById.get(id)
+      if (!meta) return null // показываем только активных операторов
       let op = byOperator.get(id)
       if (!op) {
-        const meta = operatorById[id]
-        const name = meta?.short_name || meta?.name || 'Без имени'
+        const name = meta.short_name || meta.name || 'Без имени'
         op = {
           operatorId: id,
           operatorName: name,
@@ -260,12 +344,11 @@ export default function OperatorAnalyticsPage() {
     for (const row of incomes) {
       if (!row.operator_id) continue
 
-      const company = companyById[row.company_id]
-      const code = company?.code || null
-      if (!code || !allowedCodes.has(code)) continue
-
-      // ✅ смена = уникальный ключ, а не строка
-      const shiftKey = `${row.date}|${row.shift || 'na'}|${row.company_id}|${row.operator_id}`
+      const company = companyById.get(row.company_id)
+      const code = (company?.code || '').toLowerCase()
+      if (!code) continue
+      // (здесь уже сервером отфильтровано по company_id, но пусть будет страховка)
+      if (!allowedCodes.has(code)) continue
 
       const op = ensureOp(row.operator_id)
       if (!op) continue
@@ -275,18 +358,20 @@ export default function OperatorAnalyticsPage() {
         Number(row.kaspi_amount || 0) +
         Number(row.card_amount || 0)
 
+      if (!Number.isFinite(total) || total <= 0) continue
+
       op.totalTurnover += total
       totalTurnover += total
 
       // дни
       daysByOperator.get(row.operator_id)!.add(row.date)
 
-      // смены
+      // смены (уникальный ключ)
+      const shiftKey = `${row.date}|${row.shift || 'na'}|${row.company_id}|${row.operator_id}`
       shiftsByOperator.get(row.operator_id)!.add(shiftKey)
     }
 
-    // 2) Долги из debts
-    let totalAutoDebts = 0
+    // 2) Долги из debts (active)
     for (const d of debts) {
       const op = ensureOp(d.operator_id)
       if (!op) continue
@@ -297,10 +382,6 @@ export default function OperatorAnalyticsPage() {
     }
 
     // 3) Ручные корректировки
-    let totalMinus = 0
-    let totalPlus = 0
-    let totalAdvances = 0
-
     for (const adj of adjustments) {
       const op = ensureOp(adj.operator_id)
       if (!op) continue
@@ -325,7 +406,6 @@ export default function OperatorAnalyticsPage() {
     for (const op of byOperator.values()) {
       op.days = daysByOperator.get(op.operatorId)?.size || 0
       op.shifts = shiftsByOperator.get(op.operatorId)?.size || 0
-
       op.avgPerShift = op.shifts > 0 ? op.totalTurnover / op.shifts : 0
       op.share = totalTurnover > 0 ? op.totalTurnover / totalTurnover : 0
       op.netEffect = op.manualPlus - op.manualMinus - op.autoDebts
@@ -334,9 +414,7 @@ export default function OperatorAnalyticsPage() {
 
     // поиск
     const term = search.trim().toLowerCase()
-    const searched = term
-      ? arr.filter((r) => r.operatorName.toLowerCase().includes(term))
-      : arr
+    const searched = term ? arr.filter((r) => r.operatorName.toLowerCase().includes(term)) : arr
 
     // сортировка
     const sorted = [...searched].sort((a, b) => {
@@ -347,12 +425,11 @@ export default function OperatorAnalyticsPage() {
         const pb = b.autoDebts + b.manualMinus
         return pb - pa
       }
-      // net
       return b.netEffect - a.netEffect
     })
 
-    // итоги по таблице (после поиска)
-    const totals = sorted.reduce(
+    // итоги по отфильтрованной таблице
+    const totalsFiltered = sorted.reduce(
       (acc, r) => {
         acc.turnover += r.totalTurnover
         acc.shifts += r.shifts
@@ -383,21 +460,22 @@ export default function OperatorAnalyticsPage() {
       totalMinus,
       totalPlus,
       totalAdvances,
-      totalsFiltered: totals,
+      totalsFiltered,
     }
   }, [
-    companies,
-    operators,
+    companyById,
+    operatorById,
     incomes,
-    adjustments,
     debts,
+    adjustments,
     allowedCodes,
     search,
     sortKey,
   ])
 
-  const bestOperator = analytics.rows[0] || null
-  const totalPenalties = analytics.totalAutoDebts + analytics.totalMinus // долги + штрафы (без авансов)
+  const totalPenalties = analytics.totalAutoDebts + analytics.totalMinus
+
+  const bestOperator = useMemo(() => (analytics.rows.length ? analytics.rows[0] : null), [analytics.rows])
 
   const mostNegative = useMemo(() => {
     if (!analytics.rows.length) return null
@@ -409,10 +487,12 @@ export default function OperatorAnalyticsPage() {
   }, [analytics.rows])
 
   const avgPerShiftClub = useMemo(() => {
-    const shifts = analytics.rows.reduce((s, r) => s + r.shifts, 0)
-    const turnover = analytics.rows.reduce((s, r) => s + r.totalTurnover, 0)
+    const shifts = analytics.totalsFiltered.shifts
+    const turnover = analytics.totalsFiltered.turnover
     return shifts > 0 ? Math.round(turnover / shifts) : 0
-  }, [analytics.rows])
+  }, [analytics.totalsFiltered])
+
+  const noCompaniesSelected = useMemo(() => selectedCompanyIds.length === 0, [selectedCompanyIds])
 
   return (
     <div className="flex min-h-screen bg-[#050505] text-foreground">
@@ -433,8 +513,7 @@ export default function OperatorAnalyticsPage() {
                   Аналитика операторов
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Выручка, смены, долги, штрафы, премии за период. Смены считаются умно
-                  (у Extra PS5+VR = 1 смена).
+                  Выручка, смены, долги, штрафы, премии за период. Смены считаются умно.
                 </p>
               </div>
             </div>
@@ -475,7 +554,13 @@ export default function OperatorAnalyticsPage() {
             </div>
           )}
 
-          {/* Фильтры (умные) */}
+          {noCompaniesSelected && (
+            <div className="p-3 rounded border border-yellow-500/30 bg-yellow-500/10 text-yellow-200 text-sm">
+              ⚠️ Компании отключены — выручка будет 0. (Долги/штрафы/премии всё равно считаются.)
+            </div>
+          )}
+
+          {/* Фильтры */}
           <Card className="p-4 bg-card/70 border-border flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
             <div className="flex flex-wrap gap-2 items-center">
               <span className="text-[11px] text-muted-foreground uppercase tracking-wider">
@@ -566,62 +651,43 @@ export default function OperatorAnalyticsPage() {
           {/* Карточки сверху */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <Card className="p-4 bg-card/70 border-border">
-              <p className="text-xs text-muted-foreground mb-1">
-                Общая выручка (по выбранным компаниям)
-              </p>
+              <p className="text-xs text-muted-foreground mb-1">Общая выручка (по таблице)</p>
               <p className="text-2xl font-bold">
-                {formatMoney(analytics.rows.reduce((s, r) => s + r.totalTurnover, 0))}
+                {formatMoney(analytics.totalsFiltered.turnover, moneyFmt)}
               </p>
             </Card>
 
             <Card className="p-4 bg-card/70 border-border">
-              <p className="text-xs text-muted-foreground mb-1">
-                Средняя выручка за смену (по факту смен)
-              </p>
-              <p className="text-2xl font-bold text-emerald-400">
-                {formatMoney(avgPerShiftClub)}
-              </p>
+              <p className="text-xs text-muted-foreground mb-1">Средняя выручка за смену</p>
+              <p className="text-2xl font-bold text-emerald-400">{formatMoney(avgPerShiftClub, moneyFmt)}</p>
             </Card>
 
             <Card className="p-4 bg-card/70 border-border">
-              <p className="text-xs text-muted-foreground mb-1">
-                Премии (плюс)
-              </p>
-              <p className="text-2xl font-bold text-emerald-300">
-                {formatMoney(analytics.totalPlus)}
-              </p>
+              <p className="text-xs text-muted-foreground mb-1">Премии (плюс)</p>
+              <p className="text-2xl font-bold text-emerald-300">{formatMoney(analytics.totalPlus, moneyFmt)}</p>
               <p className="text-[11px] text-muted-foreground mt-1">
-                Авансы (инфо): {formatMoney(analytics.totalAdvances)}
+                Авансы (инфо): {formatMoney(analytics.totalAdvances, moneyFmt)}
               </p>
             </Card>
 
             <Card className="p-4 bg-card/70 border-border">
-              <p className="text-xs text-muted-foreground mb-1">
-                Долги и штрафы (минус)
-              </p>
-              <p className="text-2xl font-bold text-red-400">
-                {formatMoney(totalPenalties)}
-              </p>
+              <p className="text-xs text-muted-foreground mb-1">Долги и штрафы (минус)</p>
+              <p className="text-2xl font-bold text-red-400">{formatMoney(totalPenalties, moneyFmt)}</p>
               {mostNegative && (
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Больше всего минусов:{' '}
-                  <span className="text-red-300">{mostNegative.operatorName}</span>
+                  Больше всего минусов: <span className="text-red-300">{mostNegative.operatorName}</span>
                 </p>
               )}
             </Card>
 
             <Card className="p-4 bg-card/70 border-border">
-              <p className="text-xs text-muted-foreground mb-1">
-                Лучший по выручке
-              </p>
+              <p className="text-xs text-muted-foreground mb-1">Лучший по выручке</p>
               {bestOperator ? (
                 <>
                   <p className="text-lg font-semibold">{bestOperator.operatorName}</p>
-                  <p className="text-sm text-emerald-400">
-                    {formatMoney(bestOperator.totalTurnover)}
-                  </p>
+                  <p className="text-sm text-emerald-400">{formatMoney(bestOperator.totalTurnover, moneyFmt)}</p>
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    {bestOperator.shifts} смен • {formatMoney(Math.round(bestOperator.avgPerShift))} / смена
+                    {bestOperator.shifts} смен • {formatMoney(bestOperator.avgPerShift, moneyFmt)} / смена
                   </p>
                 </>
               ) : (
@@ -650,7 +716,7 @@ export default function OperatorAnalyticsPage() {
               </thead>
 
               <tbody>
-                {loading && (
+                {(staticLoading || loading) && (
                   <tr>
                     <td colSpan={11} className="py-8 text-center text-muted-foreground text-xs">
                       Загрузка...
@@ -658,7 +724,7 @@ export default function OperatorAnalyticsPage() {
                   </tr>
                 )}
 
-                {!loading && !analytics.rows.length && (
+                {!staticLoading && !loading && !analytics.rows.length && (
                   <tr>
                     <td colSpan={11} className="py-8 text-center text-muted-foreground text-xs">
                       Нет данных за выбранный период / фильтры.
@@ -666,7 +732,8 @@ export default function OperatorAnalyticsPage() {
                   </tr>
                 )}
 
-                {!loading &&
+                {!staticLoading &&
+                  !loading &&
                   analytics.rows.map((op) => {
                     const penalties = op.autoDebts + op.manualMinus
                     const netColor =
@@ -677,27 +744,24 @@ export default function OperatorAnalyticsPage() {
                         : 'text-muted-foreground'
 
                     return (
-                      <tr
-                        key={op.operatorId}
-                        className="border-t border-border/40 hover:bg-white/5"
-                      >
+                      <tr key={op.operatorId} className="border-t border-border/40 hover:bg-white/5">
                         <td className="py-1.5 px-2 font-medium">{op.operatorName}</td>
                         <td className="py-1.5 px-2 text-center">{op.shifts}</td>
                         <td className="py-1.5 px-2 text-center">{op.days}</td>
-                        <td className="py-1.5 px-2 text-right">{formatMoney(op.totalTurnover)}</td>
-                        <td className="py-1.5 px-2 text-right">{formatMoney(Math.round(op.avgPerShift || 0))}</td>
+                        <td className="py-1.5 px-2 text-right">{formatMoney(op.totalTurnover, moneyFmt)}</td>
+                        <td className="py-1.5 px-2 text-right">{formatMoney(op.avgPerShift, moneyFmt)}</td>
                         <td className="py-1.5 px-2 text-right">{(op.share * 100).toFixed(1)}%</td>
 
-                        <td className="py-1.5 px-2 text-right text-red-300">{formatMoney(op.autoDebts)}</td>
-                        <td className="py-1.5 px-2 text-right text-red-300">{formatMoney(op.manualMinus)}</td>
-                        <td className="py-1.5 px-2 text-right text-emerald-300">{formatMoney(op.manualPlus)}</td>
-                        <td className="py-1.5 px-2 text-right text-muted-foreground">{formatMoney(op.advances)}</td>
+                        <td className="py-1.5 px-2 text-right text-red-300">{formatMoney(op.autoDebts, moneyFmt)}</td>
+                        <td className="py-1.5 px-2 text-right text-red-300">{formatMoney(op.manualMinus, moneyFmt)}</td>
+                        <td className="py-1.5 px-2 text-right text-emerald-300">{formatMoney(op.manualPlus, moneyFmt)}</td>
+                        <td className="py-1.5 px-2 text-right text-muted-foreground">{formatMoney(op.advances, moneyFmt)}</td>
 
                         <td className={`py-1.5 px-2 text-right font-semibold ${netColor}`}>
-                          {formatMoney(op.netEffect)}
+                          {formatMoney(op.netEffect, moneyFmt)}
                           {penalties > 0 && (
                             <span className="ml-2 text-[10px] text-muted-foreground">
-                              (минус: {formatMoney(penalties)})
+                              (минус: {formatMoney(penalties, moneyFmt)})
                             </span>
                           )}
                         </td>
@@ -706,20 +770,32 @@ export default function OperatorAnalyticsPage() {
                   })}
               </tbody>
 
-              {!loading && analytics.rows.length > 0 && (
+              {!staticLoading && !loading && analytics.rows.length > 0 && (
                 <tfoot>
                   <tr className="border-t border-border bg-white/5">
                     <td className="py-2 px-2 font-semibold">Итого</td>
                     <td className="py-2 px-2 text-center font-semibold">{analytics.totalsFiltered.shifts}</td>
                     <td className="py-2 px-2 text-center font-semibold">{analytics.totalsFiltered.days}</td>
-                    <td className="py-2 px-2 text-right font-semibold">{formatMoney(analytics.totalsFiltered.turnover)}</td>
+                    <td className="py-2 px-2 text-right font-semibold">
+                      {formatMoney(analytics.totalsFiltered.turnover, moneyFmt)}
+                    </td>
                     <td className="py-2 px-2 text-right text-muted-foreground">—</td>
                     <td className="py-2 px-2 text-right text-muted-foreground">—</td>
-                    <td className="py-2 px-2 text-right font-semibold text-red-300">{formatMoney(analytics.totalsFiltered.autoDebts)}</td>
-                    <td className="py-2 px-2 text-right font-semibold text-red-300">{formatMoney(analytics.totalsFiltered.manualMinus)}</td>
-                    <td className="py-2 px-2 text-right font-semibold text-emerald-300">{formatMoney(analytics.totalsFiltered.manualPlus)}</td>
-                    <td className="py-2 px-2 text-right font-semibold text-muted-foreground">{formatMoney(analytics.totalsFiltered.advances)}</td>
-                    <td className="py-2 px-2 text-right font-semibold">{formatMoney(analytics.totalsFiltered.netEffect)}</td>
+                    <td className="py-2 px-2 text-right font-semibold text-red-300">
+                      {formatMoney(analytics.totalsFiltered.autoDebts, moneyFmt)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-semibold text-red-300">
+                      {formatMoney(analytics.totalsFiltered.manualMinus, moneyFmt)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-semibold text-emerald-300">
+                      {formatMoney(analytics.totalsFiltered.manualPlus, moneyFmt)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-semibold text-muted-foreground">
+                      {formatMoney(analytics.totalsFiltered.advances, moneyFmt)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-semibold">
+                      {formatMoney(analytics.totalsFiltered.netEffect, moneyFmt)}
+                    </td>
                   </tr>
                 </tfoot>
               )}
