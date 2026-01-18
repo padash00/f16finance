@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 type AdjustmentKind = 'debt' | 'fine' | 'bonus' | 'advance'
 
 type ReqBody = {
-  operatorId: string
-  weekStart?: string // YYYY-MM-DD (понедельник)
+  operatorId?: string
+  operator_id?: string
+  weekStart?: string // YYYY-MM-DD (желательно понедельник)
   dateFrom?: string
   dateTo?: string
   lastItem?: { name: string; qty: number; total: number }
@@ -38,65 +42,101 @@ const must = (v: string | undefined, key: string) => {
   return v
 }
 
-const escapeHtml = (s: string) =>
-  s
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
+const isoRe = /^\d{4}-\d{2}-\d{2}$/
 
-const formatMoney = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₸`
+const toISODateUTC = (d: Date) => d.toISOString().slice(0, 10)
 
 const addDaysISO = (iso: string, diff: number) => {
   const [y, m, d] = iso.split('-').map(Number)
   const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1))
   dt.setUTCDate(dt.getUTCDate() + diff)
-  return dt.toISOString().slice(0, 10)
+  return toISODateUTC(dt)
+}
+
+const getMondayISO = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1))
+  const day = dt.getUTCDay() || 7 // 1..7 (Пн..Вс)
+  dt.setUTCDate(dt.getUTCDate() - (day - 1))
+  return toISODateUTC(dt)
+}
+
+const escapeHtml = (s: string) =>
+  s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+
+const formatMoney = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₸`
+
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    hint: 'Use POST with JSON body',
+    example: {
+      operatorId: 'UUID (operators.id) OR telegram_chat_id (digits)',
+      dateFrom: '2026-01-19',
+      dateTo: '2026-01-25',
+      weekStart: '2026-01-19 (optional; will be derived from dateFrom)',
+    },
+  })
 }
 
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => null)) as ReqBody | null
-    if (!body?.operatorId) {
+    const rawOperator = String(body?.operatorId || body?.operator_id || '').trim()
+    if (!rawOperator) {
       return NextResponse.json({ error: 'operatorId обязателен' }, { status: 400 })
     }
 
     const SUPABASE_URL = must(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL')
-    const SUPABASE_SERVICE_ROLE_KEY = must(
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      'SUPABASE_SERVICE_ROLE_KEY',
-    )
+    const SERVICE_KEY = must(process.env.SUPABASE_SERVICE_ROLE_KEY, 'SUPABASE_SERVICE_ROLE_KEY')
     const TG_TOKEN = must(process.env.TELEGRAM_BOT_TOKEN, 'TELEGRAM_BOT_TOKEN')
 
-    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    })
+    const sb = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
 
-    const weekStart = (body.weekStart || '').trim()
-    if (!weekStart) {
-      return NextResponse.json(
-        { error: 'weekStart обязателен (YYYY-MM-DD, понедельник)' },
-        { status: 400 },
-      )
+    // даты
+    const dateFrom = (body?.dateFrom || '').trim()
+    const dateTo = (body?.dateTo || '').trim()
+
+    if (!dateFrom || !isoRe.test(dateFrom)) {
+      return NextResponse.json({ error: 'dateFrom обязателен (YYYY-MM-DD)' }, { status: 400 })
     }
+    if (!dateTo || !isoRe.test(dateTo)) {
+      return NextResponse.json({ error: 'dateTo обязателен (YYYY-MM-DD)' }, { status: 400 })
+    }
+
+    // weekStart: если не дали — берём понедельник от dateFrom
+    const weekStart = isoRe.test((body?.weekStart || '').trim())
+      ? (body!.weekStart as string).trim()
+      : getMondayISO(dateFrom)
     const weekEnd = addDaysISO(weekStart, 6)
 
-    const dateFrom = (body.dateFrom || '').trim() || weekStart
-    const dateTo = (body.dateTo || '').trim() || weekEnd
+    // ---- 1) Ищем оператора: UUID или telegram_chat_id ----
+    const isDigits = /^\d+$/.test(rawOperator)
 
-    // operator + tg
-    const { data: operator, error: opErr } = await sb
+    let q = sb
       .from('operators')
       .select('id,name,short_name,telegram_chat_id,is_active')
-      .eq('id', body.operatorId)
-      .single()
+    q = isDigits ? q.eq('telegram_chat_id', rawOperator) : q.eq('id', rawOperator)
 
-    if (opErr || !operator) {
-      return NextResponse.json({ error: 'Оператор не найден' }, { status: 404 })
+    const { data: operator, error: opErr } = await q.maybeSingle()
+
+    if (opErr) {
+      return NextResponse.json(
+        { error: `Supabase operators lookup failed: ${opErr.message}` },
+        { status: 500 },
+      )
+    }
+    if (!operator) {
+      return NextResponse.json(
+        { error: `Оператор не найден (${isDigits ? 'telegram_chat_id' : 'id'}=${rawOperator})` },
+        { status: 404 },
+      )
     }
     if (!operator.telegram_chat_id) {
       return NextResponse.json({ error: 'У оператора нет telegram_chat_id' }, { status: 400 })
     }
 
+    // ---- 2) Тянем данные для расчёта ----
     const [
       { data: companies, error: compErr },
       { data: rules, error: rulesErr },
@@ -114,22 +154,38 @@ export async function POST(req: Request) {
       sb
         .from('incomes')
         .select('date,company_id,shift,cash_amount,kaspi_amount,card_amount')
-        .eq('operator_id', body.operatorId)
+        .eq('operator_id', operator.id)
         .gte('date', dateFrom)
         .lte('date', dateTo),
       sb
         .from('operator_salary_adjustments')
         .select('amount,kind')
-        .eq('operator_id', body.operatorId)
+        .eq('operator_id', operator.id)
         .gte('date', dateFrom)
         .lte('date', dateTo),
-      // долги недели — строго по week_start
-      sb.from('debts').select('amount').eq('operator_id', body.operatorId).eq('week_start', weekStart).eq('status', 'active'),
+      // долги недели — по weekStart
+      sb
+        .from('debts')
+        .select('amount')
+        .eq('operator_id', operator.id)
+        .eq('week_start', weekStart)
+        .eq('status', 'active'),
     ])
 
     if (compErr || rulesErr || incErr || adjErr || debtErr) {
-      console.error({ compErr, rulesErr, incErr, adjErr, debtErr })
-      return NextResponse.json({ error: 'Ошибка загрузки данных для расчёта' }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: 'Ошибка загрузки данных для расчёта',
+          details: {
+            comp: compErr?.message || null,
+            rules: rulesErr?.message || null,
+            incomes: incErr?.message || null,
+            adjustments: adjErr?.message || null,
+            debts: debtErr?.message || null,
+          },
+        },
+        { status: 500 },
+      )
     }
 
     const companyById = new Map<string, CompanyRow>()
@@ -140,7 +196,7 @@ export async function POST(req: Request) {
       rulesMap.set(`${r.company_code}_${r.shift_type}`, r)
     }
 
-    // ---- агрегация смен (как на /salary) ----
+    // ---- 3) Агрегация смен (как на /salary) ----
     const aggregated = new Map<string, number>() // key -> turnover
     for (const row of (incomes || []) as IncomeRow[]) {
       const company = companyById.get(row.company_id)
@@ -160,7 +216,6 @@ export async function POST(req: Request) {
     let shifts = 0
     let baseSalary = 0
     let bonusSalary = 0
-
     const DEFAULT_BASE = 8000
 
     for (const [key, turnover] of aggregated.entries()) {
@@ -183,7 +238,7 @@ export async function POST(req: Request) {
 
     const totalSalary = baseSalary + bonusSalary
 
-    // ручные корректировки
+    // ---- 4) Корректировки ----
     let manualPlus = 0
     let manualMinus = 0
     let advances = 0
@@ -196,7 +251,7 @@ export async function POST(req: Request) {
       else manualMinus += amount // debt/fine
     }
 
-    // долги недели (auto)
+    // ---- 5) Долги недели ----
     let autoDebts = 0
     for (const d of (debts || []) as DebtRow[]) {
       const amount = Number(d.amount || 0)
@@ -206,14 +261,15 @@ export async function POST(req: Request) {
 
     const finalSalary = totalSalary + manualPlus - manualMinus - autoDebts - advances
 
+    // ---- 6) Текст в Telegram ----
     const name = escapeHtml(operator.short_name || operator.name || 'Оператор')
     const period = `${dateFrom} — ${dateTo}`
 
     let text = `👤 <b>${name}</b>\n`
     text += `📅 Период: <code>${escapeHtml(period)}</code>\n`
-    text += `🗓 Неделя: <code>${escapeHtml(weekStart)}</code>\n\n`
+    text += `🗓 Неделя: <code>${escapeHtml(weekStart)} — ${escapeHtml(weekEnd)}</code>\n\n`
 
-    if (body.lastItem?.name) {
+    if (body?.lastItem?.name) {
       text += `🛒 Сегодня в долг: <b>${escapeHtml(body.lastItem.name)}</b> x${body.lastItem.qty} = <b>${formatMoney(body.lastItem.total)}</b>\n\n`
     }
 
@@ -226,6 +282,7 @@ export async function POST(req: Request) {
     if (manualPlus > 0) text += `🎁 Премии: <b>${formatMoney(manualPlus)}</b>\n`
     text += `\n💰 <b>К выплате: ${formatMoney(finalSalary)}</b>`
 
+    // ---- 7) Отправка ----
     const tgResp = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -239,13 +296,14 @@ export async function POST(req: Request) {
 
     if (!tgResp.ok) {
       const raw = await tgResp.text().catch(() => '')
-      console.error('TG send error', raw)
-      return NextResponse.json({ error: 'Telegram не принял сообщение' }, { status: 502 })
+      return NextResponse.json(
+        { error: 'Telegram не принял сообщение', details: raw.slice(0, 800) },
+        { status: 502 },
+      )
     }
 
     return NextResponse.json({ ok: true })
   } catch (e: any) {
-    console.error(e)
     return NextResponse.json({ error: e?.message || 'Server error' }, { status: 500 })
   }
 }
