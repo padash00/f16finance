@@ -36,6 +36,14 @@ type IncomeRow = {
 type AdjRow = { amount: number; kind: AdjustmentKind }
 type DebtRow = { amount: number | null }
 
+type OperatorRow = {
+  id: string
+  name: string | null
+  short_name: string | null
+  telegram_chat_id: string | null
+  is_active: boolean | null
+}
+
 const must = (v: string | undefined, key: string) => {
   if (!v) throw new Error(`ENV ${key} is not set`)
   return v
@@ -46,11 +54,12 @@ const escapeHtml = (s: string) =>
 
 const formatMoney = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₸`
 
+const isISODate = (iso: string) => /^\d{4}-\d{2}-\d{2}$/.test(iso)
+
 const parseISO = (iso: string) => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
-  if (!m) return null
-  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3])
-  const dt = new Date(Date.UTC(y, mo - 1, d))
+  if (!isISODate(iso)) return null
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1))
   if (Number.isNaN(dt.getTime())) return null
   return dt
 }
@@ -74,12 +83,25 @@ const mondayOf = (iso: string) => {
   return toISO(dt)
 }
 
+const json = (data: any, status = 200) => NextResponse.json(data, { status })
+
+export async function GET() {
+  return json({
+    ok: true,
+    hint: 'Use POST with JSON body',
+    example: {
+      operatorId: 'UUID (operators.id) OR telegram_chat_id digits',
+      dateFrom: '2026-01-11',
+      dateTo: '2026-01-18',
+      weekStart: '2026-01-13 (optional, any date ok -> will be normalized to Monday)',
+    },
+  })
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => null)) as ReqBody | null
-    if (!body?.operatorId) {
-      return NextResponse.json({ error: 'operatorId обязателен' }, { status: 400 })
-    }
+    if (!body?.operatorId?.trim()) return json({ error: 'operatorId обязателен' }, 400)
 
     const SUPABASE_URL = must(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL')
     const SUPABASE_SERVICE_ROLE_KEY = must(
@@ -95,42 +117,39 @@ export async function POST(req: Request) {
     const dateFrom = (body.dateFrom || '').trim()
     const dateTo = (body.dateTo || '').trim()
 
-    if (!dateFrom || !parseISO(dateFrom)) {
-      return NextResponse.json({ error: 'dateFrom обязателен (YYYY-MM-DD)' }, { status: 400 })
-    }
-    if (!dateTo || !parseISO(dateTo)) {
-      return NextResponse.json({ error: 'dateTo обязателен (YYYY-MM-DD)' }, { status: 400 })
-    }
+    if (!dateFrom || !parseISO(dateFrom)) return json({ error: 'dateFrom обязателен (YYYY-MM-DD)' }, 400)
+    if (!dateTo || !parseISO(dateTo)) return json({ error: 'dateTo обязателен (YYYY-MM-DD)' }, 400)
 
-    // weekStart optional -> derive monday from dateFrom
-    const weekStart = (body.weekStart || '').trim() || mondayOf(dateFrom)
+    // weekStart optional -> normalize to Monday (иначе debts по week_start не совпадут)
+    const rawWeekStart = (body.weekStart || '').trim() || dateFrom
+    const weekStart = mondayOf(rawWeekStart)
     const weekEnd = addDaysISO(weekStart, 6)
 
     // operator lookup: uuid OR telegram_chat_id digits
     const opKey = body.operatorId.trim()
     const isDigits = /^[0-9]+$/.test(opKey)
 
-    const opQuery = sb
+    const { data: opList, error: opErr } = await sb
       .from('operators')
       .select('id,name,short_name,telegram_chat_id,is_active')
-
-    const { data: operator, error: opErr } = isDigits
-      ? await opQuery.eq('telegram_chat_id', opKey).maybeSingle()
-      : await opQuery.eq('id', opKey).maybeSingle()
+      .limit(2)
+      .match(isDigits ? { telegram_chat_id: opKey } : { id: opKey })
 
     if (opErr) {
       console.error('operator lookup error', opErr)
-      return NextResponse.json({ error: 'Ошибка поиска оператора' }, { status: 500 })
+      return json({ error: 'Ошибка поиска оператора' }, 500)
     }
+
+    const operator = (opList?.[0] as OperatorRow | undefined) || null
     if (!operator) {
-      return NextResponse.json(
+      return json(
         { error: `Оператор не найден (${isDigits ? 'telegram_chat_id' : 'id'}=${opKey})` },
-        { status: 404 },
+        404,
       )
     }
-    if (!operator.telegram_chat_id) {
-      return NextResponse.json({ error: 'У оператора нет telegram_chat_id' }, { status: 400 })
-    }
+    if (!operator.telegram_chat_id) return json({ error: 'У оператора нет telegram_chat_id' }, 400)
+
+    const operatorId = operator.id
 
     const [
       { data: companies, error: compErr },
@@ -149,26 +168,26 @@ export async function POST(req: Request) {
       sb
         .from('incomes')
         .select('date,company_id,shift,cash_amount,kaspi_amount,card_amount')
-        .eq('operator_id', operator.id)
+        .eq('operator_id', operatorId)
         .gte('date', dateFrom)
         .lte('date', dateTo),
       sb
         .from('operator_salary_adjustments')
         .select('amount,kind')
-        .eq('operator_id', operator.id)
+        .eq('operator_id', operatorId)
         .gte('date', dateFrom)
         .lte('date', dateTo),
       sb
         .from('debts')
         .select('amount')
-        .eq('operator_id', operator.id)
+        .eq('operator_id', operatorId)
         .eq('week_start', weekStart)
         .eq('status', 'active'),
     ])
 
     if (compErr || rulesErr || incErr || adjErr || debtErr) {
       console.error({ compErr, rulesErr, incErr, adjErr, debtErr })
-      return NextResponse.json({ error: 'Ошибка загрузки данных для расчёта' }, { status: 500 })
+      return json({ error: 'Ошибка загрузки данных для расчёта' }, 500)
     }
 
     const companyById = new Map<string, CompanyRow>()
@@ -176,7 +195,7 @@ export async function POST(req: Request) {
 
     const rulesMap = new Map<string, RuleRow>()
     for (const r of (rules || []) as RuleRow[]) {
-      rulesMap.set(`${r.company_code}_${r.shift_type}`, r)
+      rulesMap.set(`${String(r.company_code).toLowerCase()}_${r.shift_type}`, r)
     }
 
     // aggregate shifts (company+date+shift -> turnover)
@@ -190,7 +209,7 @@ export async function POST(req: Request) {
       const shift: 'day' | 'night' = row.shift === 'night' ? 'night' : 'day'
       const total =
         Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0)
-      if (total <= 0) continue
+      if (!Number.isFinite(total) || total <= 0) continue
 
       const key = `${code}_${row.date}_${shift}`
       aggregated.set(key, (aggregated.get(key) || 0) + total)
@@ -278,12 +297,12 @@ export async function POST(req: Request) {
     if (!tgResp.ok) {
       const raw = await tgResp.text().catch(() => '')
       console.error('TG send error', raw)
-      return NextResponse.json({ error: 'Telegram не принял сообщение' }, { status: 502 })
+      return json({ error: 'Telegram не принял сообщение' }, 502)
     }
 
-    return NextResponse.json({ ok: true })
+    return json({ ok: true, operator: { id: operatorId, telegram_chat_id: operator.telegram_chat_id } })
   } catch (e: any) {
     console.error(e)
-    return NextResponse.json({ error: e?.message || 'Server error' }, { status: 500 })
+    return json({ error: e?.message || 'Server error' }, 500)
   }
 }
