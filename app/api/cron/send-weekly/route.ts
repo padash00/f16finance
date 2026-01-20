@@ -19,9 +19,10 @@ type Operator = {
   telegram_chat_id: string | null;
 };
 
+type CompanyRow = { id: string };
+
 type IncomeRow = {
   id: string;
-  date: string;
   shift: "day" | "night" | null;
 };
 
@@ -49,8 +50,9 @@ function sbHeaders() {
 async function sbGet<T>(path: string, params: URLSearchParams) {
   const url = `${SUPABASE_URL}/rest/v1/${path}?${params.toString()}`;
   const r = await fetch(url, { headers: sbHeaders() });
-  if (!r.ok) throw new Error(await r.text());
-  return (await r.json()) as T;
+  const text = await r.text();
+  if (!r.ok) throw new Error(`Supabase ${path} ${r.status}: ${text}`);
+  return JSON.parse(text) as T;
 }
 
 async function tgSend(chatId: string, text: string) {
@@ -61,11 +63,12 @@ async function tgSend(chatId: string, text: string) {
       chat_id: chatId,
       text,
       parse_mode: "HTML",
+      disable_web_page_preview: "true",
     }),
   });
 
-  const data = await r.json();
-  if (!data.ok) throw new Error(JSON.stringify(data));
+  const data = await r.json().catch(() => null);
+  if (!data?.ok) throw new Error(`TG: ${JSON.stringify(data)}`);
 }
 
 function sleep(ms: number) {
@@ -73,7 +76,8 @@ function sleep(ms: number) {
 }
 
 function fmt(n: number) {
-  return Math.trunc(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₸";
+  const v = Math.trunc(Number(n || 0));
+  return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₸";
 }
 
 function esc(s: string) {
@@ -96,23 +100,31 @@ function getPrevWeekKZ() {
       d.getUTCDate()
     ).padStart(2, "0")}`;
 
-  return {
-    from: iso(mon),
-    to: iso(sun),
-    weekMonday: iso(mon),
-  };
+  return { from: iso(mon), to: iso(sun), weekMonday: iso(mon) };
 }
 
 /* ================== ROUTE ================== */
 export async function GET(req: Request) {
-  if (req.headers.get("authorization") !== `Bearer ${CRON_SECRET}`) {
-    return NextResponse.json({ ok: false }, { status: 401 });
+  const auth = req.headers.get("authorization") || "";
+  if (auth !== `Bearer ${CRON_SECRET}`) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   const dryRun = new URL(req.url).searchParams.get("dryRun") === "1";
   const { from, to, weekMonday } = getPrevWeekKZ();
 
-  /* --- OPERATORS --- */
+  // 1) company_id по коду (чтобы не считать чужие смены)
+  const companyCode = process.env.SUPABASE_COMPANY_CODE || "arena";
+  const companyRows = await sbGet<CompanyRow[]>(
+    "companies",
+    new URLSearchParams({ select: "id", code: `eq.${companyCode}`, limit: "1" })
+  );
+  if (!companyRows.length) {
+    return NextResponse.json({ ok: false, error: `company not found: ${companyCode}` }, { status: 500 });
+  }
+  const companyId = companyRows[0].id;
+
+  // 2) операторы
   const operators = await sbGet<Operator[]>(
     "operators",
     new URLSearchParams({
@@ -122,67 +134,54 @@ export async function GET(req: Request) {
   );
 
   const targets = operators.filter(
-    (o) =>
-      (o.role === "admin" || o.role === "worker") &&
-      o.telegram_chat_id
+    (o) => (o.role === "admin" || o.role === "worker") && o.telegram_chat_id
   );
 
   let sent = 0;
   let failed = 0;
+  const errors: Array<{ name: string; error: string }> = [];
 
   for (const op of targets) {
     try {
-      /* --- SHIFTS --- */
-      const shifts = await sbGet<IncomeRow[]>(
-        "incomes",
-        new URLSearchParams({
-          select: "id,shift",
-          operator_id: `eq.${op.id}`,
-          date: `gte.${from}`,
-          "date.lte": to,
-        })
-      );
+      // --- SHIFTS (incomes) ---
+      const incomeParams = new URLSearchParams();
+      incomeParams.set("select", "id,shift");
+      incomeParams.set("company_id", `eq.${companyId}`);
+      incomeParams.set("operator_id", `eq.${op.id}`);
+      incomeParams.append("date", `gte.${from}`);
+      incomeParams.append("date", `lte.${to}`);
 
-      const shiftCount = shifts.filter((s) => s.shift).length;
+      const shifts = await sbGet<IncomeRow[]>("incomes", incomeParams);
+      const shiftCount = shifts.filter((s) => s.shift === "day" || s.shift === "night").length;
       const base = shiftCount * SHIFT_BASE_PAY;
 
-      /* --- WEEKLY DEBT --- */
-      const debtRow = await sbGet<DebtRow[]>(
-        "debts",
-        new URLSearchParams({
-          select: "amount",
-          operator_id: `eq.${op.id}`,
-          date: `eq.${weekMonday}`,
-          status: "eq.active",
-          limit: "1",
-        })
-      );
+      // --- WEEKLY DEBT ---
+      const debtParams = new URLSearchParams();
+      debtParams.set("select", "amount");
+      debtParams.set("company_id", `eq.${companyId}`);
+      debtParams.set("operator_id", `eq.${op.id}`);
+      debtParams.set("status", "eq.active");
+      debtParams.set("date", `eq.${weekMonday}`);
+      debtParams.set("limit", "1");
 
+      const debtRow = await sbGet<DebtRow[]>("debts", debtParams);
       const weeklyDebt = Number(debtRow?.[0]?.amount || 0);
 
-      /* --- ADJUSTMENTS --- */
-      const adj = await sbGet<AdjustmentRow[]>(
-        "operator_salary_adjustments",
-        new URLSearchParams({
-          select: "id,date,amount,kind,comment",
-          operator_id: `eq.${op.id}`,
-          date: `gte.${from}`,
-          "date.lte": to,
-        })
-      );
+      // --- ADJUSTMENTS ---
+      const adjParams = new URLSearchParams();
+      adjParams.set("select", "id,date,amount,kind,comment");
+      adjParams.set("operator_id", `eq.${op.id}`);
+      adjParams.append("date", `gte.${from}`);
+      adjParams.append("date", `lte.${to}`);
+
+      const adj = await sbGet<AdjustmentRow[]>("operator_salary_adjustments", adjParams);
 
       const sum = { bonus: 0, fine: 0, advance: 0, debt: 0 };
-      adj.forEach((a) => (sum[a.kind] += Number(a.amount || 0)));
+      for (const a of adj) sum[a.kind] += Number(a.amount || 0);
 
-      const toPay =
-        base +
-        sum.bonus -
-        sum.fine -
-        sum.advance -
-        weeklyDebt -
-        sum.debt;
+      const totalDebt = weeklyDebt + sum.debt;
+      const toPay = base + sum.bonus - sum.fine - sum.advance - totalDebt;
 
-      /* --- MESSAGE --- */
       const msg =
         `📌 <b>Недельная зарплата</b>\n` +
         `👤 <b>${esc(op.name)}</b>\n` +
@@ -193,27 +192,31 @@ export async function GET(req: Request) {
         `🎁 Бонусы: +${fmt(sum.bonus)}\n` +
         `⚠️ Штрафы: -${fmt(sum.fine)}\n` +
         `💸 Авансы: -${fmt(sum.advance)}\n` +
-        `🔗 Долг: -${fmt(weeklyDebt + sum.debt)}\n` +
+        `🔗 Долг: -${fmt(totalDebt)}\n` +
         `------------------\n` +
         `✅ <b>К выплате: ${fmt(toPay)}</b>`;
 
       if (!dryRun) {
-        await tgSend(op.telegram_chat_id!, msg);
+        await tgSend(String(op.telegram_chat_id), msg);
         await sleep(350);
       }
 
       sent++;
-    } catch (e) {
+    } catch (e: any) {
       failed++;
-      console.error(op.name, e);
+      errors.push({ name: op.name, error: String(e?.message || e).slice(0, 300) });
     }
   }
 
   return NextResponse.json({
     ok: true,
-    period: { from, to },
+    dryRun,
+    company_code: process.env.SUPABASE_COMPANY_CODE || "arena",
+    company_id: companyId,
+    period: { from, to, weekMonday },
+    total: targets.length,
     sent,
     failed,
-    total: targets.length,
+    errors,
   });
 }
