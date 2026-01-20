@@ -20,11 +20,7 @@ import {
   Pencil,
 } from 'lucide-react'
 
-type Company = {
-  id: string
-  name: string
-  code: string | null
-}
+type Company = { id: string; name: string; code: string | null }
 
 type IncomeRow = {
   id: string
@@ -85,7 +81,7 @@ type DebtRow = {
   status: string | null
 }
 
-// ВАЖНО: выплаты — это оператор + неделя (+ shift фиксированный)
+// выплаты — это оператор + неделя (+ shift фиксированный)
 type PayoutRow = {
   id: number
   operator_id: string
@@ -148,6 +144,8 @@ const formatIsoRu = (iso: string) => {
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
 export default function SalaryPage() {
   const today = new Date()
   const monday = getMonday(today)
@@ -183,8 +181,14 @@ export default function SalaryPage() {
   // Оплата
   const [payingOperatorId, setPayingOperatorId] = useState<string | null>(null)
 
-  // Telegram отправка
+  // Telegram отправка (одному)
   const [sendingOperatorId, setSendingOperatorId] = useState<string | null>(null)
+
+  // Telegram отправка всем
+  const [broadcastSending, setBroadcastSending] = useState(false)
+  const [broadcastDone, setBroadcastDone] = useState(0)
+  const [broadcastTotal, setBroadcastTotal] = useState(0)
+  const [broadcastErrors, setBroadcastErrors] = useState<string[]>([])
 
   // Telegram chat_id редактирование
   const [chatEditOperatorId, setChatEditOperatorId] = useState<string | null>(null)
@@ -587,25 +591,17 @@ export default function SalaryPage() {
     setError(null)
     setSendingOperatorId(operatorId)
     try {
-      // отправляем по UUID (бек сам найдёт оператора и возьмёт его telegram_chat_id)
       const resp = await fetch('/api/telegram/salary-snapshot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          operatorId,
-          dateFrom,
-          dateTo,
-          weekStart: weekStartISO,
-        }),
+        body: JSON.stringify({ operatorId, dateFrom, dateTo, weekStart: weekStartISO }),
       })
 
       const raw = await resp.text().catch(() => '')
       let json: any = null
       try {
         json = raw ? JSON.parse(raw) : null
-      } catch {
-        // ignore
-      }
+      } catch {}
 
       if (!resp.ok) {
         const msg = json?.error || `Ошибка отправки в Telegram (HTTP ${resp.status})`
@@ -616,6 +612,65 @@ export default function SalaryPage() {
       setError(e?.message || 'Ошибка отправки в Telegram')
     } finally {
       setSendingOperatorId(null)
+    }
+  }
+
+  // ✅ МАССОВАЯ ОТПРАВКА ВСЕМ
+  const sendToAll = async () => {
+    if (broadcastSending) return
+    setError(null)
+    setBroadcastErrors([])
+    setBroadcastDone(0)
+
+    // берем только активных у кого есть chat_id
+    const target = operators
+      .filter((o) => o.is_active && o.telegram_chat_id)
+      .sort((a, b) => (a.short_name || a.name).localeCompare(b.short_name || b.name, 'ru'))
+
+    if (target.length === 0) {
+      setError('Нет операторов с telegram_chat_id для отправки')
+      return
+    }
+
+    setBroadcastTotal(target.length)
+    setBroadcastSending(true)
+
+    try {
+      for (let i = 0; i < target.length; i++) {
+        const op = target[i]
+
+        try {
+          const resp = await fetch('/api/telegram/salary-snapshot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              operatorId: op.id,
+              dateFrom,
+              dateTo,
+              weekStart: weekStartISO,
+            }),
+          })
+
+          const raw = await resp.text().catch(() => '')
+          let json: any = null
+          try {
+            json = raw ? JSON.parse(raw) : null
+          } catch {}
+
+          if (!resp.ok) {
+            const msg = json?.error || `HTTP ${resp.status}`
+            setBroadcastErrors((prev) => [...prev, `${op.short_name || op.name}: ${msg}`])
+          }
+        } catch (e: any) {
+          setBroadcastErrors((prev) => [...prev, `${op.short_name || op.name}: ${e?.message || 'ошибка'}`])
+        }
+
+        setBroadcastDone(i + 1)
+        // маленькая пауза чтобы Telegram не банил (и серверу легче)
+        await sleep(350)
+      }
+    } finally {
+      setBroadcastSending(false)
     }
   }
 
@@ -657,6 +712,18 @@ export default function SalaryPage() {
     }
   }
 
+  const canBroadcast = useMemo(() => {
+    if (loading) return false
+    if (broadcastSending) return false
+    // хотя бы один активный с chat_id
+    return operators.some((o) => o.is_active && !!o.telegram_chat_id)
+  }, [loading, broadcastSending, operators])
+
+  const broadcastLabel = useMemo(() => {
+    if (!broadcastSending) return 'Отправить всем'
+    return `Отправка... ${broadcastDone}/${broadcastTotal}`
+  }, [broadcastSending, broadcastDone, broadcastTotal])
+
   return (
     <div className="flex min-h-screen bg-[#050505] text-foreground">
       <Sidebar />
@@ -676,7 +743,10 @@ export default function SalaryPage() {
             </div>
 
             <div className="text-xs text-muted-foreground mb-2">
-              Оператор: <span className="font-semibold">{operatorById[chatEditOperatorId]?.short_name || operatorById[chatEditOperatorId]?.name}</span>
+              Оператор:{' '}
+              <span className="font-semibold">
+                {operatorById[chatEditOperatorId]?.short_name || operatorById[chatEditOperatorId]?.name}
+              </span>
             </div>
 
             <input
@@ -709,10 +779,25 @@ export default function SalaryPage() {
                 </Button>
               </Link>
               <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                  <Users2 className="w-6 h-6 text-emerald-400" />
-                  Зарплата операторов
-                </h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-2xl font-bold flex items-center gap-2">
+                    <Users2 className="w-6 h-6 text-emerald-400" />
+                    Зарплата операторов
+                  </h1>
+
+                  {/* ✅ КНОПКА ОТПРАВИТЬ ВСЕМ */}
+                  <Button
+                    onClick={sendToAll}
+                    disabled={!canBroadcast}
+                    className="h-9 rounded-full text-[12px] font-semibold gap-2"
+                    variant="outline"
+                    title={!canBroadcast ? 'Нет операторов с chat_id или идет загрузка' : 'Отправить всем активным с chat_id'}
+                  >
+                    {broadcastSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    {broadcastLabel}
+                  </Button>
+                </div>
+
                 <p className="text-xs text-muted-foreground">База + авто-бонусы + корректировки − долги − авансы</p>
                 <p className="text-[11px] text-muted-foreground mt-1">
                   Неделя оплаты: <span className="font-semibold">{formatIsoRu(weekStartISO)}</span>
@@ -725,6 +810,27 @@ export default function SalaryPage() {
                     </>
                   )}
                 </p>
+
+                {/* ✅ РЕЗУЛЬТАТ МАССОВОЙ ОТПРАВКИ */}
+                {!broadcastSending && broadcastTotal > 0 && (
+                  <div className="mt-2 text-[11px] text-muted-foreground">
+                    Рассылка: <span className="font-semibold">{broadcastDone}/{broadcastTotal}</span>
+                    {broadcastErrors.length > 0 ? (
+                      <span className="text-red-300"> • ошибок: {broadcastErrors.length}</span>
+                    ) : (
+                      <span className="text-emerald-300"> • без ошибок</span>
+                    )}
+                  </div>
+                )}
+
+                {!broadcastSending && broadcastErrors.length > 0 && (
+                  <div className="mt-2 text-[11px] text-red-200 whitespace-pre-wrap">
+                    {broadcastErrors.slice(0, 8).map((e, i) => (
+                      <div key={i}>• {e}</div>
+                    ))}
+                    {broadcastErrors.length > 8 && <div>… и ещё {broadcastErrors.length - 8}</div>}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -913,7 +1019,7 @@ export default function SalaryPage() {
                                     ? 'border-emerald-500/30 text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/15'
                                     : 'border-red-500/30 text-red-200 bg-red-500/10 hover:bg-red-500/15',
                                 ].join(' ')}
-                                disabled={!hasChat || sendingOperatorId === op.operatorId}
+                                disabled={!hasChat || sendingOperatorId === op.operatorId || broadcastSending}
                                 onClick={() => sendToTelegram(op.operatorId)}
                                 title={!hasChat ? 'Сначала добавь telegram_chat_id' : 'Отправить расчёт в Telegram'}
                               >
