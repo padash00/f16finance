@@ -15,6 +15,9 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  Send,
+  MessageCircle,
+  Pencil,
 } from 'lucide-react'
 
 type Company = {
@@ -51,6 +54,7 @@ type Operator = {
   name: string
   short_name: string | null
   is_active: boolean
+  telegram_chat_id: string | null
 }
 
 type AggregatedShift = {
@@ -108,8 +112,7 @@ type OperatorWeekStat = {
   finalSalary: number
 }
 
-const formatMoney = (v: number) =>
-  v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
+const formatMoney = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 
 // --- Даты: локальный ISO без UTC-сдвигов ---
 const toISODateLocal = (d: Date) => {
@@ -180,6 +183,14 @@ export default function SalaryPage() {
   // Оплата
   const [payingOperatorId, setPayingOperatorId] = useState<string | null>(null)
 
+  // Telegram отправка
+  const [sendingOperatorId, setSendingOperatorId] = useState<string | null>(null)
+
+  // Telegram chat_id редактирование
+  const [chatEditOperatorId, setChatEditOperatorId] = useState<string | null>(null)
+  const [chatEditValue, setChatEditValue] = useState('')
+  const [chatSaving, setChatSaving] = useState(false)
+
   // если кривой диапазон
   useEffect(() => {
     if (dateFrom && dateTo && dateFrom > dateTo) {
@@ -232,7 +243,7 @@ export default function SalaryPage() {
             'id,company_code,shift_type,base_per_shift,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus',
           )
           .eq('is_active', true),
-        supabase.from('operators').select('id,name,short_name,is_active'),
+        supabase.from('operators').select('id,name,short_name,is_active,telegram_chat_id'),
       ])
 
       if (!alive) return
@@ -279,9 +290,7 @@ export default function SalaryPage() {
       const [incRes, adjRes, debtsRes, payoutsRes] = await Promise.all([
         supabase
           .from('incomes')
-          .select(
-            'id,date,company_id,shift,cash_amount,kaspi_amount,card_amount,operator_id,operator_name',
-          )
+          .select('id,date,company_id,shift,cash_amount,kaspi_amount,card_amount,operator_id,operator_name')
           .gte('date', dateFrom)
           .lte('date', dateTo),
 
@@ -309,13 +318,7 @@ export default function SalaryPage() {
       if (!alive) return
 
       if (incRes.error || adjRes.error || debtsRes.error || payoutsRes.error) {
-        console.error(
-          'Salary range load error',
-          incRes.error,
-          adjRes.error,
-          debtsRes.error,
-          payoutsRes.error,
-        )
+        console.error('Salary range load error', incRes.error, adjRes.error, debtsRes.error, payoutsRes.error)
         setError('Ошибка загрузки данных для расчёта зарплаты')
         setRangeLoading(false)
         return
@@ -341,6 +344,12 @@ export default function SalaryPage() {
     return map
   }, [payouts])
 
+  const operatorById = useMemo(() => {
+    const map: Record<string, Operator> = {}
+    for (const o of operators) map[o.id] = o
+    return map
+  }, [operators])
+
   // Список операторов для селекта
   const operatorOptions = useMemo(
     () =>
@@ -352,9 +361,6 @@ export default function SalaryPage() {
 
   // Основная математика
   const stats = useMemo(() => {
-    const operatorById: Record<string, Operator> = {}
-    for (const o of operators) operatorById[o.id] = o
-
     const aggregated = new Map<string, AggregatedShift>()
     const byOperator = new Map<string, OperatorWeekStat>()
 
@@ -398,11 +404,7 @@ export default function SalaryPage() {
 
       const shift: 'day' | 'night' = row.shift === 'night' ? 'night' : 'day'
 
-      const total =
-        Number(row.cash_amount || 0) +
-        Number(row.kaspi_amount || 0) +
-        Number(row.card_amount || 0)
-
+      const total = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0)
       if (total <= 0) continue
 
       const meta = operatorById[row.operator_id]
@@ -430,12 +432,8 @@ export default function SalaryPage() {
       const basePerShift = rule?.base_per_shift ?? DEFAULT_BASE
 
       let bonus = 0
-      if (rule?.threshold1_turnover && sh.turnover >= rule.threshold1_turnover) {
-        bonus += rule.threshold1_bonus || 0
-      }
-      if (rule?.threshold2_turnover && sh.turnover >= rule.threshold2_turnover) {
-        bonus += rule.threshold2_bonus || 0
-      }
+      if (rule?.threshold1_turnover && sh.turnover >= rule.threshold1_turnover) bonus += rule.threshold1_bonus || 0
+      if (rule?.threshold2_turnover && sh.turnover >= rule.threshold2_turnover) bonus += rule.threshold2_bonus || 0
 
       const op = ensureOperator(sh.operatorId)
       if (!op) continue
@@ -463,7 +461,7 @@ export default function SalaryPage() {
 
       if (adj.kind === 'bonus') op.manualPlus += amount
       else if (adj.kind === 'advance') op.advances += amount
-      else op.manualMinus += amount // debt/fine
+      else op.manualMinus += amount
     }
 
     // 4) Долги недели (авто)
@@ -484,12 +482,9 @@ export default function SalaryPage() {
       totalSalary += op.finalSalary
     }
 
-    const operatorsStats = Array.from(byOperator.values()).sort((a, b) =>
-      a.operatorName.localeCompare(b.operatorName, 'ru'),
-    )
-
+    const operatorsStats = Array.from(byOperator.values()).sort((a, b) => a.operatorName.localeCompare(b.operatorName, 'ru'))
     return { operators: operatorsStats, totalSalary }
-  }, [incomes, companyById, rulesMap, adjustments, operators, debts])
+  }, [incomes, companyById, rulesMap, adjustments, operators, debts, operatorById])
 
   const totalShifts = stats.operators.reduce((s, o) => s + o.shifts, 0)
   const totalBase = stats.operators.reduce((s, o) => s + o.baseSalary, 0)
@@ -517,9 +512,7 @@ export default function SalaryPage() {
       if (!adjDate) throw new Error('Выберите дату корректировки')
 
       const amountNum = parseAmount(adjAmount)
-      if (!Number.isFinite(amountNum) || amountNum <= 0) {
-        throw new Error('Введите сумму корректировки')
-      }
+      if (!Number.isFinite(amountNum) || amountNum <= 0) throw new Error('Введите сумму корректировки')
 
       setAdjSaving(true)
 
@@ -540,7 +533,6 @@ export default function SalaryPage() {
       if (error) throw error
 
       setAdjustments((prev) => [...prev, data as AdjustmentRow])
-
       setAdjAmount('')
       setAdjComment('')
       setAdjKind('debt')
@@ -591,9 +583,121 @@ export default function SalaryPage() {
     }
   }
 
+  const sendToTelegram = async (operatorId: string) => {
+    setError(null)
+    setSendingOperatorId(operatorId)
+    try {
+      // отправляем по UUID (бек сам найдёт оператора и возьмёт его telegram_chat_id)
+      const resp = await fetch('/api/telegram/salary-snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operatorId,
+          dateFrom,
+          dateTo,
+          weekStart: weekStartISO,
+        }),
+      })
+
+      const raw = await resp.text().catch(() => '')
+      let json: any = null
+      try {
+        json = raw ? JSON.parse(raw) : null
+      } catch {
+        // ignore
+      }
+
+      if (!resp.ok) {
+        const msg = json?.error || `Ошибка отправки в Telegram (HTTP ${resp.status})`
+        throw new Error(msg)
+      }
+    } catch (e: any) {
+      console.error(e)
+      setError(e?.message || 'Ошибка отправки в Telegram')
+    } finally {
+      setSendingOperatorId(null)
+    }
+  }
+
+  const openChatEditor = (operatorId: string) => {
+    const op = operatorById[operatorId]
+    setChatEditOperatorId(operatorId)
+    setChatEditValue(op?.telegram_chat_id || '')
+  }
+
+  const saveChatId = async () => {
+    setError(null)
+    if (!chatEditOperatorId) return
+
+    const v = chatEditValue.trim()
+    if (v && !/^\-?\d+$/.test(v)) {
+      setError('telegram_chat_id должен быть числом (может быть с минусом для группы)')
+      return
+    }
+
+    setChatSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('operators')
+        .update({ telegram_chat_id: v || null })
+        .eq('id', chatEditOperatorId)
+        .select('id,name,short_name,is_active,telegram_chat_id')
+        .single()
+
+      if (error) throw error
+
+      setOperators((prev) => prev.map((o) => (o.id === chatEditOperatorId ? (data as Operator) : o)))
+      setChatEditOperatorId(null)
+      setChatEditValue('')
+    } catch (e: any) {
+      console.error(e)
+      setError(e?.message || 'Ошибка сохранения telegram_chat_id')
+    } finally {
+      setChatSaving(false)
+    }
+  }
+
   return (
     <div className="flex min-h-screen bg-[#050505] text-foreground">
       <Sidebar />
+
+      {/* Мини-окно для chat_id */}
+      {chatEditOperatorId && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md p-4 border-border bg-card/90">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <div className="font-semibold text-sm">Telegram chat_id</div>
+              </div>
+              <Button variant="ghost" size="sm" className="h-8" onClick={() => setChatEditOperatorId(null)}>
+                Закрыть
+              </Button>
+            </div>
+
+            <div className="text-xs text-muted-foreground mb-2">
+              Оператор: <span className="font-semibold">{operatorById[chatEditOperatorId]?.short_name || operatorById[chatEditOperatorId]?.name}</span>
+            </div>
+
+            <input
+              value={chatEditValue}
+              onChange={(e) => setChatEditValue(e.target.value)}
+              className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm"
+              placeholder="например: 1566833632 или -4935038728"
+            />
+
+            <div className="flex gap-2 mt-3 justify-end">
+              <Button variant="outline" onClick={() => setChatEditOperatorId(null)} className="h-9">
+                Отмена
+              </Button>
+              <Button onClick={saveChatId} disabled={chatSaving} className="h-9">
+                {chatSaving ? 'Сохранение...' : 'Сохранить'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       <main className="flex-1 overflow-auto">
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
           {/* Хедер */}
@@ -609,12 +713,9 @@ export default function SalaryPage() {
                   <Users2 className="w-6 h-6 text-emerald-400" />
                   Зарплата операторов
                 </h1>
-                <p className="text-xs text-muted-foreground">
-                  База + авто-бонусы + корректировки − долги − авансы
-                </p>
+                <p className="text-xs text-muted-foreground">База + авто-бонусы + корректировки − долги − авансы</p>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Неделя оплаты:{' '}
-                  <span className="font-semibold">{formatIsoRu(weekStartISO)}</span>
+                  Неделя оплаты: <span className="font-semibold">{formatIsoRu(weekStartISO)}</span>
                   {!loading && (
                     <>
                       {'  '}• Оплачено:{' '}
@@ -675,19 +776,13 @@ export default function SalaryPage() {
             </Card>
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">Авто-бонусы</p>
-              <p className="text-2xl font-bold text-emerald-400">
-                {loading ? '—' : formatMoney(totalBonus)}
-              </p>
+              <p className="text-2xl font-bold text-emerald-400">{loading ? '—' : formatMoney(totalBonus)}</p>
             </Card>
             <Card className="p-4 border-border bg-card/70">
               <p className="text-xs text-muted-foreground mb-1">К выплате (итог)</p>
-              <p className="text-2xl font-bold text-sky-400">
-                {loading ? '—' : formatMoney(stats.totalSalary)}
-              </p>
+              <p className="text-2xl font-bold text-sky-400">{loading ? '—' : formatMoney(stats.totalSalary)}</p>
               {!loading && totalAutoDebts > 0 && (
-                <p className="mt-1 text-[11px] text-red-300">
-                  Включая долги недели: {formatMoney(totalAutoDebts)}
-                </p>
+                <p className="mt-1 text-[11px] text-red-300">Включая долги недели: {formatMoney(totalAutoDebts)}</p>
               )}
             </Card>
           </div>
@@ -695,7 +790,7 @@ export default function SalaryPage() {
           {/* Таблица */}
           <Card className="border-border bg-card/80 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-xs md:text-sm border-collapse">
+              <table className="w-full min-w-[1280px] text-xs md:text-sm border-collapse">
                 <thead className="sticky top-0 z-10 bg-[#0b0b0b]/95 backdrop-blur border-b border-border">
                   <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
                     <th className="py-3 px-3 text-left">Оператор</th>
@@ -709,13 +804,14 @@ export default function SalaryPage() {
                     <th className="py-3 px-3 text-right text-emerald-300">Премия</th>
                     <th className="py-3 px-3 text-right">К выплате</th>
                     <th className="py-3 px-3 text-center">Оплата</th>
+                    <th className="py-3 px-3 text-center">Telegram</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={11} className="py-8 text-center text-muted-foreground text-xs">
+                      <td colSpan={12} className="py-8 text-center text-muted-foreground text-xs">
                         Загрузка...
                       </td>
                     </tr>
@@ -723,7 +819,7 @@ export default function SalaryPage() {
 
                   {!loading && stats.operators.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="py-8 text-center text-muted-foreground text-xs">
+                      <td colSpan={12} className="py-8 text-center text-muted-foreground text-xs">
                         Нет данных в выбранном периоде.
                       </td>
                     </tr>
@@ -734,6 +830,8 @@ export default function SalaryPage() {
                       const payout = payoutByOperator.get(op.operatorId)
                       const isPaid = Boolean(payout?.is_paid)
                       const isNeg = op.finalSalary < 0
+                      const opMeta = operatorById[op.operatorId]
+                      const hasChat = Boolean(opMeta?.telegram_chat_id)
 
                       return (
                         <tr
@@ -747,31 +845,13 @@ export default function SalaryPage() {
                           <td className="py-3 px-3 font-semibold">{op.operatorName}</td>
                           <td className="py-3 px-3 text-center">{op.shifts}</td>
 
-                          <td className="py-3 px-3 text-right font-medium">
-                            {formatMoney(op.basePerShift)}
-                          </td>
-
+                          <td className="py-3 px-3 text-right font-medium">{formatMoney(op.basePerShift)}</td>
                           <td className="py-3 px-3 text-right">{formatMoney(op.baseSalary)}</td>
-
-                          <td className="py-3 px-3 text-right text-emerald-300">
-                            {formatMoney(op.bonusSalary)}
-                          </td>
-
-                          <td className="py-3 px-3 text-right text-red-300">
-                            {formatMoney(op.autoDebts)}
-                          </td>
-
-                          <td className="py-3 px-3 text-right text-red-300">
-                            {formatMoney(op.manualMinus)}
-                          </td>
-
-                          <td className="py-3 px-3 text-right text-amber-300">
-                            {formatMoney(op.advances)}
-                          </td>
-
-                          <td className="py-3 px-3 text-right text-emerald-300">
-                            {formatMoney(op.manualPlus)}
-                          </td>
+                          <td className="py-3 px-3 text-right text-emerald-300">{formatMoney(op.bonusSalary)}</td>
+                          <td className="py-3 px-3 text-right text-red-300">{formatMoney(op.autoDebts)}</td>
+                          <td className="py-3 px-3 text-right text-red-300">{formatMoney(op.manualMinus)}</td>
+                          <td className="py-3 px-3 text-right text-amber-300">{formatMoney(op.advances)}</td>
+                          <td className="py-3 px-3 text-right text-emerald-300">{formatMoney(op.manualPlus)}</td>
 
                           <td
                             className={[
@@ -811,6 +891,52 @@ export default function SalaryPage() {
                               </div>
                             )}
                           </td>
+
+                          <td className="py-3 px-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                className="h-8 px-3 rounded-full text-[11px] border border-border/60"
+                                onClick={() => openChatEditor(op.operatorId)}
+                              >
+                                <Pencil className="w-3.5 h-3.5 mr-1" />
+                                chat_id
+                              </Button>
+
+                              <Button
+                                size="xs"
+                                variant="ghost"
+                                className={[
+                                  'h-8 px-3 rounded-full text-[11px] font-semibold gap-1 shadow-sm border',
+                                  hasChat
+                                    ? 'border-emerald-500/30 text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/15'
+                                    : 'border-red-500/30 text-red-200 bg-red-500/10 hover:bg-red-500/15',
+                                ].join(' ')}
+                                disabled={!hasChat || sendingOperatorId === op.operatorId}
+                                onClick={() => sendToTelegram(op.operatorId)}
+                                title={!hasChat ? 'Сначала добавь telegram_chat_id' : 'Отправить расчёт в Telegram'}
+                              >
+                                {sendingOperatorId === op.operatorId ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Send className="w-3.5 h-3.5" />
+                                )}
+                                Отправить
+                              </Button>
+                            </div>
+
+                            <div className="text-[10px] text-muted-foreground mt-1">
+                              {hasChat ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <MessageCircle className="w-3 h-3" />
+                                  {opMeta.telegram_chat_id}
+                                </span>
+                              ) : (
+                                <span className="text-red-300">нет chat_id</span>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       )
                     })}
@@ -822,27 +948,16 @@ export default function SalaryPage() {
                       </td>
                       <td className="py-3 px-3 text-right font-bold">—</td>
                       <td className="py-3 px-3 text-right font-bold">{formatMoney(totalBase)}</td>
-                      <td className="py-3 px-3 text-right font-bold text-emerald-300">
-                        {formatMoney(totalBonus)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-bold text-red-300">
-                        {formatMoney(totalAutoDebts)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-bold text-red-300">
-                        {formatMoney(totalMinus)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-bold text-amber-300">
-                        {formatMoney(totalAdvances)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-bold text-emerald-300">
-                        {formatMoney(totalPlus)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-bold text-sky-200">
-                        {formatMoney(stats.totalSalary)}
-                      </td>
+                      <td className="py-3 px-3 text-right font-bold text-emerald-300">{formatMoney(totalBonus)}</td>
+                      <td className="py-3 px-3 text-right font-bold text-red-300">{formatMoney(totalAutoDebts)}</td>
+                      <td className="py-3 px-3 text-right font-bold text-red-300">{formatMoney(totalMinus)}</td>
+                      <td className="py-3 px-3 text-right font-bold text-amber-300">{formatMoney(totalAdvances)}</td>
+                      <td className="py-3 px-3 text-right font-bold text-emerald-300">{formatMoney(totalPlus)}</td>
+                      <td className="py-3 px-3 text-right font-bold text-sky-200">{formatMoney(stats.totalSalary)}</td>
                       <td className="py-3 px-3 text-center text-[11px] text-muted-foreground">
                         {paidCount}/{stats.operators.length}
                       </td>
+                      <td className="py-3 px-3 text-center text-[11px] text-muted-foreground">—</td>
                     </tr>
                   )}
                 </tbody>
