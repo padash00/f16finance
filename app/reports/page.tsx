@@ -15,6 +15,8 @@ import {
   Percent,
   PieChart as PieIcon,
   CalendarDays,
+  Wifi,
+  CreditCard,
 } from 'lucide-react'
 
 import {
@@ -45,6 +47,7 @@ type IncomeRow = {
   zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
+  online_amount: number | null // ✅ ADDED
   card_amount: number | null
 }
 
@@ -67,6 +70,9 @@ type GroupMode = 'day' | 'week' | 'month' | 'year'
 
 type FinancialTotals = {
   incomeCash: number
+  incomeKaspi: number
+  incomeOnline: number
+  incomeCard: number
   incomeNonCash: number
   expenseCash: number
   expenseKaspi: number
@@ -97,6 +103,9 @@ type TimeAggregation = {
   expense: number
   profit: number
   incomeCash: number
+  incomeKaspi: number
+  incomeOnline: number
+  incomeCard: number
   incomeNonCash: number
   expenseCash: number
   expenseKaspi: number
@@ -214,7 +223,7 @@ export default function ReportsPage() {
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
-  const [companiesLoaded, setCompaniesLoaded] = useState(false) // ✅ ADDED: чтобы не висеть на loading
+  const [companiesLoaded, setCompaniesLoaded] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -287,14 +296,13 @@ export default function ReportsPage() {
         console.error('Companies load error', error)
         setError('Не удалось загрузить список компаний')
         setCompanies([])
-        setCompaniesLoaded(true) // ✅ ADDED
-        setLoading(false) // ✅ ADDED: иначе можно зависнуть
+        setCompaniesLoaded(true)
+        setLoading(false)
         return
       }
 
       setCompanies((data || []) as Company[])
-      setCompaniesLoaded(true) // ✅ ADDED
-      // loading не трогаем: дальше его управляет loadRange
+      setCompaniesLoaded(true)
     }
 
     loadCompanies()
@@ -385,9 +393,8 @@ export default function ReportsPage() {
 
   // 2) load incomes/expenses for current + previous in one request range
   useEffect(() => {
-    if (!companiesLoaded) return // ✅ ADDED: ждём хотя бы попытку загрузки компаний
+    if (!companiesLoaded) return
 
-    // если компаний нет — показываем страницу без бесконечной загрузки
     if (companies.length === 0) {
       setIncomes([])
       setExpenses([])
@@ -407,7 +414,9 @@ export default function ReportsPage() {
 
       let incomeQ = supabase
         .from('incomes')
-        .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,card_amount')
+        .select(
+          'id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount',
+        )
         .gte('date', rangeFrom)
         .lte('date', rangeTo)
 
@@ -421,7 +430,6 @@ export default function ReportsPage() {
         incomeQ = incomeQ.eq('company_id', companyFilter)
         expenseQ = expenseQ.eq('company_id', companyFilter)
       } else {
-        // если все, но Extra НЕ учитывать — режем на сервере (если знаем id)
         if (!includeExtraInTotals && extraCompanyId) {
           incomeQ = incomeQ.neq('company_id', extraCompanyId)
           expenseQ = expenseQ.neq('company_id', extraCompanyId)
@@ -466,12 +474,18 @@ export default function ReportsPage() {
 
     const baseTotals: FinancialTotals = {
       incomeCash: 0,
+      incomeKaspi: 0,
+      incomeOnline: 0,
+      incomeCard: 0,
       incomeNonCash: 0,
+
       expenseCash: 0,
       expenseKaspi: 0,
+
       totalIncome: 0,
       totalExpense: 0,
       profit: 0,
+
       remainingCash: 0,
       remainingKaspi: 0,
       totalBalance: 0,
@@ -488,7 +502,15 @@ export default function ReportsPage() {
     const signatureCount = new Map<string, number>()
     const signatureExample = new Map<
       string,
-      { date: string; companyId: string; shift: string; cash: number; kaspi: number; card: number }
+      {
+        date: string
+        companyId: string
+        shift: string
+        cash: number
+        kaspi: number
+        online: number
+        card: number
+      }
     >()
 
     const getRange = (iso: string) => {
@@ -522,6 +544,31 @@ export default function ReportsPage() {
       return code === 'extra'
     }
 
+    // ensure bucket
+    const ensureBucket = (key: string, label: string, sortISO: string) => {
+      const b =
+        chartDataMap.get(key) ||
+        ({
+          label,
+          sortISO,
+          income: 0,
+          expense: 0,
+          profit: 0,
+
+          incomeCash: 0,
+          incomeKaspi: 0,
+          incomeOnline: 0,
+          incomeCard: 0,
+          incomeNonCash: 0,
+
+          expenseCash: 0,
+          expenseKaspi: 0,
+        } as TimeAggregation)
+
+      chartDataMap.set(key, b)
+      return b
+    }
+
     // INCOMES
     for (const r of incomes) {
       const range = getRange(r.date)
@@ -529,42 +576,40 @@ export default function ReportsPage() {
       if (maybeSkipExtra(r.company_id)) continue
 
       const cash = Number(r.cash_amount || 0)
-      const nonCash = Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
+      const kaspi = Number(r.kaspi_amount || 0)
+      const online = Number(r.online_amount || 0)
+      const card = Number(r.card_amount || 0)
+
+      const nonCash = kaspi + online + card
       const total = cash + nonCash
       if (total <= 0) continue
 
       const tgt = range === 'current' ? totalsCur : totalsPrev
       tgt.incomeCash += cash
+      tgt.incomeKaspi += kaspi
+      tgt.incomeOnline += online
+      tgt.incomeCard += card
       tgt.incomeNonCash += nonCash
       tgt.totalIncome += total
 
       if (range === 'current') {
         const { key, label, sortISO } = getKey(r.date)
-        const bucket =
-          chartDataMap.get(key) ||
-          ({
-            label,
-            sortISO,
-            income: 0,
-            expense: 0,
-            profit: 0,
-            incomeCash: 0,
-            incomeNonCash: 0,
-            expenseCash: 0,
-            expenseKaspi: 0,
-          } as TimeAggregation)
+        const bucket = ensureBucket(key, label, sortISO)
 
         bucket.income += total
         bucket.incomeCash += cash
+        bucket.incomeKaspi += kaspi
+        bucket.incomeOnline += online
+        bucket.incomeCard += card
         bucket.incomeNonCash += nonCash
-        chartDataMap.set(key, bucket)
 
         const name = companyName(r.company_id) || 'Неизвестно'
         const cur = incomeByCompanyMap.get(r.company_id)
         if (!cur) incomeByCompanyMap.set(r.company_id, { companyId: r.company_id, name, value: total })
         else cur.value += total
 
-        const sig = `${r.date}|${r.company_id}|${r.shift}|${cash}|${Number(r.kaspi_amount || 0)}|${Number(r.card_amount || 0)}`
+        // ✅ duplicates signature теперь учитывает online
+        const sig = `${r.date}|${r.company_id}|${r.shift}|${cash}|${kaspi}|${online}|${card}`
         signatureCount.set(sig, (signatureCount.get(sig) || 0) + 1)
         if (!signatureExample.has(sig)) {
           signatureExample.set(sig, {
@@ -572,8 +617,9 @@ export default function ReportsPage() {
             companyId: r.company_id,
             shift: r.shift,
             cash,
-            kaspi: Number(r.kaspi_amount || 0),
-            card: Number(r.card_amount || 0),
+            kaspi,
+            online,
+            card,
           })
         }
       }
@@ -600,30 +646,18 @@ export default function ReportsPage() {
         expenseByCategoryMap.set(category, (expenseByCategoryMap.get(category) || 0) + total)
 
         const { key, label, sortISO } = getKey(r.date)
-        const bucket =
-          chartDataMap.get(key) ||
-          ({
-            label,
-            sortISO,
-            income: 0,
-            expense: 0,
-            profit: 0,
-            incomeCash: 0,
-            incomeNonCash: 0,
-            expenseCash: 0,
-            expenseKaspi: 0,
-          } as TimeAggregation)
+        const bucket = ensureBucket(key, label, sortISO)
 
         bucket.expense += total
         bucket.expenseCash += cash
         bucket.expenseKaspi += kaspi
-        chartDataMap.set(key, bucket)
       }
     }
 
     const finalizeTotals = (t: FinancialTotals) => {
       t.profit = t.totalIncome - t.totalExpense
       t.remainingCash = t.incomeCash - t.expenseCash
+      // kaspi-side: весь безнал (kaspi + online + card) минус kaspi-расходы
       t.remainingKaspi = t.incomeNonCash - t.expenseKaspi
       t.totalBalance = t.profit
       return t
@@ -647,7 +681,7 @@ export default function ReportsPage() {
       const cname = companyName(ex.companyId)
       duplicateList.push({
         count: n,
-        text: `${ex.date} • ${cname} • ${ex.shift} • нал ${ex.cash} • kaspi ${ex.kaspi} • карта ${ex.card}`,
+        text: `${ex.date} • ${cname} • ${ex.shift} • нал ${ex.cash} • kaspi ${ex.kaspi} • online ${ex.online} • карта ${ex.card}`,
       })
     }
     duplicateList.sort((a, b) => b.count - a.count)
@@ -677,7 +711,9 @@ export default function ReportsPage() {
   const totalsPrev = processed.totalsPrev
 
   const chartData = useMemo(() => {
-    return Array.from(processed.chartDataMap.values()).sort((a, b) => a.sortISO.localeCompare(b.sortISO))
+    return Array.from(processed.chartDataMap.values()).sort((a, b) =>
+      a.sortISO.localeCompare(b.sortISO),
+    )
   }, [processed.chartDataMap])
 
   const expenseByCategoryData = useMemo(() => {
@@ -710,7 +746,7 @@ export default function ReportsPage() {
     return arr.slice(0, 5)
   }, [chartData])
 
-  // Forecast (показываем только когда выбран “Тек. месяц” — иначе это гадание на кофейной гуще)
+  // Forecast (показываем только когда выбран “Тек. месяц”)
   const forecast = useMemo(() => {
     if (datePreset !== 'currentMonth') return null
 
@@ -758,6 +794,7 @@ export default function ReportsPage() {
     itemStyle: { color: '#ffffff' },
   } as const
 
+  // Custom tooltip for composed chart (показывает разбивку)
   const ComposedTooltip = ({
     active,
     payload,
@@ -779,7 +816,7 @@ export default function ReportsPage() {
           borderRadius: 10,
           padding: 12,
           color: '#fff',
-          minWidth: 240,
+          minWidth: 260,
         }}
       >
         <div style={{ fontWeight: 800, marginBottom: 8 }}>{label}</div>
@@ -789,7 +826,8 @@ export default function ReportsPage() {
         </div>
         <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 10 }}>
           <span style={{ opacity: 0.85 }}>
-            нал {formatMoney(p.incomeCash)} • безнал {formatMoney(p.incomeNonCash)}
+            нал {formatMoney(p.incomeCash)} • kaspi {formatMoney(p.incomeKaspi)} • online{' '}
+            {formatMoney(p.incomeOnline)} • карта {formatMoney(p.incomeCard)}
           </span>
         </div>
 
@@ -878,13 +916,13 @@ export default function ReportsPage() {
     )
   }
 
-  // ✅ ADDED: если компаний нет (пустая таблица / не созданы компании)
   if (companiesLoaded && companies.length === 0) {
     return (
       <div className="flex min-h-screen bg-background">
         <Sidebar />
         <main className="flex-1 flex items-center justify-center text-muted-foreground">
-          Нет компаний в таблице <b className="mx-1 text-foreground">companies</b>. Создай хотя бы одну — и отчёты оживут.
+          Нет компаний в таблице <b className="mx-1 text-foreground">companies</b>. Создай хотя бы
+          одну — и отчёты оживут.
         </main>
       </div>
     )
@@ -900,7 +938,9 @@ export default function ReportsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-foreground">Отчёты</h1>
-              <p className="text-muted-foreground mt-2">Выручка, расходы и прибыль по выбранному периоду</p>
+              <p className="text-muted-foreground mt-2">
+                Выручка, расходы и прибыль по выбранному периоду
+              </p>
             </div>
           </div>
 
@@ -975,7 +1015,6 @@ export default function ReportsPage() {
                     />
                   </div>
 
-                  {/* ✅ ADDED: расширил пресеты, раз они у тебя уже в типах */}
                   <div className="flex flex-wrap gap-1 bg-input/30 rounded-md border border-border/30 p-0.5">
                     {(
                       [
@@ -1081,60 +1120,126 @@ export default function ReportsPage() {
           {/* TOTALS */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Card className="p-4 border-border bg-card neon-glow">
-              <p className="text-xs font-semibold text-green-400 mb-2 uppercase tracking-wide">Выручка</p>
+              <p className="text-xs font-semibold text-green-400 mb-2 uppercase tracking-wide">
+                Выручка
+              </p>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-1">Наличные</p>
-                  <p className="text-xl font-bold text-green-400">{formatMoney(totals.incomeCash)} ₸</p>
+                  <p className="text-xl font-bold text-green-400">
+                    {formatMoney(totals.incomeCash)} ₸
+                  </p>
                 </div>
+
                 <div>
-                  <p className="text-[10px] text-muted-foreground mb-1">Kaspi + Карта</p>
-                  <p className="text-xl font-bold text-green-400">{formatMoney(totals.incomeNonCash)} ₸</p>
+                  <p className="text-[10px] text-muted-foreground mb-1">Безнал (Kaspi/Online/Card)</p>
+                  <p className="text-xl font-bold text-green-400">
+                    {formatMoney(totals.incomeNonCash)} ₸
+                  </p>
                 </div>
               </div>
+
+              {/* ✅ ADDED: детализация безнала */}
+              <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-muted-foreground">
+                <div className="flex items-center gap-1">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-blue-400" />
+                    Kaspi
+                  </span>
+                  <span className="ml-auto text-foreground font-semibold">
+                    {formatMoney(totals.incomeKaspi)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="inline-flex items-center gap-1">
+                    <Wifi className="w-3 h-3 text-amber-300" />
+                    Online
+                  </span>
+                  <span className="ml-auto text-foreground font-semibold">
+                    {formatMoney(totals.incomeOnline)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="inline-flex items-center gap-1">
+                    <CreditCard className="w-3 h-3 text-sky-300" />
+                    Card
+                  </span>
+                  <span className="ml-auto text-foreground font-semibold">
+                    {formatMoney(totals.incomeCard)}
+                  </span>
+                </div>
+              </div>
+
               <div className="mt-3 pt-3 border-t border-border/60">
                 <p className="text-[10px] text-muted-foreground mb-1">ВСЕГО ВЫРУЧКА</p>
-                <p className="text-2xl font-bold text-green-400">{formatMoney(totals.totalIncome)} ₸</p>
+                <p className="text-2xl font-bold text-green-400">
+                  {formatMoney(totals.totalIncome)} ₸
+                </p>
               </div>
             </Card>
 
             <Card className="p-4 border-border bg-card neon-glow">
-              <p className="text-xs font-semibold text-red-400 mb-2 uppercase tracking-wide">Расходы</p>
+              <p className="text-xs font-semibold text-red-400 mb-2 uppercase tracking-wide">
+                Расходы
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-1">Наличные</p>
-                  <p className="text-xl font-bold text-red-400">{formatMoney(totals.expenseCash)} ₸</p>
+                  <p className="text-xl font-bold text-red-400">
+                    {formatMoney(totals.expenseCash)} ₸
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-1">Kaspi (безнал)</p>
-                  <p className="text-xl font-bold text-red-400">{formatMoney(totals.expenseKaspi)} ₸</p>
+                  <p className="text-xl font-bold text-red-400">
+                    {formatMoney(totals.expenseKaspi)} ₸
+                  </p>
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-border/60">
                 <p className="text-[10px] text-muted-foreground mb-1">ВСЕГО РАСХОДЫ</p>
-                <p className="text-2xl font-bold text-red-400">{formatMoney(totals.totalExpense)} ₸</p>
+                <p className="text-2xl font-bold text-red-400">
+                  {formatMoney(totals.totalExpense)} ₸
+                </p>
               </div>
             </Card>
 
             <Card className="p-4 border-border bg-card neon-glow border-accent/60">
-              <p className="text-xs font-semibold text-accent mb-2 uppercase tracking-wide">Остатки и прибыль</p>
+              <p className="text-xs font-semibold text-accent mb-2 uppercase tracking-wide">
+                Остатки и прибыль
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-1">Остаток (нал)</p>
-                  <p className={`text-xl font-bold ${totals.remainingCash >= 0 ? 'text-sky-400' : 'text-red-500'}`}>
+                  <p
+                    className={`text-xl font-bold ${
+                      totals.remainingCash >= 0 ? 'text-sky-400' : 'text-red-500'
+                    }`}
+                  >
                     {formatMoney(totals.remainingCash)} ₸
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground mb-1">Остаток (Kaspi/Card)</p>
-                  <p className={`text-xl font-bold ${totals.remainingKaspi >= 0 ? 'text-sky-400' : 'text-red-500'}`}>
+                  <p className="text-[10px] text-muted-foreground mb-1">
+                    Остаток (Kaspi/Online/Card)
+                  </p>
+                  <p
+                    className={`text-xl font-bold ${
+                      totals.remainingKaspi >= 0 ? 'text-sky-400' : 'text-red-500'
+                    }`}
+                  >
                     {formatMoney(totals.remainingKaspi)} ₸
                   </p>
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-border/60">
                 <p className="text-[10px] text-muted-foreground mb-1">ЧИСТАЯ ПРИБЫЛЬ</p>
-                <p className={`text-2xl font-bold ${totals.profit >= 0 ? 'text-yellow-400' : 'text-red-500'}`}>
+                <p
+                  className={`text-2xl font-bold ${
+                    totals.profit >= 0 ? 'text-yellow-400' : 'text-red-500'
+                  }`}
+                >
                   {formatMoney(totals.profit)} ₸
                 </p>
               </div>
@@ -1180,7 +1285,9 @@ export default function ReportsPage() {
               <TrendCard
                 title="Рентабельность"
                 current={totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0}
-                previous={totalsPrev.totalIncome > 0 ? (totalsPrev.profit / totalsPrev.totalIncome) * 100 : 0}
+                previous={
+                  totalsPrev.totalIncome > 0 ? (totalsPrev.profit / totalsPrev.totalIncome) * 100 : 0
+                }
                 Icon={Percent}
                 unit="%"
               />
@@ -1200,7 +1307,11 @@ export default function ReportsPage() {
                     className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2"
                   >
                     <div className="text-xs text-muted-foreground">{p.label}</div>
-                    <div className={`text-sm font-bold ${p.profit >= 0 ? 'text-yellow-400' : 'text-red-500'}`}>
+                    <div
+                      className={`text-sm font-bold ${
+                        p.profit >= 0 ? 'text-yellow-400' : 'text-red-500'
+                      }`}
+                    >
                       {formatMoney(p.profit)} ₸
                     </div>
                   </div>
@@ -1219,7 +1330,9 @@ export default function ReportsPage() {
                     className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2"
                   >
                     <div className="text-xs text-muted-foreground">{p.label}</div>
-                    <div className="text-sm font-bold text-red-400">{formatMoney(p.expense)} ₸</div>
+                    <div className="text-sm font-bold text-red-400">
+                      {formatMoney(p.expense)} ₸
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1257,7 +1370,9 @@ export default function ReportsPage() {
 
               <div className="h-80">
                 {expenseByCategoryData.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-muted-foreground">Нет данных</div>
+                  <div className="h-full flex items-center justify-center text-muted-foreground">
+                    Нет данных
+                  </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
@@ -1296,7 +1411,9 @@ export default function ReportsPage() {
 
               <div className="h-80">
                 {incomeByCompanyData.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-muted-foreground">Нет данных</div>
+                  <div className="h-full flex items-center justify-center text-muted-foreground">
+                    Нет данных
+                  </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -1344,7 +1461,10 @@ export default function ReportsPage() {
               {companyFilter !== 'all' && (
                 <div className="mt-3 text-xs text-muted-foreground">
                   Фильтр по компании включён.{' '}
-                  <button className="underline underline-offset-4 hover:opacity-80" onClick={() => setCompanyFilter('all')}>
+                  <button
+                    className="underline underline-offset-4 hover:opacity-80"
+                    onClick={() => setCompanyFilter('all')}
+                  >
                     Сбросить
                   </button>
                 </div>
@@ -1369,19 +1489,14 @@ export default function ReportsPage() {
                   <Tooltip content={<ComposedTooltip />} />
                   <Legend
                     wrapperStyle={{ color: '#fff', fontSize: 12 }}
-                    formatter={(value) => (value === 'income' ? 'Доход' : value === 'expense' ? 'Расход' : 'Прибыль')}
+                    formatter={(value) =>
+                      value === 'income' ? 'Доход' : value === 'expense' ? 'Расход' : 'Прибыль'
+                    }
                   />
 
                   <Bar dataKey="income" name="income" fill="#22c55e" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="expense" name="expense" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                  <Line
-                    type="monotone"
-                    dataKey="profit"
-                    name="profit"
-                    stroke="#eab308"
-                    strokeWidth={3}
-                    dot={{ r: 4 }}
-                  />
+                  <Line type="monotone" dataKey="profit" name="profit" stroke="#eab308" strokeWidth={3} dot={{ r: 4 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
