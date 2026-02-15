@@ -35,32 +35,28 @@ type ExpenseRow = {
   company_id: string
   category: string | null
   cash_amount: number | null
-  kaspi_amount: number | null
+  kaspi_amount: number | null // считаем как онлайн-расход (Kaspi)
 }
 
 type Totals = {
   incomeCash: number
   incomeKaspi: number
   incomeCard: number
-  incomeNonCash: number
+  incomeOnline: number // kaspi + card
   incomeTotal: number
 
   expenseCash: number
-  expenseKaspi: number
+  expenseKaspi: number // online expense (Kaspi)
   expenseTotal: number
 
   profit: number
 
-  // extra (за выбранную неделю)
   extraTotal: number
 
-  // по компаниям (без extra)
-  statsByCompany: Record<string, { cash: number; nonCash: number; total: number }>
+  statsByCompany: Record<string, { cash: number; online: number; total: number }>
 
-  // топ расходов (за неделю)
   expenseCategories: { name: string; value: number }[]
 
-  // прошл. неделя (для сравнения)
   prev: {
     incomeTotal: number
     expenseTotal: number
@@ -76,8 +72,9 @@ type Totals = {
   metrics: {
     expenseRate: number // % расходов от выручки
     cashShare: number // % налички в выручке
+    onlineShare: number // % онлайна (kaspi+card) в выручке
     netCash: number // incomeCash - expenseCash
-    netNonCash: number // incomeNonCash - expenseKaspi
+    netOnline: number // incomeOnline - expenseKaspi
     topExpenseName: string | null
     topExpenseShare: number
   }
@@ -139,11 +136,9 @@ export default function WeeklyReportPage() {
   const moneyFmt = useMemo(() => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }), [])
   const formatKzt = (v: number) => `${moneyFmt.format(Math.round(v))} ₸`
 
-  // today + current week bounds (фиксируем на рендер, не дергаем каждую секунду)
   const todayISO = useMemo(() => getTodayISO(), [])
   const currentWeek = useMemo(() => getWeekBounds(todayISO), [todayISO])
 
-  // выбранная неделя
   const [startDate, setStartDate] = useState(currentWeek.start)
   const [endDate, setEndDate] = useState(currentWeek.end)
 
@@ -151,14 +146,11 @@ export default function WeeklyReportPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // улучшение: включать Extra в общий итог по желанию
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
 
-  // raw data (2 запроса, без 5 штук)
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([])
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([])
 
-  // защита от гонок при быстром листании недель
   const reqIdRef = useRef(0)
 
   const extraCompanyId = useMemo(() => {
@@ -173,13 +165,13 @@ export default function WeeklyReportPage() {
     [companies],
   )
 
-  const isCurrentWeek = useMemo(() => startDate === currentWeek.start, [startDate, currentWeek.start])
+  const isCurrentWeek = useMemo(
+    () => startDate === currentWeek.start && endDate === currentWeek.end,
+    [startDate, endDate, currentWeek.start, currentWeek.end],
+  )
 
-  // запрет будущих недель (чтоб не листали в пустоту)
   const canGoNext = useMemo(() => {
-    // следующая неделя стартует через +7 дней
     const nextStart = addDaysISO(startDate, 7)
-    // разрешаем только если nextStart <= currentWeek.start (т.е. не в будущее)
     return nextStart <= currentWeek.start
   }, [startDate, currentWeek.start])
 
@@ -217,7 +209,7 @@ export default function WeeklyReportPage() {
 
   // =====================
   // LOAD DATA (2 queries total)
-  // Берём диапазон: prevWeekStart .. endDate
+  // range: prevWeekStart .. endDate
   // =====================
   useEffect(() => {
     const load = async () => {
@@ -227,7 +219,7 @@ export default function WeeklyReportPage() {
       setLoading(true)
       setError(null)
 
-      const rangeFrom = addDaysISO(startDate, -7) // прошл. неделя старт
+      const rangeFrom = addDaysISO(startDate, -7)
       const rangeTo = endDate
 
       const incomeQ = supabase
@@ -247,7 +239,6 @@ export default function WeeklyReportPage() {
         expenseQ,
       ])
 
-      // stale response guard
       if (myId !== reqIdRef.current) return
 
       if (incErr || expErr) {
@@ -274,71 +265,63 @@ export default function WeeklyReportPage() {
     const prevStart = addDaysISO(startDate, -7)
     const prevEnd = addDaysISO(endDate, -7)
 
-    // current totals (main)
     let iCash = 0
     let iKaspi = 0
     let iCard = 0
+
     let eCash = 0
     let eKaspi = 0
 
-    // extra
     let extraTotal = 0
 
-    // prev totals (main)
     let pIncome = 0
     let pExpense = 0
 
-    // company stats (без extra)
-    const statsByCompany: Record<string, { cash: number; nonCash: number; total: number }> = {}
-    for (const c of activeCompanies) statsByCompany[c.id] = { cash: 0, nonCash: 0, total: 0 }
+    const statsByCompany: Record<string, { cash: number; online: number; total: number }> = {}
+    for (const c of activeCompanies) statsByCompany[c.id] = { cash: 0, online: 0, total: 0 }
 
-    // categories (текущая неделя)
     const catMap = new Map<string, number>()
 
     const isExtra = (companyId: string) => !!extraCompanyId && companyId === extraCompanyId
     const inCurrentWeek = (iso: string) => iso >= startDate && iso <= endDate
     const inPrevWeek = (iso: string) => iso >= prevStart && iso <= prevEnd
 
-    // incomes
+    // incomes (онлайн = kaspi + card)
     for (const r of incomeRows) {
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
       const card = Number(r.card_amount || 0)
-      const total = cash + kaspi + card
+      const online = kaspi + card
+      const total = cash + online
       if (total <= 0) continue
 
       const extra = isExtra(r.company_id)
 
-      // prev week aggregation (for comparisons)
       if (inPrevWeek(r.date)) {
-        // по умолчанию extra НЕ сравниваем (как было у тебя), но если включили — тогда включаем
         if (!extra || includeExtraInTotals) pIncome += total
         continue
       }
 
-      // current week aggregation
       if (!inCurrentWeek(r.date)) continue
 
       if (extra) {
         extraTotal += total
         if (!includeExtraInTotals) continue
-        // если включили extra — он идёт в общий итог как обычная выручка (но без companyStats)
       }
 
       iCash += cash
       iKaspi += kaspi
       iCard += card
 
-      // company stats только для “активных” компаний (без extra)
       const s = statsByCompany[r.company_id]
       if (s) {
         s.cash += cash
-        s.nonCash += kaspi + card
+        s.online += online
         s.total += total
       }
     }
 
-    // expenses
+    // expenses (онлайн-расход = kaspi_amount)
     for (const r of expenseRows) {
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
@@ -347,27 +330,24 @@ export default function WeeklyReportPage() {
 
       const extra = isExtra(r.company_id)
 
-      // prev week
       if (inPrevWeek(r.date)) {
         if (!extra || includeExtraInTotals) pExpense += total
         continue
       }
 
-      // current week
       if (!inCurrentWeek(r.date)) continue
 
-      // если extra выключен — расходы extra тоже не портят общую картину
       if (extra && !includeExtraInTotals) continue
 
       eCash += cash
       eKaspi += kaspi
 
-      const catName = r.category || 'Без категории'
+      const catName = (r.category || '').trim() || 'Без категории'
       catMap.set(catName, (catMap.get(catName) || 0) + total)
     }
 
-    const incomeNonCash = iKaspi + iCard
-    const incomeTotal = iCash + incomeNonCash
+    const incomeOnline = iKaspi + iCard
+    const incomeTotal = iCash + incomeOnline
     const expenseTotal = eCash + eKaspi
     const profit = incomeTotal - expenseTotal
 
@@ -379,10 +359,14 @@ export default function WeeklyReportPage() {
       .slice(0, 10)
 
     const topExpense = expenseCategories[0] || null
+
     const expenseRate = incomeTotal > 0 ? (expenseTotal / incomeTotal) * 100 : 0
     const cashShare = incomeTotal > 0 ? (iCash / incomeTotal) * 100 : 0
+    const onlineShare = incomeTotal > 0 ? (incomeOnline / incomeTotal) * 100 : 0
+
     const netCash = iCash - eCash
-    const netNonCash = incomeNonCash - eKaspi
+    const netOnline = incomeOnline - eKaspi
+
     const topExpenseShare =
       expenseTotal > 0 && topExpense ? (topExpense.value / expenseTotal) * 100 : 0
 
@@ -390,7 +374,7 @@ export default function WeeklyReportPage() {
       incomeCash: iCash,
       incomeKaspi: iKaspi,
       incomeCard: iCard,
-      incomeNonCash,
+      incomeOnline,
       incomeTotal,
 
       expenseCash: eCash,
@@ -418,8 +402,9 @@ export default function WeeklyReportPage() {
       metrics: {
         expenseRate,
         cashShare,
+        onlineShare,
         netCash,
-        netNonCash,
+        netOnline,
         topExpenseName: topExpense?.name ?? null,
         topExpenseShare,
       },
@@ -460,6 +445,7 @@ export default function WeeklyReportPage() {
                 size="icon"
                 onClick={() => shiftWeek(-1)}
                 className="hover:bg-white/10 w-8 h-8"
+                title="Предыдущая неделя"
               >
                 <ChevronLeft className="w-5 h-5" />
               </Button>
@@ -533,7 +519,8 @@ export default function WeeklyReportPage() {
 
                   {!includeExtraInTotals && totals.extraTotal > 0 && (
                     <div className="text-xs text-muted-foreground">
-                      Extra отдельно: <span className="text-foreground font-semibold">{formatKzt(totals.extraTotal)}</span>
+                      Extra отдельно:{' '}
+                      <span className="text-foreground font-semibold">{formatKzt(totals.extraTotal)}</span>
                     </div>
                   )}
                 </div>
@@ -550,7 +537,13 @@ export default function WeeklyReportPage() {
                   </span>
 
                   <span className="px-2 py-1 rounded-full border border-border/60 text-muted-foreground">
-                    Доля налички: <b className="text-foreground">{totals.metrics.cashShare.toFixed(1)}%</b>
+                    Доля налички:{' '}
+                    <b className="text-foreground">{totals.metrics.cashShare.toFixed(1)}%</b>
+                  </span>
+
+                  <span className="px-2 py-1 rounded-full border border-border/60 text-muted-foreground">
+                    Доля онлайна:{' '}
+                    <b className="text-foreground">{totals.metrics.onlineShare.toFixed(1)}%</b>
                   </span>
 
                   <span className="px-2 py-1 rounded-full border border-border/60 text-muted-foreground">
@@ -561,9 +554,9 @@ export default function WeeklyReportPage() {
                   </span>
 
                   <span className="px-2 py-1 rounded-full border border-border/60 text-muted-foreground">
-                    Сальдо безнал:{' '}
-                    <b className={totals.metrics.netNonCash >= 0 ? 'text-emerald-300' : 'text-red-300'}>
-                      {formatKzt(totals.metrics.netNonCash)}
+                    Сальдо онлайн:{' '}
+                    <b className={totals.metrics.netOnline >= 0 ? 'text-emerald-300' : 'text-red-300'}>
+                      {formatKzt(totals.metrics.netOnline)}
                     </b>
                   </span>
 
@@ -630,9 +623,9 @@ export default function WeeklyReportPage() {
 
                     <div className="flex justify-between text-xs">
                       <span className="flex items-center gap-1 text-muted-foreground">
-                        <CreditCard className="w-3 h-3" /> Безнал (Kaspi + Карта)
+                        <CreditCard className="w-3 h-3" /> Онлайн (Kaspi + Карта)
                       </span>
-                      <span className="font-mono text-foreground">{formatKzt(totals.incomeNonCash)}</span>
+                      <span className="font-mono text-foreground">{formatKzt(totals.incomeOnline)}</span>
                     </div>
 
                     <div className="flex justify-between text-[11px] text-muted-foreground">
@@ -692,13 +685,13 @@ export default function WeeklyReportPage() {
 
                     <div className="flex justify-between text-xs">
                       <span className="flex items-center gap-1 text-muted-foreground">
-                        <CreditCard className="w-3 h-3" /> Kaspi
+                        <CreditCard className="w-3 h-3" /> Онлайн (Kaspi)
                       </span>
                       <span className="font-mono text-foreground">{formatKzt(totals.expenseKaspi)}</span>
                     </div>
 
                     <div className="text-[11px] text-muted-foreground">
-                      * Если хочешь “расходы по карте” — добавим `card_amount` в expenses.
+                      * Если хочешь учитывать «расходы по карте» — добавим <code>card_amount</code> в таблицу <code>expenses</code>.
                     </div>
                   </div>
                 </Card>
@@ -707,7 +700,9 @@ export default function WeeklyReportPage() {
                 <Card className="p-5 border border-accent/50 bg-accent/5 neon-glow flex flex-col justify-between">
                   <div>
                     <p className="text-xs text-accent/80 uppercase tracking-wider font-bold">Чистая прибыль</p>
-                    <h2 className="text-4xl font-bold text-yellow-400 mt-2">{formatKzt(totals.profit)}</h2>
+                    <h2 className="text-4xl font-bold text-yellow-400 mt-2">
+                      {formatKzt(totals.profit)}
+                    </h2>
 
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-3">
                       <span>Δ к прошлой неделе</span>
@@ -721,7 +716,9 @@ export default function WeeklyReportPage() {
                         <span className="text-xs text-muted-foreground">
                           F16 Extra {includeExtraInTotals ? '(включено)' : '(не включено)'}
                         </span>
-                        <span className="text-sm font-bold text-purple-400">{formatKzt(totals.extraTotal)}</span>
+                        <span className="text-sm font-bold text-purple-400">
+                          {formatKzt(totals.extraTotal)}
+                        </span>
                       </div>
                     </div>
                   )}
@@ -740,7 +737,7 @@ export default function WeeklyReportPage() {
                         <tr className="border-b border-white/10 text-xs text-muted-foreground uppercase">
                           <th className="px-4 py-3 text-left">Точка</th>
                           <th className="px-4 py-3 text-right text-green-500">Нал</th>
-                          <th className="px-4 py-3 text-right text-blue-500">Безнал</th>
+                          <th className="px-4 py-3 text-right text-blue-500">Онлайн</th>
                           <th className="px-4 py-3 text-right text-foreground">Всего</th>
                           <th className="px-4 py-3 text-right text-muted-foreground">Доля</th>
                         </tr>
@@ -748,7 +745,7 @@ export default function WeeklyReportPage() {
 
                       <tbody>
                         {activeCompanies.map((c) => {
-                          const s = totals.statsByCompany[c.id] || { cash: 0, nonCash: 0, total: 0 }
+                          const s = totals.statsByCompany[c.id] || { cash: 0, online: 0, total: 0 }
                           const share = totals.incomeTotal > 0 ? (s.total / totals.incomeTotal) * 100 : 0
 
                           return (
@@ -758,7 +755,7 @@ export default function WeeklyReportPage() {
                             >
                               <td className="px-4 py-3 font-medium">{c.name}</td>
                               <td className="px-4 py-3 text-right opacity-80">{formatKzt(s.cash)}</td>
-                              <td className="px-4 py-3 text-right opacity-80">{formatKzt(s.nonCash)}</td>
+                              <td className="px-4 py-3 text-right opacity-80">{formatKzt(s.online)}</td>
                               <td className="px-4 py-3 text-right font-bold">{formatKzt(s.total)}</td>
                               <td className="px-4 py-3 text-right text-muted-foreground">
                                 {share.toFixed(1)}%
