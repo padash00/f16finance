@@ -16,6 +16,7 @@ import {
   Building2,
   Save,
   UserCircle2,
+  Smartphone,
 } from 'lucide-react'
 
 import { Sidebar } from '@/components/sidebar'
@@ -67,10 +68,11 @@ export default function AddIncomePage() {
 
   // Обычные компании
   const [cash, setCash] = useState('')
-  const [kaspi, setKaspi] = useState('')
+  const [kaspi, setKaspi] = useState('') // POS/переводы
+  const [online, setOnline] = useState('') // ✅ Только Arena
   const [card, setCard] = useState('')
 
-  // Extra: PS5 и VR отдельно по НАЛ и KASPI
+  // Extra: PS5 и VR отдельно по НАЛ / KASPI (Online не нужно)
   const [ps5Cash, setPs5Cash] = useState('')
   const [ps5Kaspi, setPs5Kaspi] = useState('')
   const [vrCash, setVrCash] = useState('')
@@ -88,18 +90,11 @@ export default function AddIncomePage() {
 
       const [compRes, opRes] = await Promise.all([
         supabase.from('companies').select('id, name, code').order('name'),
-        supabase
-          .from('operators')
-          .select('id, name, short_name, is_active')
-          .eq('is_active', true)
-          .order('name'),
+        supabase.from('operators').select('id, name, short_name, is_active').eq('is_active', true).order('name'),
       ])
 
       if (compRes.error || opRes.error) {
-        console.error('Income add load error', {
-          compErr: compRes.error,
-          opErr: opRes.error,
-        })
+        console.error('Income add load error', { compErr: compRes.error, opErr: opRes.error })
         setError('Не удалось загрузить компании/операторов')
         setCompanies(compRes.data || [])
         setOperators(opRes.data || [])
@@ -115,14 +110,12 @@ export default function AddIncomePage() {
     load()
   }, [])
 
-  const selectedCompany = useMemo(
-    () => companies.find((c) => c.id === companyId) || null,
-    [companies, companyId],
-  )
+  const selectedCompany = useMemo(() => companies.find((c) => c.id === companyId) || null, [companies, companyId])
 
   const isExtra = selectedCompany?.code === 'extra'
   const isArena = selectedCompany?.code === 'arena'
   const isRamen = selectedCompany?.code === 'ramen'
+  const showOnline = isArena // ✅ только арена
 
   const getZone = useCallback((): ZoneType => {
     if (isArena) return 'pc'
@@ -138,6 +131,7 @@ export default function AddIncomePage() {
     setCash('')
     setKaspi('')
     setCard('')
+    setOnline('') // ✅ сброс
 
     setPs5Cash('')
     setPs5Kaspi('')
@@ -161,11 +155,12 @@ export default function AddIncomePage() {
 
     const c = parseAmount(cash)
     const k = parseAmount(kaspi)
+    const o = showOnline ? parseAmount(online) : 0 // ✅ онлайн учитываем только в Arena
     const cd = parseAmount(card)
-    if (c <= 0 && k <= 0 && cd <= 0) return { ok: false, msg: 'Введите сумму дохода' }
+    if (c <= 0 && k <= 0 && o <= 0 && cd <= 0) return { ok: false, msg: 'Введите сумму дохода' }
 
     return { ok: true, msg: '' }
-  }, [companyId, operatorId, date, operators.length, isExtra, ps5Cash, ps5Kaspi, vrCash, vrKaspi, cash, kaspi, card])
+  }, [companyId, operatorId, date, operators.length, isExtra, ps5Cash, ps5Kaspi, vrCash, vrKaspi, cash, kaspi, online, card, showOnline])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -195,6 +190,7 @@ export default function AddIncomePage() {
             zone: 'ps5',
             cash_amount: pCash,
             kaspi_amount: pKaspi,
+            online_amount: 0, // ✅ всегда 0
             card_amount: 0,
             comment: baseComment ? `${baseComment} • PS5` : 'PS5',
             is_virtual: true,
@@ -210,6 +206,7 @@ export default function AddIncomePage() {
             zone: 'vr',
             cash_amount: vCash,
             kaspi_amount: vKaspi,
+            online_amount: 0, // ✅ всегда 0
             card_amount: 0,
             comment: baseComment ? `${baseComment} • VR` : 'VR',
             is_virtual: true,
@@ -228,6 +225,7 @@ export default function AddIncomePage() {
             zone: getZone(),
             cash_amount: parseAmount(cash),
             kaspi_amount: parseAmount(kaspi),
+            online_amount: showOnline ? parseAmount(online) : 0, // ✅ только Arena
             card_amount: parseAmount(card),
             comment: comment.trim() || null,
             is_virtual: false,
@@ -300,9 +298,7 @@ export default function AddIncomePage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* 1. Настройки смены */}
             <Card className="p-5 border-border bg-card neon-glow space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                Настройки смены
-              </h3>
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Настройки смены</h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="relative">
@@ -325,9 +321,7 @@ export default function AddIncomePage() {
                       type="button"
                       onClick={() => setShift('day')}
                       className={`flex items-center justify-center gap-2 py-1.5 rounded-md text-sm transition-all ${
-                        shift === 'day'
-                          ? 'bg-yellow-500/20 text-yellow-400 shadow-sm'
-                          : 'text-muted-foreground hover:text-white'
+                        shift === 'day' ? 'bg-yellow-500/20 text-yellow-400 shadow-sm' : 'text-muted-foreground hover:text-white'
                       }`}
                     >
                       <Sun className="w-4 h-4" /> День
@@ -336,9 +330,7 @@ export default function AddIncomePage() {
                       type="button"
                       onClick={() => setShift('night')}
                       className={`flex items-center justify-center gap-2 py-1.5 rounded-md text-sm transition-all ${
-                        shift === 'night'
-                          ? 'bg-blue-500/20 text-blue-400 shadow-sm'
-                          : 'text-muted-foreground hover:text-white'
+                        shift === 'night' ? 'bg-blue-500/20 text-blue-400 shadow-sm' : 'text-muted-foreground hover:text-white'
                       }`}
                     >
                       <Moon className="w-4 h-4" /> Ночь
@@ -430,7 +422,7 @@ export default function AddIncomePage() {
 
                       <div>
                         <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                          <CreditCard className="w-4 h-4 text-red-500" /> Kaspi QR
+                          <CreditCard className="w-4 h-4 text-red-500" /> Kaspi QR / POS
                         </label>
                         <input
                           inputMode="numeric"
@@ -470,7 +462,7 @@ export default function AddIncomePage() {
 
                       <div>
                         <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                          <CreditCard className="w-4 h-4 text-red-500" /> Kaspi QR
+                          <CreditCard className="w-4 h-4 text-red-500" /> Kaspi QR / POS
                         </label>
                         <input
                           inputMode="numeric"
@@ -486,7 +478,7 @@ export default function AddIncomePage() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className={`grid grid-cols-1 sm:grid-cols-2 gap-6`}>
                   <div>
                     <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
                       <Wallet className="w-4 h-4 text-green-500" /> Наличные (Cash)
@@ -504,7 +496,7 @@ export default function AddIncomePage() {
 
                   <div>
                     <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-red-500" /> Kaspi QR
+                      <CreditCard className="w-4 h-4 text-red-500" /> Kaspi POS/переводы
                     </label>
                     <input
                       inputMode="numeric"
@@ -517,10 +509,25 @@ export default function AddIncomePage() {
                     />
                   </div>
 
+                  {showOnline && (
+                    <div className="sm:col-span-2">
+                      <label className="text-xs text-foreground mb-1.5 flex items-center gap-2">
+                        <Smartphone className="w-4 h-4 text-cyan-500" /> Kaspi Online (в Senet отдельно)
+                      </label>
+                      <input
+                        inputMode="numeric"
+                        type="number"
+                        placeholder="0"
+                        min="0"
+                        value={online}
+                        onChange={(e) => setOnline(e.target.value)}
+                        className="w-full text-lg bg-input border border-border rounded-lg py-3 px-4 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+                      />
+                    </div>
+                  )}
+
                   <div className="sm:col-span-2">
-                    <label className="text-xs text-muted-foreground mb-1.5 block">
-                      Карта (если используете) — можно оставить 0
-                    </label>
+                    <label className="text-xs text-muted-foreground mb-1.5 block">Карта (если используете) — можно оставить 0</label>
                     <input
                       inputMode="numeric"
                       type="number"
