@@ -1,10 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ElementType } from 'react'
+
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
+
 import {
   Filter,
   TrendingUp,
@@ -13,7 +16,7 @@ import {
   PieChart as PieIcon,
   CalendarDays,
 } from 'lucide-react'
-import type { ElementType } from 'react'
+
 import {
   ResponsiveContainer,
   CartesianGrid,
@@ -102,7 +105,15 @@ type TimeAggregation = {
 // =====================
 // CONSTS
 // =====================
-const PIE_COLORS = ['#22c55e', '#3b82f6', '#eab308', '#a855f7', '#ef4444', '#06b6d4', '#f97316']
+const PIE_COLORS = [
+  '#22c55e',
+  '#3b82f6',
+  '#eab308',
+  '#a855f7',
+  '#ef4444',
+  '#06b6d4',
+  '#f97316',
+]
 
 const groupLabelMap: Record<GroupMode, string> = {
   day: 'по дням',
@@ -203,6 +214,7 @@ export default function ReportsPage() {
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [companiesLoaded, setCompaniesLoaded] = useState(false) // ✅ ADDED: чтобы не висеть на loading
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -214,10 +226,7 @@ export default function ReportsPage() {
   const [groupMode, setGroupMode] = useState<GroupMode>('day')
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
 
-  // “Показать дубли” (чтобы не просто пугать цифрой)
   const [showDuplicates, setShowDuplicates] = useState(false)
-
-  // UX-фишка: выбранная категория (для подсветки/сводки), totals НЕ ломаем
   const [focusCategory, setFocusCategory] = useState<string | null>(null)
 
   // защита от гонок запросов
@@ -260,7 +269,6 @@ export default function ReportsPage() {
   // аккуратная защита от dateFrom > dateTo
   useEffect(() => {
     if (dateFrom <= dateTo) return
-    // swap
     setDateFrom(dateTo)
     setDateTo(dateFrom)
   }, [dateFrom, dateTo])
@@ -268,17 +276,27 @@ export default function ReportsPage() {
   // 1) load companies once
   useEffect(() => {
     const loadCompanies = async () => {
+      setError(null)
+
       const { data, error } = await supabase
         .from('companies')
         .select('id,name,code')
         .order('name')
+
       if (error) {
         console.error('Companies load error', error)
         setError('Не удалось загрузить список компаний')
+        setCompanies([])
+        setCompaniesLoaded(true) // ✅ ADDED
+        setLoading(false) // ✅ ADDED: иначе можно зависнуть
         return
       }
+
       setCompanies((data || []) as Company[])
+      setCompaniesLoaded(true) // ✅ ADDED
+      // loading не трогаем: дальше его управляет loadRange
     }
+
     loadCompanies()
   }, [])
 
@@ -367,7 +385,15 @@ export default function ReportsPage() {
 
   // 2) load incomes/expenses for current + previous in one request range
   useEffect(() => {
-    if (!companies.length) return
+    if (!companiesLoaded) return // ✅ ADDED: ждём хотя бы попытку загрузки компаний
+
+    // если компаний нет — показываем страницу без бесконечной загрузки
+    if (companies.length === 0) {
+      setIncomes([])
+      setExpenses([])
+      setLoading(false)
+      return
+    }
 
     const loadRange = async () => {
       const myReqId = ++reqIdRef.current
@@ -407,7 +433,6 @@ export default function ReportsPage() {
         expenseQ,
       ])
 
-      // stale response guard
       if (myReqId !== reqIdRef.current) return
 
       if (incErr || expErr) {
@@ -423,7 +448,15 @@ export default function ReportsPage() {
     }
 
     loadRange()
-  }, [companies, dateFrom, dateTo, companyFilter, includeExtraInTotals, extraCompanyId])
+  }, [
+    companiesLoaded,
+    companies,
+    dateFrom,
+    dateTo,
+    companyFilter,
+    includeExtraInTotals,
+    extraCompanyId,
+  ])
 
   // =====================
   // PROCESSING
@@ -448,11 +481,7 @@ export default function ReportsPage() {
     const totalsPrev: FinancialTotals = { ...baseTotals }
 
     const expenseByCategoryMap = new Map<string, number>()
-    const incomeByCompanyMap = new Map<
-      string,
-      { companyId: string; name: string; value: number }
-    >()
-
+    const incomeByCompanyMap = new Map<string, { companyId: string; name: string; value: number }>()
     const chartDataMap = new Map<string, TimeAggregation>()
 
     // дубль-детектор + примеры
@@ -512,7 +541,8 @@ export default function ReportsPage() {
       if (range === 'current') {
         const { key, label, sortISO } = getKey(r.date)
         const bucket =
-          chartDataMap.get(key) || ({
+          chartDataMap.get(key) ||
+          ({
             label,
             sortISO,
             income: 0,
@@ -571,7 +601,8 @@ export default function ReportsPage() {
 
         const { key, label, sortISO } = getKey(r.date)
         const bucket =
-          chartDataMap.get(key) || ({
+          chartDataMap.get(key) ||
+          ({
             label,
             sortISO,
             income: 0,
@@ -646,9 +677,7 @@ export default function ReportsPage() {
   const totalsPrev = processed.totalsPrev
 
   const chartData = useMemo(() => {
-    return Array.from(processed.chartDataMap.values()).sort((a, b) =>
-      a.sortISO.localeCompare(b.sortISO),
-    )
+    return Array.from(processed.chartDataMap.values()).sort((a, b) => a.sortISO.localeCompare(b.sortISO))
   }, [processed.chartDataMap])
 
   const expenseByCategoryData = useMemo(() => {
@@ -669,7 +698,6 @@ export default function ReportsPage() {
       .sort((a, b) => b.value - a.value)
   }, [processed.incomeByCompanyMap])
 
-  // ТОП периодов по прибыли/расходам (управленческий кайф без доп. БД)
   const topProfitPeriods = useMemo(() => {
     const arr = [...chartData]
     arr.sort((a, b) => b.profit - a.profit)
@@ -694,7 +722,6 @@ export default function ReportsPage() {
     const dayOfMonth = dTo.getDate()
     const remaining = Math.max(0, dim - dayOfMonth)
 
-    // считаем “дневной темп” по текущему периоду (dateFrom..dateTo)
     const daysRange =
       Math.floor((fromISO(dateTo).getTime() - fromISO(dateFrom).getTime()) / 86400000) + 1
 
@@ -720,7 +747,6 @@ export default function ReportsPage() {
     setShowDuplicates(false)
   }
 
-  // Tooltip styles
   const tooltipStyles = {
     contentStyle: {
       backgroundColor: '#09090b',
@@ -732,18 +758,17 @@ export default function ReportsPage() {
     itemStyle: { color: '#ffffff' },
   } as const
 
-  // Custom tooltip for composed chart (показывает разбивку)
   const ComposedTooltip = ({
     active,
     payload,
     label,
   }: {
     active?: boolean
-    payload?: any[]
+    payload?: Array<{ payload?: TimeAggregation }>
     label?: string
   }) => {
     if (!active || !payload || !payload.length) return null
-    const p = payload[0]?.payload as TimeAggregation | undefined
+    const p = payload[0]?.payload
     if (!p) return null
 
     return (
@@ -808,8 +833,7 @@ export default function ReportsPage() {
       change === '—' ? 'text-muted-foreground' : positiveTrend ? 'text-green-400' : 'text-red-400'
     const TrendIcon = change === '—' ? Icon : positiveTrend ? TrendingUp : TrendingDown
 
-    const formatValue = (value: number) =>
-      moneyFmt.format(value) + (unit ? ` ${unit}` : '')
+    const formatValue = (value: number) => moneyFmt.format(value) + (unit ? ` ${unit}` : '')
 
     return (
       <Card className="p-4 border border-border bg-card neon-glow flex flex-col justify-between">
@@ -850,6 +874,18 @@ export default function ReportsPage() {
       <div className="flex min-h-screen bg-background">
         <Sidebar />
         <main className="flex-1 flex items-center justify-center text-red-400">{error}</main>
+      </div>
+    )
+  }
+
+  // ✅ ADDED: если компаний нет (пустая таблица / не созданы компании)
+  if (companiesLoaded && companies.length === 0) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <Sidebar />
+        <main className="flex-1 flex items-center justify-center text-muted-foreground">
+          Нет компаний в таблице <b className="mx-1 text-foreground">companies</b>. Создай хотя бы одну — и отчёты оживут.
+        </main>
       </div>
     )
   }
@@ -939,27 +975,41 @@ export default function ReportsPage() {
                     />
                   </div>
 
+                  {/* ✅ ADDED: расширил пресеты, раз они у тебя уже в типах */}
                   <div className="flex flex-wrap gap-1 bg-input/30 rounded-md border border-border/30 p-0.5">
-                    {(['today', 'yesterday', 'last7', 'last30', 'currentMonth', 'prevMonth'] as DatePreset[]).map(
-                      (p) => (
-                        <button
-                          key={p}
-                          onClick={() => handlePresetChange(p)}
-                          className={`px-2 py-1 text-[10px] rounded transition-colors ${
-                            datePreset === p
-                              ? 'bg-accent text-accent-foreground'
-                              : 'hover:bg-white/10 text-muted-foreground'
-                          }`}
-                        >
-                          {p === 'today' && 'Сегодня'}
-                          {p === 'yesterday' && 'Вчера'}
-                          {p === 'last7' && '7 дн.'}
-                          {p === 'last30' && '30 дн.'}
-                          {p === 'currentMonth' && 'Тек. месяц'}
-                          {p === 'prevMonth' && 'Прош. месяц'}
-                        </button>
-                      ),
-                    )}
+                    {(
+                      [
+                        'today',
+                        'yesterday',
+                        'last7',
+                        'prevWeek',
+                        'last30',
+                        'currentMonth',
+                        'prevMonth',
+                        'currentYear',
+                        'prevYear',
+                      ] as DatePreset[]
+                    ).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => handlePresetChange(p)}
+                        className={`px-2 py-1 text-[10px] rounded transition-colors ${
+                          datePreset === p
+                            ? 'bg-accent text-accent-foreground'
+                            : 'hover:bg-white/10 text-muted-foreground'
+                        }`}
+                      >
+                        {p === 'today' && 'Сегодня'}
+                        {p === 'yesterday' && 'Вчера'}
+                        {p === 'last7' && '7 дн.'}
+                        {p === 'prevWeek' && 'Прош. нед.'}
+                        {p === 'last30' && '30 дн.'}
+                        {p === 'currentMonth' && 'Тек. месяц'}
+                        {p === 'prevMonth' && 'Прош. месяц'}
+                        {p === 'currentYear' && 'Тек. год'}
+                        {p === 'prevYear' && 'Прош. год'}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1216,11 +1266,7 @@ export default function ReportsPage() {
                       margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" opacity={0.2} stroke="#555" />
-                      <XAxis
-                        type="number"
-                        stroke="#ccc"
-                        tickFormatter={(v) => formatCompact(Number(v))}
-                      />
+                      <XAxis type="number" stroke="#ccc" tickFormatter={(v) => formatCompact(Number(v))} />
                       <YAxis type="category" dataKey="name" stroke="#ccc" width={140} />
                       <Tooltip
                         {...tooltipStyles}
@@ -1298,10 +1344,7 @@ export default function ReportsPage() {
               {companyFilter !== 'all' && (
                 <div className="mt-3 text-xs text-muted-foreground">
                   Фильтр по компании включён.{' '}
-                  <button
-                    className="underline underline-offset-4 hover:opacity-80"
-                    onClick={() => setCompanyFilter('all')}
-                  >
+                  <button className="underline underline-offset-4 hover:opacity-80" onClick={() => setCompanyFilter('all')}>
                     Сбросить
                   </button>
                 </div>
@@ -1326,14 +1369,19 @@ export default function ReportsPage() {
                   <Tooltip content={<ComposedTooltip />} />
                   <Legend
                     wrapperStyle={{ color: '#fff', fontSize: 12 }}
-                    formatter={(value) =>
-                      value === 'income' ? 'Доход' : value === 'expense' ? 'Расход' : 'Прибыль'
-                    }
+                    formatter={(value) => (value === 'income' ? 'Доход' : value === 'expense' ? 'Расход' : 'Прибыль')}
                   />
 
                   <Bar dataKey="income" name="income" fill="#22c55e" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="expense" name="expense" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                  <Line type="monotone" dataKey="profit" name="profit" stroke="#eab308" strokeWidth={3} dot={{ r: 4 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="profit"
+                    name="profit"
+                    stroke="#eab308"
+                    strokeWidth={3}
+                    dot={{ r: 4 }}
+                  />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
