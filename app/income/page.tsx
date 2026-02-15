@@ -36,6 +36,7 @@ type IncomeRow = {
   zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
+  online_amount: number | null // ✅ NEW
   card_amount: number | null
   comment: string | null
 }
@@ -54,7 +55,7 @@ type Operator = {
 }
 
 type ShiftFilter = 'all' | Shift
-type PayFilter = 'all' | 'cash' | 'kaspi' | 'card'
+type PayFilter = 'all' | 'cash' | 'kaspi' | 'online' | 'card' // ✅ NEW
 type DateRangePreset = 'today' | 'week' | 'month' | 'all'
 type OperatorFilter = 'all' | 'none' | string
 
@@ -178,10 +179,7 @@ export default function IncomePage() {
     return extra?.id ?? null
   }, [companies])
 
-  const isExtraRow = useCallback(
-    (r: IncomeRow) => !!extraCompanyId && r.company_id === extraCompanyId,
-    [extraCompanyId],
-  )
+  const isExtraRow = useCallback((r: IncomeRow) => !!extraCompanyId && r.company_id === extraCompanyId, [extraCompanyId])
 
   // 2) Загрузка доходов
   useEffect(() => {
@@ -194,7 +192,9 @@ export default function IncomePage() {
 
       let query = supabase
         .from('incomes')
-        .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, card_amount, comment')
+        .select(
+          'id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment',
+        )
         .order('date', { ascending: false })
 
       if (dateFrom) query = query.gte('date', dateFrom)
@@ -207,6 +207,7 @@ export default function IncomePage() {
 
       if (payFilter === 'cash') query = query.gt('cash_amount', 0)
       if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
+      if (payFilter === 'online') query = query.gt('online_amount', 0) // ✅ NEW
       if (payFilter === 'card') query = query.gt('card_amount', 0)
 
       query = query.limit(LIMIT)
@@ -271,7 +272,6 @@ export default function IncomePage() {
         continue
       }
 
-      // Группируем по дате+смене+оператору (обычно Extra вводится так)
       const key = `${r.date}|${r.shift}|${r.operator_id ?? 'none'}|${r.company_id}`
 
       const cleanComment = stripExtraSuffix(r.comment ?? '')
@@ -279,19 +279,21 @@ export default function IncomePage() {
 
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
+      const online = Number(r.online_amount || 0) // ✅ NEW
       const card = Number(r.card_amount || 0)
 
       const existing = aggs.get(key)
       if (!existing) {
         const newRow: IncomeRow = {
-          id: `extra-${key}`, // виртуальный id для UI
+          id: `extra-${key}`,
           date: r.date,
           company_id: r.company_id,
           operator_id: r.operator_id,
           shift: r.shift,
-          zone: 'Extra', // <- одна строка "Extra"
+          zone: 'Extra',
           cash_amount: cash,
           kaspi_amount: kaspi,
+          online_amount: online, // ✅ NEW
           card_amount: card,
           comment: cmt || null,
         }
@@ -304,6 +306,7 @@ export default function IncomePage() {
       } else {
         existing.row.cash_amount = Number(existing.row.cash_amount || 0) + cash
         existing.row.kaspi_amount = Number(existing.row.kaspi_amount || 0) + kaspi
+        existing.row.online_amount = Number(existing.row.online_amount || 0) + online // ✅ NEW
         existing.row.card_amount = Number(existing.row.card_amount || 0) + card
 
         if (cmt) existing.comments.add(cmt)
@@ -316,10 +319,11 @@ export default function IncomePage() {
     return out
   }, [filteredRows, extraCompanyId])
 
-  // Итоги + аналитика (считаем по displayRows, чтобы “Записей” и “средний чек” совпадали с таблицей)
+  // Итоги + аналитика
   const analytics = useMemo(() => {
     let cash = 0
     let kaspi = 0
+    let online = 0
     let card = 0
     let dayTotal = 0
     let nightTotal = 0
@@ -332,11 +336,13 @@ export default function IncomePage() {
 
       const rowCash = Number(r.cash_amount || 0)
       const rowKaspi = Number(r.kaspi_amount || 0)
+      const rowOnline = Number(r.online_amount || 0) // ✅ NEW
       const rowCard = Number(r.card_amount || 0)
-      const rowTotal = rowCash + rowKaspi + rowCard
+      const rowTotal = rowCash + rowKaspi + rowOnline + rowCard
 
       cash += rowCash
       kaspi += rowKaspi
+      online += rowOnline
       card += rowCard
 
       if (r.shift === 'day') dayTotal += rowTotal
@@ -349,7 +355,7 @@ export default function IncomePage() {
       byZone[z] = (byZone[z] || 0) + rowTotal
     }
 
-    const total = cash + kaspi + card
+    const total = cash + kaspi + online + card
     const avg = displayRows.length ? Math.round(total / displayRows.length) : 0
 
     const topOperator = Object.entries(byOperator).sort((a, b) => b[1] - a[1])[0] || ['—', 0]
@@ -358,6 +364,7 @@ export default function IncomePage() {
     return {
       cash,
       kaspi,
+      online,
       card,
       total,
       avg,
@@ -420,7 +427,19 @@ export default function IncomePage() {
   const downloadCSV = () => {
     const SEP = ';'
 
-    const headers = ['Дата', 'Компания', 'Оператор', 'Смена', 'Зона', 'Cash', 'Kaspi', 'Card', 'Итого', 'Комментарий']
+    const headers = [
+      'Дата',
+      'Компания',
+      'Оператор',
+      'Смена',
+      'Зона',
+      'Cash',
+      'Kaspi POS',
+      'Kaspi Online',
+      'Card',
+      'Итого',
+      'Комментарий',
+    ]
 
     const exportRows = displayRows.filter((r) => {
       if (companyFilter === 'all' && !includeExtraInTotals && isExtraRow(r)) return false
@@ -430,7 +449,7 @@ export default function IncomePage() {
     const csvContent = [
       headers.join(SEP),
       ...exportRows.map((r) => {
-        const total = (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.card_amount || 0)
+        const total = (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.online_amount || 0) + (r.card_amount || 0)
         return [
           escapeCSV(r.date, SEP),
           escapeCSV(companyName(r.company_id), SEP),
@@ -439,6 +458,7 @@ export default function IncomePage() {
           escapeCSV(r.zone ?? '', SEP),
           escapeCSV(r.cash_amount ?? 0, SEP),
           escapeCSV(r.kaspi_amount ?? 0, SEP),
+          escapeCSV(r.online_amount ?? 0, SEP),
           escapeCSV(r.card_amount ?? 0, SEP),
           escapeCSV(total, SEP),
           escapeCSV(r.comment ?? '', SEP),
@@ -498,7 +518,7 @@ export default function IncomePage() {
 
           {/* KPI */}
           <Card className="p-4 border-border bg-card/70 neon-glow space-y-3">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <Banknote className="w-4 h-4" />
@@ -510,9 +530,17 @@ export default function IncomePage() {
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <Smartphone className="w-4 h-4" />
-                  <span className="text-xs uppercase tracking-wide">Kaspi</span>
+                  <span className="text-xs uppercase tracking-wide">Kaspi POS</span>
                 </div>
                 <div className="text-xl font-bold text-foreground">{formatMoney(analytics.kaspi)} ₸</div>
+              </Card>
+
+              <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <Smartphone className="w-4 h-4" />
+                  <span className="text-xs uppercase tracking-wide">Kaspi Online</span>
+                </div>
+                <div className="text-xl font-bold text-foreground">{formatMoney(analytics.online)} ₸</div>
               </Card>
 
               <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
@@ -703,7 +731,8 @@ export default function IncomePage() {
                   >
                     <option value="all">Любая</option>
                     <option value="cash">Нал</option>
-                    <option value="kaspi">Kaspi</option>
+                    <option value="kaspi">Kaspi POS</option>
+                    <option value="online">Kaspi Online</option>
                     <option value="card">Карта</option>
                   </select>
                 </div>
@@ -752,7 +781,8 @@ export default function IncomePage() {
                     <th className="px-4 py-3 text-center">Смена</th>
                     <th className="px-4 py-3 text-left">Зона</th>
                     <th className="px-4 py-3 text-right text-green-500">Нал</th>
-                    <th className="px-4 py-3 text-right text-blue-500">Kaspi</th>
+                    <th className="px-4 py-3 text-right text-blue-500">Kaspi POS</th>
+                    <th className="px-4 py-3 text-right text-cyan-400">Online</th>
                     <th className="px-4 py-3 text-right text-purple-500">Карта</th>
                     <th className="px-4 py-3 text-right text-foreground">Всего</th>
                     <th className="px-4 py-3 text-left">Комментарий</th>
@@ -762,7 +792,7 @@ export default function IncomePage() {
                 <tbody className="text-sm">
                   {loading && (
                     <tr>
-                      <td colSpan={10} className="px-6 py-10 text-center text-muted-foreground animate-pulse">
+                      <td colSpan={11} className="px-6 py-10 text-center text-muted-foreground animate-pulse">
                         Загрузка данных...
                       </td>
                     </tr>
@@ -770,7 +800,8 @@ export default function IncomePage() {
 
                   {!loading &&
                     displayRows.map((row, idx) => {
-                      const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.card_amount || 0)
+                      const total =
+                        (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.online_amount || 0) + (row.card_amount || 0)
                       const company = companyMap.get(row.company_id)
                       const isExtra = isExtraCompany(company)
 
@@ -781,9 +812,7 @@ export default function IncomePage() {
                             idx % 2 === 0 ? 'bg-card/40' : ''
                           } ${isExtra ? 'bg-yellow-500/5 border-l-2 border-l-yellow-500/50' : ''}`}
                         >
-                          <td className="px-4 py-3 whitespace-nowrap text-muted-foreground font-mono text-xs">
-                            {formatDate(row.date)}
-                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-muted-foreground font-mono text-xs">{formatDate(row.date)}</td>
 
                           <td className="px-4 py-3 font-medium whitespace-nowrap">
                             {company?.name ?? '—'}
@@ -811,44 +840,36 @@ export default function IncomePage() {
 
                           <td className="px-4 py-3 text-xs text-muted-foreground">{row.zone || '—'}</td>
 
-                          <td
-                            className={`px-4 py-3 text-right font-mono ${
-                              row.cash_amount ? 'text-foreground' : 'text-muted-foreground/20'
-                            }`}
-                          >
+                          <td className={`px-4 py-3 text-right font-mono ${row.cash_amount ? 'text-foreground' : 'text-muted-foreground/20'}`}>
                             {row.cash_amount ? formatMoney(row.cash_amount) : '—'}
                           </td>
 
-                          <td
-                            className={`px-4 py-3 text-right font-mono ${
-                              row.kaspi_amount ? 'text-foreground' : 'text-muted-foreground/20'
-                            }`}
-                          >
+                          <td className={`px-4 py-3 text-right font-mono ${row.kaspi_amount ? 'text-foreground' : 'text-muted-foreground/20'}`}>
                             {row.kaspi_amount ? formatMoney(row.kaspi_amount) : '—'}
                           </td>
 
                           <td
                             className={`px-4 py-3 text-right font-mono ${
-                              row.card_amount ? 'text-foreground' : 'text-muted-foreground/20'
+                              row.online_amount ? 'text-foreground' : 'text-muted-foreground/20'
                             }`}
                           >
+                            {row.online_amount ? formatMoney(row.online_amount) : '—'}
+                          </td>
+
+                          <td className={`px-4 py-3 text-right font-mono ${row.card_amount ? 'text-foreground' : 'text-muted-foreground/20'}`}>
                             {row.card_amount ? formatMoney(row.card_amount) : '—'}
                           </td>
 
-                          <td className="px-4 py-3 text-right font-bold text-accent font-mono bg-accent/5">
-                            {formatMoney(total)}
-                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-accent font-mono bg-accent/5">{formatMoney(total)}</td>
 
-                          <td className="px-4 py-3 text-xs text-muted-foreground max-w-[220px] truncate">
-                            {row.comment || '—'}
-                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground max-w-[220px] truncate">{row.comment || '—'}</td>
                         </tr>
                       )
                     })}
 
                   {!loading && !error && displayRows.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="px-6 py-12 text-center text-muted-foreground">
+                      <td colSpan={11} className="px-6 py-12 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
                           <Filter className="w-8 h-8 opacity-20" />
                           <p>Записи не найдены. Попробуйте изменить фильтры.</p>
