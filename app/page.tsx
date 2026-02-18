@@ -1,1043 +1,871 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
-import { Sidebar } from '@/components/sidebar'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Sidebar } from '@/components/sidebar'
+import {
+  Banknote,
+  CreditCard,
+  Smartphone,
+  TrendingUp,
+  CalendarDays,
+  UserCircle2,
+  Trophy,
+  MapPin,
+  Sun,
+  Moon,
+  Brain,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import {
-  TrendingUp,
-  TrendingDown,
-  Zap,
-  Clock,
-  BarChart2,
-  Brain,
-  AlertTriangle,
-  CheckCircle2,
-  Activity,
-  CalendarDays,
-  DollarSign,
-} from 'lucide-react'
-import {
-  ResponsiveContainer,
+  LineChart,
   Line,
-  CartesianGrid,
   XAxis,
   YAxis,
+  CartesianGrid,
   Tooltip,
-  Legend,
-  AreaChart,
-  Area,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
 } from 'recharts'
 
-// =========================
-// TYPES
-// =========================
-type Company = { id: string; name: string; code?: string | null }
+// --- Типы ---
+type Shift = 'day' | 'night'
 
 type IncomeRow = {
   id: string
-  date: string // YYYY-MM-DD
+  date: string
   company_id: string
+  operator_id: string | null
+  shift: Shift
+  zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
+  online_amount: number | null
   card_amount: number | null
   comment: string | null
 }
 
-type ExpenseRow = {
+type Company = {
   id: string
-  date: string // YYYY-MM-DD
-  company_id: string
-  category: string | null
-  cash_amount: number | null
-  kaspi_amount: number | null
-  comment: string | null
+  name: string
+  code?: string | null
 }
 
-type RangeType = 'today' | 'week' | 'month30' | 'currentMonth' | 'custom'
-
-type FinancialTotals = {
-  incomeCash: number
-  incomeKaspi: number
-  incomeCard: number
-  incomeTotal: number
-  expenseCash: number
-  expenseKaspi: number
-  expenseTotal: number
-  profit: number
-  netCash: number
-  netKaspi: number
-  netTotal: number
-}
-
-type AIInsight = {
-  score: number
-  status: 'critical' | 'warning' | 'healthy' | 'excellent'
-  summary: string
-  recommendation: string
-  margin: number
-  efficiency: number
-}
-
-type ChartPoint = {
-  date: string
-  income: number
-  expense: number
-  profit: number
-}
-
-type FeedItem = {
+type Operator = {
   id: string
-  date: string
-  company_id: string
-  kind: 'income' | 'expense'
-  title: string
-  amount: number
+  name: string
+  short_name: string | null
+  is_active: boolean
 }
 
-// =========================
-// DATE HELPERS (локально)
-// =========================
+type DateRangePreset = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all'
+
+// --- Даты без UTC-косяков ---
 const toISODateLocal = (d: Date) => {
   const t = d.getTime() - d.getTimezoneOffset() * 60_000
   return new Date(t).toISOString().slice(0, 10)
 }
 
-const fromISO = (iso: string) => {
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, (m || 1) - 1, d || 1)
-}
+const parseISODateSafe = (iso: string) => new Date(`${iso}T12:00:00`)
 
 const todayISO = () => toISODateLocal(new Date())
 
 const addDaysISO = (iso: string, diff: number) => {
-  const d = fromISO(iso)
-  d.setDate(d.getDate() + diff)
-  return toISODateLocal(d)
+  const base = iso ? parseISODateSafe(iso) : parseISODateSafe(todayISO())
+  base.setDate(base.getDate() + diff)
+  return toISODateLocal(base)
 }
 
-const formatRuDate = (iso: string) => {
-  if (!iso) return ''
-  const d = fromISO(iso)
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+const formatMoney = (v: number | null | undefined) => (v ?? 0).toLocaleString('ru-RU')
+
+const formatDate = (value: string) => {
+  if (!value) return ''
+  const d = parseISODateSafe(value)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-const getCurrentMonthBounds = () => {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = now.getMonth()
-  const firstDay = new Date(y, m, 1)
-  const lastDay = new Date(y, m + 1, 0)
-  return { start: toISODateLocal(firstDay), end: toISODateLocal(lastDay) }
+const formatIsoToRu = (iso: string | '') => {
+  if (!iso) return '…'
+  const d = parseISODateSafe(iso)
+  if (Number.isNaN(d.getTime())) return '…'
+  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-const calculatePrevPeriod = (dateFrom: string, dateTo: string) => {
-  const dFrom = fromISO(dateFrom)
-  const dTo = fromISO(dateTo)
-  const durationDays = Math.floor((dTo.getTime() - dFrom.getTime()) / 86_400_000) + 1
-  const prevTo = addDaysISO(dateFrom, -1)
-  const prevFrom = addDaysISO(prevTo, -(durationDays - 1))
-  return { prevFrom, prevTo, durationDays }
+// Надёжно определяем Extra
+const isExtraCompany = (c?: Company | null) => {
+  const code = String(c?.code ?? '').toLowerCase().trim()
+  const name = String(c?.name ?? '').toLowerCase().trim()
+  return code === 'extra' || name.includes('extra')
 }
 
-// =========================
-// MATH / FORMAT
-// =========================
-const getPercentageChange = (current: number, previous: number) => {
-  if (previous === 0) return current > 0 ? 100 : 0
-  if (current === 0) return -100
-  return ((current - previous) / previous) * 100
-}
-
-const fmtPctLabel = (val: number) => {
-  if (!Number.isFinite(val)) return '—'
-  const sign = val > 0 ? '+' : ''
-  return `${sign}${val.toFixed(1)}%`
-}
-
-const tooltipStyles = {
-  contentStyle: {
-    backgroundColor: '#111',
-    border: '1px solid #333',
-    borderRadius: 8,
-  },
-  itemStyle: { color: '#fff' },
-} as const
-
-// =========================
-// UI HELPERS
-// =========================
-function StatusBadge({ status }: { status: AIInsight['status'] }) {
-  const cfg =
-    status === 'excellent'
-      ? { text: 'Отлично', cls: 'text-green-400 border-green-500/30 bg-green-500/10' }
-      : status === 'healthy'
-        ? { text: 'Норма', cls: 'text-purple-400 border-purple-500/30 bg-purple-500/10' }
-        : status === 'warning'
-          ? { text: 'Внимание', cls: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' }
-          : { text: 'Критично', cls: 'text-red-400 border-red-500/30 bg-red-500/10' }
-
-  return (
-    <span
-      className={`px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider border ${cfg.cls}`}
-    >
-      {cfg.text}
-    </span>
-  )
-}
-
-function RangeButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-        active ? 'bg-purple-600 text-white' : 'hover:bg-white/5 text-muted-foreground'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
-function MetricCard({
-  title,
-  value,
-  sub1,
-  sub2,
-  icon,
-  valueClass,
-}: {
+// AI Insight типы
+type AIInsight = {
+  type: 'positive' | 'negative' | 'neutral' | 'warning' | 'tip'
   title: string
-  value: string
-  sub1?: string
-  sub2?: string
-  icon: React.ReactNode
-  valueClass?: string
-}) {
-  return (
-    <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors group">
-      <div className="flex justify-between mb-2">
-        <span className="text-xs text-muted-foreground">{title}</span>
-        <span className="opacity-50 group-hover:opacity-100 transition-opacity">{icon}</span>
-      </div>
-      <div className={`text-xl font-bold ${valueClass ?? 'text-foreground'}`}>{value}</div>
-      {sub1 && <div className="text-[10px] text-muted-foreground mt-1">{sub1}</div>}
-      {sub2 && <div className="text-[10px] text-muted-foreground">{sub2}</div>}
-    </Card>
-  )
+  description: string
+  metric?: string
+  change?: number
 }
 
-// =========================
-// PAGE
-// =========================
 export default function DashboardPage() {
-  const moneyFmt = useMemo(
-    () => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }),
-    [],
-  )
-  const formatMoney = useCallback((v: number) => moneyFmt.format(v), [moneyFmt])
+  const LIMIT = 2000
 
-  const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -6))
-  const [dateTo, setDateTo] = useState(() => todayISO())
-  const [rangeType, setRangeType] = useState<RangeType>('week')
-
+  // Данные
+  const [rows, setRows] = useState<IncomeRow[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
-  const [incomes, setIncomes] = useState<IncomeRow[]>([])
-  const [expenses, setExpenses] = useState<ExpenseRow[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
+  const [hitLimit, setHitLimit] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [includeExtra, setIncludeExtra] = useState(false)
+  // AI Insights
+  const [aiInsights, setAiInsights] = useState<AIInsight[]>([])
+  const [aiLoading, setAiLoading] = useState(false)
 
-  // защита от гонок запросов
-  const reqIdRef = useRef(0)
+  // Фильтры
+  const [dateFrom, setDateFrom] = useState(addDaysISO(todayISO(), -29))
+  const [dateTo, setDateTo] = useState(todayISO())
+  const [activePreset, setActivePreset] = useState<DateRangePreset>('month')
 
-  // если пользователь “перевернул” даты — чиним молча
+  // Рефы для загрузки
   useEffect(() => {
-    if (dateFrom <= dateTo) return
-    setDateFrom(dateTo)
-    setDateTo(dateFrom)
-  }, [dateFrom, dateTo])
+    const fetchRefs = async () => {
+      const [compRes, opRes] = await Promise.all([
+        supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
+        supabase
+          .from('operators')
+          .select('id, name, short_name, is_active')
+          .eq('is_active', true)
+          .order('name'),
+      ])
+      if (!compRes.error && compRes.data) setCompanies(compRes.data)
+      if (!opRes.error && opRes.data) setOperators(opRes.data)
+    }
+    fetchRefs()
+  }, [])
 
-  const hasExtraCompany = useMemo(
-    () => companies.some((c) => (c.code || '').toLowerCase() === 'extra'),
-    [companies],
-  )
-
-  const companyById = useMemo(() => {
-    const map: Record<string, Company> = {}
-    for (const c of companies) map[c.id] = c
+  const companyMap = useMemo(() => {
+    const map = new Map<string, Company>()
+    for (const c of companies) map.set(c.id, c)
     return map
   }, [companies])
 
-  const companyName = useCallback(
-    (id: string) => companyById[id]?.name ?? '—',
-    [companyById],
-  )
+  const operatorMap = useMemo(() => {
+    const map = new Map<string, Operator>()
+    for (const o of operators) map.set(o.id, o)
+    return map
+  }, [operators])
 
-  const isExtraCompany = useCallback(
-    (companyId: string) => (companyById[companyId]?.code || '').toLowerCase() === 'extra',
-    [companyById],
-  )
+  const extraCompanyId = useMemo(() => {
+    const extra = companies.find((c) => isExtraCompany(c))
+    return extra?.id ?? null
+  }, [companies])
 
-  const setQuickRange = useCallback((type: RangeType) => {
-    const today = todayISO()
+  const isExtraRow = useCallback((r: IncomeRow) => !!extraCompanyId && r.company_id === extraCompanyId, [extraCompanyId])
 
-    if (type === 'today') {
-      setDateFrom(today)
-      setDateTo(today)
-    } else if (type === 'week') {
-      setDateFrom(addDaysISO(today, -6))
-      setDateTo(today)
-    } else if (type === 'month30') {
-      setDateFrom(addDaysISO(today, -29))
-      setDateTo(today)
-    } else if (type === 'currentMonth') {
-      const { start, end } = getCurrentMonthBounds()
-      setDateFrom(start)
-      setDateTo(end)
-    }
-    setRangeType(type)
-  }, [])
-
-  // =========================
-  // LOAD (companies + incomes + expenses) одним заходом
-  // =========================
+  // Загрузка доходов (с LIMIT 2000 как на странице доходов)
   useEffect(() => {
-    const myReqId = ++reqIdRef.current
-    let alive = true
-
-    const load = async () => {
+    const loadData = async () => {
       setLoading(true)
       setError(null)
+      setHitLimit(false)
 
-      const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
+      const t0 = performance.now()
 
-      const [compRes, incomeRes, expenseRes] = await Promise.all([
-        supabase.from('companies').select('id,name,code').order('name'),
-        supabase
-          .from('incomes')
-          .select('id,date,company_id,cash_amount,kaspi_amount,card_amount,comment')
-          .gte('date', prevFrom)
-          .lte('date', dateTo)
-          .order('date', { ascending: false }),
-        supabase
-          .from('expenses')
-          .select('id,date,company_id,category,cash_amount,kaspi_amount,comment')
-          .gte('date', prevFrom)
-          .lte('date', dateTo)
-          .order('date', { ascending: false }),
-      ])
+      let query = supabase
+        .from('incomes')
+        .select(
+          'id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment',
+        )
+        .order('date', { ascending: false })
 
-      if (!alive) return
-      if (myReqId !== reqIdRef.current) return
+      if (dateFrom) query = query.gte('date', dateFrom)
+      if (dateTo) query = query.lte('date', dateTo)
 
-      if (compRes.error || incomeRes.error || expenseRes.error) {
-        console.error('Dashboard load error', {
-          compErr: compRes.error,
-          incomeErr: incomeRes.error,
-          expenseErr: expenseRes.error,
-        })
-        setError('Ошибка загрузки данных')
-        setLoading(false)
-        return
+      query = query.limit(LIMIT)
+
+      const { data, error } = await query
+
+      const t1 = performance.now()
+      console.log(`dashboard incomes query time: ${(t1 - t0).toFixed(0)} ms, rows: ${data?.length ?? 0}`)
+
+      if (error) {
+        console.error('Error loading incomes:', error)
+        setError('Ошибка при загрузке данных')
+        setRows([])
+      } else {
+        const list = (data || []) as IncomeRow[]
+        setRows(list)
+        setHitLimit(list.length >= LIMIT)
       }
 
-      setCompanies((compRes.data || []) as Company[])
-      setIncomes((incomeRes.data || []) as IncomeRow[])
-      setExpenses((expenseRes.data || []) as ExpenseRow[])
       setLoading(false)
     }
 
-    load()
-
-    return () => {
-      alive = false
-    }
+    loadData()
   }, [dateFrom, dateTo])
 
-  // =========================
-  // ANALYTICS (memo)
-  // =========================
+  // Генерация AI Insights
+  useEffect(() => {
+    const generateInsights = () => {
+      setAiLoading(true)
+      
+      const insights: AIInsight[] = []
+      
+      // Анализ тренда
+      const dailyData = useDailyData()
+      if (dailyData.length >= 2) {
+        const firstWeek = dailyData.slice(0, Math.min(7, Math.floor(dailyData.length / 2)))
+        const secondWeek = dailyData.slice(Math.floor(dailyData.length / 2))
+        
+        const firstAvg = firstWeek.reduce((s, d) => s + d.total, 0) / firstWeek.length
+        const secondAvg = secondWeek.reduce((s, d) => s + d.total, 0) / secondWeek.length
+        
+        const change = firstAvg > 0 ? ((secondAvg - firstAvg) / firstAvg) * 100 : 0
+        
+        if (change > 15) {
+          insights.push({
+            type: 'positive',
+            title: 'Рост выручки',
+            description: `Выручка выросла на ${change.toFixed(1)}% по сравнению с предыдущим периодом`,
+            metric: `+${change.toFixed(1)}%`,
+            change,
+          })
+        } else if (change < -15) {
+          insights.push({
+            type: 'negative',
+            title: 'Снижение выручки',
+            description: `Выручка снизилась на ${Math.abs(change).toFixed(1)}% — стоит проанализировать причины`,
+            metric: `${change.toFixed(1)}%`,
+            change,
+          })
+        }
+      }
+
+      // Анализ по способам оплаты
+      const { cash, kaspi, online, card, total } = analytics
+      if (total > 0) {
+        const kaspiShare = (kaspi / total) * 100
+        const cashShare = (cash / total) * 100
+        
+        if (kaspiShare > 50) {
+          insights.push({
+            type: 'neutral',
+            title: 'Kaspi доминирует',
+            description: `${kaspiShare.toFixed(0)}% платежей через Kaspi POS — убедитесь, что терминал работает стабильно`,
+          })
+        }
+        
+        if (cashShare < 10 && cashShare > 0) {
+          insights.push({
+            type: 'tip',
+            title: 'Мало наличных',
+            description: 'Наличные составляют менее 10% — возможно, стоит проверить работу кассы',
+          })
+        }
+      }
+
+      // Анализ по сменам
+      if (analytics.dayTotal > 0 || analytics.nightTotal > 0) {
+        const dayShare = analytics.dayTotal / (analytics.dayTotal + analytics.nightTotal)
+        if (dayShare > 0.7) {
+          insights.push({
+            type: 'neutral',
+            title: 'Дневная нагрузка',
+            description: 'Более 70% выручки приходится на дневную смену — ночная смена недогружена',
+          })
+        }
+      }
+
+      // Топ оператор
+      if (analytics.topOperatorAmount > 0) {
+        const avgPerOperator = analytics.total / Object.keys(analytics.byOperator).length
+        if (analytics.topOperatorAmount > avgPerOperator * 1.5) {
+          insights.push({
+            type: 'positive',
+            title: 'Звезда команды',
+            description: `${analytics.topOperatorName} показывает результат на ${((analytics.topOperatorAmount / avgPerOperator - 1) * 100).toFixed(0)}% выше среднего`,
+          })
+        }
+      }
+
+      // Предупреждение о лимите
+      if (hitLimit) {
+        insights.push({
+          type: 'warning',
+          title: 'Данные обрезаны',
+          description: `Показаны только первые ${LIMIT} записей. Для полного анализа уточните период`,
+        })
+      }
+
+      setAiInsights(insights)
+      setAiLoading(false)
+    }
+
+    if (!loading && rows.length > 0) {
+      generateInsights()
+    }
+  }, [rows, loading, hitLimit])
+
+  // Аналитика (Extra всегда включён)
   const analytics = useMemo(() => {
-    const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
+    let cash = 0
+    let kaspi = 0
+    let online = 0
+    let card = 0
+    let dayTotal = 0
+    let nightTotal = 0
 
-    const inCurrent = (date: string) => date >= dateFrom && date <= dateTo
-    const inPrev = (date: string) => date >= prevFrom && date <= prevTo
+    const byOperator: Record<string, number> = {}
+    const byZone: Record<string, number> = {}
+    const byCompany: Record<string, number> = {}
+    const byDate: Record<string, number> = {}
 
-    const makeTotals = (): FinancialTotals => ({
-      incomeCash: 0,
-      incomeKaspi: 0,
-      incomeCard: 0,
-      incomeTotal: 0,
-      expenseCash: 0,
-      expenseKaspi: 0,
-      expenseTotal: 0,
-      profit: 0,
-      netCash: 0,
-      netKaspi: 0,
-      netTotal: 0,
-    })
+    for (const r of rows) {
+      const rowCash = Number(r.cash_amount || 0)
+      const rowKaspi = Number(r.kaspi_amount || 0)
+      const rowOnline = Number(r.online_amount || 0)
+      const rowCard = Number(r.card_amount || 0)
+      const rowTotal = rowCash + rowKaspi + rowOnline + rowCard
 
-    const current: FinancialTotals = makeTotals()
-    const previous: FinancialTotals = makeTotals()
+      cash += rowCash
+      kaspi += rowKaspi
+      online += rowOnline
+      card += rowCard
 
-    // график: заполняем все дни, чтобы линия не рвалась
-    const chartMap = new Map<string, ChartPoint>()
-    {
-      let d = fromISO(dateFrom)
-      const end = fromISO(dateTo)
-      while (d.getTime() <= end.getTime()) {
-        const iso = toISODateLocal(d)
-        chartMap.set(iso, { date: iso, income: 0, expense: 0, profit: 0 })
-        d.setDate(d.getDate() + 1)
-      }
+      if (r.shift === 'day') dayTotal += rowTotal
+      else nightTotal += rowTotal
+
+      const opKey = operatorMap.get(r.operator_id ?? '')?.short_name || operatorMap.get(r.operator_id ?? '')?.name || 'Без оператора'
+      byOperator[opKey] = (byOperator[opKey] || 0) + rowTotal
+
+      const z = (r.zone || '—').trim() || '—'
+      byZone[z] = (byZone[z] || 0) + rowTotal
+
+      const compName = companyMap.get(r.company_id)?.name || '—'
+      byCompany[compName] = (byCompany[compName] || 0) + rowTotal
+
+      byDate[r.date] = (byDate[r.date] || 0) + rowTotal
     }
 
-    // incomes
-    for (const r of incomes) {
-      if (!includeExtra && isExtraCompany(r.company_id)) continue
+    const total = cash + kaspi + online + card
+    const avg = rows.length ? Math.round(total / rows.length) : 0
 
-      const cash = Number(r.cash_amount || 0)
-      const kaspi = Number(r.kaspi_amount || 0)
-      const card = Number(r.card_amount || 0)
-      const total = cash + kaspi + card
-      if (total <= 0) continue
+    const topOperator = Object.entries(byOperator).sort((a, b) => b[1] - a[1])[0] || ['—', 0]
+    const topZone = Object.entries(byZone).sort((a, b) => b[1] - a[1])[0] || ['—', 0]
 
-      if (inCurrent(r.date)) {
-        current.incomeTotal += total
-        current.incomeCash += cash
-        current.incomeKaspi += kaspi
-        current.incomeCard += card
-        const p = chartMap.get(r.date)
-        if (p) p.income += total
-      } else if (inPrev(r.date)) {
-        previous.incomeTotal += total
-        previous.incomeCash += cash
-        previous.incomeKaspi += kaspi
-        previous.incomeCard += card
-      }
+    return {
+      cash,
+      kaspi,
+      online,
+      card,
+      total,
+      avg,
+      dayTotal,
+      nightTotal,
+      byOperator,
+      byZone,
+      byCompany,
+      byDate,
+      topOperatorName: topOperator[0],
+      topOperatorAmount: topOperator[1],
+      topZoneName: topZone[0],
+      topZoneAmount: topZone[1],
     }
+  }, [rows, companyMap, operatorMap])
 
-    // expenses
-    for (const r of expenses) {
-      if (!includeExtra && isExtraCompany(r.company_id)) continue
-
-      const cash = Number(r.cash_amount || 0)
-      const kaspi = Number(r.kaspi_amount || 0)
-      const total = cash + kaspi
-      if (total <= 0) continue
-
-      if (inCurrent(r.date)) {
-        current.expenseTotal += total
-        current.expenseCash += cash
-        current.expenseKaspi += kaspi
-        const p = chartMap.get(r.date)
-        if (p) p.expense += total
-      } else if (inPrev(r.date)) {
-        previous.expenseTotal += total
-        previous.expenseCash += cash
-        previous.expenseKaspi += kaspi
-      }
-    }
-
-    const finalize = (t: FinancialTotals) => {
-      t.profit = t.incomeTotal - t.expenseTotal
-      t.netCash = t.incomeCash - t.expenseCash
-      // kaspi-side: kaspi + card - kaspi расход
-      t.netKaspi = t.incomeKaspi + t.incomeCard - t.expenseKaspi
-      t.netTotal = t.profit
-    }
-    finalize(current)
-    finalize(previous)
-
-    for (const p of chartMap.values()) p.profit = p.income - p.expense
-
-    const chartData: ChartPoint[] = Array.from(chartMap.values()).sort((a, b) =>
-      a.date.localeCompare(b.date),
-    )
-
-    const margin = current.incomeTotal > 0 ? (current.profit / current.incomeTotal) * 100 : 0
-    const efficiency =
-      current.expenseTotal > 0
-        ? current.incomeTotal / current.expenseTotal
-        : current.incomeTotal > 0
-          ? 10
-          : 0
-
-    const incomeChange = getPercentageChange(current.incomeTotal, previous.incomeTotal)
-    const profitChange = getPercentageChange(current.profit, previous.profit)
-
-    // скоринг: без магии, но честно
-    let score = 50
-    score += Math.min(25, Math.max(-25, margin)) // маржа = главный босс
-    score += incomeChange > 0 ? 6 : -6
-    score += profitChange > 0 ? 10 : -10
-    if (efficiency > 1.2) score += 6
-    if (efficiency < 1.05 && current.incomeTotal > 0) score -= 8
-    if (current.profit < 0) score -= 20
-    score = Math.min(100, Math.max(0, Math.round(score)))
-
-    let status: AIInsight['status'] = 'healthy'
-    let summary = ''
-    let recommendation = ''
-
-    if (score >= 80) {
-      status = 'excellent'
-      summary = 'Отличные показатели: вы в плюсе и растёте.'
-      recommendation = 'Закрепляйте: усиливайте лучшее (топ-часы/зоны), слабое — оптимизируйте.'
-    } else if (score >= 55) {
-      status = 'healthy'
-      summary = 'Устойчивая работа: прибыль есть, всё под контролем.'
-      recommendation = 'Поднимайте маржу: пересмотрите цены/пакеты и отрежьте “тихие” расходы.'
-    } else if (score >= 35) {
-      status = 'warning'
-      summary = 'Прибыль под давлением: расходы заметно съедают выручку.'
-      recommendation = 'Ревизия затрат + фокус на прибыльные позиции. Остальное — на паузу.'
-    } else {
-      status = 'critical'
-      summary = 'Риск убытков: вы слишком близко к минусу.'
-      recommendation = 'Срочно: резать лишнее, проверять цены/скидки, усиливать загрузку пиков.'
-    }
-
-    const insight: AIInsight = {
-      score,
-      status,
-      summary,
-      recommendation,
-      margin,
-      efficiency,
-    }
-
-    return { current, previous, chartData, insight }
-  }, [incomes, expenses, dateFrom, dateTo, includeExtra, isExtraCompany])
-
-  const { current, previous, chartData, insight } = analytics
-
-  const transactionsCount = useMemo(() => {
-    const inc = incomes.filter((x) => {
-      if (!includeExtra && isExtraCompany(x.company_id)) return false
-      if (x.date < dateFrom || x.date > dateTo) return false
-      const amount = Number(x.cash_amount || 0) + Number(x.kaspi_amount || 0) + Number(x.card_amount || 0)
-      return amount > 0
-    }).length
-
-    const exp = expenses.filter((x) => {
-      if (!includeExtra && isExtraCompany(x.company_id)) return false
-      if (x.date < dateFrom || x.date > dateTo) return false
-      const amount = Number(x.cash_amount || 0) + Number(x.kaspi_amount || 0)
-      return amount > 0
-    }).length
-
-    return inc + exp
-  }, [incomes, expenses, dateFrom, dateTo, includeExtra, isExtraCompany])
-
-  const feedItems = useMemo<FeedItem[]>(() => {
-    const items: FeedItem[] = []
-
-    for (const r of incomes) {
-      if (!includeExtra && isExtraCompany(r.company_id)) continue
-      if (r.date < dateFrom || r.date > dateTo) continue
-      const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
-      if (amount <= 0) continue
-
-      items.push({
-        id: r.id,
-        date: r.date,
-        company_id: r.company_id,
-        kind: 'income',
-        title: r.comment || 'Продажа',
-        amount,
-      })
-    }
-
-    for (const r of expenses) {
-      if (!includeExtra && isExtraCompany(r.company_id)) continue
-      if (r.date < dateFrom || r.date > dateTo) continue
-      const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0)
-      if (amount <= 0) continue
-
-      items.push({
-        id: r.id,
-        date: r.date,
-        company_id: r.company_id,
-        kind: 'expense',
-        title: r.category || r.comment || 'Расход',
-        amount,
-      })
-    }
-
-    items.sort((a, b) => (b.date === a.date ? b.amount - a.amount : b.date.localeCompare(a.date)))
-    return items.slice(0, 7)
-  }, [incomes, expenses, dateFrom, dateTo, includeExtra, isExtraCompany])
-
-  // =========================
-  // RENDER STATES
-  // =========================
-  if (loading) {
-    return (
-      <div className="flex min-h-screen bg-[#050505] text-foreground">
-        <Sidebar />
-        <main className="flex-1 flex items-center justify-center text-muted-foreground">
-          Загрузка дэшборда...
-        </main>
-      </div>
-    )
+  // Данные для графиков
+  const useDailyData = () => {
+    return useMemo(() => {
+      const dates = Object.keys(analytics.byDate).sort()
+      return dates.map(date => ({
+        date: formatDate(date),
+        fullDate: date,
+        total: analytics.byDate[date],
+      }))
+    }, [analytics.byDate])
   }
 
-  if (error) {
-    return (
-      <div className="flex min-h-screen bg-[#050505] text-foreground">
-        <Sidebar />
-        <main className="flex-1 flex items-center justify-center text-red-400">
-          {error}
-        </main>
-      </div>
-    )
+  const dailyData = useDailyData()
+
+  const paymentMethodData = useMemo(() => [
+    { name: 'Наличные', value: analytics.cash, color: '#22c55e' },
+    { name: 'Kaspi POS', value: analytics.kaspi, color: '#3b82f6' },
+    { name: 'Kaspi Online', value: analytics.online, color: '#06b6d4' },
+    { name: 'Карта', value: analytics.card, color: '#a855f7' },
+  ], [analytics])
+
+  const shiftData = useMemo(() => [
+    { name: 'День', value: analytics.dayTotal, icon: '☀️' },
+    { name: 'Ночь', value: analytics.nightTotal, icon: '🌙' },
+  ], [analytics])
+
+  const operatorData = useMemo(() => {
+    return Object.entries(analytics.byOperator)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, value]) => ({ name, value }))
+  }, [analytics.byOperator])
+
+  const companyData = useMemo(() => {
+    return Object.entries(analytics.byCompany)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value]) => ({ name, value }))
+  }, [analytics.byCompany])
+
+  // Пресеты дат
+  const setPreset = (preset: DateRangePreset) => {
+    const today = todayISO()
+    setActivePreset(preset)
+
+    if (preset === 'today') {
+      setDateFrom(today)
+      setDateTo(today)
+    }
+    if (preset === 'week') {
+      setDateFrom(addDaysISO(today, -6))
+      setDateTo(today)
+    }
+    if (preset === 'month') {
+      setDateFrom(addDaysISO(today, -29))
+      setDateTo(today)
+    }
+    if (preset === 'quarter') {
+      setDateFrom(addDaysISO(today, -89))
+      setDateTo(today)
+    }
+    if (preset === 'year') {
+      setDateFrom(addDaysISO(today, -364))
+      setDateTo(today)
+    }
+    if (preset === 'all') {
+      setDateFrom('')
+      setDateTo('')
+    }
   }
 
-  // =========================
-  // UI
-  // =========================
-  const incomeDelta = getPercentageChange(current.incomeTotal, previous.incomeTotal)
-  const profitDelta = getPercentageChange(current.profit, previous.profit)
+  const periodLabel = dateFrom || dateTo ? `${formatIsoToRu(dateFrom)} — ${formatIsoToRu(dateTo)}` : 'Весь период'
+
+  const getInsightIcon = (type: AIInsight['type']) => {
+    switch (type) {
+      case 'positive': return <TrendingUp className="w-5 h-5 text-green-500" />
+      case 'negative': return <TrendingUp className="w-5 h-5 text-red-500 rotate-180" />
+      case 'warning': return <AlertCircle className="w-5 h-5 text-yellow-500" />
+      case 'tip': return <Brain className="w-5 h-5 text-purple-500" />
+      default: return <Brain className="w-5 h-5 text-blue-500" />
+    }
+  }
+
+  const getInsightBorder = (type: AIInsight['type']) => {
+    switch (type) {
+      case 'positive': return 'border-green-500/30 bg-green-500/5'
+      case 'negative': return 'border-red-500/30 bg-red-500/5'
+      case 'warning': return 'border-yellow-500/30 bg-yellow-500/5'
+      case 'tip': return 'border-purple-500/30 bg-purple-500/5'
+      default: return 'border-blue-500/30 bg-blue-500/5'
+    }
+  }
 
   return (
-    <div className="flex min-h-screen bg-[#050505] text-foreground">
+    <div className="flex min-h-screen bg-background">
       <Sidebar />
-
       <main className="flex-1 overflow-auto">
-        <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
-          {/* Header + Filters */}
-          <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+        <div className="p-8 space-y-6">
+          {/* Шапка */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                <Brain className="w-8 h-8 text-purple-500" />
-                AI Dashboard
-              </h1>
-              <p className="text-muted-foreground text-sm">
-                Умная аналитика по выручке, расходам и прибыли
-              </p>
-
-              <div className="mt-2 text-[11px] text-muted-foreground flex flex-wrap items-center gap-2">
-                <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
-                  Период: <span className="text-foreground">{formatRuDate(dateFrom)}</span> —{' '}
-                  <span className="text-foreground">{formatRuDate(dateTo)}</span>
-                </span>
-
-                {hasExtraCompany && (
-                  <button
-                    type="button"
-                    onClick={() => setIncludeExtra((v) => !v)}
-                    className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-0.5 text-[11px] ${
-                      includeExtra
-                        ? 'border-red-400 text-red-400 bg-red-500/10'
-                        : 'border-border text-muted-foreground hover:bg-white/5'
-                    }`}
-                    title="Включать/исключать F16 Extra"
-                  >
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        includeExtra ? 'bg-red-400' : 'bg-muted-foreground/50'
-                      }`}
-                    />
-                    {includeExtra ? 'Extra включён' : 'Extra исключён'}
-                  </button>
-                )}
-              </div>
+              <h1 className="text-3xl font-bold text-foreground">Дашборд</h1>
+              <p className="text-muted-foreground mt-1 text-sm">AI-аналитика и ключевые метрики</p>
             </div>
 
-            {/* Filters */}
-            <div className="flex flex-col items-stretch gap-2 w-full xl:w-auto">
-              <div className="flex flex-col sm:flex-row items-center gap-2 w-full xl:w-auto">
-                <div className="bg-card/50 border border-border/50 rounded-lg p-1 flex items-center gap-1 w-full sm:w-auto justify-center">
-                  <RangeButton active={rangeType === 'today'} onClick={() => setQuickRange('today')}>
-                    Сегодня
-                  </RangeButton>
-
-                  <RangeButton active={rangeType === 'week'} onClick={() => setQuickRange('week')}>
-                    7 дней
-                  </RangeButton>
-
-                  <RangeButton
-                    active={rangeType === 'currentMonth'}
-                    onClick={() => setQuickRange('currentMonth')}
+            <div className="flex gap-2">
+              <div className="flex bg-input/30 rounded-md border border-border/30 p-0.5">
+                {(['today', 'week', 'month', 'quarter', 'year'] as DateRangePreset[]).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPreset(p)}
+                    className={`px-3 py-1.5 text-[11px] rounded transition-colors ${
+                      activePreset === p ? 'bg-accent text-accent-foreground' : 'hover:bg-white/10 text-muted-foreground'
+                    }`}
                   >
-                    <span className="inline-flex items-center gap-1">
-                      <CalendarDays className="w-3 h-3" /> Этот месяц
-                    </span>
-                  </RangeButton>
-
-                  <RangeButton
-                    active={rangeType === 'month30'}
-                    onClick={() => setQuickRange('month30')}
-                  >
-                    30 дней
-                  </RangeButton>
-                </div>
-
-                <div className="flex items-center gap-2 bg-card/30 p-1 rounded-lg border border-border/30">
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => {
-                      setDateFrom(e.target.value)
-                      setRangeType('custom')
-                    }}
-                    className="bg-transparent text-xs text-foreground px-2 py-1 rounded focus:outline-none"
-                  />
-                  <span className="text-muted-foreground text-[10px]">—</span>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => {
-                      setDateTo(e.target.value)
-                      setRangeType('custom')
-                    }}
-                    className="bg-transparent text-xs text-foreground px-2 py-1 rounded focus:outline-none"
-                  />
-                </div>
+                    {p === 'today' && 'Сегодня'}
+                    {p === 'week' && 'Неделя'}
+                    {p === 'month' && 'Месяц'}
+                    {p === 'quarter' && 'Квартал'}
+                    {p === 'year' && 'Год'}
+                  </button>
+                ))}
               </div>
+
+              <Link href="/income">
+                <Button variant="outline" size="sm" className="gap-2 text-xs">
+                  <TrendingUp className="w-4 h-4" /> Журнал
+                </Button>
+              </Link>
             </div>
           </div>
 
-          {/* Block 1: AI Insight */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card
-              className={`lg:col-span-2 p-6 border relative overflow-hidden ${
-                insight.status === 'excellent'
-                  ? 'border-green-500/30 bg-green-950/10'
-                  : insight.status === 'healthy'
-                    ? 'border-purple-500/30 bg-purple-950/10'
-                    : insight.status === 'warning'
-                      ? 'border-yellow-500/30 bg-yellow-950/10'
-                      : 'border-red-500/30 bg-red-950/10'
-              }`}
-            >
-              <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider bg-white/10 border border-white/10">
-                      Анализ периода
-                    </span>
-                    <StatusBadge status={insight.status} />
-                  </div>
-
-                  <h2 className="text-2xl font-semibold leading-tight max-w-xl">
-                    {insight.summary}
-                  </h2>
-
-                  <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-yellow-400" />
-                    Совет: {insight.recommendation}
-                  </p>
-
-                  <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-                    <span>
-                      Маржа:{' '}
-                      <span className="text-foreground">{insight.margin.toFixed(1)}%</span>
-                    </span>
-                    <span>
-                      Рост выручки:{' '}
-                      <span className={incomeDelta >= 0 ? 'text-green-400' : 'text-red-400'}>
-                        {fmtPctLabel(incomeDelta)}
-                      </span>
-                    </span>
-                    <span>
-                      Рост прибыли:{' '}
-                      <span className={profitDelta >= 0 ? 'text-green-400' : 'text-red-400'}>
-                        {fmtPctLabel(profitDelta)}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 min-w-[140px]">
-                  <div className="text-right">
-                    <div className="text-4xl font-bold">{insight.score}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                      Балл
+          {/* AI Insights */}
+          <Card className="p-4 border-border bg-card/70 neon-glow">
+            <div className="flex items-center gap-2 mb-4">
+              <Brain className="w-5 h-5 text-accent" />
+              <h2 className="text-lg font-semibold">AI Аналитика</h2>
+              {aiLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+            </div>
+            
+            {aiInsights.length === 0 && !aiLoading ? (
+              <p className="text-sm text-muted-foreground">Недостаточно данных для анализа</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {aiInsights.map((insight, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-lg border ${getInsightBorder(insight.type)} transition-all hover:scale-[1.02]`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5">{getInsightIcon(insight.type)}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-sm">{insight.title}</h3>
+                          {insight.metric && (
+                            <span className={`text-xs font-bold ${insight.change && insight.change > 0 ? 'text-green-500' : insight.change && insight.change < 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                              {insight.metric}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">{insight.description}</p>
+                      </div>
                     </div>
                   </div>
-                  {insight.score >= 80 ? (
-                    <CheckCircle2 className="w-10 h-10 text-green-500" />
-                  ) : insight.score >= 55 ? (
-                    <Activity className="w-10 h-10 text-purple-500" />
-                  ) : insight.score >= 35 ? (
-                    <AlertTriangle className="w-10 h-10 text-yellow-500" />
-                  ) : (
-                    <AlertTriangle className="w-10 h-10 text-red-500" />
-                  )}
-                </div>
+                ))}
               </div>
+            )}
+          </Card>
 
-              <div
-                className={`absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl -mr-20 -mt-20 opacity-20 pointer-events-none ${
-                  insight.status === 'excellent'
-                    ? 'bg-green-500'
-                    : insight.status === 'healthy'
-                      ? 'bg-purple-600'
-                      : insight.status === 'warning'
-                        ? 'bg-yellow-500'
-                        : 'bg-red-500'
-                }`}
-              />
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Card className="p-4 border-border bg-card/70 flex flex-col justify-center">
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <Banknote className="w-4 h-4 text-green-500" />
+                <span className="text-xs uppercase tracking-wide">Наличные</span>
+              </div>
+              <div className="text-xl font-bold text-foreground">{formatMoney(analytics.cash)} ₸</div>
+              <div className="text-[10px] text-muted-foreground mt-1">
+                {analytics.total > 0 ? ((analytics.cash / analytics.total) * 100).toFixed(0) : 0}% от общего
+              </div>
             </Card>
 
-            <div className="grid grid-cols-1 gap-4">
-              <Card className="p-4 border border-border bg-card flex flex-col justify-center">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Чистая прибыль</p>
-                    <p className="text-2xl font-bold text-white">
-                      {formatMoney(current.profit)} ₸
-                    </p>
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      Прошлый период:{' '}
-                      <span className="text-foreground">{formatMoney(previous.profit)} ₸</span>
-                    </p>
-                  </div>
-                  <div className={`text-right ${profitDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    <div className="text-sm font-bold">{fmtPctLabel(profitDelta)}</div>
-                  </div>
-                </div>
+            <Card className="p-4 border-border bg-card/70 flex flex-col justify-center">
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <Smartphone className="w-4 h-4 text-blue-500" />
+                <span className="text-xs uppercase tracking-wide">Kaspi POS</span>
+              </div>
+              <div className="text-xl font-bold text-foreground">{formatMoney(analytics.kaspi)} ₸</div>
+              <div className="text-[10px] text-muted-foreground mt-1">
+                {analytics.total > 0 ? ((analytics.kaspi / analytics.total) * 100).toFixed(0) : 0}% от общего
+              </div>
+            </Card>
 
-                <div className="mt-3 h-1 w-full bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-yellow-400 to-orange-500"
-                    style={{ width: `${Math.min(100, Math.max(0, insight.margin))}%` }}
-                  />
-                </div>
+            <Card className="p-4 border-border bg-card/70 flex flex-col justify-center">
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <Smartphone className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs uppercase tracking-wide">Kaspi Online</span>
+              </div>
+              <div className="text-xl font-bold text-foreground">{formatMoney(analytics.online)} ₸</div>
+              <div className="text-[10px] text-muted-foreground mt-1">
+                {analytics.total > 0 ? ((analytics.online / analytics.total) * 100).toFixed(0) : 0}% от общего
+              </div>
+            </Card>
 
-                <p className="text-[10px] text-right mt-1 text-muted-foreground">
-                  Маржа: {insight.margin.toFixed(1)}%
-                </p>
-              </Card>
+            <Card className="p-4 border-border bg-card/70 flex flex-col justify-center">
+              <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                <CreditCard className="w-4 h-4 text-purple-500" />
+                <span className="text-xs uppercase tracking-wide">Карта</span>
+              </div>
+              <div className="text-xl font-bold text-foreground">{formatMoney(analytics.card)} ₸</div>
+              <div className="text-[10px] text-muted-foreground mt-1">
+                {analytics.total > 0 ? ((analytics.card / analytics.total) * 100).toFixed(0) : 0}% от общего
+              </div>
+            </Card>
 
-              <Card className="p-4 border border-border bg-card flex flex-col justify-center">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Коэф. эффективности</p>
-                    <p className="text-2xl font-bold text-white">{insight.efficiency.toFixed(2)}x</p>
-                  </div>
-                  <Zap className="w-6 h-6 text-purple-500 opacity-50" />
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  На 1₸ затрат →{' '}
-                  <span className="text-foreground">{insight.efficiency.toFixed(2)}₸</span> выручки
-                </p>
-              </Card>
-            </div>
+            <Card className="p-4 border border-accent/60 bg-accent/10 flex flex-col justify-center relative overflow-hidden">
+              <div className="text-[11px] text-muted-foreground mb-1 uppercase tracking-wider">Всего за период</div>
+              <div className="text-2xl font-bold text-accent">{formatMoney(analytics.total)} ₸</div>
+              <div className="mt-1 text-[10px] text-muted-foreground">
+                {rows.length} записей • Средний чек: {formatMoney(analytics.avg)} ₸
+              </div>
+            </Card>
           </div>
 
-          {/* Block 2: Metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-            <MetricCard
-              title="Общий доход"
-              value={`${formatMoney(current.incomeTotal)} ₸`}
-              valueClass="text-green-400"
-              sub1={`Нал: ${formatMoney(current.incomeCash)}`}
-              sub2={`Прошлый: ${formatMoney(previous.incomeTotal)} ₸`}
-              icon={<TrendingUp className="w-4 h-4 text-green-500" />}
-            />
-
-            <MetricCard
-              title="Общий расход"
-              value={`${formatMoney(current.expenseTotal)} ₸`}
-              valueClass="text-red-400"
-              sub1={`Нал: ${formatMoney(current.expenseCash)}`}
-              sub2={`Прошлый: ${formatMoney(previous.expenseTotal)} ₸`}
-              icon={<TrendingDown className="w-4 h-4 text-red-500" />}
-            />
-
-            <MetricCard
-              title="Безнал (Kaspi + Card)"
-              value={`${formatMoney(current.incomeKaspi + current.incomeCard)} ₸`}
-              sub1={`${(
-                current.incomeTotal > 0
-                  ? ((current.incomeKaspi + current.incomeCard) / current.incomeTotal) * 100
-                  : 0
-              ).toFixed(0)}% от выручки`}
-              icon={<DollarSign className="w-4 h-4 text-blue-500" />}
-            />
-
-            <MetricCard
-              title="Остаток нал"
-              value={`${formatMoney(current.netCash)} ₸`}
-              valueClass={current.netCash >= 0 ? 'text-emerald-400' : 'text-red-400'}
-              sub1="Доход(нал) − Расход(нал)"
-              icon={<BarChart2 className="w-4 h-4 text-emerald-500" />}
-            />
-
-            <MetricCard
-              title="Остаток Kaspi/Card"
-              value={`${formatMoney(current.netKaspi)} ₸`}
-              valueClass={current.netKaspi >= 0 ? 'text-sky-400' : 'text-red-400'}
-              sub1="Kaspi+Card − Расход(Kaspi)"
-              icon={<BarChart2 className="w-4 h-4 text-sky-500" />}
-            />
-
-            <MetricCard
-              title="Операций"
-              value={`${transactionsCount}`}
-              sub1="Доход + расход за период"
-              icon={<BarChart2 className="w-4 h-4 text-gray-500" />}
-            />
-          </div>
-
-          {/* Block 3: Chart + Feed */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2 p-6 border-border bg-card">
-              <h3 className="text-sm font-semibold text-foreground mb-6 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-purple-500" />
-                Дневная динамика (Доход / Расход / Прибыль)
+          {/* Графики */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Динамика по дням */}
+            <Card className="p-4 border-border bg-card/70">
+              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-muted-foreground" />
+                Динамика по дням
               </h3>
+              <div className="h-64">
+                {dailyData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={dailyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis 
+                        dataKey="date" 
+                        tick={{ fontSize: 11 }}
+                        stroke="hsl(var(--muted-foreground))"
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 11 }}
+                        stroke="hsl(var(--muted-foreground))"
+                        tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                        formatter={(v: number) => [`${formatMoney(v)} ₸`, 'Выручка']}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="total" 
+                        stroke="hsl(var(--accent))" 
+                        strokeWidth={2}
+                        dot={{ fill: 'hsl(var(--accent))', strokeWidth: 0, r: 3 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                    Нет данных за выбранный период
+                  </div>
+                )}
+              </div>
+            </Card>
 
-              {chartData.length === 0 ? (
-                <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
+            {/* Распределение по способам оплаты */}
+            <Card className="p-4 border-border bg-card/70">
+              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-muted-foreground" />
+                Способы оплаты
+              </h3>
+              <div className="h-64 flex items-center">
+                {analytics.total > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={paymentMethodData.filter(d => d.value > 0)}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {paymentMethodData.filter(d => d.value > 0).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                        formatter={(v: number, n: string) => [`${formatMoney(v)} ₸ (${((v / analytics.total) * 100).toFixed(0)}%)`, n]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="w-full text-center text-muted-foreground text-sm">
+                    Нет данных
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap justify-center gap-3 mt-2">
+                {paymentMethodData.filter(d => d.value > 0).map((item) => (
+                  <div key={item.name} className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="text-xs text-muted-foreground">{item.name}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Топ операторов */}
+            <Card className="p-4 border-border bg-card/70">
+              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <UserCircle2 className="w-4 h-4 text-muted-foreground" />
+                Топ операторов
+              </h3>
+              <div className="h-64">
+                {operatorData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={operatorData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                      <XAxis 
+                        type="number"
+                        tick={{ fontSize: 11 }}
+                        stroke="hsl(var(--muted-foreground))"
+                        tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                      />
+                      <YAxis 
+                        type="category"
+                        dataKey="name"
+                        tick={{ fontSize: 11 }}
+                        stroke="hsl(var(--muted-foreground))"
+                        width={100}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                        formatter={(v: number) => [`${formatMoney(v)} ₸`, 'Выручка']}
+                      />
+                      <Bar dataKey="value" fill="hsl(var(--accent))" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                    Нет данных
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Сравнение смен */}
+            <Card className="p-4 border-border bg-card/70">
+              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <Sun className="w-4 h-4 text-yellow-400" />
+                День vs Ночь
+              </h3>
+              <div className="h-64">
+                {analytics.dayTotal > 0 || analytics.nightTotal > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={shiftData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis 
+                        dataKey="name"
+                        tick={{ fontSize: 12 }}
+                        stroke="hsl(var(--muted-foreground))"
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 11 }}
+                        stroke="hsl(var(--muted-foreground))"
+                        tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                        formatter={(v: number) => [`${formatMoney(v)} ₸`, 'Выручка']}
+                      />
+                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                        <Cell fill="#fbbf24" />
+                        <Cell fill="#6366f1" />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                    Нет данных
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-center gap-4 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <Sun className="w-4 h-4 text-yellow-400" />
+                  <span className="text-xs text-muted-foreground">
+                    День: {formatMoney(analytics.dayTotal)} ₸ ({analytics.dayTotal + analytics.nightTotal > 0 ? ((analytics.dayTotal / (analytics.dayTotal + analytics.nightTotal)) * 100).toFixed(0) : 0}%)
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Moon className="w-4 h-4 text-indigo-400" />
+                  <span className="text-xs text-muted-foreground">
+                    Ночь: {formatMoney(analytics.nightTotal)} ₸ ({analytics.dayTotal + analytics.nightTotal > 0 ? ((analytics.nightTotal / (analytics.dayTotal + analytics.nightTotal)) * 100).toFixed(0) : 0}%)
+                  </span>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Компании */}
+          <Card className="p-4 border-border bg-card/70">
+            <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-muted-foreground" />
+              Выручка по компаниям
+            </h3>
+            <div className="h-48">
+              {companyData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={companyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis 
+                      dataKey="name"
+                      tick={{ fontSize: 10 }}
+                      stroke="hsl(var(--muted-foreground))"
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 11 }}
+                      stroke="hsl(var(--muted-foreground))"
+                      tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                      formatter={(v: number) => [`${formatMoney(v)} ₸`, 'Выручка']}
+                    />
+                    <Bar dataKey="value" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
                   Нет данных
                 </div>
-              ) : (
-                <div className="h-72 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData}>
-                      <defs>
-                        <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="#444" vertical={false} />
-                      <XAxis
-                        dataKey="date"
-                        stroke="#666"
-                        fontSize={10}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(v) => String(v).slice(5)}
-                      />
-                      <YAxis
-                        stroke="#666"
-                        fontSize={10}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
-                      />
-                      <Tooltip
-                        {...tooltipStyles}
-                        formatter={(val: number) => [`${formatMoney(Number(val))} ₸`, '']}
-                        labelFormatter={(label: string) => formatRuDate(label)}
-                      />
-                      <Legend />
-
-                      <Area
-                        type="monotone"
-                        dataKey="profit"
-                        name="Прибыль"
-                        stroke="#a855f7"
-                        strokeWidth={3}
-                        fillOpacity={1}
-                        fill="url(#colorProfit)"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="income"
-                        name="Доход"
-                        stroke="#22c55e"
-                        strokeWidth={2}
-                        dot={false}
-                        strokeOpacity={0.7}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="expense"
-                        name="Расход"
-                        stroke="#ef4444"
-                        strokeWidth={2}
-                        dot={false}
-                        strokeOpacity={0.7}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
               )}
+            </div>
+          </Card>
 
-              <div className="mt-3 text-[11px] text-muted-foreground">
-                Подсказка: если прибыль “пилит” вниз — смотри расходы, а не звёзды.
+          {/* Период и предупреждение */}
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <CalendarDays className="w-3 h-3" />
+              <span className="uppercase tracking-wide">Период:</span>
+              <span className="font-mono">{periodLabel}</span>
+            </div>
+            {hitLimit && (
+              <div className="text-yellow-500/90">
+                ⚠️ Показаны первые {LIMIT} записей. Для полного анализа уточните период.
               </div>
-            </Card>
-
-            <Card className="lg:col-span-1 p-0 border-border bg-card overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-white/5 bg-white/5">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-blue-400" />
-                  Лента событий
-                </h3>
-                <p className="text-[11px] text-muted-foreground">Последние операции дохода и расхода</p>
-              </div>
-
-              <div className="flex-1 overflow-auto max-h-[320px] p-2 space-y-1">
-                {feedItems.length === 0 ? (
-                  <p className="text-xs text-center p-4 text-muted-foreground">Пусто</p>
-                ) : (
-                  feedItems.map((op) => (
-                    <div
-                      key={op.id}
-                      className="group flex items-center justify-between p-3 hover:bg-white/5 rounded-lg transition-colors cursor-default"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-2 h-2 rounded-full ${
-                            op.kind === 'income'
-                              ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]'
-                              : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
-                          }`}
-                        />
-                        <div className="flex flex-col">
-                          <span className="text-xs font-medium text-foreground/90">{op.title}</span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {companyName(op.company_id)} • {formatRuDate(op.date)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <span
-                        className={`text-xs font-bold font-mono ${
-                          op.kind === 'income' ? 'text-green-400' : 'text-red-400'
-                        }`}
-                      >
-                        {op.kind === 'income' ? '+' : '-'}
-                        {formatMoney(op.amount)}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="p-3 border-t border-white/5 bg-white/[0.02]">
-                <Link href={`/income?from=${dateFrom}&to=${dateTo}`}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full text-xs h-8 text-muted-foreground hover:text-white"
-                  >
-                    Посмотреть все операции →
-                  </Button>
-                </Link>
-              </div>
-            </Card>
+            )}
           </div>
+
+          {error && (
+            <div className="border border-destructive/60 bg-destructive/10 text-destructive px-4 py-3 rounded text-sm flex items-center gap-2">
+              <span className="text-lg">⚠️</span> {error}
+            </div>
+          )}
         </div>
       </main>
     </div>
