@@ -49,8 +49,9 @@ type IncomeRow = {
   online_amount: number | null
   card_amount: number | null
   comment: string | null
+  created_at: string | null
   operator_id: string | null
-  operator_nam: string | null // как в БД на скрине
+  operator_nam: string | null
   is_virtual: boolean | null
 }
 
@@ -62,6 +63,8 @@ type ExpenseRow = {
   cash_amount: number | null
   kaspi_amount: number | null
   comment: string | null
+  created_at: string | null
+  operator_id: string | null
 }
 
 type RangeType = 'today' | 'week' | 'month30' | 'currentMonth' | 'custom'
@@ -248,7 +251,6 @@ function MetricCard({
 // PAGE
 // =========================
 export default function DashboardPage() {
-  // как на IncomePage — максимум 2000 строк (и честно предупреждаем, если упёрлись)
   const LIMIT = 2000
   const PAGE = 1000
 
@@ -266,10 +268,8 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [hitLimit, setHitLimit] = useState(false)
 
-  // защита от гонок запросов
   const reqIdRef = useRef(0)
 
-  // если пользователь “перевернул” даты — чиним молча
   useEffect(() => {
     if (dateFrom <= dateTo) return
     setDateFrom(dateTo)
@@ -304,34 +304,34 @@ export default function DashboardPage() {
     setRangeType(type)
   }, [])
 
-  // =========================
-  // Paged loader (важно!)
-  // =========================
   const fetchPaged = useCallback(
-    async <T,>(builder: (from: number, to: number) => Promise<{ data: T[] | null; error: any }>) => {
+    async <T,>(
+      builder: (from: number, to: number) => Promise<{ data: T[] | null; error: any }>,
+    ) => {
       const out: T[] = []
       let from = 0
+      let limited = false
 
       while (out.length < LIMIT) {
         const to = Math.min(from + PAGE - 1, LIMIT - 1)
         const { data, error } = await builder(from, to)
-        if (error) return { data: null as T[] | null, error }
+        if (error) return { data: null as T[] | null, error, limited: false }
+
         const chunk = (data || []) as T[]
         out.push(...chunk)
 
-        if (chunk.length < PAGE) break // дальше данных нет
+        if (chunk.length < PAGE) break
         from += PAGE
       }
 
-      const limited = out.length >= LIMIT
+      if (out.length >= LIMIT) limited = true
       return { data: out.slice(0, LIMIT), error: null, limited }
     },
     [LIMIT],
   )
 
   // =========================
-  // LOAD (companies + incomes + expenses)
-  // incomes/expenses грузим с prevFrom..dateTo, постранично
+  // LOAD
   // =========================
   useEffect(() => {
     const myReqId = ++reqIdRef.current
@@ -350,23 +350,25 @@ export default function DashboardPage() {
         supabase
           .from('incomes')
           .select(
-            'id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,comment,operator_id,operator_nam,is_virtual',
+            'id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,comment,created_at,operator_id,operator_nam,is_virtual',
           )
           .gte('date', prevFrom)
           .lte('date', dateTo)
           .order('date', { ascending: false })
-          .order('created_at', { ascending: false }) // стабильнее пагинация
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
           .range(from, to),
       )
 
       const expensePromise = fetchPaged<ExpenseRow>((from, to) =>
         supabase
           .from('expenses')
-          .select('id,date,company_id,category,cash_amount,kaspi_amount,comment')
+          .select('id,date,company_id,category,cash_amount,kaspi_amount,comment,created_at,operator_id')
           .gte('date', prevFrom)
           .lte('date', dateTo)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
           .range(from, to),
       )
 
@@ -401,12 +403,10 @@ export default function DashboardPage() {
   }, [dateFrom, dateTo, fetchPaged])
 
   // =========================
-  // ANALYTICS (memo)
-  // Extra всегда включён -> НИКАКИХ фильтров по company.code
+  // ANALYTICS
   // =========================
   const analytics = useMemo(() => {
     const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
-
     const inCurrent = (date: string) => date >= dateFrom && date <= dateTo
     const inPrev = (date: string) => date >= prevFrom && date <= prevTo
 
@@ -428,7 +428,7 @@ export default function DashboardPage() {
     const current: FinancialTotals = makeTotals()
     const previous: FinancialTotals = makeTotals()
 
-    // график: заполняем все дни, чтобы линия не рвалась
+    // график на все дни
     const chartMap = new Map<string, ChartPoint>()
     {
       let d = fromISO(dateFrom)
@@ -440,7 +440,6 @@ export default function DashboardPage() {
       }
     }
 
-    // incomes (с online_amount)
     for (const r of incomes) {
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
@@ -466,7 +465,6 @@ export default function DashboardPage() {
       }
     }
 
-    // expenses
     for (const r of expenses) {
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
@@ -489,7 +487,6 @@ export default function DashboardPage() {
     const finalize = (t: FinancialTotals) => {
       t.profit = t.incomeTotal - t.expenseTotal
       t.netCash = t.incomeCash - t.expenseCash
-      // kaspi-side: kaspi + online + card - kaspi расход
       t.netKaspi = t.incomeKaspi + t.incomeOnline + t.incomeCard - t.expenseKaspi
       t.netTotal = t.profit
     }
@@ -507,7 +504,6 @@ export default function DashboardPage() {
     const incomeChange = getPercentageChange(current.incomeTotal, previous.incomeTotal)
     const profitChange = getPercentageChange(current.profit, previous.profit)
 
-    // скоринг: без магии, но честно
     let score = 50
     score += Math.min(25, Math.max(-25, margin))
     score += incomeChange > 0 ? 6 : -6
@@ -540,7 +536,6 @@ export default function DashboardPage() {
     }
 
     const insight: AIInsight = { score, status, summary, recommendation, margin, efficiency }
-
     return { current, previous, chartData, insight }
   }, [incomes, expenses, dateFrom, dateTo])
 
@@ -583,7 +578,7 @@ export default function DashboardPage() {
         date: r.date,
         company_id: r.company_id,
         kind: 'income',
-        title: r.comment || r.operator_nam || 'Продажа',
+        title: r.comment || r.operator_nam || 'Доход',
         amount,
       })
     }
@@ -605,7 +600,7 @@ export default function DashboardPage() {
 
     items.sort((a, b) => (b.date === a.date ? b.amount - a.amount : b.date.localeCompare(a.date)))
     return items.slice(0, 7)
-  }, [incomes, expenses, dateFrom, dateTo, companyName])
+  }, [incomes, expenses, dateFrom, dateTo])
 
   // =========================
   // RENDER STATES
@@ -802,10 +797,7 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="mt-3 h-1 w-full bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-yellow-400 to-orange-500"
-                    style={{ width: `${Math.min(100, Math.max(0, insight.margin))}%` }}
-                  />
+                  <div className="h-full bg-gradient-to-r from-yellow-400 to-orange-500" style={{ width: `${Math.min(100, Math.max(0, insight.margin))}%` }} />
                 </div>
 
                 <p className="text-[10px] text-right mt-1 text-muted-foreground">Маржа: {insight.margin.toFixed(1)}%</p>
@@ -925,15 +917,7 @@ export default function DashboardPage() {
                       />
                       <Legend />
 
-                      <Area
-                        type="monotone"
-                        dataKey="profit"
-                        name="Прибыль"
-                        stroke="#a855f7"
-                        strokeWidth={3}
-                        fillOpacity={1}
-                        fill="url(#colorProfit)"
-                      />
+                      <Area type="monotone" dataKey="profit" name="Прибыль" stroke="#a855f7" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" />
                       <Line type="monotone" dataKey="income" name="Доход" stroke="#22c55e" strokeWidth={2} dot={false} strokeOpacity={0.7} />
                       <Line type="monotone" dataKey="expense" name="Расход" stroke="#ef4444" strokeWidth={2} dot={false} strokeOpacity={0.7} />
                     </AreaChart>
@@ -980,9 +964,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
-                      <span
-                        className={`text-xs font-bold font-mono ${op.kind === 'income' ? 'text-green-400' : 'text-red-400'}`}
-                      >
+                      <span className={`text-xs font-bold font-mono ${op.kind === 'income' ? 'text-green-400' : 'text-red-400'}`}>
                         {op.kind === 'income' ? '+' : '-'}
                         {formatMoney(op.amount)}
                       </span>
