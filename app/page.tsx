@@ -20,14 +20,11 @@ import {
   DollarSign,
   Target,
   Award,
-  Flame,
   Sparkles,
   TrendingUp as TrendUpIcon,
   TrendingDown as TrendDownIcon,
   ArrowRight,
-  Lightbulb,
   LineChart,
-  PieChart,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -40,10 +37,9 @@ import {
   AreaChart,
   Area,
   ComposedChart,
-  Bar,
 } from 'recharts'
 
-// ==================== РАСШИРЕННЫЕ ТИПЫ ====================
+// ==================== ТИПЫ ====================
 
 type Company = { id: string; name: string; code?: string | null }
 
@@ -121,7 +117,6 @@ type ChartPoint = {
   expense: number
   profit: number
   movingAvg?: number
-  trend?: number
 }
 
 type CategoryAnalysis = {
@@ -142,7 +137,7 @@ type FeedItem = {
   isAnomaly?: boolean
 }
 
-// ==================== РАСШИРЕННЫЕ УТИЛИТЫ ====================
+// ==================== УТИЛИТЫ ====================
 
 const DateUtils = {
   toISODateLocal: (d: Date): string => {
@@ -228,8 +223,6 @@ const DateUtils = {
   }
 }
 
-// ==================== РАСШИРЕННЫЕ ФОРМАТТЕРЫ ====================
-
 const Formatters = {
   money: (v: number): string => 
     v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }),
@@ -243,12 +236,6 @@ const Formatters = {
   percent: (val: number): string => {
     const sign = val > 0 ? '+' : ''
     return `${sign}${val.toFixed(1)}%`
-  },
-
-  percentChange: (current: number, previous: number): string => {
-    if (previous === 0) return current > 0 ? '+100%' : '0%'
-    const change = ((current - previous) / previous) * 100
-    return Formatters.percent(change)
   },
 
   tooltip: {
@@ -271,7 +258,7 @@ class AIAnalytics {
     
     const first = data[0]
     const last = data[data.length - 1]
-    const change = ((last - first) / first) * 100
+    const change = ((last - first) / (first || 1)) * 100
     
     if (change > 5) return 'up'
     if (change < -5) return 'down'
@@ -283,14 +270,17 @@ class AIAnalytics {
     threshold: number = 2.5
   ): Array<{ type: 'spike' | 'drop' | 'unusual'; date: string; description: string; severity: 'low' | 'medium' | 'high' }> {
     const anomalies = []
+    const values = points.map(p => p.income).filter(v => v > 0)
     
-    // Скользящее среднее и стандартное отклонение
-    const values = points.map(p => p.income)
+    if (values.length === 0) return []
+    
     const mean = values.reduce((a, b) => a + b, 0) / values.length
     const stdDev = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length)
     
     for (let i = 0; i < points.length; i++) {
       const point = points[i]
+      if (point.income === 0) continue
+      
       const zScore = Math.abs((point.income - mean) / (stdDev || 1))
       
       if (zScore > threshold) {
@@ -300,7 +290,7 @@ class AIAnalytics {
         anomalies.push({
           type,
           date: point.date,
-          description: `${type === 'spike' ? 'Всплеск' : 'Падение'} доходов: ${Formatters.moneyShort(point.income)} (${(zScore).toFixed(1)}σ)`,
+          description: `${type === 'spike' ? 'Всплеск' : 'Падение'} доходов: ${Formatters.moneyShort(point.income)}`,
           severity
         })
       }
@@ -312,8 +302,9 @@ class AIAnalytics {
   static predictNextMonth(data: ChartPoint[]): { value: number; confidence: number } {
     if (data.length < 7) return { value: 0, confidence: 0 }
     
-    // Простая линейная регрессия
-    const profits = data.map(d => d.profit)
+    const profits = data.map(d => d.profit).filter(v => v !== 0)
+    if (profits.length < 3) return { value: 0, confidence: 0 }
+    
     const x = Array.from({ length: profits.length }, (_, i) => i)
     
     const n = x.length
@@ -322,13 +313,11 @@ class AIAnalytics {
     const sumXY = x.reduce((a, _, i) => a + x[i] * profits[i], 0)
     const sumXX = x.reduce((a, _, i) => a + x[i] * x[i], 0)
     
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX)
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX || 1)
     const intercept = (sumY - slope * sumX) / n
     
-    // Прогноз на следующий месяц (30 дней)
     const nextValue = slope * (n + 30) + intercept
     
-    // Достоверность на основе R²
     const yMean = sumY / n
     const ssRes = profits.reduce((a, y, i) => a + Math.pow(y - (slope * x[i] + intercept), 2), 0)
     const ssTot = profits.reduce((a, y) => a + Math.pow(y - yMean, 2), 0)
@@ -345,7 +334,6 @@ class AIAnalytics {
   static calculateScore(current: FinancialTotals, previous: FinancialTotals, trends: any): number {
     let score = 50
     
-    // Маржа
     const margin = current.incomeTotal > 0 ? (current.profit / current.incomeTotal) * 100 : 0
     if (margin > 30) score += 20
     else if (margin > 20) score += 15
@@ -353,7 +341,6 @@ class AIAnalytics {
     else if (margin > 5) score += 5
     else if (margin < 0) score -= 20
     
-    // Рост
     const incomeGrowth = ((current.incomeTotal - previous.incomeTotal) / (previous.incomeTotal || 1)) * 100
     const profitGrowth = ((current.profit - previous.profit) / (Math.abs(previous.profit) || 1)) * 100
     
@@ -367,7 +354,6 @@ class AIAnalytics {
     else if (profitGrowth > 0) score += 10
     else if (profitGrowth < -10) score -= 15
     
-    // Эффективность
     const efficiency = current.expenseTotal > 0 
       ? current.incomeTotal / current.expenseTotal 
       : current.incomeTotal > 0 ? 10 : 0
@@ -378,27 +364,6 @@ class AIAnalytics {
     else if (efficiency < 0.8) score -= 10
     
     return Math.min(100, Math.max(0, score))
-  }
-
-  static getRecommendations(score: number, margin: number, trends: any, anomalies: any[]): string {
-    if (score >= 80) {
-      return "Отличные результаты! Рекомендуем: реинвестировать прибыль, масштабировать успешные практики, рассмотреть новые направления."
-    } else if (score >= 60) {
-      return "Хорошая работа! Обратите внимание на: оптимизацию расходов, увеличение среднего чека, работу с постоянными клиентами."
-    } else if (score >= 40) {
-      if (margin < 10) {
-        return "Критически низкая маржа. Срочно: пересмотрите цены, сократите неэффективные расходы, проанализируйте конкурентов."
-      }
-      if (trends.expense === 'up' && trends.income === 'down') {
-        return "Расходы растут быстрее доходов. Фокус: контроль затрат, отказ от убыточных направлений, повышение эффективности."
-      }
-      return "Требуется оптимизация. Проверьте: рентабельность каждой категории, сезонные факторы, эффективность маркетинга."
-    } else {
-      if (anomalies.length > 0) {
-        return `КРИТИЧЕСКИ! Обнаружены аномалии: ${anomalies[0].description}. Требуется немедленный анализ и корректировка.`
-      }
-      return "СРОЧНЫЕ МЕРЫ! Проанализируйте каждую статью расходов, проверьте ценообразование, остановите убыточные активности."
-    }
   }
 }
 
@@ -474,10 +439,11 @@ export default function SmartDashboardPage() {
 
   // Мемоизированные значения
   const companyById = useMemo(() => {
-    return companies.reduce<Record<string, Company>>((acc, c) => {
-      acc[c.id] = c
-      return acc
-    }, {})
+    const map: Record<string, Company> = {}
+    companies.forEach(c => {
+      map[c.id] = c
+    })
+    return map
   }, [companies])
 
   const isExtraCompany = useCallback((companyId: string) => {
@@ -523,6 +489,9 @@ export default function SmartDashboardPage() {
         setDateTo(end)
         break
       }
+      default:
+        setDateFrom(today)
+        setDateTo(today)
     }
     setRangeType(type)
   }, [])
@@ -535,7 +504,7 @@ export default function SmartDashboardPage() {
     const inCurrent = (date: string) => date >= dateFrom && date <= dateTo
     const inPrev = (date: string) => date >= prevFrom && date <= prevTo
 
-    // Инициализация структур данных
+    // Инициализация
     const current: FinancialTotals = {
       incomeCash: 0, incomeKaspi: 0, incomeCard: 0, incomeTotal: 0,
       expenseCash: 0, expenseKaspi: 0, expenseTotal: 0,
@@ -555,11 +524,11 @@ export default function SmartDashboardPage() {
       chartMap.set(date, { date, income: 0, expense: 0, profit: 0 })
     })
 
-    // Анализ по категориям
+    // Категории
     const incomeCategories: Record<string, number> = {}
     const expenseCategories: Record<string, number> = {}
 
-    // Обработка доходов
+    // Обработка доходов (ИСПРАВЛЕНО: используется row вместо r)
     incomes.forEach(row => {
       if (!includeExtra && isExtraCompany(row.company_id)) return
 
@@ -570,7 +539,6 @@ export default function SmartDashboardPage() {
       
       if (total <= 0) return
 
-      // Категории доходов
       const category = row.comment || 'Продажи'
       incomeCategories[category] = (incomeCategories[category] || 0) + total
 
@@ -591,17 +559,16 @@ export default function SmartDashboardPage() {
       }
     })
 
-    // Обработка расходов
+    // Обработка расходов (ИСПРАВЛЕНО: используется row вместо r)
     expenses.forEach(row => {
       if (!includeExtra && isExtraCompany(row.company_id)) return
 
-      const cash = Number(r.cash_amount || 0)
-      const kaspi = Number(r.kaspi_amount || 0)
+      const cash = Number(row.cash_amount || 0)
+      const kaspi = Number(row.kaspi_amount || 0)
       const total = cash + kaspi
       
       if (total <= 0) return
 
-      // Категории расходов
       const category = row.category || row.comment || 'Прочее'
       expenseCategories[category] = (expenseCategories[category] || 0) + total
 
@@ -632,16 +599,14 @@ export default function SmartDashboardPage() {
     finalizeTotals(current)
     finalizeTotals(previous)
 
-    // Расчет прибыли для графика
     chartMap.forEach(point => {
       point.profit = point.income - point.expense
     })
 
-    // Сортируем данные для графика
     const chartData = Array.from(chartMap.values())
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    // Добавляем скользящее среднее
+    // Скользящее среднее
     const windowSize = 7
     chartData.forEach((point, i) => {
       const start = Math.max(0, i - windowSize + 1)
@@ -650,7 +615,6 @@ export default function SmartDashboardPage() {
       point.movingAvg = avg
     })
 
-    // Метрики
     const margin = current.incomeTotal > 0 ? (current.profit / current.incomeTotal) * 100 : 0
     const efficiency = current.expenseTotal > 0 
       ? current.incomeTotal / current.expenseTotal 
@@ -667,26 +631,27 @@ export default function SmartDashboardPage() {
       expense: AIAnalytics.detectTrends(expenseValues.length > 0 ? expenseValues : [0])
     }
 
-    // Аномалии
     const anomalies = AIAnalytics.detectAnomalies(chartData)
-
-    // Прогноз
     const prediction = AIAnalytics.predictNextMonth(chartData)
-
-    // Скоринг
     const score = AIAnalytics.calculateScore(current, previous, trends)
 
-    // Статус
     let status: AIInsight['status'] = 'healthy'
     if (score >= 80) status = 'excellent'
     else if (score >= 55) status = 'healthy'
     else if (score >= 35) status = 'warning'
     else status = 'critical'
 
-    // Рекомендации
-    const recommendation = AIAnalytics.getRecommendations(score, margin, trends, anomalies)
+    let recommendation = ''
+    if (score >= 80) {
+      recommendation = "Отличные результаты! Рекомендуем реинвестировать прибыль."
+    } else if (score >= 60) {
+      recommendation = "Хорошая работа! Оптимизируйте расходы для роста."
+    } else if (score >= 40) {
+      recommendation = "Требуется оптимизация. Проверьте рентабельность."
+    } else {
+      recommendation = "Критическая ситуация! Срочно проанализируйте расходы."
+    }
 
-    // Бенчмарки
     const benchmarks = {
       vsLastWeek: current.profit - previous.profit,
       vsLastMonth: current.profit - previous.profit * 4,
@@ -696,11 +661,9 @@ export default function SmartDashboardPage() {
     const insight: AIInsight = {
       score,
       status,
-      summary: `${status === 'excellent' ? '🚀 Отлично' : 
-                status === 'healthy' ? '✅ Хорошо' : 
-                status === 'warning' ? '⚠️ Внимание' : '🔴 Критично'}: ${
-                trends.profit === 'up' ? 'прибыль растет' : 
-                trends.profit === 'down' ? 'прибыль падает' : 'прибыль стабильна'}`,
+      summary: `${status === 'excellent' ? 'Отлично' : 
+                status === 'healthy' ? 'Хорошо' : 
+                status === 'warning' ? 'Внимание' : 'Критично'}`,
       recommendation,
       margin,
       efficiency,
@@ -709,14 +672,11 @@ export default function SmartDashboardPage() {
       predictions: {
         nextMonthProfit: prediction.value,
         confidence: prediction.confidence,
-        recommendation: prediction.confidence > 70 
-          ? 'Прогноз достаточно надежен' 
-          : 'Низкая достоверность прогноза'
+        recommendation: prediction.confidence > 70 ? 'Прогноз надежен' : 'Низкая достоверность'
       },
       benchmarks
     }
 
-    // Топ категории
     const topIncomeCategories = Object.entries(incomeCategories)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5)
@@ -752,43 +712,42 @@ export default function SmartDashboardPage() {
   const feedItems = useMemo(() => {
     const items: FeedItem[] = []
 
-    incomes.forEach(r => {
-      if (!includeExtra && isExtraCompany(r.company_id)) return
-      if (r.date < dateFrom || r.date > dateTo) return
+    incomes.forEach(row => {
+      if (!includeExtra && isExtraCompany(row.company_id)) return
+      if (row.date < dateFrom || row.date > dateTo) return
 
-      const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
+      const amount = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0)
       if (amount <= 0) return
 
       items.push({
-        id: `inc-${r.id}`,
-        date: r.date,
-        company_id: r.company_id,
+        id: `inc-${row.id}`,
+        date: row.date,
+        company_id: row.company_id,
         kind: 'income',
-        title: r.comment || 'Продажа',
+        title: row.comment || 'Продажа',
         amount,
         category: 'income'
       })
     })
 
-    expenses.forEach(r => {
-      if (!includeExtra && isExtraCompany(r.company_id)) return
-      if (r.date < dateFrom || r.date > dateTo) return
+    expenses.forEach(row => {
+      if (!includeExtra && isExtraCompany(row.company_id)) return
+      if (row.date < dateFrom || row.date > dateTo) return
 
-      const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0)
+      const amount = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0)
       if (amount <= 0) return
 
       items.push({
-        id: `exp-${r.id}`,
-        date: r.date,
-        company_id: r.company_id,
+        id: `exp-${row.id}`,
+        date: row.date,
+        company_id: row.company_id,
         kind: 'expense',
-        title: r.category || r.comment || 'Расход',
+        title: row.category || row.comment || 'Расход',
         amount,
-        category: r.category || undefined
+        category: row.category || undefined
       })
     })
 
-    // Отмечаем аномалии
     const anomalyDates = new Set(analytics.anomalies.map(a => a.date))
     items.forEach(item => {
       if (anomalyDates.has(item.date)) {
@@ -811,7 +770,7 @@ export default function SmartDashboardPage() {
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4" />
-            <p className="text-muted-foreground">Загрузка умного дашборда...</p>
+            <p className="text-muted-foreground">Загрузка дашборда...</p>
           </div>
         </main>
       </div>
@@ -841,7 +800,7 @@ export default function SmartDashboardPage() {
       <Sidebar />
       <main className="flex-1 overflow-auto">
         <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-          {/* Хедер с AI-статусом */}
+          {/* Хедер */}
           <SmartHeader
             dateFrom={dateFrom}
             dateTo={dateTo}
@@ -861,7 +820,7 @@ export default function SmartDashboardPage() {
             }}
           />
 
-          {/* AI Инсайты и ключевые метрики */}
+          {/* Инсайты */}
           <InsightDashboard
             insight={insight}
             current={current}
@@ -870,9 +829,8 @@ export default function SmartDashboardPage() {
             selectedMetric={selectedMetric}
           />
 
-          {/* Расширенная аналитика */}
+          {/* Аналитика */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* График занимает 3 колонки */}
             <div className="lg:col-span-3">
               <AdvancedChart
                 data={chartData}
@@ -883,7 +841,6 @@ export default function SmartDashboardPage() {
               />
             </div>
 
-            {/* Боковая панель с аналитикой */}
             <div className="lg:col-span-1 space-y-6">
               <CategoryAnalysis
                 title="Топ доходов"
@@ -906,7 +863,7 @@ export default function SmartDashboardPage() {
             </div>
           </div>
 
-          {/* Аномалии и лента событий */}
+          {/* Аномалии и лента */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <AnomaliesCard
               anomalies={insight.anomalies}
@@ -932,7 +889,7 @@ export default function SmartDashboardPage() {
   )
 }
 
-// ==================== УМНЫЕ КОМПОНЕНТЫ ====================
+// ==================== ПОДКОМПОНЕНТЫ ====================
 
 interface SmartHeaderProps {
   dateFrom: string
@@ -975,9 +932,9 @@ function SmartHeader({
             AI Dashboard
           </h1>
           <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[insight.status]}`}>
-            {insight.status === 'excellent' ? '🚀 Отличные показатели' :
-             insight.status === 'healthy' ? '✅ Стабильно' :
-             insight.status === 'warning' ? '⚠️ Требует внимания' : '🔴 Критическая ситуация'}
+            {insight.status === 'excellent' ? 'Отличные показатели' :
+             insight.status === 'healthy' ? 'Стабильно' :
+             insight.status === 'warning' ? 'Требует внимания' : 'Критическая ситуация'}
           </span>
         </div>
         
@@ -1012,7 +969,6 @@ function SmartHeader({
         </div>
       </div>
 
-      {/* Фильтры */}
       <DateFilters
         dateFrom={dateFrom}
         dateTo={dateTo}
@@ -1025,38 +981,40 @@ function SmartHeader({
   )
 }
 
-interface DateFiltersProps {
+function DateFilters({ dateFrom, dateTo, rangeType, onRangeChange, onDateFromChange, onDateToChange }: {
   dateFrom: string
   dateTo: string
   rangeType: RangeType
   onRangeChange: (type: RangeType) => void
   onDateFromChange: (value: string) => void
   onDateToChange: (value: string) => void
-}
+}) {
+  const ranges: Array<{ type: RangeType; label: string }> = [
+    { type: 'today', label: 'Сегодня' },
+    { type: 'week', label: '7 дней' },
+    { type: 'month30', label: '30 дней' },
+    { type: 'currentMonth', label: 'Месяц' },
+    { type: 'quarter', label: 'Квартал' },
+    { type: 'year', label: 'Год' },
+  ]
 
-function DateFilters({ dateFrom, dateTo, rangeType, onRangeChange, onDateFromChange, onDateToChange }: DateFiltersProps) {
   return (
     <div className="flex flex-col items-stretch gap-2 w-full xl:w-auto">
       <div className="flex flex-col sm:flex-row items-center gap-2 w-full xl:w-auto">
         <div className="bg-card/50 border border-border/50 rounded-lg p-1 flex items-center gap-1 w-full sm:w-auto justify-center flex-wrap">
-          <RangeButton active={rangeType === 'today'} onClick={() => onRangeChange('today')}>
-            Сегодня
-          </RangeButton>
-          <RangeButton active={rangeType === 'week'} onClick={() => onRangeChange('week')}>
-            7 дней
-          </RangeButton>
-          <RangeButton active={rangeType === 'month30'} onClick={() => onRangeChange('month30')}>
-            30 дней
-          </RangeButton>
-          <RangeButton active={rangeType === 'currentMonth'} onClick={() => onRangeChange('currentMonth')}>
-            Месяц
-          </RangeButton>
-          <RangeButton active={rangeType === 'quarter'} onClick={() => onRangeChange('quarter')}>
-            Квартал
-          </RangeButton>
-          <RangeButton active={rangeType === 'year'} onClick={() => onRangeChange('year')}>
-            Год
-          </RangeButton>
+          {ranges.map(r => (
+            <button
+              key={r.type}
+              onClick={() => onRangeChange(r.type)}
+              className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all whitespace-nowrap ${
+                rangeType === r.type
+                  ? 'bg-purple-600 text-white'
+                  : 'hover:bg-white/5 text-muted-foreground'
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
         </div>
 
         <div className="flex items-center gap-2 bg-card/30 p-1 rounded-lg border border-border/30">
@@ -1085,21 +1043,6 @@ function DateFilters({ dateFrom, dateTo, rangeType, onRangeChange, onDateFromCha
   )
 }
 
-function RangeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-2 py-1 text-[10px] font-medium rounded-md transition-all whitespace-nowrap ${
-        active
-          ? 'bg-purple-600 text-white'
-          : 'hover:bg-white/5 text-muted-foreground'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
 interface InsightDashboardProps {
   insight: AIInsight
   current: FinancialTotals
@@ -1110,14 +1053,13 @@ interface InsightDashboardProps {
 
 function InsightDashboard({ insight, current, previous, selectedMetric, onMetricChange }: InsightDashboardProps) {
   const metrics = [
-    { key: 'profit', label: 'Прибыль', value: current.profit, change: current.profit - previous.profit, icon: <Target className="w-4 h-4" /> },
-    { key: 'income', label: 'Доход', value: current.incomeTotal, change: current.incomeTotal - previous.incomeTotal, icon: <TrendingUp className="w-4 h-4" /> },
-    { key: 'expense', label: 'Расход', value: current.expenseTotal, change: current.expenseTotal - previous.expenseTotal, icon: <TrendingDown className="w-4 h-4" /> },
+    { key: 'profit' as const, label: 'Прибыль', value: current.profit, change: current.profit - previous.profit, icon: <Target className="w-4 h-4" /> },
+    { key: 'income' as const, label: 'Доход', value: current.incomeTotal, change: current.incomeTotal - previous.incomeTotal, icon: <TrendingUp className="w-4 h-4" /> },
+    { key: 'expense' as const, label: 'Расход', value: current.expenseTotal, change: current.expenseTotal - previous.expenseTotal, icon: <TrendingDown className="w-4 h-4" /> },
   ]
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      {/* AI Карточка */}
       <Card className="lg:col-span-1 p-6 border relative overflow-hidden bg-gradient-to-br from-purple-950/20 to-transparent border-purple-500/30">
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-4">
@@ -1155,12 +1097,11 @@ function InsightDashboard({ insight, current, previous, selectedMetric, onMetric
         <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 rounded-full blur-3xl opacity-20 -mr-20 -mt-20" />
       </Card>
 
-      {/* Метрики */}
       <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
         {metrics.map(metric => {
           const isSelected = selectedMetric === metric.key
-          const changePercent = previous[metric.key as keyof FinancialTotals] 
-            ? ((metric.change / (previous[metric.key as keyof FinancialTotals] as number)) * 100).toFixed(1)
+          const changePercent = previous[metric.key] 
+            ? ((metric.change / (previous[metric.key] || 1)) * 100).toFixed(1)
             : '0'
 
           return (
@@ -1169,7 +1110,7 @@ function InsightDashboard({ insight, current, previous, selectedMetric, onMetric
               className={`p-6 cursor-pointer transition-all hover:border-purple-500/50 ${
                 isSelected ? 'border-purple-500 bg-purple-500/5' : 'border-border'
               }`}
-              onClick={() => onMetricChange(metric.key as any)}
+              onClick={() => onMetricChange(metric.key)}
             >
               <div className="flex items-center justify-between mb-4">
                 <span className="text-sm text-muted-foreground">{metric.label}</span>
@@ -1211,24 +1152,6 @@ function AdvancedChart({ data, selectedMetric, showPredictions, anomalies, onTog
     profit: 'Прибыль'
   }
 
-  // Добавляем прогнозные точки
-  const chartData = [...data]
-  if (showPredictions && data.length > 0) {
-    const lastDate = DateUtils.fromISO(data[data.length - 1].date)
-    const nextDate = DateUtils.addDaysISO(data[data.length - 1].date, 1)
-    const avgChange = data.slice(-7).reduce((sum, d, i, arr) => {
-      if (i === 0) return sum
-      return sum + (d[selectedMetric] - arr[i - 1][selectedMetric])
-    }, 0) / 6
-
-    chartData.push({
-      date: nextDate,
-      income: data[data.length - 1].income + avgChange,
-      expense: data[data.length - 1].expense + avgChange,
-      profit: data[data.length - 1].profit + avgChange,
-    })
-  }
-
   return (
     <Card className="p-6 border-border bg-card">
       <div className="flex items-center justify-between mb-6">
@@ -1253,7 +1176,7 @@ function AdvancedChart({ data, selectedMetric, showPredictions, anomalies, onTog
       ) : (
         <div className="h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData}>
+            <ComposedChart data={data}>
               <defs>
                 <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={metricColors[selectedMetric]} stopOpacity={0.3} />
@@ -1284,7 +1207,6 @@ function AdvancedChart({ data, selectedMetric, showPredictions, anomalies, onTog
               />
               <Legend />
 
-              {/* Основная линия */}
               <Area
                 type="monotone"
                 dataKey={selectedMetric}
@@ -1295,7 +1217,6 @@ function AdvancedChart({ data, selectedMetric, showPredictions, anomalies, onTog
                 fill="url(#colorMetric)"
               />
 
-              {/* Скользящее среднее */}
               <Line
                 type="monotone"
                 dataKey="movingAvg"
@@ -1305,37 +1226,6 @@ function AdvancedChart({ data, selectedMetric, showPredictions, anomalies, onTog
                 dot={false}
                 strokeDasharray="5 5"
               />
-
-              {/* Прогноз (пунктиром) */}
-              {showPredictions && (
-                <Line
-                  type="monotone"
-                  dataKey={selectedMetric}
-                  name="Прогноз"
-                  stroke={metricColors[selectedMetric]}
-                  strokeWidth={2}
-                  dot={false}
-                  strokeDasharray="5 5"
-                  data={chartData.slice(-2)}
-                />
-              )}
-
-              {/* Аномалии точками */}
-              {anomalies.map((anomaly, i) => {
-                const point = data.find(d => d.date === anomaly.date)
-                if (!point) return null
-                return (
-                  <circle
-                    key={i}
-                    cx={`${data.findIndex(d => d.date === anomaly.date) * (100 / data.length)}%`}
-                    cy={`${100 - (point[selectedMetric] / Math.max(...data.map(d => d[selectedMetric])) * 100)}%`}
-                    r={6}
-                    fill={anomaly.severity === 'high' ? '#ef4444' : anomaly.severity === 'medium' ? '#f97316' : '#eab308'}
-                    stroke="#fff"
-                    strokeWidth={2}
-                  />
-                )
-              })}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -1364,21 +1254,19 @@ function CategoryAnalysis({ title, categories, total, icon }: {
           categories.map((cat, i) => (
             <div key={i}>
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-muted-foreground">{cat.name}</span>
-                <span className="font-medium">{Formatters.money(cat.amount)} ₸</span>
+                <span className="text-muted-foreground truncate max-w-[120px]">{cat.name}</span>
+                <span className="font-medium">{Formatters.moneyShort(cat.amount)}</span>
               </div>
               <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full ${
                     title.includes('Доход') ? 'bg-green-500' : 'bg-red-500'
                   }`}
-                  style={{ width: `${cat.percentage}%` }}
+                  style={{ width: `${Math.min(100, cat.percentage)}%` }}
                 />
               </div>
               <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
                 <span>{cat.percentage.toFixed(1)}%</span>
-                {cat.trend === 'up' && <TrendUpIcon className="w-3 h-3 text-green-400" />}
-                {cat.trend === 'down' && <TrendDownIcon className="w-3 h-3 text-red-400" />}
               </div>
             </div>
           ))
@@ -1482,7 +1370,7 @@ function AnomaliesCard({ anomalies, isVisible, onToggle }: {
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-medium">
-                    {anomaly.type === 'spike' ? '📈 Всплеск' : '📉 Падение'}
+                    {anomaly.type === 'spike' ? 'Всплеск' : 'Падение'}
                   </span>
                   <span className="text-[10px] opacity-75">
                     {DateUtils.formatRuDate(anomaly.date)}
@@ -1525,7 +1413,7 @@ function BenchmarksCard({ benchmarks, profit }: {
                 {item.label}
               </span>
               <span className={isPositive ? 'text-green-400' : 'text-red-400'}>
-                {isPositive ? '+' : ''}{Formatters.money(item.value)} ₸
+                {isPositive ? '+' : ''}{Formatters.moneyShort(item.value)}
               </span>
             </div>
           )
@@ -1534,7 +1422,7 @@ function BenchmarksCard({ benchmarks, profit }: {
         <div className="pt-2 border-t border-white/10">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">Средний чек</span>
-            <span className="font-medium">{Formatters.money(profit / 30)} ₸</span>
+            <span className="font-medium">{Formatters.moneyShort(profit / 30)}</span>
           </div>
         </div>
       </div>
