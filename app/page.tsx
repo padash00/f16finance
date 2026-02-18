@@ -1,11 +1,11 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
+import { useEffect, useMemo, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
+import Link from 'next/link'
 import {
   TrendingUp,
   TrendingDown,
@@ -31,40 +31,27 @@ import {
   Area,
 } from 'recharts'
 
-// =========================
-// TYPES
-// =========================
+// --- Типы данных ---
 type Company = { id: string; name: string; code?: string | null }
-
-type Shift = 'day' | 'night' | string
 
 type IncomeRow = {
   id: string
-  date: string // YYYY-MM-DD
+  date: string
   company_id: string
-  shift: Shift | null
-  zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
-  online_amount: number | null
   card_amount: number | null
   comment: string | null
-  created_at: string | null
-  operator_id: string | null
-  operator_nam: string | null
-  is_virtual: boolean | null
 }
 
 type ExpenseRow = {
   id: string
-  date: string // YYYY-MM-DD
+  date: string
   company_id: string
   category: string | null
   cash_amount: number | null
   kaspi_amount: number | null
   comment: string | null
-  created_at: string | null
-  operator_id: string | null
 }
 
 type RangeType = 'today' | 'week' | 'month30' | 'currentMonth' | 'custom'
@@ -72,7 +59,6 @@ type RangeType = 'today' | 'week' | 'month30' | 'currentMonth' | 'custom'
 type FinancialTotals = {
   incomeCash: number
   incomeKaspi: number
-  incomeOnline: number
   incomeCard: number
   incomeTotal: number
   expenseCash: number
@@ -109,9 +95,7 @@ type FeedItem = {
   amount: number
 }
 
-// =========================
-// DATE HELPERS (локально)
-// =========================
+// --- Даты (локально, без UTC-сдвигов) ---
 const toISODateLocal = (d: Date) => {
   const t = d.getTime() - d.getTimezoneOffset() * 60_000
   return new Date(t).toISOString().slice(0, 10)
@@ -154,17 +138,16 @@ const calculatePrevPeriod = (dateFrom: string, dateTo: string) => {
   return { prevFrom, prevTo, durationDays }
 }
 
-// =========================
-// MATH / FORMAT
-// =========================
 const getPercentageChange = (current: number, previous: number) => {
   if (previous === 0) return current > 0 ? 100 : 0
   if (current === 0) return -100
   return ((current - previous) / previous) * 100
 }
 
+const formatMoney = (v: number) =>
+  v.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
+
 const fmtPctLabel = (val: number) => {
-  if (!Number.isFinite(val)) return '—'
   const sign = val > 0 ? '+' : ''
   return `${sign}${val.toFixed(1)}%`
 }
@@ -178,87 +161,9 @@ const tooltipStyles = {
   itemStyle: { color: '#fff' },
 } as const
 
-// =========================
-// UI HELPERS
-// =========================
-function StatusBadge({ status }: { status: AIInsight['status'] }) {
-  const cfg =
-    status === 'excellent'
-      ? { text: 'Отлично', cls: 'text-green-400 border-green-500/30 bg-green-500/10' }
-      : status === 'healthy'
-        ? { text: 'Норма', cls: 'text-purple-400 border-purple-500/30 bg-purple-500/10' }
-        : status === 'warning'
-          ? { text: 'Внимание', cls: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' }
-          : { text: 'Критично', cls: 'text-red-400 border-red-500/30 bg-red-500/10' }
-
-  return (
-    <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider border ${cfg.cls}`}>
-      {cfg.text}
-    </span>
-  )
-}
-
-function RangeButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-        active ? 'bg-purple-600 text-white' : 'hover:bg-white/5 text-muted-foreground'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
-function MetricCard({
-  title,
-  value,
-  sub1,
-  sub2,
-  icon,
-  valueClass,
-}: {
-  title: string
-  value: string
-  sub1?: string
-  sub2?: string
-  icon: React.ReactNode
-  valueClass?: string
-}) {
-  return (
-    <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors group">
-      <div className="flex justify-between mb-2">
-        <span className="text-xs text-muted-foreground">{title}</span>
-        <span className="opacity-50 group-hover:opacity-100 transition-opacity">{icon}</span>
-      </div>
-      <div className={`text-xl font-bold ${valueClass ?? 'text-foreground'}`}>{value}</div>
-      {sub1 && <div className="text-[10px] text-muted-foreground mt-1">{sub1}</div>}
-      {sub2 && <div className="text-[10px] text-muted-foreground">{sub2}</div>}
-    </Card>
-  )
-}
-
-// =========================
-// PAGE
-// =========================
 export default function DashboardPage() {
-  const LIMIT = 2000
-  const PAGE = 1000
-
-  const moneyFmt = useMemo(() => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }), [])
-  const formatMoney = useCallback((v: number) => moneyFmt.format(v), [moneyFmt])
-
   const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -6))
-  const [dateTo, setDateTo] = useState(() => todayISO())
+  const [dateTo, setDateTo] = useState(todayISO())
   const [rangeType, setRangeType] = useState<RangeType>('week')
 
   const [companies, setCompanies] = useState<Company[]>([])
@@ -266,25 +171,9 @@ export default function DashboardPage() {
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [hitLimit, setHitLimit] = useState(false)
+  const [includeExtra, setIncludeExtra] = useState(false)
 
-  const reqIdRef = useRef(0)
-
-  useEffect(() => {
-    if (dateFrom <= dateTo) return
-    setDateFrom(dateTo)
-    setDateTo(dateFrom)
-  }, [dateFrom, dateTo])
-
-  const companyById = useMemo(() => {
-    const map: Record<string, Company> = {}
-    for (const c of companies) map[c.id] = c
-    return map
-  }, [companies])
-
-  const companyName = useCallback((id: string) => companyById[id]?.name ?? '—', [companyById])
-
-  const setQuickRange = useCallback((type: RangeType) => {
+  const setQuickRange = (type: RangeType) => {
     const today = todayISO()
 
     if (type === 'today') {
@@ -302,118 +191,78 @@ export default function DashboardPage() {
       setDateTo(end)
     }
     setRangeType(type)
-  }, [])
+  }
 
-  const fetchPaged = useCallback(
-    async <T,>(
-      builder: (from: number, to: number) => Promise<{ data: T[] | null; error: any }>,
-    ) => {
-      const out: T[] = []
-      let from = 0
-      let limited = false
-
-      while (out.length < LIMIT) {
-        const to = Math.min(from + PAGE - 1, LIMIT - 1)
-        const { data, error } = await builder(from, to)
-        if (error) return { data: null as T[] | null, error, limited: false }
-
-        const chunk = (data || []) as T[]
-        out.push(...chunk)
-
-        if (chunk.length < PAGE) break
-        from += PAGE
-      }
-
-      if (out.length >= LIMIT) limited = true
-      return { data: out.slice(0, LIMIT), error: null, limited }
-    },
-    [LIMIT],
-  )
-
-  // =========================
-  // LOAD
-  // =========================
+  // Загрузка: только нужные поля + prev period одним запросом
   useEffect(() => {
-    const myReqId = ++reqIdRef.current
     let alive = true
 
     const load = async () => {
       setLoading(true)
       setError(null)
-      setHitLimit(false)
 
       const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
 
-      const compPromise = supabase.from('companies').select('id,name,code').order('name')
-
-      const incomePromise = fetchPaged<IncomeRow>((from, to) =>
+      const [
+        { data: compData, error: compErr },
+        { data: incomeData, error: incomeErr },
+        { data: expenseData, error: expenseErr },
+      ] = await Promise.all([
+        supabase.from('companies').select('id,name,code').order('name'),
         supabase
           .from('incomes')
-          .select(
-            'id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,comment,created_at,operator_id,operator_nam,is_virtual',
-          )
+          .select('id,date,company_id,cash_amount,kaspi_amount,card_amount,comment')
           .gte('date', prevFrom)
           .lte('date', dateTo)
-          .order('date', { ascending: false })
-          .order('created_at', { ascending: false })
-          .order('id', { ascending: false })
-          .range(from, to),
-      )
-
-      const expensePromise = fetchPaged<ExpenseRow>((from, to) =>
+          .order('date', { ascending: false }),
         supabase
           .from('expenses')
-          .select('id,date,company_id,category,cash_amount,kaspi_amount,comment,created_at,operator_id')
+          .select('id,date,company_id,category,cash_amount,kaspi_amount,comment')
           .gte('date', prevFrom)
           .lte('date', dateTo)
-          .order('date', { ascending: false })
-          .order('created_at', { ascending: false })
-          .order('id', { ascending: false })
-          .range(from, to),
-      )
-
-      const [compRes, incRes, expRes] = await Promise.all([compPromise, incomePromise, expensePromise])
+          .order('date', { ascending: false }),
+      ])
 
       if (!alive) return
-      if (myReqId !== reqIdRef.current) return
 
-      if (compRes.error || incRes.error || expRes.error) {
-        console.error('Dashboard load error', {
-          compErr: compRes.error,
-          incomeErr: incRes.error,
-          expenseErr: expRes.error,
-        })
+      if (compErr || incomeErr || expenseErr) {
+        console.error('Dashboard load error', { compErr, incomeErr, expenseErr })
         setError('Ошибка загрузки данных')
         setLoading(false)
         return
       }
 
-      setCompanies((compRes.data || []) as Company[])
-      setIncomes((incRes.data || []) as IncomeRow[])
-      setExpenses((expRes.data || []) as ExpenseRow[])
-      setHitLimit(Boolean(incRes.limited || expRes.limited))
+      setCompanies((compData || []) as Company[])
+      setIncomes((incomeData || []) as IncomeRow[])
+      setExpenses((expenseData || []) as ExpenseRow[])
       setLoading(false)
     }
 
     load()
-
     return () => {
       alive = false
     }
-  }, [dateFrom, dateTo, fetchPaged])
+  }, [dateFrom, dateTo])
 
-  // =========================
-  // ANALYTICS
-  // =========================
+  const companyById = useMemo(() => {
+    const map: Record<string, Company> = {}
+    for (const c of companies) map[c.id] = c
+    return map
+  }, [companies])
+
+  const companyName = (id: string) => companyById[id]?.name ?? '—'
+  const isExtraCompany = (companyId: string) =>
+    (companyById[companyId]?.code || '').toLowerCase() === 'extra'
+
   const analytics = useMemo(() => {
     const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
+
     const inCurrent = (date: string) => date >= dateFrom && date <= dateTo
     const inPrev = (date: string) => date >= prevFrom && date <= prevTo
 
     const makeTotals = (): FinancialTotals => ({
       incomeCash: 0,
       incomeKaspi: 0,
-      incomeOnline: 0,
       incomeCard: 0,
       incomeTotal: 0,
       expenseCash: 0,
@@ -428,7 +277,7 @@ export default function DashboardPage() {
     const current: FinancialTotals = makeTotals()
     const previous: FinancialTotals = makeTotals()
 
-    // график на все дни
+    // график — заранее все дни, чтобы не рвало линию
     const chartMap = new Map<string, ChartPoint>()
     {
       let d = fromISO(dateFrom)
@@ -440,32 +289,36 @@ export default function DashboardPage() {
       }
     }
 
+    // Доходы
     for (const r of incomes) {
+      if (!includeExtra && isExtraCompany(r.company_id)) continue
+
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
-      const online = Number(r.online_amount || 0)
       const card = Number(r.card_amount || 0)
-      const total = cash + kaspi + online + card
+      const total = cash + kaspi + card
       if (total <= 0) continue
 
       if (inCurrent(r.date)) {
         current.incomeTotal += total
         current.incomeCash += cash
         current.incomeKaspi += kaspi
-        current.incomeOnline += online
         current.incomeCard += card
+
         const p = chartMap.get(r.date)
         if (p) p.income += total
       } else if (inPrev(r.date)) {
         previous.incomeTotal += total
         previous.incomeCash += cash
         previous.incomeKaspi += kaspi
-        previous.incomeOnline += online
         previous.incomeCard += card
       }
     }
 
+    // Расходы
     for (const r of expenses) {
+      if (!includeExtra && isExtraCompany(r.company_id)) continue
+
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
       const total = cash + kaspi
@@ -475,6 +328,7 @@ export default function DashboardPage() {
         current.expenseTotal += total
         current.expenseCash += cash
         current.expenseKaspi += kaspi
+
         const p = chartMap.get(r.date)
         if (p) p.expense += total
       } else if (inPrev(r.date)) {
@@ -484,34 +338,39 @@ export default function DashboardPage() {
       }
     }
 
-    const finalize = (t: FinancialTotals) => {
+    const finalizeTotals = (t: FinancialTotals) => {
       t.profit = t.incomeTotal - t.expenseTotal
       t.netCash = t.incomeCash - t.expenseCash
-      t.netKaspi = t.incomeKaspi + t.incomeOnline + t.incomeCard - t.expenseKaspi
-      t.netTotal = t.profit
+      t.netKaspi = t.incomeKaspi + t.incomeCard - t.expenseKaspi
+      t.netTotal = t.incomeTotal - t.expenseTotal
     }
-    finalize(current)
-    finalize(previous)
 
-    for (const p of chartMap.values()) p.profit = p.income - p.expense
+    finalizeTotals(current)
+    finalizeTotals(previous)
 
-    const chartData: ChartPoint[] = Array.from(chartMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+    for (const p of chartMap.values()) {
+      p.profit = p.income - p.expense
+    }
 
     const margin = current.incomeTotal > 0 ? (current.profit / current.incomeTotal) * 100 : 0
-    const efficiency =
-      current.expenseTotal > 0 ? current.incomeTotal / current.expenseTotal : current.incomeTotal > 0 ? 10 : 0
+
+    let efficiency = 0
+    if (current.expenseTotal > 0) efficiency = current.incomeTotal / current.expenseTotal
+    else if (current.incomeTotal > 0) efficiency = 10
 
     const incomeChange = getPercentageChange(current.incomeTotal, previous.incomeTotal)
     const profitChange = getPercentageChange(current.profit, previous.profit)
 
+    // скоринг — чуть более адекватный
     let score = 50
-    score += Math.min(25, Math.max(-25, margin))
-    score += incomeChange > 0 ? 6 : -6
-    score += profitChange > 0 ? 10 : -10
-    if (efficiency > 1.2) score += 6
-    if (efficiency < 1.05 && current.incomeTotal > 0) score -= 8
-    if (current.profit < 0) score -= 20
-    score = Math.min(100, Math.max(0, Math.round(score)))
+    if (margin > 10) score += 10
+    if (margin > 20) score += 15
+    if (margin > 35) score += 10
+    if (incomeChange > 0) score += 7
+    if (profitChange > 0) score += 10
+    if (efficiency > 1.2) score += 8
+    if (current.profit < 0) score -= 25
+    score = Math.min(100, Math.max(0, score))
 
     let status: AIInsight['status'] = 'healthy'
     let summary = ''
@@ -520,57 +379,68 @@ export default function DashboardPage() {
     if (score >= 80) {
       status = 'excellent'
       summary = 'Отличные показатели: вы в плюсе и растёте.'
-      recommendation = 'Закрепляйте: усиливайте лучшее (пиковые часы/зоны), слабое — оптимизируйте.'
+      recommendation = 'Реинвестируйте часть прибыли в маркетинг/апгрейд и фиксируйте удачные решения.'
     } else if (score >= 55) {
       status = 'healthy'
       summary = 'Устойчивая работа: прибыль есть, всё под контролем.'
-      recommendation = 'Поднимайте маржу: пересмотрите цены/пакеты и режьте “тихие” расходы.'
+      recommendation = 'Дожимайте маржу: смотрите, где “течёт” расход и где можно поднять чек.'
     } else if (score >= 35) {
       status = 'warning'
       summary = 'Прибыль под давлением: расходы заметно съедают выручку.'
-      recommendation = 'Ревизия затрат + фокус на прибыльные позиции. Остальное — на паузу.'
+      recommendation = 'Ревизия затрат + упор на самые прибыльные зоны. Ненужное — в морозилку.'
     } else {
       status = 'critical'
       summary = 'Риск убытков: вы слишком близко к минусу.'
-      recommendation = 'Срочно: резать лишнее, проверять цены/скидки, усиливать загрузку пиков.'
+      recommendation = 'Срочно режьте лишнее, проверьте цены/тарифы и поднимайте загрузку ключевых часов.'
     }
 
-    const insight: AIInsight = { score, status, summary, recommendation, margin, efficiency }
+    const chartData: ChartPoint[] = Array.from(chartMap.values()).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    )
+
+    const insight: AIInsight = {
+      score,
+      status,
+      summary,
+      recommendation,
+      margin,
+      efficiency,
+    }
+
     return { current, previous, chartData, insight }
-  }, [incomes, expenses, dateFrom, dateTo])
+  }, [incomes, expenses, dateFrom, dateTo, includeExtra, companyById])
 
   const { current, previous, chartData, insight } = analytics
 
   const transactionsCount = useMemo(() => {
-    const inc = incomes.filter((x) => {
-      if (x.date < dateFrom || x.date > dateTo) return false
-      const amount =
-        Number(x.cash_amount || 0) +
-        Number(x.kaspi_amount || 0) +
-        Number(x.online_amount || 0) +
-        Number(x.card_amount || 0)
-      return amount > 0
-    }).length
+    const inc = incomes.filter(
+      (x) =>
+        (includeExtra || !isExtraCompany(x.company_id)) &&
+        x.date >= dateFrom &&
+        x.date <= dateTo &&
+        (Number(x.cash_amount || 0) + Number(x.kaspi_amount || 0) + Number(x.card_amount || 0)) > 0,
+    ).length
 
-    const exp = expenses.filter((x) => {
-      if (x.date < dateFrom || x.date > dateTo) return false
-      const amount = Number(x.cash_amount || 0) + Number(x.kaspi_amount || 0)
-      return amount > 0
-    }).length
+    const exp = expenses.filter(
+      (x) =>
+        (includeExtra || !isExtraCompany(x.company_id)) &&
+        x.date >= dateFrom &&
+        x.date <= dateTo &&
+        (Number(x.cash_amount || 0) + Number(x.kaspi_amount || 0)) > 0,
+    ).length
 
     return inc + exp
-  }, [incomes, expenses, dateFrom, dateTo])
+  }, [incomes, expenses, dateFrom, dateTo, includeExtra, companyById])
 
   const feedItems = useMemo<FeedItem[]>(() => {
     const items: FeedItem[] = []
 
     for (const r of incomes) {
+      if (!includeExtra && isExtraCompany(r.company_id)) continue
       if (r.date < dateFrom || r.date > dateTo) continue
+
       const amount =
-        Number(r.cash_amount || 0) +
-        Number(r.kaspi_amount || 0) +
-        Number(r.online_amount || 0) +
-        Number(r.card_amount || 0)
+        Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
       if (amount <= 0) continue
 
       items.push({
@@ -578,13 +448,15 @@ export default function DashboardPage() {
         date: r.date,
         company_id: r.company_id,
         kind: 'income',
-        title: r.comment || r.operator_nam || 'Доход',
+        title: r.comment || 'Продажа',
         amount,
       })
     }
 
     for (const r of expenses) {
+      if (!includeExtra && isExtraCompany(r.company_id)) continue
       if (r.date < dateFrom || r.date > dateTo) continue
+
       const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0)
       if (amount <= 0) continue
 
@@ -598,13 +470,11 @@ export default function DashboardPage() {
       })
     }
 
+    // дата desc, потом сумма desc
     items.sort((a, b) => (b.date === a.date ? b.amount - a.amount : b.date.localeCompare(a.date)))
     return items.slice(0, 7)
-  }, [incomes, expenses, dateFrom, dateTo])
+  }, [incomes, expenses, dateFrom, dateTo, includeExtra, companyById])
 
-  // =========================
-  // RENDER STATES
-  // =========================
   if (loading) {
     return (
       <div className="flex min-h-screen bg-[#050505] text-foreground">
@@ -620,28 +490,28 @@ export default function DashboardPage() {
     return (
       <div className="flex min-h-screen bg-[#050505] text-foreground">
         <Sidebar />
-        <main className="flex-1 flex items-center justify-center text-red-400">{error}</main>
+        <main className="flex-1 flex items-center justify-center text-red-400">
+          {error}
+        </main>
       </div>
     )
   }
 
-  const incomeDelta = getPercentageChange(current.incomeTotal, previous.incomeTotal)
-  const profitDelta = getPercentageChange(current.profit, previous.profit)
-
   return (
     <div className="flex min-h-screen bg-[#050505] text-foreground">
       <Sidebar />
-
       <main className="flex-1 overflow-auto">
         <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
-          {/* Header + Filters */}
+          {/* Хедер + фильтры */}
           <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
                 <Brain className="w-8 h-8 text-purple-500" />
                 AI Dashboard
               </h1>
-              <p className="text-muted-foreground text-sm">Умная аналитика по выручке, расходам и прибыли</p>
+              <p className="text-muted-foreground text-sm">
+                Умная аналитика по выручке, расходам и прибыли
+              </p>
 
               <div className="mt-2 text-[11px] text-muted-foreground flex flex-wrap items-center gap-2">
                 <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
@@ -649,39 +519,72 @@ export default function DashboardPage() {
                   <span className="text-foreground">{formatRuDate(dateTo)}</span>
                 </span>
 
-                <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
-                  Extra: <span className="text-foreground">всегда включён</span>
-                </span>
-
-                {hitLimit && (
-                  <span className="px-2 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-300">
-                    ⚠️ Показаны первые {LIMIT} записей (сузь период)
-                  </span>
+                {companies.some((c) => (c.code || '').toLowerCase() === 'extra') && (
+                  <button
+                    type="button"
+                    onClick={() => setIncludeExtra((v) => !v)}
+                    className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-0.5 text-[11px] ${
+                      includeExtra
+                        ? 'border-red-400 text-red-400 bg-red-500/10'
+                        : 'border-border text-muted-foreground hover:bg-white/5'
+                    }`}
+                    title="Включать/исключать F16 Extra"
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        includeExtra ? 'bg-red-400' : 'bg-muted-foreground/50'
+                      }`}
+                    />
+                    {includeExtra ? 'Extra включён' : 'Extra исключён'}
+                  </button>
                 )}
               </div>
             </div>
 
-            {/* Filters */}
+            {/* Фильтры по датам */}
             <div className="flex flex-col items-stretch gap-2 w-full xl:w-auto">
               <div className="flex flex-col sm:flex-row items-center gap-2 w-full xl:w-auto">
                 <div className="bg-card/50 border border-border/50 rounded-lg p-1 flex items-center gap-1 w-full sm:w-auto justify-center">
-                  <RangeButton active={rangeType === 'today'} onClick={() => setQuickRange('today')}>
+                  <button
+                    onClick={() => setQuickRange('today')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      rangeType === 'today'
+                        ? 'bg-purple-600 text-white'
+                        : 'hover:bg-white/5 text-muted-foreground'
+                    }`}
+                  >
                     Сегодня
-                  </RangeButton>
-
-                  <RangeButton active={rangeType === 'week'} onClick={() => setQuickRange('week')}>
+                  </button>
+                  <button
+                    onClick={() => setQuickRange('week')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      rangeType === 'week'
+                        ? 'bg-purple-600 text-white'
+                        : 'hover:bg-white/5 text-muted-foreground'
+                    }`}
+                  >
                     7 дней
-                  </RangeButton>
-
-                  <RangeButton active={rangeType === 'currentMonth'} onClick={() => setQuickRange('currentMonth')}>
-                    <span className="inline-flex items-center gap-1">
-                      <CalendarDays className="w-3 h-3" /> Этот месяц
-                    </span>
-                  </RangeButton>
-
-                  <RangeButton active={rangeType === 'month30'} onClick={() => setQuickRange('month30')}>
+                  </button>
+                  <button
+                    onClick={() => setQuickRange('currentMonth')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${
+                      rangeType === 'currentMonth'
+                        ? 'bg-purple-600 text-white'
+                        : 'hover:bg-white/5 text-muted-foreground'
+                    }`}
+                  >
+                    <CalendarDays className="w-3 h-3" /> Этот месяц
+                  </button>
+                  <button
+                    onClick={() => setQuickRange('month30')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      rangeType === 'month30'
+                        ? 'bg-purple-600 text-white'
+                        : 'hover:bg-white/5 text-muted-foreground'
+                    }`}
+                  >
                     30 дней
-                  </RangeButton>
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-2 bg-card/30 p-1 rounded-lg border border-border/30">
@@ -709,17 +612,17 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Block 1: AI Insight */}
+          {/* Блок 1: AI-инсайты + резюме */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card
               className={`lg:col-span-2 p-6 border relative overflow-hidden ${
                 insight.status === 'excellent'
                   ? 'border-green-500/30 bg-green-950/10'
                   : insight.status === 'healthy'
-                    ? 'border-purple-500/30 bg-purple-950/10'
-                    : insight.status === 'warning'
-                      ? 'border-yellow-500/30 bg-yellow-950/10'
-                      : 'border-red-500/30 bg-red-950/10'
+                  ? 'border-purple-500/30 bg-purple-950/10'
+                  : insight.status === 'warning'
+                  ? 'border-yellow-500/30 bg-yellow-950/10'
+                  : 'border-red-500/30 bg-red-950/10'
               }`}
             >
               <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -728,10 +631,30 @@ export default function DashboardPage() {
                     <span className="px-2 py-1 rounded text-[10px] uppercase font-bold tracking-wider bg-white/10 border border-white/10">
                       Анализ периода
                     </span>
-                    <StatusBadge status={insight.status} />
+                    <span
+                      className={`text-sm font-bold uppercase ${
+                        insight.status === 'excellent'
+                          ? 'text-green-400'
+                          : insight.status === 'healthy'
+                          ? 'text-purple-400'
+                          : insight.status === 'warning'
+                          ? 'text-yellow-400'
+                          : 'text-red-400'
+                      }`}
+                    >
+                      {insight.status === 'excellent'
+                        ? 'Отлично'
+                        : insight.status === 'healthy'
+                        ? 'Норма'
+                        : insight.status === 'warning'
+                        ? 'Внимание'
+                        : 'Критично'}
+                    </span>
                   </div>
 
-                  <h2 className="text-2xl font-semibold leading-tight max-w-xl">{insight.summary}</h2>
+                  <h2 className="text-2xl font-semibold leading-tight max-w-xl">
+                    {insight.summary}
+                  </h2>
 
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
                     <Zap className="w-4 h-4 text-yellow-400" />
@@ -740,15 +663,34 @@ export default function DashboardPage() {
 
                   <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
                     <span>
-                      Маржа: <span className="text-foreground">{insight.margin.toFixed(1)}%</span>
+                      Маржа:{' '}
+                      <span className="text-foreground">
+                        {insight.margin.toFixed(1)}%
+                      </span>
                     </span>
                     <span>
                       Рост выручки:{' '}
-                      <span className={incomeDelta >= 0 ? 'text-green-400' : 'text-red-400'}>{fmtPctLabel(incomeDelta)}</span>
+                      <span
+                        className={
+                          getPercentageChange(current.incomeTotal, previous.incomeTotal) >= 0
+                            ? 'text-green-400'
+                            : 'text-red-400'
+                        }
+                      >
+                        {fmtPctLabel(getPercentageChange(current.incomeTotal, previous.incomeTotal))}
+                      </span>
                     </span>
                     <span>
                       Рост прибыли:{' '}
-                      <span className={profitDelta >= 0 ? 'text-green-400' : 'text-red-400'}>{fmtPctLabel(profitDelta)}</span>
+                      <span
+                        className={
+                          getPercentageChange(current.profit, previous.profit) >= 0
+                            ? 'text-green-400'
+                            : 'text-red-400'
+                        }
+                      >
+                        {fmtPctLabel(getPercentageChange(current.profit, previous.profit))}
+                      </span>
                     </span>
                   </div>
                 </div>
@@ -756,14 +698,16 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-4 min-w-[140px]">
                   <div className="text-right">
                     <div className="text-4xl font-bold">{insight.score}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Балл</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                      Балл
+                    </div>
                   </div>
-                  {insight.score >= 80 ? (
+                  {insight.score > 80 ? (
                     <CheckCircle2 className="w-10 h-10 text-green-500" />
-                  ) : insight.score >= 55 ? (
+                  ) : insight.score > 55 ? (
                     <Activity className="w-10 h-10 text-purple-500" />
                   ) : (
-                    <AlertTriangle className={`w-10 h-10 ${insight.score >= 35 ? 'text-yellow-500' : 'text-red-500'}`} />
+                    <AlertTriangle className="w-10 h-10 text-yellow-500" />
                   )}
                 </div>
               </div>
@@ -773,10 +717,10 @@ export default function DashboardPage() {
                   insight.status === 'excellent'
                     ? 'bg-green-500'
                     : insight.status === 'healthy'
-                      ? 'bg-purple-600'
-                      : insight.status === 'warning'
-                        ? 'bg-yellow-500'
-                        : 'bg-red-500'
+                    ? 'bg-purple-600'
+                    : insight.status === 'warning'
+                    ? 'bg-yellow-500'
+                    : 'bg-red-500'
                 }`}
               />
             </Card>
@@ -786,94 +730,143 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Чистая прибыль</p>
-                    <p className="text-2xl font-bold text-white">{formatMoney(current.profit)} ₸</p>
+                    <p className="text-2xl font-bold text-white">
+                      {formatMoney(current.profit)} ₸
+                    </p>
                     <p className="text-[10px] text-muted-foreground mt-1">
-                      Прошлый период: <span className="text-foreground">{formatMoney(previous.profit)} ₸</span>
+                      Прошлый период:{' '}
+                      <span className="text-foreground">
+                        {formatMoney(previous.profit)} ₸
+                      </span>
                     </p>
                   </div>
-                  <div className={`text-right ${profitDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    <div className="text-sm font-bold">{fmtPctLabel(profitDelta)}</div>
+                  <div
+                    className={`text-right ${
+                      getPercentageChange(current.profit, previous.profit) >= 0
+                        ? 'text-green-400'
+                        : 'text-red-400'
+                    }`}
+                  >
+                    <div className="text-sm font-bold">
+                      {fmtPctLabel(getPercentageChange(current.profit, previous.profit))}
+                    </div>
                   </div>
                 </div>
 
                 <div className="mt-3 h-1 w-full bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-yellow-400 to-orange-500" style={{ width: `${Math.min(100, Math.max(0, insight.margin))}%` }} />
+                  <div
+                    className="h-full bg-gradient-to-r from-yellow-400 to-orange-500"
+                    style={{ width: `${Math.min(100, Math.max(0, insight.margin))}%` }}
+                  />
                 </div>
 
-                <p className="text-[10px] text-right mt-1 text-muted-foreground">Маржа: {insight.margin.toFixed(1)}%</p>
+                <p className="text-[10px] text-right mt-1 text-muted-foreground">
+                  Маржа: {insight.margin.toFixed(1)}%
+                </p>
               </Card>
 
               <Card className="p-4 border border-border bg-card flex flex-col justify-center">
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Коэф. эффективности</p>
-                    <p className="text-2xl font-bold text-white">{insight.efficiency.toFixed(2)}x</p>
+                    <p className="text-2xl font-bold text-white">
+                      {insight.efficiency.toFixed(2)}x
+                    </p>
                   </div>
                   <Zap className="w-6 h-6 text-purple-500 opacity-50" />
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  На 1₸ затрат → <span className="text-foreground">{insight.efficiency.toFixed(2)}₸</span> выручки
+                  На 1₸ затрат →{' '}
+                  <span className="text-foreground">{insight.efficiency.toFixed(2)}₸</span> выручки
                 </p>
               </Card>
             </div>
           </div>
 
-          {/* Block 2: Metrics */}
+          {/* Блок 2: ключевые метрики */}
           <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-            <MetricCard
-              title="Общий доход"
-              value={`${formatMoney(current.incomeTotal)} ₸`}
-              valueClass="text-green-400"
-              sub1={`Нал: ${formatMoney(current.incomeCash)}`}
-              sub2={`Прошлый: ${formatMoney(previous.incomeTotal)} ₸`}
-              icon={<TrendingUp className="w-4 h-4 text-green-500" />}
-            />
+            <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors group">
+              <div className="flex justify-between mb-2">
+                <span className="text-xs text-muted-foreground">Общий доход</span>
+                <TrendingUp className="w-4 h-4 text-green-500 opacity-50 group-hover:opacity-100 transition-opacity" />
+              </div>
+              <div className="text-xl font-bold text-green-400">
+                {formatMoney(current.incomeTotal)} ₸
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-1">
+                Нал: <span className="text-foreground">{formatMoney(current.incomeCash)}</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Прошлый: <span className="text-foreground">{formatMoney(previous.incomeTotal)} ₸</span>
+              </div>
+            </Card>
 
-            <MetricCard
-              title="Общий расход"
-              value={`${formatMoney(current.expenseTotal)} ₸`}
-              valueClass="text-red-400"
-              sub1={`Нал: ${formatMoney(current.expenseCash)}`}
-              sub2={`Прошлый: ${formatMoney(previous.expenseTotal)} ₸`}
-              icon={<TrendingDown className="w-4 h-4 text-red-500" />}
-            />
+            <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors group">
+              <div className="flex justify-between mb-2">
+                <span className="text-xs text-muted-foreground">Общий расход</span>
+                <TrendingDown className="w-4 h-4 text-red-500 opacity-50 group-hover:opacity-100 transition-opacity" />
+              </div>
+              <div className="text-xl font-bold text-red-400">
+                {formatMoney(current.expenseTotal)} ₸
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-1">
+                Нал: <span className="text-foreground">{formatMoney(current.expenseCash)}</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Прошлый: <span className="text-foreground">{formatMoney(previous.expenseTotal)} ₸</span>
+              </div>
+            </Card>
 
-            <MetricCard
-              title="Безнал (Kaspi+Online+Card)"
-              value={`${formatMoney(current.incomeKaspi + current.incomeOnline + current.incomeCard)} ₸`}
-              sub1={`${(
-                current.incomeTotal > 0
-                  ? ((current.incomeKaspi + current.incomeOnline + current.incomeCard) / current.incomeTotal) * 100
+            <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
+              <div className="flex justify-between mb-2">
+                <span className="text-xs text-muted-foreground">Безнал (Kaspi + Card)</span>
+                <DollarSign className="w-4 h-4 text-blue-500 opacity-50" />
+              </div>
+              <div className="text-xl font-bold text-foreground">
+                {formatMoney(current.incomeKaspi + current.incomeCard)} ₸
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-1">
+                {(current.incomeTotal > 0
+                  ? ((current.incomeKaspi + current.incomeCard) / current.incomeTotal) * 100
                   : 0
-              ).toFixed(0)}% от выручки`}
-              icon={<DollarSign className="w-4 h-4 text-blue-500" />}
-            />
+                ).toFixed(0)}
+                % от выручки
+              </div>
+            </Card>
 
-            <MetricCard
-              title="Остаток нал"
-              value={`${formatMoney(current.netCash)} ₸`}
-              valueClass={current.netCash >= 0 ? 'text-emerald-400' : 'text-red-400'}
-              sub1="Доход(нал) − Расход(нал)"
-              icon={<BarChart2 className="w-4 h-4 text-emerald-500" />}
-            />
+            <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
+              <div className="flex justify-between mb-2">
+                <span className="text-xs text-muted-foreground">Остаток нал</span>
+                <BarChart2 className="w-4 h-4 text-emerald-500 opacity-50" />
+              </div>
+              <div className={`text-xl font-bold ${current.netCash >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {formatMoney(current.netCash)} ₸
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-1">Доход(нал) − Расход(нал)</div>
+            </Card>
 
-            <MetricCard
-              title="Остаток Kaspi/Online/Card"
-              value={`${formatMoney(current.netKaspi)} ₸`}
-              valueClass={current.netKaspi >= 0 ? 'text-sky-400' : 'text-red-400'}
-              sub1="Kaspi+Online+Card − Расход(Kaspi)"
-              icon={<BarChart2 className="w-4 h-4 text-sky-500" />}
-            />
+            <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
+              <div className="flex justify-between mb-2">
+                <span className="text-xs text-muted-foreground">Остаток Kaspi/Card</span>
+                <BarChart2 className="w-4 h-4 text-sky-500 opacity-50" />
+              </div>
+              <div className={`text-xl font-bold ${current.netKaspi >= 0 ? 'text-sky-400' : 'text-red-400'}`}>
+                {formatMoney(current.netKaspi)} ₸
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-1">Kaspi+Card − Расход(Kaspi)</div>
+            </Card>
 
-            <MetricCard
-              title="Операций"
-              value={`${transactionsCount}`}
-              sub1="Доход + расход за период"
-              icon={<BarChart2 className="w-4 h-4 text-gray-500" />}
-            />
+            <Card className="p-4 border-border bg-card/50 hover:bg-card transition-colors">
+              <div className="flex justify-between mb-2">
+                <span className="text-xs text-muted-foreground">Операций</span>
+                <BarChart2 className="w-4 h-4 text-gray-500 opacity-50" />
+              </div>
+              <div className="text-xl font-bold">{transactionsCount}</div>
+              <div className="text-[10px] text-muted-foreground mt-1">Доход + расход за период</div>
+            </Card>
           </div>
 
-          {/* Block 3: Chart + Feed */}
+          {/* Блок 3: график + лента */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="lg:col-span-2 p-6 border-border bg-card">
               <h3 className="text-sm font-semibold text-foreground mb-6 flex items-center gap-2">
@@ -882,7 +875,9 @@ export default function DashboardPage() {
               </h3>
 
               {chartData.length === 0 ? (
-                <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">Нет данных</div>
+                <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
+                  Нет данных
+                </div>
               ) : (
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -894,40 +889,65 @@ export default function DashboardPage() {
                         </linearGradient>
                       </defs>
 
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="#444" vertical={false} />
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        opacity={0.1}
+                        stroke="#444"
+                        vertical={false}
+                      />
                       <XAxis
                         dataKey="date"
                         stroke="#666"
                         fontSize={10}
                         tickLine={false}
                         axisLine={false}
-                        tickFormatter={(v) => String(v).slice(5)}
+                        tickFormatter={(v) => v.slice(5)}
                       />
                       <YAxis
                         stroke="#666"
                         fontSize={10}
                         tickLine={false}
                         axisLine={false}
-                        tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+                        tickFormatter={(v) => `${Math.round(v / 1000)}k`}
                       />
                       <Tooltip
                         {...tooltipStyles}
-                        formatter={(val: number) => [`${formatMoney(Number(val))} ₸`, '']}
+                        formatter={(val: number) => [formatMoney(val) + ' ₸', '']}
                         labelFormatter={(label: string) => formatRuDate(label)}
                       />
                       <Legend />
 
-                      <Area type="monotone" dataKey="profit" name="Прибыль" stroke="#a855f7" strokeWidth={3} fillOpacity={1} fill="url(#colorProfit)" />
-                      <Line type="monotone" dataKey="income" name="Доход" stroke="#22c55e" strokeWidth={2} dot={false} strokeOpacity={0.7} />
-                      <Line type="monotone" dataKey="expense" name="Расход" stroke="#ef4444" strokeWidth={2} dot={false} strokeOpacity={0.7} />
+                      <Area
+                        type="monotone"
+                        dataKey="profit"
+                        name="Прибыль"
+                        stroke="#a855f7"
+                        strokeWidth={3}
+                        fillOpacity={1}
+                        fill="url(#colorProfit)"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="income"
+                        name="Доход"
+                        stroke="#22c55e"
+                        strokeWidth={2}
+                        dot={false}
+                        strokeOpacity={0.7}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="expense"
+                        name="Расход"
+                        stroke="#ef4444"
+                        strokeWidth={2}
+                        dot={false}
+                        strokeOpacity={0.7}
+                      />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
               )}
-
-              <div className="mt-3 text-[11px] text-muted-foreground">
-                Подсказка: если прибыль “пилит” вниз — смотри расходы, а не звёзды.
-              </div>
             </Card>
 
             <Card className="lg:col-span-1 p-0 border-border bg-card overflow-hidden flex flex-col">
@@ -936,7 +956,9 @@ export default function DashboardPage() {
                   <Clock className="w-4 h-4 text-blue-400" />
                   Лента событий
                 </h3>
-                <p className="text-[11px] text-muted-foreground">Последние операции дохода и расхода</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Последние операции дохода и расхода
+                </p>
               </div>
 
               <div className="flex-1 overflow-auto max-h-[320px] p-2 space-y-1">
@@ -957,14 +979,20 @@ export default function DashboardPage() {
                           }`}
                         />
                         <div className="flex flex-col">
-                          <span className="text-xs font-medium text-foreground/90">{op.title}</span>
+                          <span className="text-xs font-medium text-foreground/90">
+                            {op.title}
+                          </span>
                           <span className="text-[10px] text-muted-foreground">
                             {companyName(op.company_id)} • {formatRuDate(op.date)}
                           </span>
                         </div>
                       </div>
 
-                      <span className={`text-xs font-bold font-mono ${op.kind === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                      <span
+                        className={`text-xs font-bold font-mono ${
+                          op.kind === 'income' ? 'text-green-400' : 'text-red-400'
+                        }`}
+                      >
                         {op.kind === 'income' ? '+' : '-'}
                         {formatMoney(op.amount)}
                       </span>
@@ -975,7 +1003,11 @@ export default function DashboardPage() {
 
               <div className="p-3 border-t border-white/5 bg-white/[0.02]">
                 <Link href={`/income?from=${dateFrom}&to=${dateTo}`}>
-                  <Button variant="ghost" size="sm" className="w-full text-xs h-8 text-muted-foreground hover:text-white">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-xs h-8 text-muted-foreground hover:text-white"
+                  >
                     Посмотреть все операции →
                   </Button>
                 </Link>
