@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback, useDeferredValue, useRef } from 'react'
+import type { KeyboardEvent } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sidebar } from '@/components/sidebar'
@@ -99,118 +100,23 @@ const escapeCSV = (v: any, sep = ';') => {
   return needs ? `"${safe}"` : safe
 }
 
-// Надёжно определяем Extra (чтобы не зависеть от точного совпадения)
+// Надёжно определяем Extra
 const isExtraCompany = (c?: Company | null) => {
   const code = String(c?.code ?? '').toLowerCase().trim()
   const name = String(c?.name ?? '').toLowerCase().trim()
   return code === 'extra' || name.includes('extra')
 }
 
-// Снимаем хвостики " • PS5/VR" чтобы комментарий в агрегированной строке был нормальный
+// Снимаем хвостики " • PS5/VR"
 const stripExtraSuffix = (s: string) => s.replace(/\s*•\s*(PS5|VR)\s*$/i, '').trim()
 
-// Компонент для редактируемой ячейки
-function EditableCell({
-  value,
-  onSave,
-  rowId,
-}: {
-  value: number | null
-  onSave: (newValue: number | null) => Promise<void>
-  rowId: string
-}) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [editValue, setEditValue] = useState<string>('')
-  const [isSaving, setIsSaving] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [isEditing])
-
-  const handleStartEdit = () => {
-    setEditValue(value?.toString() ?? '')
-    setIsEditing(true)
-  }
-
-  const handleCancel = () => {
-    setIsEditing(false)
-    setEditValue('')
-  }
-
-  const handleSave = async () => {
-    const numValue = editValue.trim() === '' ? null : parseInt(editValue, 10)
-    
-    if (editValue.trim() !== '' && isNaN(numValue as number)) {
-      return // Не сохраняем если не число
-    }
-
-    setIsSaving(true)
-    try {
-      await onSave(numValue)
-      setIsEditing(false)
-    } catch (err) {
-      console.error('Ошибка сохранения:', err)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSave()
-    } else if (e.key === 'Escape') {
-      handleCancel()
-    }
-  }
-
-  if (isEditing) {
-    return (
-      <div className="flex items-center justify-end gap-1">
-        <input
-          ref={inputRef}
-          type="number"
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={handleSave}
-          disabled={isSaving}
-          className="w-20 px-2 py-1 text-right text-xs bg-background border border-accent rounded focus:outline-none focus:ring-1 focus:ring-accent font-mono"
-          placeholder="0"
-        />
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="p-1 text-green-500 hover:bg-green-500/10 rounded transition-colors"
-        >
-          <Check className="w-3 h-3" />
-        </button>
-        <button
-          onClick={handleCancel}
-          disabled={isSaving}
-          className="p-1 text-muted-foreground hover:bg-muted rounded transition-colors"
-        >
-          <X className="w-3 h-3" />
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div
-      onClick={handleStartEdit}
-      className={`cursor-pointer group flex items-center justify-end gap-1 hover:bg-accent/10 rounded px-2 py-1 -mx-2 transition-colors ${
-        value ? 'text-foreground' : 'text-muted-foreground/20'
-      }`}
-      title="Кликните для редактирования"
-    >
-      <span className="font-mono">{value ? formatMoney(value) : '—'}</span>
-      <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-50 text-muted-foreground transition-opacity" />
-    </div>
-  )
+// Парсер: возвращает null только для пустой строки
+const parseMoneyInput = (raw: string): number | null => {
+  const cleaned = raw.replace(/[^\d]/g, '')
+  if (cleaned === '') return null
+  const n = Number(cleaned)
+  if (!Number.isFinite(n)) return null
+  return Math.max(0, n)
 }
 
 export default function IncomePage() {
@@ -238,6 +144,14 @@ export default function IncomePage() {
 
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
   const [hideExtraRows, setHideExtraRows] = useState(false)
+
+  // Inline edit: Online
+  const [editingOnlineId, setEditingOnlineId] = useState<string | null>(null)
+  const [onlineDraft, setOnlineDraft] = useState<string>('')
+  const [savingOnlineId, setSavingOnlineId] = useState<string | null>(null)
+  
+  // Ref для предотвращения сохранения при Escape/кнопках
+  const skipBlurSaveRef = useRef(false)
 
   // 1) Рефы
   useEffect(() => {
@@ -286,27 +200,6 @@ export default function IncomePage() {
   }, [companies])
 
   const isExtraRow = useCallback((r: IncomeRow) => !!extraCompanyId && r.company_id === extraCompanyId, [extraCompanyId])
-
-  // Функция обновления online_amount в Supabase
-  const updateOnlineAmount = useCallback(async (rowId: string, newValue: number | null) => {
-    const { error } = await supabase
-      .from('incomes')
-      .update({ online_amount: newValue })
-      .eq('id', rowId)
-
-    if (error) {
-      console.error('Ошибка обновления:', error)
-      setError('Ошибка при сохранении: ' + error.message)
-      throw error
-    }
-
-    // Обновляем локальное состояние
-    setRows((prev) =>
-      prev.map((row) =>
-        row.id === rowId ? { ...row, online_amount: newValue } : row
-      )
-    )
-  }, [])
 
   // 2) Загрузка доходов
   useEffect(() => {
@@ -445,6 +338,37 @@ export default function IncomePage() {
 
     return out
   }, [filteredRows, extraCompanyId])
+
+  // ✅ ИСПРАВЛЕННОЕ сохранение Online в Supabase (с защитой от stale row)
+  const saveOnlineAmount = useCallback(async (row: IncomeRow, nextValue: number | null) => {
+    if (String(row.id).startsWith('extra-')) return
+
+    setSavingOnlineId(row.id)
+
+    // ✅ актуальное значение из state (защита от stale row)
+    const current = rows.find((x) => x.id === row.id)
+    const prev = current?.online_amount ?? null
+
+    // ✅ защита от одинакового значения
+    if (prev === (nextValue ?? null)) {
+      setSavingOnlineId(null)
+      return
+    }
+
+    // optimistic
+    setRows((curr) => curr.map((x) => (x.id === row.id ? { ...x, online_amount: nextValue } : x)))
+
+    const { error } = await supabase.from('incomes').update({ online_amount: nextValue }).eq('id', row.id)
+
+    if (error) {
+      console.error('Update online_amount error:', error)
+      // rollback
+      setRows((curr) => curr.map((x) => (x.id === row.id ? { ...x, online_amount: prev } : x)))
+      setError('Не удалось сохранить Online. Проверьте соединение/права.')
+    }
+
+    setSavingOnlineId(null)
+  }, [rows]) // ✅ добавлена зависимость rows
 
   // Итоги + аналитика
   const analytics = useMemo(() => {
@@ -931,8 +855,6 @@ export default function IncomePage() {
                         (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.online_amount || 0) + (row.card_amount || 0)
                       const company = companyMap.get(row.company_id)
                       const isExtra = isExtraCompany(company)
-                      // Проверяем, является ли строка агрегированной Extra-строкой
-                      const isAggregatedExtra = row.id.startsWith('extra-')
 
                       return (
                         <tr
@@ -977,20 +899,106 @@ export default function IncomePage() {
                             {row.kaspi_amount ? formatMoney(row.kaspi_amount) : '—'}
                           </td>
 
-                          {/* Редактируемая ячейка Online */}
-                          <td className="px-4 py-1 text-right">
-                            {!isAggregatedExtra ? (
-                              <EditableCell
-                                value={row.online_amount}
-                                rowId={row.id}
-                                onSave={async (newValue) => {
-                                  await updateOnlineAmount(row.id, newValue)
-                                }}
-                              />
-                            ) : (
-                              <span className={`font-mono ${row.online_amount ? 'text-foreground' : 'text-muted-foreground/20'}`}>
-                                {row.online_amount ? formatMoney(row.online_amount) : '—'}
+                          {/* ONLINE: Исправленное inline-редактирование */}
+                          <td className="px-4 py-3 text-right font-mono">
+                            {String(row.id).startsWith('extra-') ? (
+                              <span className={row.online_amount === null ? 'text-muted-foreground/20' : 'text-foreground'}>
+                                {row.online_amount === null ? '—' : formatMoney(row.online_amount)}
                               </span>
+                            ) : editingOnlineId === row.id ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <input
+                                  autoFocus
+                                  inputMode="numeric"
+                                  value={onlineDraft}
+                                  onChange={(e) => setOnlineDraft(e.target.value)}
+                                  onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                                    if (e.key === 'Escape') {
+                                      // ✅ БАГ №1 ИСПРАВЛЕН: НЕ сбрасываем флаг здесь, пусть сбросит onBlur
+                                      skipBlurSaveRef.current = true
+                                      setEditingOnlineId(null)
+                                      setOnlineDraft('')
+                                      return
+                                    }
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      const val = parseMoneyInput(onlineDraft)
+                                      setEditingOnlineId(null)
+                                      setOnlineDraft('')
+                                      saveOnlineAmount(row, val)
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    if (skipBlurSaveRef.current) {
+                                      skipBlurSaveRef.current = false
+                                      return
+                                    }
+                                    const val = parseMoneyInput(onlineDraft)
+                                    setEditingOnlineId(null)
+                                    setOnlineDraft('')
+                                    saveOnlineAmount(row, val)
+                                  }}
+                                  className="w-[90px] h-7 text-right px-2 rounded border border-border bg-input text-foreground text-xs outline-none focus:border-accent"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={savingOnlineId === row.id}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault()
+                                    skipBlurSaveRef.current = true
+                                  }}
+                                  onClick={() => {
+                                    const val = parseMoneyInput(onlineDraft)
+                                    setEditingOnlineId(null)
+                                    setOnlineDraft('')
+                                    saveOnlineAmount(row, val)
+                                  }}
+                                  className="p-1 text-green-500 hover:bg-green-500/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Сохранить"
+                                >
+                                  <Check className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={savingOnlineId === row.id}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault()
+                                    skipBlurSaveRef.current = true
+                                  }}
+                                  onClick={() => {
+                                    // ✅ УЛУЧШЕНИЕ: НЕ сбрасываем флаг здесь, пусть сбросит onBlur (или останется true, но onBlur его сбросит)
+                                    setEditingOnlineId(null)
+                                    setOnlineDraft('')
+                                  }}
+                                  className="p-1 text-muted-foreground hover:bg-muted rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Отмена"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className={`w-full text-right inline-flex items-center justify-end gap-1 group/btn ${
+                                  savingOnlineId === row.id
+                                    ? 'text-muted-foreground animate-pulse'
+                                    : row.online_amount === null
+                                      ? 'text-muted-foreground/20'
+                                      : 'text-foreground'
+                                } hover:bg-accent/10 rounded px-2 py-1 -mx-2 transition-colors`}
+                                title="Кликните для редактирования"
+                                onClick={() => {
+                                  setEditingOnlineId(row.id)
+                                  setOnlineDraft(String(row.online_amount ?? ''))
+                                  skipBlurSaveRef.current = false
+                                }}
+                                disabled={savingOnlineId === row.id}
+                              >
+                                <span className="font-mono">
+                                  {row.online_amount === null ? '—' : formatMoney(row.online_amount)}
+                                </span>
+                                <Pencil className="w-3 h-3 opacity-0 group-hover/btn:opacity-50 text-muted-foreground transition-opacity" />
+                              </button>
                             )}
                           </td>
 
