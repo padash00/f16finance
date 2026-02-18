@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback, useDeferredValue } from 'react'
+import { useEffect, useMemo, useState, useCallback, useDeferredValue, useRef } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sidebar } from '@/components/sidebar'
@@ -20,6 +20,8 @@ import {
   Trophy,
   MapPin,
   TrendingUp,
+  Check,
+  Pencil,
 } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -36,7 +38,7 @@ type IncomeRow = {
   zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
-  online_amount: number | null // ✅ NEW
+  online_amount: number | null
   card_amount: number | null
   comment: string | null
 }
@@ -55,7 +57,7 @@ type Operator = {
 }
 
 type ShiftFilter = 'all' | Shift
-type PayFilter = 'all' | 'cash' | 'kaspi' | 'online' | 'card' // ✅ NEW
+type PayFilter = 'all' | 'cash' | 'kaspi' | 'online' | 'card'
 type DateRangePreset = 'today' | 'week' | 'month' | 'all'
 type OperatorFilter = 'all' | 'none' | string
 
@@ -106,6 +108,110 @@ const isExtraCompany = (c?: Company | null) => {
 
 // Снимаем хвостики " • PS5/VR" чтобы комментарий в агрегированной строке был нормальный
 const stripExtraSuffix = (s: string) => s.replace(/\s*•\s*(PS5|VR)\s*$/i, '').trim()
+
+// Компонент для редактируемой ячейки
+function EditableCell({
+  value,
+  onSave,
+  rowId,
+}: {
+  value: number | null
+  onSave: (newValue: number | null) => Promise<void>
+  rowId: string
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValue, setEditValue] = useState<string>('')
+  const [isSaving, setIsSaving] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [isEditing])
+
+  const handleStartEdit = () => {
+    setEditValue(value?.toString() ?? '')
+    setIsEditing(true)
+  }
+
+  const handleCancel = () => {
+    setIsEditing(false)
+    setEditValue('')
+  }
+
+  const handleSave = async () => {
+    const numValue = editValue.trim() === '' ? null : parseInt(editValue, 10)
+    
+    if (editValue.trim() !== '' && isNaN(numValue as number)) {
+      return // Не сохраняем если не число
+    }
+
+    setIsSaving(true)
+    try {
+      await onSave(numValue)
+      setIsEditing(false)
+    } catch (err) {
+      console.error('Ошибка сохранения:', err)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave()
+    } else if (e.key === 'Escape') {
+      handleCancel()
+    }
+  }
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center justify-end gap-1">
+        <input
+          ref={inputRef}
+          type="number"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleSave}
+          disabled={isSaving}
+          className="w-20 px-2 py-1 text-right text-xs bg-background border border-accent rounded focus:outline-none focus:ring-1 focus:ring-accent font-mono"
+          placeholder="0"
+        />
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="p-1 text-green-500 hover:bg-green-500/10 rounded transition-colors"
+        >
+          <Check className="w-3 h-3" />
+        </button>
+        <button
+          onClick={handleCancel}
+          disabled={isSaving}
+          className="p-1 text-muted-foreground hover:bg-muted rounded transition-colors"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      onClick={handleStartEdit}
+      className={`cursor-pointer group flex items-center justify-end gap-1 hover:bg-accent/10 rounded px-2 py-1 -mx-2 transition-colors ${
+        value ? 'text-foreground' : 'text-muted-foreground/20'
+      }`}
+      title="Кликните для редактирования"
+    >
+      <span className="font-mono">{value ? formatMoney(value) : '—'}</span>
+      <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-50 text-muted-foreground transition-opacity" />
+    </div>
+  )
+}
 
 export default function IncomePage() {
   const LIMIT = 2000
@@ -181,6 +287,27 @@ export default function IncomePage() {
 
   const isExtraRow = useCallback((r: IncomeRow) => !!extraCompanyId && r.company_id === extraCompanyId, [extraCompanyId])
 
+  // Функция обновления online_amount в Supabase
+  const updateOnlineAmount = useCallback(async (rowId: string, newValue: number | null) => {
+    const { error } = await supabase
+      .from('incomes')
+      .update({ online_amount: newValue })
+      .eq('id', rowId)
+
+    if (error) {
+      console.error('Ошибка обновления:', error)
+      setError('Ошибка при сохранении: ' + error.message)
+      throw error
+    }
+
+    // Обновляем локальное состояние
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === rowId ? { ...row, online_amount: newValue } : row
+      )
+    )
+  }, [])
+
   // 2) Загрузка доходов
   useEffect(() => {
     const loadData = async () => {
@@ -207,7 +334,7 @@ export default function IncomePage() {
 
       if (payFilter === 'cash') query = query.gt('cash_amount', 0)
       if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
-      if (payFilter === 'online') query = query.gt('online_amount', 0) // ✅ NEW
+      if (payFilter === 'online') query = query.gt('online_amount', 0)
       if (payFilter === 'card') query = query.gt('card_amount', 0)
 
       query = query.limit(LIMIT)
@@ -279,7 +406,7 @@ export default function IncomePage() {
 
       const cash = Number(r.cash_amount || 0)
       const kaspi = Number(r.kaspi_amount || 0)
-      const online = Number(r.online_amount || 0) // ✅ NEW
+      const online = Number(r.online_amount || 0)
       const card = Number(r.card_amount || 0)
 
       const existing = aggs.get(key)
@@ -293,7 +420,7 @@ export default function IncomePage() {
           zone: 'Extra',
           cash_amount: cash,
           kaspi_amount: kaspi,
-          online_amount: online, // ✅ NEW
+          online_amount: online,
           card_amount: card,
           comment: cmt || null,
         }
@@ -306,7 +433,7 @@ export default function IncomePage() {
       } else {
         existing.row.cash_amount = Number(existing.row.cash_amount || 0) + cash
         existing.row.kaspi_amount = Number(existing.row.kaspi_amount || 0) + kaspi
-        existing.row.online_amount = Number(existing.row.online_amount || 0) + online // ✅ NEW
+        existing.row.online_amount = Number(existing.row.online_amount || 0) + online
         existing.row.card_amount = Number(existing.row.card_amount || 0) + card
 
         if (cmt) existing.comments.add(cmt)
@@ -336,7 +463,7 @@ export default function IncomePage() {
 
       const rowCash = Number(r.cash_amount || 0)
       const rowKaspi = Number(r.kaspi_amount || 0)
-      const rowOnline = Number(r.online_amount || 0) // ✅ NEW
+      const rowOnline = Number(r.online_amount || 0)
       const rowCard = Number(r.card_amount || 0)
       const rowTotal = rowCash + rowKaspi + rowOnline + rowCard
 
@@ -626,7 +753,7 @@ export default function IncomePage() {
 
             {hitLimit && (
               <div className="text-[11px] text-yellow-500/90 pt-1">
-                Показаны первые {LIMIT} строк (ограничение). Для “Всё за год” лучше добавить пагинацию/серверную агрегацию.
+                Показаны первые {LIMIT} строк (ограничение). Для "Всё за год" лучше добавить пагинацию/серверную агрегацию.
               </div>
             )}
           </Card>
@@ -804,6 +931,8 @@ export default function IncomePage() {
                         (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.online_amount || 0) + (row.card_amount || 0)
                       const company = companyMap.get(row.company_id)
                       const isExtra = isExtraCompany(company)
+                      // Проверяем, является ли строка агрегированной Extra-строкой
+                      const isAggregatedExtra = row.id.startsWith('extra-')
 
                       return (
                         <tr
@@ -848,12 +977,21 @@ export default function IncomePage() {
                             {row.kaspi_amount ? formatMoney(row.kaspi_amount) : '—'}
                           </td>
 
-                          <td
-                            className={`px-4 py-3 text-right font-mono ${
-                              row.online_amount ? 'text-foreground' : 'text-muted-foreground/20'
-                            }`}
-                          >
-                            {row.online_amount ? formatMoney(row.online_amount) : '—'}
+                          {/* Редактируемая ячейка Online */}
+                          <td className="px-4 py-1 text-right">
+                            {!isAggregatedExtra ? (
+                              <EditableCell
+                                value={row.online_amount}
+                                rowId={row.id}
+                                onSave={async (newValue) => {
+                                  await updateOnlineAmount(row.id, newValue)
+                                }}
+                              />
+                            ) : (
+                              <span className={`font-mono ${row.online_amount ? 'text-foreground' : 'text-muted-foreground/20'}`}>
+                                {row.online_amount ? formatMoney(row.online_amount) : '—'}
+                              </span>
+                            )}
                           </td>
 
                           <td className={`px-4 py-3 text-right font-mono ${row.card_amount ? 'text-foreground' : 'text-muted-foreground/20'}`}>
