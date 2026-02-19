@@ -59,7 +59,7 @@ type IncomeRow = {
   cash_amount: number | null
   kaspi_amount: number | null
   card_amount: number | null
-  online_amount: number | null // ДОБАВЛЕНО
+  online_amount: number | null
   comment: string | null
 }
 
@@ -79,7 +79,7 @@ type FinancialTotals = {
   incomeCash: number
   incomeKaspi: number
   incomeCard: number
-  incomeOnline: number // ДОБАВЛЕНО
+  incomeOnline: number
   incomeTotal: number
   expenseCash: number
   expenseKaspi: number
@@ -247,12 +247,16 @@ const DateUtils = {
 }
 
 const Formatters = {
-  // ИЗМЕНЕНО: всегда показываем полные числа
   money: (v: number): string => {
+    if (v >= 1_000_000) {
+      return (v / 1_000_000).toFixed(1) + ' млн ₸'
+    }
+    if (v >= 1_000) {
+      return (v / 1_000).toFixed(1) + ' тыс ₸'
+    }
     return v.toLocaleString('ru-RU') + ' ₸'
   },
 
-  // ИЗМЕНЕНО: всегда показываем полные числа
   moneyDetailed: (v: number): string => {
     return v.toLocaleString('ru-RU', { 
       minimumFractionDigits: 0,
@@ -304,7 +308,7 @@ const COLORS = {
   kaspi: '#2563eb',
   card: '#7c3aed',
   cash: '#f59e0b',
-  online: '#ec4899', // ДОБАВЛЕНО для онлайн платежей
+  online: '#ec4899',
   chart: ['#8b5cf6', '#10b981', '#ef4444', '#f59e0b', '#3b82f6', '#ec4899'],
 }
 
@@ -428,7 +432,6 @@ class AIAnalytics {
 // ==================== ОСНОВНОЙ КОМПОНЕНТ ====================
 
 export default function SmartDashboardPage() {
-  // Состояния
   const [dateFrom, setDateFrom] = useState(() => DateUtils.addDaysISO(DateUtils.todayISO(), -29))
   const [dateTo, setDateTo] = useState(DateUtils.todayISO())
   const [rangeType, setRangeType] = useState<RangeType>('month')
@@ -437,16 +440,14 @@ export default function SmartDashboardPage() {
   const [showPredictions, setShowPredictions] = useState(true)
   const [showAnomalies, setShowAnomalies] = useState(true)
   const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'forecast'>('overview')
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false) // ДОБАВЛЕНО
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
 
-  // Данные
   const [companies, setCompanies] = useState<Company[]>([])
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Загрузка данных
   useEffect(() => {
     let mounted = true
 
@@ -465,7 +466,7 @@ export default function SmartDashboardPage() {
           supabase.from('companies').select('id,name,code').order('name'),
           supabase
             .from('incomes')
-            .select('id,date,company_id,cash_amount,kaspi_amount,card_amount,online_amount,comment') // ДОБАВЛЕН online_amount
+            .select('id,date,company_id,cash_amount,kaspi_amount,card_amount,online_amount,comment')
             .gte('date', prevFrom)
             .lte('date', dateTo)
             .order('date', { ascending: false }),
@@ -497,7 +498,6 @@ export default function SmartDashboardPage() {
     return () => { mounted = false }
   }, [dateFrom, dateTo])
 
-  // Мемоизированные значения
   const companyById = useMemo(() => {
     const map: Record<string, Company> = {}
     companies.forEach(c => {
@@ -514,7 +514,6 @@ export default function SmartDashboardPage() {
     return companyById[id]?.name ?? '—'
   }, [companyById])
 
-  // Обработчики
   const setQuickRange = useCallback((type: RangeType) => {
     const today = DateUtils.todayISO()
 
@@ -550,7 +549,6 @@ export default function SmartDashboardPage() {
     setRangeType(type)
   }, [])
 
-  // ИЗМЕНЕНО: обработчики для кастомного выбора дат
   const handleDateFromChange = useCallback((value: string) => {
     setDateFrom(value)
     setRangeType('custom')
@@ -561,7 +559,6 @@ export default function SmartDashboardPage() {
     setRangeType('custom')
   }, [])
 
-  // Основная аналитика
   const analytics = useMemo(() => {
     const { prevFrom, prevTo } = DateUtils.calculatePrevPeriod(dateFrom, dateTo)
     const allDates = DateUtils.getDatesInRange(dateFrom, dateTo)
@@ -569,7 +566,6 @@ export default function SmartDashboardPage() {
     const inCurrent = (date: string) => date >= dateFrom && date <= dateTo
     const inPrev = (date: string) => date >= prevFrom && date <= prevTo
 
-    // Инициализация - ДОБАВЛЕН online
     const current: FinancialTotals = {
       incomeCash: 0, incomeKaspi: 0, incomeCard: 0, incomeOnline: 0, incomeTotal: 0,
       expenseCash: 0, expenseKaspi: 0, expenseTotal: 0,
@@ -583,7 +579,6 @@ export default function SmartDashboardPage() {
       profit: 0, netCash: 0, netKaspi: 0, netTotal: 0
     }
 
-    // Карта для графика
     const chartMap = new Map<string, ChartPoint>()
     allDates.forEach(date => {
       chartMap.set(date, { 
@@ -595,19 +590,17 @@ export default function SmartDashboardPage() {
       })
     })
 
-    // Категории
     const incomeCategories: Record<string, number> = {}
     const expenseCategories: Record<string, number> = {}
 
-    // Обработка доходов - ДОБАВЛЕН online_amount
     incomes.forEach(row => {
       if (!includeExtra && isExtraCompany(row.company_id)) return
 
       const cash = Number(row.cash_amount || 0)
       const kaspi = Number(row.kaspi_amount || 0)
       const card = Number(row.card_amount || 0)
-      const online = Number(row.online_amount || 0) // ДОБАВЛЕНО
-      const total = cash + kaspi + card + online // ИЗМЕНЕНО
+      const online = Number(row.online_amount || 0)
+      const total = cash + kaspi + card + online
       
       if (total <= 0) return
 
@@ -619,7 +612,7 @@ export default function SmartDashboardPage() {
         current.incomeCash += cash
         current.incomeKaspi += kaspi
         current.incomeCard += card
-        current.incomeOnline += online // ДОБАВЛЕНО
+        current.incomeOnline += online
         current.transactionsCount!++
 
         const point = chartMap.get(row.date)
@@ -629,11 +622,10 @@ export default function SmartDashboardPage() {
         previous.incomeCash += cash
         previous.incomeKaspi += kaspi
         previous.incomeCard += card
-        previous.incomeOnline += online // ДОБАВЛЕНО
+        previous.incomeOnline += online
       }
     })
 
-    // Обработка расходов
     expenses.forEach(row => {
       if (!includeExtra && isExtraCompany(row.company_id)) return
 
@@ -661,11 +653,10 @@ export default function SmartDashboardPage() {
       }
     })
 
-    // Финальные расчеты
     const finalizeTotals = (t: FinancialTotals) => {
       t.profit = t.incomeTotal - t.expenseTotal
       t.netCash = t.incomeCash - t.expenseCash
-      t.netKaspi = t.incomeKaspi + t.incomeCard + t.incomeOnline - t.expenseKaspi // ИЗМЕНЕНО
+      t.netKaspi = t.incomeKaspi + t.incomeCard + t.incomeOnline - t.expenseKaspi
       t.netTotal = t.profit
       t.avgCheck = t.transactionsCount ? t.incomeTotal / t.transactionsCount : 0
     }
@@ -680,7 +671,6 @@ export default function SmartDashboardPage() {
     const chartData = Array.from(chartMap.values())
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    // Скользящее среднее
     const windowSize = 7
     chartData.forEach((point, i) => {
       const start = Math.max(0, i - windowSize + 1)
@@ -694,7 +684,6 @@ export default function SmartDashboardPage() {
       ? current.incomeTotal / current.expenseTotal 
       : current.incomeTotal > 0 ? 10 : 0
 
-    // Тренды
     const profitValues = chartData.map(d => d.profit).filter(v => v !== 0)
     const incomeValues = chartData.map(d => d.income).filter(v => v !== 0)
     const expenseValues = chartData.map(d => d.expense).filter(v => v !== 0)
@@ -749,7 +738,6 @@ export default function SmartDashboardPage() {
       benchmarks
     }
 
-    // Форматирование категорий для графиков
     const topIncomeCategories: CategoryData[] = Object.entries(incomeCategories)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5)
@@ -781,7 +769,6 @@ export default function SmartDashboardPage() {
     }
   }, [incomes, expenses, dateFrom, dateTo, includeExtra, isExtraCompany])
 
-  // Лента событий
   const feedItems = useMemo(() => {
     const items: FeedItem[] = []
 
@@ -789,7 +776,7 @@ export default function SmartDashboardPage() {
       if (!includeExtra && isExtraCompany(row.company_id)) return
       if (row.date < dateFrom || row.date > dateTo) return
 
-      const amount = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0) + Number(row.online_amount || 0) // ИЗМЕНЕНО
+      const amount = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0) + Number(row.online_amount || 0)
       if (amount <= 0) return
 
       items.push({
@@ -877,94 +864,99 @@ export default function SmartDashboardPage() {
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-foreground">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto relative">
         <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-          {/* Хедер */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 p-6 border border-purple-500/20">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 rounded-full blur-3xl opacity-20" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-600 rounded-full blur-3xl opacity-20" />
-            
-            <SmartHeader
-              dateFrom={dateFrom}
-              dateTo={dateTo}
-              rangeType={rangeType}
-              includeExtra={includeExtra}
-              hasExtraCompany={hasExtraCompany}
-              insight={insight}
-              isCalendarOpen={isCalendarOpen}
-              onRangeChange={setQuickRange}
-              onIncludeExtraChange={setIncludeExtra}
-              onDateFromChange={handleDateFromChange}
-              onDateToChange={handleDateToChange}
-              onToggleCalendar={() => setIsCalendarOpen(!isCalendarOpen)}
-            />
+          {/* Хедер с календарем */}
+          <div className="relative z-50">
+            <div className="overflow-visible rounded-2xl bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 p-6 border border-purple-500/20">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
+              
+              <SmartHeader
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                rangeType={rangeType}
+                includeExtra={includeExtra}
+                hasExtraCompany={hasExtraCompany}
+                insight={insight}
+                isCalendarOpen={isCalendarOpen}
+                onRangeChange={setQuickRange}
+                onIncludeExtraChange={setIncludeExtra}
+                onDateFromChange={handleDateFromChange}
+                onDateToChange={handleDateToChange}
+                onToggleCalendar={() => setIsCalendarOpen(!isCalendarOpen)}
+              />
+            </div>
           </div>
 
-          {/* Табы навигации */}
-          <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
-            <TabButton 
-              active={activeTab === 'overview'} 
-              onClick={() => setActiveTab('overview')}
-              icon={<Activity className="w-4 h-4" />}
-              label="Обзор"
-            />
-            <TabButton 
-              active={activeTab === 'details'} 
-              onClick={() => setActiveTab('details')}
-              icon={<BarChart2 className="w-4 h-4" />}
-              label="Детали"
-            />
-            <TabButton 
-              active={activeTab === 'forecast'} 
-              onClick={() => setActiveTab('forecast')}
-              icon={<Sparkles className="w-4 h-4" />}
-              label="Прогноз"
-            />
+          {/* Остальной контент */}
+          <div className="relative z-10 space-y-6">
+            {/* Табы навигации */}
+            <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
+              <TabButton 
+                active={activeTab === 'overview'} 
+                onClick={() => setActiveTab('overview')}
+                icon={<Activity className="w-4 h-4" />}
+                label="Обзор"
+              />
+              <TabButton 
+                active={activeTab === 'details'} 
+                onClick={() => setActiveTab('details')}
+                icon={<BarChart2 className="w-4 h-4" />}
+                label="Детали"
+              />
+              <TabButton 
+                active={activeTab === 'forecast'} 
+                onClick={() => setActiveTab('forecast')}
+                icon={<Sparkles className="w-4 h-4" />}
+                label="Прогноз"
+              />
+            </div>
+
+            {/* Контент в зависимости от таба */}
+            {activeTab === 'overview' && (
+              <OverviewContent
+                insight={insight}
+                current={current}
+                previous={previous}
+                selectedMetric={selectedMetric}
+                onMetricChange={setSelectedMetric}
+                chartData={chartData}
+                showPredictions={showPredictions}
+                onTogglePredictions={() => setShowPredictions(!showPredictions)}
+                topIncomeCategories={topIncomeCategories}
+                topExpenseCategories={topExpenseCategories}
+                anomalies={insight.anomalies}
+                showAnomalies={showAnomalies}
+                onToggleAnomalies={() => setShowAnomalies(!showAnomalies)}
+                feedItems={feedItems}
+                companyName={companyName}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                prediction={insight.predictions}
+              />
+            )}
+
+            {activeTab === 'details' && (
+              <DetailsView
+                current={current}
+                previous={previous}
+                topIncomeCategories={topIncomeCategories}
+                topExpenseCategories={topExpenseCategories}
+                chartData={chartData}
+              />
+            )}
+
+            {activeTab === 'forecast' && (
+              <ForecastView
+                prediction={insight.predictions}
+                chartData={chartData}
+                trends={insight.trends}
+                margin={insight.margin}
+                efficiency={insight.efficiency}
+              />
+            )}
           </div>
-
-          {/* Контент в зависимости от таба */}
-          {activeTab === 'overview' && (
-            <OverviewContent
-              insight={insight}
-              current={current}
-              previous={previous}
-              selectedMetric={selectedMetric}
-              onMetricChange={setSelectedMetric}
-              chartData={chartData}
-              showPredictions={showPredictions}
-              onTogglePredictions={() => setShowPredictions(!showPredictions)}
-              topIncomeCategories={topIncomeCategories}
-              topExpenseCategories={topExpenseCategories}
-              anomalies={insight.anomalies}
-              showAnomalies={showAnomalies}
-              onToggleAnomalies={() => setShowAnomalies(!showAnomalies)}
-              feedItems={feedItems}
-              companyName={companyName}
-              dateFrom={dateFrom}
-              dateTo={dateTo}
-              prediction={insight.predictions}
-            />
-          )}
-
-          {activeTab === 'details' && (
-            <DetailsView
-              current={current}
-              previous={previous}
-              topIncomeCategories={topIncomeCategories}
-              topExpenseCategories={topExpenseCategories}
-              chartData={chartData}
-            />
-          )}
-
-          {activeTab === 'forecast' && (
-            <ForecastView
-              prediction={insight.predictions}
-              chartData={chartData}
-              trends={insight.trends}
-              margin={insight.margin}
-              efficiency={insight.efficiency}
-            />
-          )}
         </div>
       </main>
     </div>
@@ -1015,7 +1007,6 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
   )
 }
 
-// ИЗМЕНЕНО: обновленный интерфейс SmartHeader с календарем
 interface SmartHeaderProps {
   dateFrom: string
   dateTo: string
@@ -1053,78 +1044,80 @@ function SmartHeader({
   }
 
   return (
-    <div className="relative z-10 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
-      <div className="flex-1">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="p-2 bg-purple-500/20 rounded-xl">
-            <Brain className="w-6 h-6 text-purple-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-              AI Финансовый Дашборд
-            </h1>
-            <p className="text-xs text-gray-400">Умная аналитика вашего бизнеса</p>
-          </div>
-          <span className={`ml-auto px-3 py-1 rounded-full text-xs font-medium border ${statusColors[insight.status]}`}>
-            {insight.status === 'excellent' ? '🚀 Отлично' :
-             insight.status === 'good' ? '✅ Хорошо' :
-             insight.status === 'warning' ? '⚠️ Внимание' : '🔴 Критично'}
-          </span>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <button
-            onClick={onToggleCalendar}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-purple-500/50 transition-colors"
-          >
-            <Calendar className="w-4 h-4 text-purple-400" />
-            <span className="text-gray-300">
-              {DateUtils.formatDate(dateFrom, 'full')} — {DateUtils.formatDate(dateTo, 'full')}
+    <div className="relative">
+      <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 bg-purple-500/20 rounded-xl">
+              <Brain className="w-6 h-6 text-purple-400" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                AI Финансовый Дашборд
+              </h1>
+              <p className="text-xs text-gray-400">Умная аналитика вашего бизнеса</p>
+            </div>
+            <span className={`ml-auto px-3 py-1 rounded-full text-xs font-medium border ${statusColors[insight.status]}`}>
+              {insight.status === 'excellent' ? '🚀 Отлично' :
+               insight.status === 'good' ? '✅ Хорошо' :
+               insight.status === 'warning' ? '⚠️ Внимание' : '🔴 Критично'}
             </span>
-            <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
-          </button>
-
-          {hasExtraCompany && (
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-3 text-sm">
             <button
-              onClick={() => onIncludeExtraChange(!includeExtra)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${
-                includeExtra
-                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                  : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-700/50'
-              }`}
+              onClick={onToggleCalendar}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-purple-500/50 transition-colors"
             >
-              <span className={`w-2 h-2 rounded-full ${includeExtra ? 'bg-red-400' : 'bg-gray-500'}`} />
-              {includeExtra ? 'Extra включён' : 'Extra исключён'}
+              <Calendar className="w-4 h-4 text-purple-400" />
+              <span className="text-gray-300">
+                {DateUtils.formatDate(dateFrom, 'full')} — {DateUtils.formatDate(dateTo, 'full')}
+              </span>
+              <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
             </button>
-          )}
 
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700">
-            <Sparkles className="w-4 h-4 text-yellow-400" />
-            <span className="text-gray-300">Достоверность прогноза:</span>
-            <span className="font-medium text-purple-400">{insight.predictions.confidence}%</span>
+            {hasExtraCompany && (
+              <button
+                onClick={() => onIncludeExtraChange(!includeExtra)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${
+                  includeExtra
+                    ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                    : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-700/50'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${includeExtra ? 'bg-red-400' : 'bg-gray-500'}`} />
+                {includeExtra ? 'Extra включён' : 'Extra исключён'}
+              </button>
+            )}
+
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700">
+              <Sparkles className="w-4 h-4 text-yellow-400" />
+              <span className="text-gray-300">Достоверность прогноза:</span>
+              <span className="font-medium text-purple-400">{insight.predictions.confidence}%</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ИЗМЕНЕНО: новый дизайн календаря */}
       {isCalendarOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 p-4 bg-gray-900/95 backdrop-blur-xl border border-purple-500/20 rounded-2xl shadow-2xl z-50">
-          <DateFilters
-            dateFrom={dateFrom}
-            dateTo={dateTo}
-            rangeType={rangeType}
-            onRangeChange={onRangeChange}
-            onDateFromChange={onDateFromChange}
-            onDateToChange={onDateToChange}
-            onClose={onToggleCalendar}
-          />
+        <div className="absolute top-full left-0 right-0 mt-2 z-[100]">
+          <div className="p-4 bg-gray-900/95 backdrop-blur-xl border border-purple-500/20 rounded-2xl shadow-2xl">
+            <DateFilters
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              rangeType={rangeType}
+              onRangeChange={onRangeChange}
+              onDateFromChange={onDateFromChange}
+              onDateToChange={onDateToChange}
+              onClose={onToggleCalendar}
+            />
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-// ИЗМЕНЕНО: улучшенный компонент выбора дат
 function DateFilters({ 
   dateFrom, 
   dateTo, 
@@ -1232,7 +1225,6 @@ interface OverviewContentProps {
   prediction: AIInsight['predictions']
 }
 
-// ИЗМЕНЕНО: новая структура сетки
 function OverviewContent({
   insight,
   current,
@@ -1257,10 +1249,8 @@ function OverviewContent({
     <div className="space-y-6">
       {/* Верхний ряд: AI карточка + 3 метрики */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* AI карточка */}
         <AICard insight={insight} />
         
-        {/* Три метрики */}
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
           <MetricCard
             label="Доход"
@@ -1292,7 +1282,7 @@ function OverviewContent({
         </div>
       </div>
 
-      {/* ИЗМЕНЕНО: Средний ряд - график на всю ширину */}
+      {/* Средний ряд - график на всю ширину */}
       <div className="w-full">
         <AdvancedChart
           data={chartData}
@@ -1303,7 +1293,7 @@ function OverviewContent({
         />
       </div>
 
-      {/* ИЗМЕНЕНО: Нижний ряд - 4 карточки в ряд */}
+      {/* Нижний ряд - 4 карточки в ряд */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <CategoryPieChart
           title="Структура доходов"
@@ -1332,7 +1322,7 @@ function OverviewContent({
         />
       </div>
 
-      {/* ИЗМЕНЕНО: AI Прогноз на всю ширину внизу */}
+      {/* AI Прогноз на всю ширину внизу */}
       <div className="w-full">
         <PredictionCardFull
           prediction={prediction}
@@ -1435,7 +1425,6 @@ function MetricCard({
         </div>
       </div>
       
-      {/* ИЗМЕНЕНО: полное отображение числа */}
       <div className="text-2xl font-bold text-white mb-2 break-all">
         {Formatters.moneyDetailed(value)}
       </div>
@@ -1645,7 +1634,6 @@ function CategoryPieChart({ title, data, total, icon, color }: {
   )
 }
 
-// ИЗМЕНЕНО: новый компонент полноразмерного прогноза
 function PredictionCardFull({ prediction, currentProfit, insight }: { 
   prediction: AIInsight['predictions']
   currentProfit: number
@@ -1657,7 +1645,6 @@ function PredictionCardFull({ prediction, currentProfit, insight }: {
   return (
     <Card className="p-6 border-0 bg-gradient-to-br from-blue-900/30 via-gray-900 to-purple-900/30 backdrop-blur-sm">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Левая часть - основной прогноз */}
         <div className="lg:col-span-1 space-y-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-500/20 rounded-xl">
@@ -1701,7 +1688,6 @@ function PredictionCardFull({ prediction, currentProfit, insight }: {
           </div>
         </div>
 
-        {/* Средняя часть - тренды */}
         <div className="lg:col-span-1 space-y-4 border-l border-r border-gray-800 px-6">
           <h4 className="text-sm font-medium text-gray-300">Текущие тренды</h4>
           
@@ -1738,7 +1724,6 @@ function PredictionCardFull({ prediction, currentProfit, insight }: {
           </div>
         </div>
 
-        {/* Правая часть - рекомендации */}
         <div className="lg:col-span-1 space-y-4">
           <h4 className="text-sm font-medium text-gray-300">Рекомендации AI</h4>
           <div className="space-y-3">
@@ -1964,7 +1949,6 @@ function DetailsView({ current, previous, topIncomeCategories, topExpenseCategor
   topExpenseCategories: CategoryData[]
   chartData: ChartPoint[]
 }) {
-  // ИЗМЕНЕНО: добавлен online в статистику
   const paymentStats = [
     { name: 'Наличные', value: current.incomeCash, color: '#f59e0b' },
     { name: 'Kaspi', value: current.incomeKaspi, color: '#2563eb' },
