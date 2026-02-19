@@ -33,6 +33,7 @@ import {
   CheckCircle2,
   XCircle,
   Minus,
+  Wallet,
 } from 'lucide-react'
 
 import {
@@ -50,8 +51,6 @@ import {
   ComposedChart,
   Line,
   ReferenceLine,
-  Area,
-  AreaChart,
 } from 'recharts'
 
 // =====================
