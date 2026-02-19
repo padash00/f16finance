@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, FormEvent, useCallback } from 'react'
+import { useEffect, useMemo, useState, FormEvent, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
@@ -26,10 +26,8 @@ import {
   ChevronDown,
   Wallet,
   Plus,
-  Minus,
-  Gift,
-  AlertCircle,
   Clock,
+  Trash2,
 } from 'lucide-react'
 
 type Company = { id: string; name: string; code: string | null }
@@ -158,13 +156,7 @@ const DateUtils = {
 
 // ================== FORMATTERS ==================
 const Formatters = {
-  money: (v: number): string => {
-    if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + ' млн ₸'
-    if (v >= 1_000) return (v / 1_000).toFixed(1) + ' тыс ₸'
-    return v.toLocaleString('ru-RU') + ' ₸'
-  },
-
-  moneyDetailed: (v: number): string => 
+  money: (v: number): string => 
     v.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₸'
 }
 
@@ -207,9 +199,6 @@ export default function SalaryPage() {
   const [adjComment, setAdjComment] = useState('')
   const [adjSaving, setAdjSaving] = useState(false)
 
-  // Оплата
-  const [payingOperatorId, setPayingOperatorId] = useState<string | null>(null)
-
   // Telegram отправка (одному)
   const [sendingOperatorId, setSendingOperatorId] = useState<string | null>(null)
 
@@ -224,7 +213,8 @@ export default function SalaryPage() {
   const [chatEditValue, setChatEditValue] = useState('')
   const [chatSaving, setChatSaving] = useState(false)
 
-  // Date picker
+  // Date picker ref для позиционирования
+  const datePickerRef = useRef<HTMLDivElement>(null)
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
 
   // если кривой диапазон
@@ -235,6 +225,17 @@ export default function SalaryPage() {
     }
   }, [dateFrom, dateTo])
 
+  // Close datepicker on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setIsDatePickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const setThisWeek = useCallback(() => {
     const now = new Date()
     const mon = DateUtils.getMonday(now)
@@ -242,6 +243,7 @@ export default function SalaryPage() {
     const to = DateUtils.addDaysISO(from, 6)
     setDateFrom(from)
     setDateTo(to)
+    setIsDatePickerOpen(false)
   }, [])
 
   const setLastWeek = useCallback(() => {
@@ -252,6 +254,7 @@ export default function SalaryPage() {
     const to = DateUtils.addDaysISO(from, 6)
     setDateFrom(from)
     setDateTo(to)
+    setIsDatePickerOpen(false)
   }, [])
 
   // неделя оплаты = понедельник от dateFrom
@@ -371,7 +374,6 @@ export default function SalaryPage() {
     }
   }, [dateFrom, dateTo, weekStartISO])
 
-  // Статус оплаты по оператору
   const payoutByOperator = useMemo(() => {
     const map = new Map<string, PayoutRow>()
     for (const p of payouts) map.set(p.operator_id, p)
@@ -384,7 +386,6 @@ export default function SalaryPage() {
     return map
   }, [operators])
 
-  // Список операторов для селекта
   const operatorOptions = useMemo(
     () =>
       operators
@@ -578,45 +579,6 @@ export default function SalaryPage() {
     }
   }
 
-  const togglePaid = async (operatorId: string) => {
-    setError(null)
-    setPayingOperatorId(operatorId)
-
-    try {
-      const existing = payoutByOperator.get(operatorId)
-      const nextPaid = !Boolean(existing?.is_paid)
-
-      const payload = {
-        operator_id: operatorId,
-        week_start: weekStartISO,
-        shift: 'all',
-        is_paid: nextPaid,
-        paid_at: nextPaid ? new Date().toISOString() : null,
-      }
-
-      const { data, error } = await supabase
-        .from('operator_salary_payouts')
-        .upsert([payload], { onConflict: 'operator_id,week_start,shift' })
-        .select('id,operator_id,week_start,shift,is_paid,paid_at,comment,created_at')
-        .single()
-
-      if (error) throw error
-
-      setPayouts((prev) => {
-        const next = [...prev]
-        const idx = next.findIndex((p) => p.operator_id === operatorId)
-        if (idx >= 0) next[idx] = data as PayoutRow
-        else next.push(data as PayoutRow)
-        return next
-      })
-    } catch (e: any) {
-      console.error(e)
-      setError(e.message || 'Ошибка при обновлении статуса оплаты')
-    } finally {
-      setPayingOperatorId(null)
-    }
-  }
-
   const sendToTelegram = async (operatorId: string) => {
     setError(null)
     setSendingOperatorId(operatorId)
@@ -804,7 +766,7 @@ export default function SalaryPage() {
       )}
 
       <main className="flex-1 overflow-auto">
-        <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+        <div className="p-4 md:p-8 max-w-[1600px] mx-auto space-y-6">
           {/* Хедер */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900/30 via-gray-900 to-blue-900/30 p-6 border border-emerald-500/20 mb-6">
             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
@@ -853,7 +815,7 @@ export default function SalaryPage() {
                 </div>
 
                 {/* Date Picker */}
-                <div className="relative">
+                <div className="relative" ref={datePickerRef}>
                   <button
                     onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
                     className="flex items-center gap-2 px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-gray-300 hover:border-emerald-500/50 transition-all"
@@ -864,31 +826,33 @@ export default function SalaryPage() {
                   </button>
 
                   {isDatePickerOpen && (
-                    <div className="absolute right-0 top-full mt-2 p-4 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 min-w-[280px]">
-                      <div className="space-y-3">
+                    <div className="absolute right-0 top-full mt-2 p-4 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-[100] min-w-[320px]">
+                      <div className="space-y-4">
                         <div>
-                          <label className="text-xs text-gray-500 uppercase mb-1 block">От</label>
+                          <label className="text-xs text-gray-500 uppercase mb-2 block">Начало периода</label>
                           <input
                             type="date"
                             value={dateFrom}
-                            onChange={(e) => {
-                              setDateFrom(e.target.value)
-                              setIsDatePickerOpen(false)
-                            }}
-                            className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-emerald-500 outline-none"
+                            onChange={(e) => setDateFrom(e.target.value)}
+                            className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-emerald-500 outline-none"
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500 uppercase mb-1 block">До</label>
+                          <label className="text-xs text-gray-500 uppercase mb-2 block">Конец периода</label>
                           <input
                             type="date"
                             value={dateTo}
-                            onChange={(e) => {
-                              setDateTo(e.target.value)
-                              setIsDatePickerOpen(false)
-                            }}
-                            className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-emerald-500 outline-none"
+                            onChange={(e) => setDateTo(e.target.value)}
+                            className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-emerald-500 outline-none"
                           />
+                        </div>
+                        <div className="flex gap-2 pt-2 border-t border-gray-800">
+                          <Button size="sm" variant="outline" onClick={setLastWeek} className="flex-1 h-9 border-gray-700 text-xs">
+                            Прошлая неделя
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={setThisWeek} className="flex-1 h-9 border-gray-700 text-xs">
+                            Эта неделя
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -984,31 +948,30 @@ export default function SalaryPage() {
             </Card>
           </div>
 
-          {/* Таблица */}
+          {/* Таблица - УБРАН СТОЛБЕЦ СТАТУС */}
           <Card className="border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1280px] text-xs md:text-sm border-collapse">
+              <table className="w-full text-xs md:text-sm border-collapse">
                 <thead className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur border-b border-gray-700">
                   <tr className="text-[11px] uppercase tracking-wide text-gray-500">
-                    <th className="py-4 px-4 text-left font-medium">Оператор</th>
-                    <th className="py-4 px-4 text-center font-medium">Смен</th>
-                    <th className="py-4 px-4 text-right font-medium">Оклад</th>
-                    <th className="py-4 px-4 text-right font-medium">База</th>
-                    <th className="py-4 px-4 text-right font-medium text-emerald-400">Бонус</th>
-                    <th className="py-4 px-4 text-right font-medium text-red-400">Долги</th>
-                    <th className="py-4 px-4 text-right font-medium text-red-400">Штрафы</th>
-                    <th className="py-4 px-4 text-right font-medium text-amber-400">Аванс</th>
-                    <th className="py-4 px-4 text-right font-medium text-emerald-400">Премия</th>
-                    <th className="py-4 px-4 text-right font-medium">К выплате</th>
-                    <th className="py-4 px-4 text-center font-medium">Статус</th>
-                    <th className="py-4 px-4 text-center font-medium">Telegram</th>
+                    <th className="py-4 px-4 text-left font-medium w-[200px]">Оператор</th>
+                    <th className="py-4 px-4 text-center font-medium w-[80px]">Смен</th>
+                    <th className="py-4 px-4 text-right font-medium w-[120px]">Оклад</th>
+                    <th className="py-4 px-4 text-right font-medium w-[120px]">База</th>
+                    <th className="py-4 px-4 text-right font-medium text-emerald-400 w-[120px]">Бонус</th>
+                    <th className="py-4 px-4 text-right font-medium text-red-400 w-[120px]">Долги</th>
+                    <th className="py-4 px-4 text-right font-medium text-red-400 w-[120px]">Штрафы</th>
+                    <th className="py-4 px-4 text-right font-medium text-amber-400 w-[120px]">Аванс</th>
+                    <th className="py-4 px-4 text-right font-medium text-emerald-400 w-[120px]">Премия</th>
+                    <th className="py-4 px-4 text-right font-medium w-[140px]">К выплате</th>
+                    <th className="py-4 px-4 text-center font-medium w-[180px]">Telegram</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={12} className="py-12 text-center text-gray-400">
+                      <td colSpan={11} className="py-12 text-center text-gray-400">
                         <div className="flex items-center justify-center gap-2">
                           <Loader2 className="w-5 h-5 animate-spin" />
                           Загрузка данных...
@@ -1019,7 +982,7 @@ export default function SalaryPage() {
 
                   {!loading && stats.operators.length === 0 && (
                     <tr>
-                      <td colSpan={12} className="py-12 text-center text-gray-400">
+                      <td colSpan={11} className="py-12 text-center text-gray-400">
                         Нет данных в выбранном периоде
                       </td>
                     </tr>
@@ -1047,45 +1010,16 @@ export default function SalaryPage() {
                             </div>
                           </td>
                           <td className="py-4 px-4 text-center text-gray-400">{op.shifts}</td>
-                          <td className="py-4 px-4 text-right text-gray-300">{Formatters.money(op.basePerShift)}</td>
-                          <td className="py-4 px-4 text-right text-white">{Formatters.money(op.baseSalary)}</td>
-                          <td className="py-4 px-4 text-right text-emerald-400">{Formatters.money(op.bonusSalary)}</td>
-                          <td className="py-4 px-4 text-right text-red-400">{Formatters.money(op.autoDebts)}</td>
-                          <td className="py-4 px-4 text-right text-red-400">{Formatters.money(op.manualMinus)}</td>
-                          <td className="py-4 px-4 text-right text-amber-400">{Formatters.money(op.advances)}</td>
-                          <td className="py-4 px-4 text-right text-emerald-400">{Formatters.money(op.manualPlus)}</td>
+                          <td className="py-4 px-4 text-right text-gray-300 font-mono">{Formatters.money(op.basePerShift)}</td>
+                          <td className="py-4 px-4 text-right text-white font-mono">{Formatters.money(op.baseSalary)}</td>
+                          <td className="py-4 px-4 text-right text-emerald-400 font-mono">{Formatters.money(op.bonusSalary)}</td>
+                          <td className="py-4 px-4 text-right text-red-400 font-mono">{Formatters.money(op.autoDebts)}</td>
+                          <td className="py-4 px-4 text-right text-red-400 font-mono">{Formatters.money(op.manualMinus)}</td>
+                          <td className="py-4 px-4 text-right text-amber-400 font-mono">{Formatters.money(op.advances)}</td>
+                          <td className="py-4 px-4 text-right text-emerald-400 font-mono">{Formatters.money(op.manualPlus)}</td>
 
-                          <td className={`py-4 px-4 text-right font-bold ${isNeg ? 'text-red-400' : 'text-white'}`}>
+                          <td className={`py-4 px-4 text-right font-bold font-mono text-base ${isNeg ? 'text-red-400' : 'text-white'}`}>
                             {Formatters.money(op.finalSalary)}
-                          </td>
-
-                          <td className="py-4 px-4 text-center">
-                            <Button
-                              size="sm"
-                              onClick={() => togglePaid(op.operatorId)}
-                              disabled={payingOperatorId === op.operatorId}
-                              className={`h-9 px-4 rounded-xl text-xs font-semibold gap-2 transition-all ${
-                                isPaid
-                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
-                                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30'
-                              }`}
-                              variant="outline"
-                            >
-                              {payingOperatorId === op.operatorId ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : isPaid ? (
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                              ) : (
-                                <XCircle className="w-3.5 h-3.5" />
-                              )}
-                              {isPaid ? 'Оплачено' : 'Не оплачено'}
-                            </Button>
-
-                            {isPaid && payout?.paid_at && (
-                              <div className="text-[10px] text-gray-500 mt-1">
-                                {new Date(payout.paid_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                              </div>
-                            )}
                           </td>
 
                           <td className="py-4 px-4">
@@ -1135,19 +1069,19 @@ export default function SalaryPage() {
 
                   {!loading && stats.operators.length > 0 && (
                     <tr className="border-t border-gray-700 bg-gray-800/30">
-                      <td className="py-4 px-4 font-bold text-white" colSpan={2}>Итого:</td>
-                      <td className="py-4 px-4 text-right font-bold text-gray-400">—</td>
-                      <td className="py-4 px-4 text-right font-bold text-white">{Formatters.money(totalBase)}</td>
-                      <td className="py-4 px-4 text-right font-bold text-emerald-400">{Formatters.money(totalBonus)}</td>
-                      <td className="py-4 px-4 text-right font-bold text-red-400">{Formatters.money(totalAutoDebts)}</td>
-                      <td className="py-4 px-4 text-right font-bold text-red-400">{Formatters.money(totalMinus)}</td>
-                      <td className="py-4 px-4 text-right font-bold text-amber-400">{Formatters.money(totalAdvances)}</td>
-                      <td className="py-4 px-4 text-right font-bold text-emerald-400">{Formatters.money(totalPlus)}</td>
-                      <td className="py-4 px-4 text-right font-bold text-emerald-300">{Formatters.money(stats.totalSalary)}</td>
+                      <td className="py-4 px-4 font-bold text-white">Итого:</td>
+                      <td className="py-4 px-4 text-center font-bold text-gray-400">{totalShifts}</td>
+                      <td className="py-4 px-4 text-right font-bold text-gray-400 font-mono">—</td>
+                      <td className="py-4 px-4 text-right font-bold text-white font-mono">{Formatters.money(totalBase)}</td>
+                      <td className="py-4 px-4 text-right font-bold text-emerald-400 font-mono">{Formatters.money(totalBonus)}</td>
+                      <td className="py-4 px-4 text-right font-bold text-red-400 font-mono">{Formatters.money(totalAutoDebts)}</td>
+                      <td className="py-4 px-4 text-right font-bold text-red-400 font-mono">{Formatters.money(totalMinus)}</td>
+                      <td className="py-4 px-4 text-right font-bold text-amber-400 font-mono">{Formatters.money(totalAdvances)}</td>
+                      <td className="py-4 px-4 text-right font-bold text-emerald-400 font-mono">{Formatters.money(totalPlus)}</td>
+                      <td className="py-4 px-4 text-right font-bold text-emerald-300 font-mono text-base">{Formatters.money(stats.totalSalary)}</td>
                       <td className="py-4 px-4 text-center text-xs text-gray-500">
                         {paidCount}/{stats.operators.length}
                       </td>
-                      <td className="py-4 px-4 text-center text-xs text-gray-500">—</td>
                     </tr>
                   )}
                 </tbody>
@@ -1257,7 +1191,7 @@ export default function SalaryPage() {
                     onClick={() => setAdjAmount(String((parseInt(adjAmount) || 0) + amount))}
                     className="px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-900 text-xs text-gray-400 hover:border-orange-500/50 hover:text-orange-400 transition-colors"
                   >
-                    <Plus className="w-3 h-3 inline mr-1" /> {Formatters.moneyDetailed(amount)}
+                    <Plus className="w-3 h-3 inline mr-1" /> {Formatters.money(amount)}
                   </button>
                 ))}
               </div>
