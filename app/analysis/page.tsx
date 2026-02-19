@@ -23,6 +23,16 @@ import {
   SlidersHorizontal,
   PieChart,
   Target,
+  Globe,
+  Wallet,
+  CreditCard,
+  Banknote,
+  AlertTriangle,
+  CheckCircle2,
+  Zap,
+  TrendingUp as TrendUpIcon,
+  TrendingDown as TrendDownIcon,
+  MinusIcon,
 } from "lucide-react"
 import {
   ResponsiveContainer,
@@ -36,6 +46,9 @@ import {
   Bar,
   BarChart,
   Area,
+  PieChart as RePieChart,
+  Pie,
+  Cell,
 } from "recharts"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -55,6 +68,8 @@ const MAX_DAYS_HARD_LIMIT = 730
 const PLANS_TABLE = "plans_daily"
 
 // ================== ТИПЫ ==================
+type PaymentMethod = 'cash' | 'kaspi' | 'card' | 'online'
+
 type DataPoint = {
   date: string
   income: number
@@ -64,6 +79,12 @@ type DataPoint = {
   dayOfWeek: number
   dayName: string
   type?: "fact" | "forecast"
+
+  // Детализация по способам оплаты
+  incomeCash: number
+  incomeKaspi: number
+  incomeCard: number
+  incomeOnline: number
 
   planned_income?: number
   planned_expense?: number
@@ -81,22 +102,40 @@ type Anomaly = {
   type: "income_high" | "income_low" | "expense_high"
   amount: number
   avgForDay: number
+  paymentMethod?: PaymentMethod
 }
 
 type DayStats = {
   income: number[]
   expense: number[]
+  incomeCash: number[]
+  incomeKaspi: number[]
+  incomeCard: number[]
+  incomeOnline: number[]
 }
 
 type DayAverage = {
   dow: number
   income: number
   expense: number
+  incomeCash: number
+  incomeKaspi: number
+  incomeCard: number
+  incomeOnline: number
   sigmaIncome: number
   sigmaExpense: number
   coverage: number
   count: number
   isEstimated: boolean
+}
+
+type PaymentTrend = {
+  method: PaymentMethod
+  total: number
+  percentage: number
+  trend: 'up' | 'down' | 'stable'
+  avgDaily: number
+  color: string
 }
 
 type AnalysisResult = {
@@ -121,17 +160,39 @@ type AnalysisResult = {
   totalForecastIncome: number
   totalForecastProfit: number
 
+  // Детализация по способам оплаты
+  paymentTrends: PaymentTrend[]
+  totalCash: number
+  totalKaspi: number
+  totalCard: number
+  totalOnline: number
+  onlineShare: number
+  cashlessShare: number
+
   totalPlanIncome: number
   planIncomeAchievementPct: number
 
   bestDow: { dow: number; income: number; profit: number }
   worstDow: { dow: number; income: number; profit: number }
+  
+  // AI метрики
+  seasonalityStrength: number
+  growthRate: number
+  riskLevel: 'low' | 'medium' | 'high'
+  recommendedActions: string[]
 }
 
 type RangePreset = "30" | "90" | "180" | "365" | "all"
 type Granularity = "daily" | "weekly"
 
 const dayNames = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"]
+
+const PAYMENT_COLORS = {
+  cash: '#f59e0b',
+  kaspi: '#2563eb',
+  card: '#7c3aed',
+  online: '#ec4899',
+}
 
 // ================== УТИЛИТЫ ==================
 const toISODateLocal = (d: Date) => {
@@ -143,6 +204,9 @@ const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(ma
 
 const formatMoney = (v: number) =>
   (Number.isFinite(v) ? v : 0).toLocaleString("ru-RU", { maximumFractionDigits: 0 }) + " ₸"
+
+const formatMoneyDetailed = (v: number) =>
+  (Number.isFinite(v) ? v : 0).toLocaleString("ru-RU", { maximumFractionDigits: 0 })
 
 const formatPct = (v: number) => `${(Number.isFinite(v) ? v : 0).toFixed(1)}%`
 
@@ -207,6 +271,16 @@ const safeMargin = (profit: number, income: number) => {
   return (profit / income) * 100
 }
 
+const detectTrend = (values: number[]): 'up' | 'down' | 'stable' => {
+  if (values.length < 3) return 'stable'
+  const first = values[0]
+  const last = values[values.length - 1]
+  const change = ((last - first) / (first || 1)) * 100
+  if (change > 5) return 'up'
+  if (change < -5) return 'down'
+  return 'stable'
+}
+
 const startOfWeekISO = (dateStr: string) => {
   const d = parseISODateSafe(dateStr)
   const day = d.getDay()
@@ -241,6 +315,59 @@ const downloadCSV = (filename: string, rows: Record<string, any>[]) => {
   URL.revokeObjectURL(url)
 }
 
+// ================== AI АНАЛИТИКА ==================
+const calculateSeasonalityStrength = (dayAverages: DayAverage[]): number => {
+  const incomes = dayAverages.map(d => d.income).filter(v => v > 0)
+  if (incomes.length < 2) return 0
+  const avg = incomes.reduce((a, b) => a + b, 0) / incomes.length
+  const variance = incomes.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / incomes.length
+  const cv = avg > 0 ? Math.sqrt(variance) / avg : 0
+  return clamp(cv * 100, 0, 100)
+}
+
+const calculateGrowthRate = (history: DataPoint[]): number => {
+  if (history.length < 14) return 0
+  const firstWeek = history.slice(0, 7).reduce((s, d) => s + d.income, 0)
+  const lastWeek = history.slice(-7).reduce((s, d) => s + d.income, 0)
+  if (firstWeek <= 0) return 0
+  return ((lastWeek - firstWeek) / firstWeek) * 100
+}
+
+const determineRiskLevel = (volatility: number, avgIncome: number, margin: number): 'low' | 'medium' | 'high' => {
+  const cv = avgIncome > 0 ? volatility / avgIncome : 0
+  if (cv > 0.8 || margin < 10) return 'high'
+  if (cv > 0.5 || margin < 20) return 'medium'
+  return 'low'
+}
+
+const generateRecommendations = (analysis: AnalysisResult): string[] => {
+  const recs: string[] = []
+  
+  if (analysis.onlineShare < 15) {
+    recs.push("Добавьте онлайн-оплату — это увеличит средний чек на 10-15%")
+  }
+  
+  if (analysis.cashlessShare < 40) {
+    recs.push("Стимулируйте безналичную оплату — снижает риски и ускоряет оборот")
+  }
+  
+  if (analysis.seasonalityStrength > 30) {
+    recs.push("Высокая сезонность: планируйте запасы и персонал заранее")
+  }
+  
+  if (analysis.growthRate < -10) {
+    recs.push("Тренд падает: запустите акции или проверьте конкурентов")
+  } else if (analysis.growthRate > 20) {
+    recs.push("Отличный рост! Рассмотрите расширение ассортимента")
+  }
+  
+  if (analysis.avgMargin < 25) {
+    recs.push("Маржа ниже оптимума: проанализируйте себестоимость и ценообразование")
+  }
+  
+  return recs.slice(0, 4)
+}
+
 // ================== АНАЛИЗАТОР ==================
 const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): AnalysisResult | null => {
   if (!history.length) return null
@@ -268,11 +395,22 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
   let totalIncome = 0
   let totalExpense = 0
   let totalPlanIncome = 0
+  
+  // По способам оплаты
+  let totalCash = 0
+  let totalKaspi = 0
+  let totalCard = 0
+  let totalOnline = 0
 
   for (const d of effectiveAll) {
     totalIncome += d.income
     totalExpense += d.expense
     totalPlanIncome += d.planned_income || 0
+    
+    totalCash += d.incomeCash
+    totalKaspi += d.incomeKaspi
+    totalCard += d.incomeCard
+    totalOnline += d.incomeOnline
   }
 
   const planIncomeAchievementPct =
@@ -280,10 +418,22 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
 
   const weeksApprox = Math.max(1, Math.floor(totalPointsStats / 7))
 
-  const dayStats: DayStats[] = Array.from({ length: 7 }, () => ({ income: [], expense: [] }))
+  const dayStats: DayStats[] = Array.from({ length: 7 }, () => ({ 
+    income: [], 
+    expense: [],
+    incomeCash: [],
+    incomeKaspi: [],
+    incomeCard: [],
+    incomeOnline: [],
+  }))
+  
   for (const d of effectiveForStats) {
     dayStats[d.dayOfWeek].income.push(d.income)
     dayStats[d.dayOfWeek].expense.push(d.expense)
+    dayStats[d.dayOfWeek].incomeCash.push(d.incomeCash)
+    dayStats[d.dayOfWeek].incomeKaspi.push(d.incomeKaspi)
+    dayStats[d.dayOfWeek].incomeCard.push(d.incomeCard)
+    dayStats[d.dayOfWeek].incomeOnline.push(d.incomeOnline)
   }
 
   const globalIncomeArr = effectiveForStats.map((d) => d.income)
@@ -316,6 +466,10 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
       dow,
       income: medInc,
       expense: medExp,
+      incomeCash: ds.incomeCash.length ? median(ds.incomeCash) : 0,
+      incomeKaspi: ds.incomeKaspi.length ? median(ds.incomeKaspi) : 0,
+      incomeCard: ds.incomeCard.length ? median(ds.incomeCard) : 0,
+      incomeOnline: ds.incomeOnline.length ? median(ds.incomeOnline) : 0,
       sigmaIncome: rawMadInc * 1.4826 || globalIncomeSigma,
       sigmaExpense: rawMadExp * 1.4826 || globalExpenseSigma,
       coverage,
@@ -323,6 +477,42 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
       isEstimated: coverage < 0.4,
     }
   })
+
+  // Тренды по способам оплаты
+  const paymentTrends: PaymentTrend[] = [
+    {
+      method: 'cash',
+      total: totalCash,
+      percentage: totalIncome > 0 ? (totalCash / totalIncome) * 100 : 0,
+      trend: detectTrend(effectiveForStats.map(d => d.incomeCash)),
+      avgDaily: totalCash / totalPoints,
+      color: PAYMENT_COLORS.cash,
+    },
+    {
+      method: 'kaspi',
+      total: totalKaspi,
+      percentage: totalIncome > 0 ? (totalKaspi / totalIncome) * 100 : 0,
+      trend: detectTrend(effectiveForStats.map(d => d.incomeKaspi)),
+      avgDaily: totalKaspi / totalPoints,
+      color: PAYMENT_COLORS.kaspi,
+    },
+    {
+      method: 'card',
+      total: totalCard,
+      percentage: totalIncome > 0 ? (totalCard / totalIncome) * 100 : 0,
+      trend: detectTrend(effectiveForStats.map(d => d.incomeCard)),
+      avgDaily: totalCard / totalPoints,
+      color: PAYMENT_COLORS.card,
+    },
+    {
+      method: 'online',
+      total: totalOnline,
+      percentage: totalIncome > 0 ? (totalOnline / totalIncome) * 100 : 0,
+      trend: detectTrend(effectiveForStats.map(d => d.incomeOnline)),
+      avgDaily: totalOnline / totalPoints,
+      color: PAYMENT_COLORS.online,
+    },
+  ]
 
   const effectiveForTrend = includeZeroDays ? effectiveAll : effectiveForStats
   const incomeTrendBase = winsorize(
@@ -382,6 +572,10 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     const profit_p10 = profit - 1.28 * profitSigma
     const profit_p90 = profit + 1.28 * profitSigma
 
+    // Распределение прогноза по способам оплаты на основе исторических долей
+    const totalBase = base.incomeCash + base.incomeKaspi + base.incomeCard + base.incomeOnline
+    const ratio = totalBase > 0 ? predictedIncome / totalBase : 0
+
     forecast.push({
       date: iso,
       income: predictedIncome,
@@ -397,6 +591,10 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
       profit_p90,
       planned_income: 0,
       planned_expense: 0,
+      incomeCash: base.incomeCash * ratio,
+      incomeKaspi: base.incomeKaspi * ratio,
+      incomeCard: base.incomeCard * ratio,
+      incomeOnline: base.incomeOnline * ratio,
     })
 
     totalForecastIncome += predictedIncome
@@ -446,7 +644,22 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
       avgForDay = avg.income
     }
 
-    anomaliesRaw.push({ date: d.date, type, amount, avgForDay })
+    // Определяем способ оплаты с максимальным отклонением
+    const methods: [PaymentMethod, number][] = [
+      ['cash', d.incomeCash - avg.incomeCash],
+      ['kaspi', d.incomeKaspi - avg.incomeKaspi],
+      ['card', d.incomeCard - avg.incomeCard],
+      ['online', d.incomeOnline - avg.incomeOnline],
+    ]
+    const maxDev = methods.reduce((max, curr) => Math.abs(curr[1]) > Math.abs(max[1]) ? curr : max, methods[0])
+    
+    anomaliesRaw.push({ 
+      date: d.date, 
+      type, 
+      amount, 
+      avgForDay,
+      paymentMethod: maxDev[0]
+    })
   }
 
   const anomalies = anomaliesRaw.slice(-8).reverse()
@@ -494,7 +707,12 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     ...forecast,
   ]
 
-  return {
+  // AI метрики
+  const seasonalityStrength = calculateSeasonalityStrength(dayAverages)
+  const growthRate = calculateGrowthRate(effectiveAll)
+  const riskLevel = determineRiskLevel(profitVolatility, avgIncome, avgMargin)
+  
+  const result: AnalysisResult = {
     dayAverages,
     forecastData: forecast,
     chartData,
@@ -515,11 +733,26 @@ const buildAnalysis = (history: DataPoint[], includeZeroDays: boolean): Analysis
     totalExpense,
     totalForecastIncome,
     totalForecastProfit: totalForecastIncome - totalForecastExpense,
+    paymentTrends,
+    totalCash,
+    totalKaspi,
+    totalCard,
+    totalOnline,
+    onlineShare: totalIncome > 0 ? (totalOnline / totalIncome) * 100 : 0,
+    cashlessShare: totalIncome > 0 ? ((totalKaspi + totalCard + totalOnline) / totalIncome) * 100 : 0,
     totalPlanIncome,
     planIncomeAchievementPct,
     bestDow: best,
     worstDow: worst,
+    seasonalityStrength,
+    growthRate,
+    riskLevel,
+    recommendedActions: [],
   }
+  
+  result.recommendedActions = generateRecommendations(result)
+
+  return result
 }
 
 // ================== АГРЕГАЦИЯ НЕДЕЛЯ ==================
@@ -540,6 +773,10 @@ const aggregateWeekly = (data: DataPoint[]): DataPoint[] => {
         type: d.type,
         planned_income: d.planned_income || 0,
         planned_expense: d.planned_expense || 0,
+        incomeCash: d.incomeCash,
+        incomeKaspi: d.incomeKaspi,
+        incomeCard: d.incomeCard,
+        incomeOnline: d.incomeOnline,
       })
     } else {
       cur.income += d.income
@@ -548,6 +785,10 @@ const aggregateWeekly = (data: DataPoint[]): DataPoint[] => {
       cur.margin = safeMargin(cur.profit, cur.income)
       cur.planned_income = (cur.planned_income || 0) + (d.planned_income || 0)
       cur.planned_expense = (cur.planned_expense || 0) + (d.planned_expense || 0)
+      cur.incomeCash += d.incomeCash
+      cur.incomeKaspi += d.incomeKaspi
+      cur.incomeCard += d.incomeCard
+      cur.incomeOnline += d.incomeOnline
       if (d.type === "forecast") cur.type = "forecast"
     }
   }
@@ -623,12 +864,10 @@ export default function AIAnalysisPage() {
       const fromDateStr = toISODateLocal(start)
       const toDateStr = toISODateLocal(end)
 
-      const allDates = generateDateRange(start, end)
-
       const [incRes, expRes] = await Promise.all([
         supabase
           .from("incomes")
-          .select("date, cash_amount, kaspi_amount, card_amount")
+          .select("date, cash_amount, kaspi_amount, card_amount, online_amount")
           .gte("date", fromDateStr)
           .lte("date", toDateStr)
           .order("date")
@@ -642,7 +881,6 @@ export default function AIAnalysisPage() {
           .throwOnError(),
       ])
 
-      // планы — необязательные
       let planRows: any[] = []
       if (plansEnabled) {
         const planRes = await supabase
@@ -657,7 +895,7 @@ export default function AIAnalysisPage() {
           const isMissingTable = msg.includes("Could not find the table") || msg.includes("schema cache")
           if (isMissingTable) {
             planRows = []
-            setPlansWarning(`Планы отключены: таблица "${PLANS_TABLE}" не найдена. Графики работают без плана.`)
+            setPlansWarning(`Планы отключены: таблица "${PLANS_TABLE}" не найдена.`)
           } else {
             throw planRes.error
           }
@@ -666,22 +904,53 @@ export default function AIAnalysisPage() {
         }
       }
 
-      const dbMap = new Map<string, { income: number; expense: number }>()
+      const dbMap = new Map<string, { 
+        income: number
+        expense: number
+        incomeCash: number
+        incomeKaspi: number
+        incomeCard: number
+        incomeOnline: number
+      }>()
+      
       const planMap = new Map<string, { planned_income: number; planned_expense: number }>()
       const catsMap: Record<string, number> = {}
 
       for (const r of incRes.data ?? []) {
         const date = (r as any).date as string
-        const val = ((r as any).cash_amount || 0) + ((r as any).kaspi_amount || 0) + ((r as any).card_amount || 0)
-        const cur = dbMap.get(date) || { income: 0, expense: 0 }
+        const cash = (r as any).cash_amount || 0
+        const kaspi = (r as any).kaspi_amount || 0
+        const card = (r as any).card_amount || 0
+        const online = (r as any).online_amount || 0
+        const val = cash + kaspi + card + online
+        
+        const cur = dbMap.get(date) || { 
+          income: 0, 
+          expense: 0,
+          incomeCash: 0,
+          incomeKaspi: 0,
+          incomeCard: 0,
+          incomeOnline: 0,
+        }
         cur.income += val
+        cur.incomeCash += cash
+        cur.incomeKaspi += kaspi
+        cur.incomeCard += card
+        cur.incomeOnline += online
         dbMap.set(date, cur)
       }
 
       for (const r of expRes.data ?? []) {
         const date = (r as any).date as string
         const val = ((r as any).cash_amount || 0) + ((r as any).kaspi_amount || 0)
-        const cur = dbMap.get(date) || { income: 0, expense: 0 }
+        const cur = dbMap.get(date) || { 
+          income: 0, 
+          expense: 0,
+          incomeCash: 0,
+          incomeKaspi: 0,
+          incomeCard: 0,
+          incomeOnline: 0,
+        }
         cur.expense += val
         dbMap.set(date, cur)
 
@@ -699,8 +968,16 @@ export default function AIAnalysisPage() {
         })
       }
 
+      const allDates = generateDateRange(start, end)
       const fullHistory: DataPoint[] = allDates.map((date) => {
-        const fact = dbMap.get(date) || { income: 0, expense: 0 }
+        const fact = dbMap.get(date) || { 
+          income: 0, 
+          expense: 0,
+          incomeCash: 0,
+          incomeKaspi: 0,
+          incomeCard: 0,
+          incomeOnline: 0,
+        }
         const plan = planMap.get(date) || { planned_income: 0, planned_expense: 0 }
         const profit = fact.income - fact.expense
 
@@ -717,6 +994,10 @@ export default function AIAnalysisPage() {
           dayName: dayNames[dow],
           planned_income: plan.planned_income || 0,
           planned_expense: plan.planned_expense || 0,
+          incomeCash: fact.incomeCash,
+          incomeKaspi: fact.incomeKaspi,
+          incomeCard: fact.incomeCard,
+          incomeOnline: fact.incomeOnline,
         }
       })
 
@@ -786,21 +1067,13 @@ export default function AIAnalysisPage() {
     if (!analysis) return null
 
     const warnings: string[] = []
-    if (analysis.avgMargin < 18) warnings.push("Маржа низкая — проверь расходы/цены.")
-    if (analysis.profitVolatility > analysis.avgIncome * 0.6) warnings.push("Прибыль сильно скачет — нужны стабильные источники дохода.")
-    if (analysis.confidenceScore < 45) warnings.push("Прогноз пока слабый — мало равномерных данных по дням недели.")
+    if (analysis.avgMargin < 18) warnings.push("Маржа низкая — проверьте расходы и ценообразование")
+    if (analysis.profitVolatility > analysis.avgIncome * 0.6) warnings.push("Высокая волатильность прибыли — диверсифицируйте источники дохода")
+    if (analysis.confidenceScore < 45) warnings.push("Недостаточно данных для точного прогноза")
+    if (analysis.onlineShare < 10) warnings.push("Низкая доля онлайн-оплат — потенциал роста")
+    if (analysis.riskLevel === 'high') warnings.push("Высокий финансовый риск — срочно оптимизируйте расходы")
 
-    const best = analysis.bestDow
-    const worst = analysis.worstDow
-
-    const tips: string[] = [
-      `Лучший день недели: ${dayNames[best.dow]} (типичная прибыль ~${formatMoney(best.profit)}).`,
-      `Худший день недели: ${dayNames[worst.dow]} (типичная прибыль ~${formatMoney(worst.profit)}).`,
-    ]
-
-    if (analysis.trendIncome > 0) tips.push("Тренд дохода положительный — закрепи рост: акции/пакеты/апселл.")
-    if (analysis.trendIncome < 0) tips.push("Доход падает — найди дни просадки и причину: маркетинг/график/цены.")
-    if (analysis.totalPlanIncome > 0) tips.push(`Выполнение плана по доходу: ~${analysis.planIncomeAchievementPct.toFixed(0)}%.`)
+    const tips: string[] = analysis.recommendedActions
 
     return { warnings, tips }
   }, [analysis])
@@ -822,6 +1095,17 @@ export default function AIAnalysisPage() {
       trendExpensePerDay: analysis.trendExpense,
       bestDayOfWeek: dayNames[analysis.bestDow.dow],
       worstDayOfWeek: dayNames[analysis.worstDow.dow],
+      paymentMethods: {
+        cash: { total: analysis.totalCash, percentage: analysis.paymentTrends.find(p => p.method === 'cash')?.percentage || 0 },
+        kaspi: { total: analysis.totalKaspi, percentage: analysis.paymentTrends.find(p => p.method === 'kaspi')?.percentage || 0 },
+        card: { total: analysis.totalCard, percentage: analysis.paymentTrends.find(p => p.method === 'card')?.percentage || 0 },
+        online: { total: analysis.totalOnline, percentage: analysis.paymentTrends.find(p => p.method === 'online')?.percentage || 0 },
+      },
+      onlineShare: analysis.onlineShare,
+      cashlessShare: analysis.cashlessShare,
+      seasonalityStrength: analysis.seasonalityStrength,
+      growthRate: analysis.growthRate,
+      riskLevel: analysis.riskLevel,
       expensesByCategory: expenseCategories,
       plan: {
         totalPlanIncome: Math.round(analysis.totalPlanIncome),
@@ -832,6 +1116,7 @@ export default function AIAnalysisPage() {
         type: a.type === "income_low" ? "Низкий доход" : a.type === "income_high" ? "Высокий доход" : "Высокий расход",
         amount: a.amount,
         normalForDay: a.avgForDay,
+        paymentMethod: a.paymentMethod,
       })),
       confidenceScore: analysis.confidenceScore,
     }
@@ -845,7 +1130,7 @@ export default function AIAnalysisPage() {
       setAiAdvice(text)
     } catch (e) {
       console.error("getGeminiAdvice error:", e)
-      setAiAdvice("Не смог получить совет. Проверь ключ/лимиты Gemini и логи сервера.")
+      setAiAdvice("Не удалось получить совет. Проверьте подключение к AI.")
     } finally {
       setAiLoading(false)
     }
@@ -859,6 +1144,10 @@ export default function AIAnalysisPage() {
       income: Math.round(d.income),
       expense: Math.round(d.expense),
       profit: Math.round(d.profit ?? d.income - d.expense),
+      income_cash: Math.round(d.incomeCash),
+      income_kaspi: Math.round(d.incomeKaspi),
+      income_card: Math.round(d.incomeCard),
+      income_online: Math.round(d.incomeOnline),
       planned_income: Math.round(d.planned_income || 0),
       planned_expense: Math.round(d.planned_expense || 0),
       margin_pct: Number((d.margin ?? safeMargin((d.profit ?? d.income - d.expense), d.income)).toFixed(2)),
@@ -871,104 +1160,111 @@ export default function AIAnalysisPage() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-[#050505] text-foreground">
+    <div className="flex flex-col md:flex-row min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-auto pt-16 md:pt-0">
         <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
           {/* Header */}
-          <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-purple-500/20 rounded-full">
-                <BrainCircuit className="w-8 h-8 text-purple-400" />
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 p-6 border border-purple-500/20">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
+            
+            <div className="relative z-10 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-purple-500/20 rounded-xl">
+                  <BrainCircuit className="w-8 h-8 text-purple-400" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                    AI Аналитика Pro
+                  </h1>
+                  <p className="text-gray-400 text-sm mt-1">
+                    Умная аналитика • Прогнозирование • Аномалии • Рекомендации
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-foreground">AI Советник Pro</h1>
-                <p className="text-muted-foreground text-sm">
-                  Робастная статистика • прогноз • аномалии • планы • советы Gemini
-                </p>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => loadData()}
+                  disabled={loading}
+                  variant="outline"
+                  className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                  Обновить
+                </Button>
+
+                <Button
+                  onClick={handleExport}
+                  disabled={!analysis}
+                  variant="outline"
+                  className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Экспорт CSV
+                </Button>
+
+                <Button
+                  onClick={handleAskAi}
+                  disabled={aiLoading || !analysis}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-500/25"
+                >
+                  {aiLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                  {aiAdvice ? "Обновить совет" : "Совет AI"}
+                </Button>
               </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={() => loadData()}
-                disabled={loading}
-                variant="outline"
-                className="border-white/10 bg-white/5 hover:bg-white/10"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-                Обновить
-              </Button>
-
-              <Button
-                onClick={handleExport}
-                disabled={!analysis}
-                variant="outline"
-                className="border-white/10 bg-white/5 hover:bg-white/10"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                CSV
-              </Button>
-
-              <Button
-                onClick={handleAskAi}
-                disabled={aiLoading || !analysis}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white border-0 shadow-[0_0_20px_rgba(124,58,237,0.4)]"
-              >
-                {aiLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Bot className="w-4 h-4 mr-2" />}
-                {aiAdvice ? "Обновить совет" : "Совет ИИ"}
-              </Button>
             </div>
           </div>
 
           {/* Панель фильтров */}
-          <Card className="p-4 border border-white/10 bg-card">
+          <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
             <div className="flex flex-col lg:flex-row gap-4 lg:items-end lg:justify-between">
               <div className="flex flex-wrap gap-4 items-center">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 text-xs text-gray-500">
                   <SlidersHorizontal className="w-4 h-4" />
                   Период
                 </div>
 
                 <Select value={rangePreset} onValueChange={(v) => setRangePreset(v as RangePreset)}>
-                  <SelectTrigger className="w-[160px] bg-white/5 border-white/10">
+                  <SelectTrigger className="w-[160px] bg-gray-900 border-gray-700 text-gray-300">
                     <SelectValue placeholder="Период" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="30">Последние 30</SelectItem>
-                    <SelectItem value="90">Последние 90</SelectItem>
-                    <SelectItem value="180">Последние 180</SelectItem>
-                    <SelectItem value="365">Последние 365</SelectItem>
-                    <SelectItem value="all">Всё</SelectItem>
+                  <SelectContent className="bg-gray-900 border-gray-700">
+                    <SelectItem value="30">Последние 30 дней</SelectItem>
+                    <SelectItem value="90">Последние 90 дней</SelectItem>
+                    <SelectItem value="180">Последние 180 дней</SelectItem>
+                    <SelectItem value="365">Последние 365 дней</SelectItem>
+                    <SelectItem value="all">Весь период</SelectItem>
                   </SelectContent>
                 </Select>
 
                 <div className="flex items-center gap-2">
-                  <div className="text-xs text-muted-foreground">С</div>
+                  <div className="text-xs text-gray-500">С</div>
                   <Input
                     type="date"
                     value={customStart}
                     onChange={(e) => setCustomStart(e.target.value)}
-                    className="w-[160px] bg-white/5 border-white/10"
+                    className="w-[160px] bg-gray-900 border-gray-700 text-gray-300"
                   />
-                  <div className="text-xs text-muted-foreground">по</div>
+                  <div className="text-xs text-gray-500">по</div>
                   <Input
                     type="date"
                     value={customEnd}
                     onChange={(e) => setCustomEnd(e.target.value)}
-                    className="w-[160px] bg-white/5 border-white/10"
+                    className="w-[160px] bg-gray-900 border-gray-700 text-gray-300"
                   />
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <div className="text-xs text-muted-foreground">График</div>
+                  <div className="text-xs text-gray-500">График</div>
                   <Select value={granularity} onValueChange={(v) => setGranularity(v as Granularity)}>
-                    <SelectTrigger className="w-[140px] bg-white/5 border-white/10">
+                    <SelectTrigger className="w-[140px] bg-gray-900 border-gray-700 text-gray-300">
                       <SelectValue placeholder="График" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="daily">Дни</SelectItem>
-                      <SelectItem value="weekly">Недели</SelectItem>
+                    <SelectContent className="bg-gray-900 border-gray-700">
+                      <SelectItem value="daily">По дням</SelectItem>
+                      <SelectItem value="weekly">По неделям</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -976,55 +1272,68 @@ export default function AIAnalysisPage() {
 
               <div className="flex flex-wrap gap-6 items-center">
                 <div className="flex items-center gap-2">
-                  <div className="text-xs text-muted-foreground">Нули учитывать</div>
+                  <div className="text-xs text-gray-500">Учитывать нули</div>
                   <Switch checked={includeZeroDays} onCheckedChange={setIncludeZeroDays} />
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <div className="text-xs text-muted-foreground">Автообновление</div>
+                  <div className="text-xs text-gray-500">Автообновление</div>
                   <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} />
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <div className="text-xs text-muted-foreground">Планы</div>
+                  <div className="text-xs text-gray-500">Планы</div>
                   <Switch checked={plansEnabled} onCheckedChange={setPlansEnabled} />
                 </div>
               </div>
             </div>
 
             {plansWarning && (
-              <div className="mt-3 p-3 rounded border border-amber-500/20 bg-amber-500/10 text-amber-200 text-xs">
+              <div className="mt-3 p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 text-yellow-200 text-xs">
+                <AlertTriangle className="w-4 h-4 inline mr-2" />
                 {plansWarning}
               </div>
             )}
 
             {analysis && (
-              <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                <div className="px-2 py-1 rounded border border-white/10 bg-white/5 w-fit">
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                <div className="px-2 py-1 rounded-lg border border-gray-700 bg-gray-900/50 text-gray-400">
                   <History className="w-3 h-3 inline mr-1" />
                   {formatDateRu(analysis.dataRangeStart)} — {formatDateRu(analysis.dataRangeEnd)}
                 </div>
 
-                <div className="px-2 py-1 rounded border border-white/10 bg-white/5 w-fit">
-                  Достоверность: <span className="text-purple-300 font-bold">{analysis.confidenceScore}%</span>
+                <div className="px-2 py-1 rounded-lg border border-gray-700 bg-gray-900/50 text-gray-400">
+                  Достоверность: <span className="text-purple-400 font-bold">{analysis.confidenceScore}%</span>
                 </div>
 
                 <div
-                  className={`px-2 py-1 rounded border w-fit ${
+                  className={`px-2 py-1 rounded-lg border w-fit ${
                     analysis.trendIncome > 0
                       ? "text-green-400 bg-green-500/10 border-green-500/20"
                       : "text-red-400 bg-red-500/10 border-red-500/20"
                   }`}
                 >
                   {analysis.trendIncome >= 0 ? <TrendingUp className="w-3 h-3 inline mr-1" /> : <TrendingDown className="w-3 h-3 inline mr-1" />}
-                  Тренд дохода: {analysis.trendIncome >= 0 ? "+" : ""}
+                  Тренд: {analysis.trendIncome >= 0 ? "+" : ""}
                   {analysis.trendIncome.toFixed(0)} ₸/день
                 </div>
 
+                <div
+                  className={`px-2 py-1 rounded-lg border w-fit ${
+                    analysis.riskLevel === 'low' 
+                      ? "text-green-400 bg-green-500/10 border-green-500/20"
+                      : analysis.riskLevel === 'medium'
+                        ? "text-yellow-400 bg-yellow-500/10 border-yellow-500/20"
+                        : "text-red-400 bg-red-500/10 border-red-500/20"
+                  }`}
+                >
+                  Риск: {analysis.riskLevel === 'low' ? 'Низкий' : analysis.riskLevel === 'medium' ? 'Средний' : 'Высокий'}
+                </div>
+
                 {analysis.totalPlanIncome > 0 && (
-                  <div className="px-2 py-1 rounded border w-fit text-cyan-200 bg-cyan-500/10 border-cyan-500/20">
+                  <div className="px-2 py-1 rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-300">
                     <Target className="w-3 h-3 inline mr-1" />
-                    План выполнен: {analysis.planIncomeAchievementPct.toFixed(0)}%
+                    План: {analysis.planIncomeAchievementPct.toFixed(0)}%
                   </div>
                 )}
               </div>
@@ -1033,167 +1342,272 @@ export default function AIAnalysisPage() {
 
           {/* AI advice */}
           {aiAdvice && (
-            <Card className="p-6 border border-purple-500/40 bg-purple-950/20 animate-in fade-in slide-in-from-top-4 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
+            <Card className="p-6 border-0 bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 backdrop-blur-sm shadow-lg shadow-purple-500/10">
               <div className="flex items-start gap-4">
-                <div className="p-2 bg-purple-500/20 rounded-lg shrink-0 mt-1">
-                  <Sparkles className="w-5 h-5 text-purple-300" />
+                <div className="p-2 bg-purple-500/20 rounded-xl shrink-0">
+                  <Sparkles className="w-6 h-6 text-purple-400" />
                 </div>
                 <div className="space-y-2 w-full">
-                  <h3 className="font-bold text-purple-100 text-lg">Мнение AI-директора</h3>
-                  <div className="text-sm text-purple-100/90 whitespace-pre-wrap leading-relaxed">{aiAdvice}</div>
+                  <h3 className="font-bold text-white text-lg">Рекомендации AI-директора</h3>
+                  <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{aiAdvice}</div>
                 </div>
               </div>
             </Card>
           )}
 
-          {loading && <div className="p-12 text-center text-muted-foreground animate-pulse">Считаем математическую модель...</div>}
+          {loading && (
+            <div className="p-12 text-center">
+              <div className="relative inline-block">
+                <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-500/30 border-t-purple-500" />
+                <BrainCircuit className="w-8 h-8 text-purple-400 absolute top-4 left-4" />
+              </div>
+              <p className="text-gray-400 mt-4">Анализируем данные и строим прогнозы...</p>
+            </div>
+          )}
 
           {errorText && !loading && (
-            <Card className="p-4 border border-red-500/30 bg-red-500/10 text-red-200 text-sm">Ошибка: {errorText}</Card>
+            <Card className="p-4 border-0 bg-red-500/10 text-red-300 text-sm">
+              <AlertTriangle className="w-5 h-5 inline mr-2" />
+              Ошибка: {errorText}
+            </Card>
           )}
 
           {!loading && analysis && (
-            <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-              {/* Left charts */}
-              <div className="xl:col-span-3 space-y-8">
-                {/* Fact + forecast */}
-                <Card className="p-6 border border-purple-500/20 bg-card relative overflow-hidden">
-                  <div className="mb-6 relative z-10 flex flex-col sm:flex-row justify-between items-start gap-4">
-                    <div>
-                      <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                        <CalendarDays className="w-5 h-5 text-purple-400" />
-                        Факт + прогноз на {FORECAST_DAYS} дней
-                      </h2>
+            <div className="space-y-6">
+              {/* Верхний ряд: график + способы оплаты */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* График факт + прогноз */}
+                <div className="lg:col-span-2">
+                  <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm h-full">
+                    <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
+                      <div>
+                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                          <CalendarDays className="w-5 h-5 text-purple-400" />
+                          Факт + прогноз на {FORECAST_DAYS} дней
+                        </h2>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Прогноз прибыли:{" "}
+                          <span className="text-green-400 font-bold">{formatMoney(analysis.totalForecastProfit)}</span> •
+                          Прогноз дохода:{" "}
+                          <span className="text-purple-400 font-bold">{formatMoney(analysis.totalForecastIncome)}</span>
+                        </p>
+                        <p className="text-xs text-gray-500 mt-2">
+                          Аномалии: 🟢 рекорд • 🔴 просадка • 🟠 высокий расход • 🟦 план
+                        </p>
+                      </div>
 
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Прогноз прибыли:{" "}
-                        <span className="text-green-400 font-bold">{formatMoney(analysis.totalForecastProfit)}</span> •
-                        Прогноз дохода:{" "}
-                        <span className="text-purple-300 font-bold">{formatMoney(analysis.totalForecastIncome)}</span>
-                      </p>
-
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Аномалии: 🟢 рекорд дохода • 🔴 низкий доход • 🟠 высокий расход • 🟦 план дохода
-                      </p>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="text-[10px] uppercase text-muted-foreground tracking-wider">Достоверность</span>
-                      <div className="flex items-center gap-2 justify-end">
-                        <div className="h-2 w-20 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full bg-purple-500" style={{ width: `${analysis.confidenceScore}%` }} />
+                      <div className="text-right">
+                        <span className="text-[10px] uppercase text-gray-500 tracking-wider">Достоверность</span>
+                        <div className="flex items-center gap-2 justify-end">
+                          <div className="h-2 w-24 bg-gray-700 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-purple-500 to-indigo-500" style={{ width: `${analysis.confidenceScore}%` }} />
+                          </div>
+                          <span className="text-sm font-bold text-purple-400">{analysis.confidenceScore}%</span>
                         </div>
-                        <span className="text-xs font-bold text-purple-300">{analysis.confidenceScore}%</span>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="h-96 w-full relative z-10">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={chartViewData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
+                    <div className="h-80 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={chartViewData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                              <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
 
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                        <XAxis
-                          dataKey="date"
-                          stroke="#666"
-                          fontSize={10}
-                          tickFormatter={(val) => {
-                            const d = parseISODateSafe(val as string)
-                            return `${dayNames[d.getDay()]} ${d.getDate()}`
-                          }}
-                          interval="preserveStartEnd"
-                          minTickGap={22}
-                        />
-                        <YAxis stroke="#666" fontSize={10} tickFormatter={(v) => `${(v as number) / 1000}k`} />
+                          <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
+                          <XAxis
+                            dataKey="date"
+                            stroke="#6b7280"
+                            fontSize={10}
+                            tickFormatter={(val) => {
+                              const d = parseISODateSafe(val as string)
+                              return `${dayNames[d.getDay()]} ${d.getDate()}`
+                            }}
+                            interval="preserveStartEnd"
+                            minTickGap={22}
+                          />
+                          <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => `${Math.round((v as number) / 1000)}k`} />
 
-                        <Tooltip
-                          contentStyle={{ backgroundColor: "#111", border: "1px solid #333", borderRadius: "8px" }}
-                          formatter={(val: any, name: any, props: any) => {
-                            const label =
-                              name === "income"
-                                ? "Доход"
-                                : name === "planned_income"
-                                  ? "План дохода"
-                                  : name === "expense"
-                                    ? "Расход"
-                                    : name === "profit"
-                                      ? "Прибыль"
-                                      : name === "income_p10"
-                                        ? "Доход p10"
-                                        : name === "income_p90"
-                                          ? "Доход p90"
-                                          : name === "profit_p10"
-                                            ? "Прибыль p10"
-                                            : name === "profit_p90"
-                                              ? "Прибыль p90"
-                                              : name
-                            return [formatMoney(val as number), `${label} (${props?.payload?.type === "forecast" ? "прогноз" : "факт"})`]
-                          }}
-                          labelFormatter={(label: any) => {
-                            const d = parseISODateSafe(label)
-                            return formatDateRu(label) + ` (${dayNames[d.getDay()]})`
-                          }}
-                          cursor={{ stroke: "white", strokeWidth: 1, strokeDasharray: "3 3" }}
-                        />
+                          <Tooltip
+                            contentStyle={{ 
+                              backgroundColor: "#1f2937", 
+                              border: "1px solid #374151", 
+                              borderRadius: "8px",
+                              color: "#fff"
+                            }}
+                            formatter={(val: any, name: any, props: any) => {
+                              const label =
+                                name === "income"
+                                  ? "Доход"
+                                  : name === "planned_income"
+                                    ? "План дохода"
+                                    : name === "expense"
+                                      ? "Расход"
+                                      : name === "profit"
+                                        ? "Прибыль"
+                                        : name
+                              return [formatMoney(val as number), `${label} (${props?.payload?.type === "forecast" ? "прогноз" : "факт"})`]
+                            }}
+                            labelFormatter={(label: any) => {
+                              const d = parseISODateSafe(label)
+                              return formatDateRu(label) + ` (${dayNames[d.getDay()]})`
+                            }}
+                          />
 
-                        <ReferenceLine x={analysis.lastFactDate} stroke="#666" strokeDasharray="3 3" label="ПОСЛЕДНИЙ ФАКТ" />
+                          <ReferenceLine x={analysis.lastFactDate} stroke="#6b7280" strokeDasharray="3 3" />
 
-                        {/* Доход */}
-                        <Area
-                          type="monotone"
-                          dataKey="income"
-                          name="income"
-                          stroke="#8b5cf6"
-                          strokeWidth={3}
-                          fill="url(#incomeGradient)"
-                          dot={<AnomalyDot />}
-                        />
+                          <Area
+                            type="monotone"
+                            dataKey="income"
+                            name="income"
+                            stroke="#8b5cf6"
+                            strokeWidth={3}
+                            fill="url(#incomeGradient)"
+                            dot={<AnomalyDot />}
+                          />
 
-                        {/* План (доход) */}
-                        <Line
-                          type="monotone"
-                          dataKey="planned_income"
-                          name="planned_income"
-                          stroke="#38bdf8"
-                          strokeWidth={2}
-                          strokeDasharray="6 6"
-                          dot={false}
-                          strokeOpacity={0.9}
-                        />
+                          <Line
+                            type="monotone"
+                            dataKey="planned_income"
+                            name="planned_income"
+                            stroke="#38bdf8"
+                            strokeWidth={2}
+                            strokeDasharray="6 6"
+                            dot={false}
+                          />
 
-                        {/* Расход */}
-                        <Line type="monotone" dataKey="expense" name="expense" stroke="#ef4444" strokeWidth={2} dot={false} strokeOpacity={0.55} />
+                          <Line type="monotone" dataKey="expense" name="expense" stroke="#ef4444" strokeWidth={2} dot={false} strokeOpacity={0.6} />
+                          <Line type="monotone" dataKey="profit" name="profit" stroke="#22c55e" strokeWidth={2} dot={false} strokeOpacity={0.6} />
 
-                        {/* Прибыль */}
-                        <Line type="monotone" dataKey="profit" name="profit" stroke="#22c55e" strokeWidth={2} dot={false} strokeOpacity={0.55} />
+                          {granularity === "daily" && (
+                            <>
+                              <Line type="monotone" dataKey="income_p10" name="income_p10" stroke="#8b5cf6" strokeOpacity={0.15} dot={false} strokeDasharray="4 6" />
+                              <Line type="monotone" dataKey="income_p90" name="income_p90" stroke="#8b5cf6" strokeOpacity={0.15} dot={false} strokeDasharray="4 6" />
+                            </>
+                          )}
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Card>
+                </div>
 
-                        {granularity === "daily" && (
-                          <>
-                            <Line type="monotone" dataKey="income_p10" name="income_p10" stroke="#8b5cf6" strokeOpacity={0.2} dot={false} strokeDasharray="4 6" />
-                            <Line type="monotone" dataKey="income_p90" name="income_p90" stroke="#8b5cf6" strokeOpacity={0.2} dot={false} strokeDasharray="4 6" />
-                            <Line type="monotone" dataKey="profit_p10" name="profit_p10" stroke="#22c55e" strokeOpacity={0.18} dot={false} strokeDasharray="4 6" />
-                            <Line type="monotone" dataKey="profit_p90" name="profit_p90" stroke="#22c55e" strokeOpacity={0.18} dot={false} strokeDasharray="4 6" />
-                          </>
-                        )}
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
-
-                {/* Типичная неделя */}
-                <Card className="p-6 border-border bg-card">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-blue-400" />
-                      Типичная неделя (медиана)
+                {/* Способы оплаты */}
+                <div className="space-y-6">
+                  <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+                    <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-purple-400" />
+                      Структура оплат
                     </h3>
-                    <div className="flex gap-4 text-xs text-muted-foreground">
+                    
+                    <div className="h-48 mb-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RePieChart>
+                          <Pie
+                            data={analysis.paymentTrends}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={50}
+                            outerRadius={70}
+                            paddingAngle={2}
+                            dataKey="total"
+                          >
+                            {analysis.paymentTrends.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            formatter={(val: number, name: string, props: any) => [
+                              formatMoney(val), 
+                              props.payload.method === 'cash' ? 'Наличные' :
+                              props.payload.method === 'kaspi' ? 'Kaspi' :
+                              props.payload.method === 'card' ? 'Карта' : 'Онлайн'
+                            ]}
+                            contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px" }}
+                          />
+                        </RePieChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="space-y-2">
+                      {analysis.paymentTrends.map((trend) => (
+                        <div key={trend.method} className="flex items-center justify-between p-2 rounded-lg bg-gray-900/50">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: trend.color }} />
+                            <span className="text-xs text-gray-400">
+                              {trend.method === 'cash' ? 'Наличные' :
+                               trend.method === 'kaspi' ? 'Kaspi' :
+                               trend.method === 'card' ? 'Карта' : 'Онлайн'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-white font-medium">{trend.percentage.toFixed(1)}%</span>
+                            {trend.trend === 'up' ? <TrendingUp className="w-3 h-3 text-green-400" /> :
+                             trend.trend === 'down' ? <TrendingDown className="w-3 h-3 text-red-400" /> :
+                             <MinusIcon className="w-3 h-3 text-gray-500" />}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-gray-700">
+                      <div className="flex justify-between text-xs mb-2">
+                        <span className="text-gray-500">Доля онлайн</span>
+                        <span className={analysis.onlineShare < 15 ? "text-yellow-400" : "text-green-400"}>
+                          {analysis.onlineShare.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500">Безналичные</span>
+                        <span className="text-purple-400">{analysis.cashlessShare.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Быстрые метрики */}
+                  <Card className="p-6 border-0 bg-gradient-to-br from-purple-900/20 to-indigo-900/20 backdrop-blur-sm">
+                    <h3 className="text-sm font-bold text-white mb-4">AI Метрики</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-400">Сезонность</span>
+                          <span className="text-purple-400">{analysis.seasonalityStrength.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                          <div className="h-full bg-purple-500" style={{ width: `${analysis.seasonalityStrength}%` }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-400">Рост</span>
+                          <span className={analysis.growthRate >= 0 ? "text-green-400" : "text-red-400"}>
+                            {analysis.growthRate >= 0 ? '+' : ''}{analysis.growthRate.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full ${analysis.growthRate >= 0 ? 'bg-green-500' : 'bg-red-500'}`} 
+                            style={{ width: `${clamp(Math.abs(analysis.growthRate), 0, 100)}%` }} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Средний ряд: типичная неделя + категории */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Типичная неделя */}
+                <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4 text-blue-400" />
+                      Типичная неделя
+                    </h3>
+                    <div className="flex gap-4 text-xs text-gray-500">
                       <div className="flex items-center gap-1">
                         <div className="w-2 h-2 bg-blue-500 rounded-full" />
                         Доход
@@ -1220,10 +1634,9 @@ export default function AIAnalysisPage() {
                         }))}
                       >
                         <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                        <XAxis dataKey="name" stroke="#666" fontSize={12} />
+                        <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
                         <Tooltip
-                          cursor={{ fill: "transparent" }}
-                          contentStyle={{ backgroundColor: "#111", border: "1px solid #333" }}
+                          contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px" }}
                           formatter={(val: any, name: any) => [
                             formatMoney(val as number),
                             name === "income" ? "Типичный доход" : name === "expense" ? "Типичный расход" : "Типичная прибыль",
@@ -1238,23 +1651,28 @@ export default function AIAnalysisPage() {
                 </Card>
 
                 {/* Категории расходов */}
-                <Card className="p-6 border border-white/10 bg-card">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                      <PieChart className="w-4 h-4 text-purple-300" />
-                      Топ категорий расходов
-                    </h3>
-                    <div className="text-xs text-muted-foreground">(берётся из таблицы expenses)</div>
-                  </div>
+                <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+                  <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                    <PieChart className="w-4 h-4 text-purple-400" />
+                    Топ категорий расходов
+                  </h3>
 
                   {topExpenseCats.length === 0 ? (
-                    <div className="text-xs text-muted-foreground text-center py-8">Нет расходов по категориям за выбранный период.</div>
+                    <div className="text-center py-12 text-gray-500">
+                      <Info className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                      Нет данных о расходах
+                    </div>
                   ) : (
-                    <div className="space-y-2">
-                      {topExpenseCats.map((c) => (
-                        <div key={c.name} className="flex items-center justify-between px-3 py-2 rounded border border-white/10 bg-white/5">
-                          <div className="text-sm text-foreground">{c.name}</div>
-                          <div className="text-sm text-red-300 font-semibold">{formatMoney(c.value)}</div>
+                    <div className="space-y-2 max-h-64 overflow-auto">
+                      {topExpenseCats.map((c, idx) => (
+                        <div key={c.name} className="flex items-center justify-between p-3 rounded-xl bg-gray-900/50 border border-gray-800">
+                          <div className="flex items-center gap-3">
+                            <div className="w-6 h-6 rounded-lg bg-gray-800 flex items-center justify-center text-xs text-gray-500">
+                              {idx + 1}
+                            </div>
+                            <span className="text-sm text-gray-300">{c.name}</span>
+                          </div>
+                          <div className="text-sm text-red-400 font-semibold">{formatMoney(c.value)}</div>
                         </div>
                       ))}
                     </div>
@@ -1262,70 +1680,45 @@ export default function AIAnalysisPage() {
                 </Card>
               </div>
 
-              {/* Right panels */}
-              <div className="xl:col-span-1 space-y-6">
-                {/* KPI */}
-                <Card className="p-5 border border-emerald-500/20 bg-emerald-900/5">
-                  <h3 className="text-sm font-bold text-emerald-300 mb-3">Ключевые метрики</h3>
-                  <div className="space-y-1 text-xs text-muted-foreground">
-                    <p>Средний доход/день: <span className="text-foreground font-semibold">{formatMoney(analysis.avgIncome)}</span></p>
-                    <p>Средний расход/день: <span className="text-foreground font-semibold">{formatMoney(analysis.avgExpense)}</span></p>
-                    <p>Средняя прибыль/день: <span className="text-foreground font-semibold">{formatMoney(analysis.avgProfit)}</span></p>
-                    <p>Средняя маржа: <span className="text-foreground font-semibold">{formatPct(analysis.avgMargin)}</span></p>
-                    <p>Волатильность прибыли (σ): <span className="text-foreground font-semibold">{formatMoney(analysis.profitVolatility)}</span></p>
-                    <p>Дней в выборке: <span className="text-foreground font-semibold">{analysis.totalDataPoints}</span></p>
-                  </div>
-                </Card>
-
-                {/* План vs факт */}
-                <Card className="p-5 border border-cyan-500/20 bg-cyan-900/5">
-                  <h3 className="text-sm font-bold text-cyan-200 mb-3 flex items-center gap-2">
-                    <Target className="w-4 h-4" />
-                    План vs Факт
-                  </h3>
-                  {analysis.totalPlanIncome <= 0 ? (
-                    <div className="text-xs text-muted-foreground">
-                      Планов за период нет (или планы отключены).
-                    </div>
-                  ) : (
-                    <div className="space-y-2 text-xs text-muted-foreground">
-                      <p>План дохода: <span className="text-foreground font-semibold">{formatMoney(analysis.totalPlanIncome)}</span></p>
-                      <p>Факт дохода: <span className="text-foreground font-semibold">{formatMoney(analysis.totalIncome)}</span></p>
-                      <p>
-                        Выполнение:{" "}
-                        <span className={`font-bold ${analysis.planIncomeAchievementPct >= 100 ? "text-green-400" : "text-amber-300"}`}>
-                          {analysis.planIncomeAchievementPct.toFixed(0)}%
-                        </span>
-                      </p>
-                    </div>
-                  )}
-                </Card>
-
+              {/* Нижний ряд: инсайты + аномалии + методология */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Умные инсайты */}
-                <Card className="p-5 border border-purple-500/20 bg-purple-900/5">
-                  <h3 className="text-sm font-bold text-purple-300 mb-3 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4" />
+                <Card className="p-6 border-0 bg-gradient-to-br from-purple-900/20 to-indigo-900/20 backdrop-blur-sm">
+                  <h3 className="text-sm font-bold text-purple-300 mb-4 flex items-center gap-2">
+                    <Zap className="w-4 h-4" />
                     Умные инсайты
                   </h3>
 
                   {smartInsights && (
-                    <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
+                    <div className="space-y-3 text-xs">
                       {smartInsights.warnings.length > 0 && (
-                        <div className="p-3 rounded border border-amber-500/20 bg-amber-500/10 text-amber-200">
-                          <div className="font-semibold mb-1">⚠️ Внимание</div>
-                          <ul className="list-disc pl-4 space-y-1">
+                        <div className="p-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 text-yellow-200">
+                          <div className="font-semibold mb-2 flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4" />
+                            Внимание
+                          </div>
+                          <ul className="space-y-1">
                             {smartInsights.warnings.map((w, i) => (
-                              <li key={i}>{w}</li>
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="text-yellow-500">•</span>
+                                {w}
+                              </li>
                             ))}
                           </ul>
                         </div>
                       )}
 
-                      <div className="p-3 rounded border border-white/10 bg-white/5">
-                        <div className="font-semibold text-foreground mb-1">Что делать</div>
-                        <ul className="list-disc pl-4 space-y-1">
+                      <div className="p-3 rounded-xl border border-gray-700 bg-gray-900/50">
+                        <div className="font-semibold text-white mb-2 flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-green-400" />
+                          Рекомендации
+                        </div>
+                        <ul className="space-y-2">
                           {smartInsights.tips.map((t, i) => (
-                            <li key={i}>{t}</li>
+                            <li key={i} className="flex items-start gap-2 text-gray-400">
+                              <span className="text-purple-400 mt-0.5">→</span>
+                              {t}
+                            </li>
                           ))}
                         </ul>
                       </div>
@@ -1334,52 +1727,68 @@ export default function AIAnalysisPage() {
                 </Card>
 
                 {/* Аномалии */}
-                <Card className="p-5 border border-border bg-card">
-                  <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+                  <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
                     <Search className="w-4 h-4 text-yellow-400" />
-                    Аномалии (умный детектор)
+                    Обнаруженные аномалии
                   </h3>
 
                   {analysis.anomalies.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-4">Выбросов не найдено.</p>
+                    <div className="text-center py-8">
+                      <CheckCircle2 className="w-12 h-12 text-green-500/50 mx-auto mb-2" />
+                      <p className="text-sm text-gray-400">Аномалий не найдено</p>
+                      <p className="text-xs text-gray-600">Все показатели в норме</p>
+                    </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-64 overflow-auto">
                       {analysis.anomalies.map((a, idx) => (
-                        <div key={idx} className="p-2 bg-white/5 rounded border border-white/10 text-xs">
-                          <div className="flex justify-between mb-1">
-                            <span className="font-bold text-foreground">{formatDateRu(a.date)}</span>
-                            <span className={a.type === "income_low" ? "text-red-400" : a.type === "expense_high" ? "text-amber-300" : "text-green-400"}>
-                              {a.type === "income_low" ? "🔴 Низкий доход" : a.type === "expense_high" ? "🟠 Высокий расход" : "🟢 Рекорд дохода"}
+                        <div key={idx} className="p-3 rounded-xl bg-gray-900/50 border border-gray-800">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="font-bold text-gray-300">{formatDateRu(a.date)}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              a.type === "income_low" ? "bg-red-500/20 text-red-400" : 
+                              a.type === "expense_high" ? "bg-orange-500/20 text-orange-400" : 
+                              "bg-green-500/20 text-green-400"
+                            }`}>
+                              {a.type === "income_low" ? "↓ Доход" : 
+                               a.type === "expense_high" ? "↑ Расход" : "↑ Доход"}
                             </span>
                           </div>
-                          <p className="text-muted-foreground">
-                            Было: <span className="text-foreground">{formatMoney(a.amount)}</span> (норма: {formatMoney(a.avgForDay)})
+                          <p className="text-xs text-gray-500">
+                            {formatMoney(a.amount)} (норма: {formatMoney(a.avgForDay)})
                           </p>
+                          {a.paymentMethod && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              Через: {a.paymentMethod === 'cash' ? 'наличные' : 
+                                      a.paymentMethod === 'kaspi' ? 'Kaspi' :
+                                      a.paymentMethod === 'card' ? 'карта' : 'онлайн'}
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
                 </Card>
 
-                {/* Как считает */}
-                <Card className="p-5 border border-blue-500/20 bg-blue-900/5">
-                  <h3 className="text-sm font-bold text-blue-300 mb-3 flex items-center gap-2">
+                {/* Методология */}
+                <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+                  <h3 className="text-sm font-bold text-blue-300 mb-4 flex items-center gap-2">
                     <HelpCircle className="w-4 h-4" />
-                    Как это считает
+                    Как это работает
                   </h3>
-                  <div className="space-y-3 text-xs text-muted-foreground leading-relaxed">
-                    <p>
-                      <span className="text-blue-200 font-semibold">1) Робастная статистика:</span> медиана и MAD по дням недели.
-                    </p>
-                    <p>
-                      <span className="text-blue-200 font-semibold">2) Тренды:</span> считаем отдельно тренд дохода и расхода, тренд “приглушается” при короткой истории.
-                    </p>
-                    <p>
-                      <span className="text-blue-200 font-semibold">3) Прогноз:</span> сезонность + тренды + ограничение расхода (cap), плюс интервалы p10/p90.
-                    </p>
-                    <p>
-                      <span className="text-blue-200 font-semibold">4) Аномалии:</span> z-score от sigma (из MAD) + пороги по сумме.
-                    </p>
+                  <div className="space-y-3 text-xs text-gray-400 leading-relaxed">
+                    <div className="p-3 rounded-lg bg-gray-900/50 border-l-2 border-blue-500">
+                      <span className="text-blue-400 font-semibold">1. Робастная статистика</span>
+                      <p className="mt-1">Медиана и MAD для устойчивости к выбросам</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-900/50 border-l-2 border-purple-500">
+                      <span className="text-purple-400 font-semibold">2. Многомерный тренд</span>
+                      <p className="mt-1">Отдельные тренды для каждого способа оплаты</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-900/50 border-l-2 border-green-500">
+                      <span className="text-green-400 font-semibold">3. AI Прогноз</span>
+                      <p className="mt-1">Сезонность + тренды + доверительные интервалы</p>
+                    </div>
                   </div>
                 </Card>
               </div>
@@ -1387,9 +1796,10 @@ export default function AIAnalysisPage() {
           )}
 
           {!loading && !analysis && (
-            <div className="text-center py-20 text-muted-foreground">
-              <Info className="w-12 h-12 mx-auto mb-4 opacity-20" />
-              <p>Недостаточно данных. Внесите хотя бы одну операцию.</p>
+            <div className="text-center py-20">
+              <Info className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+              <p className="text-gray-400">Недостаточно данных для анализа</p>
+              <p className="text-sm text-gray-600 mt-2">Добавьте операции доходов и расходов</p>
             </div>
           )}
         </div>
