@@ -37,6 +37,10 @@ import {
   BarChart2,
   ArrowRight,
   MinusIcon,
+  Filter,
+  Building2,
+  Users,
+  CreditCard as CardIcon,
 } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -100,6 +104,7 @@ type ChartPoint = {
   card: number
   total: number
   formattedDate?: string
+  movingAvg?: number
 }
 
 type PaymentData = {
@@ -173,15 +178,6 @@ const Formatters = {
 
   moneyDetailed: (v: number): string => 
     v.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₸',
-
-  percentChange: (current: number, previous: number): { value: string; isPositive: boolean } => {
-    if (previous === 0) return { value: '—', isPositive: true }
-    const change = ((current - previous) / Math.abs(previous)) * 100
-    return {
-      value: `${change > 0 ? '+' : ''}${change.toFixed(1)}%`,
-      isPositive: change >= 0
-    }
-  },
 
   tooltip: {
     contentStyle: {
@@ -286,15 +282,22 @@ export default function IncomePage() {
   const [dateTo, setDateTo] = useState(DateUtils.todayISO())
   const [activePreset, setActivePreset] = useState<DateRangePreset>('month')
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  
+  // Основные фильтры
   const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
   const [operatorFilter, setOperatorFilter] = useState<OperatorFilter>('all')
   const [shiftFilter, setShiftFilter] = useState<ShiftFilter>('all')
   const [payFilter, setPayFilter] = useState<PayFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const deferredSearch = useDeferredValue(searchTerm)
+  
+  // Дополнительные настройки
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
   const [hideExtraRows, setHideExtraRows] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'feed'>('overview')
+
+  // Показ/скрытие фильтров
+  const [showFilters, setShowFilters] = useState(false)
 
   // Inline edit
   const [editingOnlineId, setEditingOnlineId] = useState<string | null>(null)
@@ -342,7 +345,7 @@ export default function IncomePage() {
 
   const isExtraRow = useCallback((r: IncomeRow) => !!extraCompanyId && r.company_id === extraCompanyId, [extraCompanyId])
 
-  // Загрузка данных
+  // Загрузка данных с учетом фильтров
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
@@ -452,7 +455,7 @@ export default function IncomePage() {
     return out
   }, [filteredRows, extraCompanyId])
 
-  // Аналитика и графики
+  // Аналитика
   const analytics = useMemo(() => {
     const dates = DateUtils.getDatesInRange(dateFrom, dateTo)
     const chartMap = new Map<string, ChartPoint>()
@@ -599,6 +602,7 @@ export default function IncomePage() {
     setIsCalendarOpen(false)
   }
 
+  // Сброс всех фильтров
   const resetFilters = () => {
     setDateFrom(DateUtils.addDaysISO(DateUtils.todayISO(), -29))
     setDateTo(DateUtils.todayISO())
@@ -612,9 +616,50 @@ export default function IncomePage() {
     setHideExtraRows(false)
   }
 
+  // Экспорт CSV
+  const downloadCSV = () => {
+    const SEP = ';'
+    const headers = ['Дата', 'Компания', 'Оператор', 'Смена', 'Зона', 'Cash', 'Kaspi POS', 'Kaspi Online', 'Card', 'Итого', 'Комментарий']
+    
+    const csvContent = [
+      headers.join(SEP),
+      ...displayRows.map(r => {
+        const total = (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.online_amount || 0) + (r.card_amount || 0)
+        return [
+          r.date,
+          companyName(r.company_id),
+          operatorName(r.operator_id),
+          r.shift,
+          r.zone || '',
+          r.cash_amount || 0,
+          r.kaspi_amount || 0,
+          r.online_amount || 0,
+          r.card_amount || 0,
+          total,
+          r.comment || ''
+        ].join(SEP)
+      })
+    ].join('\n')
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `incomes_${DateUtils.todayISO()}.csv`
+    link.click()
+  }
+
   const periodLabel = dateFrom && dateTo 
     ? `${DateUtils.formatDate(dateFrom)} — ${DateUtils.formatDate(dateTo)}`
     : 'Весь период'
+
+  // Количество активных фильтров
+  const activeFiltersCount = [
+    companyFilter !== 'all',
+    operatorFilter !== 'all',
+    shiftFilter !== 'all',
+    payFilter !== 'all',
+    searchTerm !== ''
+  ].filter(Boolean).length
 
   if (loading) {
     return (
@@ -658,12 +703,30 @@ export default function IncomePage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
+                  {/* Кнопка фильтров */}
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${
+                      activeFiltersCount > 0
+                        ? 'bg-purple-500/20 border-purple-500/30 text-purple-400'
+                        : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-purple-500/50'
+                    }`}
+                  >
+                    <Filter className="w-4 h-4" />
+                    Фильтры
+                    {activeFiltersCount > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 bg-purple-500 text-white text-xs rounded-full">
+                        {activeFiltersCount}
+                      </span>
+                    )}
+                  </button>
+
                   <button
                     onClick={() => setIsCalendarOpen(!isCalendarOpen)}
                     className="flex items-center gap-2 px-4 py-2 bg-gray-800/50 rounded-xl border border-gray-700 hover:border-purple-500/50 transition-colors"
                   >
                     <Calendar className="w-4 h-4 text-purple-400" />
-                    <span className="text-gray-300">{periodLabel}</span>
+                    <span className="text-gray-300 text-sm">{periodLabel}</span>
                     <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
                   </button>
 
@@ -677,18 +740,12 @@ export default function IncomePage() {
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-yellow-400' : 'bg-gray-500'}`} />
-                      Extra {includeExtraInTotals ? 'включён' : 'исключён'}
+                      Extra
                     </button>
                   )}
 
-                  <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
-                    <Sparkles className="w-4 h-4 text-yellow-400" />
-                    <span className="text-xs text-gray-400">Прогноз:</span>
-                    <span className="text-sm font-medium text-purple-400">{analytics.prediction.confidence}%</span>
-                  </div>
-
-                  <Button variant="outline" size="sm" onClick={resetFilters} className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
-                    <X className="w-4 h-4 mr-1" /> Сброс
+                  <Button variant="outline" size="sm" onClick={downloadCSV} className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
+                    <Download className="w-4 h-4 mr-1" /> Экспорт
                   </Button>
 
                   <Link href="/income/add">
@@ -703,7 +760,7 @@ export default function IncomePage() {
               {isCalendarOpen && (
                 <div className="mt-4 p-4 bg-gray-900/95 backdrop-blur-xl border border-purple-500/20 rounded-2xl">
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {(['today', 'week', 'month'] as DateRangePreset[]).map(p => (
+                    {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map(p => (
                       <button
                         key={p}
                         onClick={() => setPreset(p)}
@@ -713,7 +770,7 @@ export default function IncomePage() {
                             : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
                         }`}
                       >
-                        {p === 'today' ? 'Сегодня' : p === 'week' ? 'Неделя' : 'Месяц'}
+                        {p === 'today' ? 'Сегодня' : p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Все время'}
                       </button>
                     ))}
                   </div>
@@ -739,17 +796,202 @@ export default function IncomePage() {
                   </div>
                 </div>
               )}
+
+              {/* Панель фильтров */}
+              {showFilters && (
+                <div className="mt-4 p-4 bg-gray-900/95 backdrop-blur-xl border border-purple-500/20 rounded-2xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-medium text-white flex items-center gap-2">
+                      <Filter className="w-4 h-4 text-purple-400" />
+                      Фильтры данных
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      {activeFiltersCount > 0 && (
+                        <button
+                          onClick={resetFilters}
+                          className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                          Сбросить все
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowFilters(false)}
+                        className="text-gray-400 hover:text-white"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Фильтр компании */}
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                        <Building2 className="w-3 h-3" />
+                        Компания
+                      </label>
+                      <select
+                        value={companyFilter}
+                        onChange={(e) => setCompanyFilter(e.target.value)}
+                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm"
+                      >
+                        <option value="all">Все компании</option>
+                        {companies.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Фильтр оператора */}
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        Оператор
+                      </label>
+                      <select
+                        value={operatorFilter}
+                        onChange={(e) => setOperatorFilter(e.target.value as OperatorFilter)}
+                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm"
+                      >
+                        <option value="all">Все операторы</option>
+                        <option value="none">Без оператора</option>
+                        {operators.map(o => (
+                          <option key={o.id} value={o.id}>{o.short_name || o.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Фильтр смены */}
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Смена
+                      </label>
+                      <select
+                        value={shiftFilter}
+                        onChange={(e) => setShiftFilter(e.target.value as ShiftFilter)}
+                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm"
+                      >
+                        <option value="all">Все смены</option>
+                        <option value="day">День ☀️</option>
+                        <option value="night">Ночь 🌙</option>
+                      </select>
+                    </div>
+
+                    {/* Фильтр способа оплаты */}
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                        <CardIcon className="w-3 h-3" />
+                        Способ оплаты
+                      </label>
+                      <select
+                        value={payFilter}
+                        onChange={(e) => setPayFilter(e.target.value as PayFilter)}
+                        className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm"
+                      >
+                        <option value="all">Любая оплата</option>
+                        <option value="cash">Наличные 💵</option>
+                        <option value="kaspi">Kaspi POS 📱</option>
+                        <option value="online">Kaspi Online 🌐</option>
+                        <option value="card">Карта 💳</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Поиск и дополнительные опции */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-800">
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-500 uppercase flex items-center gap-1">
+                        <Search className="w-3 h-3" />
+                        Поиск по комментарию, зоне, оператору
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Введите текст для поиска..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full bg-gray-800 text-white pl-10 pr-4 py-2.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm"
+                        />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+                        {searchTerm && (
+                          <button
+                            onClick={() => setSearchTerm('')}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {extraCompanyId && (
+                      <div className="flex items-end">
+                        <button
+                          onClick={() => setHideExtraRows(!hideExtraRows)}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-colors w-full md:w-auto ${
+                            hideExtraRows
+                              ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400'
+                              : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-300'
+                          }`}
+                        >
+                          {hideExtraRows ? <Check className="w-4 h-4" /> : <div className="w-4 h-4 border border-gray-500 rounded" />}
+                          Скрыть строки Extra из таблицы
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Активные фильтры */}
+                  {activeFiltersCount > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-800">
+                      <span className="text-xs text-gray-500">Активные фильтры:</span>
+                      {companyFilter !== 'all' && (
+                        <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded-lg flex items-center gap-1">
+                          Компания: {companyName(companyFilter)}
+                          <button onClick={() => setCompanyFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                        </span>
+                      )}
+                      {operatorFilter !== 'all' && (
+                        <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-lg flex items-center gap-1">
+                          Оператор: {operatorFilter === 'none' ? 'Без оператора' : operatorName(operatorFilter)}
+                          <button onClick={() => setOperatorFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                        </span>
+                      )}
+                      {shiftFilter !== 'all' && (
+                        <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs rounded-lg flex items-center gap-1">
+                          Смена: {shiftFilter === 'day' ? 'День' : 'Ночь'}
+                          <button onClick={() => setShiftFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                        </span>
+                      )}
+                      {payFilter !== 'all' && (
+                        <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-lg flex items-center gap-1">
+                          Оплата: {payFilter === 'cash' ? 'Наличные' : payFilter === 'kaspi' ? 'Kaspi POS' : payFilter === 'online' ? 'Online' : 'Карта'}
+                          <button onClick={() => setPayFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                        </span>
+                      )}
+                      {searchTerm && (
+                        <span className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-lg flex items-center gap-1">
+                          Поиск: "{searchTerm}"
+                          <button onClick={() => setSearchTerm('')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Табы */}
+          {/* Табы навигации */}
           <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
             <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity className="w-4 h-4" />} label="Обзор" />
             <TabButton active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} icon={<LineChart className="w-4 h-4" />} label="Аналитика" />
             <TabButton active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} icon={<Clock className="w-4 h-4" />} label="Операции" />
           </div>
 
-          {/* Контент */}
+          {/* Контент табов */}
           {activeTab === 'overview' && (
             <OverviewTab 
               analytics={analytics} 
@@ -757,7 +999,6 @@ export default function IncomePage() {
               companyName={companyName}
               operatorName={operatorName}
               isExtraRow={isExtraRow}
-              companyMap={companyMap}
               editingOnlineId={editingOnlineId}
               setEditingOnlineId={setEditingOnlineId}
               onlineDraft={onlineDraft}
@@ -782,7 +1023,6 @@ export default function IncomePage() {
               companyName={companyName}
               operatorName={operatorName}
               isExtraRow={isExtraRow}
-              companyMap={companyMap}
               editingOnlineId={editingOnlineId}
               setEditingOnlineId={setEditingOnlineId}
               onlineDraft={onlineDraft}
@@ -822,7 +1062,6 @@ function OverviewTab({
   companyName,
   operatorName,
   isExtraRow,
-  companyMap,
   editingOnlineId,
   setEditingOnlineId,
   onlineDraft,
@@ -1013,7 +1252,7 @@ function OverviewTab({
         </Card>
       </div>
 
-      {/* Последние операции (компактно) */}
+      {/* Последние операции */}
       <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -1022,16 +1261,13 @@ function OverviewTab({
             </div>
             <h3 className="text-sm font-semibold text-white">Последние операции</h3>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => {}} className="text-xs text-gray-400 hover:text-white">
-            Все операции <ArrowRight className="w-3 h-3 ml-1" />
-          </Button>
         </div>
         
         <div className="space-y-2">
           {displayRows.slice(0, 5).map((row: IncomeRow) => (
             <IncomeRowCompact 
               key={row.id} 
-              row={row} 
+              row={row}
               companyName={companyName(row.company_id)}
               operatorName={operatorName(row.operator_id)}
               isExtra={isExtraRow(row)}
@@ -1174,7 +1410,7 @@ function AnalyticsTab({ analytics, dateFrom, dateTo }: any) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="#374151" />
                 <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
                 <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.money(v)} />
-                <Tooltip formatter={(v: number) => Formatters.moneyDetailed(v)} contentStyle={Formatters.tooltip.contentStyle} />
+                <Tooltip formatter={(val: number) => Formatters.moneyDetailed(val)} contentStyle={Formatters.tooltip.contentStyle} />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {analytics.paymentData.map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1244,7 +1480,6 @@ function FeedTab({
   companyName,
   operatorName,
   isExtraRow,
-  companyMap,
   editingOnlineId,
   setEditingOnlineId,
   onlineDraft,
@@ -1256,25 +1491,32 @@ function FeedTab({
   return (
     <Card className="p-0 border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden">
       <div className="p-4 border-b border-gray-700">
-        <h3 className="text-sm font-semibold text-white">Все операции</h3>
+        <h3 className="text-sm font-semibold text-white">Все операции ({displayRows.length})</h3>
       </div>
       <div className="divide-y divide-gray-800">
-        {displayRows.map((row: IncomeRow) => (
-          <IncomeRowFull 
-            key={row.id} 
-            row={row}
-            companyName={companyName(row.company_id)}
-            operatorName={operatorName(row.operator_id)}
-            isExtra={isExtraRow(row)}
-            editingOnlineId={editingOnlineId}
-            setEditingOnlineId={setEditingOnlineId}
-            onlineDraft={onlineDraft}
-            setOnlineDraft={setOnlineDraft}
-            savingOnlineId={savingOnlineId}
-            saveOnlineAmount={saveOnlineAmount}
-            skipBlurSaveRef={skipBlurSaveRef}
-          />
-        ))}
+        {displayRows.length === 0 ? (
+          <div className="p-12 text-center text-gray-500">
+            <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>Нет операций по выбранным фильтрам</p>
+          </div>
+        ) : (
+          displayRows.map((row: IncomeRow) => (
+            <IncomeRowFull 
+              key={row.id} 
+              row={row}
+              companyName={companyName(row.company_id)}
+              operatorName={operatorName(row.operator_id)}
+              isExtra={isExtraRow(row)}
+              editingOnlineId={editingOnlineId}
+              setEditingOnlineId={setEditingOnlineId}
+              onlineDraft={onlineDraft}
+              setOnlineDraft={setOnlineDraft}
+              savingOnlineId={savingOnlineId}
+              saveOnlineAmount={saveOnlineAmount}
+              skipBlurSaveRef={skipBlurSaveRef}
+            />
+          ))
+        )}
       </div>
     </Card>
   )
