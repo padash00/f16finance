@@ -27,7 +27,8 @@ import {
   Wallet,
   CreditCard,
   MinusIcon,
-  Rocket,
+  Calendar,
+  ChevronDown,
   Globe,
 } from 'lucide-react'
 import {
@@ -47,10 +48,6 @@ import {
   Pie,
 } from 'recharts'
 
-// shadcn/ui (календарь красивый + корректный диапазон)
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Calendar } from '@/components/ui/calendar'
-
 // ==================== ТИПЫ ====================
 
 type Company = { id: string; name: string; code?: string | null }
@@ -62,7 +59,7 @@ type IncomeRow = {
   cash_amount: number | null
   kaspi_amount: number | null
   card_amount: number | null
-  online_amount: number | null
+  online_amount: number | null // ДОБАВЛЕНО
   comment: string | null
 }
 
@@ -82,20 +79,17 @@ type FinancialTotals = {
   incomeCash: number
   incomeKaspi: number
   incomeCard: number
-  incomeOnline: number
+  incomeOnline: number // ДОБАВЛЕНО
   incomeTotal: number
-
   expenseCash: number
   expenseKaspi: number
   expenseTotal: number
-
   profit: number
   netCash: number
   netKaspi: number
   netTotal: number
-
   avgCheck?: number
-  incomeTxCount?: number
+  transactionsCount?: number
 }
 
 type AIInsight = {
@@ -179,7 +173,7 @@ const DateUtils = {
   formatDate: (iso: string, format: 'short' | 'full' = 'short'): string => {
     if (!iso) return ''
     const d = DateUtils.fromISO(iso)
-
+    
     if (format === 'short') {
       return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
     }
@@ -190,7 +184,7 @@ const DateUtils = {
     const today = DateUtils.fromISO(DateUtils.todayISO())
     const date = DateUtils.fromISO(iso)
     const diffDays = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-
+    
     if (diffDays === 0) return 'Сегодня'
     if (diffDays === 1) return 'Вчера'
     if (diffDays < 7) return `${diffDays} дня назад`
@@ -198,13 +192,13 @@ const DateUtils = {
   },
 
   getPeriodLabel: (type: RangeType): string => {
-    const labels: Record<RangeType, string> = {
+    const labels = {
       today: 'Сегодня',
       week: 'Последние 7 дней',
       month: 'Последние 30 дней',
       quarter: 'Текущий квартал',
       year: 'Текущий год',
-      custom: 'Произвольный период',
+      custom: 'Произвольный период'
     }
     return labels[type] || 'Период'
   },
@@ -215,7 +209,7 @@ const DateUtils = {
     const q = Math.floor(now.getMonth() / 3)
     return {
       start: DateUtils.toISODateLocal(new Date(y, q * 3, 1)),
-      end: DateUtils.toISODateLocal(new Date(y, q * 3 + 3, 0)),
+      end: DateUtils.toISODateLocal(new Date(y, q * 3 + 3, 0))
     }
   },
 
@@ -224,7 +218,7 @@ const DateUtils = {
     const y = now.getFullYear()
     return {
       start: DateUtils.toISODateLocal(new Date(y, 0, 1)),
-      end: DateUtils.toISODateLocal(new Date(y, 11, 31)),
+      end: DateUtils.toISODateLocal(new Date(y, 11, 31))
     }
   },
 
@@ -235,7 +229,7 @@ const DateUtils = {
     return {
       prevFrom: DateUtils.addDaysISO(dateFrom, -durationDays),
       prevTo: DateUtils.addDaysISO(dateFrom, -1),
-      durationDays,
+      durationDays
     }
   },
 
@@ -243,19 +237,28 @@ const DateUtils = {
     const dates: string[] = []
     let current = DateUtils.fromISO(from)
     const end = DateUtils.fromISO(to)
-
+    
     while (current <= end) {
       dates.push(DateUtils.toISODateLocal(current))
       current.setDate(current.getDate() + 1)
     }
     return dates
-  },
+  }
 }
 
 const Formatters = {
-  // ✅ ВСЕ ЦИФРЫ “РАЗВЕРНУТЫЕ”: без K/M/тыс/млн
-  money: (v: number): string => `${Math.round(v).toLocaleString('ru-RU')} ₸`,
-  moneyPlain: (v: number): string => Math.round(v).toLocaleString('ru-RU'),
+  // ИЗМЕНЕНО: всегда показываем полные числа
+  money: (v: number): string => {
+    return v.toLocaleString('ru-RU') + ' ₸'
+  },
+
+  // ИЗМЕНЕНО: всегда показываем полные числа
+  moneyDetailed: (v: number): string => {
+    return v.toLocaleString('ru-RU', { 
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0 
+    }) + ' ₸'
+  },
 
   percent: (val: number): string => {
     const sign = val > 0 ? '+' : ''
@@ -263,19 +266,21 @@ const Formatters = {
   },
 
   percentChange: (current: number, previous: number): { value: string; isPositive: boolean } => {
-    if (previous === 0) return { value: '—', isPositive: true }
+    if (previous === 0) {
+      return { value: '—', isPositive: true }
+    }
     const change = ((current - previous) / Math.abs(previous)) * 100
-    return { value: `${change > 0 ? '+' : ''}${change.toFixed(1)}%`, isPositive: change >= 0 }
+    return {
+      value: `${change > 0 ? '+' : ''}${change.toFixed(1)}%`,
+      isPositive: change >= 0
+    }
   },
 
   trendIcon: (trend: 'up' | 'down' | 'stable') => {
     switch (trend) {
-      case 'up':
-        return <TrendUpIcon className="w-3 h-3 text-green-400" />
-      case 'down':
-        return <TrendDownIcon className="w-3 h-3 text-red-400" />
-      default:
-        return <MinusIcon className="w-3 h-3 text-gray-400" />
+      case 'up': return <TrendUpIcon className="w-3 h-3 text-green-400" />
+      case 'down': return <TrendDownIcon className="w-3 h-3 text-red-400" />
+      default: return <MinusIcon className="w-3 h-3 text-gray-400" />
     }
   },
 
@@ -289,7 +294,7 @@ const Formatters = {
     },
     itemStyle: { color: '#fff' },
     labelStyle: { color: '#a0a0c0', fontSize: 12 },
-  } as const,
+  } as const
 }
 
 const COLORS = {
@@ -299,8 +304,8 @@ const COLORS = {
   kaspi: '#2563eb',
   card: '#7c3aed',
   cash: '#f59e0b',
-  online: '#06b6d4',
-  chart: ['#8b5cf6', '#10b981', '#ef4444', '#f59e0b', '#3b82f6', '#06b6d4'],
+  online: '#ec4899', // ДОБАВЛЕНО для онлайн платежей
+  chart: ['#8b5cf6', '#10b981', '#ef4444', '#f59e0b', '#3b82f6', '#ec4899'],
 }
 
 // ==================== AI-АНАЛИТИКА ====================
@@ -308,9 +313,11 @@ const COLORS = {
 class AIAnalytics {
   static detectTrends(data: number[]): 'up' | 'down' | 'stable' {
     if (data.length < 3) return 'stable'
+    
     const first = data[0]
     const last = data[data.length - 1]
     const change = ((last - first) / (first || 1)) * 100
+    
     if (change > 5) return 'up'
     if (change < -5) return 'down'
     return 'stable'
@@ -322,84 +329,98 @@ class AIAnalytics {
   ): Array<{ type: 'spike' | 'drop' | 'unusual'; date: string; description: string; severity: 'low' | 'medium' | 'high' }> {
     const anomalies = []
     const values = points.map(p => p.income).filter(v => v > 0)
+    
     if (values.length === 0) return []
-
+    
     const mean = values.reduce((a, b) => a + b, 0) / values.length
     const stdDev = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length)
-
+    
     for (let i = 0; i < points.length; i++) {
       const point = points[i]
       if (point.income === 0) continue
-
+      
       const zScore = Math.abs((point.income - mean) / (stdDev || 1))
+      
       if (zScore > threshold) {
         const type = point.income > mean ? 'spike' : 'drop'
         const severity = zScore > 4 ? 'high' : zScore > 3 ? 'medium' : 'low'
+        
         anomalies.push({
           type,
           date: point.date,
-          description: `${type === 'spike' ? 'Всплеск' : 'Падение'}: ${Formatters.money(point.income)}`,
-          severity,
+          description: `${type === 'spike' ? 'Всплеск' : 'Падение'}: ${Formatters.moneyDetailed(point.income)}`,
+          severity
         })
       }
     }
+    
     return anomalies
   }
 
   static predictNextMonth(data: ChartPoint[]): { value: number; confidence: number } {
     if (data.length < 7) return { value: 0, confidence: 0 }
+    
     const profits = data.map(d => d.profit).filter(v => v !== 0)
     if (profits.length < 3) return { value: 0, confidence: 0 }
-
+    
     const x = Array.from({ length: profits.length }, (_, i) => i)
+    
     const n = x.length
     const sumX = x.reduce((a, b) => a + b, 0)
     const sumY = profits.reduce((a, b) => a + b, 0)
     const sumXY = x.reduce((a, _, i) => a + x[i] * profits[i], 0)
     const sumXX = x.reduce((a, _, i) => a + x[i] * x[i], 0)
-
+    
     const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX || 1)
     const intercept = (sumY - slope * sumX) / n
+    
     const nextValue = slope * (n + 30) + intercept
-
+    
     const yMean = sumY / n
     const ssRes = profits.reduce((a, y, i) => a + Math.pow(y - (slope * x[i] + intercept), 2), 0)
     const ssTot = profits.reduce((a, y) => a + Math.pow(y - yMean, 2), 0)
     const r2 = 1 - (ssRes / (ssTot || 1))
+    
     const confidence = Math.min(100, Math.max(0, r2 * 100))
-
-    return { value: nextValue, confidence: Math.round(confidence * 100) / 100 }
+    
+    return {
+      value: Math.max(0, nextValue),
+      confidence: Math.round(confidence * 100) / 100
+    }
   }
 
   static calculateScore(current: FinancialTotals, previous: FinancialTotals): number {
     let score = 50
-
+    
     const margin = current.incomeTotal > 0 ? (current.profit / current.incomeTotal) * 100 : 0
     if (margin > 30) score += 20
     else if (margin > 20) score += 15
     else if (margin > 10) score += 10
     else if (margin > 5) score += 5
     else if (margin < 0) score -= 20
-
+    
     const incomeGrowth = ((current.incomeTotal - previous.incomeTotal) / (previous.incomeTotal || 1)) * 100
     const profitGrowth = ((current.profit - previous.profit) / (Math.abs(previous.profit) || 1)) * 100
-
+    
     if (incomeGrowth > 20) score += 15
     else if (incomeGrowth > 10) score += 10
     else if (incomeGrowth > 0) score += 5
     else if (incomeGrowth < -10) score -= 10
-
+    
     if (profitGrowth > 20) score += 20
     else if (profitGrowth > 10) score += 15
     else if (profitGrowth > 0) score += 10
     else if (profitGrowth < -10) score -= 15
-
-    const efficiency = current.expenseTotal > 0 ? current.incomeTotal / current.expenseTotal : current.incomeTotal > 0 ? 10 : 0
+    
+    const efficiency = current.expenseTotal > 0 
+      ? current.incomeTotal / current.expenseTotal 
+      : current.incomeTotal > 0 ? 10 : 0
+    
     if (efficiency > 2) score += 15
     else if (efficiency > 1.5) score += 10
     else if (efficiency > 1.2) score += 5
     else if (efficiency < 0.8) score -= 10
-
+    
     return Math.min(100, Math.max(0, score))
   }
 }
@@ -407,6 +428,7 @@ class AIAnalytics {
 // ==================== ОСНОВНОЙ КОМПОНЕНТ ====================
 
 export default function SmartDashboardPage() {
+  // Состояния
   const [dateFrom, setDateFrom] = useState(() => DateUtils.addDaysISO(DateUtils.todayISO(), -29))
   const [dateTo, setDateTo] = useState(DateUtils.todayISO())
   const [rangeType, setRangeType] = useState<RangeType>('month')
@@ -415,13 +437,16 @@ export default function SmartDashboardPage() {
   const [showPredictions, setShowPredictions] = useState(true)
   const [showAnomalies, setShowAnomalies] = useState(true)
   const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'forecast'>('overview')
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false) // ДОБАВЛЕНО
 
+  // Данные
   const [companies, setCompanies] = useState<Company[]>([])
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Загрузка данных
   useEffect(() => {
     let mounted = true
 
@@ -440,7 +465,7 @@ export default function SmartDashboardPage() {
           supabase.from('companies').select('id,name,code').order('name'),
           supabase
             .from('incomes')
-            .select('id,date,company_id,cash_amount,kaspi_amount,card_amount,online_amount,comment')
+            .select('id,date,company_id,cash_amount,kaspi_amount,card_amount,online_amount,comment') // ДОБАВЛЕН online_amount
             .gte('date', prevFrom)
             .lte('date', dateTo)
             .order('date', { ascending: false }),
@@ -453,7 +478,10 @@ export default function SmartDashboardPage() {
         ])
 
         if (!mounted) return
-        if (compErr || incomeErr || expenseErr) throw new Error('Ошибка загрузки данных')
+
+        if (compErr || incomeErr || expenseErr) {
+          throw new Error('Ошибка загрузки данных')
+        }
 
         setCompanies(compData || [])
         setIncomes(incomeData || [])
@@ -466,24 +494,27 @@ export default function SmartDashboardPage() {
     }
 
     loadData()
-    return () => {
-      mounted = false
-    }
+    return () => { mounted = false }
   }, [dateFrom, dateTo])
 
+  // Мемоизированные значения
   const companyById = useMemo(() => {
     const map: Record<string, Company> = {}
-    companies.forEach(c => (map[c.id] = c))
+    companies.forEach(c => {
+      map[c.id] = c
+    })
     return map
   }, [companies])
 
-  const isExtraCompany = useCallback(
-    (companyId: string) => (companyById[companyId]?.code || '').toLowerCase() === 'extra',
-    [companyById]
-  )
+  const isExtraCompany = useCallback((companyId: string) => {
+    return (companyById[companyId]?.code || '').toLowerCase() === 'extra'
+  }, [companyById])
 
-  const companyName = useCallback((id: string) => companyById[id]?.name ?? '—', [companyById])
+  const companyName = useCallback((id: string) => {
+    return companyById[id]?.name ?? '—'
+  }, [companyById])
 
+  // Обработчики
   const setQuickRange = useCallback((type: RangeType) => {
     const today = DateUtils.todayISO()
 
@@ -513,11 +544,24 @@ export default function SmartDashboardPage() {
         break
       }
       default:
-        break
+        setDateFrom(today)
+        setDateTo(today)
     }
     setRangeType(type)
   }, [])
 
+  // ИЗМЕНЕНО: обработчики для кастомного выбора дат
+  const handleDateFromChange = useCallback((value: string) => {
+    setDateFrom(value)
+    setRangeType('custom')
+  }, [])
+
+  const handleDateToChange = useCallback((value: string) => {
+    setDateTo(value)
+    setRangeType('custom')
+  }, [])
+
+  // Основная аналитика
   const analytics = useMemo(() => {
     const { prevFrom, prevTo } = DateUtils.calculatePrevPeriod(dateFrom, dateTo)
     const allDates = DateUtils.getDatesInRange(dateFrom, dateTo)
@@ -525,66 +569,46 @@ export default function SmartDashboardPage() {
     const inCurrent = (date: string) => date >= dateFrom && date <= dateTo
     const inPrev = (date: string) => date >= prevFrom && date <= prevTo
 
+    // Инициализация - ДОБАВЛЕН online
     const current: FinancialTotals = {
-      incomeCash: 0,
-      incomeKaspi: 0,
-      incomeCard: 0,
-      incomeOnline: 0,
-      incomeTotal: 0,
-
-      expenseCash: 0,
-      expenseKaspi: 0,
-      expenseTotal: 0,
-
-      profit: 0,
-      netCash: 0,
-      netKaspi: 0,
-      netTotal: 0,
-
-      incomeTxCount: 0,
+      incomeCash: 0, incomeKaspi: 0, incomeCard: 0, incomeOnline: 0, incomeTotal: 0,
+      expenseCash: 0, expenseKaspi: 0, expenseTotal: 0,
+      profit: 0, netCash: 0, netKaspi: 0, netTotal: 0,
+      transactionsCount: 0
     }
 
     const previous: FinancialTotals = {
-      incomeCash: 0,
-      incomeKaspi: 0,
-      incomeCard: 0,
-      incomeOnline: 0,
-      incomeTotal: 0,
-
-      expenseCash: 0,
-      expenseKaspi: 0,
-      expenseTotal: 0,
-
-      profit: 0,
-      netCash: 0,
-      netKaspi: 0,
-      netTotal: 0,
-
-      incomeTxCount: 0,
+      incomeCash: 0, incomeKaspi: 0, incomeCard: 0, incomeOnline: 0, incomeTotal: 0,
+      expenseCash: 0, expenseKaspi: 0, expenseTotal: 0,
+      profit: 0, netCash: 0, netKaspi: 0, netTotal: 0
     }
 
+    // Карта для графика
     const chartMap = new Map<string, ChartPoint>()
     allDates.forEach(date => {
-      chartMap.set(date, {
-        date,
-        income: 0,
-        expense: 0,
+      chartMap.set(date, { 
+        date, 
+        income: 0, 
+        expense: 0, 
         profit: 0,
-        formattedDate: DateUtils.formatDate(date),
+        formattedDate: DateUtils.formatDate(date)
       })
     })
 
+    // Категории
     const incomeCategories: Record<string, number> = {}
     const expenseCategories: Record<string, number> = {}
 
+    // Обработка доходов - ДОБАВЛЕН online_amount
     incomes.forEach(row => {
       if (!includeExtra && isExtraCompany(row.company_id)) return
 
       const cash = Number(row.cash_amount || 0)
       const kaspi = Number(row.kaspi_amount || 0)
       const card = Number(row.card_amount || 0)
-      const online = Number(row.online_amount || 0)
-      const total = cash + kaspi + card + online
+      const online = Number(row.online_amount || 0) // ДОБАВЛЕНО
+      const total = cash + kaspi + card + online // ИЗМЕНЕНО
+      
       if (total <= 0) return
 
       const category = row.comment || 'Продажи'
@@ -595,8 +619,8 @@ export default function SmartDashboardPage() {
         current.incomeCash += cash
         current.incomeKaspi += kaspi
         current.incomeCard += card
-        current.incomeOnline += online
-        current.incomeTxCount!++
+        current.incomeOnline += online // ДОБАВЛЕНО
+        current.transactionsCount!++
 
         const point = chartMap.get(row.date)
         if (point) point.income += total
@@ -605,17 +629,18 @@ export default function SmartDashboardPage() {
         previous.incomeCash += cash
         previous.incomeKaspi += kaspi
         previous.incomeCard += card
-        previous.incomeOnline += online
-        previous.incomeTxCount!++
+        previous.incomeOnline += online // ДОБАВЛЕНО
       }
     })
 
+    // Обработка расходов
     expenses.forEach(row => {
       if (!includeExtra && isExtraCompany(row.company_id)) return
 
       const cash = Number(row.cash_amount || 0)
       const kaspi = Number(row.kaspi_amount || 0)
       const total = cash + kaspi
+      
       if (total <= 0) return
 
       const category = row.category || row.comment || 'Прочее'
@@ -625,6 +650,7 @@ export default function SmartDashboardPage() {
         current.expenseTotal += total
         current.expenseCash += cash
         current.expenseKaspi += kaspi
+        current.transactionsCount!++
 
         const point = chartMap.get(row.date)
         if (point) point.expense += total
@@ -635,13 +661,13 @@ export default function SmartDashboardPage() {
       }
     })
 
+    // Финальные расчеты
     const finalizeTotals = (t: FinancialTotals) => {
       t.profit = t.incomeTotal - t.expenseTotal
       t.netCash = t.incomeCash - t.expenseCash
-      // ✅ netKaspi = весь безнал (kaspi + card + online) - безналовые расходы
-      t.netKaspi = t.incomeKaspi + t.incomeCard + t.incomeOnline - t.expenseKaspi
+      t.netKaspi = t.incomeKaspi + t.incomeCard + t.incomeOnline - t.expenseKaspi // ИЗМЕНЕНО
       t.netTotal = t.profit
-      t.avgCheck = t.incomeTxCount ? t.incomeTotal / t.incomeTxCount : 0
+      t.avgCheck = t.transactionsCount ? t.incomeTotal / t.transactionsCount : 0
     }
 
     finalizeTotals(current)
@@ -651,8 +677,10 @@ export default function SmartDashboardPage() {
       point.profit = point.income - point.expense
     })
 
-    const chartData = Array.from(chartMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+    const chartData = Array.from(chartMap.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
 
+    // Скользящее среднее
     const windowSize = 7
     chartData.forEach((point, i) => {
       const start = Math.max(0, i - windowSize + 1)
@@ -662,9 +690,11 @@ export default function SmartDashboardPage() {
     })
 
     const margin = current.incomeTotal > 0 ? (current.profit / current.incomeTotal) * 100 : 0
-    const efficiency =
-      current.expenseTotal > 0 ? current.incomeTotal / current.expenseTotal : current.incomeTotal > 0 ? 10 : 0
+    const efficiency = current.expenseTotal > 0 
+      ? current.incomeTotal / current.expenseTotal 
+      : current.incomeTotal > 0 ? 10 : 0
 
+    // Тренды
     const profitValues = chartData.map(d => d.profit).filter(v => v !== 0)
     const incomeValues = chartData.map(d => d.income).filter(v => v !== 0)
     const expenseValues = chartData.map(d => d.expense).filter(v => v !== 0)
@@ -672,7 +702,7 @@ export default function SmartDashboardPage() {
     const trends = {
       profit: AIAnalytics.detectTrends(profitValues.length > 0 ? profitValues : [0]),
       income: AIAnalytics.detectTrends(incomeValues.length > 0 ? incomeValues : [0]),
-      expense: AIAnalytics.detectTrends(expenseValues.length > 0 ? expenseValues : [0]),
+      expense: AIAnalytics.detectTrends(expenseValues.length > 0 ? expenseValues : [0])
     }
 
     const anomalies = AIAnalytics.detectAnomalies(chartData)
@@ -686,15 +716,20 @@ export default function SmartDashboardPage() {
     else status = 'critical'
 
     let recommendation = ''
-    if (score >= 80) recommendation = 'Отличные результаты! Рекомендуем реинвестировать прибыль в развитие и масштабирование.'
-    else if (score >= 60) recommendation = 'Хорошая работа! Оптимизируйте расходы и работайте над увеличением среднего чека.'
-    else if (score >= 40) recommendation = 'Требуется оптимизация. Проверьте рентабельность и проанализируйте основные статьи расходов.'
-    else recommendation = 'Критическая ситуация! Срочно проанализируйте каждую статью расходов и пересмотрите ценообразование.'
+    if (score >= 80) {
+      recommendation = "Отличные результаты! Рекомендуем реинвестировать прибыль в развитие и масштабирование."
+    } else if (score >= 60) {
+      recommendation = "Хорошая работа! Оптимизируйте расходы и работайте над увеличением среднего чека."
+    } else if (score >= 40) {
+      recommendation = "Требуется оптимизация. Проверьте рентабельность и проанализируйте основные статьи расходов."
+    } else {
+      recommendation = "Критическая ситуация! Срочно проанализируйте каждую статью расходов и пересмотрите ценообразование."
+    }
 
     const benchmarks = {
       vsLastWeek: current.profit - previous.profit,
       vsLastMonth: current.profit - previous.profit * 4,
-      vsAvg: current.profit - chartData.reduce((sum, d) => sum + d.profit, 0) / (chartData.length || 1),
+      vsAvg: current.profit - (chartData.reduce((sum, d) => sum + d.profit, 0) / chartData.length)
     }
 
     const insight: AIInsight = {
@@ -709,19 +744,20 @@ export default function SmartDashboardPage() {
       predictions: {
         nextMonthProfit: prediction.value,
         confidence: prediction.confidence,
-        recommendation: prediction.confidence > 70 ? 'Прогноз достаточно надежен' : 'Низкая достоверность прогноза',
+        recommendation: prediction.confidence > 70 ? 'Прогноз достаточно надежен' : 'Низкая достоверность прогноза'
       },
-      benchmarks,
+      benchmarks
     }
 
+    // Форматирование категорий для графиков
     const topIncomeCategories: CategoryData[] = Object.entries(incomeCategories)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5)
       .map(([name, value], index) => ({
         name,
         value,
-        percentage: current.incomeTotal ? (value / current.incomeTotal) * 100 : 0,
-        color: COLORS.chart[index % COLORS.chart.length],
+        percentage: (value / current.incomeTotal) * 100,
+        color: COLORS.chart[index % COLORS.chart.length]
       }))
 
     const topExpenseCategories: CategoryData[] = Object.entries(expenseCategories)
@@ -730,13 +766,22 @@ export default function SmartDashboardPage() {
       .map(([name, value], index) => ({
         name,
         value,
-        percentage: current.expenseTotal ? (value / current.expenseTotal) * 100 : 0,
-        color: COLORS.chart[index % COLORS.chart.length],
+        percentage: (value / current.expenseTotal) * 100,
+        color: COLORS.chart[index % COLORS.chart.length]
       }))
 
-    return { current, previous, chartData, insight, topIncomeCategories, topExpenseCategories, anomalies }
+    return { 
+      current, 
+      previous, 
+      chartData, 
+      insight,
+      topIncomeCategories,
+      topExpenseCategories,
+      anomalies
+    }
   }, [incomes, expenses, dateFrom, dateTo, includeExtra, isExtraCompany])
 
+  // Лента событий
   const feedItems = useMemo(() => {
     const items: FeedItem[] = []
 
@@ -744,8 +789,7 @@ export default function SmartDashboardPage() {
       if (!includeExtra && isExtraCompany(row.company_id)) return
       if (row.date < dateFrom || row.date > dateTo) return
 
-      const amount =
-        Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0) + Number(row.online_amount || 0)
+      const amount = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0) + Number(row.online_amount || 0) // ИЗМЕНЕНО
       if (amount <= 0) return
 
       items.push({
@@ -755,7 +799,7 @@ export default function SmartDashboardPage() {
         kind: 'income',
         title: row.comment || 'Продажа',
         amount,
-        category: 'income',
+        category: 'income'
       })
     })
 
@@ -773,16 +817,20 @@ export default function SmartDashboardPage() {
         kind: 'expense',
         title: row.category || row.comment || 'Расход',
         amount,
-        category: row.category || undefined,
+        category: row.category || undefined
       })
     })
 
     const anomalyDates = new Set(analytics.anomalies.map(a => a.date))
     items.forEach(item => {
-      if (anomalyDates.has(item.date)) item.isAnomaly = true
+      if (anomalyDates.has(item.date)) {
+        item.isAnomaly = true
+      }
     })
 
-    return items.sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount).slice(0, 10)
+    return items
+      .sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount)
+      .slice(0, 10)
   }, [incomes, expenses, dateFrom, dateTo, includeExtra, isExtraCompany, analytics.anomalies])
 
   const { current, previous, chartData, insight, topIncomeCategories, topExpenseCategories } = analytics
@@ -814,7 +862,7 @@ export default function SmartDashboardPage() {
             <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">Ошибка загрузки</h2>
             <p className="text-gray-400 mb-6">{error}</p>
-            <Button
+            <Button 
               onClick={() => window.location.reload()}
               className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
             >
@@ -835,7 +883,7 @@ export default function SmartDashboardPage() {
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 p-6 border border-purple-500/20">
             <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 rounded-full blur-3xl opacity-20" />
             <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-600 rounded-full blur-3xl opacity-20" />
-
+            
             <SmartHeader
               dateFrom={dateFrom}
               dateTo={dateTo}
@@ -843,31 +891,38 @@ export default function SmartDashboardPage() {
               includeExtra={includeExtra}
               hasExtraCompany={hasExtraCompany}
               insight={insight}
+              isCalendarOpen={isCalendarOpen}
               onRangeChange={setQuickRange}
               onIncludeExtraChange={setIncludeExtra}
-              onDateFromChange={value => {
-                setDateFrom(value)
-                setRangeType('custom')
-              }}
-              onDateToChange={value => {
-                setDateTo(value)
-                setRangeType('custom')
-              }}
-              onCustomRange={(from, to) => {
-                setDateFrom(from)
-                setDateTo(to)
-                setRangeType('custom')
-              }}
+              onDateFromChange={handleDateFromChange}
+              onDateToChange={handleDateToChange}
+              onToggleCalendar={() => setIsCalendarOpen(!isCalendarOpen)}
             />
           </div>
 
-          {/* Табы */}
+          {/* Табы навигации */}
           <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
-            <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity className="w-4 h-4" />} label="Обзор" />
-            <TabButton active={activeTab === 'details'} onClick={() => setActiveTab('details')} icon={<BarChart2 className="w-4 h-4" />} label="Детали" />
-            <TabButton active={activeTab === 'forecast'} onClick={() => setActiveTab('forecast')} icon={<Sparkles className="w-4 h-4" />} label="Прогноз" />
+            <TabButton 
+              active={activeTab === 'overview'} 
+              onClick={() => setActiveTab('overview')}
+              icon={<Activity className="w-4 h-4" />}
+              label="Обзор"
+            />
+            <TabButton 
+              active={activeTab === 'details'} 
+              onClick={() => setActiveTab('details')}
+              icon={<BarChart2 className="w-4 h-4" />}
+              label="Детали"
+            />
+            <TabButton 
+              active={activeTab === 'forecast'} 
+              onClick={() => setActiveTab('forecast')}
+              icon={<Sparkles className="w-4 h-4" />}
+              label="Прогноз"
+            />
           </div>
 
+          {/* Контент в зависимости от таба */}
           {activeTab === 'overview' && (
             <OverviewContent
               insight={insight}
@@ -920,6 +975,7 @@ export default function SmartDashboardPage() {
 
 function getStatusSummary(status: AIInsight['status'], trends: AIInsight['trends']): string {
   const trendEmoji = trends.profit === 'up' ? '📈' : trends.profit === 'down' ? '📉' : '📊'
+  
   switch (status) {
     case 'excellent':
       return `${trendEmoji} Отличная динамика! Прибыль растет, все показатели в зеленой зоне`
@@ -948,7 +1004,9 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
     <button
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-        active ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+        active
+          ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25'
+          : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
       }`}
     >
       {icon}
@@ -957,6 +1015,7 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
   )
 }
 
+// ИЗМЕНЕНО: обновленный интерфейс SmartHeader с календарем
 interface SmartHeaderProps {
   dateFrom: string
   dateTo: string
@@ -964,11 +1023,12 @@ interface SmartHeaderProps {
   includeExtra: boolean
   hasExtraCompany: boolean
   insight: AIInsight
+  isCalendarOpen: boolean
   onRangeChange: (type: RangeType) => void
   onIncludeExtraChange: (value: boolean) => void
   onDateFromChange: (value: string) => void
   onDateToChange: (value: string) => void
-  onCustomRange: (from: string, to: string) => void
+  onToggleCalendar: () => void
 }
 
 function SmartHeader({
@@ -978,18 +1038,19 @@ function SmartHeader({
   includeExtra,
   hasExtraCompany,
   insight,
+  isCalendarOpen,
   onRangeChange,
   onIncludeExtraChange,
   onDateFromChange,
   onDateToChange,
-  onCustomRange,
+  onToggleCalendar
 }: SmartHeaderProps) {
   const statusColors = {
     excellent: 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-500/30 text-green-400',
     good: 'bg-gradient-to-r from-purple-500/20 to-indigo-500/20 border-purple-500/30 text-purple-400',
     warning: 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-500/30 text-yellow-400',
     critical: 'bg-gradient-to-r from-red-500/20 to-rose-500/20 border-red-500/30 text-red-400',
-  } as const
+  }
 
   return (
     <div className="relative z-10 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
@@ -999,28 +1060,37 @@ function SmartHeader({
             <Brain className="w-6 h-6 text-purple-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">AI Финансовый Дашборд</h1>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+              AI Финансовый Дашборд
+            </h1>
             <p className="text-xs text-gray-400">Умная аналитика вашего бизнеса</p>
           </div>
           <span className={`ml-auto px-3 py-1 rounded-full text-xs font-medium border ${statusColors[insight.status]}`}>
-            {insight.status === 'excellent' ? '🚀 Отлично' : insight.status === 'good' ? '✅ Хорошо' : insight.status === 'warning' ? '⚠️ Внимание' : '🔴 Критично'}
+            {insight.status === 'excellent' ? '🚀 Отлично' :
+             insight.status === 'good' ? '✅ Хорошо' :
+             insight.status === 'warning' ? '⚠️ Внимание' : '🔴 Критично'}
           </span>
         </div>
-
+        
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700">
-            <CalendarDays className="w-4 h-4 text-purple-400" />
+          <button
+            onClick={onToggleCalendar}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-purple-500/50 transition-colors"
+          >
+            <Calendar className="w-4 h-4 text-purple-400" />
             <span className="text-gray-300">
-              {DateUtils.formatDate(dateFrom)} — {DateUtils.formatDate(dateTo)}
+              {DateUtils.formatDate(dateFrom, 'full')} — {DateUtils.formatDate(dateTo, 'full')}
             </span>
-            <span className="text-xs px-1.5 py-0.5 bg-gray-700 rounded-full text-gray-400">{DateUtils.getPeriodLabel(rangeType)}</span>
-          </div>
+            <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
+          </button>
 
           {hasExtraCompany && (
             <button
               onClick={() => onIncludeExtraChange(!includeExtra)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${
-                includeExtra ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-700/50'
+                includeExtra
+                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                  : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-700/50'
               }`}
             >
               <span className={`w-2 h-2 rounded-full ${includeExtra ? 'bg-red-400' : 'bg-gray-500'}`} />
@@ -1036,28 +1106,33 @@ function SmartHeader({
         </div>
       </div>
 
-      <DateFilters
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        rangeType={rangeType}
-        onRangeChange={onRangeChange}
-        onDateFromChange={onDateFromChange}
-        onDateToChange={onDateToChange}
-        onCustomRange={onCustomRange}
-      />
+      {/* ИЗМЕНЕНО: новый дизайн календаря */}
+      {isCalendarOpen && (
+        <div className="absolute top-full left-0 right-0 mt-2 p-4 bg-gray-900/95 backdrop-blur-xl border border-purple-500/20 rounded-2xl shadow-2xl z-50">
+          <DateFilters
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            rangeType={rangeType}
+            onRangeChange={onRangeChange}
+            onDateFromChange={onDateFromChange}
+            onDateToChange={onDateToChange}
+            onClose={onToggleCalendar}
+          />
+        </div>
+      )}
     </div>
   )
 }
 
-// ✅ нормальный календарь с диапазоном (и “custom” без боли)
-function DateFilters({
-  dateFrom,
-  dateTo,
-  rangeType,
-  onRangeChange,
-  onDateFromChange,
+// ИЗМЕНЕНО: улучшенный компонент выбора дат
+function DateFilters({ 
+  dateFrom, 
+  dateTo, 
+  rangeType, 
+  onRangeChange, 
+  onDateFromChange, 
   onDateToChange,
-  onCustomRange,
+  onClose 
 }: {
   dateFrom: string
   dateTo: string
@@ -1065,74 +1140,76 @@ function DateFilters({
   onRangeChange: (type: RangeType) => void
   onDateFromChange: (value: string) => void
   onDateToChange: (value: string) => void
-  onCustomRange: (from: string, to: string) => void
+  onClose: () => void
 }) {
   const ranges: Array<{ type: RangeType; label: string }> = [
-    { type: 'today', label: 'День' },
+    { type: 'today', label: 'Сегодня' },
     { type: 'week', label: 'Неделя' },
     { type: 'month', label: 'Месяц' },
     { type: 'quarter', label: 'Квартал' },
     { type: 'year', label: 'Год' },
   ]
 
-  const fromDate = useMemo(() => DateUtils.fromISO(dateFrom), [dateFrom])
-  const toDate = useMemo(() => DateUtils.fromISO(dateTo), [dateTo])
-
   return (
-    <div className="flex flex-col items-stretch gap-2 w-full xl:w-auto">
-      <div className="flex flex-col sm:flex-row items-center gap-2">
-        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-1 flex items-center gap-1">
-          {ranges.map(r => (
-            <button
-              key={r.type}
-              onClick={() => onRangeChange(r.type)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all whitespace-nowrap ${
-                rangeType === r.type ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25' : 'text-gray-400 hover:text-white hover:bg-gray-700'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {ranges.map(r => (
+          <button
+            key={r.type}
+            onClick={() => onRangeChange(r.type)}
+            className={`px-4 py-2 text-sm font-medium rounded-xl transition-all ${
+              rangeType === r.type
+                ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25'
+                : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 border border-gray-700'
+            }`}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-800">
+        <div className="space-y-2">
+          <label className="text-xs text-gray-500 uppercase tracking-wider">Начало периода</label>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-purple-400" />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => onDateFromChange(e.target.value)}
+              className="w-full bg-gray-800 text-white pl-10 pr-4 py-3 rounded-xl border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
+            />
+          </div>
         </div>
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-xl hover:bg-gray-700/50 transition-colors">
-              <CalendarDays className="w-4 h-4 text-purple-400" />
-              <span className="text-xs text-gray-200">
-                {DateUtils.formatDate(dateFrom, 'full')} — {DateUtils.formatDate(dateTo, 'full')}
-              </span>
-              <span className="text-[10px] px-2 py-0.5 bg-gray-700 rounded-full text-gray-300">выбрать</span>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-3 bg-gray-900 border border-gray-700 rounded-2xl" align="end">
-            <div className="text-xs text-gray-400 mb-2">Выберите любой диапазон дат</div>
-            <Calendar
-              mode="range"
-              numberOfMonths={2}
-              selected={{ from: fromDate, to: toDate }}
-              onSelect={(range: any) => {
-                const from = range?.from ? DateUtils.toISODateLocal(range.from) : null
-                const to = range?.to ? DateUtils.toISODateLocal(range.to) : null
-                if (from && to) {
-                  onCustomRange(from, to)
-                  onRangeChange('custom')
-                } else if (from && !to) {
-                  // пока выбрана только первая дата — считаем это “from”
-                  onDateFromChange(from)
-                  onRangeChange('custom')
-                }
-              }}
-              className="rounded-xl"
+        <div className="space-y-2">
+          <label className="text-xs text-gray-500 uppercase tracking-wider">Конец периода</label>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-purple-400" />
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => onDateToChange(e.target.value)}
+              min={dateFrom}
+              className="w-full bg-gray-800 text-white pl-10 pr-4 py-3 rounded-xl border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
             />
-          </PopoverContent>
-        </Popover>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end pt-2">
+        <Button 
+          onClick={onClose}
+          className="bg-purple-500 hover:bg-purple-600 text-white"
+        >
+          Применить
+        </Button>
       </div>
     </div>
   )
 }
 
-// ==================== OVERVIEW ====================
+// ==================== КОМПОНЕНТЫ ДЛЯ OVERVIEW ====================
 
 interface OverviewContentProps {
   insight: AIInsight
@@ -1155,6 +1232,7 @@ interface OverviewContentProps {
   prediction: AIInsight['predictions']
 }
 
+// ИЗМЕНЕНО: новая структура сетки
 function OverviewContent({
   insight,
   current,
@@ -1177,9 +1255,12 @@ function OverviewContent({
 }: OverviewContentProps) {
   return (
     <div className="space-y-6">
-      {/* Верхний ряд: AI + 3 метрики */}
+      {/* Верхний ряд: AI карточка + 3 метрики */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* AI карточка */}
         <AICard insight={insight} />
+        
+        {/* Три метрики */}
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
           <MetricCard
             label="Доход"
@@ -1211,7 +1292,7 @@ function OverviewContent({
         </div>
       </div>
 
-      {/* ✅ Средний ряд: ГРАФИК НА ВСЮ ШИРИНУ */}
+      {/* ИЗМЕНЕНО: Средний ряд - график на всю ширину */}
       <div className="w-full">
         <AdvancedChart
           data={chartData}
@@ -1222,16 +1303,43 @@ function OverviewContent({
         />
       </div>
 
-      {/* ✅ Нижний ряд: 4 карточки */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        <CategoryPieChart title="Структура доходов" data={topIncomeCategories} total={current.incomeTotal} icon={<TrendingUp className="w-4 h-4" />} color={COLORS.income} />
-        <CategoryPieChart title="Структура расходов" data={topExpenseCategories} total={current.expenseTotal} icon={<TrendingDown className="w-4 h-4" />} color={COLORS.expense} />
-        <AnomaliesCard anomalies={anomalies} isVisible={showAnomalies} onToggle={onToggleAnomalies} />
-        <FeedCard feedItems={feedItems} companyName={companyName} dateFrom={dateFrom} dateTo={dateTo} />
+      {/* ИЗМЕНЕНО: Нижний ряд - 4 карточки в ряд */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <CategoryPieChart
+          title="Структура доходов"
+          data={topIncomeCategories}
+          total={current.incomeTotal}
+          icon={<TrendingUp className="w-4 h-4" />}
+          color="#10b981"
+        />
+        <CategoryPieChart
+          title="Структура расходов"
+          data={topExpenseCategories}
+          total={current.expenseTotal}
+          icon={<TrendingDown className="w-4 h-4" />}
+          color="#ef4444"
+        />
+        <AnomaliesCard
+          anomalies={anomalies}
+          isVisible={showAnomalies}
+          onToggle={onToggleAnomalies}
+        />
+        <FeedCard
+          feedItems={feedItems}
+          companyName={companyName}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+        />
       </div>
 
-      {/* ✅ После нижнего ряда: прогноз НА ВСЮ ШИРИНУ (развернуто) */}
-      <PredictionCard prediction={prediction} currentProfit={current.profit} />
+      {/* ИЗМЕНЕНО: AI Прогноз на всю ширину внизу */}
+      <div className="w-full">
+        <PredictionCardFull
+          prediction={prediction}
+          currentProfit={current.profit}
+          insight={insight}
+        />
+      </div>
     </div>
   )
 }
@@ -1241,7 +1349,7 @@ function AICard({ insight }: { insight: AIInsight }) {
     <Card className="p-6 border-0 bg-gradient-to-br from-purple-900/30 via-gray-900 to-indigo-900/30 backdrop-blur-sm relative overflow-hidden group">
       <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
       <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500 rounded-full blur-3xl opacity-20" />
-
+      
       <div className="relative z-10">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 bg-purple-500/20 rounded-xl">
@@ -1251,7 +1359,9 @@ function AICard({ insight }: { insight: AIInsight }) {
         </div>
 
         <div className="mb-4">
-          <div className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-indigo-400 bg-clip-text text-transparent">{insight.score}</div>
+          <div className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-indigo-400 bg-clip-text text-transparent">
+            {insight.score}
+          </div>
           <div className="text-xs text-gray-500">из 100</div>
         </div>
 
@@ -1262,7 +1372,10 @@ function AICard({ insight }: { insight: AIInsight }) {
               <span className="text-purple-400 font-medium">{insight.margin.toFixed(1)}%</span>
             </div>
             <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-purple-400 to-indigo-400 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, insight.margin * 2)}%` }} />
+              <div 
+                className="h-full bg-gradient-to-r from-purple-400 to-indigo-400 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, insight.margin * 2)}%` }}
+              />
             </div>
           </div>
 
@@ -1272,7 +1385,10 @@ function AICard({ insight }: { insight: AIInsight }) {
               <span className="text-green-400 font-medium">{insight.efficiency.toFixed(2)}x</span>
             </div>
             <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, insight.efficiency * 30)}%` }} />
+              <div 
+                className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, insight.efficiency * 30)}%` }}
+              />
             </div>
           </div>
 
@@ -1286,15 +1402,15 @@ function AICard({ insight }: { insight: AIInsight }) {
   )
 }
 
-function MetricCard({
-  label,
-  value,
-  previousValue,
-  icon,
-  color,
-  isSelected,
-  onClick,
-}: {
+function MetricCard({ 
+  label, 
+  value, 
+  previousValue, 
+  icon, 
+  color, 
+  isSelected, 
+  onClick 
+}: { 
   label: string
   value: number
   previousValue: number
@@ -1307,18 +1423,27 @@ function MetricCard({
 
   return (
     <Card
-      className={`p-6 cursor-pointer transition-all border-0 bg-gray-800/50 backdrop-blur-sm hover:bg-gray-800/80 ${isSelected ? 'ring-2 ring-purple-500' : ''}`}
+      className={`p-6 cursor-pointer transition-all border-0 bg-gray-800/50 backdrop-blur-sm hover:bg-gray-800/80 ${
+        isSelected ? 'ring-2 ring-purple-500' : ''
+      }`}
       onClick={onClick}
     >
       <div className="flex items-center justify-between mb-4">
         <span className="text-sm text-gray-400">{label}</span>
-        <div className={`p-2 rounded-xl bg-gradient-to-br ${color} bg-opacity-20`}>{icon}</div>
+        <div className={`p-2 rounded-xl bg-gradient-to-br ${color} bg-opacity-20`}>
+          {icon}
+        </div>
       </div>
-
-      <div className="text-2xl font-bold text-white mb-2">{Formatters.money(value)}</div>
-
+      
+      {/* ИЗМЕНЕНО: полное отображение числа */}
+      <div className="text-2xl font-bold text-white mb-2 break-all">
+        {Formatters.moneyDetailed(value)}
+      </div>
+      
       <div className="flex items-center gap-2 text-xs">
-        <span className={change.isPositive ? 'text-green-400' : 'text-red-400'}>{change.value}</span>
+        <span className={change.isPositive ? 'text-green-400' : 'text-red-400'}>
+          {change.value}
+        </span>
         <span className="text-gray-500">к прошлому периоду</span>
       </div>
 
@@ -1332,23 +1457,29 @@ function MetricCard({
   )
 }
 
-function AdvancedChart({
-  data,
-  selectedMetric,
-  showPredictions,
-  anomalies,
-  onTogglePredictions,
-}: {
+function AdvancedChart({ data, selectedMetric, showPredictions, anomalies, onTogglePredictions }: {
   data: ChartPoint[]
   selectedMetric: 'income' | 'expense' | 'profit'
   showPredictions: boolean
   anomalies: AIInsight['anomalies']
   onTogglePredictions: () => void
 }) {
-  const metricColors = { income: COLORS.income, expense: COLORS.expense, profit: COLORS.profit }
-  const metricNames = { income: 'Доход', expense: 'Расход', profit: 'Прибыль' }
+  const metricColors = {
+    income: '#10b981',
+    expense: '#ef4444',
+    profit: '#8b5cf6'
+  }
 
-  const chartData = data.map(point => ({ ...point, formattedDate: DateUtils.formatDate(point.date) }))
+  const metricNames = {
+    income: 'Доход',
+    expense: 'Расход',
+    profit: 'Прибыль'
+  }
+
+  const chartData = data.map(point => ({
+    ...point,
+    formattedDate: DateUtils.formatDate(point.date)
+  }))
 
   return (
     <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
@@ -1358,19 +1489,28 @@ function AdvancedChart({
             <LineChart className="w-5 h-5 text-purple-400" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">Динамика {metricNames[selectedMetric].toLowerCase()}</h3>
+            <h3 className="text-sm font-semibold text-white">
+              Динамика {metricNames[selectedMetric].toLowerCase()}
+            </h3>
             <p className="text-xs text-gray-500">
               {data.length > 0 ? `с ${DateUtils.formatDate(data[0]?.date)} по ${DateUtils.formatDate(data[data.length - 1]?.date)}` : 'Нет данных'}
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onTogglePredictions} className="text-xs h-8 bg-gray-700/50 hover:bg-gray-700 text-gray-300">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onTogglePredictions}
+          className="text-xs h-8 bg-gray-700/50 hover:bg-gray-700 text-gray-300"
+        >
           {showPredictions ? 'Скрыть прогноз' : 'Показать прогноз'}
         </Button>
       </div>
 
       {data.length === 0 ? (
-        <div className="h-80 flex items-center justify-center text-gray-500">Нет данных за выбранный период</div>
+        <div className="h-80 flex items-center justify-center text-gray-500">
+          Нет данных за выбранный период
+        </div>
       ) : (
         <div className="h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -1383,9 +1523,26 @@ function AdvancedChart({
               </defs>
 
               <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="#374151" vertical={false} />
-              <XAxis dataKey="formattedDate" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-              <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => Formatters.moneyPlain(v)} />
-              <Tooltip {...Formatters.tooltip} formatter={(val: number) => [Formatters.money(val), '']} labelFormatter={(label: string) => label} />
+              <XAxis
+                dataKey="formattedDate"
+                stroke="#6b7280"
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                stroke="#6b7280"
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) => Formatters.moneyDetailed(v)}
+              />
+              <Tooltip
+                {...Formatters.tooltip}
+                formatter={(val: number) => [Formatters.moneyDetailed(val), '']}
+                labelFormatter={(label: string) => label}
+              />
               <Legend />
 
               <Area
@@ -1398,7 +1555,15 @@ function AdvancedChart({
                 fill={`url(#gradient-${selectedMetric})`}
               />
 
-              <Line type="monotone" dataKey="movingAvg" name="Среднее (7 дней)" stroke="#fbbf24" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+              <Line
+                type="monotone"
+                dataKey="movingAvg"
+                name="Среднее (7 дней)"
+                stroke="#fbbf24"
+                strokeWidth={2}
+                dot={false}
+                strokeDasharray="5 5"
+              />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -1407,7 +1572,13 @@ function AdvancedChart({
   )
 }
 
-function CategoryPieChart({ title, data, total, icon, color }: { title: string; data: CategoryData[]; total: number; icon: React.ReactNode; color: string }) {
+function CategoryPieChart({ title, data, total, icon, color }: {
+  title: string
+  data: CategoryData[]
+  total: number
+  icon: React.ReactNode
+  color: string
+}) {
   return (
     <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
       <div className="flex items-center gap-3 mb-4">
@@ -1418,31 +1589,44 @@ function CategoryPieChart({ title, data, total, icon, color }: { title: string; 
       </div>
 
       {data.length === 0 ? (
-        <div className="h-48 flex items-center justify-center text-gray-500">Нет данных</div>
+        <div className="h-48 flex items-center justify-center text-gray-500">
+          Нет данных
+        </div>
       ) : (
         <div className="space-y-4">
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <RePieChart>
-                <Pie data={data} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} dataKey="value">
+                <Pie
+                  data={data}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
                   {data.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => [Formatters.money(value), '']} contentStyle={Formatters.tooltip.contentStyle} />
+                <Tooltip
+                  formatter={(value: number) => [Formatters.moneyDetailed(value), '']}
+                  contentStyle={Formatters.tooltip.contentStyle}
+                />
               </RePieChart>
             </ResponsiveContainer>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-32 overflow-auto">
             {data.map((item, index) => (
               <div key={index} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-gray-400 truncate max-w-[140px]">{item.name}</span>
+                  <span className="text-gray-400 truncate max-w-[100px]">{item.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-white font-medium">{Formatters.money(item.value)}</span>
+                  <span className="text-white font-medium">{Formatters.moneyDetailed(item.value)}</span>
                   <span className="text-gray-500">({item.percentage.toFixed(1)}%)</span>
                 </div>
               </div>
@@ -1452,7 +1636,7 @@ function CategoryPieChart({ title, data, total, icon, color }: { title: string; 
           <div className="pt-2 border-t border-gray-700">
             <div className="flex justify-between text-xs">
               <span className="text-gray-400">Всего</span>
-              <span className="text-white font-medium">{Formatters.money(total)}</span>
+              <span className="text-white font-medium">{Formatters.moneyDetailed(total)}</span>
             </div>
           </div>
         </div>
@@ -1461,77 +1645,136 @@ function CategoryPieChart({ title, data, total, icon, color }: { title: string; 
   )
 }
 
-function PredictionCard({ prediction, currentProfit }: { prediction: AIInsight['predictions']; currentProfit: number }) {
+// ИЗМЕНЕНО: новый компонент полноразмерного прогноза
+function PredictionCardFull({ prediction, currentProfit, insight }: { 
+  prediction: AIInsight['predictions']
+  currentProfit: number
+  insight: AIInsight
+}) {
   const change = prediction.nextMonthProfit - currentProfit
   const changePercent = currentProfit ? (change / Math.abs(currentProfit)) * 100 : 0
 
   return (
     <Card className="p-6 border-0 bg-gradient-to-br from-blue-900/30 via-gray-900 to-purple-900/30 backdrop-blur-sm">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-blue-500/20 rounded-xl">
-          <Sparkles className="w-5 h-5 text-blue-400" />
-        </div>
-        <div className="flex-1">
-          <h3 className="text-sm font-semibold text-white">AI Прогноз на месяц</h3>
-          <p className="text-xs text-gray-500">Развернутый прогноз и оценка достоверности</p>
-        </div>
-        <div className={`px-3 py-1.5 rounded-xl text-xs font-medium border ${prediction.confidence > 70 ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'}`}>
-          Доверие: {prediction.confidence}%
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
+        {/* Левая часть - основной прогноз */}
+        <div className="lg:col-span-1 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-500/20 rounded-xl">
+              <Sparkles className="w-5 h-5 text-blue-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-white">AI Прогноз на месяц</h3>
+          </div>
+
           <div>
             <p className="text-xs text-gray-400 mb-1">Ожидаемая прибыль</p>
-            <p className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">{Formatters.money(prediction.nextMonthProfit)}</p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className={`px-3 py-1.5 rounded-xl text-xs font-medium ${change >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-              {change >= 0 ? '↗ Рост' : '↘ Снижение'}: {Formatters.money(Math.abs(change))} ({Math.abs(changePercent).toFixed(1)}%)
-            </div>
-            <div className="px-3 py-1.5 rounded-xl text-xs bg-gray-800/60 border border-gray-700 text-gray-300">
-              {prediction.recommendation}
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-gray-700">
-            <p className="text-xs text-gray-400 mb-2">Что делать прямо сейчас</p>
-            <ul className="text-sm text-gray-300 space-y-1.5 list-disc pl-5">
-              <li>Сфокусируйся на росте среднего чека: комбо/апсейл/доп. услуги.</li>
-              <li>Контроль расходов: топ-3 статьи, лимиты, согласование.</li>
-              <li>Смотри аномалии: там обычно “дырка” или “золотая жила”.</li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-gray-900/40 border border-gray-700">
-            <p className="text-xs text-gray-400 mb-2">Достоверность прогноза</p>
-            <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-blue-400 to-purple-400 rounded-full transition-all duration-500" style={{ width: `${Math.max(0, Math.min(100, prediction.confidence))}%` }} />
-            </div>
-            <p className="text-[11px] text-gray-500 mt-2">
-              Чем больше данных и стабильнее период — тем честнее прогноз. Если доверие низкое, это не “ошибка”, это “мало истории”.
+            <p className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+              {Formatters.moneyDetailed(prediction.nextMonthProfit)}
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-gray-900/40 border border-gray-700">
-            <p className="text-xs text-gray-400 mb-2">Ориентир</p>
-            <div className="text-sm text-gray-300 space-y-2">
-              <div className="flex justify-between">
-                <span>Текущая прибыль</span>
-                <span className="font-medium text-white">{Formatters.money(currentProfit)}</span>
+          <div className="flex items-center gap-3">
+            <div className={`px-3 py-1 rounded-lg text-sm font-medium ${
+              change >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+            }`}>
+              {change >= 0 ? '↗' : '↘'} {Math.abs(changePercent).toFixed(1)}%
+            </div>
+            <span className="text-xs text-gray-500">от текущей прибыли</span>
+          </div>
+
+          <div className="pt-4 border-t border-gray-700">
+            <div className="flex justify-between text-xs mb-2">
+              <span className="text-gray-400">Достоверность прогноза</span>
+              <span className={prediction.confidence > 70 ? 'text-green-400' : 'text-yellow-400'}>
+                {prediction.confidence}%
+              </span>
+            </div>
+            <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-blue-400 to-purple-400 rounded-full transition-all duration-500"
+                style={{ width: `${prediction.confidence}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              {prediction.recommendation}
+            </p>
+          </div>
+        </div>
+
+        {/* Средняя часть - тренды */}
+        <div className="lg:col-span-1 space-y-4 border-l border-r border-gray-800 px-6">
+          <h4 className="text-sm font-medium text-gray-300">Текущие тренды</h4>
+          
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-xl">
+              <span className="text-sm text-gray-400">Доходы</span>
+              <div className="flex items-center gap-2">
+                {Formatters.trendIcon(insight.trends.income)}
+                <span className={insight.trends.income === 'up' ? 'text-green-400' : insight.trends.income === 'down' ? 'text-red-400' : 'text-gray-400'}>
+                  {insight.trends.income === 'up' ? 'Растут' : insight.trends.income === 'down' ? 'Падают' : 'Стабильны'}
+                </span>
               </div>
-              <div className="flex justify-between">
-                <span>Прогноз</span>
-                <span className="font-medium text-white">{Formatters.money(prediction.nextMonthProfit)}</span>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-xl">
+              <span className="text-sm text-gray-400">Расходы</span>
+              <div className="flex items-center gap-2">
+                {Formatters.trendIcon(insight.trends.expense)}
+                <span className={insight.trends.expense === 'up' ? 'text-red-400' : insight.trends.expense === 'down' ? 'text-green-400' : 'text-gray-400'}>
+                  {insight.trends.expense === 'up' ? 'Растут' : insight.trends.expense === 'down' ? 'Падают' : 'Стабильны'}
+                </span>
               </div>
-              <div className="flex justify-between">
-                <span>Разница</span>
-                <span className={`font-medium ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>{Formatters.money(change)}</span>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-xl">
+              <span className="text-sm text-gray-400">Прибыль</span>
+              <div className="flex items-center gap-2">
+                {Formatters.trendIcon(insight.trends.profit)}
+                <span className={insight.trends.profit === 'up' ? 'text-green-400' : insight.trends.profit === 'down' ? 'text-red-400' : 'text-gray-400'}>
+                  {insight.trends.profit === 'up' ? 'Растет' : insight.trends.profit === 'down' ? 'Падает' : 'Стабильна'}
+                </span>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Правая часть - рекомендации */}
+        <div className="lg:col-span-1 space-y-4">
+          <h4 className="text-sm font-medium text-gray-300">Рекомендации AI</h4>
+          <div className="space-y-3">
+            <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+              <div className="flex items-center gap-2 mb-1">
+                <Target className="w-4 h-4 text-purple-400" />
+                <span className="text-sm font-medium text-white">Маржинальность</span>
+              </div>
+              <p className="text-xs text-gray-400">
+                {insight.margin < 20 
+                  ? 'Увеличьте маржу. Анализируйте ценообразование.' 
+                  : 'Маржа на хорошем уровне. Поддерживайте текущую стратегию.'}
+              </p>
+            </div>
+
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+              <div className="flex items-center gap-2 mb-1">
+                <Zap className="w-4 h-4 text-blue-400" />
+                <span className="text-sm font-medium text-white">Эффективность</span>
+              </div>
+              <p className="text-xs text-gray-400">
+                Коэффициент эффективности {insight.efficiency.toFixed(2)}x. 
+                {insight.efficiency < 1.5 ? ' Расходы слишком высоки относительно доходов.' : ' Хорошее соотношение доходов и расходов.'}
+              </p>
+            </div>
+
+            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="w-4 h-4 text-green-400" />
+                <span className="text-sm font-medium text-white">Рост</span>
+              </div>
+              <p className="text-xs text-gray-400">
+                {insight.benchmarks.vsLastWeek > 0 
+                  ? `Прибыль выросла на ${Formatters.moneyDetailed(insight.benchmarks.vsLastWeek)} по сравнению с прошлой неделей.`
+                  : `Прибыль снизилась на ${Formatters.moneyDetailed(Math.abs(insight.benchmarks.vsLastWeek))} по сравнению с прошлой неделей.`}
+              </p>
             </div>
           </div>
         </div>
@@ -1540,12 +1783,16 @@ function PredictionCard({ prediction, currentProfit }: { prediction: AIInsight['
   )
 }
 
-function AnomaliesCard({ anomalies, isVisible, onToggle }: { anomalies: AIInsight['anomalies']; isVisible: boolean; onToggle: () => void }) {
+function AnomaliesCard({ anomalies, isVisible, onToggle }: { 
+  anomalies: AIInsight['anomalies']
+  isVisible: boolean
+  onToggle: () => void
+}) {
   const severityColors = {
     high: 'bg-red-500/20 border-red-500/30 text-red-400',
     medium: 'bg-orange-500/20 border-orange-500/30 text-orange-400',
     low: 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400',
-  } as const
+  }
 
   return (
     <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
@@ -1555,15 +1802,24 @@ function AnomaliesCard({ anomalies, isVisible, onToggle }: { anomalies: AIInsigh
             <AlertTriangle className="w-5 h-5 text-yellow-400" />
           </div>
           <h3 className="text-sm font-semibold text-white">Аномалии</h3>
-          {anomalies.length > 0 && <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full">{anomalies.length}</span>}
+          {anomalies.length > 0 && (
+            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full">
+              {anomalies.length}
+            </span>
+          )}
         </div>
-        <Button variant="ghost" size="sm" onClick={onToggle} className="text-xs h-7 bg-gray-700/50 hover:bg-gray-700 text-gray-300">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={onToggle}
+          className="text-xs h-7 bg-gray-700/50 hover:bg-gray-700 text-gray-300"
+        >
           {isVisible ? 'Скрыть' : 'Показать'}
         </Button>
       </div>
 
       {isVisible && (
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-64 overflow-auto">
           {anomalies.length === 0 ? (
             <div className="text-center py-8">
               <CheckCircle2 className="w-12 h-12 text-green-500/50 mx-auto mb-2" />
@@ -1572,17 +1828,22 @@ function AnomaliesCard({ anomalies, isVisible, onToggle }: { anomalies: AIInsigh
             </div>
           ) : (
             anomalies.map((anomaly, i) => (
-              <div key={i} className={`p-4 rounded-xl border ${severityColors[anomaly.severity]}`}>
-                <div className="flex items-center justify-between mb-2">
+              <div
+                key={i}
+                className={`p-3 rounded-xl border ${severityColors[anomaly.severity]}`}
+              >
+                <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-medium flex items-center gap-1">
                     {anomaly.type === 'spike' ? '📈 Всплеск' : '📉 Падение'}
                     <span className="text-[10px] opacity-75 ml-1">
                       ({anomaly.severity === 'high' ? 'высокий' : anomaly.severity === 'medium' ? 'средний' : 'низкий'} риск)
                     </span>
                   </span>
-                  <span className="text-[10px] opacity-75">{DateUtils.getRelativeDay(anomaly.date)}</span>
+                  <span className="text-[10px] opacity-75">
+                    {DateUtils.getRelativeDay(anomaly.date)}
+                  </span>
                 </div>
-                <p className="text-sm">{anomaly.description}</p>
+                <p className="text-xs">{anomaly.description}</p>
               </div>
             ))
           )}
@@ -1592,7 +1853,12 @@ function AnomaliesCard({ anomalies, isVisible, onToggle }: { anomalies: AIInsigh
   )
 }
 
-function FeedCard({ feedItems, companyName, dateFrom, dateTo }: { feedItems: FeedItem[]; companyName: (id: string) => string; dateFrom: string; dateTo: string }) {
+function FeedCard({ feedItems, companyName, dateFrom, dateTo }: {
+  feedItems: FeedItem[]
+  companyName: (id: string) => string
+  dateFrom: string
+  dateTo: string
+}) {
   return (
     <Card className="p-0 border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden flex flex-col">
       <div className="p-4 border-b border-gray-700">
@@ -1604,7 +1870,11 @@ function FeedCard({ feedItems, companyName, dateFrom, dateTo }: { feedItems: Fee
             <h3 className="text-sm font-semibold text-white">Лента событий</h3>
             <p className="text-xs text-gray-500">Последние операции</p>
           </div>
-          {feedItems.length > 0 && <span className="ml-auto px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-full">{feedItems.length}</span>}
+          {feedItems.length > 0 && (
+            <span className="ml-auto px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+              {feedItems.length}
+            </span>
+          )}
         </div>
       </div>
 
@@ -1614,13 +1884,23 @@ function FeedCard({ feedItems, companyName, dateFrom, dateTo }: { feedItems: Fee
             <p className="text-sm text-gray-500">Нет операций</p>
           </div>
         ) : (
-          feedItems.map(op => <FeedItemRow key={op.id} item={op} companyName={companyName(op.company_id)} />)
+          feedItems.map((op) => (
+            <FeedItemRow
+              key={op.id}
+              item={op}
+              companyName={companyName(op.company_id)}
+            />
+          ))
         )}
       </div>
 
       <div className="p-3 border-t border-gray-700 bg-gray-900/50">
         <Link href={`/income?from=${dateFrom}&to=${dateTo}`}>
-          <Button variant="ghost" size="sm" className="w-full text-xs h-8 text-gray-400 hover:text-white hover:bg-gray-700 group">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-xs h-8 text-gray-400 hover:text-white hover:bg-gray-700 group"
+          >
             Все операции
             <ArrowRight className="w-3 h-3 ml-1 group-hover:translate-x-0.5 transition-transform" />
           </Button>
@@ -1632,62 +1912,84 @@ function FeedCard({ feedItems, companyName, dateFrom, dateTo }: { feedItems: Fee
 
 function FeedItemRow({ item, companyName }: { item: FeedItem; companyName: string }) {
   const isIncome = item.kind === 'income'
-
+  
   return (
-    <div
-      className={`group flex items-center justify-between p-3 rounded-xl transition-all ${
-        item.isAnomaly ? 'bg-yellow-500/10 hover:bg-yellow-500/15 border border-yellow-500/20' : 'hover:bg-gray-700/50'
-      }`}
-    >
+    <div className={`group flex items-center justify-between p-3 rounded-xl transition-all ${
+      item.isAnomaly 
+        ? 'bg-yellow-500/10 hover:bg-yellow-500/15 border border-yellow-500/20' 
+        : 'hover:bg-gray-700/50'
+    }`}>
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <div className="relative">
-          <div className={`w-2.5 h-2.5 rounded-full ${isIncome ? 'bg-green-500 shadow-lg shadow-green-500/25' : 'bg-red-500 shadow-lg shadow-red-500/25'}`} />
-          {item.isAnomaly && <AlertTriangle className="w-3 h-3 text-yellow-400 absolute -top-1 -right-2" />}
+          <div
+            className={`w-2.5 h-2.5 rounded-full ${
+              isIncome
+                ? 'bg-green-500 shadow-lg shadow-green-500/25'
+                : 'bg-red-500 shadow-lg shadow-red-500/25'
+            }`}
+          />
+          {item.isAnomaly && (
+            <AlertTriangle className="w-3 h-3 text-yellow-400 absolute -top-1 -right-2" />
+          )}
         </div>
-
+        
         <div className="flex flex-col min-w-0">
-          <span className="text-xs font-medium text-white truncate">{item.title}</span>
+          <span className="text-xs font-medium text-white truncate">
+            {item.title}
+          </span>
           <span className="text-[10px] text-gray-500 truncate">
             {companyName} • {DateUtils.getRelativeDay(item.date)}
           </span>
         </div>
       </div>
 
-      <span className={`text-xs font-bold font-mono whitespace-nowrap ml-2 ${isIncome ? 'text-green-400' : 'text-red-400'}`}>
+      <span
+        className={`text-xs font-bold font-mono whitespace-nowrap ml-2 ${
+          isIncome ? 'text-green-400' : 'text-red-400'
+        }`}
+      >
         {isIncome ? '+' : '-'}
-        {Formatters.money(item.amount)}
+        {Formatters.moneyDetailed(item.amount)}
       </span>
     </div>
   )
 }
 
-// ==================== DETAILS ====================
+// ==================== КОМПОНЕНТЫ ДЛЯ DETAILS ====================
 
-function DetailsView({
-  current,
-  previous,
-  topIncomeCategories,
-  topExpenseCategories,
-  chartData,
-}: {
+function DetailsView({ current, previous, topIncomeCategories, topExpenseCategories, chartData }: {
   current: FinancialTotals
   previous: FinancialTotals
   topIncomeCategories: CategoryData[]
   topExpenseCategories: CategoryData[]
   chartData: ChartPoint[]
 }) {
+  // ИЗМЕНЕНО: добавлен online в статистику
   const paymentStats = [
-    { name: 'Наличные', value: current.incomeCash, color: COLORS.cash },
-    { name: 'Kaspi', value: current.incomeKaspi, color: COLORS.kaspi },
-    { name: 'Карта', value: current.incomeCard, color: COLORS.card },
-    { name: 'Online', value: current.incomeOnline, color: COLORS.online },
+    { name: 'Наличные', value: current.incomeCash, color: '#f59e0b' },
+    { name: 'Kaspi', value: current.incomeKaspi, color: '#2563eb' },
+    { name: 'Карта', value: current.incomeCard, color: '#7c3aed' },
+    { name: 'Онлайн', value: current.incomeOnline, color: '#ec4899' },
   ]
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Транзакции (доход)" value={current.incomeTxCount || 0} previousValue={previous.incomeTxCount || 0} icon={<Activity className="w-4 h-4" />} color="from-purple-500 to-indigo-500" />
-        <StatCard label="Средний чек" value={current.avgCheck || 0} previousValue={previous.avgCheck || 0} icon={<DollarSign className="w-4 h-4" />} color="from-green-500 to-emerald-500" isMoney />
+        <StatCard
+          label="Всего транзакций"
+          value={current.transactionsCount || 0}
+          previousValue={previous.transactionsCount || 0}
+          icon={<Activity className="w-4 h-4" />}
+          color="from-purple-500 to-indigo-500"
+        />
+        <StatCard
+          label="Средний чек"
+          value={current.avgCheck || 0}
+          previousValue={previous.avgCheck || 0}
+          icon={<DollarSign className="w-4 h-4" />}
+          color="from-green-500 to-emerald-500"
+          isMoney
+        />
         <StatCard
           label="Нал vs Безнал"
           value={current.incomeCash}
@@ -1696,7 +1998,14 @@ function DetailsView({
           color="from-blue-500 to-cyan-500"
           isComparison
         />
-        <StatCard label="Online доход" value={current.incomeOnline} previousValue={previous.incomeOnline} icon={<Globe className="w-4 h-4" />} color="from-cyan-500 to-blue-500" isMoney />
+        <StatCard
+          label="Онлайн платежи"
+          value={current.incomeOnline}
+          previousValue={previous.incomeOnline}
+          icon={<Globe className="w-4 h-4" />}
+          color="from-pink-500 to-rose-500"
+          isMoney
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1707,8 +2016,8 @@ function DetailsView({
               <BarChart data={paymentStats}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.1} stroke="#374151" />
                 <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
-                <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.moneyPlain(v)} />
-                <Tooltip formatter={(v: number) => Formatters.money(v)} />
+                <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.moneyDetailed(v)} />
+                <Tooltip formatter={(v: number) => Formatters.moneyDetailed(v)} />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {paymentStats.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1722,14 +2031,24 @@ function DetailsView({
         <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
           <h3 className="text-sm font-semibold text-white mb-4">Ключевые показатели</h3>
           <div className="space-y-4">
-            <KeyMetric label="Рентабельность" value={current.incomeTotal ? (current.profit / current.incomeTotal) * 100 : 0} unit="%" target={20} />
+            <KeyMetric
+              label="Рентабельность"
+              value={current.incomeTotal ? (current.profit / current.incomeTotal) * 100 : 0}
+              unit="%"
+              target={20}
+            />
             <KeyMetric
               label="Доля безнала"
               value={current.incomeTotal ? ((current.incomeKaspi + current.incomeCard + current.incomeOnline) / current.incomeTotal) * 100 : 0}
               unit="%"
               target={50}
             />
-            <KeyMetric label="Соотношение доход/расход" value={current.expenseTotal ? current.incomeTotal / current.expenseTotal : 0} unit="x" target={1.5} />
+            <KeyMetric
+              label="Соотношение доход/расход"
+              value={current.expenseTotal ? current.incomeTotal / current.expenseTotal : 0}
+              unit="x"
+              target={1.5}
+            />
           </div>
         </Card>
       </div>
@@ -1737,16 +2056,7 @@ function DetailsView({
   )
 }
 
-function StatCard({
-  label,
-  value,
-  previousValue,
-  secondaryValue,
-  icon,
-  color,
-  isMoney = false,
-  isComparison = false,
-}: {
+function StatCard({ label, value, previousValue, secondaryValue, icon, color, isMoney = false, isComparison = false }: {
   label: string
   value: number
   previousValue?: number
@@ -1756,32 +2066,38 @@ function StatCard({
   isMoney?: boolean
   isComparison?: boolean
 }) {
-  const change = previousValue ? ((value - previousValue) / (previousValue || 1)) * 100 : 0
+  const change = previousValue ? ((value - previousValue) / previousValue) * 100 : 0
 
   return (
     <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
       <div className="flex items-center gap-2 mb-3">
-        <div className={`p-1.5 rounded-lg bg-gradient-to-br ${color} bg-opacity-20`}>{icon}</div>
+        <div className={`p-1.5 rounded-lg bg-gradient-to-br ${color} bg-opacity-20`}>
+          {icon}
+        </div>
         <span className="text-xs text-gray-400">{label}</span>
       </div>
-
+      
       {isComparison ? (
         <div className="space-y-1">
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Нал:</span>
-            <span className="text-white font-medium">{Formatters.money(value)}</span>
+            <span className="text-white font-medium">{Formatters.moneyDetailed(value)}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Безнал:</span>
-            <span className="text-white font-medium">{Formatters.money(secondaryValue || 0)}</span>
+            <span className="text-white font-medium">{Formatters.moneyDetailed(secondaryValue || 0)}</span>
           </div>
         </div>
       ) : (
         <>
-          <div className="text-xl font-bold text-white">{isMoney ? Formatters.money(value) : value.toLocaleString('ru-RU')}</div>
+          <div className="text-xl font-bold text-white">
+            {isMoney ? Formatters.moneyDetailed(value) : value.toLocaleString()}
+          </div>
           {previousValue !== undefined && (
             <div className="flex items-center gap-1 mt-1 text-xs">
-              <span className={change >= 0 ? 'text-green-400' : 'text-red-400'}>{change >= 0 ? '+' : ''}{change.toFixed(1)}%</span>
+              <span className={change >= 0 ? 'text-green-400' : 'text-red-400'}>
+                {change >= 0 ? '+' : ''}{change.toFixed(1)}%
+              </span>
               <span className="text-gray-500">к прошлому</span>
             </div>
           )}
@@ -1792,7 +2108,7 @@ function StatCard({
 }
 
 function KeyMetric({ label, value, unit, target }: { label: string; value: number; unit: string; target: number }) {
-  const percentage = Math.min(100, target ? (value / target) * 100 : 0)
+  const percentage = Math.min(100, (value / target) * 100)
   const isGood = value >= target
 
   return (
@@ -1800,21 +2116,31 @@ function KeyMetric({ label, value, unit, target }: { label: string; value: numbe
       <div className="flex justify-between text-sm mb-1">
         <span className="text-gray-400">{label}</span>
         <span className={isGood ? 'text-green-400' : 'text-yellow-400'}>
-          {value.toFixed(1)}
-          {unit}
+          {value.toFixed(1)}{unit}
         </span>
       </div>
       <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-500 ${isGood ? 'bg-gradient-to-r from-green-400 to-emerald-400' : 'bg-gradient-to-r from-yellow-400 to-orange-400'}`} style={{ width: `${percentage}%` }} />
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${
+            isGood ? 'bg-gradient-to-r from-green-400 to-emerald-400' : 'bg-gradient-to-r from-yellow-400 to-orange-400'
+          }`}
+          style={{ width: `${percentage}%` }}
+        />
       </div>
       <div className="text-[10px] text-gray-500 mt-1">Цель: {target}{unit}</div>
     </div>
   )
 }
 
-// ==================== FORECAST ====================
+// ==================== КОМПОНЕНТЫ ДЛЯ FORECAST ====================
 
-function ForecastView({ prediction, chartData, trends, margin, efficiency }: { prediction: AIInsight['predictions']; chartData: ChartPoint[]; trends: AIInsight['trends']; margin: number; efficiency: number }) {
+function ForecastView({ prediction, chartData, trends, margin, efficiency }: {
+  prediction: AIInsight['predictions']
+  chartData: ChartPoint[]
+  trends: AIInsight['trends']
+  margin: number
+  efficiency: number
+}) {
   const lastWeekProfit = chartData.slice(-7).reduce((sum, d) => sum + d.profit, 0)
   const prevWeekProfit = chartData.slice(-14, -7).reduce((sum, d) => sum + d.profit, 0)
   const weeklyGrowth = prevWeekProfit ? ((lastWeekProfit - prevWeekProfit) / prevWeekProfit) * 100 : 0
@@ -1834,16 +2160,41 @@ function ForecastView({ prediction, chartData, trends, margin, efficiency }: { p
           icon={weeklyGrowth > 0 ? <TrendUpIcon className="w-5 h-5" /> : <TrendDownIcon className="w-5 h-5" />}
           color={weeklyGrowth > 0 ? 'text-green-400' : 'text-red-400'}
         />
-        <ForecastCard title="Прогноз на месяц" value={Formatters.money(prediction.nextMonthProfit)} icon={<Sparkles className="w-5 h-5" />} color="text-purple-400" />
+        <ForecastCard
+          title="Прогноз на месяц"
+          value={Formatters.moneyDetailed(prediction.nextMonthProfit)}
+          icon={<Sparkles className="w-5 h-5" />}
+          color="text-purple-400"
+        />
       </div>
 
       <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
         <h3 className="text-sm font-semibold text-white mb-4">Рекомендации по улучшению</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <RecommendationCard title="Увеличьте маржинальность" description={`Текущая маржа ${margin.toFixed(1)}%. Целевой показатель 25%`} impact="+15% к прибыли" icon={<Target className="w-4 h-4" />} />
-          <RecommendationCard title="Повысьте эффективность" description={`Коэффициент ${efficiency.toFixed(2)}x. Можно улучшить до 2x`} impact="+20% к ROI" icon={<Zap className="w-4 h-4" />} />
-          <RecommendationCard title="Оптимизируйте расходы" description={trends.expense === 'up' ? 'Расходы растут быстрее доходов' : 'Контролируйте основные статьи'} impact="-10% расходов" icon={<TrendingDown className="w-4 h-4" />} />
-          <RecommendationCard title="Работа с клиентами" description="Увеличьте частоту повторных продаж" impact="+25% LTV" icon={<Rocket className="w-4 h-4" />} />
+          <RecommendationCard
+            title="Увеличьте маржинальность"
+            description={`Текущая маржа ${margin.toFixed(1)}%. Целевой показатель 25%`}
+            impact="+15% к прибыли"
+            icon={<Target className="w-4 h-4" />}
+          />
+          <RecommendationCard
+            title="Повысьте эффективность"
+            description={`Коэффициент ${efficiency.toFixed(2)}x. Можно улучшить до 2x`}
+            impact="+20% к ROI"
+            icon={<Zap className="w-4 h-4" />}
+          />
+          <RecommendationCard
+            title="Оптимизируйте расходы"
+            description={trends.expense === 'up' ? 'Расходы растут быстрее доходов' : 'Контролируйте основные статьи'}
+            impact="-10% расходов"
+            icon={<TrendingDown className="w-4 h-4" />}
+          />
+          <RecommendationCard
+            title="Работа с клиентами"
+            description="Увеличьте частоту повторных продаж"
+            impact="+25% LTV"
+            icon={<Activity className="w-4 h-4" />}
+          />
         </div>
       </Card>
     </div>
@@ -1854,7 +2205,9 @@ function ForecastCard({ title, value, icon, color }: { title: string; value: str
   return (
     <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
       <div className="flex items-center gap-3 mb-2">
-        <div className="p-2 bg-gray-700/50 rounded-lg">{icon}</div>
+        <div className="p-2 bg-gray-700/50 rounded-lg">
+          {icon}
+        </div>
         <span className="text-xs text-gray-400">{title}</span>
       </div>
       <div className={`text-lg font-bold ${color}`}>{value}</div>
@@ -1866,7 +2219,9 @@ function RecommendationCard({ title, description, impact, icon }: { title: strin
   return (
     <div className="p-4 bg-gray-700/30 rounded-xl border border-gray-700 hover:border-purple-500/30 transition-colors">
       <div className="flex items-center gap-2 mb-2">
-        <div className="p-1.5 bg-purple-500/20 rounded-lg">{icon}</div>
+        <div className="p-1.5 bg-purple-500/20 rounded-lg">
+          {icon}
+        </div>
         <h4 className="text-sm font-medium text-white">{title}</h4>
       </div>
       <p className="text-xs text-gray-400 mb-2">{description}</p>
