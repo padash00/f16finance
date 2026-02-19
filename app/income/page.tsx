@@ -23,6 +23,12 @@ import {
   TrendingUp,
   Check,
   Pencil,
+  Wallet,
+  Globe,
+  Sparkles,
+  Calendar,
+  ChevronDown,
+  ArrowRight,
 } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -79,11 +85,21 @@ const addDaysISO = (iso: string, diff: number) => {
 
 const formatMoney = (v: number | null | undefined) => (v ?? 0).toLocaleString('ru-RU')
 
+const formatMoneyDetailed = (v: number | null | undefined) => 
+  (v ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })
+
 const formatDate = (value: string) => {
   if (!value) return ''
   const d = parseISODateSafe(value)
   if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+const formatDateShort = (value: string) => {
+  if (!value) return ''
+  const d = parseISODateSafe(value)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 }
 
 const formatIsoToRu = (iso: string | '') => {
@@ -119,6 +135,14 @@ const parseMoneyInput = (raw: string): number | null => {
   return Math.max(0, n)
 }
 
+// Цвета для способов оплаты
+const PAYMENT_COLORS = {
+  cash: '#f59e0b',
+  kaspi: '#2563eb',
+  card: '#7c3aed',
+  online: '#ec4899',
+}
+
 export default function IncomePage() {
   const LIMIT = 2000
 
@@ -134,6 +158,7 @@ export default function IncomePage() {
   const [dateFrom, setDateFrom] = useState(todayISO())
   const [dateTo, setDateTo] = useState(todayISO())
   const [activePreset, setActivePreset] = useState<DateRangePreset | null>('today')
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
 
   const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
   const [operatorFilter, setOperatorFilter] = useState<OperatorFilter>('all')
@@ -150,7 +175,6 @@ export default function IncomePage() {
   const [onlineDraft, setOnlineDraft] = useState<string>('')
   const [savingOnlineId, setSavingOnlineId] = useState<string | null>(null)
   
-  // Ref для предотвращения сохранения при Escape/кнопках
   const skipBlurSaveRef = useRef(false)
 
   // 1) Рефы
@@ -339,36 +363,32 @@ export default function IncomePage() {
     return out
   }, [filteredRows, extraCompanyId])
 
-  // ✅ ИСПРАВЛЕННОЕ сохранение Online в Supabase (с защитой от stale row)
+  // ✅ ИСПРАВЛЕННОЕ сохранение Online в Supabase
   const saveOnlineAmount = useCallback(async (row: IncomeRow, nextValue: number | null) => {
     if (String(row.id).startsWith('extra-')) return
 
     setSavingOnlineId(row.id)
 
-    // ✅ актуальное значение из state (защита от stale row)
     const current = rows.find((x) => x.id === row.id)
     const prev = current?.online_amount ?? null
 
-    // ✅ защита от одинакового значения
     if (prev === (nextValue ?? null)) {
       setSavingOnlineId(null)
       return
     }
 
-    // optimistic
     setRows((curr) => curr.map((x) => (x.id === row.id ? { ...x, online_amount: nextValue } : x)))
 
     const { error } = await supabase.from('incomes').update({ online_amount: nextValue }).eq('id', row.id)
 
     if (error) {
       console.error('Update online_amount error:', error)
-      // rollback
       setRows((curr) => curr.map((x) => (x.id === row.id ? { ...x, online_amount: prev } : x)))
       setError('Не удалось сохранить Online. Проверьте соединение/права.')
     }
 
     setSavingOnlineId(null)
-  }, [rows]) // ✅ добавлена зависимость rows
+  }, [rows])
 
   // Итоги + аналитика
   const analytics = useMemo(() => {
@@ -381,6 +401,12 @@ export default function IncomePage() {
 
     const byOperator: Record<string, number> = {}
     const byZone: Record<string, number> = {}
+    const byPayment: Record<string, number> = {
+      cash: 0,
+      kaspi: 0,
+      online: 0,
+      card: 0,
+    }
 
     for (const r of displayRows) {
       if (companyFilter === 'all' && !includeExtraInTotals && isExtraRow(r)) continue
@@ -395,6 +421,11 @@ export default function IncomePage() {
       kaspi += rowKaspi
       online += rowOnline
       card += rowCard
+
+      byPayment.cash += rowCash
+      byPayment.kaspi += rowKaspi
+      byPayment.online += rowOnline
+      byPayment.card += rowCard
 
       if (r.shift === 'day') dayTotal += rowTotal
       else nightTotal += rowTotal
@@ -421,6 +452,9 @@ export default function IncomePage() {
       avg,
       dayTotal,
       nightTotal,
+      byPayment,
+      onlineShare: total > 0 ? (online / total) * 100 : 0,
+      cashlessShare: total > 0 ? ((kaspi + card + online) / total) * 100 : 0,
       topOperatorName: topOperator[0],
       topOperatorAmount: topOperator[1],
       topZoneName: topZone[0],
@@ -449,6 +483,7 @@ export default function IncomePage() {
       setDateFrom('')
       setDateTo('')
     }
+    setIsCalendarOpen(false)
   }
 
   const handleDateFromChange = (value: string) => {
@@ -474,7 +509,7 @@ export default function IncomePage() {
     setHideExtraRows(false)
   }
 
-  // Экспорт (то, что видно в таблице)
+  // Экспорт
   const downloadCSV = () => {
     const SEP = ';'
 
@@ -524,248 +559,290 @@ export default function IncomePage() {
     link.click()
   }
 
-  const periodLabel = dateFrom || dateTo ? `${formatIsoToRu(dateFrom)} — ${formatIsoToRu(dateTo)}` : 'Весь период'
+  const periodLabel = dateFrom || dateTo ? `${formatDateShort(dateFrom)} — ${formatDateShort(dateTo)}` : 'Весь период'
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-auto">
-        <div className="p-8 space-y-6">
+        <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
           {/* Шапка */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">Журнал доходов</h1>
-              <p className="text-muted-foreground mt-1 text-sm">История операций и анализ по фильтрам</p>
-            </div>
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 p-6 border border-purple-500/20">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
+            
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-purple-500/20 rounded-xl">
+                  <Wallet className="w-8 h-8 text-purple-400" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                    Журнал доходов
+                  </h1>
+                  <p className="text-gray-400 text-sm mt-1">История операций и аналитика</p>
+                </div>
+              </div>
 
-            <div className="flex gap-2">
-              <Link href="/income/analytics">
-                <Button variant="outline" size="sm" className="gap-2 text-xs border-accent/30 hover:bg-accent/5">
-                  <TrendingUp className="w-4 h-4" /> Аналитика
+              <div className="flex flex-wrap gap-2">
+                <Link href="/income/analytics">
+                  <Button variant="outline" size="sm" className="gap-2 border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
+                    <TrendingUp className="w-4 h-4" /> Аналитика
+                  </Button>
+                </Link>
+
+                <Button variant="outline" size="sm" onClick={resetFilters} className="gap-2 border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300">
+                  <X className="w-4 h-4" /> Сброс
                 </Button>
-              </Link>
 
-              <Button variant="outline" size="sm" onClick={resetFilters} className="gap-2 text-xs" title="Сбросить фильтры">
-                <X className="w-4 h-4" /> Сброс
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={downloadCSV}
-                disabled={displayRows.length === 0}
-                className="gap-2 text-xs"
-              >
-                <Download className="w-4 h-4" /> Экспорт
-              </Button>
-
-              <Link href="/income/add">
-                <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2 text-xs">
-                  <Plus className="w-4 h-4" /> Добавить
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadCSV}
+                  disabled={displayRows.length === 0}
+                  className="gap-2 border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
+                >
+                  <Download className="w-4 h-4" /> Экспорт
                 </Button>
-              </Link>
+
+                <Link href="/income/add">
+                  <Button size="sm" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-500/25 gap-2">
+                    <Plus className="w-4 h-4" /> Добавить
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
 
-          {/* KPI */}
-          <Card className="p-4 border-border bg-card/70 neon-glow space-y-3">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Banknote className="w-4 h-4" />
-                  <span className="text-xs uppercase tracking-wide">Наличные</span>
-                </div>
-                <div className="text-xl font-bold text-foreground">{formatMoney(analytics.cash)} ₸</div>
-              </Card>
-
-              <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Smartphone className="w-4 h-4" />
-                  <span className="text-xs uppercase tracking-wide">Kaspi POS</span>
-                </div>
-                <div className="text-xl font-bold text-foreground">{formatMoney(analytics.kaspi)} ₸</div>
-              </Card>
-
-              <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Smartphone className="w-4 h-4" />
-                  <span className="text-xs uppercase tracking-wide">Kaspi Online</span>
-                </div>
-                <div className="text-xl font-bold text-foreground">{formatMoney(analytics.online)} ₸</div>
-              </Card>
-
-              <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <CreditCard className="w-4 h-4" />
-                  <span className="text-xs uppercase tracking-wide">Карта</span>
-                </div>
-                <div className="text-xl font-bold text-foreground">{formatMoney(analytics.card)} ₸</div>
-              </Card>
-
-              <Card className="p-4 border border-accent/60 bg-accent/10 flex flex-col justify-center relative overflow-hidden">
-                <div className="text-[11px] text-muted-foreground mb-1 uppercase tracking-wider">Всего по фильтру</div>
-                <div className="text-2xl font-bold text-accent">{formatMoney(analytics.total)} ₸</div>
-
-                <div className="mt-1 text-[10px] text-muted-foreground flex flex-wrap items-center gap-2">
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
-                      includeExtraInTotals ? 'border-accent text-accent bg-accent/10' : 'border-border text-muted-foreground'
-                    } cursor-pointer select-none`}
-                    onClick={() => setIncludeExtraInTotals((v) => !v)}
-                    title="Влияет на итоги/экспорт"
-                  >
-                    <span className={`h-2 w-2 rounded-full ${includeExtraInTotals ? 'bg-accent' : 'bg-muted-foreground/40'}`} />
-                    Extra в итогах
-                  </span>
-
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
-                      hideExtraRows ? 'border-yellow-500 text-yellow-500 bg-yellow-500/10' : 'border-border text-muted-foreground'
-                    } cursor-pointer select-none`}
-                    onClick={() => setHideExtraRows((v) => !v)}
-                    title="Скрывает строки Extra"
-                  >
-                    <span className={`h-2 w-2 rounded-full ${hideExtraRows ? 'bg-yellow-500' : 'bg-muted-foreground/40'}`} />
-                    Скрыть Extra
-                  </span>
-                </div>
-              </Card>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <CalendarDays className="w-3 h-3" />
-                <span className="uppercase tracking-wide">Период:</span>
-                <span className="font-mono">{periodLabel}</span>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
+              <div className="flex items-center gap-2 text-gray-500 mb-2">
+                <Banknote className="w-4 h-4 text-amber-500" />
+                <span className="text-xs uppercase tracking-wide">Наличные</span>
               </div>
-              <div>
-                Записей: <span className="font-semibold">{displayRows.length}</span>
-                {analytics.total > 0 && (
-                  <>
-                    {' '}
-                    • Средний чек: <span className="font-semibold">{formatMoney(analytics.avg)} ₸</span>
-                  </>
-                )}
-              </div>
-            </div>
+              <div className="text-xl font-bold text-white">{formatMoneyDetailed(analytics.cash)} ₸</div>
+            </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-              <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/30 px-3 py-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Trophy className="w-4 h-4" />
-                  Топ оператор
+            <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
+              <div className="flex items-center gap-2 text-gray-500 mb-2">
+                <Smartphone className="w-4 h-4 text-blue-500" />
+                <span className="text-xs uppercase tracking-wide">Kaspi POS</span>
+              </div>
+              <div className="text-xl font-bold text-white">{formatMoneyDetailed(analytics.kaspi)} ₸</div>
+            </Card>
+
+            <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
+              <div className="flex items-center gap-2 text-gray-500 mb-2">
+                <Globe className="w-4 h-4 text-pink-500" />
+                <span className="text-xs uppercase tracking-wide">Kaspi Online</span>
+              </div>
+              <div className="text-xl font-bold text-white">{formatMoneyDetailed(analytics.online)} ₸</div>
+            </Card>
+
+            <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
+              <div className="flex items-center gap-2 text-gray-500 mb-2">
+                <CreditCard className="w-4 h-4 text-purple-500" />
+                <span className="text-xs uppercase tracking-wide">Карта</span>
+              </div>
+              <div className="text-xl font-bold text-white">{formatMoneyDetailed(analytics.card)} ₸</div>
+            </Card>
+
+            <Card className="p-4 border-0 bg-gradient-to-br from-purple-900/30 to-indigo-900/30 backdrop-blur-sm lg:col-span-2">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs uppercase text-purple-300 tracking-wide">Всего по фильтру</span>
+                <Sparkles className="w-4 h-4 text-purple-400" />
+              </div>
+              <div className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-indigo-400 bg-clip-text text-transparent">
+                {formatMoneyDetailed(analytics.total)} ₸
+              </div>
+              
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => setIncludeExtraInTotals((v) => !v)}
+                  className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${
+                    includeExtraInTotals 
+                      ? 'bg-purple-500/20 border-purple-500/30 text-purple-300' 
+                      : 'bg-gray-800 border-gray-700 text-gray-500'
+                  }`}
+                >
+                  Extra в итогах
+                </button>
+                <button
+                  onClick={() => setHideExtraRows((v) => !v)}
+                  className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${
+                    hideExtraRows 
+                      ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-300' 
+                      : 'bg-gray-800 border-gray-700 text-gray-500'
+                  }`}
+                >
+                  Скрыть Extra
+                </button>
+              </div>
+            </Card>
+          </div>
+
+          {/* Дополнительная аналитика */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/20 rounded-lg">
+                  <Trophy className="w-5 h-5 text-amber-400" />
                 </div>
-                <div className="text-xs">
-                  <span className="text-foreground font-semibold">{analytics.topOperatorName}</span>{' '}
-                  <span className="text-muted-foreground">•</span>{' '}
-                  <span className="text-accent font-bold">{formatMoney(analytics.topOperatorAmount)} ₸</span>
+                <div>
+                  <div className="text-xs text-gray-500">Топ оператор</div>
+                  <div className="text-sm font-semibold text-white">{analytics.topOperatorName}</div>
                 </div>
               </div>
+              <div className="text-right">
+                <div className="text-lg font-bold text-amber-400">{formatMoneyDetailed(analytics.topOperatorAmount)}</div>
+              </div>
+            </Card>
 
-              <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/30 px-3 py-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <MapPin className="w-4 h-4" />
-                  Топ зона
+            <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/20 rounded-lg">
+                  <MapPin className="w-5 h-5 text-blue-400" />
                 </div>
-                <div className="text-xs">
-                  <span className="text-foreground font-semibold">{analytics.topZoneName}</span>{' '}
-                  <span className="text-muted-foreground">•</span>{' '}
-                  <span className="text-accent font-bold">{formatMoney(analytics.topZoneAmount)} ₸</span>
+                <div>
+                  <div className="text-xs text-gray-500">Топ зона</div>
+                  <div className="text-sm font-semibold text-white">{analytics.topZoneName}</div>
                 </div>
               </div>
-            </div>
-
-            {hitLimit && (
-              <div className="text-[11px] text-yellow-500/90 pt-1">
-                Показаны первые {LIMIT} строк (ограничение). Для "Всё за год" лучше добавить пагинацию/серверную агрегацию.
+              <div className="text-right">
+                <div className="text-lg font-bold text-blue-400">{formatMoneyDetailed(analytics.topZoneAmount)}</div>
               </div>
-            )}
-          </Card>
+            </Card>
+
+            <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500">Структура оплат</span>
+                <span className="text-xs text-purple-400">Online: {analytics.onlineShare.toFixed(1)}%</span>
+              </div>
+              <div className="h-2 bg-gray-700 rounded-full overflow-hidden flex">
+                <div className="h-full bg-amber-500" style={{ width: `${analytics.cash > 0 ? (analytics.cash / analytics.total) * 100 : 0}%` }} />
+                <div className="h-full bg-blue-500" style={{ width: `${analytics.kaspi > 0 ? (analytics.kaspi / analytics.total) * 100 : 0}%` }} />
+                <div className="h-full bg-pink-500" style={{ width: `${analytics.online > 0 ? (analytics.online / analytics.total) * 100 : 0}%` }} />
+                <div className="h-full bg-purple-500" style={{ width: `${analytics.card > 0 ? (analytics.card / analytics.total) * 100 : 0}%` }} />
+              </div>
+              <div className="flex justify-between mt-2 text-[10px] text-gray-500">
+                <span className="text-amber-500">Нал</span>
+                <span className="text-blue-500">Kaspi</span>
+                <span className="text-pink-500">Online</span>
+                <span className="text-purple-500">Карта</span>
+              </div>
+            </Card>
+          </div>
 
           {/* Фильтры */}
-          <Card className="p-4 border-border bg-card neon-glow">
-            <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-end">
-              {/* Даты */}
-              <div className="flex flex-col gap-2 w-full lg:w-auto">
-                <label className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">Период</label>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative flex items-center bg-input/50 rounded-md border border-border/50 px-2 py-1">
-                    <CalendarDays className="w-3.5 h-3.5 text-muted-foreground mr-1.5" />
-                    <input
-                      type="date"
-                      value={dateFrom}
-                      onChange={(e) => handleDateFromChange(e.target.value)}
-                      className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
-                    />
-                    <span className="text-muted-foreground text-xs px-1">→</span>
-                    <input
-                      type="date"
-                      value={dateTo}
-                      onChange={(e) => handleDateToChange(e.target.value)}
-                      className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
-                    />
-                  </div>
+          <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
+            <div className="flex flex-col lg:flex-row gap-4 lg:items-end justify-between">
+              {/* Период с календарем */}
+              <div className="space-y-2">
+                <label className="text-xs text-gray-500 uppercase tracking-wider">Период</label>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-300 hover:border-purple-500/50 transition-colors"
+                  >
+                    <Calendar className="w-4 h-4 text-purple-400" />
+                    <span>{periodLabel}</span>
+                    <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isCalendarOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                  <div className="flex bg-input/30 rounded-md border border-border/30 p-0.5">
-                    {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => setPreset(p)}
-                        className={`px-3 py-1 text-[10px] rounded transition-colors ${
-                          activePreset === p ? 'bg-accent text-accent-foreground' : 'hover:bg-white/10 text-muted-foreground'
-                        }`}
-                      >
-                        {p === 'today' && 'Сегодня'}
-                        {p === 'week' && 'Неделя'}
-                        {p === 'month' && '30 дн.'}
-                        {p === 'all' && 'Всё'}
-                      </button>
-                    ))}
-                  </div>
+                  {isCalendarOpen && (
+                    <div className="absolute top-full left-0 mt-2 z-50 w-80 p-4 bg-gray-900/95 backdrop-blur-xl border border-purple-500/20 rounded-2xl shadow-2xl">
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map((p) => (
+                          <button
+                            key={p}
+                            onClick={() => setPreset(p)}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                              activePreset === p
+                                ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25'
+                                : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 border border-gray-700'
+                            }`}
+                          >
+                            {p === 'today' && 'Сегодня'}
+                            {p === 'week' && 'Неделя'}
+                            {p === 'month' && '30 дн.'}
+                            {p === 'all' && 'Всё'}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-gray-500 uppercase">С</label>
+                          <input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => handleDateFromChange(e.target.value)}
+                            className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-gray-500 uppercase">По</label>
+                          <input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => handleDateToChange(e.target.value)}
+                            className="w-full bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end mt-3">
+                        <Button 
+                          size="sm" 
+                          onClick={() => setIsCalendarOpen(false)}
+                          className="bg-purple-500 hover:bg-purple-600 text-white"
+                        >
+                          Применить
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Остальные фильтры */}
-              <div className="flex flex-wrap items-end gap-2 w-full lg:w-auto">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">Компания</label>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-500 uppercase">Компания</label>
                   <select
                     value={companyFilter}
                     onChange={(e) => setCompanyFilter(e.target.value)}
-                    className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground min-w-[130px]"
+                    className="h-9 bg-gray-900 border border-gray-700 rounded-lg px-3 text-xs text-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none min-w-[130px]"
                   >
                     <option value="all">Все компании</option>
                     {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
+                      <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">Оператор</label>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-500 uppercase">Оператор</label>
                   <select
                     value={operatorFilter}
                     onChange={(e) => setOperatorFilter(e.target.value as OperatorFilter)}
-                    className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground min-w-[150px]"
+                    className="h-9 bg-gray-900 border border-gray-700 rounded-lg px-3 text-xs text-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none min-w-[150px]"
                   >
                     <option value="all">Все</option>
                     <option value="none">Без оператора</option>
                     {operators.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.short_name || o.name}
-                      </option>
+                      <option key={o.id} value={o.id}>{o.short_name || o.name}</option>
                     ))}
                   </select>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">Смена</label>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-500 uppercase">Смена</label>
                   <select
                     value={shiftFilter}
                     onChange={(e) => setShiftFilter(e.target.value as ShiftFilter)}
-                    className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground"
+                    className="h-9 bg-gray-900 border border-gray-700 rounded-lg px-3 text-xs text-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none"
                   >
                     <option value="all">Все</option>
                     <option value="day">День ☀️</option>
@@ -773,37 +850,36 @@ export default function IncomePage() {
                   </select>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-muted-foreground">Оплата</label>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-500 uppercase">Оплата</label>
                   <select
                     value={payFilter}
                     onChange={(e) => setPayFilter(e.target.value as PayFilter)}
-                    className="h-9 bg-input border border-border rounded px-2 text-xs text-foreground"
+                    className="h-9 bg-gray-900 border border-gray-700 rounded-lg px-3 text-xs text-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none"
                   >
                     <option value="all">Любая</option>
-                    <option value="cash">Нал</option>
+                    <option value="cash">Наличные</option>
                     <option value="kaspi">Kaspi POS</option>
                     <option value="online">Kaspi Online</option>
                     <option value="card">Карта</option>
                   </select>
                 </div>
 
-                <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-                  <label className="text-[10px] text-muted-foreground">Поиск</label>
+                <div className="space-y-1 flex-1 min-w-[200px]">
+                  <label className="text-[10px] text-gray-500 uppercase">Поиск</label>
                   <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                     <input
                       type="text"
-                      placeholder="Комментарий / зона / оператор / компания..."
+                      placeholder="Комментарий, зона, оператор..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full h-9 pl-8 pr-6 bg-input border border-border rounded text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-accent transition-colors"
+                      className="w-full h-9 pl-10 pr-8 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-300 placeholder:text-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none"
                     />
                     {searchTerm && (
                       <button
                         onClick={() => setSearchTerm('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
-                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -812,30 +888,38 @@ export default function IncomePage() {
                 </div>
               </div>
             </div>
+
+            {hitLimit && (
+              <div className="mt-3 p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 text-yellow-200 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Показаны первые {LIMIT} строк. Для больших периодов используйте фильтры.
+              </div>
+            )}
           </Card>
 
           {error && (
-            <div className="border border-destructive/60 bg-destructive/10 text-destructive px-4 py-3 rounded text-sm flex items-center gap-2">
-              <span className="text-lg">⚠️</span> {error}
+            <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/10 text-red-300 text-sm flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              {error}
             </div>
           )}
 
           {/* Таблица */}
-          <Card className="border-border bg-card neon-glow overflow-hidden">
+          <Card className="border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="sticky top-0 z-10 border-b border-border bg-secondary/40 backdrop-blur text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  <tr className="border-b border-gray-700 bg-gray-900/50 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
                     <th className="px-4 py-3 text-left">Дата</th>
                     <th className="px-4 py-3 text-left">Компания</th>
                     <th className="px-4 py-3 text-left">Оператор</th>
                     <th className="px-4 py-3 text-center">Смена</th>
                     <th className="px-4 py-3 text-left">Зона</th>
-                    <th className="px-4 py-3 text-right text-green-500">Нал</th>
-                    <th className="px-4 py-3 text-right text-blue-500">Kaspi POS</th>
-                    <th className="px-4 py-3 text-right text-cyan-400">Online</th>
+                    <th className="px-4 py-3 text-right text-amber-500">Нал</th>
+                    <th className="px-4 py-3 text-right text-blue-500">Kaspi</th>
+                    <th className="px-4 py-3 text-right text-pink-500">Online</th>
                     <th className="px-4 py-3 text-right text-purple-500">Карта</th>
-                    <th className="px-4 py-3 text-right text-foreground">Всего</th>
+                    <th className="px-4 py-3 text-right text-white">Всего</th>
                     <th className="px-4 py-3 text-left">Комментарий</th>
                   </tr>
                 </thead>
@@ -843,67 +927,72 @@ export default function IncomePage() {
                 <tbody className="text-sm">
                   {loading && (
                     <tr>
-                      <td colSpan={11} className="px-6 py-10 text-center text-muted-foreground animate-pulse">
-                        Загрузка данных...
+                      <td colSpan={11} className="px-6 py-12 text-center">
+                        <div className="relative inline-block">
+                          <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-500/30 border-t-purple-500" />
+                          <Wallet className="w-6 h-6 text-purple-400 absolute top-3 left-3" />
+                        </div>
+                        <p className="text-gray-400 mt-4">Загрузка данных...</p>
                       </td>
                     </tr>
                   )}
 
                   {!loading &&
                     displayRows.map((row, idx) => {
-                      const total =
-                        (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.online_amount || 0) + (row.card_amount || 0)
+                      const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.online_amount || 0) + (row.card_amount || 0)
                       const company = companyMap.get(row.company_id)
                       const isExtra = isExtraCompany(company)
 
                       return (
                         <tr
                           key={row.id}
-                          className={`border-b border-border/40 hover:bg-white/5 transition-colors ${
-                            idx % 2 === 0 ? 'bg-card/40' : ''
-                          } ${isExtra ? 'bg-yellow-500/5 border-l-2 border-l-yellow-500/50' : ''}`}
+                          className={`border-b border-gray-800/50 hover:bg-white/5 transition-colors ${
+                            idx % 2 === 0 ? 'bg-transparent' : 'bg-gray-900/20'
+                          } ${isExtra ? 'bg-yellow-500/5 border-l-2 border-l-yellow-500/30' : ''}`}
                         >
-                          <td className="px-4 py-3 whitespace-nowrap text-muted-foreground font-mono text-xs">{formatDate(row.date)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-400 font-mono text-xs">
+                            {formatDate(row.date)}
+                          </td>
 
-                          <td className="px-4 py-3 font-medium whitespace-nowrap">
+                          <td className="px-4 py-3 font-medium whitespace-nowrap text-gray-300">
                             {company?.name ?? '—'}
                             {isExtra && (
-                              <span className="ml-2 text-[9px] bg-yellow-500/20 text-yellow-500 px-1.5 py-0.5 rounded border border-yellow-500/30">
+                              <span className="ml-2 text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded border border-yellow-500/30">
                                 EXTRA
                               </span>
                             )}
                           </td>
 
                           <td className="px-4 py-3 text-xs whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1">
-                              <UserCircle2 className="w-3.5 h-3.5 text-muted-foreground" />
+                            <span className="inline-flex items-center gap-1 text-gray-400">
+                              <UserCircle2 className="w-3.5 h-3.5" />
                               {operatorName(row.operator_id)}
                             </span>
                           </td>
 
                           <td className="px-4 py-3 text-center">
                             {row.shift === 'day' ? (
-                              <Sun className="w-4 h-4 text-yellow-400 inline" />
+                              <Sun className="w-4 h-4 text-amber-400 inline" />
                             ) : (
                               <Moon className="w-4 h-4 text-blue-400 inline" />
                             )}
                           </td>
 
-                          <td className="px-4 py-3 text-xs text-muted-foreground">{row.zone || '—'}</td>
+                          <td className="px-4 py-3 text-xs text-gray-500">{row.zone || '—'}</td>
 
-                          <td className={`px-4 py-3 text-right font-mono ${row.cash_amount ? 'text-foreground' : 'text-muted-foreground/20'}`}>
-                            {row.cash_amount ? formatMoney(row.cash_amount) : '—'}
+                          <td className={`px-4 py-3 text-right font-mono ${row.cash_amount ? 'text-amber-400' : 'text-gray-700'}`}>
+                            {row.cash_amount ? formatMoneyDetailed(row.cash_amount) : '—'}
                           </td>
 
-                          <td className={`px-4 py-3 text-right font-mono ${row.kaspi_amount ? 'text-foreground' : 'text-muted-foreground/20'}`}>
-                            {row.kaspi_amount ? formatMoney(row.kaspi_amount) : '—'}
+                          <td className={`px-4 py-3 text-right font-mono ${row.kaspi_amount ? 'text-blue-400' : 'text-gray-700'}`}>
+                            {row.kaspi_amount ? formatMoneyDetailed(row.kaspi_amount) : '—'}
                           </td>
 
-                          {/* ONLINE: Исправленное inline-редактирование */}
+                          {/* ONLINE: Inline-редактирование */}
                           <td className="px-4 py-3 text-right font-mono">
                             {String(row.id).startsWith('extra-') ? (
-                              <span className={row.online_amount === null ? 'text-muted-foreground/20' : 'text-foreground'}>
-                                {row.online_amount === null ? '—' : formatMoney(row.online_amount)}
+                              <span className={row.online_amount === null ? 'text-gray-700' : 'text-pink-400'}>
+                                {row.online_amount === null ? '—' : formatMoneyDetailed(row.online_amount)}
                               </span>
                             ) : editingOnlineId === row.id ? (
                               <div className="flex items-center justify-end gap-1">
@@ -914,7 +1003,6 @@ export default function IncomePage() {
                                   onChange={(e) => setOnlineDraft(e.target.value)}
                                   onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                                     if (e.key === 'Escape') {
-                                      // ✅ БАГ №1 ИСПРАВЛЕН: НЕ сбрасываем флаг здесь, пусть сбросит onBlur
                                       skipBlurSaveRef.current = true
                                       setEditingOnlineId(null)
                                       setOnlineDraft('')
@@ -938,7 +1026,7 @@ export default function IncomePage() {
                                     setOnlineDraft('')
                                     saveOnlineAmount(row, val)
                                   }}
-                                  className="w-[90px] h-7 text-right px-2 rounded border border-border bg-input text-foreground text-xs outline-none focus:border-accent"
+                                  className="w-[90px] h-7 text-right px-2 rounded-lg border border-gray-700 bg-gray-900 text-white text-xs outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20"
                                 />
                                 <button
                                   type="button"
@@ -953,25 +1041,21 @@ export default function IncomePage() {
                                     setOnlineDraft('')
                                     saveOnlineAmount(row, val)
                                   }}
-                                  className="p-1 text-green-500 hover:bg-green-500/10 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Сохранить"
+                                  className="p-1 text-green-400 hover:bg-green-500/10 rounded transition-colors"
                                 >
                                   <Check className="w-3 h-3" />
                                 </button>
                                 <button
                                   type="button"
-                                  disabled={savingOnlineId === row.id}
                                   onMouseDown={(e) => {
                                     e.preventDefault()
                                     skipBlurSaveRef.current = true
                                   }}
                                   onClick={() => {
-                                    // ✅ УЛУЧШЕНИЕ: НЕ сбрасываем флаг здесь, пусть сбросит onBlur (или останется true, но onBlur его сбросит)
                                     setEditingOnlineId(null)
                                     setOnlineDraft('')
                                   }}
-                                  className="p-1 text-muted-foreground hover:bg-muted rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Отмена"
+                                  className="p-1 text-gray-500 hover:bg-gray-800 rounded transition-colors"
                                 >
                                   <X className="w-3 h-3" />
                                 </button>
@@ -981,12 +1065,11 @@ export default function IncomePage() {
                                 type="button"
                                 className={`w-full text-right inline-flex items-center justify-end gap-1 group/btn ${
                                   savingOnlineId === row.id
-                                    ? 'text-muted-foreground animate-pulse'
+                                    ? 'text-gray-500 animate-pulse'
                                     : row.online_amount === null
-                                      ? 'text-muted-foreground/20'
-                                      : 'text-foreground'
-                                } hover:bg-accent/10 rounded px-2 py-1 -mx-2 transition-colors`}
-                                title="Кликните для редактирования"
+                                      ? 'text-gray-700'
+                                      : 'text-pink-400'
+                                } hover:bg-pink-500/10 rounded-lg px-2 py-1 -mx-2 transition-colors`}
                                 onClick={() => {
                                   setEditingOnlineId(row.id)
                                   setOnlineDraft(String(row.online_amount ?? ''))
@@ -995,30 +1078,47 @@ export default function IncomePage() {
                                 disabled={savingOnlineId === row.id}
                               >
                                 <span className="font-mono">
-                                  {row.online_amount === null ? '—' : formatMoney(row.online_amount)}
+                                  {row.online_amount === null ? '—' : formatMoneyDetailed(row.online_amount)}
                                 </span>
-                                <Pencil className="w-3 h-3 opacity-0 group-hover/btn:opacity-50 text-muted-foreground transition-opacity" />
+                                <Pencil className="w-3 h-3 opacity-0 group-hover/btn:opacity-50 text-gray-500 transition-opacity" />
                               </button>
                             )}
                           </td>
 
-                          <td className={`px-4 py-3 text-right font-mono ${row.card_amount ? 'text-foreground' : 'text-muted-foreground/20'}`}>
-                            {row.card_amount ? formatMoney(row.card_amount) : '—'}
+                          <td className={`px-4 py-3 text-right font-mono ${row.card_amount ? 'text-purple-400' : 'text-gray-700'}`}>
+                            {row.card_amount ? formatMoneyDetailed(row.card_amount) : '—'}
                           </td>
 
-                          <td className="px-4 py-3 text-right font-bold text-accent font-mono bg-accent/5">{formatMoney(total)}</td>
+                          <td className="px-4 py-3 text-right font-bold text-white font-mono bg-purple-500/10">
+                            {formatMoneyDetailed(total)}
+                                                      </td>
 
-                          <td className="px-4 py-3 text-xs text-muted-foreground max-w-[220px] truncate">{row.comment || '—'}</td>
+                          <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate" title={row.comment || ''}>
+                            {row.comment || '—'}
+                          </td>
                         </tr>
                       )
                     })}
 
-                  {!loading && !error && displayRows.length === 0 && (
+                  {!loading && displayRows.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="px-6 py-12 text-center text-muted-foreground">
-                        <div className="flex flex-col items-center gap-2">
-                          <Filter className="w-8 h-8 opacity-20" />
-                          <p>Записи не найдены. Попробуйте изменить фильтры.</p>
+                      <td colSpan={11} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="p-4 bg-gray-800/50 rounded-full">
+                            <Search className="w-8 h-8 text-gray-600" />
+                          </div>
+                          <div className="text-gray-500">
+                            <p className="font-medium">Ничего не найдено</p>
+                            <p className="text-sm mt-1">Попробуйте изменить фильтры или период</p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={resetFilters}
+                            className="mt-2 border-gray-700 text-gray-400 hover:text-white"
+                          >
+                            Сбросить фильтры
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -1026,9 +1126,21 @@ export default function IncomePage() {
                 </tbody>
               </table>
             </div>
+
+            {!loading && displayRows.length > 0 && (
+              <div className="px-4 py-3 border-t border-gray-700 bg-gray-900/30 flex items-center justify-between text-xs text-gray-500">
+                <span>
+                  Показано {displayRows.length} из {rows.length} записей
+                </span>
+                <span>
+                  {formatMoneyDetailed(analytics.total)} ₸ всего
+                </span>
+              </div>
+            )}
           </Card>
         </div>
       </main>
     </div>
   )
 }
+                         
