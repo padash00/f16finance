@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { Sidebar } from '@/components/sidebar'
@@ -20,6 +20,14 @@ import {
   TrendingDown,
   TrendingUp,
   Wallet,
+  RotateCcw,
+  X,
+  ChevronDown,
+  Filter,
+  Calendar,
+  Building2,
+  LayoutGrid,
+  Sparkles,
 } from 'lucide-react'
 
 import {
@@ -141,7 +149,7 @@ const baseTotals = (): FinancialTotals => ({
 })
 
 // =====================
-// DATE HELPERS
+// DATE HELPERS (local ISO yyyy-mm-dd)
 // =====================
 const toISODateLocal = (d: Date) => {
   const t = d.getTime() - d.getTimezoneOffset() * 60_000
@@ -220,17 +228,13 @@ const getPercentageChange = (current: number, previous: number) => {
 
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n))
 
-const safeNumber = (v: unknown) => {
-  if (v === null || v === undefined) return 0
-  const num = Number(v)
-  return isNaN(num) ? 0 : num
-}
+const safeNumber = (v: unknown) => Number(v || 0)
 
 // =====================
 // CSV
 // =====================
 const csvEscape = (v: string) => {
-  const s = String(v).replaceAll('"', '""')
+  const s = v.replaceAll('"', '""')
   if (/[",\n\r;]/.test(s)) return `"${s}"`
   return s
 }
@@ -239,7 +243,7 @@ const toCSV = (rows: string[][], sep = ';') =>
   rows.map((r) => r.map((c) => csvEscape(c)).join(sep)).join('\n') + '\n'
 
 const downloadTextFile = (filename: string, content: string, mime = 'text/csv;charset=utf-8') => {
-  const blob = new Blob(['\uFEFF' + content], { type: `${mime};charset=utf-8` })
+  const blob = new Blob([content], { type: mime })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -267,9 +271,28 @@ const parseTab = (v: string | null): 'overview' | 'analytics' | 'details' | null
 const isISODate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
 
 // =====================
-// COMPONENT
+// LOADING SKELETON
 // =====================
-export default function ReportsPage() {
+function ReportsSkeleton() {
+  return (
+    <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+      <Sidebar />
+      <main className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
+            <BarChart3 className="w-8 h-8 text-white" />
+          </div>
+          <p className="text-gray-400">Загрузка отчета...</p>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+// =====================
+// MAIN COMPONENT
+// =====================
+function ReportsContent() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -295,8 +318,12 @@ export default function ReportsPage() {
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
 
+  const [isFiltersOpen, setIsFiltersOpen] = useState(true)
+  const [activeFiltersCount, setActiveFiltersCount] = useState(0)
+
   const reqIdRef = useRef(0)
   const didInitFromUrl = useRef(false)
+  const didSyncUrlOnce = useRef(false)
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -304,14 +331,22 @@ export default function ReportsPage() {
     toastTimer.current = window.setTimeout(() => setToast(null), 2200)
   }, [])
 
-  // Нормализация дат
+  useEffect(() => {
+    let count = 0
+    if (datePreset !== 'last7') count++
+    if (companyFilter !== 'all') count++
+    if (groupMode !== 'day') count++
+    if (includeExtraInTotals) count++
+    if (dateFrom !== addDaysISO(todayISO(), -6) || dateTo !== todayISO()) count++
+    setActiveFiltersCount(count)
+  }, [datePreset, companyFilter, groupMode, includeExtraInTotals, dateFrom, dateTo])
+
   useEffect(() => {
     if (dateFrom <= dateTo) return
     setDateFrom(dateTo)
     setDateTo(dateFrom)
   }, [dateFrom, dateTo])
 
-  // Загрузка компаний
   useEffect(() => {
     let alive = true
     const loadCompanies = async () => {
@@ -333,7 +368,6 @@ export default function ReportsPage() {
     }
   }, [])
 
-  // Companies map
   const companyById = useMemo(() => {
     const m = new Map<string, { name: string; code: string }>()
     for (const c of companies) m.set(c.id, { name: c.name, code: (c.code || '').toLowerCase() })
@@ -352,85 +386,111 @@ export default function ReportsPage() {
   const companyName = useCallback((id: string) => companyById.get(id)?.name ?? '—', [companyById])
   const companyCode = useCallback((id: string) => companyById.get(id)?.code ?? '', [companyById])
 
-  // Применение пресета
-  const applyPreset = useCallback((preset: DatePreset) => {
-    const today = todayISO()
-    const todayDate = fromISO(today)
-    let from = today
-    let to = today
+  const applyPreset = useCallback(
+    (preset: DatePreset) => {
+      const today = todayISO()
+      const todayDate = fromISO(today)
 
-    switch (preset) {
-      case 'today':
-        from = today
-        to = today
-        break
-      case 'yesterday':
-        from = addDaysISO(today, -1)
-        to = from
-        break
-      case 'last7':
-        from = addDaysISO(today, -6)
-        to = today
-        break
-      case 'last30':
-        from = addDaysISO(today, -29)
-        to = today
-        break
-      case 'prevWeek': {
-        const d = new Date(todayDate)
-        const diffToMonday = (d.getDay() + 6) % 7
-        const currentMonday = new Date(d)
-        currentMonday.setDate(d.getDate() - diffToMonday)
-        const prevMonday = new Date(currentMonday)
-        prevMonday.setDate(currentMonday.getDate() - 7)
-        const prevSunday = new Date(prevMonday)
-        prevSunday.setDate(prevMonday.getDate() + 6)
-        from = toISODateLocal(prevMonday)
-        to = toISODateLocal(prevSunday)
-        break
-      }
-      case 'currentMonth': {
-        const y = todayDate.getFullYear()
-        const m = todayDate.getMonth()
-        from = toISODateLocal(new Date(y, m, 1))
-        to = toISODateLocal(new Date(y, m + 1, 0))
-        break
-      }
-      case 'prevMonth': {
-        const y = todayDate.getFullYear()
-        const m = todayDate.getMonth() - 1
-        from = toISODateLocal(new Date(y, m, 1))
-        to = toISODateLocal(new Date(y, m + 1, 0))
-        break
-      }
-      case 'custom':
-        return
-    }
+      let from = dateFrom
+      let to = dateTo
 
-    setDateFrom(from)
-    setDateTo(to)
-  }, [])
+      switch (preset) {
+        case 'today':
+          from = today
+          to = today
+          break
+        case 'yesterday': {
+          const y = addDaysISO(today, -1)
+          from = y
+          to = y
+          break
+        }
+        case 'last7':
+          from = addDaysISO(today, -6)
+          to = today
+          break
+        case 'last30':
+          from = addDaysISO(today, -29)
+          to = today
+          break
+        case 'prevWeek': {
+          const d = new Date(todayDate)
+          const diffToMonday = (d.getDay() + 6) % 7
+          const currentMonday = new Date(d)
+          currentMonday.setDate(d.getDate() - diffToMonday)
+          const prevMonday = new Date(currentMonday)
+          prevMonday.setDate(currentMonday.getDate() - 7)
+          const prevSunday = new Date(prevMonday)
+          prevSunday.setDate(prevMonday.getDate() + 6)
+          from = toISODateLocal(prevMonday)
+          to = toISODateLocal(prevSunday)
+          break
+        }
+        case 'currentMonth': {
+          const y = todayDate.getFullYear()
+          const m = todayDate.getMonth()
+          from = toISODateLocal(new Date(y, m, 1))
+          to = toISODateLocal(new Date(y, m + 1, 0))
+          break
+        }
+        case 'prevMonth': {
+          const y = todayDate.getFullYear()
+          const m = todayDate.getMonth() - 1
+          from = toISODateLocal(new Date(y, m, 1))
+          to = toISODateLocal(new Date(y, m + 1, 0))
+          break
+        }
+        case 'custom':
+          return
+      }
 
-  const handlePresetChange = useCallback((value: DatePreset) => {
-    setDatePreset(value)
-    if (value !== 'custom') applyPreset(value)
-  }, [applyPreset])
+      setDateFrom(from)
+      setDateTo(to)
+    },
+    [dateFrom, dateTo],
+  )
+
+  const handlePresetChange = useCallback(
+    (value: DatePreset) => {
+      setDatePreset(value)
+      if (value !== 'custom') applyPreset(value)
+    },
+    [applyPreset],
+  )
 
   const resetFilters = useCallback(() => {
+    const defaultFrom = addDaysISO(todayISO(), -6)
+    const defaultTo = todayISO()
+    
     setDatePreset('last7')
-    applyPreset('last7')
+    setDateFrom(defaultFrom)
+    setDateTo(defaultTo)
     setCompanyFilter('all')
     setGroupMode('day')
     setIncludeExtraInTotals(false)
     setActiveTab('overview')
-    showToast('Фильтры сброшены')
-  }, [applyPreset, showToast])
+    
+    const params = new URLSearchParams()
+    params.set('from', defaultFrom)
+    params.set('to', defaultTo)
+    params.set('preset', 'last7')
+    params.set('company', 'all')
+    params.set('group', 'day')
+    params.set('extra', '0')
+    params.set('tab', 'overview')
+    
+    const newUrl = `${pathname}?${params.toString()}`
+    router.replace(newUrl, { scroll: false })
+    
+    showToast('Фильтры сброшены ✅')
+  }, [pathname, router, showToast])
 
-  // Инициализация из URL
   useEffect(() => {
-    if (didInitFromUrl.current || !companiesLoaded) return
+    if (didInitFromUrl.current) return
+    if (!companiesLoaded) return
 
     const sp = searchParams
+
     const pFrom = sp.get('from')
     const pTo = sp.get('to')
     const pPreset = sp.get('preset') as DatePreset | null
@@ -444,7 +504,7 @@ export default function ReportsPage() {
 
     if (pPreset && ['custom', 'today', 'yesterday', 'last7', 'prevWeek', 'last30', 'currentMonth', 'prevMonth'].includes(pPreset)) {
       setDatePreset(pPreset)
-      if (pPreset !== 'custom' && !pFrom && !pTo) applyPreset(pPreset)
+      if (pPreset !== 'custom' && !(pFrom && pTo)) applyPreset(pPreset)
     }
 
     if (pCompany) {
@@ -453,97 +513,95 @@ export default function ReportsPage() {
     }
 
     if (pGroup) setGroupMode(pGroup)
-    if (pExtra) setIncludeExtraInTotals(true)
+    setIncludeExtraInTotals(Boolean(pExtra))
+
     if (pTab) setActiveTab(pTab)
 
     didInitFromUrl.current = true
   }, [companiesLoaded, companies, searchParams, applyPreset])
 
-  // Синхронизация с URL
+  const syncUrl = useCallback(() => {
+    const params = new URLSearchParams()
+
+    params.set('from', dateFrom)
+    params.set('to', dateTo)
+    params.set('preset', datePreset)
+    params.set('company', companyFilter)
+    params.set('group', groupMode)
+    params.set('extra', includeExtraInTotals ? '1' : '0')
+    params.set('tab', activeTab)
+
+    const newUrl = `${pathname}?${params.toString()}`
+    router.replace(newUrl, { scroll: false })
+  }, [router, pathname, dateFrom, dateTo, datePreset, companyFilter, groupMode, includeExtraInTotals, activeTab])
+
   useEffect(() => {
     if (!didInitFromUrl.current) return
+    const t = window.setTimeout(() => {
+      if (!didSyncUrlOnce.current) didSyncUrlOnce.current = true
+      syncUrl()
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [syncUrl])
 
-    const timeoutId = setTimeout(() => {
-      const params = new URLSearchParams()
-      params.set('from', dateFrom)
-      params.set('to', dateTo)
-      params.set('preset', datePreset)
-      params.set('company', companyFilter)
-      params.set('group', groupMode)
-      params.set('extra', includeExtraInTotals ? '1' : '0')
-      params.set('tab', activeTab)
+  const range = useMemo(() => {
+    const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
+    return { rangeFrom: prevFrom, rangeTo: dateTo }
+  }, [dateFrom, dateTo])
 
-      const newUrl = `${pathname}?${params.toString()}`
-      router.replace(newUrl, { scroll: false })
-    }, 300)
-
-    return () => clearTimeout(timeoutId)
-  }, [dateFrom, dateTo, datePreset, companyFilter, groupMode, includeExtraInTotals, activeTab, pathname, router])
-
-  // Загрузка данных
   useEffect(() => {
     if (!companiesLoaded) return
 
-    const loadData = async () => {
+    if (companies.length === 0) {
+      setIncomes([])
+      setExpenses([])
+      setLoading(false)
+      return
+    }
+
+    const loadRange = async () => {
       const myReqId = ++reqIdRef.current
       setLoading(true)
       setError(null)
 
-      try {
-        if (companies.length === 0) {
-          setIncomes([])
-          setExpenses([])
-          setLoading(false)
-          return
-        }
+      let incomeQ = supabase
+        .from('incomes')
+        .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount')
+        .gte('date', range.rangeFrom)
+        .lte('date', range.rangeTo)
 
-        const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
+      let expenseQ = supabase
+        .from('expenses')
+        .select('id,date,company_id,category,cash_amount,kaspi_amount')
+        .gte('date', range.rangeFrom)
+        .lte('date', range.rangeTo)
 
-        let incomeQuery = supabase
-          .from('incomes')
-          .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount')
-          .gte('date', prevFrom)
-          .lte('date', dateTo)
-
-        let expenseQuery = supabase
-          .from('expenses')
-          .select('id,date,company_id,category,cash_amount,kaspi_amount')
-          .gte('date', prevFrom)
-          .lte('date', dateTo)
-
-        if (companyFilter !== 'all') {
-          incomeQuery = incomeQuery.eq('company_id', companyFilter)
-          expenseQuery = expenseQuery.eq('company_id', companyFilter)
-        } else if (!includeExtraInTotals && extraCompanyId) {
-          incomeQuery = incomeQuery.neq('company_id', extraCompanyId)
-          expenseQuery = expenseQuery.neq('company_id', extraCompanyId)
-        }
-
-        const [incomeResult, expenseResult] = await Promise.all([incomeQuery, expenseQuery])
-
-        if (myReqId !== reqIdRef.current) return
-
-        if (incomeResult.error) throw incomeResult.error
-        if (expenseResult.error) throw expenseResult.error
-
-        setIncomes(incomeResult.data || [])
-        setExpenses(expenseResult.data || [])
-      } catch (err) {
-        if (myReqId === reqIdRef.current) {
-          setError('Ошибка загрузки данных')
-          console.error(err)
-        }
-      } finally {
-        if (myReqId === reqIdRef.current) {
-          setLoading(false)
-        }
+      if (companyFilter !== 'all') {
+        incomeQ = incomeQ.eq('company_id', companyFilter)
+        expenseQ = expenseQ.eq('company_id', companyFilter)
+      } else if (!includeExtraInTotals && extraCompanyId) {
+        incomeQ = incomeQ.neq('company_id', extraCompanyId)
+        expenseQ = expenseQ.neq('company_id', extraCompanyId)
       }
+
+      const [{ data: inc, error: incErr }, { data: exp, error: expErr }] = await Promise.all([incomeQ, expenseQ])
+
+      if (myReqId !== reqIdRef.current) return
+
+      if (incErr || expErr) {
+        setError('Не удалось загрузить данные')
+        setLoading(false)
+        return
+      }
+
+      setIncomes((inc || []) as IncomeRow[])
+      setExpenses((exp || []) as ExpenseRow[])
+      setLoading(false)
     }
 
-    loadData()
-  }, [companiesLoaded, companies.length, dateFrom, dateTo, companyFilter, includeExtraInTotals, extraCompanyId])
+    loadRange()
+  }, [companiesLoaded, companies.length, range.rangeFrom, range.rangeTo, companyFilter, includeExtraInTotals, extraCompanyId])
 
-  // Обработка данных
   const processed = useMemo(() => {
     const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
 
@@ -579,25 +637,27 @@ export default function ReportsPage() {
     }
 
     const ensureBucket = (key: string, label: string, sortISO: string) => {
-      const b = chartDataMap.get(key) || {
-        label,
-        sortISO,
-        income: 0,
-        expense: 0,
-        profit: 0,
-        incomeCash: 0,
-        incomeKaspi: 0,
-        incomeOnline: 0,
-        incomeCard: 0,
-        incomeNonCash: 0,
-        expenseCash: 0,
-        expenseKaspi: 0,
-      }
+      const b =
+        chartDataMap.get(key) ||
+        ({
+          label,
+          sortISO,
+          income: 0,
+          expense: 0,
+          profit: 0,
+          incomeCash: 0,
+          incomeKaspi: 0,
+          incomeOnline: 0,
+          incomeCard: 0,
+          incomeNonCash: 0,
+          expenseCash: 0,
+          expenseKaspi: 0,
+        } as TimeAggregation)
+
       chartDataMap.set(key, b)
       return b
     }
 
-    // Incomes
     for (const r of incomes) {
       const range = getRangeBucket(r.date)
       if (!range) continue
@@ -638,7 +698,6 @@ export default function ReportsPage() {
       }
     }
 
-    // Expenses
     for (const r of expenses) {
       const range = getRangeBucket(r.date)
       if (!range) continue
@@ -667,7 +726,6 @@ export default function ReportsPage() {
       }
     }
 
-    // Finalize totals
     const finalize = (t: FinancialTotals) => {
       t.profit = t.totalIncome - t.totalExpense
       t.remainingCash = t.incomeCash - t.expenseCash
@@ -679,7 +737,6 @@ export default function ReportsPage() {
     finalize(totalsCur)
     finalize(totalsPrev)
 
-    // Anomalies
     const avgIncome = totalsCur.totalIncome / (dailyIncome.size || 1)
     const avgExpense = totalsCur.totalExpense / (dailyExpense.size || 1)
 
@@ -735,7 +792,6 @@ export default function ReportsPage() {
     }
   }, [incomes, expenses, dateFrom, dateTo, groupMode, companyName])
 
-  // Derived datasets
   const totals = processed.totalsCur
   const totalsPrev = processed.totalsPrev
 
@@ -764,7 +820,6 @@ export default function ReportsPage() {
   const incomesCurrent = useMemo(() => incomes.filter((r) => r.date >= dateFrom && r.date <= dateTo), [incomes, dateFrom, dateTo])
   const expensesCurrent = useMemo(() => expenses.filter((r) => r.date >= dateFrom && r.date <= dateTo), [expenses, dateFrom, dateTo])
 
-  // AI Insights
   const aiInsights = useMemo((): AIInsight[] => {
     const insights: AIInsight[] = []
 
@@ -834,128 +889,150 @@ export default function ReportsPage() {
     return insights.slice(0, 4)
   }, [totals, totalsPrev, processed.expenseByCategoryMap, processed.anomalies])
 
-  // Forecast
   const forecast = useMemo(() => {
     if (datePreset !== 'currentMonth') return null
 
-    const startDate = fromISO(dateFrom)
-    const endDate = fromISO(dateTo)
-    const today = new Date()
-    
-    const daysPassed = Math.floor((endDate.getTime() - startDate.getTime()) / 86400000) + 1
-    if (daysPassed <= 0) return null
+    const dTo = fromISO(dateTo)
+    const y = dTo.getFullYear()
+    const m = dTo.getMonth()
+    const dim = daysInMonth(y, m)
 
-    const avgIncome = totals.totalIncome / daysPassed
-    const avgProfit = totals.profit / daysPassed
+    const dayOfMonth = dTo.getDate()
+    const remainingDays = Math.max(0, dim - dayOfMonth)
 
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-    const remainingDays = Math.max(0, lastDayOfMonth.getDate() - today.getDate())
+    const daysRange = Math.floor((fromISO(dateTo).getTime() - fromISO(dateFrom).getTime()) / 86400000) + 1
+    if (daysRange <= 0) return null
+
+    const avgIncome = totals.totalIncome / daysRange
+    const avgProfit = totals.profit / daysRange
 
     return {
       remainingDays,
       forecastIncome: Math.round(totals.totalIncome + avgIncome * remainingDays),
       forecastProfit: Math.round(totals.profit + avgProfit * remainingDays),
-      confidence: Math.min(90, Math.max(45, 60 + (daysPassed / 30) * 30)),
+      confidence: clamp(60 + (daysRange / dim) * 30, 45, 90),
     }
   }, [datePreset, dateFrom, dateTo, totals.totalIncome, totals.profit])
 
-  // Share handler
   const handleShare = useCallback(async () => {
     try {
       const url = window.location.href
-      await navigator.clipboard.writeText(url)
-      showToast('Ссылка скопирована в буфер обмена')
-    } catch {
-      try {
-        const url = window.location.href
-        const textarea = document.createElement('textarea')
-        textarea.value = url
-        textarea.style.position = 'fixed'
-        textarea.style.opacity = '0'
-        document.body.appendChild(textarea)
-        textarea.select()
-        document.execCommand('copy')
-        document.body.removeChild(textarea)
-        showToast('Ссылка скопирована в буфер обмена')
-      } catch {
-        showToast('Не удалось скопировать ссылку')
+      
+      if (navigator.share) {
+        await navigator.share({
+          title: 'AI Аналитика - Финансовый отчет',
+          text: `Отчет за ${dateFrom} — ${dateTo}`,
+          url: url,
+        })
+        showToast('Отправлено! ✅')
+      } else if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(url)
+        showToast('Ссылка скопирована ✅')
+      } else {
+        const textArea = document.createElement('textarea')
+        textArea.value = url
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-9999px'
+        document.body.appendChild(textArea)
+        textArea.focus()
+        textArea.select()
+        
+        try {
+          document.execCommand('copy')
+          showToast('Ссылка скопирована ✅')
+        } catch (err) {
+          showToast('Не удалось скопировать 😤')
+        } finally {
+          textArea.remove()
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        showToast('Не удалось поделиться 😤')
       }
     }
-  }, [showToast])
+  }, [showToast, dateFrom, dateTo])
 
-  // Download handler
   const handleDownload = useCallback(() => {
-    try {
-      const rows: string[][] = []
+    const rows: string[][] = []
 
-      const companyLabel = companyFilter === 'all'
-        ? includeExtraInTotals ? 'Все компании (включая F16 Extra)' : 'Все компании (без F16 Extra)'
+    const companyLabel =
+      companyFilter === 'all'
+        ? includeExtraInTotals
+          ? 'Все компании (включая F16 Extra)'
+          : 'Все компании (без F16 Extra)'
         : companyName(companyFilter)
 
-      rows.push(['Отчет'])
-      rows.push(['Период', `${dateFrom} — ${dateTo}`])
-      rows.push(['Компания', companyLabel])
-      rows.push(['Группировка', groupMode])
-      rows.push([''])
-      rows.push(['Итоги'])
-      rows.push(['Показатель', 'Сумма'])
-      rows.push(['Выручка (итого)', String(Math.round(totals.totalIncome))])
-      rows.push(['Наличные (доход)', String(Math.round(totals.incomeCash))])
-      rows.push(['Kaspi (доход)', String(Math.round(totals.incomeKaspi))])
-      rows.push(['Online (доход)', String(Math.round(totals.incomeOnline))])
-      rows.push(['Card (доход)', String(Math.round(totals.incomeCard))])
-      rows.push(['Безнал (итого)', String(Math.round(totals.incomeNonCash))])
-      rows.push(['Расход (итого)', String(Math.round(totals.totalExpense))])
-      rows.push(['Наличные (расход)', String(Math.round(totals.expenseCash))])
-      rows.push(['Kaspi (расход)', String(Math.round(totals.expenseKaspi))])
-      rows.push(['Прибыль', String(Math.round(totals.profit))])
-      rows.push(['Остаток нал', String(Math.round(totals.remainingCash))])
-      rows.push(['Остаток безнал', String(Math.round(totals.remainingKaspi))])
-      rows.push([''])
+    rows.push(['Отчет'])
+    rows.push(['Период', `${dateFrom} — ${dateTo}`])
+    rows.push(['Компания', companyLabel])
+    rows.push(['Группировка', groupMode])
+    rows.push([''])
+    rows.push(['Итоги'])
+    rows.push(['Показатель', 'Сумма'])
+    rows.push(['Выручка (итого)', String(Math.round(totals.totalIncome))])
+    rows.push(['Наличные (доход)', String(Math.round(totals.incomeCash))])
+    rows.push(['Kaspi (доход)', String(Math.round(totals.incomeKaspi))])
+    rows.push(['Online (доход)', String(Math.round(totals.incomeOnline))])
+    rows.push(['Card (доход)', String(Math.round(totals.incomeCard))])
+    rows.push(['Безнал (итого)', String(Math.round(totals.incomeNonCash))])
+    rows.push(['Расход (итого)', String(Math.round(totals.totalExpense))])
+    rows.push(['Наличные (расход)', String(Math.round(totals.expenseCash))])
+    rows.push(['Kaspi (расход)', String(Math.round(totals.expenseKaspi))])
+    rows.push(['Прибыль', String(Math.round(totals.profit))])
+    rows.push(['Остаток нал', String(Math.round(totals.remainingCash))])
+    rows.push(['Остаток безнал', String(Math.round(totals.remainingKaspi))])
+    rows.push([''])
 
-      rows.push(['Доходы (incomes)'])
-      rows.push(['date', 'company', 'shift', 'zone', 'cash', 'kaspi', 'online', 'card', 'total'])
-      for (const r of incomesCurrent.sort((a, b) => a.date.localeCompare(b.date))) {
-        const cash = safeNumber(r.cash_amount)
-        const kaspi = safeNumber(r.kaspi_amount)
-        const online = safeNumber(r.online_amount)
-        const card = safeNumber(r.card_amount)
-        const total = cash + kaspi + online + card
-        rows.push([
-          r.date,
-          companyName(r.company_id),
-          r.shift,
-          r.zone || '',
-          String(Math.round(cash)),
-          String(Math.round(kaspi)),
-          String(Math.round(online)),
-          String(Math.round(card)),
-          String(Math.round(total)),
-        ])
-      }
-
-      rows.push([''])
-      rows.push(['Расходы (expenses)'])
-      rows.push(['date', 'company', 'category', 'cash', 'kaspi', 'total'])
-      for (const r of expensesCurrent.sort((a, b) => a.date.localeCompare(b.date))) {
-        const cash = safeNumber(r.cash_amount)
-        const kaspi = safeNumber(r.kaspi_amount)
-        const total = cash + kaspi
-        rows.push([r.date, companyName(r.company_id), r.category || 'Без категории', String(Math.round(cash)), String(Math.round(kaspi)), String(Math.round(total))])
-      }
-
-      const csv = toCSV(rows, ';')
-      const fname = `report_${dateFrom}_${dateTo}.csv`
-      downloadTextFile(fname, csv)
-      showToast('CSV скачан')
-    } catch (error) {
-      console.error('Download error:', error)
-      showToast('Ошибка при скачивании')
+    rows.push(['Доходы (incomes)'])
+    rows.push(['date', 'company', 'shift', 'zone', 'cash', 'kaspi', 'online', 'card', 'total'])
+    for (const r of incomesCurrent.sort((a, b) => a.date.localeCompare(b.date))) {
+      const cash = safeNumber(r.cash_amount)
+      const kaspi = safeNumber(r.kaspi_amount)
+      const online = safeNumber(r.online_amount)
+      const card = safeNumber(r.card_amount)
+      const total = cash + kaspi + online + card
+      rows.push([
+        r.date,
+        companyName(r.company_id),
+        r.shift,
+        r.zone || '',
+        String(Math.round(cash)),
+        String(Math.round(kaspi)),
+        String(Math.round(online)),
+        String(Math.round(card)),
+        String(Math.round(total)),
+      ])
     }
-  }, [companyFilter, includeExtraInTotals, companyName, dateFrom, dateTo, groupMode, totals, incomesCurrent, expensesCurrent, showToast])
 
-  // Loading state
-  if (loading && companies.length === 0) {
+    rows.push([''])
+    rows.push(['Расходы (expenses)'])
+    rows.push(['date', 'company', 'category', 'cash', 'kaspi', 'total'])
+    for (const r of expensesCurrent.sort((a, b) => a.date.localeCompare(b.date))) {
+      const cash = safeNumber(r.cash_amount)
+      const kaspi = safeNumber(r.kaspi_amount)
+      const total = cash + kaspi
+      rows.push([r.date, companyName(r.company_id), r.category || 'Без категории', String(Math.round(cash)), String(Math.round(kaspi)), String(Math.round(total))])
+    }
+
+    const csv = toCSV(rows, ';')
+    const fname = `report_${dateFrom}_${dateTo}.csv`
+    downloadTextFile(fname, csv)
+    showToast('CSV скачан ✅')
+  }, [
+    companyFilter,
+    includeExtraInTotals,
+    companyName,
+    dateFrom,
+    dateTo,
+    groupMode,
+    totals,
+    incomesCurrent,
+    expensesCurrent,
+    showToast,
+  ])
+
+  if (loading) {
     return (
       <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
         <Sidebar />
@@ -975,16 +1052,11 @@ export default function ReportsPage() {
     return (
       <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
         <Sidebar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-rose-400 bg-rose-500/10 px-6 py-4 rounded-2xl border border-rose-500/20">
-            {error}
-          </div>
-        </main>
+        <main className="flex-1 flex items-center justify-center text-rose-400">{error}</main>
       </div>
     )
   }
 
-  // Overview Block
   const OverviewBlock = (
     <>
       {aiInsights.length > 0 && (
@@ -1158,6 +1230,7 @@ export default function ReportsPage() {
                     <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
                   </linearGradient>
                 </defs>
+
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
                 <XAxis dataKey="label" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatCompact} />
@@ -1283,7 +1356,6 @@ export default function ReportsPage() {
     </>
   )
 
-  // Analytics Block
   const AnalyticsBlock = (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
@@ -1349,7 +1421,6 @@ export default function ReportsPage() {
     </div>
   )
 
-  // Details Block
   const DetailsBlock = (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
@@ -1442,14 +1513,15 @@ export default function ReportsPage() {
 
       <main className="flex-1 overflow-auto">
         <div className="p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
-          {/* Toast */}
           {toast && (
             <div className="fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl bg-gray-900/80 border border-white/10 backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2">
-              <div className="text-sm text-white">{toast}</div>
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-violet-400" />
+                <span className="text-sm text-white">{toast}</span>
+              </div>
             </div>
           )}
 
-          {/* Header */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-8">
             <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
@@ -1472,7 +1544,9 @@ export default function ReportsPage() {
                       key={tab}
                       onClick={() => setActiveTab(tab)}
                       className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                        activeTab === tab ? 'bg-white/10 text-white shadow-lg' : 'text-gray-400 hover:text-white'
+                        activeTab === tab 
+                          ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg' 
+                          : 'text-gray-400 hover:text-white'
                       }`}
                     >
                       {tab === 'overview' && 'Обзор'}
@@ -1485,11 +1559,28 @@ export default function ReportsPage() {
                 <Button
                   variant="outline"
                   size="icon"
+                  className={`rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 relative ${
+                    isFiltersOpen ? 'bg-white/10' : ''
+                  }`}
+                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                  title="Показать/скрыть фильтры"
+                >
+                  <Filter className="w-4 h-4" />
+                  {activeFiltersCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-violet-500 rounded-full text-[10px] flex items-center justify-center">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="icon"
                   className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
                   onClick={resetFilters}
                   title="Сбросить фильтры"
                 >
-                  <Lightbulb className="w-4 h-4" />
+                  <RotateCcw className="w-4 h-4" />
                 </Button>
 
                 <Button
@@ -1507,7 +1598,7 @@ export default function ReportsPage() {
                   size="icon"
                   className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
                   onClick={handleShare}
-                  title="Скопировать ссылку"
+                  title="Поделиться отчетом"
                 >
                   <Share2 className="w-4 h-4" />
                 </Button>
@@ -1515,131 +1606,172 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* Filters */}
-          <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-            <div className="flex flex-col lg:flex-row gap-6">
-              <div className="flex-1 space-y-3">
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Период</label>
-                <div className="flex flex-wrap gap-2">
-                  {(['today', 'yesterday', 'last7', 'currentMonth', 'prevMonth'] as DatePreset[]).map((p) => (
+          <div className={`rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 overflow-hidden transition-all duration-300 ${
+            isFiltersOpen ? 'opacity-100 max-h-[1000px]' : 'opacity-0 max-h-0'
+          }`}>
+            <div className="p-6">
+              <div className="flex flex-col lg:flex-row gap-6">
+                <div className="flex-1 space-y-3">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <Calendar className="w-3 h-3" />
+                    Период
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {(['today', 'yesterday', 'last7', 'currentMonth', 'prevMonth'] as DatePreset[]).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => handlePresetChange(p)}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          datePreset === p
+                            ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25'
+                            : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
+                        }`}
+                      >
+                        {p === 'today' && 'Сегодня'}
+                        {p === 'yesterday' && 'Вчера'}
+                        {p === 'last7' && '7 дней'}
+                        {p === 'currentMonth' && 'Этот месяц'}
+                        {p === 'prevMonth' && 'Прошлый месяц'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      max={dateTo}
+                      onChange={(e) => {
+                        setDateFrom(e.target.value)
+                        setDatePreset('custom')
+                      }}
+                      className="bg-gray-800/50 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50 transition-colors"
+                    />
+                    <span className="text-gray-500">→</span>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      min={dateFrom}
+                      onChange={(e) => {
+                        setDateTo(e.target.value)
+                        setDatePreset('custom')
+                      }}
+                      className="bg-gray-800/50 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3 min-w-[260px]">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <Building2 className="w-3 h-3" />
+                    Компания
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={companyFilter}
+                      onChange={(e) => setCompanyFilter(e.target.value)}
+                      className="w-full bg-gray-800/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer"
+                    >
+                      <option value="all">Все компании</option>
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                  </div>
+
+                  {companyFilter === 'all' && (
                     <button
-                      key={p}
-                      onClick={() => handlePresetChange(p)}
-                      className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                        datePreset === p
-                          ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25'
-                          : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
+                      onClick={() => setIncludeExtraInTotals((v) => !v)}
+                      className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors w-full ${
+                        includeExtraInTotals ? 'text-fuchsia-400 bg-fuchsia-500/10' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
                       }`}
                     >
-                      {p === 'today' && 'Сегодня'}
-                      {p === 'yesterday' && 'Вчера'}
-                      {p === 'last7' && '7 дней'}
-                      {p === 'currentMonth' && 'Этот месяц'}
-                      {p === 'prevMonth' && 'Прошлый месяц'}
+                      <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-fuchsia-400' : 'bg-gray-600'}`} />
+                      Учитывать F16 Extra
                     </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => {
-                      setDateFrom(e.target.value)
-                      setDatePreset('custom')
-                    }}
-                    className="bg-gray-800/50 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                  />
-                  <span className="text-gray-500">→</span>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => {
-                      setDateTo(e.target.value)
-                      setDatePreset('custom')
-                    }}
-                    className="bg-gray-800/50 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-3 min-w-[260px]">
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Компания</label>
-                <select
-                  value={companyFilter}
-                  onChange={(e) => setCompanyFilter(e.target.value)}
-                  className="w-full bg-gray-800/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500/50"
-                >
-                  <option value="all">Все компании</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-
-                {companyFilter === 'all' && (
-                  <button
-                    onClick={() => setIncludeExtraInTotals((v) => !v)}
-                    className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors ${
-                      includeExtraInTotals ? 'text-fuchsia-400 bg-fuchsia-500/10' : 'text-gray-500 hover:text-gray-300'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-fuchsia-400' : 'bg-gray-600'}`} />
-                    Учитывать F16 Extra
-                  </button>
-                )}
-              </div>
-
-              <div className="space-y-3 min-w-[240px]">
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Группировка</label>
-                <div className="flex gap-2">
-                  {(['day', 'week', 'month'] as GroupMode[]).map((mode) => (
+                  )}
+                  
+                  {companyFilter !== 'all' && (
                     <button
-                      key={mode}
-                      onClick={() => setGroupMode(mode)}
-                      className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                        groupMode === mode ? 'bg-gray-700 text-white' : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
-                      }`}
+                      onClick={() => setCompanyFilter('all')}
+                      className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-300 px-3 py-2"
                     >
-                      {mode === 'day' && 'Дни'}
-                      {mode === 'week' && 'Недели'}
-                      {mode === 'month' && 'Месяцы'}
+                      <X className="w-3 h-3" />
+                      Сбросить выбор
                     </button>
-                  ))}
+                  )}
                 </div>
-              </div>
 
-              {forecast && (
-                <div className="space-y-3 min-w-[270px]">
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Прогноз на месяц</label>
-                  <div className="p-4 rounded-xl bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/20">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs text-gray-400">Точность {forecast.confidence.toFixed(0)}%</span>
-                      <span className="text-xs text-violet-400">{forecast.remainingDays} дн. осталось</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-xs text-gray-500">Выручка</div>
-                        <div className="text-lg font-bold text-violet-400">{formatMoneyFull(forecast.forecastIncome)}</div>
+                <div className="space-y-3 min-w-[240px]">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <LayoutGrid className="w-3 h-3" />
+                    Группировка
+                  </label>
+                  <div className="flex gap-2">
+                    {(['day', 'week', 'month'] as GroupMode[]).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setGroupMode(mode)}
+                        className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          groupMode === mode 
+                            ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg' 
+                            : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
+                        }`}
+                      >
+                        {mode === 'day' && 'Дни'}
+                        {mode === 'week' && 'Недели'}
+                        {mode === 'month' && 'Месяцы'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {forecast && (
+                  <div className="space-y-3 min-w-[270px]">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Прогноз на месяц</label>
+                    <div className="p-4 rounded-xl bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/20">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs text-gray-400">Точность {forecast.confidence.toFixed(0)}%</span>
+                        <span className="text-xs text-violet-400">{forecast.remainingDays} дн. осталось</span>
                       </div>
-                      <div>
-                        <div className="text-xs text-gray-500">Прибыль</div>
-                        <div className="text-lg font-bold text-emerald-400">{formatMoneyFull(forecast.forecastProfit)}</div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-xs text-gray-500">Выручка</div>
+                          <div className="text-lg font-bold text-violet-400">{formatMoneyFull(forecast.forecastIncome)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Прибыль</div>
+                          <div className="text-lg font-bold text-emerald-400">{formatMoneyFull(forecast.forecastProfit)}</div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Tab Content */}
-          {activeTab === 'overview' && OverviewBlock}
-          {activeTab === 'analytics' && AnalyticsBlock}
-          {activeTab === 'details' && DetailsBlock}
+          <div className="transition-all duration-300">
+            {activeTab === 'overview' && OverviewBlock}
+            {activeTab === 'analytics' && AnalyticsBlock}
+            {activeTab === 'details' && DetailsBlock}
+          </div>
         </div>
       </main>
     </div>
+  )
+}
+
+// =====================
+// EXPORT WITH SUSPENSE
+// =====================
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={<ReportsSkeleton />}>
+      <ReportsContent />
+    </Suspense>
   )
 }
