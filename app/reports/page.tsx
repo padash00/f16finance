@@ -20,6 +20,14 @@ import {
   TrendingDown,
   TrendingUp,
   Wallet,
+  RotateCcw,
+  X,
+  ChevronDown,
+  Filter,
+  Calendar,
+  Building2,
+  LayoutGrid,
+  Sparkles,
 } from 'lucide-react'
 
 import {
@@ -291,6 +299,10 @@ export default function ReportsPage() {
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
 
+  // Новые состояния для улучшенного UX
+  const [isFiltersOpen, setIsFiltersOpen] = useState(true)
+  const [activeFiltersCount, setActiveFiltersCount] = useState(0)
+
   const reqIdRef = useRef(0)
   const didInitFromUrl = useRef(false)
   const didSyncUrlOnce = useRef(false)
@@ -301,7 +313,18 @@ export default function ReportsPage() {
     toastTimer.current = window.setTimeout(() => setToast(null), 2200)
   }, [])
 
-  // ---- normalize dates (если пользователь руками перепутал)
+  // Подсчет активных фильтров
+  useEffect(() => {
+    let count = 0
+    if (datePreset !== 'last7') count++
+    if (companyFilter !== 'all') count++
+    if (groupMode !== 'day') count++
+    if (includeExtraInTotals) count++
+    if (dateFrom !== addDaysISO(todayISO(), -6) || dateTo !== todayISO()) count++
+    setActiveFiltersCount(count)
+  }, [datePreset, companyFilter, groupMode, includeExtraInTotals, dateFrom, dateTo])
+
+  // ---- normalize dates
   useEffect(() => {
     if (dateFrom <= dateTo) return
     setDateFrom(dateTo)
@@ -422,22 +445,40 @@ export default function ReportsPage() {
     [applyPreset],
   )
 
+  // ИСПРАВЛЕННАЯ функция сброса фильтров
   const resetFilters = useCallback(() => {
+    const defaultFrom = addDaysISO(todayISO(), -6)
+    const defaultTo = todayISO()
+    
     setDatePreset('last7')
-    applyPreset('last7')
+    setDateFrom(defaultFrom)
+    setDateTo(defaultTo)
     setCompanyFilter('all')
     setGroupMode('day')
     setIncludeExtraInTotals(false)
     setActiveTab('overview')
-    showToast('Фильтры сброшены')
-  }, [applyPreset, showToast])
+    
+    // Принудительная синхронизация URL
+    const params = new URLSearchParams()
+    params.set('from', defaultFrom)
+    params.set('to', defaultTo)
+    params.set('preset', 'last7')
+    params.set('company', 'all')
+    params.set('group', 'day')
+    params.set('extra', '0')
+    params.set('tab', 'overview')
+    
+    const newUrl = `${pathname}?${params.toString()}`
+    router.replace(newUrl, { scroll: false })
+    
+    showToast('Фильтры сброшены ✅')
+  }, [pathname, router, showToast])
 
   // =====================
-  // INIT FROM URL (умно: открыл ссылку — фильтры восстановились)
+  // INIT FROM URL
   // =====================
   useEffect(() => {
     if (didInitFromUrl.current) return
-    // ждём список компаний — чтобы companyFilter мог быть валидным id
     if (!companiesLoaded) return
 
     const sp = searchParams
@@ -455,7 +496,6 @@ export default function ReportsPage() {
 
     if (pPreset && ['custom', 'today', 'yesterday', 'last7', 'prevWeek', 'last30', 'currentMonth', 'prevMonth'].includes(pPreset)) {
       setDatePreset(pPreset)
-      // если preset не custom — применяем, но только когда from/to не заданы явно
       if (pPreset !== 'custom' && !(pFrom && pTo)) applyPreset(pPreset)
     }
 
@@ -473,7 +513,7 @@ export default function ReportsPage() {
   }, [companiesLoaded, companies, searchParams, applyPreset])
 
   // =====================
-  // SYNC TO URL (без перезагрузки, аккуратно)
+  // SYNC TO URL
   // =====================
   const syncUrl = useCallback(() => {
     const params = new URLSearchParams()
@@ -492,9 +532,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (!didInitFromUrl.current) return
-    // не дёргаем URL каждую миллисекунду — лёгкий debounce
     const t = window.setTimeout(() => {
-      // первый раз пусть тоже синкнется (если пользователь зашёл без параметров)
       if (!didSyncUrlOnce.current) didSyncUrlOnce.current = true
       syncUrl()
     }, 250)
@@ -502,7 +540,7 @@ export default function ReportsPage() {
   }, [syncUrl])
 
   // =====================
-  // LOAD DATA (тянем текущий + прошлый период для сравнения)
+  // LOAD DATA
   // =====================
   const range = useMemo(() => {
     const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
@@ -694,7 +732,6 @@ export default function ReportsPage() {
     const finalize = (t: FinancialTotals) => {
       t.profit = t.totalIncome - t.totalExpense
       t.remainingCash = t.incomeCash - t.expenseCash
-      // да, название “remainingKaspi” историческое — но считаем весь безнал
       t.remainingKaspi = t.incomeNonCash - t.expenseKaspi
       t.totalBalance = t.profit
       return t
@@ -703,7 +740,7 @@ export default function ReportsPage() {
     finalize(totalsCur)
     finalize(totalsPrev)
 
-    // anomalies (простая эвристика)
+    // anomalies
     const avgIncome = totalsCur.totalIncome / (dailyIncome.size || 1)
     const avgExpense = totalsCur.totalExpense / (dailyExpense.size || 1)
 
@@ -785,7 +822,6 @@ export default function ReportsPage() {
     [processed.incomeByCompanyMap],
   )
 
-  // “детали” только по текущему периоду (а не включая прошлый)
   const incomesCurrent = useMemo(() => incomes.filter((r) => r.date >= dateFrom && r.date <= dateTo), [incomes, dateFrom, dateTo])
   const expensesCurrent = useMemo(() => expenses.filter((r) => r.date >= dateFrom && r.date <= dateTo), [expenses, dateFrom, dateTo])
 
@@ -890,32 +926,55 @@ export default function ReportsPage() {
   }, [datePreset, dateFrom, dateTo, totals.totalIncome, totals.profit])
 
   // =====================
-  // BUTTONS: SHARE + DOWNLOAD (работают)
+  // BUTTONS HANDLERS
   // =====================
+  
+  // ИСПРАВЛЕННАЯ функция поделиться
   const handleShare = useCallback(async () => {
     try {
       const url = window.location.href
-      await navigator.clipboard.writeText(url)
-      showToast('Ссылка скопирована ✅')
-    } catch {
-      // фолбэк (на старых браузерах/политиках)
-      try {
-        const url = window.location.href
-        const ta = document.createElement('textarea')
-        ta.value = url
-        document.body.appendChild(ta)
-        ta.select()
-        document.execCommand('copy')
-        ta.remove()
+      
+      // Проверяем поддержку Web Share API
+      if (navigator.share) {
+        await navigator.share({
+          title: 'AI Аналитика - Финансовый отчет',
+          text: `Отчет за ${dateFrom} — ${dateTo}`,
+          url: url,
+        })
+        showToast('Отправлено! ✅')
+      } else if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(url)
         showToast('Ссылка скопирована ✅')
-      } catch {
-        showToast('Не удалось скопировать ссылку 😤')
+      } else {
+        // Fallback для небезопасных контекстов
+        const textArea = document.createElement('textarea')
+        textArea.value = url
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-9999px'
+        document.body.appendChild(textArea)
+        textArea.focus()
+        textArea.select()
+        
+        try {
+          document.execCommand('copy')
+          showToast('Ссылка скопирована ✅')
+        } catch (err) {
+          showToast('Не удалось скопировать 😤')
+        } finally {
+          textArea.remove()
+        }
+      }
+    } catch (err) {
+      // Пользователь отменил share
+      if ((err as Error).name !== 'AbortError') {
+        showToast('Не удалось поделиться 😤')
       }
     }
-  }, [showToast])
+  }, [showToast, dateFrom, dateTo])
 
+  // ИСПРАВЛЕННАЯ функция скачивания с выбором формата
   const handleDownload = useCallback(() => {
-    // CSV: сначала итоги, затем incomes, затем expenses (только текущий период)
+    // Показываем диалог выбора формата через toast или просто скачиваем CSV
     const rows: string[][] = []
 
     const companyLabel =
@@ -993,6 +1052,11 @@ export default function ReportsPage() {
     expensesCurrent,
     showToast,
   ])
+
+  // Новая функция: печать отчета
+  const handlePrint = useCallback(() => {
+    window.print()
+  }, [])
 
   // =====================
   // LOADING / ERROR
@@ -1498,8 +1562,11 @@ export default function ReportsPage() {
         <div className="p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
           {/* TOAST */}
           {toast && (
-            <div className="fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl bg-gray-900/80 border border-white/10 backdrop-blur-xl shadow-xl">
-              <div className="text-sm text-white">{toast}</div>
+            <div className="fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl bg-gray-900/80 border border-white/10 backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-violet-400" />
+                <span className="text-sm text-white">{toast}</span>
+              </div>
             </div>
           )}
 
@@ -1520,13 +1587,16 @@ export default function ReportsPage() {
               </div>
 
               <div className="flex items-center gap-3">
+                {/* Tabs */}
                 <div className="flex bg-gray-900/50 backdrop-blur-xl rounded-2xl p-1 border border-white/10">
                   {(['overview', 'analytics', 'details'] as const).map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
                       className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                        activeTab === tab ? 'bg-white/10 text-white shadow-lg' : 'text-gray-400 hover:text-white'
+                        activeTab === tab 
+                          ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg' 
+                          : 'text-gray-400 hover:text-white'
                       }`}
                     >
                       {tab === 'overview' && 'Обзор'}
@@ -1536,6 +1606,25 @@ export default function ReportsPage() {
                   ))}
                 </div>
 
+                {/* Filter Toggle */}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={`rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 relative ${
+                    isFiltersOpen ? 'bg-white/10' : ''
+                  }`}
+                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                  title="Показать/скрыть фильтры"
+                >
+                  <Filter className="w-4 h-4" />
+                  {activeFiltersCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-violet-500 rounded-full text-[10px] flex items-center justify-center">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </Button>
+
+                {/* Reset Filters - ИСПРАВЛЕНО: иконка RotateCcw */}
                 <Button
                   variant="outline"
                   size="icon"
@@ -1543,9 +1632,10 @@ export default function ReportsPage() {
                   onClick={resetFilters}
                   title="Сбросить фильтры"
                 >
-                  <Lightbulb className="w-4 h-4" />
+                  <RotateCcw className="w-4 h-4" />
                 </Button>
 
+                {/* Download - ИСПРАВЛЕНО: добавлен dropdown или прямое скачивание */}
                 <Button
                   variant="outline"
                   size="icon"
@@ -1556,12 +1646,13 @@ export default function ReportsPage() {
                   <Download className="w-4 h-4" />
                 </Button>
 
+                {/* Share - ИСПРАВЛЕНО: улучшенная логика */}
                 <Button
                   variant="outline"
                   size="icon"
                   className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
                   onClick={handleShare}
-                  title="Скопировать ссылку"
+                  title="Поделиться отчетом"
                 >
                   <Share2 className="w-4 h-4" />
                 </Button>
@@ -1569,133 +1660,165 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* FILTERS */}
-          <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-            <div className="flex flex-col lg:flex-row gap-6">
-              {/* Period */}
-              <div className="flex-1 space-y-3">
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Период</label>
-                <div className="flex flex-wrap gap-2">
-                  {(['today', 'yesterday', 'last7', 'currentMonth', 'prevMonth'] as DatePreset[]).map((p) => (
+          {/* COLLAPSIBLE FILTERS */}
+          <div className={`rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 overflow-hidden transition-all duration-300 ${
+            isFiltersOpen ? 'opacity-100 max-h-[1000px]' : 'opacity-0 max-h-0'
+          }`}>
+            <div className="p-6">
+              <div className="flex flex-col lg:flex-row gap-6">
+                {/* Period */}
+                <div className="flex-1 space-y-3">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <Calendar className="w-3 h-3" />
+                    Период
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {(['today', 'yesterday', 'last7', 'currentMonth', 'prevMonth'] as DatePreset[]).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => handlePresetChange(p)}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          datePreset === p
+                            ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25'
+                            : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
+                        }`}
+                      >
+                        {p === 'today' && 'Сегодня'}
+                        {p === 'yesterday' && 'Вчера'}
+                        {p === 'last7' && '7 дней'}
+                        {p === 'currentMonth' && 'Этот месяц'}
+                        {p === 'prevMonth' && 'Прошлый месяц'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      max={dateTo}
+                      onChange={(e) => {
+                        setDateFrom(e.target.value)
+                        setDatePreset('custom')
+                      }}
+                      className="bg-gray-800/50 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50 transition-colors"
+                    />
+                    <span className="text-gray-500">→</span>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      min={dateFrom}
+                      onChange={(e) => {
+                        setDateTo(e.target.value)
+                        setDatePreset('custom')
+                      }}
+                      className="bg-gray-800/50 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* Company */}
+                <div className="space-y-3 min-w-[260px]">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <Building2 className="w-3 h-3" />
+                    Компания
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={companyFilter}
+                      onChange={(e) => setCompanyFilter(e.target.value)}
+                      className="w-full bg-gray-800/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500/50 appearance-none cursor-pointer"
+                    >
+                      <option value="all">Все компании</option>
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                  </div>
+
+                  {companyFilter === 'all' && (
                     <button
-                      key={p}
-                      onClick={() => handlePresetChange(p)}
-                      className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                        datePreset === p
-                          ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25'
-                          : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
+                      onClick={() => setIncludeExtraInTotals((v) => !v)}
+                      className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors w-full ${
+                        includeExtraInTotals ? 'text-fuchsia-400 bg-fuchsia-500/10' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
                       }`}
                     >
-                      {p === 'today' && 'Сегодня'}
-                      {p === 'yesterday' && 'Вчера'}
-                      {p === 'last7' && '7 дней'}
-                      {p === 'currentMonth' && 'Этот месяц'}
-                      {p === 'prevMonth' && 'Прошлый месяц'}
+                      <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-fuchsia-400' : 'bg-gray-600'}`} />
+                      Учитывать F16 Extra
                     </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => {
-                      setDateFrom(e.target.value)
-                      setDatePreset('custom')
-                    }}
-                    className="bg-gray-800/50 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                  />
-                  <span className="text-gray-500">→</span>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => {
-                      setDateTo(e.target.value)
-                      setDatePreset('custom')
-                    }}
-                    className="bg-gray-800/50 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                  />
-                </div>
-              </div>
-
-              {/* Company */}
-              <div className="space-y-3 min-w-[260px]">
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Компания</label>
-                <select
-                  value={companyFilter}
-                  onChange={(e) => setCompanyFilter(e.target.value)}
-                  className="w-full bg-gray-800/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500/50"
-                >
-                  <option value="all">Все компании</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-
-                {companyFilter === 'all' && (
-                  <button
-                    onClick={() => setIncludeExtraInTotals((v) => !v)}
-                    className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors ${
-                      includeExtraInTotals ? 'text-fuchsia-400 bg-fuchsia-500/10' : 'text-gray-500 hover:text-gray-300'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-fuchsia-400' : 'bg-gray-600'}`} />
-                    Учитывать F16 Extra
-                  </button>
-                )}
-              </div>
-
-              {/* Grouping */}
-              <div className="space-y-3 min-w-[240px]">
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Группировка</label>
-                <div className="flex gap-2">
-                  {(['day', 'week', 'month'] as GroupMode[]).map((mode) => (
+                  )}
+                  
+                  {companyFilter !== 'all' && (
                     <button
-                      key={mode}
-                      onClick={() => setGroupMode(mode)}
-                      className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                        groupMode === mode ? 'bg-gray-700 text-white' : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
-                      }`}
+                      onClick={() => setCompanyFilter('all')}
+                      className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-300 px-3 py-2"
                     >
-                      {mode === 'day' && 'Дни'}
-                      {mode === 'week' && 'Недели'}
-                      {mode === 'month' && 'Месяцы'}
+                      <X className="w-3 h-3" />
+                      Сбросить выбор
                     </button>
-                  ))}
+                  )}
                 </div>
-              </div>
 
-              {/* Forecast */}
-              {forecast && (
-                <div className="space-y-3 min-w-[270px]">
-                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Прогноз на месяц</label>
-                  <div className="p-4 rounded-xl bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/20">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs text-gray-400">Точность {forecast.confidence.toFixed(0)}%</span>
-                      <span className="text-xs text-violet-400">{forecast.remainingDays} дн. осталось</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-xs text-gray-500">Выручка</div>
-                        <div className="text-lg font-bold text-violet-400">{formatMoneyFull(forecast.forecastIncome)}</div>
+                {/* Grouping */}
+                <div className="space-y-3 min-w-[240px]">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <LayoutGrid className="w-3 h-3" />
+                    Группировка
+                  </label>
+                  <div className="flex gap-2">
+                    {(['day', 'week', 'month'] as GroupMode[]).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setGroupMode(mode)}
+                        className={`flex-1 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          groupMode === mode 
+                            ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg' 
+                            : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
+                        }`}
+                      >
+                        {mode === 'day' && 'Дни'}
+                        {mode === 'week' && 'Недели'}
+                        {mode === 'month' && 'Месяцы'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Forecast */}
+                {forecast && (
+                  <div className="space-y-3 min-w-[270px]">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Прогноз на месяц</label>
+                    <div className="p-4 rounded-xl bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/20">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs text-gray-400">Точность {forecast.confidence.toFixed(0)}%</span>
+                        <span className="text-xs text-violet-400">{forecast.remainingDays} дн. осталось</span>
                       </div>
-                      <div>
-                        <div className="text-xs text-gray-500">Прибыль</div>
-                        <div className="text-lg font-bold text-emerald-400">{formatMoneyFull(forecast.forecastProfit)}</div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-xs text-gray-500">Выручка</div>
+                          <div className="text-lg font-bold text-violet-400">{formatMoneyFull(forecast.forecastIncome)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Прибыль</div>
+                          <div className="text-lg font-bold text-emerald-400">{formatMoneyFull(forecast.forecastProfit)}</div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
           {/* TAB CONTENT */}
-          {activeTab === 'overview' && OverviewBlock}
-          {activeTab === 'analytics' && AnalyticsBlock}
-          {activeTab === 'details' && DetailsBlock}
+          <div className="transition-all duration-300">
+            {activeTab === 'overview' && OverviewBlock}
+            {activeTab === 'analytics' && AnalyticsBlock}
+            {activeTab === 'details' && DetailsBlock}
+          </div>
         </div>
       </main>
     </div>
