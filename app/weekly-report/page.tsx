@@ -47,6 +47,8 @@ import {
   Landmark,
   Percent,
   Scale,
+  Smartphone,
+  CreditCard as CardIcon,
 } from 'lucide-react'
 
 import {
@@ -66,7 +68,7 @@ import {
 } from 'recharts'
 
 // =====================
-// TYPES
+// TYPES (ИСПРАВЛЕНО)
 // =====================
 type Company = { id: string; name: string; code: string | null }
 
@@ -75,6 +77,7 @@ type IncomeRow = {
   company_id: string
   cash_amount: number | null
   kaspi_amount: number | null
+  online_amount: number | null  // ✅ ДОБАВЛЕНО
   card_amount: number | null
 }
 
@@ -87,11 +90,12 @@ type ExpenseRow = {
 }
 
 type WeekTotals = {
-  // Income
+  // Income (РАСШИРЕНО)
   incomeCash: number
   incomeKaspi: number
+  incomeOnline: number  // ✅ отдельно online_amount
   incomeCard: number
-  incomeOnline: number
+  incomeNonCash: number  // ✅ kaspi + online + card
   incomeTotal: number
 
   // Expenses
@@ -106,7 +110,14 @@ type WeekTotals = {
   extraTotal: number
 
   // By company
-  statsByCompany: Record<string, { cash: number; online: number; total: number }>
+  statsByCompany: Record<string, { 
+    cash: number; 
+    kaspi: number;      // ✅ добавили детализацию
+    online: number; 
+    card: number; 
+    nonCash: number;
+    total: number;
+  }>
 
   // Categories
   expenseCategories: { name: string; value: number; percentage: number }[]
@@ -129,15 +140,21 @@ type WeekTotals = {
   metrics: {
     expenseRate: number
     cashShare: number
-    onlineShare: number
+    kaspiShare: number      // ✅ добавили
+    onlineShare: number      // ✅ добавили
+    cardShare: number        // ✅ добавили
+    nonCashShare: number     // ✅ добавили
     netCash: number
-    netOnline: number
+    netKaspi: number         // ✅ добавили
+    netOnline: number        // ✅ добавили
+    netCard: number          // ✅ добавили
+    netNonCash: number       // ✅ добавили
     topExpenseName: string | null
     topExpenseShare: number
     profitMargin: number
   }
 
-  // Daily data for charts
+  // Daily data for charts (РАСШИРЕНО)
   dailyData: DailyDataPoint[]
 }
 
@@ -149,13 +166,13 @@ type DailyDataPoint = {
   profit: number
   incomeCash: number
   incomeKaspi: number
+  incomeOnline: number  // ✅ добавили
   incomeCard: number
   expenseCash: number
   expenseKaspi: number
 }
 
 type InsightType = 'success' | 'warning' | 'danger' | 'info' | 'opportunity'
-type Severity = 'low' | 'medium' | 'high' | 'critical'
 
 interface AIInsight {
   type: InsightType
@@ -206,7 +223,7 @@ const addDaysISO = (iso: string, diff: number): string => {
 
 const getWeekBounds = (dateISO: string) => {
   const d = fromISO(dateISO)
-  const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay() // 1..7
+  const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay()
 
   const monday = new Date(d)
   monday.setDate(d.getDate() - (dayOfWeek - 1))
@@ -333,7 +350,14 @@ const MemoizedDailyChart = memo(({ data }: { data: DailyDataPoint[] }) => {
             borderRadius: '12px',
             backdropFilter: 'blur(10px)'
           }}
-          formatter={(value: number, name: string) => [formatMoneyFull(value), name === 'income' ? 'Доход' : name === 'expense' ? 'Расход' : 'Прибыль']}
+          formatter={(value: number, name: string) => {
+            const labels: Record<string, string> = {
+              income: 'Доход',
+              expense: 'Расход',
+              profit: 'Прибыль'
+            }
+            return [formatMoneyFull(value), labels[name] || name]
+          }}
         />
         <Area 
           type="monotone" 
@@ -397,7 +421,7 @@ const MemoizedPieChart = memo(({ data }: { data: { name: string; value: number; 
 })
 MemoizedPieChart.displayName = 'MemoizedPieChart'
 
-const MemoizedBarChart = memo(({ data }: { data: { name: string; cash: number; online: number; total: number }[] }) => {
+const MemoizedBarChart = memo(({ data }: { data: { name: string; cash: number; kaspi: number; online: number; card: number; total: number }[] }) => {
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ left: 20 }}>
@@ -425,10 +449,20 @@ const MemoizedBarChart = memo(({ data }: { data: { name: string; cash: number; o
             border: '1px solid rgba(255,255,255,0.1)', 
             borderRadius: '12px' 
           }}
-          formatter={(value: number) => formatMoneyFull(value)}
+          formatter={(value: number, name: string) => {
+            const labels: Record<string, string> = {
+              cash: 'Наличные',
+              kaspi: 'Kaspi',
+              online: 'Online',
+              card: 'Карта'
+            }
+            return [formatMoneyFull(value), labels[name] || name]
+          }}
         />
         <Bar dataKey="cash" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} name="Наличные" />
-        <Bar dataKey="online" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Онлайн" />
+        <Bar dataKey="kaspi" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Kaspi" />
+        <Bar dataKey="online" stackId="a" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Online" />
+        <Bar dataKey="card" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Карта" />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -650,7 +684,7 @@ function WeeklyReportContent() {
   }, [startDate, endDate, includeExtraInTotals, pathname, router])
 
   // =====================
-  // LOAD DATA
+  // LOAD DATA (ИСПРАВЛЕНО - добавлен online_amount)
   // =====================
   useEffect(() => {
     const load = async () => {
@@ -667,7 +701,7 @@ function WeeklyReportContent() {
       try {
         const incomeQ = supabase
           .from('incomes')
-          .select('date,company_id,cash_amount,kaspi_amount,card_amount')
+          .select('date,company_id,cash_amount,kaspi_amount,online_amount,card_amount') // ✅ добавлен online_amount
           .gte('date', rangeFrom)
           .lte('date', rangeTo)
 
@@ -710,7 +744,7 @@ function WeeklyReportContent() {
   }, [companiesLoaded, startDate, endDate])
 
   // =====================
-  // PROCESS DATA
+  // PROCESS DATA (ИСПРАВЛЕНО - учтен online_amount)
   // =====================
   const extraCompanyId = useMemo(() => {
     const c = companies.find(
@@ -730,11 +764,14 @@ function WeeklyReportContent() {
     const prevStart = addDaysISO(startDate, -7)
     const prevEnd = addDaysISO(endDate, -7)
 
+    // Income counters
     let iCash = 0
     let iKaspi = 0
+    let iOnline = 0      // ✅ новый счётчик
     let iCard = 0
-    let iOnline = 0
+    let iNonCash = 0
 
+    // Expense counters
     let eCash = 0
     let eKaspi = 0
 
@@ -743,9 +780,25 @@ function WeeklyReportContent() {
     let pIncome = 0
     let pExpense = 0
 
-    const statsByCompany: Record<string, { cash: number; online: number; total: number }> = {}
+    // Stats by company (расширено)
+    const statsByCompany: Record<string, { 
+      cash: number; 
+      kaspi: number; 
+      online: number; 
+      card: number; 
+      nonCash: number;
+      total: number;
+    }> = {}
+    
     for (const c of activeCompanies) {
-      statsByCompany[c.id] = { cash: 0, online: 0, total: 0 }
+      statsByCompany[c.id] = { 
+        cash: 0, 
+        kaspi: 0, 
+        online: 0, 
+        card: 0, 
+        nonCash: 0,
+        total: 0 
+      }
     }
 
     const catMap = new Map<string, number>()
@@ -755,7 +808,7 @@ function WeeklyReportContent() {
     for (let i = 0; i < 7; i++) {
       const date = addDaysISO(startDate, i)
       const dayIndex = fromISO(date).getDay()
-      const label = DAY_LABELS[dayIndex === 0 ? 6 : dayIndex - 1] // Convert to 0-6 where 0 is Monday
+      const label = DAY_LABELS[dayIndex === 0 ? 6 : dayIndex - 1]
       
       dailyMap.set(date, {
         day: date,
@@ -765,6 +818,7 @@ function WeeklyReportContent() {
         profit: 0,
         incomeCash: 0,
         incomeKaspi: 0,
+        incomeOnline: 0,    // ✅ добавили
         incomeCard: 0,
         expenseCash: 0,
         expenseKaspi: 0,
@@ -775,23 +829,27 @@ function WeeklyReportContent() {
     const inCurrentWeek = (iso: string) => iso >= startDate && iso <= endDate
     const inPrevWeek = (iso: string) => iso >= prevStart && iso <= prevEnd
 
-    // Process incomes
+    // Process incomes (ГЛАВНОЕ ИСПРАВЛЕНИЕ)
     for (const r of incomeRows) {
       const cash = safeNumber(r.cash_amount)
       const kaspi = safeNumber(r.kaspi_amount)
+      const online = safeNumber(r.online_amount)  // ✅ теперь учитываем
       const card = safeNumber(r.card_amount)
-      const online = kaspi + card
-      const total = cash + online
+      
+      const nonCash = kaspi + online + card  // ✅ все безналичные вместе
+      const total = cash + nonCash
 
       if (total <= 0) continue
 
       const extra = isExtra(r.company_id)
 
+      // Previous week
       if (inPrevWeek(r.date)) {
         if (!extra || includeExtraInTotals) pIncome += total
         continue
       }
 
+      // Current week
       if (!inCurrentWeek(r.date)) continue
 
       if (extra) {
@@ -799,15 +857,21 @@ function WeeklyReportContent() {
         if (!includeExtraInTotals) continue
       }
 
+      // Add to totals
       iCash += cash
       iKaspi += kaspi
+      iOnline += online    // ✅ добавляем online
       iCard += card
-      iOnline += online
+      iNonCash += nonCash
 
+      // Add to company stats
       const s = statsByCompany[r.company_id]
       if (s) {
         s.cash += cash
+        s.kaspi += kaspi
         s.online += online
+        s.card += card
+        s.nonCash += nonCash
         s.total += total
       }
 
@@ -817,6 +881,7 @@ function WeeklyReportContent() {
         day.income += total
         day.incomeCash += cash
         day.incomeKaspi += kaspi
+        day.incomeOnline += online  // ✅ добавляем online
         day.incomeCard += card
       }
     }
@@ -846,7 +911,6 @@ function WeeklyReportContent() {
       const catName = (r.category || '').trim() || 'Без категории'
       catMap.set(catName, (catMap.get(catName) || 0) + total)
 
-      // Add to daily data
       const day = dailyMap.get(r.date)
       if (day) {
         day.expense += total
@@ -855,8 +919,7 @@ function WeeklyReportContent() {
       }
     }
 
-    const incomeOnline = iKaspi + iCard
-    const incomeTotal = iCash + incomeOnline
+    const incomeTotal = iCash + iNonCash
     const expenseTotal = eCash + eKaspi
     const profit = incomeTotal - expenseTotal
 
@@ -880,21 +943,29 @@ function WeeklyReportContent() {
 
     const topExpense = expenseCategories[0] || null
 
+    // Metrics (расширенные)
     const expenseRate = incomeTotal > 0 ? (expenseTotal / incomeTotal) * 100 : 0
     const cashShare = incomeTotal > 0 ? (iCash / incomeTotal) * 100 : 0
-    const onlineShare = incomeTotal > 0 ? (incomeOnline / incomeTotal) * 100 : 0
+    const kaspiShare = incomeTotal > 0 ? (iKaspi / incomeTotal) * 100 : 0
+    const onlineShare = incomeTotal > 0 ? (iOnline / incomeTotal) * 100 : 0
+    const cardShare = incomeTotal > 0 ? (iCard / incomeTotal) * 100 : 0
+    const nonCashShare = incomeTotal > 0 ? (iNonCash / incomeTotal) * 100 : 0
     const profitMargin = incomeTotal > 0 ? (profit / incomeTotal) * 100 : 0
 
     const netCash = iCash - eCash
-    const netOnline = incomeOnline - eKaspi
+    const netKaspi = iKaspi - eKaspi
+    const netOnline = iOnline  // расходов online нет
+    const netCard = iCard      // расходов card нет
+    const netNonCash = iNonCash - eKaspi
 
     const topExpenseShare = expenseTotal > 0 && topExpense ? (topExpense.value / expenseTotal) * 100 : 0
 
     return {
       incomeCash: iCash,
       incomeKaspi: iKaspi,
+      incomeOnline: iOnline,
       incomeCard: iCard,
-      incomeOnline,
+      incomeNonCash: iNonCash,
       incomeTotal,
 
       expenseCash: eCash,
@@ -922,9 +993,15 @@ function WeeklyReportContent() {
       metrics: {
         expenseRate,
         cashShare,
+        kaspiShare,
         onlineShare,
+        cardShare,
+        nonCashShare,
         netCash,
+        netKaspi,
         netOnline,
+        netCard,
+        netNonCash,
         topExpenseName: topExpense?.name ?? null,
         topExpenseShare,
         profitMargin,
@@ -944,13 +1021,14 @@ function WeeklyReportContent() {
   ])
 
   // =====================
-  // AI INSIGHTS
+  // AI INSIGHTS (обновлены)
   // =====================
   const aiInsights = useMemo((): AIInsight[] => {
     if (!totals) return []
 
     const insights: AIInsight[] = []
 
+    // Маржинальность
     if (totals.metrics.profitMargin < 10) {
       insights.push({ 
         type: 'danger', 
@@ -977,6 +1055,7 @@ function WeeklyReportContent() {
       })
     }
 
+    // Расходы
     if (totals.metrics.expenseRate > 80) {
       insights.push({
         type: 'warning',
@@ -987,6 +1066,7 @@ function WeeklyReportContent() {
       })
     }
 
+    // Анализ типов платежей
     if (totals.metrics.cashShare > 70) {
       insights.push({
         type: 'opportunity',
@@ -997,6 +1077,17 @@ function WeeklyReportContent() {
       })
     }
 
+    if (totals.metrics.onlineShare > 30) {
+      insights.push({
+        type: 'info',
+        title: 'Активные онлайн-платежи',
+        description: `${totals.metrics.onlineShare.toFixed(1)}% выручки через онлайн-платежи. Хороший канал продаж.`,
+        metric: `${totals.metrics.onlineShare.toFixed(1)}%`,
+        trend: 'up'
+      })
+    }
+
+    // Концентрация расходов
     const topExpense = totals.expenseCategories[0]
     if (topExpense && totals.expenseTotal > 0) {
       const share = (topExpense.value / totals.expenseTotal) * 100
@@ -1011,6 +1102,7 @@ function WeeklyReportContent() {
       }
     }
 
+    // Сравнение с прошлой неделей
     if (comparisonMode && totals.prev.incomeTotal > 0) {
       const incomeChange = ((totals.incomeTotal - totals.prev.incomeTotal) / totals.prev.incomeTotal) * 100
       if (Math.abs(incomeChange) > 20) {
@@ -1041,7 +1133,6 @@ function WeeklyReportContent() {
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true)
-    // Re-fetch data
     const load = async () => {
       if (!companiesLoaded) return
 
@@ -1054,7 +1145,7 @@ function WeeklyReportContent() {
       try {
         const incomeQ = supabase
           .from('incomes')
-          .select('date,company_id,cash_amount,kaspi_amount,card_amount')
+          .select('date,company_id,cash_amount,kaspi_amount,online_amount,card_amount')
           .gte('date', rangeFrom)
           .lte('date', rangeTo)
 
@@ -1103,8 +1194,9 @@ function WeeklyReportContent() {
     rows.push(['Прибыль', String(Math.round(totals.profit)), String(Math.round(totals.prev.profit)), totals.change.profit])
     rows.push(['Наличные (доход)', String(Math.round(totals.incomeCash)), '', ''])
     rows.push(['Kaspi (доход)', String(Math.round(totals.incomeKaspi)), '', ''])
+    rows.push(['Online (доход)', String(Math.round(totals.incomeOnline)), '', ''])
     rows.push(['Карта (доход)', String(Math.round(totals.incomeCard)), '', ''])
-    rows.push(['Онлайн (доход)', String(Math.round(totals.incomeOnline)), '', ''])
+    rows.push(['Безналичные (доход)', String(Math.round(totals.incomeNonCash)), '', ''])
     rows.push([''])
 
     rows.push(['РАСХОДЫ ПО КАТЕГОРИЯМ'])
@@ -1115,11 +1207,19 @@ function WeeklyReportContent() {
     rows.push([''])
 
     rows.push(['ДОХОДЫ ПО ТОЧКАМ'])
-    rows.push(['Точка', 'Наличные', 'Онлайн', 'Всего', 'Доля'])
+    rows.push(['Точка', 'Наличные', 'Kaspi', 'Online', 'Карта', 'Всего', 'Доля'])
     for (const c of activeCompanies) {
-      const s = totals.statsByCompany[c.id] || { cash: 0, online: 0, total: 0 }
+      const s = totals.statsByCompany[c.id] || { cash: 0, kaspi: 0, online: 0, card: 0, total: 0 }
       const share = totals.incomeTotal > 0 ? (s.total / totals.incomeTotal) * 100 : 0
-      rows.push([c.name, String(Math.round(s.cash)), String(Math.round(s.online)), String(Math.round(s.total)), share.toFixed(1)])
+      rows.push([
+        c.name, 
+        String(Math.round(s.cash)), 
+        String(Math.round(s.kaspi)), 
+        String(Math.round(s.online)), 
+        String(Math.round(s.card)), 
+        String(Math.round(s.total)), 
+        share.toFixed(1)
+      ])
     }
 
     downloadTextFile(`weekly_report_${startDate}_${endDate}.csv`, toCSV(rows, ';'))
@@ -1243,10 +1343,6 @@ function WeeklyReportContent() {
                       <FileSpreadsheet className="w-4 h-4" />
                       Скачать CSV
                     </button>
-                    <button className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
-                      <Table className="w-4 h-4" />
-                      Скачать Excel
-                    </button>
                   </div>
                 </div>
 
@@ -1358,7 +1454,7 @@ function WeeklyReportContent() {
                 <StatCard 
                   title="Выручка"
                   value={formatMoneyFull(totals.incomeTotal)}
-                  subValue={comparisonMode ? `было ${formatMoneyFull(totals.prev.incomeTotal)}` : `${formatMoneyCompact(totals.incomeCash)} нал / ${formatMoneyCompact(totals.incomeOnline)} онлайн`}
+                  subValue={comparisonMode ? `было ${formatMoneyFull(totals.prev.incomeTotal)}` : `${formatMoneyCompact(totals.incomeCash)} нал / ${formatMoneyCompact(totals.incomeNonCash)} безнал`}
                   icon={DollarSign}
                   trend={totals.prev.incomeTotal > 0 ? Number(((totals.incomeTotal - totals.prev.incomeTotal) / totals.prev.incomeTotal * 100).toFixed(1)) : undefined}
                   color="green"
@@ -1381,23 +1477,27 @@ function WeeklyReportContent() {
                 />
                 <StatCard 
                   title="Остаток"
-                  value={formatMoneyFull(totals.metrics.netCash + totals.metrics.netOnline)}
-                  subValue={`Нал: ${formatMoneyCompact(totals.metrics.netCash)} | Онлайн: ${formatMoneyCompact(totals.metrics.netOnline)}`}
+                  value={formatMoneyFull(totals.metrics.netCash + totals.metrics.netKaspi + totals.metrics.netOnline + totals.metrics.netCard)}
+                  subValue={`Нал: ${formatMoneyCompact(totals.metrics.netCash)} | Безнал: ${formatMoneyCompact(totals.metrics.netNonCash)}`}
                   icon={Scale}
                   color="violet"
                 />
               </div>
 
-              {/* Payment Types Breakdown */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Payment Types Breakdown - РАСШИРЕНО */}
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 {[
-                  { label: 'Наличные', value: totals.incomeCash, color: 'text-emerald-400' },
-                  { label: 'Kaspi', value: totals.incomeKaspi, color: 'text-blue-400' },
-                  { label: 'Карта', value: totals.incomeCard, color: 'text-amber-400' },
-                  { label: 'Онлайн всего', value: totals.incomeOnline, color: 'text-violet-400' },
+                  { label: 'Наличные', value: totals.incomeCash, color: 'text-emerald-400', icon: Wallet },
+                  { label: 'Kaspi', value: totals.incomeKaspi, color: 'text-blue-400', icon: Smartphone },
+                  { label: 'Online', value: totals.incomeOnline, color: 'text-violet-400', icon: Activity },
+                  { label: 'Карта', value: totals.incomeCard, color: 'text-amber-400', icon: CardIcon },
+                  { label: 'Безнал всего', value: totals.incomeNonCash, color: 'text-purple-400', icon: CreditCard },
                 ].map((item) => (
                   <div key={item.label} className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
-                    <p className="text-xs text-gray-500 mb-1">{item.label}</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-gray-500">{item.label}</p>
+                      <item.icon className={`w-4 h-4 ${item.color}`} />
+                    </div>
                     <p className={`text-xl font-bold ${item.color}`}>{formatMoneyFull(item.value)}</p>
                     <p className="text-xs text-gray-500 mt-1">{totals.incomeTotal > 0 ? ((item.value / totals.incomeTotal) * 100).toFixed(1) : 0}%</p>
                   </div>
@@ -1448,22 +1548,26 @@ function WeeklyReportContent() {
 
               {/* Bottom Section */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* By Company */}
+                {/* By Company - УЛУЧШЕНО */}
                 <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
                   <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
                     <Store className="w-5 h-5 text-blue-400" />
-                    Выручка по точкам
+                    Выручка по точкам (детально)
                   </h3>
 
                   <div className="h-80">
                     {mounted && (
                       <MemoizedBarChart 
                         data={activeCompanies.map(c => {
-                          const s = totals.statsByCompany[c.id] || { cash: 0, online: 0, total: 0 }
+                          const s = totals.statsByCompany[c.id] || { 
+                            cash: 0, kaspi: 0, online: 0, card: 0, total: 0 
+                          }
                           return {
-                            name: c.name,
+                            name: c.name.length > 15 ? c.name.substring(0, 12) + '...' : c.name,
                             cash: s.cash,
+                            kaspi: s.kaspi,
                             online: s.online,
+                            card: s.card,
                             total: s.total
                           }
                         })} 
@@ -1472,19 +1576,21 @@ function WeeklyReportContent() {
                   </div>
 
                   {extraCompanyId && (
-                    <div className="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
-                      <span className="text-sm text-gray-400">F16 Extra</span>
-                      <span className="text-sm font-bold text-purple-400">
-                        {formatMoneyFull(totals.extraTotal)}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {includeExtraInTotals ? '(включено)' : '(отдельно)'}
-                      </span>
+                    <div className="mt-4 pt-4 border-t border-white/5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-400">F16 Extra</span>
+                        <span className="text-sm font-bold text-purple-400">
+                          {formatMoneyFull(totals.extraTotal)}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {includeExtraInTotals ? '(включено)' : '(отдельно)'}
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Metrics Cards */}
+                {/* Metrics Cards - РАСШИРЕНО */}
                 <div className="space-y-4">
                   <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
                     <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
@@ -1506,15 +1612,15 @@ function WeeklyReportContent() {
                         <p className="text-xs text-gray-500 mt-1">цель &gt; 25%</p>
                       </div>
                       <div className="p-4 bg-white/5 rounded-xl">
-                        <p className="text-xs text-gray-500 mb-1">Сальдо наличные</p>
+                        <p className="text-xs text-gray-500 mb-1">Сальдо нал</p>
                         <p className={`text-xl font-bold ${totals.metrics.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {formatMoneyCompact(totals.metrics.netCash)}
                         </p>
                       </div>
                       <div className="p-4 bg-white/5 rounded-xl">
-                        <p className="text-xs text-gray-500 mb-1">Сальдо онлайн</p>
-                        <p className={`text-xl font-bold ${totals.metrics.netOnline >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {formatMoneyCompact(totals.metrics.netOnline)}
+                        <p className="text-xs text-gray-500 mb-1">Сальдо безнал</p>
+                        <p className={`text-xl font-bold ${totals.metrics.netNonCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {formatMoneyCompact(totals.metrics.netNonCash)}
                         </p>
                       </div>
                     </div>
@@ -1523,7 +1629,7 @@ function WeeklyReportContent() {
                   <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
                     <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                       <Percent className="w-5 h-5 text-emerald-400" />
-                      Структура выручки
+                      Структура выручки (детально)
                     </h3>
 
                     <div className="space-y-3">
@@ -1541,26 +1647,46 @@ function WeeklyReportContent() {
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">Онлайн</span>
-                          <span className="text-white font-medium">{totals.metrics.onlineShare.toFixed(1)}%</span>
+                          <span className="text-gray-400">Kaspi</span>
+                          <span className="text-white font-medium">{totals.metrics.kaspiShare.toFixed(1)}%</span>
                         </div>
                         <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-blue-500 rounded-full"
+                            style={{ width: `${totals.metrics.kaspiShare}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-gray-400">Online</span>
+                          <span className="text-white font-medium">{totals.metrics.onlineShare.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-violet-500 rounded-full"
                             style={{ width: `${totals.metrics.onlineShare}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-gray-400">Карта</span>
+                          <span className="text-white font-medium">{totals.metrics.cardShare.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-amber-500 rounded-full"
+                            style={{ width: `${totals.metrics.cardShare}%` }}
                           />
                         </div>
                       </div>
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-white/5">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">Kaspi</span>
-                        <span className="text-white">{((totals.incomeKaspi / totals.incomeTotal) * 100 || 0).toFixed(1)}%</span>
-                      </div>
-                      <div className="flex justify-between text-sm mt-2">
-                        <span className="text-gray-400">Карта</span>
-                        <span className="text-white">{((totals.incomeCard / totals.incomeTotal) * 100 || 0).toFixed(1)}%</span>
+                      <div className="flex justify-between text-sm font-medium">
+                        <span className="text-gray-400">Безналичные всего</span>
+                        <span className="text-purple-400">{totals.metrics.nonCashShare.toFixed(1)}%</span>
                       </div>
                     </div>
                   </div>
