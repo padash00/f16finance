@@ -1,6 +1,7 @@
 'use client'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
@@ -22,6 +23,11 @@ import {
   TrendingDown,
   TrendingUp,
   Wallet,
+  Layers,
+  CalendarDays,
+  PieChart as PieIcon,
+  Table2,
+  Zap,
 } from 'lucide-react'
 
 import {
@@ -74,6 +80,7 @@ type Company = {
 
 type GroupMode = 'day' | 'week' | 'month' | 'year'
 type DatePreset = 'custom' | 'today' | 'yesterday' | 'last7' | 'prevWeek' | 'last30' | 'currentMonth' | 'prevMonth'
+type TabKey = 'overview' | 'companies' | 'details'
 
 type FinancialTotals = {
   incomeCash: number
@@ -120,6 +127,24 @@ type Anomaly = {
   severity: 'low' | 'medium' | 'high'
   value: number
 }
+
+type CompanyTotals = {
+  companyId: string
+  name: string
+  incomeCash: number
+  incomeKaspi: number
+  incomeOnline: number
+  incomeCard: number
+  incomeTotal: number
+  expenseCash: number
+  expenseKaspi: number
+  expenseTotal: number
+  profit: number
+  marginPct: number
+  opsCount: number
+}
+
+type SimpleAgg = { name: string; income: number; expense: number; profit: number }
 
 // =====================
 // CONSTS
@@ -231,6 +256,7 @@ const csvEscape = (v: string) => {
   if (/[",\n\r;]/.test(s)) return `"${s}"`
   return s
 }
+
 const toCSV = (rows: string[][], sep = ';') => rows.map((r) => r.map((c) => csvEscape(c)).join(sep)).join('\n') + '\n'
 
 const downloadTextFile = (filename: string, content: string, mime = 'text/csv;charset=utf-8') => {
@@ -249,22 +275,120 @@ const downloadTextFile = (filename: string, content: string, mime = 'text/csv;ch
 // URL PARAMS
 // =====================
 const parseBool = (v: string | null) => v === '1' || v === 'true'
-const parseGroup = (v: string | null): GroupMode | null => (v === 'day' || v === 'week' || v === 'month' || v === 'year' ? v : null)
-const parseTab = (v: string | null): 'overview' | 'analytics' | 'details' | null =>
-  v === 'overview' || v === 'analytics' || v === 'details' ? v : null
+const parseGroup = (v: string | null): GroupMode | null => {
+  if (!v) return null
+  if (v === 'day' || v === 'week' || v === 'month' || v === 'year') return v
+  return null
+}
+const parseTab = (v: string | null): TabKey | null => {
+  if (!v) return null
+  if (v === 'overview' || v === 'companies' || v === 'details') return v
+  return null
+}
 const isISODate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
 
 // =====================
-// MAIN COMPONENT
+// UI HELPERS
+// =====================
+function Pill({
+  active,
+  onClick,
+  children,
+}: {
+  active?: boolean
+  onClick?: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+        active
+          ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25'
+          : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function StatCard({
+  title,
+  icon,
+  value,
+  subLeft,
+  subRight,
+  trendText,
+  trendUp,
+  accent = 'violet',
+}: {
+  title: string
+  icon: React.ReactNode
+  value: string
+  subLeft?: string
+  subRight?: string
+  trendText?: string
+  trendUp?: boolean
+  accent?: 'emerald' | 'rose' | 'amber' | 'blue' | 'violet'
+}) {
+  const bg =
+    accent === 'emerald'
+      ? 'from-emerald-500/10 to-teal-500/10 border-emerald-500/20 hover:border-emerald-500/40'
+      : accent === 'rose'
+        ? 'from-rose-500/10 to-pink-500/10 border-rose-500/20 hover:border-rose-500/40'
+        : accent === 'amber'
+          ? 'from-amber-500/10 to-yellow-500/10 border-amber-500/20 hover:border-amber-500/40'
+          : accent === 'blue'
+            ? 'from-blue-500/10 to-indigo-500/10 border-blue-500/20 hover:border-blue-500/40'
+            : 'from-violet-500/10 to-fuchsia-500/10 border-violet-500/20 hover:border-violet-500/40'
+
+  return (
+    <div className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${bg} border p-6 transition-all`}>
+      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -translate-y-1/3 translate-x-1/3 group-hover:bg-white/10 transition-all" />
+      <div className="relative">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-white/10 rounded-xl">{icon}</div>
+          <span className="text-sm font-medium text-gray-300">{title}</span>
+        </div>
+
+        <div className="text-3xl font-bold text-white mb-2">{value}</div>
+
+        {(subLeft || subRight) && (
+          <div className="flex gap-4 text-sm">
+            {subLeft && (
+              <div className="text-gray-400">
+                {subLeft}
+              </div>
+            )}
+            {subRight && (
+              <div className="text-gray-400">
+                {subRight}
+              </div>
+            )}
+          </div>
+        )}
+
+        {trendText && (
+          <div className={`mt-3 text-sm flex items-center gap-1 ${trendUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {trendUp ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+            {trendText}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// =====================
+// MAIN CONTENT
 // =====================
 function ReportsContent() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  // ✅ FIX: графики только после mount → убирает width(-1)/height(-1) на пререндере
   const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
 
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
@@ -282,7 +406,7 @@ function ReportsContent() {
   const [groupMode, setGroupMode] = useState<GroupMode>('day')
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'details'>('overview')
+  const [activeTab, setActiveTab] = useState<TabKey>('overview')
 
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
@@ -290,20 +414,22 @@ function ReportsContent() {
   const reqIdRef = useRef(0)
   const didInitFromUrl = useRef(false)
 
+  useEffect(() => setMounted(true), [])
+
   const showToast = useCallback((msg: string) => {
     setToast(msg)
     if (toastTimer.current) window.clearTimeout(toastTimer.current)
     toastTimer.current = window.setTimeout(() => setToast(null), 2200)
   }, [])
 
-  // Нормализация дат
+  // date normalize
   useEffect(() => {
     if (dateFrom <= dateTo) return
     setDateFrom(dateTo)
     setDateTo(dateFrom)
   }, [dateFrom, dateTo])
 
-  // Загрузка компаний
+  // load companies
   useEffect(() => {
     let alive = true
     const loadCompanies = async () => {
@@ -335,7 +461,7 @@ function ReportsContent() {
     for (const c of companies) {
       const code = (c.code || '').toLowerCase()
       if (code === 'extra') return c.id
-      if (c.name === 'F16 Extra') return c.id
+      if (c.name.toLowerCase().includes('f16 extra')) return c.id
     }
     return null
   }, [companies])
@@ -350,6 +476,8 @@ function ReportsContent() {
 
     switch (preset) {
       case 'today':
+        from = today
+        to = today
         break
       case 'yesterday':
         from = addDaysISO(today, -1)
@@ -357,9 +485,11 @@ function ReportsContent() {
         break
       case 'last7':
         from = addDaysISO(today, -6)
+        to = today
         break
       case 'last30':
         from = addDaysISO(today, -29)
+        to = today
         break
       case 'prevWeek': {
         const d = new Date(todayDate)
@@ -414,7 +544,7 @@ function ReportsContent() {
     showToast('Фильтры сброшены')
   }, [applyPreset, showToast])
 
-  // Инициализация из URL
+  // init from URL
   useEffect(() => {
     if (didInitFromUrl.current || !companiesLoaded) return
 
@@ -430,10 +560,8 @@ function ReportsContent() {
     if (pFrom && isISODate(pFrom)) setDateFrom(pFrom)
     if (pTo && isISODate(pTo)) setDateTo(pTo)
 
-    if (
-      pPreset &&
-      ['custom', 'today', 'yesterday', 'last7', 'prevWeek', 'last30', 'currentMonth', 'prevMonth'].includes(pPreset)
-    ) {
+    const allowedPresets: DatePreset[] = ['custom', 'today', 'yesterday', 'last7', 'prevWeek', 'last30', 'currentMonth', 'prevMonth']
+    if (pPreset && allowedPresets.includes(pPreset)) {
       setDatePreset(pPreset)
       if (pPreset !== 'custom' && !pFrom && !pTo) applyPreset(pPreset)
     }
@@ -450,7 +578,7 @@ function ReportsContent() {
     didInitFromUrl.current = true
   }, [companiesLoaded, companies, searchParams, applyPreset])
 
-  // Синхронизация с URL
+  // sync to URL
   useEffect(() => {
     if (!didInitFromUrl.current) return
 
@@ -463,14 +591,13 @@ function ReportsContent() {
       params.set('group', groupMode)
       params.set('extra', includeExtraInTotals ? '1' : '0')
       params.set('tab', activeTab)
-
       router.replace(`${pathname}?${params.toString()}`, { scroll: false })
     }, 250)
 
     return () => clearTimeout(timeoutId)
   }, [dateFrom, dateTo, datePreset, companyFilter, groupMode, includeExtraInTotals, activeTab, pathname, router])
 
-  // Загрузка данных
+  // load data (current + previous range)
   useEffect(() => {
     if (!companiesLoaded) return
 
@@ -515,12 +642,12 @@ function ReportsContent() {
         if (incomeResult.error) throw incomeResult.error
         if (expenseResult.error) throw expenseResult.error
 
-        setIncomes(incomeResult.data || [])
-        setExpenses(expenseResult.data || [])
+        setIncomes((incomeResult.data || []) as IncomeRow[])
+        setExpenses((expenseResult.data || []) as ExpenseRow[])
       } catch (err) {
         if (myReqId === reqIdRef.current) {
-          setError('Ошибка загрузки данных')
           console.error(err)
+          setError('Ошибка загрузки данных')
         }
       } finally {
         if (myReqId === reqIdRef.current) setLoading(false)
@@ -530,6 +657,7 @@ function ReportsContent() {
     loadData()
   }, [companiesLoaded, companies.length, dateFrom, dateTo, companyFilter, includeExtraInTotals, extraCompanyId])
 
+  // compute
   const processed = useMemo(() => {
     const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
 
@@ -537,9 +665,12 @@ function ReportsContent() {
     const totalsPrev = baseTotals()
 
     const expenseByCategoryMap = new Map<string, number>()
-    const incomeByCompanyMap = new Map<string, { companyId: string; name: string; value: number }>()
     const chartDataMap = new Map<string, TimeAggregation>()
     const anomalies: Anomaly[] = []
+
+    const companyTotalsMap = new Map<string, CompanyTotals>()
+    const shiftAggMap = new Map<string, SimpleAgg>()
+    const zoneAggMap = new Map<string, SimpleAgg>()
 
     const dailyIncome = new Map<string, number>()
     const dailyExpense = new Map<string, number>()
@@ -566,7 +697,8 @@ function ReportsContent() {
 
     const ensureBucket = (key: string, label: string, sortISO: string) => {
       const b =
-        chartDataMap.get(key) || {
+        chartDataMap.get(key) ||
+        ({
           label,
           sortISO,
           income: 0,
@@ -579,11 +711,48 @@ function ReportsContent() {
           incomeNonCash: 0,
           expenseCash: 0,
           expenseKaspi: 0,
-        }
+        } as TimeAggregation)
       chartDataMap.set(key, b)
       return b
     }
 
+    const ensureCompanyTotals = (companyId: string) => {
+      const name = companyName(companyId) || '—'
+      const cur =
+        companyTotalsMap.get(companyId) ||
+        ({
+          companyId,
+          name,
+          incomeCash: 0,
+          incomeKaspi: 0,
+          incomeOnline: 0,
+          incomeCard: 0,
+          incomeTotal: 0,
+          expenseCash: 0,
+          expenseKaspi: 0,
+          expenseTotal: 0,
+          profit: 0,
+          marginPct: 0,
+          opsCount: 0,
+        } as CompanyTotals)
+      companyTotalsMap.set(companyId, cur)
+      return cur
+    }
+
+    const ensureAgg = (map: Map<string, SimpleAgg>, key: string, label?: string) => {
+      const cur =
+        map.get(key) ||
+        ({
+          name: label || key,
+          income: 0,
+          expense: 0,
+          profit: 0,
+        } as SimpleAgg)
+      map.set(key, cur)
+      return cur
+    }
+
+    // Incomes
     for (const r of incomes) {
       const range = getRangeBucket(r.date)
       if (!range) continue
@@ -592,6 +761,7 @@ function ReportsContent() {
       const kaspi = safeNumber(r.kaspi_amount)
       const online = safeNumber(r.online_amount)
       const card = safeNumber(r.card_amount)
+
       const nonCash = kaspi + online + card
       const total = cash + nonCash
       if (total <= 0) continue
@@ -616,13 +786,23 @@ function ReportsContent() {
         bucket.incomeCard += card
         bucket.incomeNonCash += nonCash
 
-        const name = companyName(r.company_id) || 'Неизвестно'
-        const cur = incomeByCompanyMap.get(r.company_id)
-        if (!cur) incomeByCompanyMap.set(r.company_id, { companyId: r.company_id, name, value: total })
-        else cur.value += total
+        const cTot = ensureCompanyTotals(r.company_id)
+        cTot.incomeCash += cash
+        cTot.incomeKaspi += kaspi
+        cTot.incomeOnline += online
+        cTot.incomeCard += card
+        cTot.incomeTotal += total
+        cTot.opsCount += 1
+
+        const sLabel = r.shift === 'day' ? 'День' : 'Ночь'
+        ensureAgg(shiftAggMap, r.shift, sLabel).income += total
+
+        const z = r.zone || 'Без зоны'
+        ensureAgg(zoneAggMap, z).income += total
       }
     }
 
+    // Expenses
     for (const r of expenses) {
       const range = getRangeBucket(r.date)
       if (!range) continue
@@ -648,9 +828,15 @@ function ReportsContent() {
         bucket.expense += total
         bucket.expenseCash += cash
         bucket.expenseKaspi += kaspi
+
+        const cTot = ensureCompanyTotals(r.company_id)
+        cTot.expenseCash += cash
+        cTot.expenseKaspi += kaspi
+        cTot.expenseTotal += total
       }
     }
 
+    // finalize totals
     const finalize = (t: FinancialTotals) => {
       t.profit = t.totalIncome - t.totalExpense
       t.remainingCash = t.incomeCash - t.expenseCash
@@ -662,30 +848,75 @@ function ReportsContent() {
     finalize(totalsCur)
     finalize(totalsPrev)
 
+    // company finalize
+    for (const c of companyTotalsMap.values()) {
+      c.profit = c.incomeTotal - c.expenseTotal
+      c.marginPct = c.incomeTotal > 0 ? (c.profit / c.incomeTotal) * 100 : 0
+    }
+
+    // profit for chart buckets
+    for (const agg of chartDataMap.values()) {
+      agg.profit = agg.income - agg.expense
+    }
+
+    for (const s of shiftAggMap.values()) s.profit = s.income - s.expense
+    for (const z of zoneAggMap.values()) z.profit = z.income - z.expense
+
+    // anomalies
     const avgIncome = totalsCur.totalIncome / (dailyIncome.size || 1)
     const avgExpense = totalsCur.totalExpense / (dailyExpense.size || 1)
 
     for (const [date, amount] of dailyIncome) {
       if (amount > avgIncome * 2) {
-        anomalies.push({ type: 'income_spike', date, description: `Всплеск выручки: ${formatMoneyFull(amount)}`, severity: 'medium', value: amount })
+        anomalies.push({
+          type: 'income_spike',
+          date,
+          description: `Всплеск выручки: ${formatMoneyFull(amount)}`,
+          severity: 'medium',
+          value: amount,
+        })
       }
     }
+
     for (const [date, amount] of dailyExpense) {
       if (amount > avgExpense * 2.5) {
-        anomalies.push({ type: 'expense_spike', date, description: `Аномальный расход: ${formatMoneyFull(amount)}`, severity: 'high', value: amount })
+        anomalies.push({
+          type: 'expense_spike',
+          date,
+          description: `Аномальный расход: ${formatMoneyFull(amount)}`,
+          severity: 'high',
+          value: amount,
+        })
       }
     }
+
     for (const agg of chartDataMap.values()) {
-      agg.profit = agg.income - agg.expense
       if (agg.income > 0) {
         const margin = agg.profit / agg.income
         if (margin < 0.1) {
-          anomalies.push({ type: 'low_profit', date: agg.label, description: `Низкая маржа: ${(margin * 100).toFixed(1)}%`, severity: 'medium', value: agg.profit })
+          anomalies.push({
+            type: 'low_profit',
+            date: agg.label,
+            description: `Низкая маржа: ${(margin * 100).toFixed(1)}%`,
+            severity: 'medium',
+            value: agg.profit,
+          })
         }
       }
     }
 
-    return { totalsCur, totalsPrev, chartDataMap, expenseByCategoryMap, incomeByCompanyMap, anomalies, prevFrom, prevTo }
+    return {
+      totalsCur,
+      totalsPrev,
+      chartDataMap,
+      expenseByCategoryMap,
+      anomalies,
+      prevFrom,
+      prevTo,
+      companyTotalsMap,
+      shiftAggMap,
+      zoneAggMap,
+    }
   }, [incomes, expenses, dateFrom, dateTo, groupMode, companyName])
 
   const totals = processed.totalsCur
@@ -701,65 +932,103 @@ function ReportsContent() {
       Array.from(processed.expenseByCategoryMap.entries())
         .map(([name, amount]) => ({ name, amount }))
         .sort((a, b) => b.amount - a.amount)
-        .slice(0, 8),
+        .slice(0, 10),
     [processed.expenseByCategoryMap],
   )
 
-  const incomeByCompanyData = useMemo(
-    () =>
-      Array.from(processed.incomeByCompanyMap.values())
-        .map((x, idx) => ({ companyId: x.companyId, name: x.name, value: x.value, fill: PIE_COLORS[idx % PIE_COLORS.length] }))
-        .sort((a, b) => b.value - a.value),
-    [processed.incomeByCompanyMap],
+  const companyTotals = useMemo(
+    () => Array.from(processed.companyTotalsMap.values()).sort((a, b) => b.incomeTotal - a.incomeTotal),
+    [processed.companyTotalsMap],
+  )
+
+  const shiftAgg = useMemo(
+    () => Array.from(processed.shiftAggMap.values()),
+    [processed.shiftAggMap],
+  )
+
+  const zoneAgg = useMemo(
+    () => Array.from(processed.zoneAggMap.values()).sort((a, b) => b.income - a.income).slice(0, 12),
+    [processed.zoneAggMap],
   )
 
   const incomesCurrent = useMemo(() => incomes.filter((r) => r.date >= dateFrom && r.date <= dateTo), [incomes, dateFrom, dateTo])
   const expensesCurrent = useMemo(() => expenses.filter((r) => r.date >= dateFrom && r.date <= dateTo), [expenses, dateFrom, dateTo])
 
+  // AI insights
   const aiInsights = useMemo((): AIInsight[] => {
     const insights: AIInsight[] = []
-    const profitMargin = totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0
 
+    const profitMargin = totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0
     if (profitMargin < 15) {
-      insights.push({ type: 'warning', title: 'Низкая маржинальность', description: `Маржа ${profitMargin.toFixed(1)}% ниже нормы. Проверьте расходы.`, metric: `${profitMargin.toFixed(1)}%` })
+      insights.push({
+        type: 'warning',
+        title: 'Низкая маржинальность',
+        description: `Маржа ${profitMargin.toFixed(1)}% — проверь расходы/ошибки ввода.`,
+        metric: `${profitMargin.toFixed(1)}%`,
+      })
     } else if (profitMargin > 35) {
-      insights.push({ type: 'success', title: 'Отличная маржа', description: `Маржа ${profitMargin.toFixed(1)}% — выше среднего.`, metric: `${profitMargin.toFixed(1)}%` })
+      insights.push({
+        type: 'success',
+        title: 'Отличная маржа',
+        description: `Маржа ${profitMargin.toFixed(1)}% — красиво идёшь.`,
+        metric: `${profitMargin.toFixed(1)}%`,
+      })
     }
 
     const cashRatio = totals.totalIncome > 0 ? totals.incomeCash / totals.totalIncome : 0
     if (cashRatio < 0.3) {
-      insights.push({ type: 'opportunity', title: 'Много безнала', description: 'Можно стимулировать наличку (скидка/бонус).', metric: `${((1 - cashRatio) * 100).toFixed(0)}% безнал` })
+      insights.push({
+        type: 'opportunity',
+        title: 'Доля безнала высокая',
+        description: 'Можно стимулировать наличку бонусом/скидкой.',
+        metric: `${((1 - cashRatio) * 100).toFixed(0)}%`,
+      })
     }
 
-    const topExpense = Array.from(processed.expenseByCategoryMap.entries()).sort((a, b) => b[1] - a[1])[0]
+    const topExpense = expenseByCategoryData[0]
     if (topExpense && totals.totalExpense > 0) {
-      const share = (topExpense[1] / totals.totalExpense) * 100
-      if (share > 40) insights.push({ type: 'warning', title: 'Концентрация расходов', description: `"${topExpense[0]}" — ${share.toFixed(0)}% расходов.`, metric: `${share.toFixed(0)}%` })
-    }
-
-    if (totalsPrev.totalIncome > 0) {
-      const incomeChange = ((totals.totalIncome - totalsPrev.totalIncome) / totalsPrev.totalIncome) * 100
-      if (Math.abs(incomeChange) > 20) {
+      const share = (topExpense.amount / totals.totalExpense) * 100
+      if (share > 40) {
         insights.push({
-          type: incomeChange > 0 ? 'success' : 'warning',
-          title: incomeChange > 0 ? 'Рост выручки' : 'Падение выручки',
-          description: `${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(1)}% к прошлому периоду`,
-          metric: `${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(1)}%`,
+          type: 'warning',
+          title: 'Расходы слишком в одной категории',
+          description: `"${topExpense.name}" = ${share.toFixed(0)}% расходов.`,
+          metric: `${share.toFixed(0)}%`,
         })
       }
     }
 
     const high = processed.anomalies.filter((a) => a.severity === 'high').length
-    if (high > 0) insights.push({ type: 'warning', title: 'Критические аномалии', description: 'Нужна проверка данных/расходов.', metric: `${high} шт` })
+    if (high > 0) {
+      insights.push({
+        type: 'warning',
+        title: 'Критические аномалии',
+        description: 'Есть дни с подозрительными расходами/скачками.',
+        metric: `${high} шт`,
+      })
+    }
 
-    return insights.slice(0, 4)
-  }, [totals, totalsPrev, processed.expenseByCategoryMap, processed.anomalies])
+    if (totalsPrev.totalIncome > 0) {
+      const ch = ((totals.totalIncome - totalsPrev.totalIncome) / totalsPrev.totalIncome) * 100
+      if (Math.abs(ch) >= 15) {
+        insights.push({
+          type: ch >= 0 ? 'success' : 'warning',
+          title: ch >= 0 ? 'Рост выручки' : 'Падение выручки',
+          description: `${ch >= 0 ? '+' : ''}${ch.toFixed(1)}% к прошлому периоду`,
+          metric: `${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%`,
+        })
+      }
+    }
 
+    return insights.slice(0, 6)
+  }, [totals, totalsPrev, expenseByCategoryData, processed.anomalies])
+
+  // Forecast (only currentMonth)
   const forecast = useMemo(() => {
     if (datePreset !== 'currentMonth') return null
     const startDate = fromISO(dateFrom)
     const endDate = fromISO(dateTo)
-    const today = new Date()
+    const now = new Date()
 
     const daysPassed = Math.floor((endDate.getTime() - startDate.getTime()) / 86400000) + 1
     if (daysPassed <= 0) return null
@@ -767,85 +1036,144 @@ function ReportsContent() {
     const avgIncome = totals.totalIncome / daysPassed
     const avgProfit = totals.profit / daysPassed
 
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-    const remainingDays = Math.max(0, lastDayOfMonth.getDate() - today.getDate())
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    const remainingDays = Math.max(0, lastDayOfMonth.getDate() - now.getDate())
 
     return {
       remainingDays,
       forecastIncome: Math.round(totals.totalIncome + avgIncome * remainingDays),
       forecastProfit: Math.round(totals.profit + avgProfit * remainingDays),
-      confidence: Math.min(90, Math.max(45, 60 + (daysPassed / 30) * 30)),
+      confidence: Math.min(90, Math.max(45, 55 + (daysPassed / 30) * 35)),
     }
   }, [datePreset, dateFrom, dateTo, totals.totalIncome, totals.profit])
 
   const handleShare = useCallback(async () => {
+    const url = window.location.href
     try {
-      const url = window.location.href
       await navigator.clipboard.writeText(url)
       showToast('Ссылка скопирована')
     } catch {
-      showToast('Не удалось скопировать ссылку')
+      try {
+        const textarea = document.createElement('textarea')
+        textarea.value = url
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        textarea.remove()
+        showToast('Ссылка скопирована')
+      } catch {
+        showToast('Не удалось скопировать')
+      }
     }
   }, [showToast])
 
   const handleDownload = useCallback(() => {
-    const rows: string[][] = []
+    try {
+      const rows: string[][] = []
 
-    const companyLabel =
-      companyFilter === 'all'
-        ? includeExtraInTotals
-          ? 'Все компании (включая F16 Extra)'
-          : 'Все компании (без F16 Extra)'
-        : companyName(companyFilter)
+      const companyLabel =
+        companyFilter === 'all'
+          ? includeExtraInTotals
+            ? 'Все компании (включая F16 Extra)'
+            : 'Все компании (без F16 Extra)'
+          : companyName(companyFilter)
 
-    rows.push(['Отчет'])
-    rows.push(['Период', `${dateFrom} — ${dateTo}`])
-    rows.push(['Компания', companyLabel])
-    rows.push(['Группировка', groupMode])
-    rows.push([''])
+      rows.push(['Отчет'])
+      rows.push(['Период', `${dateFrom} — ${dateTo}`])
+      rows.push(['Компания', companyLabel])
+      rows.push(['Группировка', groupMode])
+      rows.push([''])
 
-    rows.push(['Итоги'])
-    rows.push(['Показатель', 'Сумма'])
-    rows.push(['Выручка (итого)', String(Math.round(totals.totalIncome))])
-    rows.push(['Наличные (доход)', String(Math.round(totals.incomeCash))])
-    rows.push(['Kaspi (доход)', String(Math.round(totals.incomeKaspi))])
-    rows.push(['Online (доход)', String(Math.round(totals.incomeOnline))])
-    rows.push(['Card (доход)', String(Math.round(totals.incomeCard))])
-    rows.push(['Безнал (итого)', String(Math.round(totals.incomeNonCash))])
-    rows.push(['Расход (итого)', String(Math.round(totals.totalExpense))])
-    rows.push(['Наличные (расход)', String(Math.round(totals.expenseCash))])
-    rows.push(['Kaspi (расход)', String(Math.round(totals.expenseKaspi))])
-    rows.push(['Прибыль', String(Math.round(totals.profit))])
-    rows.push(['Остаток нал', String(Math.round(totals.remainingCash))])
-    rows.push(['Остаток безнал', String(Math.round(totals.remainingKaspi))])
-    rows.push([''])
+      rows.push(['Итоги'])
+      rows.push(['Показатель', 'Сумма'])
+      rows.push(['Выручка (итого)', String(Math.round(totals.totalIncome))])
+      rows.push(['Наличные (доход)', String(Math.round(totals.incomeCash))])
+      rows.push(['Kaspi (доход)', String(Math.round(totals.incomeKaspi))])
+      rows.push(['Online (доход)', String(Math.round(totals.incomeOnline))])
+      rows.push(['Card (доход)', String(Math.round(totals.incomeCard))])
+      rows.push(['Безнал (итого)', String(Math.round(totals.incomeNonCash))])
+      rows.push(['Расход (итого)', String(Math.round(totals.totalExpense))])
+      rows.push(['Наличные (расход)', String(Math.round(totals.expenseCash))])
+      rows.push(['Kaspi (расход)', String(Math.round(totals.expenseKaspi))])
+      rows.push(['Прибыль', String(Math.round(totals.profit))])
+      rows.push(['Остаток нал', String(Math.round(totals.remainingCash))])
+      rows.push(['Остаток безнал', String(Math.round(totals.remainingKaspi))])
+      rows.push([''])
 
-    rows.push(['Доходы (incomes)'])
-    rows.push(['date', 'company', 'shift', 'zone', 'cash', 'kaspi', 'online', 'card', 'total'])
-    for (const r of incomesCurrent.slice().sort((a, b) => a.date.localeCompare(b.date))) {
-      const cash = safeNumber(r.cash_amount)
-      const kaspi = safeNumber(r.kaspi_amount)
-      const online = safeNumber(r.online_amount)
-      const card = safeNumber(r.card_amount)
-      const total = cash + kaspi + online + card
-      rows.push([r.date, companyName(r.company_id), r.shift, r.zone || '', String(Math.round(cash)), String(Math.round(kaspi)), String(Math.round(online)), String(Math.round(card)), String(Math.round(total))])
+      rows.push(['Компании'])
+      rows.push(['company', 'income_total', 'income_cash', 'income_kaspi', 'income_online', 'income_card', 'expense_total', 'profit', 'margin_pct'])
+      for (const c of companyTotals) {
+        rows.push([
+          c.name,
+          String(Math.round(c.incomeTotal)),
+          String(Math.round(c.incomeCash)),
+          String(Math.round(c.incomeKaspi)),
+          String(Math.round(c.incomeOnline)),
+          String(Math.round(c.incomeCard)),
+          String(Math.round(c.expenseTotal)),
+          String(Math.round(c.profit)),
+          c.marginPct.toFixed(1),
+        ])
+      }
+
+      rows.push([''])
+      rows.push(['Доходы (incomes)'])
+      rows.push(['date', 'company', 'shift', 'zone', 'cash', 'kaspi', 'online', 'card', 'total'])
+      for (const r of incomesCurrent.slice().sort((a, b) => a.date.localeCompare(b.date))) {
+        const cash = safeNumber(r.cash_amount)
+        const kaspi = safeNumber(r.kaspi_amount)
+        const online = safeNumber(r.online_amount)
+        const card = safeNumber(r.card_amount)
+        const total = cash + kaspi + online + card
+        rows.push([
+          r.date,
+          companyName(r.company_id),
+          r.shift,
+          r.zone || '',
+          String(Math.round(cash)),
+          String(Math.round(kaspi)),
+          String(Math.round(online)),
+          String(Math.round(card)),
+          String(Math.round(total)),
+        ])
+      }
+
+      rows.push([''])
+      rows.push(['Расходы (expenses)'])
+      rows.push(['date', 'company', 'category', 'cash', 'kaspi', 'total'])
+      for (const r of expensesCurrent.slice().sort((a, b) => a.date.localeCompare(b.date))) {
+        const cash = safeNumber(r.cash_amount)
+        const kaspi = safeNumber(r.kaspi_amount)
+        const total = cash + kaspi
+        rows.push([r.date, companyName(r.company_id), r.category || 'Без категории', String(Math.round(cash)), String(Math.round(kaspi)), String(Math.round(total))])
+      }
+
+      const csv = toCSV(rows, ';')
+      const fname = `report_${dateFrom}_${dateTo}.csv`
+      downloadTextFile(fname, csv)
+      showToast('CSV скачан')
+    } catch (e) {
+      console.error(e)
+      showToast('Ошибка при скачивании')
     }
+  }, [
+    companyFilter,
+    includeExtraInTotals,
+    companyName,
+    dateFrom,
+    dateTo,
+    groupMode,
+    totals,
+    incomesCurrent,
+    expensesCurrent,
+    showToast,
+    companyTotals,
+  ])
 
-    rows.push([''])
-    rows.push(['Расходы (expenses)'])
-    rows.push(['date', 'company', 'category', 'cash', 'kaspi', 'total'])
-    for (const r of expensesCurrent.slice().sort((a, b) => a.date.localeCompare(b.date))) {
-      const cash = safeNumber(r.cash_amount)
-      const kaspi = safeNumber(r.kaspi_amount)
-      const total = cash + kaspi
-      rows.push([r.date, companyName(r.company_id), r.category || 'Без категории', String(Math.round(cash)), String(Math.round(kaspi)), String(Math.round(total))])
-    }
-
-    downloadTextFile(`report_${dateFrom}_${dateTo}.csv`, toCSV(rows, ';'))
-    showToast('CSV скачан')
-  }, [companyFilter, includeExtraInTotals, companyName, dateFrom, dateTo, groupMode, totals, incomesCurrent, expensesCurrent, showToast])
-
-  if (loading && companies.length === 0) {
+  // loading / error
+  if (!mounted || (loading && companies.length === 0)) {
     return (
       <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
         <Sidebar />
@@ -872,47 +1200,557 @@ function ReportsContent() {
     )
   }
 
-  // ✅ FIX: контейнеры графиков с min-h + min-w-0
-  const ChartShell = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <div className={['min-w-0 h-80 min-h-[320px]', className || ''].join(' ')}>
-      {mounted ? children : <div className="h-full w-full rounded-xl bg-gray-800/40 border border-white/5 animate-pulse" />}
+  const trendUp = totalsPrev.totalIncome > 0 ? totals.totalIncome >= totalsPrev.totalIncome : true
+  const expenseTrendUp = totalsPrev.totalExpense > 0 ? totals.totalExpense >= totalsPrev.totalExpense : false
+
+  const OverviewBlock = (
+    <div className="space-y-6">
+      {aiInsights.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {aiInsights.map((insight, idx) => (
+            <div
+              key={idx}
+              className={`group relative overflow-hidden rounded-2xl border p-5 transition-all hover:scale-[1.01] ${
+                insight.type === 'warning'
+                  ? 'bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/20'
+                  : insight.type === 'success'
+                    ? 'bg-gradient-to-br from-emerald-500/10 to-green-500/10 border-emerald-500/20'
+                    : insight.type === 'opportunity'
+                      ? 'bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border-violet-500/20'
+                      : 'bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div
+                  className={`p-2 rounded-xl ${
+                    insight.type === 'warning'
+                      ? 'bg-amber-500/20 text-amber-400'
+                      : insight.type === 'success'
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : insight.type === 'opportunity'
+                          ? 'bg-violet-500/20 text-violet-400'
+                          : 'bg-blue-500/20 text-blue-400'
+                  }`}
+                >
+                  {insight.type === 'warning' && <AlertTriangle className="w-5 h-5" />}
+                  {insight.type === 'success' && <CheckCircle2 className="w-5 h-5" />}
+                  {insight.type === 'opportunity' && <Zap className="w-5 h-5" />}
+                  {insight.type === 'info' && <Lightbulb className="w-5 h-5" />}
+                </div>
+                {insight.metric && <span className="text-2xl font-bold text-white">{insight.metric}</span>}
+              </div>
+              <h3 className="font-semibold text-white mt-3">{insight.title}</h3>
+              <p className="text-sm text-gray-400 mt-1">{insight.description}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          title="Выручка"
+          icon={<TrendingUp className="w-5 h-5 text-emerald-400" />}
+          value={formatMoneyFull(totals.totalIncome)}
+          subLeft={`Нал: ${formatMoneyFull(totals.incomeCash)}`}
+          subRight={`Безнал: ${formatMoneyFull(totals.incomeNonCash)}`}
+          trendText={totalsPrev.totalIncome > 0 ? getPercentageChange(totals.totalIncome, totalsPrev.totalIncome) : undefined}
+          trendUp={trendUp}
+          accent="emerald"
+        />
+        <StatCard
+          title="Расходы"
+          icon={<TrendingDown className="w-5 h-5 text-rose-400" />}
+          value={formatMoneyFull(totals.totalExpense)}
+          subLeft={`Нал: ${formatMoneyFull(totals.expenseCash)}`}
+          subRight={`Kaspi: ${formatMoneyFull(totals.expenseKaspi)}`}
+          trendText={totalsPrev.totalExpense > 0 ? getPercentageChange(totals.totalExpense, totalsPrev.totalExpense) : undefined}
+          trendUp={!expenseTrendUp}
+          accent="rose"
+        />
+        <StatCard
+          title="Прибыль"
+          icon={<DollarSign className="w-5 h-5 text-amber-400" />}
+          value={formatMoneyFull(totals.profit)}
+          subLeft={`Маржа: ${(totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0).toFixed(1)}%`}
+          accent="amber"
+        />
+        <StatCard
+          title="Остатки"
+          icon={<Wallet className="w-5 h-5 text-blue-400" />}
+          value={formatMoneyFull(totals.remainingCash + totals.remainingKaspi)}
+          subLeft={`Нал: ${formatMoneyFull(totals.remainingCash)}`}
+          subRight={`Безнал: ${formatMoneyFull(totals.remainingKaspi)}`}
+          accent="blue"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Activity className="w-5 h-5 text-violet-400" />
+              Динамика доходов и расходов
+            </h3>
+          </div>
+
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartData}>
+                <defs>
+                  <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.28} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="expenseGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.28} />
+                    <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+                <XAxis dataKey="label" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatCompact} />
+                <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '12px', padding: '12px' }} />
+                <Area type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} fill="url(#incomeGradient)" />
+                <Area type="monotone" dataKey="expense" stroke="#f43f5e" strokeWidth={2} fill="url(#expenseGradient)" />
+                <Line type="monotone" dataKey="profit" stroke="#fbbf24" strokeWidth={3} dot={{ r: 3, fill: '#fbbf24', strokeWidth: 0 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+          <h3 className="text-lg font-semibold mb-5 flex items-center gap-2">
+            <PieIcon className="w-5 h-5 text-rose-400" />
+            Структура расходов
+          </h3>
+
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={expenseByCategoryData} cx="50%" cy="50%" innerRadius={58} outerRadius={92} paddingAngle={4} dataKey="amount">
+                  {expenseByCategoryData.map((_, idx) => (
+                    <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} stroke="transparent" />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '12px' }}
+                  formatter={(v: number) => formatMoneyFull(v)}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            {expenseByCategoryData.slice(0, 6).map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full" style={{ background: PIE_COLORS[idx % PIE_COLORS.length] }} />
+                  <span className="text-gray-400">{item.name}</span>
+                </div>
+                <span className="text-white font-medium">{formatMoneyFull(item.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Store className="w-5 h-5 text-blue-400" />
+            Компании — выручка / расход / прибыль
+          </h3>
+
+          <div className="overflow-auto max-h-[420px]">
+            <table className="w-full text-sm min-w-[980px]">
+              <thead className="sticky top-0 bg-gray-900/90">
+                <tr className="text-gray-400">
+                  <th className="text-left py-2 pr-3">Компания</th>
+                  <th className="text-right py-2 pr-3">Выручка</th>
+                  <th className="text-right py-2 pr-3">Нал</th>
+                  <th className="text-right py-2 pr-3">Kaspi</th>
+                  <th className="text-right py-2 pr-3">Online</th>
+                  <th className="text-right py-2 pr-3">Card</th>
+                  <th className="text-right py-2 pr-3">Расход</th>
+                  <th className="text-right py-2 pr-3">Прибыль</th>
+                  <th className="text-right py-2">Маржа</th>
+                </tr>
+              </thead>
+              <tbody>
+                {companyTotals.map((c) => (
+                  <tr key={c.companyId} className="border-t border-white/5">
+                    <td className="py-2 pr-3 text-gray-200">{c.name}</td>
+                    <td className="py-2 pr-3 text-right text-white font-semibold">{formatMoneyFull(c.incomeTotal)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.incomeCash)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.incomeKaspi)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.incomeOnline)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.incomeCard)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.expenseTotal)}</td>
+                    <td className={`py-2 pr-3 text-right font-semibold ${c.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {formatMoneyFull(c.profit)}
+                    </td>
+                    <td className="py-2 text-right text-gray-300">{c.marginPct.toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6 space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Layers className="w-5 h-5 text-fuchsia-400" />
+              Смены
+            </h3>
+            <div className="space-y-3">
+              {shiftAgg
+                .slice()
+                .sort((a, b) => b.income - a.income)
+                .map((s) => (
+                  <div key={s.name} className="p-4 rounded-xl bg-gray-800/40 border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div className="text-gray-300 font-medium">{s.name}</div>
+                      <div className="text-white font-semibold">{formatMoneyFull(s.income)}</div>
+                    </div>
+                    <div className="mt-2 text-xs text-gray-500">Прибыль: <span className={s.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatMoneyFull(s.profit)}</span></div>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-amber-400" />
+              ТОП зон (по выручке)
+            </h3>
+            <div className="space-y-2">
+              {zoneAgg.map((z, idx) => (
+                <div key={z.name} className="flex items-center justify-between text-sm p-3 rounded-xl bg-gray-800/40 border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-500 w-6 text-right">{idx + 1}.</span>
+                    <span className="text-gray-300">{z.name}</span>
+                  </div>
+                  <span className="text-white font-semibold">{formatMoneyFull(z.income)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-400" />
+              Аномалии
+            </h3>
+            {processed.anomalies.length > 0 ? (
+              <div className="space-y-2">
+                {processed.anomalies.slice(0, 6).map((a, i) => (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-gray-800/40 border border-white/5">
+                    <div
+                      className={`mt-0.5 p-2 rounded-lg ${
+                        a.severity === 'high'
+                          ? 'bg-rose-500/20 text-rose-400'
+                          : a.severity === 'medium'
+                            ? 'bg-amber-500/20 text-amber-400'
+                            : 'bg-blue-500/20 text-blue-400'
+                      }`}
+                    >
+                      {a.severity === 'high' ? <AlertTriangle className="w-4 h-4" /> : <Lightbulb className="w-4 h-4" />}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm text-gray-200">{a.description}</div>
+                      <div className="text-xs text-gray-500 mt-1">{a.date}</div>
+                    </div>
+                    <span
+                      className={`text-xs px-2 py-1 rounded-lg ${
+                        a.severity === 'high'
+                          ? 'bg-rose-500/20 text-rose-400'
+                          : a.severity === 'medium'
+                            ? 'bg-amber-500/20 text-amber-400'
+                            : 'bg-blue-500/20 text-blue-400'
+                      }`}
+                    >
+                      {a.severity}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-gray-800/30 border border-white/5 text-gray-400">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                Аномалий не найдено
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 
-  // ----- UI ниже ты можешь оставить как был -----
-  // Я меняю только места с ResponsiveContainer → оборачиваю ChartShell
+  const CompaniesBlock = (
+    <div className="space-y-6">
+      <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Table2 className="w-5 h-5 text-violet-400" />
+          Детальная таблица компаний
+        </h3>
+
+        <div className="overflow-auto">
+          <table className="w-full text-sm min-w-[1180px]">
+            <thead className="sticky top-0 bg-gray-900/90">
+              <tr className="text-gray-400">
+                <th className="text-left py-2 pr-3">Компания</th>
+                <th className="text-right py-2 pr-3">Выручка</th>
+                <th className="text-right py-2 pr-3">Нал</th>
+                <th className="text-right py-2 pr-3">Kaspi</th>
+                <th className="text-right py-2 pr-3">Online</th>
+                <th className="text-right py-2 pr-3">Card</th>
+                <th className="text-right py-2 pr-3">Безнал</th>
+                <th className="text-right py-2 pr-3">Расход</th>
+                <th className="text-right py-2 pr-3">Расход нал</th>
+                <th className="text-right py-2 pr-3">Расход Kaspi</th>
+                <th className="text-right py-2 pr-3">Прибыль</th>
+                <th className="text-right py-2 pr-3">Маржа</th>
+                <th className="text-right py-2">Операций</th>
+              </tr>
+            </thead>
+            <tbody>
+              {companyTotals.map((c) => {
+                const nonCash = c.incomeKaspi + c.incomeOnline + c.incomeCard
+                return (
+                  <tr key={c.companyId} className="border-t border-white/5">
+                    <td className="py-2 pr-3 text-gray-200">{c.name}</td>
+                    <td className="py-2 pr-3 text-right text-white font-semibold">{formatMoneyFull(c.incomeTotal)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.incomeCash)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.incomeKaspi)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.incomeOnline)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.incomeCard)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(nonCash)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.expenseTotal)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.expenseCash)}</td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{formatCompact(c.expenseKaspi)}</td>
+                    <td className={`py-2 pr-3 text-right font-semibold ${c.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {formatMoneyFull(c.profit)}
+                    </td>
+                    <td className="py-2 pr-3 text-right text-gray-300">{c.marginPct.toFixed(1)}%</td>
+                    <td className="py-2 text-right text-gray-400">{c.opsCount}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Store className="w-5 h-5 text-blue-400" />
+            Выручка по компаниям (бар)
+          </h3>
+
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={companyTotals.slice(0, 12).map((c, idx) => ({
+                  name: c.name,
+                  value: c.incomeTotal,
+                  fill: PIE_COLORS[idx % PIE_COLORS.length],
+                }))}
+                layout="vertical"
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} horizontal={false} />
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="name" width={160} stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '12px' }} formatter={(v: number) => formatMoneyFull(v)} />
+                <Bar dataKey="value" radius={[0, 10, 10, 0]}>
+                  {companyTotals.slice(0, 12).map((_, idx) => (
+                    <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-emerald-400" />
+            Быстрые итоги периода
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-gray-800/40 border border-white/5">
+              <div className="text-xs text-gray-500">Период</div>
+              <div className="text-white font-semibold mt-1">
+                {dateFrom} → {dateTo}
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-gray-800/40 border border-white/5">
+              <div className="text-xs text-gray-500">Компаний в отчёте</div>
+              <div className="text-white font-semibold mt-1">{companyTotals.length}</div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-gray-800/40 border border-white/5">
+              <div className="text-xs text-gray-500">Выручка / день (средняя)</div>
+              <div className="text-white font-semibold mt-1">
+                {formatMoneyFull(Math.round(totals.totalIncome / Math.max(1, calculatePrevPeriod(dateFrom, dateTo).durationDays)))}
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-gray-800/40 border border-white/5">
+              <div className="text-xs text-gray-500">Расход / день (средний)</div>
+              <div className="text-white font-semibold mt-1">
+                {formatMoneyFull(Math.round(totals.totalExpense / Math.max(1, calculatePrevPeriod(dateFrom, dateTo).durationDays)))}
+              </div>
+            </div>
+          </div>
+
+          {forecast && (
+            <div className="mt-5 p-4 rounded-xl bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/20">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-300 font-medium">Прогноз на месяц</div>
+                <div className="text-xs text-gray-500">Точность ~{forecast.confidence.toFixed(0)}%</div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-3">
+                <div>
+                  <div className="text-xs text-gray-500">Выручка</div>
+                  <div className="text-lg font-bold text-violet-400">{formatMoneyFull(forecast.forecastIncome)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Прибыль</div>
+                  <div className="text-lg font-bold text-emerald-400">{formatMoneyFull(forecast.forecastProfit)}</div>
+                </div>
+              </div>
+              <div className="text-xs text-gray-500 mt-2">Осталось дней: {forecast.remainingDays}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
+  const DetailsBlock = (
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+        <h3 className="text-lg font-semibold mb-4">Доходы (текущий период)</h3>
+        <div className="overflow-auto max-h-[560px]">
+          <table className="w-full text-sm min-w-[920px]">
+            <thead className="sticky top-0 bg-gray-900/90">
+              <tr className="text-gray-400">
+                <th className="text-left py-2 pr-2">Дата</th>
+                <th className="text-left py-2 pr-2">Компания</th>
+                <th className="text-left py-2 pr-2">Смена</th>
+                <th className="text-left py-2 pr-2">Зона</th>
+                <th className="text-right py-2 pr-2">Нал</th>
+                <th className="text-right py-2 pr-2">Kaspi</th>
+                <th className="text-right py-2 pr-2">Online</th>
+                <th className="text-right py-2 pr-2">Card</th>
+                <th className="text-right py-2">Итого</th>
+              </tr>
+            </thead>
+            <tbody>
+              {incomesCurrent
+                .slice()
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .map((r) => {
+                  const cash = safeNumber(r.cash_amount)
+                  const kaspi = safeNumber(r.kaspi_amount)
+                  const online = safeNumber(r.online_amount)
+                  const card = safeNumber(r.card_amount)
+                  const total = cash + kaspi + online + card
+                  return (
+                    <tr key={r.id} className="border-t border-white/5">
+                      <td className="py-2 pr-2 text-gray-300">{r.date}</td>
+                      <td className="py-2 pr-2 text-gray-300">{companyName(r.company_id)}</td>
+                      <td className="py-2 pr-2 text-gray-400">{r.shift}</td>
+                      <td className="py-2 pr-2 text-gray-400">{r.zone || '—'}</td>
+                      <td className="py-2 pr-2 text-right">{formatCompact(cash)}</td>
+                      <td className="py-2 pr-2 text-right">{formatCompact(kaspi)}</td>
+                      <td className="py-2 pr-2 text-right">{formatCompact(online)}</td>
+                      <td className="py-2 pr-2 text-right">{formatCompact(card)}</td>
+                      <td className="py-2 text-right font-semibold text-white">{formatCompact(total)}</td>
+                    </tr>
+                  )
+                })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+        <h3 className="text-lg font-semibold mb-4">Расходы (текущий период)</h3>
+        <div className="overflow-auto max-h-[560px]">
+          <table className="w-full text-sm min-w-[760px]">
+            <thead className="sticky top-0 bg-gray-900/90">
+              <tr className="text-gray-400">
+                <th className="text-left py-2 pr-2">Дата</th>
+                <th className="text-left py-2 pr-2">Компания</th>
+                <th className="text-left py-2 pr-2">Категория</th>
+                <th className="text-right py-2 pr-2">Нал</th>
+                <th className="text-right py-2 pr-2">Kaspi</th>
+                <th className="text-right py-2">Итого</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expensesCurrent
+                .slice()
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .map((r) => {
+                  const cash = safeNumber(r.cash_amount)
+                  const kaspi = safeNumber(r.kaspi_amount)
+                  const total = cash + kaspi
+                  return (
+                    <tr key={r.id} className="border-t border-white/5">
+                      <td className="py-2 pr-2 text-gray-300">{r.date}</td>
+                      <td className="py-2 pr-2 text-gray-300">{companyName(r.company_id)}</td>
+                      <td className="py-2 pr-2 text-gray-400">{r.category || 'Без категории'}</td>
+                      <td className="py-2 pr-2 text-right">{formatCompact(cash)}</td>
+                      <td className="py-2 pr-2 text-right">{formatCompact(kaspi)}</td>
+                      <td className="py-2 text-right font-semibold text-white">{formatCompact(total)}</td>
+                    </tr>
+                  )
+                })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100">
       <Sidebar />
 
       <main className="flex-1 overflow-auto">
-        <div className="p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
-          {toast && (
-            <div className="fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl bg-gray-900/80 border border-white/10 backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2">
-              <div className="text-sm text-white">{toast}</div>
-            </div>
-          )}
+        {/* Toast */}
+        {toast && (
+          <div className="fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl bg-gray-900/80 border border-white/10 backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2">
+            <div className="text-sm text-white">{toast}</div>
+          </div>
+        )}
 
+        <div className="p-6 lg:p-8 max-w-[1700px] mx-auto space-y-6">
           {/* Header */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-8">
             <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
 
-            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-violet-500/25">
                   <BarChart3 className="w-8 h-8 text-white" />
                 </div>
                 <div>
                   <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">AI Аналитика</h1>
-                  <p className="text-gray-400 mt-1">Умный анализ финансов в реальном времени</p>
+                  <p className="text-gray-400 mt-1">Все цифры: компании, оплаты, зоны, смены, категории</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <div className="flex bg-gray-900/50 backdrop-blur-xl rounded-2xl p-1 border border-white/10">
-                  {(['overview', 'analytics', 'details'] as const).map((tab) => (
+                  {(['overview', 'companies', 'details'] as const).map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setActiveTab(tab)}
@@ -921,154 +1759,146 @@ function ReportsContent() {
                       }`}
                     >
                       {tab === 'overview' && 'Обзор'}
-                      {tab === 'analytics' && 'Аналитика'}
+                      {tab === 'companies' && 'Компании'}
                       {tab === 'details' && 'Детали'}
                     </button>
                   ))}
                 </div>
 
-                <Button variant="outline" size="icon" className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10" onClick={resetFilters} title="Сбросить фильтры">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
+                  onClick={resetFilters}
+                  title="Сбросить фильтры"
+                >
                   <Lightbulb className="w-4 h-4" />
                 </Button>
 
-                <Button variant="outline" size="icon" className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10" onClick={handleDownload} title="Скачать CSV">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
+                  onClick={handleDownload}
+                  title="Скачать CSV"
+                >
                   <Download className="w-4 h-4" />
                 </Button>
 
-                <Button variant="outline" size="icon" className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10" onClick={handleShare} title="Скопировать ссылку">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
+                  onClick={handleShare}
+                  title="Скопировать ссылку"
+                >
                   <Share2 className="w-4 h-4" />
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Таб-контент: я покажу только часть с графиками — остальное можешь оставить как было */}
+          {/* Filters */}
+          <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+              <div className="xl:col-span-6 space-y-3">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4" /> Период
+                </label>
 
-          {activeTab === 'overview' && (
-            <>
-              {/* ... твои карточки выше оставляй как есть ... */}
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-violet-400" />
-                      Динамика доходов и расходов
-                    </h3>
-                  </div>
-
-                  <ChartShell>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                        <XAxis dataKey="label" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatCompact} />
-                        <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '12px', padding: '12px' }} />
-                        <Area type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} fillOpacity={0.15} />
-                        <Area type="monotone" dataKey="expense" stroke="#f43f5e" strokeWidth={2} fillOpacity={0.12} />
-                        <Line type="monotone" dataKey="profit" stroke="#fbbf24" strokeWidth={3} dot={false} />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </ChartShell>
+                <div className="flex flex-wrap gap-2">
+                  <Pill active={datePreset === 'today'} onClick={() => handlePresetChange('today')}>Сегодня</Pill>
+                  <Pill active={datePreset === 'yesterday'} onClick={() => handlePresetChange('yesterday')}>Вчера</Pill>
+                  <Pill active={datePreset === 'last7'} onClick={() => handlePresetChange('last7')}>7 дней</Pill>
+                  <Pill active={datePreset === 'last30'} onClick={() => handlePresetChange('last30')}>30 дней</Pill>
+                  <Pill active={datePreset === 'prevWeek'} onClick={() => handlePresetChange('prevWeek')}>Прошлая неделя</Pill>
+                  <Pill active={datePreset === 'currentMonth'} onClick={() => handlePresetChange('currentMonth')}>Этот месяц</Pill>
+                  <Pill active={datePreset === 'prevMonth'} onClick={() => handlePresetChange('prevMonth')}>Прошлый месяц</Pill>
                 </div>
 
-                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-                  <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-rose-400" />
-                    Структура расходов
-                  </h3>
-
-                  <ChartShell className="h-64 min-h-[256px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={expenseByCategoryData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={4} dataKey="amount">
-                          {expenseByCategoryData.map((_, idx) => (
-                            <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} stroke="transparent" />
-                          ))}
-                        </Pie>
-                        <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '12px' }} formatter={(v: number) => formatMoneyFull(v)} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </ChartShell>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => {
+                      setDateFrom(e.target.value)
+                      setDatePreset('custom')
+                    }}
+                    className="bg-gray-800/50 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                  />
+                  <span className="text-gray-500">→</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => {
+                      setDateTo(e.target.value)
+                      setDatePreset('custom')
+                    }}
+                    className="bg-gray-800/50 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                  />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-                  <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                    <Store className="w-5 h-5 text-blue-400" />
-                    Выручка по компаниям
-                  </h3>
+              <div className="xl:col-span-3 space-y-3">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <Store className="w-4 h-4" /> Компания
+                </label>
 
-                  <ChartShell className="h-64 min-h-[256px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={incomeByCompanyData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} horizontal={false} />
-                        <XAxis type="number" hide />
-                        <YAxis type="category" dataKey="name" width={120} stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                        <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '12px' }} formatter={(v: number) => formatMoneyFull(v)} />
-                        <Bar dataKey="value" radius={[0, 8, 8, 0]}>
-                          {incomeByCompanyData.map((entry, idx) => (
-                            <Cell key={idx} fill={entry.fill} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartShell>
+                <select
+                  value={companyFilter}
+                  onChange={(e) => setCompanyFilter(e.target.value)}
+                  className="w-full bg-gray-800/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500/50"
+                >
+                  <option value="all">Все компании</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+
+                {companyFilter === 'all' && (
+                  <button
+                    onClick={() => setIncludeExtraInTotals((v) => !v)}
+                    className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors ${
+                      includeExtraInTotals ? 'text-fuchsia-300 bg-fuchsia-500/10' : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${includeExtraInTotals ? 'bg-fuchsia-400' : 'bg-gray-600'}`} />
+                    Учитывать F16 Extra
+                  </button>
+                )}
+              </div>
+
+              <div className="xl:col-span-3 space-y-3">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" /> Группировка
+                </label>
+
+                <div className="flex flex-wrap gap-2">
+                  <Pill active={groupMode === 'day'} onClick={() => setGroupMode('day')}>Дни</Pill>
+                  <Pill active={groupMode === 'week'} onClick={() => setGroupMode('week')}>Недели</Pill>
+                  <Pill active={groupMode === 'month'} onClick={() => setGroupMode('month')}>Месяцы</Pill>
+                  <Pill active={groupMode === 'year'} onClick={() => setGroupMode('year')}>Годы</Pill>
                 </div>
 
-                {/* ... вторую колонку (аномалии) оставляй как есть ... */}
-                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-                  <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-400" />
-                    Аномалии и рекомендации
-                  </h3>
-
-                  {processed.anomalies.length > 0 ? (
-                    <div className="space-y-3">
-                      {processed.anomalies.slice(0, 6).map((a, i) => (
-                        <div key={i} className="flex items-center gap-4 p-4 rounded-xl bg-gray-800/50 border border-white/5">
-                          <div
-                            className={`p-2 rounded-lg ${
-                              a.severity === 'high'
-                                ? 'bg-rose-500/20 text-rose-400'
-                                : a.severity === 'medium'
-                                  ? 'bg-amber-500/20 text-amber-400'
-                                  : 'bg-blue-500/20 text-blue-400'
-                            }`}
-                          >
-                            {a.severity === 'high' ? <AlertTriangle className="w-5 h-5" /> : <Lightbulb className="w-5 h-5" />}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-white">{a.description}</p>
-                            <p className="text-xs text-gray-500 mt-1">{a.date}</p>
-                          </div>
-                          <span
-                            className={`text-xs px-2 py-1 rounded-lg ${
-                              a.severity === 'high'
-                                ? 'bg-rose-500/20 text-rose-400'
-                                : a.severity === 'medium'
-                                  ? 'bg-amber-500/20 text-amber-400'
-                                  : 'bg-blue-500/20 text-blue-400'
-                            }`}
-                          >
-                            {a.severity}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-48 text-gray-500">
-                      <CheckCircle2 className="w-12 h-12 mb-3 text-emerald-500/50" />
-                      <p>Аномалий не обнаружено</p>
-                    </div>
-                  )}
+                <div className="text-xs text-gray-500">
+                  Подсказка: “Годы” удобно для инвестора. “Недели” — чтобы видеть провалы по сменам.
                 </div>
               </div>
-            </>
-          )}
+            </div>
+          </div>
 
-          {/* analytics/details оставь как у тебя */}
+          {/* Tab Content */}
+          {activeTab === 'overview' && OverviewBlock}
+          {activeTab === 'companies' && CompaniesBlock}
+          {activeTab === 'details' && DetailsBlock}
+
+          {/* Footer micro */}
+          <div className="text-xs text-gray-600 flex items-center gap-2">
+            <Activity className="w-4 h-4" />
+            Если цифры “скачут” — это не мистика, это либо дубль записи, либо криво введённая дата/смена 😄
+          </div>
         </div>
       </main>
     </div>
