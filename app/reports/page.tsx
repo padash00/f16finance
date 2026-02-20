@@ -28,7 +28,7 @@ import {
   FileSpreadsheet,
   Filter,
   Lightbulb,
-  PieChart,
+  PieChart as PieChartIcon, // ← Переименовано
   RefreshCw,
   Search,
   Share2,
@@ -48,7 +48,7 @@ import {
   Tooltip,
   BarChart,
   Bar,
-  PieChart,
+  PieChart, // ← Оставляем только из recharts
   Pie,
   Cell,
   ComposedChart,
@@ -231,12 +231,6 @@ const addDaysISO = (iso: string, diff: number) => {
   return toISODateLocal(d)
 }
 
-const addMonthsISO = (iso: string, months: number) => {
-  const d = fromISO(iso)
-  d.setMonth(d.getMonth() + months)
-  return toISODateLocal(d)
-}
-
 const calculatePrevPeriod = (dateFrom: string, dateTo: string) => {
   const dFrom = fromISO(dateFrom)
   const dTo = fromISO(dateTo)
@@ -271,11 +265,6 @@ const getISOWeekStartISO = (isoDate: string) => {
 
 const getMonthKey = (isoDate: string) => isoDate.slice(0, 7)
 const getYearKey = (isoDate: string) => isoDate.slice(0, 4)
-const getQuarterKey = (isoDate: string) => {
-  const [y, m] = isoDate.split('-').map(Number)
-  const q = Math.ceil(m / 3)
-  return `${y}-Q${q}`
-}
 
 const formatDateRange = (from: string, to: string) => {
   const d1 = fromISO(from)
@@ -316,12 +305,6 @@ const getPercentageChange = (current: number, previous: number) => {
   if (current === 0) return '-100%'
   const change = ((current - previous) / previous) * 100
   return `${change > 0 ? '+' : ''}${change.toFixed(1)}%`
-}
-
-const getChangeColor = (current: number, previous: number) => {
-  if (previous === 0) return current > 0 ? 'text-emerald-400' : 'text-gray-400'
-  const change = current - previous
-  return change > 0 ? 'text-emerald-400' : change < 0 ? 'text-rose-400' : 'text-gray-400'
 }
 
 const safeNumber = (v: unknown) => {
@@ -986,12 +969,15 @@ function ReportsContent() {
 
     return { 
       totalsCur, totalsPrev, chartDataMap, expenseByCategoryMap, 
-      incomeByCompanyMap, anomalies, companyStats, prevFrom, prevTo 
+      incomeByCompanyMap, anomalies, companyStats, prevFrom, prevTo,
+      dailyIncome, dailyExpense
     }
   }, [incomes, expenses, dateFrom, dateTo, groupMode, companyName])
 
   const totals = processed.totalsCur
   const totalsPrev = processed.totalsPrev
+  const dailyIncome = processed.dailyIncome
+  const dailyExpense = processed.dailyExpense
 
   const chartData = useMemo(() => 
     Array.from(processed.chartDataMap.values())
@@ -1273,7 +1259,7 @@ function ReportsContent() {
     }
 
     return insights.slice(0, 5)
-  }, [totals, totalsPrev, expenseByCategoryData, processed.anomalies, totals.avgTransaction, totals.transactionCount])
+  }, [totals, totalsPrev, expenseByCategoryData, processed.anomalies])
 
   // =====================
   // FORECAST
@@ -1441,7 +1427,7 @@ function ReportsContent() {
             <div className={`p-2.5 rounded-xl bg-gradient-to-br ${colors[color]} bg-opacity-20`}>
               <Icon className="w-5 h-5 text-white" />
             </div>
-            {trend && (
+            {trend !== undefined && (
               <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${trend > 0 ? 'bg-emerald-500/20 text-emerald-400' : trend < 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-gray-500/20 text-gray-400'}`}>
                 {trend > 0 ? '+' : ''}{trend}%
               </span>
@@ -1942,7 +1928,7 @@ function ReportsContent() {
                 <div className="space-y-6">
                   <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
                     <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                      <PieChart className="w-5 h-5 text-rose-400" />
+                      <PieChartIcon className="w-5 h-5 text-rose-400" />
                       Структура расходов
                     </h3>
                     
