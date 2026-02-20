@@ -2,8 +2,18 @@
 
 export const dynamic = 'force-dynamic'
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { 
+  Suspense, 
+  useCallback, 
+  useEffect, 
+  useMemo, 
+  useRef, 
+  useState,
+  memo,
+  useTransition
+} from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 import { Sidebar } from '@/components/sidebar'
 import { Button } from '@/components/ui/button'
@@ -13,7 +23,6 @@ import { supabase } from '@/lib/supabaseClient'
 import {
   Activity,
   AlertTriangle,
-  ArrowDownUp,
   ArrowUpDown,
   BarChart3,
   Building2,
@@ -37,6 +46,7 @@ import {
   TrendingUp,
   Wallet,
   X,
+  Zap,
 } from 'lucide-react'
 
 import {
@@ -53,6 +63,7 @@ import {
   ComposedChart,
   Line,
   Area,
+  ReferenceLine,
 } from 'recharts'
 
 // =====================
@@ -60,7 +71,7 @@ import {
 // =====================
 type Shift = 'day' | 'night'
 
-type IncomeRow = {
+interface IncomeRow {
   id: string
   date: string
   company_id: string
@@ -68,24 +79,24 @@ type IncomeRow = {
   zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
-  online_amount: number | null  // ← ДОБАВЛЕНО
+  online_amount: number | null
   card_amount: number | null
   created_at?: string
 }
 
-type ExpenseRow = {
+interface ExpenseRow {
   id: string
   date: string
   company_id: string
   category: string | null
   cash_amount: number | null
   kaspi_amount: number | null
-  comment?: string | null  // ← изменено с description на comment
+  comment: string | null
   created_at?: string
-  operator_id?: string | null  // ← добавлено если нужно
+  operator_id?: string | null
 }
 
-type Company = {
+interface Company {
   id: string
   name: string
   code?: string | null
@@ -98,11 +109,11 @@ type DatePreset = 'custom' | 'today' | 'yesterday' | 'last7' | 'prevWeek' | 'las
 type SortDirection = 'asc' | 'desc'
 type SortField = 'date' | 'company' | 'amount' | 'category' | 'shift' | 'zone'
 
-type FinancialTotals = {
+interface FinancialTotals {
   incomeCash: number
   incomeKaspi: number
-  incomeOnline: number      // ← ДОБАВЛЕНО
-  incomeCard: number        // ← ДОБАВЛЕНО
+  incomeOnline: number
+  incomeCard: number
   incomeNonCash: number
   expenseCash: number
   expenseKaspi: number
@@ -116,7 +127,7 @@ type FinancialTotals = {
   avgTransaction: number
 }
 
-type TimeAggregation = {
+interface TimeAggregation {
   label: string
   sortISO: string
   income: number
@@ -124,32 +135,37 @@ type TimeAggregation = {
   profit: number
   incomeCash: number
   incomeKaspi: number
-  incomeOnline: number      // ← ДОБАВЛЕНО
-  incomeCard: number        // ← ДОБАВЛЕНО
+  incomeOnline: number
+  incomeCard: number
   incomeNonCash: number
   expenseCash: number
   expenseKaspi: number
   count: number
 }
 
-type AIInsight = {
-  type: 'warning' | 'success' | 'info' | 'opportunity' | 'danger'
+type InsightType = 'warning' | 'success' | 'info' | 'opportunity' | 'danger'
+
+interface AIInsight {
+  type: InsightType
   title: string
   description: string
   metric?: string
   trend?: 'up' | 'down' | 'neutral'
 }
 
-type Anomaly = {
-  type: 'income_spike' | 'expense_spike' | 'low_profit' | 'no_data' | 'high_cash_ratio'
+type Severity = 'low' | 'medium' | 'high' | 'critical'
+type AnomalyType = 'income_spike' | 'expense_spike' | 'low_profit' | 'no_data' | 'high_cash_ratio'
+
+interface Anomaly {
+  type: AnomalyType
   date: string
   description: string
-  severity: 'low' | 'medium' | 'high' | 'critical'
+  severity: Severity
   value: number
   companyId?: string
 }
 
-type DetailedRow = {
+interface DetailedRow {
   id: string
   date: string
   type: 'income' | 'expense'
@@ -163,13 +179,29 @@ type DetailedRow = {
   category?: string
   shift?: Shift
   zone?: string | null
-  comment?: string  // ← изменено с description на comment
+  comment?: string | null
+}
+
+interface CompanyStat {
+  income: number
+  expense: number
+  profit: number
+  cashIncome: number
+  kaspiIncome: number
+  onlineIncome: number
+  cardIncome: number
+  cashExpense: number
+  kaspiExpense: number
+  transactions: number
 }
 
 // =====================
-// CONSTS
+// CONSTANTS
 // =====================
-const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'] as const
+const PIE_COLORS = [
+  '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', 
+  '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'
+] as const
 
 const SHIFT_LABELS: Record<Shift, string> = {
   day: 'День',
@@ -192,40 +224,44 @@ const PRESET_LABELS: Record<DatePreset, string> = {
   custom: 'Произвольный период',
 }
 
-const baseTotals = (): FinancialTotals => ({
-  incomeCash: 0,
-  incomeKaspi: 0,
-  incomeOnline: 0,      // ← ДОБАВЛЕНО
-  incomeCard: 0,        // ← ДОБАВЛЕНО
-  incomeNonCash: 0,
-  expenseCash: 0,
-  expenseKaspi: 0,
-  totalIncome: 0,
-  totalExpense: 0,
-  profit: 0,
-  remainingCash: 0,
-  remainingKaspi: 0,
-  totalBalance: 0,
-  transactionCount: 0,
-  avgTransaction: 0,
-})
+const INSIGHT_STYLES: Record<InsightType, { bg: string; border: string; text: string; icon: typeof TrendingUp }> = {
+  success: { bg: 'bg-emerald-500/5', border: 'border-emerald-500/20', text: 'text-emerald-400', icon: TrendingUp },
+  warning: { bg: 'bg-amber-500/5', border: 'border-amber-500/20', text: 'text-amber-400', icon: AlertTriangle },
+  danger: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400', icon: AlertTriangle },
+  opportunity: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400', icon: Lightbulb },
+  info: { bg: 'bg-gray-800/30', border: 'border-white/5', text: 'text-gray-400', icon: Activity },
+}
+
+const SEVERITY_STYLES: Record<Severity, { bg: string; border: string; text: string }> = {
+  critical: { bg: 'bg-rose-500/10', border: 'border-rose-500/30', text: 'text-rose-400' },
+  high: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400' },
+  medium: { bg: 'bg-amber-500/5', border: 'border-amber-500/20', text: 'text-amber-400' },
+  low: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400' },
+}
+
+const SEVERITY_LABELS: Record<Severity, string> = {
+  critical: 'Критично',
+  high: 'Высокий',
+  medium: 'Средний',
+  low: 'Низкий',
+}
 
 // =====================
-// DATE HELPERS
+// UTILITY FUNCTIONS
 // =====================
-const toISODateLocal = (d: Date) => {
+const toISODateLocal = (d: Date): string => {
   const t = d.getTime() - d.getTimezoneOffset() * 60_000
   return new Date(t).toISOString().slice(0, 10)
 }
 
-const fromISO = (iso: string) => {
+const fromISO = (iso: string): Date => {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, (m || 1) - 1, d || 1)
 }
 
-const todayISO = () => toISODateLocal(new Date())
+const todayISO = (): string => toISODateLocal(new Date())
 
-const addDaysISO = (iso: string, diff: number) => {
+const addDaysISO = (iso: string, diff: number): string => {
   const d = fromISO(iso)
   d.setDate(d.getDate() + diff)
   return toISODateLocal(d)
@@ -240,7 +276,7 @@ const calculatePrevPeriod = (dateFrom: string, dateTo: string) => {
   return { prevFrom, prevTo, durationDays }
 }
 
-const getISOWeekKey = (isoDate: string) => {
+const getISOWeekKey = (isoDate: string): string => {
   const d = fromISO(isoDate)
   d.setHours(0, 0, 0, 0)
   d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7))
@@ -254,7 +290,7 @@ const getISOWeekKey = (isoDate: string) => {
   return `${isoYear}-W${String(weekNo).padStart(2, '0')}`
 }
 
-const getISOWeekStartISO = (isoDate: string) => {
+const getISOWeekStartISO = (isoDate: string): string => {
   const d = fromISO(isoDate)
   d.setHours(0, 0, 0, 0)
   const day = d.getDay()
@@ -263,10 +299,10 @@ const getISOWeekStartISO = (isoDate: string) => {
   return toISODateLocal(d)
 }
 
-const getMonthKey = (isoDate: string) => isoDate.slice(0, 7)
-const getYearKey = (isoDate: string) => isoDate.slice(0, 4)
+const getMonthKey = (isoDate: string): string => isoDate.slice(0, 7)
+const getYearKey = (isoDate: string): string => isoDate.slice(0, 4)
 
-const formatDateRange = (from: string, to: string) => {
+const formatDateRange = (from: string, to: string): string => {
   const d1 = fromISO(from)
   const d2 = fromISO(to)
   const sameMonth = d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear()
@@ -277,15 +313,12 @@ const formatDateRange = (from: string, to: string) => {
   return `${d1.toLocaleDateString('ru-RU')} – ${d2.toLocaleDateString('ru-RU')}`
 }
 
-// =====================
-// FORMATTERS
-// =====================
-const formatMoneyFull = (n: number) => {
+const formatMoneyFull = (n: number): string => {
   if (!Number.isFinite(n)) return '0 ₸'
   return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 }
 
-const formatMoneyCompact = (n: number) => {
+const formatMoneyCompact = (n: number): string => {
   const abs = Math.abs(n)
   if (abs >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + ' млрд'
   if (abs >= 1_000_000) return (n / 1_000_000).toFixed(1) + ' млн'
@@ -293,39 +326,39 @@ const formatMoneyCompact = (n: number) => {
   return String(Math.round(n))
 }
 
-const formatCompact = (n: number) => {
+const formatCompact = (n: number): string => {
   const abs = Math.abs(n)
   if (abs >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
   if (abs >= 1_000) return (n / 1_000).toFixed(0) + 'k'
   return String(Math.round(n))
 }
 
-const getPercentageChange = (current: number, previous: number) => {
+const getPercentageChange = (current: number, previous: number): string => {
   if (previous === 0) return current > 0 ? '+100%' : '—'
   if (current === 0) return '-100%'
   const change = ((current - previous) / previous) * 100
   return `${change > 0 ? '+' : ''}${change.toFixed(1)}%`
 }
 
-const safeNumber = (v: unknown) => {
+const safeNumber = (v: unknown): number => {
   if (v === null || v === undefined) return 0
   const num = Number(v)
   return Number.isFinite(num) ? num : 0
 }
 
 // =====================
-// CSV & EXPORT
+// CSV & EXPORT UTILITIES
 // =====================
-const csvEscape = (v: string) => {
+const csvEscape = (v: string): string => {
   const s = String(v).replaceAll('"', '""')
   if (/[",\n\r;]/.test(s)) return `"${s}"`
   return s
 }
 
-const toCSV = (rows: string[][], sep = ';') => 
+const toCSV = (rows: string[][], sep = ';'): string => 
   rows.map((r) => r.map((c) => csvEscape(c)).join(sep)).join('\n') + '\n'
 
-const downloadTextFile = (filename: string, content: string, mime = 'text/csv') => {
+const downloadTextFile = (filename: string, content: string, mime = 'text/csv'): void => {
   const blob = new Blob(['\uFEFF' + content], { type: `${mime};charset=utf-8` })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -337,7 +370,7 @@ const downloadTextFile = (filename: string, content: string, mime = 'text/csv') 
   URL.revokeObjectURL(url)
 }
 
-const generateExcelXML = (title: string, headers: string[], rows: (string | number)[][]) => {
+const generateExcelXML = (title: string, headers: string[], rows: (string | number)[][]): string => {
   const escapeXml = (str: string) => str.replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c] || c))
   
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -370,24 +403,276 @@ const generateExcelXML = (title: string, headers: string[], rows: (string | numb
 }
 
 // =====================
-// URL PARAMS
+// URL PARAMS PARSING
 // =====================
-const parseBool = (v: string | null) => v === '1' || v === 'true'
+const parseBool = (v: string | null): boolean => v === '1' || v === 'true'
 const parseGroup = (v: string | null): GroupMode | null => 
   (v === 'day' || v === 'week' || v === 'month' || v === 'year') ? v : null
 const parseTab = (v: string | null) => 
   (v === 'overview' || v === 'analytics' || v === 'details' || v === 'companies') ? v : null
-const isISODate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
+const isISODate = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s)
 
 // =====================
-// MAIN COMPONENT
+// MEMOIZED CHART COMPONENTS
 // =====================
+
+const MemoizedComposedChart = memo(({ data }: { data: TimeAggregation[] }) => {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
+        <defs>
+          <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+          </linearGradient>
+          <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
+            <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} vertical={false} />
+        <XAxis 
+          dataKey="label" 
+          stroke="#6b7280" 
+          fontSize={12} 
+          tickLine={false} 
+          axisLine={false}
+          tickMargin={10}
+        />
+        <YAxis 
+          stroke="#6b7280" 
+          fontSize={12} 
+          tickLine={false} 
+          axisLine={false} 
+          tickFormatter={formatCompact}
+          width={60}
+        />
+        <Tooltip 
+          contentStyle={{ 
+            background: 'rgba(17, 24, 39, 0.95)', 
+            border: '1px solid rgba(255,255,255,0.1)', 
+            borderRadius: '12px',
+            backdropFilter: 'blur(10px)'
+          }}
+          formatter={(value: number, name: string) => [formatMoneyFull(value), name]}
+        />
+        <Area 
+          type="monotone" 
+          dataKey="income" 
+          stroke="#10b981" 
+          strokeWidth={2}
+          fill="url(#colorIncome)" 
+        />
+        <Area 
+          type="monotone" 
+          dataKey="expense" 
+          stroke="#f43f5e" 
+          strokeWidth={2}
+          fill="url(#colorExpense)" 
+        />
+        <Line 
+          type="monotone" 
+          dataKey="profit" 
+          stroke="#fbbf24" 
+          strokeWidth={3}
+          dot={{ fill: '#fbbf24', strokeWidth: 2, r: 4 }}
+          activeDot={{ r: 6, strokeWidth: 0 }}
+        />
+      </ComposedChart>
+    </ResponsiveContainer>
+  )
+})
+MemoizedComposedChart.displayName = 'MemoizedComposedChart'
+
+const MemoizedPieChart = memo(({ data }: { data: Array<{ name: string; amount: number; percentage: number }> }) => {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <PieChart>
+        <Pie 
+          data={data} 
+          cx="50%" 
+          cy="50%" 
+          innerRadius={60} 
+          outerRadius={80}
+          paddingAngle={3}
+          dataKey="amount"
+        >
+          {data.map((_, idx) => (
+            <Cell key={`cell-${idx}`} fill={PIE_COLORS[idx % PIE_COLORS.length]} stroke="transparent" />
+          ))}
+        </Pie>
+        <Tooltip 
+          contentStyle={{ 
+            background: 'rgba(17, 24, 39, 0.95)', 
+            border: '1px solid rgba(255,255,255,0.1)', 
+            borderRadius: '12px' 
+          }}
+          formatter={(v: number, _n: string, p: { payload?: { percentage?: number; name?: string } }) => [
+            `${formatMoneyFull(v)} (${p?.payload?.percentage?.toFixed(1)}%)`,
+            p?.payload?.name
+          ]}
+        />
+      </PieChart>
+    </ResponsiveContainer>
+  )
+})
+MemoizedPieChart.displayName = 'MemoizedPieChart'
+
+const MemoizedBarChart = memo(({ data }: { data: Array<{ name: string; value: number; fill: string; percentage: number }> }) => {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} layout="vertical" margin={{ left: 20 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} horizontal={false} />
+        <XAxis type="number" hide />
+        <YAxis 
+          type="category" 
+          dataKey="name" 
+          width={100}
+          stroke="#6b7280" 
+          fontSize={11} 
+          tickLine={false} 
+          axisLine={false}
+        />
+        <Tooltip 
+          contentStyle={{ 
+            background: 'rgba(17, 24, 39, 0.95)', 
+            border: '1px solid rgba(255,255,255,0.1)', 
+            borderRadius: '12px' 
+          }}
+          formatter={(v: number, _n: string, p: { payload?: { percentage?: number } }) => [
+            formatMoneyFull(v),
+            `${p?.payload?.percentage?.toFixed(1)}% от общей`
+          ]}
+        />
+        <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+          {data.map((entry, idx) => (
+            <Cell key={`bar-${idx}`} fill={entry.fill} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+})
+MemoizedBarChart.displayName = 'MemoizedBarChart'
+
+// =====================
+// UI COMPONENTS
+// =====================
+
+const ChartShell = memo(({ children, className = '', height = 'h-80' }: { 
+  children: React.ReactNode; 
+  className?: string; 
+  height?: string 
+}) => (
+  <div className={`min-w-0 ${height} min-h-[320px] ${className}`}>
+    {children}
+  </div>
+))
+ChartShell.displayName = 'ChartShell'
+
+const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blue', onClick }: {
+  title: string
+  value: string
+  subValue?: string
+  icon: React.ElementType
+  trend?: number
+  color?: 'blue' | 'green' | 'red' | 'amber' | 'violet'
+  onClick?: () => void
+}) => {
+  const colors: Record<string, string> = {
+    blue: 'from-blue-500 to-cyan-500',
+    green: 'from-emerald-500 to-teal-500',
+    red: 'from-rose-500 to-pink-500',
+    amber: 'from-amber-500 to-orange-500',
+    violet: 'from-violet-500 to-purple-500',
+  }
+  
+  return (
+    <div 
+      onClick={onClick}
+      className={`relative overflow-hidden rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6 hover:bg-gray-800/50 transition-all ${onClick ? 'cursor-pointer' : ''}`}
+    >
+      <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colors[color]} opacity-10 rounded-full blur-3xl translate-x-8 -translate-y-8`} />
+      <div className="relative z-10">
+        <div className="flex items-center justify-between mb-4">
+          <div className={`p-2.5 rounded-xl bg-gradient-to-br ${colors[color]} bg-opacity-20`}>
+            <Icon className="w-5 h-5 text-white" />
+          </div>
+          {trend !== undefined && (
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${trend > 0 ? 'bg-emerald-500/20 text-emerald-400' : trend < 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-gray-500/20 text-gray-400'}`}>
+              {trend > 0 ? '+' : ''}{trend}%
+            </span>
+          )}
+        </div>
+        <p className="text-gray-400 text-sm mb-1">{title}</p>
+        <p className="text-2xl font-bold text-white mb-1">{value}</p>
+        {subValue && <p className="text-xs text-gray-500">{subValue}</p>}
+      </div>
+    </div>
+  )
+})
+StatCard.displayName = 'StatCard'
+
+const InsightCard = memo(({ insight, index }: { insight: AIInsight; index: number }) => {
+  const styles = INSIGHT_STYLES[insight.type]
+  const Icon = styles.icon
+  
+  return (
+    <div 
+      className={`relative overflow-hidden rounded-2xl border p-4 ${styles.bg} ${styles.border}`}
+    >
+      <div className="flex items-start gap-3">
+        <div className={`p-2 rounded-lg ${styles.bg.replace('/5', '/20')} ${styles.text}`}>
+          <Icon className="w-4 h-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-white mb-1">{insight.title}</p>
+          <p className="text-xs text-gray-400 line-clamp-2">{insight.description}</p>
+          {insight.metric && (
+            <p className={`text-lg font-bold mt-2 ${styles.text}`}>{insight.metric}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+})
+InsightCard.displayName = 'InsightCard'
+
+const AnomalyCard = memo(({ anomaly, index }: { anomaly: Anomaly; index: number }) => {
+  const styles = SEVERITY_STYLES[anomaly.severity]
+  
+  return (
+    <div 
+      className={`flex items-center gap-4 p-4 rounded-xl border ${styles.bg} ${styles.border}`}
+    >
+      <div className={`p-2 rounded-lg ${styles.bg.replace('/5', '/20').replace('/10', '/20')} ${styles.text}`}>
+        {anomaly.severity === 'critical' || anomaly.severity === 'high' ? 
+          <AlertTriangle className="w-5 h-5" /> : 
+          <Lightbulb className="w-5 h-5" />
+        }
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-white font-medium">{anomaly.description}</p>
+        <p className="text-xs text-gray-500 mt-1">{anomaly.date}</p>
+      </div>
+      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${styles.bg.replace('/5', '/20').replace('/10', '/20')} ${styles.text}`}>
+        {SEVERITY_LABELS[anomaly.severity]}
+      </span>
+    </div>
+  )
+})
+AnomalyCard.displayName = 'AnomalyCard'
+
+// =====================
+// MAIN CONTENT COMPONENT
+// =====================
+
 function ReportsContent() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  // Mount fix for charts
+  // Mount state for charts
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
@@ -431,6 +716,10 @@ function ReportsContent() {
   const toastTimer = useRef<number | null>(null)
   const reqIdRef = useRef(0)
   const didInitFromUrl = useRef(false)
+  const realtimeChannel = useRef<ReturnType<typeof supabase.channel> | null>(null)
+
+  // Virtual list ref for table
+  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message: msg, type })
@@ -439,7 +728,7 @@ function ReportsContent() {
   }, [])
 
   // =====================
-  // COMPUTED
+  // COMPUTED VALUES
   // =====================
   const companyById = useMemo(() => {
     const m = new Map<string, Company>()
@@ -458,7 +747,7 @@ function ReportsContent() {
   const companyName = useCallback((id: string) => companyById.get(id)?.name ?? 'Неизвестно', [companyById])
 
   // =====================
-  // PRESETS
+  // PRESET HANDLERS
   // =====================
   const applyPreset = useCallback((preset: DatePreset) => {
     const today = todayISO()
@@ -467,8 +756,7 @@ function ReportsContent() {
     let to = today
 
     switch (preset) {
-      case 'today':
-        break
+      case 'today': break
       case 'yesterday':
         from = addDaysISO(today, -1)
         to = from
@@ -537,8 +825,7 @@ function ReportsContent() {
         to = `${y}-12-31`
         break
       }
-      case 'custom':
-        return
+      case 'custom': return
     }
 
     setDateFrom(from)
@@ -567,118 +854,160 @@ function ReportsContent() {
     showToast('Фильтры сброшены', 'success')
   }, [applyPreset, showToast])
 
- // =====================
-// DATA LOADING (fixed)
-// =====================
+  // =====================
+  // DATA LOADING
+  // =====================
+  useEffect(() => {
+    let alive = true
 
-// 1) load companies
-useEffect(() => {
-  let alive = true
+    const loadCompanies = async () => {
+      setError(null)
+      const { data, error } = await supabase
+        .from('companies')
+        .select('id,name,code,address')
+        .order('name')
 
-  const loadCompanies = async () => {
-    setError(null)
-    const { data, error } = await supabase
-      .from('companies')
-      .select('id,name,code,address')
-      .order('name')
+      if (!alive) return
 
-    if (!alive) return
+      if (error) {
+        setError('Не удалось загрузить список компаний')
+        setCompaniesLoaded(true)
+        setLoading(false)
+        return
+      }
 
-    if (error) {
-      setError('Не удалось загрузить список компаний')
+      setCompanies((data || []) as Company[])
       setCompaniesLoaded(true)
-      setLoading(false)
-      return
     }
 
-    setCompanies((data || []) as Company[])
-    setCompaniesLoaded(true)
-  }
+    loadCompanies()
+    return () => { alive = false }
+  }, [])
 
-  loadCompanies()
-  return () => { alive = false }
-}, [])
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (!companiesLoaded) return
 
-// 2) load incomes/expenses (after companies loaded)
-const loadData = useCallback(async (isRefresh = false) => {
-  if (!companiesLoaded) return
+    const myReqId = ++reqIdRef.current
 
-  const myReqId = ++reqIdRef.current
+    if (isRefresh) setRefreshing(true)
+    else setLoading(true)
 
-  if (isRefresh) setRefreshing(true)
-  else setLoading(true)
+    setError(null)
 
-  setError(null)
+    try {
+      const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
 
-  try {
-    const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
+      let incomeQuery = supabase
+        .from('incomes')
+        .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,created_at')
+        .gte('date', prevFrom)
+        .lte('date', dateTo)
 
-    let incomeQuery = supabase
-      .from('incomes')
-      .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,created_at')
-      .gte('date', prevFrom)
-      .lte('date', dateTo)
+      let expenseQuery = supabase
+        .from('expenses')
+        .select('id,date,company_id,category,cash_amount,kaspi_amount,comment,created_at,operator_id')
+        .gte('date', prevFrom)
+        .lte('date', dateTo)
 
-    let expenseQuery = supabase
-      .from('expenses')
-      .select('id,date,company_id,category,cash_amount,kaspi_amount,description,created_at')
-      .gte('date', prevFrom)
-      .lte('date', dateTo)
+      if (companyFilter !== 'all') {
+        incomeQuery = incomeQuery.eq('company_id', companyFilter)
+        expenseQuery = expenseQuery.eq('company_id', companyFilter)
+      } else if (!includeExtraInTotals && extraCompanyId) {
+        incomeQuery = incomeQuery.neq('company_id', extraCompanyId)
+        expenseQuery = expenseQuery.neq('company_id', extraCompanyId)
+      }
 
-    if (companyFilter !== 'all') {
-      incomeQuery = incomeQuery.eq('company_id', companyFilter)
-      expenseQuery = expenseQuery.eq('company_id', companyFilter)
-    } else if (!includeExtraInTotals && extraCompanyId) {
-      incomeQuery = incomeQuery.neq('company_id', extraCompanyId)
-      expenseQuery = expenseQuery.neq('company_id', extraCompanyId)
+      if (shiftFilter !== 'all') {
+        incomeQuery = incomeQuery.eq('shift', shiftFilter)
+      }
+
+      const [incomeResult, expenseResult] = await Promise.all([
+        incomeQuery.order('date', { ascending: false }),
+        expenseQuery.order('date', { ascending: false }),
+      ])
+
+      if (myReqId !== reqIdRef.current) return
+
+      if (incomeResult.error) throw incomeResult.error
+      if (expenseResult.error) throw expenseResult.error
+
+      setIncomes((incomeResult.data || []) as IncomeRow[])
+      setExpenses((expenseResult.data || []) as ExpenseRow[])
+
+      if (isRefresh) showToast('Данные обновлены', 'success')
+    } catch (err) {
+      if (myReqId === reqIdRef.current) {
+        setError('Ошибка загрузки данных')
+        showToast('Ошибка загрузки данных', 'error')
+        console.error(err)
+      }
+    } finally {
+      if (myReqId === reqIdRef.current) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
+  }, [
+    companiesLoaded,
+    dateFrom,
+    dateTo,
+    companyFilter,
+    shiftFilter,
+    includeExtraInTotals,
+    extraCompanyId,
+    showToast,
+  ])
 
-    if (shiftFilter !== 'all') {
-      incomeQuery = incomeQuery.eq('shift', shiftFilter)
+  useEffect(() => {
+    if (!companiesLoaded) return
+    loadData(false)
+  }, [companiesLoaded, loadData])
+
+  // =====================
+  // REALTIME SUBSCRIPTION
+  // =====================
+  useEffect(() => {
+    if (!companiesLoaded) return
+
+    // Setup realtime subscription for live updates
+    const channel = supabase
+      .channel('financial-reports')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incomes' },
+        (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            // Refresh data if the new record is in our date range
+            const newDate = (payload.new as IncomeRow).date
+            if (newDate >= dateFrom && newDate <= dateTo) {
+              loadData(true)
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'expenses' },
+        (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const newDate = (payload.new as ExpenseRow).date
+            if (newDate >= dateFrom && newDate <= dateTo) {
+              loadData(true)
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    realtimeChannel.current = channel
+
+    return () => {
+      if (realtimeChannel.current) {
+        supabase.removeChannel(realtimeChannel.current)
+      }
     }
+  }, [companiesLoaded, dateFrom, dateTo, loadData])
 
-    const [incomeResult, expenseResult] = await Promise.all([
-      incomeQuery.order('date', { ascending: false }),
-      expenseQuery.order('date', { ascending: false }),
-    ])
-
-    if (myReqId !== reqIdRef.current) return
-
-    if (incomeResult.error) throw incomeResult.error
-    if (expenseResult.error) throw expenseResult.error
-
-    setIncomes((incomeResult.data || []) as IncomeRow[])
-    setExpenses((expenseResult.data || []) as ExpenseRow[])
-
-    if (isRefresh) showToast('Данные обновлены', 'success')
-  } catch (err) {
-    if (myReqId === reqIdRef.current) {
-      setError('Ошибка загрузки данных')
-      showToast('Ошибка загрузки данных', 'error')
-      console.error(err)
-    }
-  } finally {
-    if (myReqId === reqIdRef.current) {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }
-}, [
-  companiesLoaded,
-  dateFrom,
-  dateTo,
-  companyFilter,
-  shiftFilter,
-  includeExtraInTotals,
-  extraCompanyId,
-  showToast,
-])
-
-// 3) auto reload on filters changes
-useEffect(() => {
-  if (!companiesLoaded) return
-  loadData(false)
-}, [companiesLoaded, loadData])
   // =====================
   // URL SYNC
   // =====================
@@ -740,38 +1069,32 @@ useEffect(() => {
   }, [dateFrom, dateTo, datePreset, companyFilter, shiftFilter, groupMode, includeExtraInTotals, activeTab, pathname, router])
 
   // =====================
-  // DATA PROCESSING ← ИСПРАВЛЕНО: учитываем online_amount
+  // DATA PROCESSING (MEMOIZED)
   // =====================
   const processed = useMemo(() => {
     const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
 
-    const totalsCur = baseTotals()
-    const totalsPrev = baseTotals()
+    const totalsCur: FinancialTotals = {
+      incomeCash: 0, incomeKaspi: 0, incomeOnline: 0, incomeCard: 0, incomeNonCash: 0,
+      expenseCash: 0, expenseKaspi: 0, totalIncome: 0, totalExpense: 0,
+      profit: 0, remainingCash: 0, remainingKaspi: 0, totalBalance: 0,
+      transactionCount: 0, avgTransaction: 0
+    }
+    const totalsPrev: FinancialTotals = { ...totalsCur }
 
     const expenseByCategoryMap = new Map<string, number>()
     const incomeByCompanyMap = new Map<string, { 
-      companyId: string; 
-      name: string; 
-      value: number; 
-      cash: number; 
-      kaspi: number; 
-      online: number;      // ← ДОБАВЛЕНО
-      card: number;        // ← ДОБАВЛЕНО
-      count: number 
+      companyId: string; name: string; value: number; cash: number; 
+      kaspi: number; online: number; card: number; count: number 
     }>()
     const chartDataMap = new Map<string, TimeAggregation>()
     const anomalies: Anomaly[] = []
-    const companyStats = new Map<string, { 
-      income: number, expense: number, profit: number, 
-      cashIncome: number, kaspiIncome: number, onlineIncome: number, cardIncome: number,  // ← ДОБАВЛЕНО
-      cashExpense: number, kaspiExpense: number,
-      transactions: number 
-    }>()
+    const companyStats = new Map<string, CompanyStat>()
 
     const dailyIncome = new Map<string, number>()
     const dailyExpense = new Map<string, number>()
 
-    const getRangeBucket = (iso: string) => {
+    const getRangeBucket = (iso: string): 'current' | 'previous' | null => {
       if (iso >= dateFrom && iso <= dateTo) return 'current'
       if (iso >= prevFrom && iso <= prevTo) return 'previous'
       return null
@@ -791,26 +1114,29 @@ useEffect(() => {
       return { key: y, label: y, sortISO: `${y}-01-01` }
     }
 
-    const ensureBucket = (key: string, label: string, sortISO: string) => {
-      const b = chartDataMap.get(key) || {
+    const ensureBucket = (key: string, label: string, sortISO: string): TimeAggregation => {
+      const b = chartDataMap.get(key)
+      if (b) return b
+      
+      const newBucket: TimeAggregation = {
         label, sortISO, income: 0, expense: 0, profit: 0,
-        incomeCash: 0, incomeKaspi: 0, incomeOnline: 0, incomeCard: 0, incomeNonCash: 0,  // ← ДОБАВЛЕНО
+        incomeCash: 0, incomeKaspi: 0, incomeOnline: 0, incomeCard: 0, incomeNonCash: 0,
         expenseCash: 0, expenseKaspi: 0, count: 0
       }
-      chartDataMap.set(key, b)
-      return b
+      chartDataMap.set(key, newBucket)
+      return newBucket
     }
 
-    // Process incomes ← ИСПРАВЛЕНО: добавлен online_amount
+    // Process incomes
     for (const r of incomes) {
       const range = getRangeBucket(r.date)
       if (!range) continue
 
       const cash = safeNumber(r.cash_amount)
       const kaspi = safeNumber(r.kaspi_amount)
-      const online = safeNumber(r.online_amount)      // ← ДОБАВЛЕНО
+      const online = safeNumber(r.online_amount)
       const card = safeNumber(r.card_amount)
-      const nonCash = kaspi + online + card           // ← ИСПРАВЛЕНО: включаем online
+      const nonCash = kaspi + online + card
       const total = cash + nonCash
       
       if (total <= 0 && cash === 0 && kaspi === 0 && online === 0) continue
@@ -818,8 +1144,8 @@ useEffect(() => {
       const tgt = range === 'current' ? totalsCur : totalsPrev
       tgt.incomeCash += cash
       tgt.incomeKaspi += kaspi
-      tgt.incomeOnline += online                      // ← ДОБАВЛЕНО
-      tgt.incomeCard += card                          // ← ДОБАВЛЕНО
+      tgt.incomeOnline += online
+      tgt.incomeCard += card
       tgt.incomeNonCash += nonCash
       tgt.totalIncome += total
       tgt.transactionCount += 1
@@ -832,40 +1158,37 @@ useEffect(() => {
         bucket.income += total
         bucket.incomeCash += cash
         bucket.incomeKaspi += kaspi
-        bucket.incomeOnline += online                 // ← ДОБАВЛЕНО
-        bucket.incomeCard += card                     // ← ДОБАВЛЕНО
+        bucket.incomeOnline += online
+        bucket.incomeCard += card
         bucket.incomeNonCash += nonCash
         bucket.count += 1
 
-        // Company stats
         const existing = incomeByCompanyMap.get(r.company_id)
         if (!existing) {
           incomeByCompanyMap.set(r.company_id, {
             companyId: r.company_id,
             name: companyName(r.company_id),
-            value: total, cash, kaspi, online, card, count: 1  // ← ДОБАВЛЕНО
+            value: total, cash, kaspi, online, card, count: 1
           })
         } else {
           existing.value += total
           existing.cash += cash
           existing.kaspi += kaspi
-          existing.online += online                     // ← ДОБАВЛЕНО
-          existing.card += card                         // ← ДОБАВЛЕНО
+          existing.online += online
+          existing.card += card
           existing.count += 1
         }
 
-        // Detailed company stats
         const cs = companyStats.get(r.company_id) || { 
           income: 0, expense: 0, profit: 0,
-          cashIncome: 0, kaspiIncome: 0, onlineIncome: 0, cardIncome: 0,  // ← ДОБАВЛЕНО
-          cashExpense: 0, kaspiExpense: 0,
-          transactions: 0
+          cashIncome: 0, kaspiIncome: 0, onlineIncome: 0, cardIncome: 0,
+          cashExpense: 0, kaspiExpense: 0, transactions: 0
         }
         cs.income += total
         cs.cashIncome += cash
         cs.kaspiIncome += kaspi
-        cs.onlineIncome += online                     // ← ДОБАВЛЕНО
-        cs.cardIncome += card                         // ← ДОБАВЛЕНО
+        cs.onlineIncome += online
+        cs.cardIncome += card
         cs.transactions += 1
         companyStats.set(r.company_id, cs)
       }
@@ -900,12 +1223,10 @@ useEffect(() => {
         bucket.expenseCash += cash
         bucket.expenseKaspi += kaspi
 
-        // Company stats
         const cs = companyStats.get(r.company_id) || { 
           income: 0, expense: 0, profit: 0,
-          cashIncome: 0, kaspiIncome: 0, onlineIncome: 0, cardIncome: 0,  // ← ДОБАВЛЕНО
-          cashExpense: 0, kaspiExpense: 0,
-          transactions: 0
+          cashIncome: 0, kaspiIncome: 0, onlineIncome: 0, cardIncome: 0,
+          cashExpense: 0, kaspiExpense: 0, transactions: 0
         }
         cs.expense += total
         cs.cashExpense += cash
@@ -927,8 +1248,7 @@ useEffect(() => {
     finalize(totalsCur)
     finalize(totalsPrev)
 
-    // Calculate company profits
-    for (const [id, stats] of companyStats) {
+    for (const [, stats] of companyStats) {
       stats.profit = stats.income - stats.expense
     }
 
@@ -976,7 +1296,6 @@ useEffect(() => {
       }
     }
 
-    // Cash ratio check
     if (totalsCur.totalIncome > 0) {
       const cashRatio = totalsCur.incomeCash / totalsCur.totalIncome
       if (cashRatio > 0.8) {
@@ -1013,7 +1332,7 @@ useEffect(() => {
       .map(([name, amount]) => ({ name, amount, percentage: 0 }))
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 10)
-      .map((item, _, arr) => ({
+      .map((item) => ({
         ...item,
         percentage: totals.totalExpense > 0 ? (item.amount / totals.totalExpense) * 100 : 0
       })),
@@ -1044,25 +1363,23 @@ useEffect(() => {
   )
 
   // =====================
-  // DETAILED ROWS ← ИСПРАВЛЕНО: добавлен online_amount
+  // DETAILED ROWS
   // =====================
   const detailedRows = useMemo((): DetailedRow[] => {
     const rows: DetailedRow[] = []
+    const min = minAmountFilter ? parseFloat(minAmountFilter) : 0
+    const max = maxAmountFilter ? parseFloat(maxAmountFilter) : Infinity
     
     for (const r of incomes) {
       if (r.date < dateFrom || r.date > dateTo) continue
       
       const cash = safeNumber(r.cash_amount)
       const kaspi = safeNumber(r.kaspi_amount)
-      const online = safeNumber(r.online_amount)    // ← ДОБАВЛЕНО
+      const online = safeNumber(r.online_amount)
       const card = safeNumber(r.card_amount)
-      const total = cash + kaspi + online + card    // ← ИСПРАВЛЕНО
+      const total = cash + kaspi + online + card
       
       if (total === 0) continue
-
-      // Apply amount filters
-      const min = minAmountFilter ? parseFloat(minAmountFilter) : 0
-      const max = maxAmountFilter ? parseFloat(maxAmountFilter) : Infinity
       if (total < min || total > max) continue
 
       rows.push({
@@ -1074,8 +1391,8 @@ useEffect(() => {
         amount: total,
         cashAmount: cash,
         kaspiAmount: kaspi,
-        onlineAmount: online,                         // ← ДОБАВЛЕНО
-        cardAmount: card,                             // ← ДОБАВЛЕНО
+        onlineAmount: online,
+        cardAmount: card,
         shift: r.shift,
         zone: r.zone,
       })
@@ -1089,9 +1406,6 @@ useEffect(() => {
       const total = cash + kaspi
       
       if (total === 0) continue
-
-      const min = minAmountFilter ? parseFloat(minAmountFilter) : 0
-      const max = maxAmountFilter ? parseFloat(maxAmountFilter) : Infinity
       if (total < min || total > max) continue
 
       rows.push({
@@ -1104,7 +1418,7 @@ useEffect(() => {
         cashAmount: cash,
         kaspiAmount: kaspi,
         category: r.category || 'Без категории',
-        description: r.description,
+        comment: r.comment,
       })
     }
 
@@ -1121,6 +1435,7 @@ useEffect(() => {
         r.date.includes(q) ||
         (r.category && r.category.toLowerCase().includes(q)) ||
         (r.zone && r.zone.toLowerCase().includes(q)) ||
+        (r.comment && r.comment.toLowerCase().includes(q)) ||
         String(r.amount).includes(q)
       )
     }
@@ -1151,8 +1466,8 @@ useEffect(() => {
           bVal = b.shift || ''
           break
         case 'zone':
-          aVal = a.zone || ''
-          bVal = b.zone || ''
+          aVal = a.zone || a.comment || ''
+          bVal = b.zone || b.comment || ''
           break
       }
 
@@ -1167,12 +1482,24 @@ useEffect(() => {
     return result
   }, [detailedRows, searchQuery, sortField, sortDirection])
 
+  // Virtualization for large tables
+  const virtualizer = useVirtualizer({
+    count: filteredRows.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 60,
+    overscan: 5,
+  })
+
+  const virtualRows = virtualizer.getVirtualItems()
+
+  // Pagination for non-virtualized view (fallback)
   const paginatedRows = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage
     return filteredRows.slice(start, start + itemsPerPage)
   }, [filteredRows, currentPage, itemsPerPage])
 
   const totalPages = Math.ceil(filteredRows.length / itemsPerPage)
+  const useVirtualization = filteredRows.length > 100
 
   // =====================
   // AI INSIGHTS
@@ -1345,15 +1672,15 @@ useEffect(() => {
     rows.push(['Прибыль', String(Math.round(totals.profit)), String(Math.round(totalsPrev.profit)), getPercentageChange(totals.profit, totalsPrev.profit)])
     rows.push(['Наличные (доход)', String(Math.round(totals.incomeCash)), String(Math.round(totalsPrev.incomeCash)), getPercentageChange(totals.incomeCash, totalsPrev.incomeCash)])
     rows.push(['Kaspi (доход)', String(Math.round(totals.incomeKaspi)), String(Math.round(totalsPrev.incomeKaspi)), getPercentageChange(totals.incomeKaspi, totalsPrev.incomeKaspi)])
-    rows.push(['Online (доход)', String(Math.round(totals.incomeOnline)), String(Math.round(totalsPrev.incomeOnline)), getPercentageChange(totals.incomeOnline, totalsPrev.incomeOnline)])  // ← ДОБАВЛЕНО
-    rows.push(['Card (доход)', String(Math.round(totals.incomeCard)), String(Math.round(totalsPrev.incomeCard)), getPercentageChange(totals.incomeCard, totalsPrev.incomeCard)])          // ← ДОБАВЛЕНО
+    rows.push(['Online (доход)', String(Math.round(totals.incomeOnline)), String(Math.round(totalsPrev.incomeOnline)), getPercentageChange(totals.incomeOnline, totalsPrev.incomeOnline)])
+    rows.push(['Card (доход)', String(Math.round(totals.incomeCard)), String(Math.round(totalsPrev.incomeCard)), getPercentageChange(totals.incomeCard, totalsPrev.incomeCard)])
     rows.push(['Безнал (доход)', String(Math.round(totals.incomeNonCash)), String(Math.round(totalsPrev.incomeNonCash)), getPercentageChange(totals.incomeNonCash, totalsPrev.incomeNonCash)])
     rows.push([''])
 
     rows.push(['ДОХОДЫ ПО КОМПАНИЯМ'])
-    rows.push(['Компания', 'Выручка', 'Наличные', 'Kaspi', 'Online', 'Card', 'Транзакций'])  // ← ИСПРАВЛЕНО
+    rows.push(['Компания', 'Выручка', 'Наличные', 'Kaspi', 'Online', 'Card', 'Транзакций'])
     for (const c of incomeByCompanyData) {
-      rows.push([c.name, String(Math.round(c.value)), String(Math.round(c.cash)), String(Math.round(c.kaspi)), String(Math.round(c.online)), String(Math.round(c.card)), String(c.count)])  // ← ИСПРАВЛЕНО
+      rows.push([c.name, String(Math.round(c.value)), String(Math.round(c.cash)), String(Math.round(c.kaspi)), String(Math.round(c.online)), String(Math.round(c.card)), String(c.count)])
     }
     rows.push([''])
 
@@ -1365,14 +1692,14 @@ useEffect(() => {
     rows.push([''])
 
     rows.push(['ДЕТАЛЬНЫЕ ОПЕРАЦИИ'])
-    rows.push(['Дата', 'Тип', 'Компания', 'Категория/Смена', 'Сумма', 'Наличные', 'Kaspi', 'Online', 'Card', 'Зона/Описание'])  // ← ИСПРАВЛЕНО
+    rows.push(['Дата', 'Тип', 'Компания', 'Категория/Смена', 'Сумма', 'Наличные', 'Kaspi', 'Online', 'Card', 'Зона/Комментарий'])
     for (const r of filteredRows) {
       const typeLabel = r.type === 'income' ? 'Доход' : 'Расход'
       const category = r.category || r.shift || ''
-      const online = r.type === 'income' ? (r.onlineAmount || 0) : 0    // ← ДОБАВЛЕНО
-      const card = r.type === 'income' ? (r.cardAmount || 0) : 0        // ← ДОБАВЛЕНО
-      const zoneDesc = r.zone || r.description || ''
-      rows.push([r.date, typeLabel, r.companyName, category, String(Math.round(r.amount)), String(Math.round(r.cashAmount)), String(Math.round(r.kaspiAmount)), String(Math.round(online)), String(Math.round(card)), zoneDesc])  // ← ИСПРАВЛЕНО
+      const online = r.type === 'income' ? (r.onlineAmount || 0) : 0
+      const card = r.type === 'income' ? (r.cardAmount || 0) : 0
+      const zoneComment = r.zone || r.comment || ''
+      rows.push([r.date, typeLabel, r.companyName, category, String(Math.round(r.amount)), String(Math.round(r.cashAmount)), String(Math.round(r.kaspiAmount)), String(Math.round(online)), String(Math.round(card)), zoneComment])
     }
 
     downloadTextFile(`financial_report_${dateFrom}_${dateTo}.csv`, toCSV(rows, ';'))
@@ -1380,11 +1707,6 @@ useEffect(() => {
   }, [companyFilter, includeExtraInTotals, companyName, dateFrom, dateTo, groupMode, totals, totalsPrev, incomeByCompanyData, expenseByCategoryData, filteredRows, showToast])
 
   const handleDownloadExcel = useCallback(() => {
-    const companyLabel = companyFilter === 'all'
-      ? (includeExtraInTotals ? 'Все компании' : 'Все компании (без Extra)')
-      : companyName(companyFilter)
-
-    // Summary sheet
     const summaryHeaders = ['Показатель', 'Текущий период', 'Прошлый период', 'Изменение %']
     const summaryRows = [
       ['Выручка', totals.totalIncome, totalsPrev.totalIncome, parseFloat(getPercentageChange(totals.totalIncome, totalsPrev.totalIncome)) || 0],
@@ -1393,8 +1715,8 @@ useEffect(() => {
       ['Маржа %', totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0, 0, 0],
       ['Наличные (доход)', totals.incomeCash, totalsPrev.incomeCash, 0],
       ['Kaspi (доход)', totals.incomeKaspi, totalsPrev.incomeKaspi, 0],
-      ['Online (доход)', totals.incomeOnline, totalsPrev.incomeOnline, 0],        // ← ДОБАВЛЕНО
-      ['Card (доход)', totals.incomeCard, totalsPrev.incomeCard, 0],              // ← ДОБАВЛЕНО
+      ['Online (доход)', totals.incomeOnline, totalsPrev.incomeOnline, 0],
+      ['Card (доход)', totals.incomeCard, totalsPrev.incomeCard, 0],
       ['Безналичные (доход)', totals.incomeNonCash, totalsPrev.incomeNonCash, 0],
       ['Наличные (расход)', totals.expenseCash, totalsPrev.expenseCash, 0],
       ['Kaspi (расход)', totals.expenseKaspi, totalsPrev.expenseKaspi, 0],
@@ -1403,7 +1725,7 @@ useEffect(() => {
     const xml = generateExcelXML('Сводка', summaryHeaders, summaryRows)
     downloadTextFile(`report_${dateFrom}_${dateTo}.xls`, xml, 'application/vnd.ms-excel')
     showToast('Excel файл скачан', 'success')
-  }, [companyFilter, includeExtraInTotals, companyName, dateFrom, dateTo, totals, totalsPrev, showToast])
+  }, [dateFrom, dateTo, totals, totalsPrev, showToast])
 
   const handleSort = useCallback((field: SortField) => {
     setSortDirection(current => sortField === field ? (current === 'asc' ? 'desc' : 'asc') : 'desc')
@@ -1421,58 +1743,16 @@ useEffect(() => {
   }, [])
 
   const selectAllRows = useCallback(() => {
-    if (selectedRows.size === paginatedRows.length) {
+    const targetRows = useVirtualization ? filteredRows : paginatedRows
+    if (selectedRows.size === targetRows.length) {
       setSelectedRows(new Set())
     } else {
-      setSelectedRows(new Set(paginatedRows.map(r => r.id)))
+      setSelectedRows(new Set(targetRows.map(r => r.id)))
     }
-  }, [paginatedRows, selectedRows.size])
+  }, [filteredRows, paginatedRows, selectedRows.size, useVirtualization])
 
   // =====================
-  // RENDER HELPERS
-  // =====================
-  const ChartShell = ({ children, className = '', height = 'h-80' }: { children: React.ReactNode; className?: string; height?: string }) => (
-    <div className={`min-w-0 ${height} min-h-[320px] ${className}`}>
-      {mounted ? children : <div className="h-full w-full rounded-xl bg-gray-800/40 border border-white/5 animate-pulse" />}
-    </div>
-  )
-
-  const StatCard = ({ title, value, subValue, icon: Icon, trend, color = 'blue', onClick }: any) => {
-    const colors: Record<string, string> = {
-      blue: 'from-blue-500 to-cyan-500',
-      green: 'from-emerald-500 to-teal-500',
-      red: 'from-rose-500 to-pink-500',
-      amber: 'from-amber-500 to-orange-500',
-      violet: 'from-violet-500 to-purple-500',
-    }
-    
-    return (
-      <div 
-        onClick={onClick}
-        className={`relative overflow-hidden rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6 hover:bg-gray-800/50 transition-all ${onClick ? 'cursor-pointer' : ''}`}
-      >
-        <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colors[color]} opacity-10 rounded-full blur-3xl translate-x-8 -translate-y-8`} />
-        <div className="relative z-10">
-          <div className="flex items-center justify-between mb-4">
-            <div className={`p-2.5 rounded-xl bg-gradient-to-br ${colors[color]} bg-opacity-20`}>
-              <Icon className="w-5 h-5 text-white" />
-            </div>
-            {trend !== undefined && (
-              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${trend > 0 ? 'bg-emerald-500/20 text-emerald-400' : trend < 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-gray-500/20 text-gray-400'}`}>
-                {trend > 0 ? '+' : ''}{trend}%
-              </span>
-            )}
-          </div>
-          <p className="text-gray-400 text-sm mb-1">{title}</p>
-          <p className="text-2xl font-bold text-white mb-1">{value}</p>
-          {subValue && <p className="text-xs text-gray-500">{subValue}</p>}
-        </div>
-      </div>
-    )
-  }
-
-  // =====================
-  // LOADING & ERROR
+  // LOADING & ERROR STATES
   // =====================
   if (loading && companies.length === 0) {
     return (
@@ -1629,45 +1909,7 @@ useEffect(() => {
           {aiInsights.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {aiInsights.map((insight, idx) => (
-                <div 
-                  key={idx} 
-                  className={`relative overflow-hidden rounded-2xl border p-4 ${
-                    insight.type === 'success' ? 'bg-emerald-500/5 border-emerald-500/20' :
-                    insight.type === 'warning' ? 'bg-amber-500/5 border-amber-500/20' :
-                    insight.type === 'danger' ? 'bg-rose-500/5 border-rose-500/20' :
-                    insight.type === 'opportunity' ? 'bg-blue-500/5 border-blue-500/20' :
-                    'bg-gray-800/30 border-white/5'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-lg ${
-                      insight.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' :
-                      insight.type === 'warning' ? 'bg-amber-500/20 text-amber-400' :
-                      insight.type === 'danger' ? 'bg-rose-500/20 text-rose-400' :
-                      insight.type === 'opportunity' ? 'bg-blue-500/20 text-blue-400' :
-                      'bg-gray-700/50 text-gray-400'
-                    }`}>
-                      {insight.type === 'success' ? <TrendingUp className="w-4 h-4" /> :
-                       insight.type === 'danger' ? <AlertTriangle className="w-4 h-4" /> :
-                       insight.type === 'warning' ? <AlertTriangle className="w-4 h-4" /> :
-                       insight.type === 'opportunity' ? <Lightbulb className="w-4 h-4" /> :
-                       <Activity className="w-4 h-4" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white mb-1">{insight.title}</p>
-                      <p className="text-xs text-gray-400 line-clamp-2">{insight.description}</p>
-                      {insight.metric && (
-                        <p className={`text-lg font-bold mt-2 ${
-                          insight.type === 'success' ? 'text-emerald-400' :
-                          insight.type === 'danger' ? 'text-rose-400' :
-                          insight.type === 'warning' ? 'text-amber-400' :
-                          insight.type === 'opportunity' ? 'text-blue-400' :
-                          'text-white'
-                        }`}>{insight.metric}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <InsightCard key={idx} insight={insight} index={idx} />
               ))}
             </div>
           )}
@@ -1756,7 +1998,7 @@ useEffect(() => {
                   <label className="text-xs text-gray-500 mb-1.5 block">Смена</label>
                   <select 
                     value={shiftFilter}
-                    onChange={(e) => setShiftFilter(e.target.value as any)}
+                    onChange={(e) => setShiftFilter(e.target.value as 'all' | Shift)}
                     className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500/50"
                   >
                     <option value="all">Все смены</option>
@@ -1867,26 +2109,18 @@ useEffect(() => {
 
               {/* Payment Types Breakdown */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
-                  <p className="text-xs text-gray-500 mb-1">Наличные</p>
-                  <p className="text-xl font-bold text-emerald-400">{formatMoneyFull(totals.incomeCash)}</p>
-                  <p className="text-xs text-gray-500 mt-1">{totals.totalIncome > 0 ? ((totals.incomeCash / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
-                </div>
-                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
-                  <p className="text-xs text-gray-500 mb-1">Kaspi</p>
-                  <p className="text-xl font-bold text-blue-400">{formatMoneyFull(totals.incomeKaspi)}</p>
-                  <p className="text-xs text-gray-500 mt-1">{totals.totalIncome > 0 ? ((totals.incomeKaspi / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
-                </div>
-                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
-                  <p className="text-xs text-gray-500 mb-1">Online</p>
-                  <p className="text-xl font-bold text-violet-400">{formatMoneyFull(totals.incomeOnline)}</p>
-                  <p className="text-xs text-gray-500 mt-1">{totals.totalIncome > 0 ? ((totals.incomeOnline / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
-                </div>
-                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
-                  <p className="text-xs text-gray-500 mb-1">Card</p>
-                  <p className="text-xl font-bold text-amber-400">{formatMoneyFull(totals.incomeCard)}</p>
-                  <p className="text-xs text-gray-500 mt-1">{totals.totalIncome > 0 ? ((totals.incomeCard / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
-                </div>
+                {[
+                  { label: 'Наличные', value: totals.incomeCash, color: 'text-emerald-400' },
+                  { label: 'Kaspi', value: totals.incomeKaspi, color: 'text-blue-400' },
+                  { label: 'Online', value: totals.incomeOnline, color: 'text-violet-400' },
+                  { label: 'Card', value: totals.incomeCard, color: 'text-amber-400' },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
+                    <p className="text-xs text-gray-500 mb-1">{item.label}</p>
+                    <p className={`text-xl font-bold ${item.color}`}>{formatMoneyFull(item.value)}</p>
+                    <p className="text-xs text-gray-500 mt-1">{totals.totalIncome > 0 ? ((item.value / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
+                  </div>
+                ))}
               </div>
 
               {/* Charts */}
@@ -1914,68 +2148,7 @@ useEffect(() => {
                   </div>
 
                   <ChartShell height="h-96">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
-                        <defs>
-                          <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                          </linearGradient>
-                          <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} vertical={false} />
-                        <XAxis 
-                          dataKey="label" 
-                          stroke="#6b7280" 
-                          fontSize={12} 
-                          tickLine={false} 
-                          axisLine={false}
-                          tickMargin={10}
-                        />
-                        <YAxis 
-                          stroke="#6b7280" 
-                          fontSize={12} 
-                          tickLine={false} 
-                          axisLine={false} 
-                          tickFormatter={formatCompact}
-                          width={60}
-                        />
-                        <Tooltip 
-                          contentStyle={{ 
-                            background: 'rgba(17, 24, 39, 0.95)', 
-                            border: '1px solid rgba(255,255,255,0.1)', 
-                            borderRadius: '12px',
-                            backdropFilter: 'blur(10px)'
-                          }}
-                          formatter={(value: number, name: string) => [formatMoneyFull(value), name]}
-                        />
-                        <Area 
-                          type="monotone" 
-                          dataKey="income" 
-                          stroke="#10b981" 
-                          strokeWidth={2}
-                          fill="url(#colorIncome)" 
-                        />
-                        <Area 
-                          type="monotone" 
-                          dataKey="expense" 
-                          stroke="#f43f5e" 
-                          strokeWidth={2}
-                          fill="url(#colorExpense)" 
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="profit" 
-                          stroke="#fbbf24" 
-                          strokeWidth={3}
-                          dot={{ fill: '#fbbf24', strokeWidth: 2, r: 4 }}
-                          activeDot={{ r: 6, strokeWidth: 0 }}
-                        />
-                      </ComposedChart>
-                    </ResponsiveContainer>
+                    {mounted && <MemoizedComposedChart data={chartData} />}
                   </ChartShell>
                 </div>
 
@@ -1987,34 +2160,7 @@ useEffect(() => {
                     </h3>
                     
                     <ChartShell height="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie 
-                            data={expenseByCategoryData} 
-                            cx="50%" 
-                            cy="50%" 
-                            innerRadius={60} 
-                            outerRadius={80}
-                            paddingAngle={3}
-                            dataKey="amount"
-                          >
-                            {expenseByCategoryData.map((_, idx) => (
-                              <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} stroke="transparent" />
-                            ))}
-                          </Pie>
-                          <Tooltip 
-                            contentStyle={{ 
-                              background: 'rgba(17, 24, 39, 0.95)', 
-                              border: '1px solid rgba(255,255,255,0.1)', 
-                              borderRadius: '12px' 
-                            }}
-                            formatter={(v: number, _n: string, p: any) => [
-                              `${formatMoneyFull(v)} (${p?.payload?.percentage?.toFixed(1)}%)`,
-                              p?.payload?.name
-                            ]}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
+                      {mounted && <MemoizedPieChart data={expenseByCategoryData} />}
                     </ChartShell>
 
                     <div className="mt-4 space-y-2 max-h-48 overflow-auto">
@@ -2047,37 +2193,7 @@ useEffect(() => {
                   </h3>
                   
                   <ChartShell height="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={incomeByCompanyData} layout="vertical" margin={{ left: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} horizontal={false} />
-                        <XAxis type="number" hide />
-                        <YAxis 
-                          type="category" 
-                          dataKey="name" 
-                          width={100}
-                          stroke="#6b7280" 
-                          fontSize={11} 
-                          tickLine={false} 
-                          axisLine={false}
-                        />
-                        <Tooltip 
-                          contentStyle={{ 
-                            background: 'rgba(17, 24, 39, 0.95)', 
-                            border: '1px solid rgba(255,255,255,0.1)', 
-                            borderRadius: '12px' 
-                          }}
-                          formatter={(v: number, _n: string, p: any) => [
-                            formatMoneyFull(v),
-                            `${p?.payload?.percentage?.toFixed(1)}% от общей`
-                          ]}
-                        />
-                        <Bar dataKey="value" radius={[0, 6, 6, 0]}>
-                          {incomeByCompanyData.map((entry, idx) => (
-                            <Cell key={idx} fill={entry.fill} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {mounted && <MemoizedBarChart data={incomeByCompanyData} />}
                   </ChartShell>
                 </div>
 
@@ -2091,46 +2207,12 @@ useEffect(() => {
                     <div className="space-y-3 max-h-80 overflow-auto">
                       {processed.anomalies
                         .sort((a, b) => {
-                          const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
+                          const severityOrder: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 }
                           return severityOrder[a.severity] - severityOrder[b.severity]
                         })
                         .map((a, i) => (
-                        <div 
-                          key={i} 
-                          className={`flex items-center gap-4 p-4 rounded-xl border ${
-                            a.severity === 'critical' ? 'bg-rose-500/10 border-rose-500/30' :
-                            a.severity === 'high' ? 'bg-rose-500/5 border-rose-500/20' :
-                            a.severity === 'medium' ? 'bg-amber-500/5 border-amber-500/20' :
-                            'bg-blue-500/5 border-blue-500/20'
-                          }`}
-                        >
-                          <div className={`p-2 rounded-lg ${
-                            a.severity === 'critical' ? 'bg-rose-500/20 text-rose-400' :
-                            a.severity === 'high' ? 'bg-rose-500/20 text-rose-400' :
-                            a.severity === 'medium' ? 'bg-amber-500/20 text-amber-400' :
-                            'bg-blue-500/20 text-blue-400'
-                          }`}>
-                            {a.severity === 'critical' || a.severity === 'high' ? 
-                              <AlertTriangle className="w-5 h-5" /> : 
-                              <Lightbulb className="w-5 h-5" />
-                            }
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-white font-medium">{a.description}</p>
-                            <p className="text-xs text-gray-500 mt-1">{a.date}</p>
-                          </div>
-                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                            a.severity === 'critical' ? 'bg-rose-500/20 text-rose-400' :
-                            a.severity === 'high' ? 'bg-rose-500/20 text-rose-400' :
-                            a.severity === 'medium' ? 'bg-amber-500/20 text-amber-400' :
-                            'bg-blue-500/20 text-blue-400'
-                          }`}>
-                            {a.severity === 'critical' ? 'Критично' : 
-                             a.severity === 'high' ? 'Высокий' : 
-                             a.severity === 'medium' ? 'Средний' : 'Низкий'}
-                          </span>
-                        </div>
-                      ))}
+                          <AnomalyCard key={i} anomaly={a} index={i} />
+                        ))}
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-64 text-gray-500">
@@ -2197,10 +2279,10 @@ useEffect(() => {
                   <h3 className="text-lg font-semibold mb-6">Распределение по типам платежей</h3>
                   <div className="space-y-4">
                     {[
-                      { label: 'Наличные', value: totals.incomeCash, total: totals.totalIncome, color: 'bg-emerald-500' },
-                      { label: 'Kaspi', value: totals.incomeKaspi, total: totals.totalIncome, color: 'bg-blue-500' },
-                      { label: 'Online', value: totals.incomeOnline, total: totals.totalIncome, color: 'bg-violet-500' },
-                      { label: 'Карта', value: totals.incomeCard, total: totals.totalIncome, color: 'bg-amber-500' },
+                      { label: 'Наличные', value: totals.incomeCash, color: 'bg-emerald-500' },
+                      { label: 'Kaspi', value: totals.incomeKaspi, color: 'bg-blue-500' },
+                      { label: 'Online', value: totals.incomeOnline, color: 'bg-violet-500' },
+                      { label: 'Карта', value: totals.incomeCard, color: 'bg-amber-500' },
                     ].map((item) => {
                       const pct = totals.totalIncome > 0 ? (item.value / totals.totalIncome) * 100 : 0
                       return (
@@ -2299,18 +2381,24 @@ useEffect(() => {
                     <option value={100}>100</option>
                   </select>
                   <span className="text-sm text-gray-500">записей</span>
+                  {useVirtualization && (
+                    <span className="text-xs text-violet-400 flex items-center gap-1">
+                      <Zap className="w-3 h-3" />
+                      Виртуализация активна
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto" ref={tableContainerRef}>
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-white/5 bg-gray-800/30">
                         <th className="px-4 py-3 text-left">
                           <input 
                             type="checkbox"
-                            checked={selectedRows.size === paginatedRows.length && paginatedRows.length > 0}
+                            checked={selectedRows.size === (useVirtualization ? filteredRows.length : paginatedRows.length) && (useVirtualization ? filteredRows.length : paginatedRows.length) > 0}
                             onChange={selectAllRows}
                             className="rounded border-white/10 bg-gray-800 text-violet-500"
                           />
@@ -2321,7 +2409,7 @@ useEffect(() => {
                           { key: 'company', label: 'Компания' },
                           { key: 'category', label: 'Категория/Смена' },
                           { key: 'amount', label: 'Сумма', align: 'right' },
-                          { key: 'zone', label: 'Зона/Описание' },
+                          { key: 'zone', label: 'Зона/Комментарий' },
                         ].map((col) => (
                           <th 
                             key={col.key}
@@ -2339,48 +2427,97 @@ useEffect(() => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {paginatedRows.map((row) => (
-                        <tr 
-                          key={row.id} 
-                          className={`hover:bg-white/5 transition-colors ${selectedRows.has(row.id) ? 'bg-violet-500/10' : ''}`}
-                        >
-                          <td className="px-4 py-3">
-                            <input 
-                              type="checkbox"
-                              checked={selectedRows.has(row.id)}
-                              onChange={() => toggleRowSelection(row.id)}
-                              className="rounded border-white/10 bg-gray-800 text-violet-500"
-                            />
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-300 whitespace-nowrap">{row.date}</td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              row.type === 'income' 
-                                ? 'bg-emerald-500/10 text-emerald-400' 
-                                : 'bg-rose-500/10 text-rose-400'
-                            }`}>
-                              {row.type === 'income' ? 'Доход' : 'Расход'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-white">{row.companyName}</td>
-                          <td className="px-4 py-3 text-sm text-gray-300">
-                            {row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right">
-                            <div className={`font-medium ${row.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {row.type === 'income' ? '+' : '-'}{formatMoneyFull(row.amount)}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              Нал: {formatMoneyCompact(row.cashAmount)} | Kaspi: {formatMoneyCompact(row.kaspiAmount)}
-                              {row.onlineAmount ? ` | Online: ${formatMoneyCompact(row.onlineAmount)}` : ''}
-                              {row.cardAmount ? ` | Card: ${formatMoneyCompact(row.cardAmount)}` : ''}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-400 max-w-xs truncate">
-                            {row.zone || row.description || '—'}
+                      {useVirtualization ? (
+                        // Virtualized rendering for large datasets
+                        <tr style={{ height: `${virtualizer.getTotalSize()}px` }}>
+                          <td colSpan={7} className="p-0 relative">
+                            {virtualRows.map((virtualRow) => {
+                              const row = filteredRows[virtualRow.index]
+                              return (
+                                <div
+                                  key={row.id}
+                                  style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: `${virtualRow.size}px`,
+                                    transform: `translateY(${virtualRow.start}px)`,
+                                  }}
+                                  className="flex items-center px-4 hover:bg-white/5 transition-colors"
+                                >
+                                  <div className="w-8">
+                                    <input 
+                                      type="checkbox"
+                                      checked={selectedRows.has(row.id)}
+                                      onChange={() => toggleRowSelection(row.id)}
+                                      className="rounded border-white/10 bg-gray-800 text-violet-500"
+                                    />
+                                  </div>
+                                  <div className="flex-1 px-4 text-sm text-gray-300 whitespace-nowrap">{row.date}</div>
+                                  <div className="flex-1 px-4">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                      row.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                                    }`}>
+                                      {row.type === 'income' ? 'Доход' : 'Расход'}
+                                    </span>
+                                  </div>
+                                  <div className="flex-1 px-4 text-sm text-white">{row.companyName}</div>
+                                  <div className="flex-1 px-4 text-sm text-gray-300">{row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}</div>
+                                  <div className="flex-1 px-4 text-sm text-right">
+                                    <div className={`font-medium ${row.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                      {row.type === 'income' ? '+' : '-'}{formatMoneyFull(row.amount)}
+                                    </div>
+                                  </div>
+                                  <div className="flex-1 px-4 text-sm text-gray-400 truncate">{row.zone || row.comment || '—'}</div>
+                                </div>
+                              )
+                            })}
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        // Regular pagination for smaller datasets
+                        paginatedRows.map((row) => (
+                          <tr 
+                            key={row.id} 
+                            className={`hover:bg-white/5 transition-colors ${selectedRows.has(row.id) ? 'bg-violet-500/10' : ''}`}
+                          >
+                            <td className="px-4 py-3">
+                              <input 
+                                type="checkbox"
+                                checked={selectedRows.has(row.id)}
+                                onChange={() => toggleRowSelection(row.id)}
+                                className="rounded border-white/10 bg-gray-800 text-violet-500"
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-300 whitespace-nowrap">{row.date}</td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                row.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                              }`}>
+                                {row.type === 'income' ? 'Доход' : 'Расход'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-white">{row.companyName}</td>
+                            <td className="px-4 py-3 text-sm text-gray-300">
+                              {row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-right">
+                              <div className={`font-medium ${row.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {row.type === 'income' ? '+' : '-'}{formatMoneyFull(row.amount)}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                Нал: {formatMoneyCompact(row.cashAmount)} | Kaspi: {formatMoneyCompact(row.kaspiAmount)}
+                                {row.onlineAmount ? ` | Online: ${formatMoneyCompact(row.onlineAmount)}` : ''}
+                                {row.cardAmount ? ` | Card: ${formatMoneyCompact(row.cardAmount)}` : ''}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-400 max-w-xs truncate">
+                              {row.zone || row.comment || '—'}
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2393,8 +2530,8 @@ useEffect(() => {
                   </div>
                 )}
 
-                {/* Pagination */}
-                {totalPages > 1 && (
+                {/* Pagination - only show if not using virtualization */}
+                {!useVirtualization && totalPages > 1 && (
                   <div className="flex items-center justify-between px-4 py-3 border-t border-white/5">
                     <div className="text-sm text-gray-500">
                       Показано {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, filteredRows.length)} из {filteredRows.length}
@@ -2438,7 +2575,7 @@ useEffect(() => {
                           r.companyName,
                           r.category || r.shift || '',
                           String(r.amount),
-                          r.zone || r.description || ''
+                          r.zone || r.comment || ''
                         ])
                         downloadTextFile('selected_rows.csv', toCSV([['Дата', 'Тип', 'Компания', 'Категория', 'Сумма', 'Примечание'], ...rows]))
                         showToast('Выбранные строки экспортированы', 'success')
