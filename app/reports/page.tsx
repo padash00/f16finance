@@ -569,49 +569,46 @@ function ReportsContent() {
   // =====================
   // DATA LOADING ← ИСПРАВЛЕНО: добавлен online_amount в select
   // =====================
-  useEffect(() => {
-    let alive = true
-    const loadCompanies = async () => {
-      setError(null)
-      const { data, error } = await supabase
-        .from('companies')
-        .select('id,name,code,address')
-        .order('name')
-      
-      if (!alive) return
-      if (error) {
-        setError('Не удалось загрузить список компаний')
-        setCompaniesLoaded(true)
-        setLoading(false)
-        return
-      }
-      setCompanies((data || []) as Company[])
-      setCompaniesLoaded(true)
-    }
-    loadCompanies()
-    return () => { alive = false }
-  }, [])
-
-  const loadData = useCallback(async (isRefresh = false) => {
-    if (!companiesLoaded) return
+// =====================
+// DATA LOADING
+// =====================
+useEffect(() => {
+  let alive = true
+  const loadCompanies = async () => {
+    setError(null)
+    const { data, error } = await supabase
+      .from('companies')
+      .select('id,name,code,address')
+      .order('name')
     
-    const myReqId = ++reqIdRef.current
+    if (!alive) return
+    if (error) {
+      setError('Не удалось загрузить список компаний')
+      setCompaniesLoaded(true)
+      setLoading(false)
+      return
+    }
+    setCompanies((data || []) as Company[])
+    setCompaniesLoaded(true)
+  }
+  loadCompanies()
+  return () => { alive = false }
+}, [])
+
+// Загрузка incomes/expenses - ТОЛЬКО после загрузки компаний
+useEffect(() => {
+  if (!companiesLoaded || companies.length === 0) return
+  
+  const myReqId = ++reqIdRef.current
+  
+  const loadData = async () => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
     setError(null)
 
     try {
-      if (companies.length === 0) {
-        setIncomes([])
-        setExpenses([])
-        setLoading(false)
-        setRefreshing(false)
-        return
-      }
-
       const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
 
-      // ← ИСПРАВЛЕНО: добавлен online_amount в запрос
       let incomeQuery = supabase
         .from('incomes')
         .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,created_at')
@@ -661,8 +658,11 @@ function ReportsContent() {
         setRefreshing(false)
       }
     }
-  }, [companiesLoaded, companies.length, dateFrom, dateTo, companyFilter, shiftFilter, includeExtraInTotals, extraCompanyId, showToast])
-
+  }
+  
+  loadData()
+  
+}, [companiesLoaded, companies.length, dateFrom, dateTo, companyFilter, shiftFilter, includeExtraInTotals, extraCompanyId])
   useEffect(() => {
     loadData()
   }, [loadData])
