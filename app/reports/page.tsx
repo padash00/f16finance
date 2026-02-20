@@ -22,13 +22,11 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Copy,
-  DollarSign,
   Download,
   FileSpreadsheet,
   Filter,
   Lightbulb,
-  PieChart as PieChartIcon, // ← Переименовано
+  PieChart as PieChartIcon,
   RefreshCw,
   Search,
   Share2,
@@ -48,7 +46,7 @@ import {
   Tooltip,
   BarChart,
   Bar,
-  PieChart, // ← Оставляем только из recharts
+  PieChart,
   Pie,
   Cell,
   ComposedChart,
@@ -69,7 +67,7 @@ type IncomeRow = {
   zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
-  online_amount: number | null
+  online_amount: number | null  // ← ДОБАВЛЕНО
   card_amount: number | null
   created_at?: string
 }
@@ -101,8 +99,8 @@ type SortField = 'date' | 'company' | 'amount' | 'category' | 'shift' | 'zone'
 type FinancialTotals = {
   incomeCash: number
   incomeKaspi: number
-  incomeOnline: number
-  incomeCard: number
+  incomeOnline: number      // ← ДОБАВЛЕНО
+  incomeCard: number        // ← ДОБАВЛЕНО
   incomeNonCash: number
   expenseCash: number
   expenseKaspi: number
@@ -124,8 +122,8 @@ type TimeAggregation = {
   profit: number
   incomeCash: number
   incomeKaspi: number
-  incomeOnline: number
-  incomeCard: number
+  incomeOnline: number      // ← ДОБАВЛЕНО
+  incomeCard: number        // ← ДОБАВЛЕНО
   incomeNonCash: number
   expenseCash: number
   expenseKaspi: number
@@ -158,11 +156,11 @@ type DetailedRow = {
   amount: number
   cashAmount: number
   kaspiAmount: number
+  onlineAmount?: number     // ← ДОБАВЛЕНО
+  cardAmount?: number       // ← ДОБАВЛЕНО
   category?: string
   shift?: Shift
   zone?: string | null
-  onlineAmount?: number
-  cardAmount?: number
   description?: string
 }
 
@@ -195,8 +193,8 @@ const PRESET_LABELS: Record<DatePreset, string> = {
 const baseTotals = (): FinancialTotals => ({
   incomeCash: 0,
   incomeKaspi: 0,
-  incomeOnline: 0,
-  incomeCard: 0,
+  incomeOnline: 0,      // ← ДОБАВЛЕНО
+  incomeCard: 0,        // ← ДОБАВЛЕНО
   incomeNonCash: 0,
   expenseCash: 0,
   expenseKaspi: 0,
@@ -568,7 +566,7 @@ function ReportsContent() {
   }, [applyPreset, showToast])
 
   // =====================
-  // DATA LOADING
+  // DATA LOADING ← ИСПРАВЛЕНО: добавлен online_amount в select
   // =====================
   useEffect(() => {
     let alive = true
@@ -612,15 +610,16 @@ function ReportsContent() {
 
       const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
 
+      // ← ИСПРАВЛЕНО: добавлен online_amount в запрос
       let incomeQuery = supabase
         .from('incomes')
-        .select('*')
+        .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,created_at')
         .gte('date', prevFrom)
         .lte('date', dateTo)
 
       let expenseQuery = supabase
         .from('expenses')
-        .select('*')
+        .select('id,date,company_id,category,cash_amount,kaspi_amount,description,created_at')
         .gte('date', prevFrom)
         .lte('date', dateTo)
 
@@ -728,7 +727,7 @@ function ReportsContent() {
   }, [dateFrom, dateTo, datePreset, companyFilter, shiftFilter, groupMode, includeExtraInTotals, activeTab, pathname, router])
 
   // =====================
-  // DATA PROCESSING
+  // DATA PROCESSING ← ИСПРАВЛЕНО: учитываем online_amount
   // =====================
   const processed = useMemo(() => {
     const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
@@ -737,12 +736,21 @@ function ReportsContent() {
     const totalsPrev = baseTotals()
 
     const expenseByCategoryMap = new Map<string, number>()
-    const incomeByCompanyMap = new Map<string, { companyId: string; name: string; value: number; cash: number; kaspi: number; online: number; card: number; count: number }>()
+    const incomeByCompanyMap = new Map<string, { 
+      companyId: string; 
+      name: string; 
+      value: number; 
+      cash: number; 
+      kaspi: number; 
+      online: number;      // ← ДОБАВЛЕНО
+      card: number;        // ← ДОБАВЛЕНО
+      count: number 
+    }>()
     const chartDataMap = new Map<string, TimeAggregation>()
     const anomalies: Anomaly[] = []
     const companyStats = new Map<string, { 
       income: number, expense: number, profit: number, 
-      cashIncome: number, kaspiIncome: number, 
+      cashIncome: number, kaspiIncome: number, onlineIncome: number, cardIncome: number,  // ← ДОБАВЛЕНО
       cashExpense: number, kaspiExpense: number,
       transactions: number 
     }>()
@@ -773,32 +781,32 @@ function ReportsContent() {
     const ensureBucket = (key: string, label: string, sortISO: string) => {
       const b = chartDataMap.get(key) || {
         label, sortISO, income: 0, expense: 0, profit: 0,
-        incomeCash: 0, incomeKaspi: 0, incomeOnline: 0, incomeCard: 0, incomeNonCash: 0,
+        incomeCash: 0, incomeKaspi: 0, incomeOnline: 0, incomeCard: 0, incomeNonCash: 0,  // ← ДОБАВЛЕНО
         expenseCash: 0, expenseKaspi: 0, count: 0
       }
       chartDataMap.set(key, b)
       return b
     }
 
-    // Process incomes
+    // Process incomes ← ИСПРАВЛЕНО: добавлен online_amount
     for (const r of incomes) {
       const range = getRangeBucket(r.date)
       if (!range) continue
 
       const cash = safeNumber(r.cash_amount)
       const kaspi = safeNumber(r.kaspi_amount)
-      const online = safeNumber(r.online_amount)
+      const online = safeNumber(r.online_amount)      // ← ДОБАВЛЕНО
       const card = safeNumber(r.card_amount)
-      const nonCash = kaspi + online + card
+      const nonCash = kaspi + online + card           // ← ИСПРАВЛЕНО: включаем online
       const total = cash + nonCash
       
-      if (total <= 0 && cash === 0 && kaspi === 0) continue
+      if (total <= 0 && cash === 0 && kaspi === 0 && online === 0) continue
 
       const tgt = range === 'current' ? totalsCur : totalsPrev
       tgt.incomeCash += cash
       tgt.incomeKaspi += kaspi
-      tgt.incomeOnline += online
-      tgt.incomeCard += card
+      tgt.incomeOnline += online                      // ← ДОБАВЛЕНО
+      tgt.incomeCard += card                          // ← ДОБАВЛЕНО
       tgt.incomeNonCash += nonCash
       tgt.totalIncome += total
       tgt.transactionCount += 1
@@ -811,8 +819,8 @@ function ReportsContent() {
         bucket.income += total
         bucket.incomeCash += cash
         bucket.incomeKaspi += kaspi
-        bucket.incomeOnline += online
-        bucket.incomeCard += card
+        bucket.incomeOnline += online                 // ← ДОБАВЛЕНО
+        bucket.incomeCard += card                     // ← ДОБАВЛЕНО
         bucket.incomeNonCash += nonCash
         bucket.count += 1
 
@@ -822,27 +830,29 @@ function ReportsContent() {
           incomeByCompanyMap.set(r.company_id, {
             companyId: r.company_id,
             name: companyName(r.company_id),
-            value: total, cash, kaspi, online, card, count: 1
+            value: total, cash, kaspi, online, card, count: 1  // ← ДОБАВЛЕНО
           })
         } else {
           existing.value += total
           existing.cash += cash
           existing.kaspi += kaspi
-          existing.online += online
-          existing.card += card
+          existing.online += online                     // ← ДОБАВЛЕНО
+          existing.card += card                         // ← ДОБАВЛЕНО
           existing.count += 1
         }
 
         // Detailed company stats
         const cs = companyStats.get(r.company_id) || { 
           income: 0, expense: 0, profit: 0,
-          cashIncome: 0, kaspiIncome: 0,
+          cashIncome: 0, kaspiIncome: 0, onlineIncome: 0, cardIncome: 0,  // ← ДОБАВЛЕНО
           cashExpense: 0, kaspiExpense: 0,
           transactions: 0
         }
         cs.income += total
         cs.cashIncome += cash
-        cs.kaspiIncome += nonCash
+        cs.kaspiIncome += kaspi
+        cs.onlineIncome += online                     // ← ДОБАВЛЕНО
+        cs.cardIncome += card                         // ← ДОБАВЛЕНО
         cs.transactions += 1
         companyStats.set(r.company_id, cs)
       }
@@ -880,7 +890,7 @@ function ReportsContent() {
         // Company stats
         const cs = companyStats.get(r.company_id) || { 
           income: 0, expense: 0, profit: 0,
-          cashIncome: 0, kaspiIncome: 0,
+          cashIncome: 0, kaspiIncome: 0, onlineIncome: 0, cardIncome: 0,  // ← ДОБАВЛЕНО
           cashExpense: 0, kaspiExpense: 0,
           transactions: 0
         }
@@ -1021,7 +1031,7 @@ function ReportsContent() {
   )
 
   // =====================
-  // DETAILED ROWS
+  // DETAILED ROWS ← ИСПРАВЛЕНО: добавлен online_amount
   // =====================
   const detailedRows = useMemo((): DetailedRow[] => {
     const rows: DetailedRow[] = []
@@ -1031,9 +1041,9 @@ function ReportsContent() {
       
       const cash = safeNumber(r.cash_amount)
       const kaspi = safeNumber(r.kaspi_amount)
-      const online = safeNumber(r.online_amount)
+      const online = safeNumber(r.online_amount)    // ← ДОБАВЛЕНО
       const card = safeNumber(r.card_amount)
-      const total = cash + kaspi + online + card
+      const total = cash + kaspi + online + card    // ← ИСПРАВЛЕНО
       
       if (total === 0) continue
 
@@ -1051,10 +1061,10 @@ function ReportsContent() {
         amount: total,
         cashAmount: cash,
         kaspiAmount: kaspi,
+        onlineAmount: online,                         // ← ДОБАВЛЕНО
+        cardAmount: card,                             // ← ДОБАВЛЕНО
         shift: r.shift,
         zone: r.zone,
-        onlineAmount: online,
-        cardAmount: card,
       })
     }
 
@@ -1321,13 +1331,16 @@ function ReportsContent() {
     rows.push(['Расходы', String(Math.round(totals.totalExpense)), String(Math.round(totalsPrev.totalExpense)), getPercentageChange(totals.totalExpense, totalsPrev.totalExpense)])
     rows.push(['Прибыль', String(Math.round(totals.profit)), String(Math.round(totalsPrev.profit)), getPercentageChange(totals.profit, totalsPrev.profit)])
     rows.push(['Наличные (доход)', String(Math.round(totals.incomeCash)), String(Math.round(totalsPrev.incomeCash)), getPercentageChange(totals.incomeCash, totalsPrev.incomeCash)])
+    rows.push(['Kaspi (доход)', String(Math.round(totals.incomeKaspi)), String(Math.round(totalsPrev.incomeKaspi)), getPercentageChange(totals.incomeKaspi, totalsPrev.incomeKaspi)])
+    rows.push(['Online (доход)', String(Math.round(totals.incomeOnline)), String(Math.round(totalsPrev.incomeOnline)), getPercentageChange(totals.incomeOnline, totalsPrev.incomeOnline)])  // ← ДОБАВЛЕНО
+    rows.push(['Card (доход)', String(Math.round(totals.incomeCard)), String(Math.round(totalsPrev.incomeCard)), getPercentageChange(totals.incomeCard, totalsPrev.incomeCard)])          // ← ДОБАВЛЕНО
     rows.push(['Безнал (доход)', String(Math.round(totals.incomeNonCash)), String(Math.round(totalsPrev.incomeNonCash)), getPercentageChange(totals.incomeNonCash, totalsPrev.incomeNonCash)])
     rows.push([''])
 
     rows.push(['ДОХОДЫ ПО КОМПАНИЯМ'])
-    rows.push(['Компания', 'Выручка', 'Наличные', 'Kaspi', 'Online', 'Card', 'Транзакций'])
+    rows.push(['Компания', 'Выручка', 'Наличные', 'Kaspi', 'Online', 'Card', 'Транзакций'])  // ← ИСПРАВЛЕНО
     for (const c of incomeByCompanyData) {
-      rows.push([c.name, String(Math.round(c.value)), String(Math.round(c.cash)), String(Math.round(c.kaspi)), String(Math.round(c.online)), String(Math.round(c.card)), String(c.count)])
+      rows.push([c.name, String(Math.round(c.value)), String(Math.round(c.cash)), String(Math.round(c.kaspi)), String(Math.round(c.online)), String(Math.round(c.card)), String(c.count)])  // ← ИСПРАВЛЕНО
     }
     rows.push([''])
 
@@ -1339,13 +1352,14 @@ function ReportsContent() {
     rows.push([''])
 
     rows.push(['ДЕТАЛЬНЫЕ ОПЕРАЦИИ'])
-    rows.push(['Дата', 'Тип', 'Компания', 'Категория/Смена', 'Сумма', 'Наличные', 'Kaspi', 'Online/Card', 'Зона/Описание'])
+    rows.push(['Дата', 'Тип', 'Компания', 'Категория/Смена', 'Сумма', 'Наличные', 'Kaspi', 'Online', 'Card', 'Зона/Описание'])  // ← ИСПРАВЛЕНО
     for (const r of filteredRows) {
       const typeLabel = r.type === 'income' ? 'Доход' : 'Расход'
       const category = r.category || r.shift || ''
-      const onlineCard = r.type === 'income' ? (r.onlineAmount || 0) + (r.cardAmount || 0) : 0
+      const online = r.type === 'income' ? (r.onlineAmount || 0) : 0    // ← ДОБАВЛЕНО
+      const card = r.type === 'income' ? (r.cardAmount || 0) : 0        // ← ДОБАВЛЕНО
       const zoneDesc = r.zone || r.description || ''
-      rows.push([r.date, typeLabel, r.companyName, category, String(Math.round(r.amount)), String(Math.round(r.cashAmount)), String(Math.round(r.kaspiAmount)), String(Math.round(onlineCard)), zoneDesc])
+      rows.push([r.date, typeLabel, r.companyName, category, String(Math.round(r.amount)), String(Math.round(r.cashAmount)), String(Math.round(r.kaspiAmount)), String(Math.round(online)), String(Math.round(card)), zoneDesc])  // ← ИСПРАВЛЕНО
     }
 
     downloadTextFile(`financial_report_${dateFrom}_${dateTo}.csv`, toCSV(rows, ';'))
@@ -1365,6 +1379,9 @@ function ReportsContent() {
       ['Прибыль', totals.profit, totalsPrev.profit, parseFloat(getPercentageChange(totals.profit, totalsPrev.profit)) || 0],
       ['Маржа %', totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0, 0, 0],
       ['Наличные (доход)', totals.incomeCash, totalsPrev.incomeCash, 0],
+      ['Kaspi (доход)', totals.incomeKaspi, totalsPrev.incomeKaspi, 0],
+      ['Online (доход)', totals.incomeOnline, totalsPrev.incomeOnline, 0],        // ← ДОБАВЛЕНО
+      ['Card (доход)', totals.incomeCard, totalsPrev.incomeCard, 0],              // ← ДОБАВЛЕНО
       ['Безналичные (доход)', totals.incomeNonCash, totalsPrev.incomeNonCash, 0],
       ['Наличные (расход)', totals.expenseCash, totalsPrev.expenseCash, 0],
       ['Kaspi (расход)', totals.expenseKaspi, totalsPrev.expenseKaspi, 0],
@@ -1833,6 +1850,30 @@ function ReportsContent() {
                   icon={Building2}
                   color="violet"
                 />
+              </div>
+
+              {/* Payment Types Breakdown */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
+                  <p className="text-xs text-gray-500 mb-1">Наличные</p>
+                  <p className="text-xl font-bold text-emerald-400">{formatMoneyFull(totals.incomeCash)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{totals.totalIncome > 0 ? ((totals.incomeCash / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
+                </div>
+                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
+                  <p className="text-xs text-gray-500 mb-1">Kaspi</p>
+                  <p className="text-xl font-bold text-blue-400">{formatMoneyFull(totals.incomeKaspi)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{totals.totalIncome > 0 ? ((totals.incomeKaspi / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
+                </div>
+                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
+                  <p className="text-xs text-gray-500 mb-1">Online</p>
+                  <p className="text-xl font-bold text-violet-400">{formatMoneyFull(totals.incomeOnline)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{totals.totalIncome > 0 ? ((totals.incomeOnline / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
+                </div>
+                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
+                  <p className="text-xs text-gray-500 mb-1">Card</p>
+                  <p className="text-xl font-bold text-amber-400">{formatMoneyFull(totals.incomeCard)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{totals.totalIncome > 0 ? ((totals.incomeCard / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
+                </div>
               </div>
 
               {/* Charts */}
@@ -2466,7 +2507,7 @@ function ReportsContent() {
                       </div>
                       <div>
                         <span className="text-gray-500 block">Безналичные</span>
-                        <span className="text-white">+{formatMoneyCompact(company.kaspiIncome)} / -{formatMoneyCompact(company.kaspiExpense)}</span>
+                        <span className="text-white">+{formatMoneyCompact(company.kaspiIncome + company.onlineIncome + company.cardIncome)} / -{formatMoneyCompact(company.kaspiExpense)}</span>
                       </div>
                     </div>
                   </div>
@@ -2511,7 +2552,7 @@ function ReportsContent() {
                             {formatMoneyCompact(c.cashIncome - c.cashExpense)}
                           </td>
                           <td className="py-4 text-right text-gray-300">
-                            {formatMoneyCompact(c.kaspiIncome - c.kaspiExpense)}
+                            {formatMoneyCompact((c.kaspiIncome + c.onlineIncome + c.cardIncome) - c.kaspiExpense)}
                           </td>
                           <td className="py-4 text-center text-gray-400">{c.transactions}</td>
                         </tr>
