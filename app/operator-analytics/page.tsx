@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, memo, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, memo, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Sidebar } from '@/components/sidebar'
@@ -21,12 +21,10 @@ import {
   AlertTriangle,
   Filter,
   ChevronDown,
-  ChevronUp,
   BarChart3,
   PieChart,
   Activity,
   User,
-  Clock,
   Calendar,
   Download,
   Share2,
@@ -37,7 +35,6 @@ import {
   Percent,
   Scale,
   Zap,
-  CheckCircle2,
   AlertCircle,
   Info,
   ArrowUpDown,
@@ -55,10 +52,7 @@ import {
   Pie,
   LineChart,
   Line,
-  ComposedChart,
-  Area,
   CartesianGrid,
-  Legend,
 } from 'recharts'
 
 // =====================
@@ -132,7 +126,6 @@ type OperatorAnalyticsRow = {
   advances: number
   netEffect: number
 
-  // для графиков
   dailyData: { date: string; amount: number }[]
   paymentBreakdown: { name: string; value: number; color: string }[]
 }
@@ -140,7 +133,7 @@ type OperatorAnalyticsRow = {
 type SortKey = 'turnover' | 'avg' | 'penalties' | 'net' | 'shifts' | 'name'
 type SortDirection = 'asc' | 'desc'
 
-type DatePreset = 'custom' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'lastQuarter'
+type DatePreset = 'custom' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth'
 
 type InsightType = 'success' | 'warning' | 'danger' | 'info' | 'opportunity'
 
@@ -214,28 +207,6 @@ const DATE_PRESETS: Record<DatePreset, { label: string; getRange: () => { from: 
       const now = new Date()
       const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       const last = new Date(now.getFullYear(), now.getMonth(), 0)
-      return { from: toISODateLocal(first), to: toISODateLocal(last) }
-    },
-  },
-  thisQuarter: {
-    label: 'Текущий квартал',
-    getRange: () => {
-      const now = new Date()
-      const quarter = Math.floor(now.getMonth() / 3)
-      const first = new Date(now.getFullYear(), quarter * 3, 1)
-      const last = new Date(now.getFullYear(), quarter * 3 + 3, 0)
-      return { from: toISODateLocal(first), to: toISODateLocal(last) }
-    },
-  },
-  lastQuarter: {
-    label: 'Прошлый квартал',
-    getRange: () => {
-      const now = new Date()
-      const quarter = Math.floor(now.getMonth() / 3) - 1
-      const year = now.getFullYear() + (quarter < 0 ? -1 : 0)
-      const adjustedQuarter = quarter < 0 ? 3 + quarter : quarter
-      const first = new Date(year, adjustedQuarter * 3, 1)
-      const last = new Date(year, adjustedQuarter * 3 + 3, 0)
       return { from: toISODateLocal(first), to: toISODateLocal(last) }
     },
   },
@@ -470,9 +441,28 @@ const InsightCard = memo(({ insight, index }: { insight: AIInsight; index: numbe
 InsightCard.displayName = 'InsightCard'
 
 // =====================
-// MAIN COMPONENT
+// LOADING COMPONENT
 // =====================
-export default function OperatorAnalyticsPage() {
+function OperatorAnalyticsLoading() {
+  return (
+    <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+      <Sidebar />
+      <main className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
+            <Users2 className="w-8 h-8 text-white" />
+          </div>
+          <p className="text-gray-400">Загрузка аналитики операторов...</p>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+// =====================
+// MAIN CONTENT COMPONENT (with useSearchParams)
+// =====================
+function OperatorAnalyticsContent() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -1185,19 +1175,7 @@ export default function OperatorAnalyticsPage() {
 
   // Loading states
   if (staticLoading && companies.length === 0) {
-    return (
-      <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-        <Sidebar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
-              <Users2 className="w-8 h-8 text-white" />
-            </div>
-            <p className="text-gray-400">Загрузка аналитики операторов...</p>
-          </div>
-        </main>
-      </div>
-    )
+    return <OperatorAnalyticsLoading />
   }
 
   if (error) {
@@ -1784,5 +1762,16 @@ export default function OperatorAnalyticsPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+// =====================
+// MAIN EXPORT with Suspense
+// =====================
+export default function OperatorAnalyticsPage() {
+  return (
+    <Suspense fallback={<OperatorAnalyticsLoading />}>
+      <OperatorAnalyticsContent />
+    </Suspense>
   )
 }
