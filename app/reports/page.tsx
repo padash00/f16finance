@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  DollarSign,
   Download,
   FileSpreadsheet,
   Filter,
