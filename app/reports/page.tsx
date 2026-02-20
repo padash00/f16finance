@@ -80,8 +80,9 @@ type ExpenseRow = {
   category: string | null
   cash_amount: number | null
   kaspi_amount: number | null
-  description?: string | null
+  comment?: string | null  // ← изменено с description на comment
   created_at?: string
+  operator_id?: string | null  // ← добавлено если нужно
 }
 
 type Company = {
@@ -157,12 +158,12 @@ type DetailedRow = {
   amount: number
   cashAmount: number
   kaspiAmount: number
-  onlineAmount?: number     // ← ДОБАВЛЕНО
-  cardAmount?: number       // ← ДОБАВЛЕНО
+  onlineAmount?: number
+  cardAmount?: number
   category?: string
   shift?: Shift
   zone?: string | null
-  description?: string
+  comment?: string  // ← изменено с description на comment
 }
 
 // =====================
