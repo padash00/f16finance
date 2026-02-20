@@ -566,107 +566,118 @@ function ReportsContent() {
     showToast('Фильтры сброшены', 'success')
   }, [applyPreset, showToast])
 
-  // =====================
-  // DATA LOADING ← ИСПРАВЛЕНО: добавлен online_amount в select
-  // =====================
+ // =====================
+// DATA LOADING (fixed)
 // =====================
-// DATA LOADING
-// =====================
+
+// 1) load companies
 useEffect(() => {
   let alive = true
+
   const loadCompanies = async () => {
     setError(null)
     const { data, error } = await supabase
       .from('companies')
       .select('id,name,code,address')
       .order('name')
-    
+
     if (!alive) return
+
     if (error) {
       setError('Не удалось загрузить список компаний')
       setCompaniesLoaded(true)
       setLoading(false)
       return
     }
+
     setCompanies((data || []) as Company[])
     setCompaniesLoaded(true)
   }
+
   loadCompanies()
   return () => { alive = false }
 }, [])
 
-// Загрузка incomes/expenses - ТОЛЬКО после загрузки компаний
-useEffect(() => {
-  if (!companiesLoaded || companies.length === 0) return
-  
+// 2) load incomes/expenses (after companies loaded)
+const loadData = useCallback(async (isRefresh = false) => {
+  if (!companiesLoaded) return
+
   const myReqId = ++reqIdRef.current
-  
-  const loadData = async () => {
-    if (isRefresh) setRefreshing(true)
-    else setLoading(true)
-    setError(null)
 
-    try {
-      const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
+  if (isRefresh) setRefreshing(true)
+  else setLoading(true)
 
-      let incomeQuery = supabase
-        .from('incomes')
-        .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,created_at')
-        .gte('date', prevFrom)
-        .lte('date', dateTo)
+  setError(null)
 
-      let expenseQuery = supabase
-        .from('expenses')
-        .select('id,date,company_id,category,cash_amount,kaspi_amount,description,created_at')
-        .gte('date', prevFrom)
-        .lte('date', dateTo)
+  try {
+    const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
 
-      if (companyFilter !== 'all') {
-        incomeQuery = incomeQuery.eq('company_id', companyFilter)
-        expenseQuery = expenseQuery.eq('company_id', companyFilter)
-      } else if (!includeExtraInTotals && extraCompanyId) {
-        incomeQuery = incomeQuery.neq('company_id', extraCompanyId)
-        expenseQuery = expenseQuery.neq('company_id', extraCompanyId)
-      }
+    let incomeQuery = supabase
+      .from('incomes')
+      .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,created_at')
+      .gte('date', prevFrom)
+      .lte('date', dateTo)
 
-      if (shiftFilter !== 'all') {
-        incomeQuery = incomeQuery.eq('shift', shiftFilter)
-      }
+    let expenseQuery = supabase
+      .from('expenses')
+      .select('id,date,company_id,category,cash_amount,kaspi_amount,description,created_at')
+      .gte('date', prevFrom)
+      .lte('date', dateTo)
 
-      const [incomeResult, expenseResult] = await Promise.all([
-        incomeQuery.order('date', { ascending: false }),
-        expenseQuery.order('date', { ascending: false })
-      ])
+    if (companyFilter !== 'all') {
+      incomeQuery = incomeQuery.eq('company_id', companyFilter)
+      expenseQuery = expenseQuery.eq('company_id', companyFilter)
+    } else if (!includeExtraInTotals && extraCompanyId) {
+      incomeQuery = incomeQuery.neq('company_id', extraCompanyId)
+      expenseQuery = expenseQuery.neq('company_id', extraCompanyId)
+    }
 
-      if (myReqId !== reqIdRef.current) return
-      if (incomeResult.error) throw incomeResult.error
-      if (expenseResult.error) throw expenseResult.error
+    if (shiftFilter !== 'all') {
+      incomeQuery = incomeQuery.eq('shift', shiftFilter)
+    }
 
-      setIncomes(incomeResult.data || [])
-      setExpenses(expenseResult.data || [])
-      
-      if (isRefresh) showToast('Данные обновлены', 'success')
-    } catch (err) {
-      if (myReqId === reqIdRef.current) {
-        setError('Ошибка загрузки данных')
-        showToast('Ошибка загрузки данных', 'error')
-        console.error(err)
-      }
-    } finally {
-      if (myReqId === reqIdRef.current) {
-        setLoading(false)
-        setRefreshing(false)
-      }
+    const [incomeResult, expenseResult] = await Promise.all([
+      incomeQuery.order('date', { ascending: false }),
+      expenseQuery.order('date', { ascending: false }),
+    ])
+
+    if (myReqId !== reqIdRef.current) return
+
+    if (incomeResult.error) throw incomeResult.error
+    if (expenseResult.error) throw expenseResult.error
+
+    setIncomes((incomeResult.data || []) as IncomeRow[])
+    setExpenses((expenseResult.data || []) as ExpenseRow[])
+
+    if (isRefresh) showToast('Данные обновлены', 'success')
+  } catch (err) {
+    if (myReqId === reqIdRef.current) {
+      setError('Ошибка загрузки данных')
+      showToast('Ошибка загрузки данных', 'error')
+      console.error(err)
+    }
+  } finally {
+    if (myReqId === reqIdRef.current) {
+      setLoading(false)
+      setRefreshing(false)
     }
   }
-  
-  loadData()
-  
-}, [companiesLoaded, companies.length, dateFrom, dateTo, companyFilter, shiftFilter, includeExtraInTotals, extraCompanyId])
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+}, [
+  companiesLoaded,
+  dateFrom,
+  dateTo,
+  companyFilter,
+  shiftFilter,
+  includeExtraInTotals,
+  extraCompanyId,
+  showToast,
+])
 
+// 3) auto reload on filters changes
+useEffect(() => {
+  if (!companiesLoaded) return
+  loadData(false)
+}, [companiesLoaded, loadData])
   // =====================
   // URL SYNC
   // =====================
