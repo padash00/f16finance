@@ -99,7 +99,6 @@ interface Company {
   id: string
   name: string
   code?: string | null
-  address?: string | null
 }
 
 type GroupMode = 'day' | 'week' | 'month' | 'year'
@@ -857,31 +856,33 @@ function ReportsContent() {
   // DATA LOADING
   // =====================
   useEffect(() => {
-    let alive = true
+  let alive = true
 
-    const loadCompanies = async () => {
-      setError(null)
-      const { data, error } = await supabase
-        .from('companies')
-        .select('id,name,code,address')
-        .order('name')
+  const loadCompanies = async () => {
+    setError(null)
 
-      if (!alive) return
+    const { data, error } = await supabase
+      .from('companies')
+      .select('id,name,code') // ✅ убрали address
+      .order('name', { ascending: true })
 
-      if (error) {
-        setError('Не удалось загрузить список компаний')
-        setCompaniesLoaded(true)
-        setLoading(false)
-        return
-      }
+    if (!alive) return
 
-      setCompanies((data || []) as Company[])
+    if (error) {
+      console.error('loadCompanies error:', error)
+      setError('Не удалось загрузить список компаний: ' + error.message)
       setCompaniesLoaded(true)
+      setLoading(false)
+      return
     }
 
-    loadCompanies()
-    return () => { alive = false }
-  }, [])
+    setCompanies((data || []) as Company[])
+    setCompaniesLoaded(true)
+  }
+
+  loadCompanies()
+  return () => { alive = false }
+}, [])
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (!companiesLoaded) return
