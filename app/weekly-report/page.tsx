@@ -1,54 +1,48 @@
 'use client'
 
-import { 
-  Suspense, 
-  useCallback, 
-  useEffect, 
-  useMemo, 
-  useRef, 
-  useState,
-  memo
-} from 'react'
+import { useEffect, useMemo, useRef, useState, memo, useCallback, Suspense } from 'react'
+import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
-
 import {
+  CalendarDays,
+  ArrowLeft,
+  Users2,
+  Search,
+  X,
   TrendingUp,
   TrendingDown,
-  Wallet,
-  CreditCard,
-  PieChart,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
   DollarSign,
-  Store,
+  Wallet,
+  Award,
   AlertTriangle,
-  CheckCircle2,
-  ArrowUpDown,
-  Download,
-  FileSpreadsheet,
-  Table,
-  Share2,
-  RefreshCw,
   Filter,
-  X,
-  Lightbulb,
-  Activity,
-  Zap,
-  BarChart3,
-  Calendar,
   ChevronDown,
-  Building2,
+  BarChart3,
+  PieChart,
+  Activity,
+  User,
+  Calendar,
+  Download,
+  RefreshCw,
+  Smartphone,
+  CreditCard,
   Landmark,
   Percent,
   Scale,
-  Smartphone,
-  CreditCard as CardIcon,
+  Zap,
+  AlertCircle,
+  Info,
+  ArrowUpDown,
+  Coins,
+  Banknote,
+  BadgeDollarSign,
+  Receipt,
+  ArrowRightLeft,
+  Sparkles,
 } from 'lucide-react'
 
 import {
@@ -61,116 +55,124 @@ import {
   Cell,
   PieChart as RechartsPieChart,
   Pie,
+  LineChart,
   Line,
-  ComposedChart,
-  Area,
   CartesianGrid,
 } from 'recharts'
 
 // =====================
-// TYPES (ИСПРАВЛЕНО)
+// TYPES (расширены для сальдо)
 // =====================
-type Company = { id: string; name: string; code: string | null }
+type Company = {
+  id: string
+  name: string
+  code: string | null
+}
 
 type IncomeRow = {
+  id: string
   date: string
   company_id: string
+  shift: 'day' | 'night' | null
   cash_amount: number | null
   kaspi_amount: number | null
-  online_amount: number | null  // ✅ ДОБАВЛЕНО
+  online_amount: number | null
   card_amount: number | null
+  operator_id: string | null
+  is_virtual: boolean | null
 }
 
-type ExpenseRow = {
+type AdjustmentKind = 'debt' | 'fine' | 'bonus' | 'advance'
+
+type AdjustmentRow = {
+  id: number
+  operator_id: string
   date: string
-  company_id: string
-  category: string | null
-  cash_amount: number | null
-  kaspi_amount: number | null
+  amount: number
+  kind: AdjustmentKind
+  comment: string | null
 }
 
-type WeekTotals = {
-  // Income (РАСШИРЕНО)
-  incomeCash: number
-  incomeKaspi: number
-  incomeOnline: number  // ✅ отдельно online_amount
-  incomeCard: number
-  incomeNonCash: number  // ✅ kaspi + online + card
-  incomeTotal: number
-
-  // Expenses
-  expenseCash: number
-  expenseKaspi: number
-  expenseTotal: number
-
-  // Profit
-  profit: number
-
-  // Extra
-  extraTotal: number
-
-  // By company
-  statsByCompany: Record<string, { 
-    cash: number; 
-    kaspi: number;      // ✅ добавили детализацию
-    online: number; 
-    card: number; 
-    nonCash: number;
-    total: number;
-  }>
-
-  // Categories
-  expenseCategories: { name: string; value: number; percentage: number }[]
-
-  // Previous period
-  prev: {
-    incomeTotal: number
-    expenseTotal: number
-    profit: number
-  }
-
-  // Changes
-  change: {
-    income: string
-    expense: string
-    profit: string
-  }
-
-  // Metrics
-  metrics: {
-    expenseRate: number
-    cashShare: number
-    kaspiShare: number      // ✅ добавили
-    onlineShare: number      // ✅ добавили
-    cardShare: number        // ✅ добавили
-    nonCashShare: number     // ✅ добавили
-    netCash: number
-    netKaspi: number         // ✅ добавили
-    netOnline: number        // ✅ добавили
-    netCard: number          // ✅ добавили
-    netNonCash: number       // ✅ добавили
-    topExpenseName: string | null
-    topExpenseShare: number
-    profitMargin: number
-  }
-
-  // Daily data for charts (РАСШИРЕНО)
-  dailyData: DailyDataPoint[]
+type DebtRow = {
+  id: string
+  operator_id: string | null
+  amount: number | null
+  week_start: string | null
+  status: string | null
 }
 
-type DailyDataPoint = {
-  day: string
-  label: string
-  income: number
-  expense: number
-  profit: number
-  incomeCash: number
-  incomeKaspi: number
-  incomeOnline: number  // ✅ добавили
-  incomeCard: number
-  expenseCash: number
-  expenseKaspi: number
+type Operator = {
+  id: string
+  name: string
+  short_name: string | null
+  is_active: boolean
 }
+
+// Расширенный тип с детальной информацией о сальдо
+type OperatorAnalyticsRow = {
+  operatorId: string
+  operatorName: string
+  operatorShortName: string | null
+
+  // Основные показатели
+  shifts: number
+  days: number
+
+  // Доходы по типам
+  totalTurnover: number
+  cashIncome: number
+  kaspiIncome: number
+  onlineIncome: number
+  cardIncome: number
+  nonCashIncome: number // kaspi + online + card
+
+  // Расходы (долги/штрафы)
+  autoDebts: number
+  manualMinus: number
+  totalDebts: number // autoDebts + manualMinus
+
+  // Премии и авансы
+  manualPlus: number
+  advances: number
+
+  // САЛЬДО (ключевые показатели)
+  netCash: number // cashIncome - autoDebts (если долги из нала) - уточнить логику
+  netNonCash: number // nonCashIncome - advances (если авансы из безнала)
+  netEffect: number // общий эффект
+
+  // Для аналитики
+  avgPerShift: number
+  share: number
+
+  // Для графиков
+  dailyData: { date: string; cash: number; nonCash: number; total: number }[]
+  paymentBreakdown: { name: string; value: number; color: string }[]
+  balanceHistory: { date: string; cashBalance: number; nonCashBalance: number }[]
+}
+
+// Глобальная статистика
+type GlobalBalances = {
+  totalCashIncome: number
+  totalNonCashIncome: number
+  totalDebts: number
+  totalAdvances: number
+  totalBonuses: number
+  
+  // Итоговые сальдо
+  netCashBalance: number
+  netNonCashBalance: number
+  netTotalBalance: number
+  
+  // Прогнозы
+  projectedCashBalance: number
+  projectedNonCashBalance: number
+  projectedTotalBalance: number
+}
+
+type SortKey = 'netCash' | 'netNonCash' | 'netTotal' | 'turnover' | 'avg' | 'shifts' | 'name'
+type SortDirection = 'asc' | 'desc'
+
+type DatePreset = 'custom' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'lastQuarter'
 
 type InsightType = 'success' | 'warning' | 'danger' | 'info' | 'opportunity'
 
@@ -180,25 +182,102 @@ interface AIInsight {
   description: string
   metric?: string
   trend?: 'up' | 'down' | 'neutral'
+  operatorId?: string
 }
 
 // =====================
 // CONSTANTS
 // =====================
+const PAYMENT_COLORS = {
+  cash: '#10b981',
+  kaspi: '#3b82f6',
+  online: '#8b5cf6',
+  card: '#f59e0b',
+} as const
+
+const BALANCE_COLORS = {
+  cash: '#10b981',
+  nonCash: '#3b82f6',
+  total: '#8b5cf6',
+} as const
+
 const PIE_COLORS = [
-  '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', 
+  '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', 
   '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'
 ] as const
 
 const INSIGHT_STYLES: Record<InsightType, { bg: string; border: string; text: string; icon: React.ElementType }> = {
   success: { bg: 'bg-emerald-500/5', border: 'border-emerald-500/20', text: 'text-emerald-400', icon: TrendingUp },
   warning: { bg: 'bg-amber-500/5', border: 'border-amber-500/20', text: 'text-amber-400', icon: AlertTriangle },
-  danger: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400', icon: AlertTriangle },
-  opportunity: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400', icon: Lightbulb },
-  info: { bg: 'bg-gray-800/30', border: 'border-white/5', text: 'text-gray-400', icon: Activity },
+  danger: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400', icon: AlertCircle },
+  opportunity: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400', icon: Zap },
+  info: { bg: 'bg-gray-800/30', border: 'border-white/5', text: 'text-gray-400', icon: Info },
 }
 
-const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+const DATE_PRESETS: Record<DatePreset, { label: string; getRange: () => { from: string; to: string } }> = {
+  custom: { label: 'Произвольный', getRange: () => ({ from: '', to: '' }) },
+  thisWeek: {
+    label: 'Текущая неделя',
+    getRange: () => {
+      const now = new Date()
+      const mon = getMonday(now)
+      const sun = new Date(mon)
+      sun.setDate(mon.getDate() + 6)
+      return { from: toISODateLocal(mon), to: toISODateLocal(sun) }
+    },
+  },
+  lastWeek: {
+    label: 'Прошлая неделя',
+    getRange: () => {
+      const now = new Date()
+      const mon = getMonday(now)
+      mon.setDate(mon.getDate() - 7)
+      const sun = new Date(mon)
+      sun.setDate(mon.getDate() + 6)
+      return { from: toISODateLocal(mon), to: toISODateLocal(sun) }
+    },
+  },
+  thisMonth: {
+    label: 'Текущий месяц',
+    getRange: () => {
+      const now = new Date()
+      const first = new Date(now.getFullYear(), now.getMonth(), 1)
+      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      return { from: toISODateLocal(first), to: toISODateLocal(last) }
+    },
+  },
+  lastMonth: {
+    label: 'Прошлый месяц',
+    getRange: () => {
+      const now = new Date()
+      const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const last = new Date(now.getFullYear(), now.getMonth(), 0)
+      return { from: toISODateLocal(first), to: toISODateLocal(last) }
+    },
+  },
+  thisQuarter: {
+    label: 'Текущий квартал',
+    getRange: () => {
+      const now = new Date()
+      const quarter = Math.floor(now.getMonth() / 3)
+      const first = new Date(now.getFullYear(), quarter * 3, 1)
+      const last = new Date(now.getFullYear(), quarter * 3 + 3, 0)
+      return { from: toISODateLocal(first), to: toISODateLocal(last) }
+    },
+  },
+  lastQuarter: {
+    label: 'Прошлый квартал',
+    getRange: () => {
+      const now = new Date()
+      const quarter = Math.floor(now.getMonth() / 3) - 1
+      const year = now.getFullYear() + (quarter < 0 ? -1 : 0)
+      const adjustedQuarter = quarter < 0 ? 3 + quarter : quarter
+      const first = new Date(year, adjustedQuarter * 3, 1)
+      const last = new Date(year, adjustedQuarter * 3 + 3, 0)
+      return { from: toISODateLocal(first), to: toISODateLocal(last) }
+    },
+  },
+}
 
 // =====================
 // UTILITY FUNCTIONS
@@ -213,51 +292,17 @@ const fromISO = (iso: string): Date => {
   return new Date(y, (m || 1) - 1, d || 1)
 }
 
-const getTodayISO = (): string => toISODateLocal(new Date())
-
-const addDaysISO = (iso: string, diff: number): string => {
-  const d = fromISO(iso)
-  d.setDate(d.getDate() + diff)
-  return toISODateLocal(d)
+const getMonday = (d: Date): Date => {
+  const date = new Date(d)
+  const day = date.getDay() || 7
+  if (day !== 1) date.setDate(date.getDate() - (day - 1))
+  date.setHours(0, 0, 0, 0)
+  return date
 }
 
-const getWeekBounds = (dateISO: string) => {
-  const d = fromISO(dateISO)
-  const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay()
+const mondayISOOf = (iso: string): string => toISODateLocal(getMonday(fromISO(iso)))
 
-  const monday = new Date(d)
-  monday.setDate(d.getDate() - (dayOfWeek - 1))
-
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-
-  return { start: toISODateLocal(monday), end: toISODateLocal(sunday) }
-}
-
-const formatRangeTitle = (start: string, end: string): string => {
-  const d1 = fromISO(start)
-  const d2 = fromISO(end)
-  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long' }
-  return `${d1.toLocaleDateString('ru-RU', opts)} — ${d2.toLocaleDateString('ru-RU', opts)}`
-}
-
-const formatDateRange = (from: string, to: string): string => {
-  const d1 = fromISO(from)
-  const d2 = fromISO(to)
-  const sameMonth = d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear()
-  
-  if (sameMonth) {
-    return `${d1.getDate()}–${d2.getDate()} ${d1.toLocaleDateString('ru-RU', { month: 'long' })} ${d1.getFullYear()}`
-  }
-  return `${d1.toLocaleDateString('ru-RU')} – ${d2.toLocaleDateString('ru-RU')}`
-}
-
-const pctChange = (current: number, previous: number): string => {
-  if (previous === 0) return current > 0 ? '+100%' : '—'
-  if (current === 0) return '-100%'
-  const change = ((current - previous) / previous) * 100
-  return `${change > 0 ? '+' : ''}${change.toFixed(1)}%`
-}
+const formatMoney = (v: number, fmt: Intl.NumberFormat): string => `${fmt.format(Math.round(v || 0))} ₸`
 
 const formatMoneyFull = (n: number): string => {
   if (!Number.isFinite(n)) return '0 ₸'
@@ -279,139 +324,135 @@ const formatCompact = (n: number): string => {
   return String(Math.round(n))
 }
 
+const formatDateRange = (from: string, to: string): string => {
+  const d1 = fromISO(from)
+  const d2 = fromISO(to)
+  const sameMonth = d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear()
+  
+  if (sameMonth) {
+    return `${d1.getDate()}–${d2.getDate()} ${d1.toLocaleDateString('ru-RU', { month: 'long' })} ${d1.getFullYear()}`
+  }
+  return `${d1.toLocaleDateString('ru-RU')} – ${d2.toLocaleDateString('ru-RU')}`
+}
+
 const safeNumber = (v: unknown): number => {
   if (v === null || v === undefined) return 0
   const num = Number(v)
   return Number.isFinite(num) ? num : 0
 }
 
-// =====================
-// CSV & EXPORT UTILITIES
-// =====================
-const csvEscape = (v: string): string => {
-  const s = String(v).replaceAll('"', '""')
-  if (/[",\n\r;]/.test(s)) return `"${s}"`
-  return s
-}
-
-const toCSV = (rows: string[][], sep = ';'): string => 
-  rows.map((r) => r.map((c) => csvEscape(c)).join(sep)).join('\n') + '\n'
-
-const downloadTextFile = (filename: string, content: string, mime = 'text/csv'): void => {
-  const blob = new Blob(['\uFEFF' + content], { type: `${mime};charset=utf-8` })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+const getPercentageChange = (current: number, previous: number): string => {
+  if (previous === 0) return current > 0 ? '+100%' : '—'
+  if (current === 0) return '-100%'
+  const change = ((current - previous) / previous) * 100
+  return `${change > 0 ? '+' : ''}${change.toFixed(1)}%`
 }
 
 // =====================
 // MEMOIZED CHART COMPONENTS
 // =====================
-const MemoizedDailyChart = memo(({ data }: { data: DailyDataPoint[] }) => {
+const OperatorDailyChart = memo(({ data }: { data: { date: string; cash: number; nonCash: number; total: number }[] }) => {
+  const chartData = data.map(d => ({
+    ...d,
+    label: d.date.slice(5),
+  }))
+
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
-        <defs>
-          <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-          </linearGradient>
-          <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
-            <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
-          </linearGradient>
-        </defs>
+      <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} vertical={false} />
         <XAxis 
           dataKey="label" 
           stroke="#6b7280" 
-          fontSize={12} 
+          fontSize={10} 
           tickLine={false} 
           axisLine={false}
-          tickMargin={10}
         />
         <YAxis 
           stroke="#6b7280" 
-          fontSize={12} 
+          fontSize={10} 
           tickLine={false} 
-          axisLine={false} 
+          axisLine={false}
           tickFormatter={formatCompact}
-          width={60}
+          width={35}
         />
         <Tooltip 
           contentStyle={{ 
             background: 'rgba(17, 24, 39, 0.95)', 
             border: '1px solid rgba(255,255,255,0.1)', 
-            borderRadius: '12px',
-            backdropFilter: 'blur(10px)'
+            borderRadius: '8px',
+            fontSize: '12px'
           }}
           formatter={(value: number, name: string) => {
             const labels: Record<string, string> = {
-              income: 'Доход',
-              expense: 'Расход',
-              profit: 'Прибыль'
+              cash: 'Наличные',
+              nonCash: 'Безналичные',
+              total: 'Всего'
             }
             return [formatMoneyFull(value), labels[name] || name]
           }}
         />
-        <Area 
+        <Line 
           type="monotone" 
-          dataKey="income" 
-          stroke="#10b981" 
+          dataKey="total" 
+          stroke="#8b5cf6" 
           strokeWidth={2}
-          fill="url(#colorIncome)" 
-        />
-        <Area 
-          type="monotone" 
-          dataKey="expense" 
-          stroke="#f43f5e" 
-          strokeWidth={2}
-          fill="url(#colorExpense)" 
+          dot={{ fill: '#8b5cf6', r: 2 }}
+          activeDot={{ r: 4 }}
         />
         <Line 
           type="monotone" 
-          dataKey="profit" 
-          stroke="#fbbf24" 
-          strokeWidth={3}
-          dot={{ fill: '#fbbf24', strokeWidth: 2, r: 4 }}
-          activeDot={{ r: 6, strokeWidth: 0 }}
+          dataKey="cash" 
+          stroke="#10b981" 
+          strokeWidth={1.5}
+          dot={{ fill: '#10b981', r: 1.5 }}
+          activeDot={{ r: 3 }}
         />
-      </ComposedChart>
+        <Line 
+          type="monotone" 
+          dataKey="nonCash" 
+          stroke="#3b82f6" 
+          strokeWidth={1.5}
+          dot={{ fill: '#3b82f6', r: 1.5 }}
+          activeDot={{ r: 3 }}
+        />
+      </LineChart>
     </ResponsiveContainer>
   )
 })
-MemoizedDailyChart.displayName = 'MemoizedDailyChart'
+OperatorDailyChart.displayName = 'OperatorDailyChart'
 
-const MemoizedPieChart = memo(({ data }: { data: { name: string; value: number; percentage: number }[] }) => {
+const PaymentPieChart = memo(({ data }: { data: { name: string; value: number; color: string }[] }) => {
+  const total = data.reduce((sum, item) => sum + item.value, 0)
+  const dataWithPercent = data.map(item => ({
+    ...item,
+    percentage: total > 0 ? (item.value / total) * 100 : 0,
+  }))
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <RechartsPieChart>
         <Pie 
-          data={data} 
+          data={dataWithPercent} 
           cx="50%" 
           cy="50%" 
-          innerRadius={60} 
-          outerRadius={80}
-          paddingAngle={3}
+          innerRadius={30} 
+          outerRadius={45}
+          paddingAngle={2}
           dataKey="value"
         >
-          {data.map((_, idx) => (
-            <Cell key={`cell-${idx}`} fill={PIE_COLORS[idx % PIE_COLORS.length]} stroke="transparent" />
+          {dataWithPercent.map((entry, idx) => (
+            <Cell key={`cell-${idx}`} fill={entry.color} stroke="transparent" />
           ))}
         </Pie>
         <Tooltip 
           contentStyle={{ 
             background: 'rgba(17, 24, 39, 0.95)', 
             border: '1px solid rgba(255,255,255,0.1)', 
-            borderRadius: '12px' 
+            borderRadius: '8px' 
           }}
-          formatter={(v: number, _n: string, p: { payload?: { percentage?: number } }) => [
-            `${formatMoneyFull(v)} (${p?.payload?.percentage?.toFixed(1)}%)`,
+          formatter={(value: number, _n: string, p: { payload?: { percentage?: number } }) => [
+            `${formatMoneyFull(value)} (${p?.payload?.percentage?.toFixed(1)}%)`,
             'Сумма'
           ]}
         />
@@ -419,60 +460,75 @@ const MemoizedPieChart = memo(({ data }: { data: { name: string; value: number; 
     </ResponsiveContainer>
   )
 })
-MemoizedPieChart.displayName = 'MemoizedPieChart'
+PaymentPieChart.displayName = 'PaymentPieChart'
 
-const MemoizedBarChart = memo(({ data }: { data: { name: string; cash: number; kaspi: number; online: number; card: number; total: number }[] }) => {
+// График баланса
+const BalanceChart = memo(({ data }: { data: { date: string; cashBalance: number; nonCashBalance: number }[] }) => {
+  const chartData = data.map(d => ({
+    ...d,
+    label: d.date.slice(5),
+  }))
+
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ left: 20 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} horizontal={false} />
+      <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} vertical={false} />
         <XAxis 
-          dataKey="name" 
+          dataKey="label" 
           stroke="#6b7280" 
-          fontSize={11} 
+          fontSize={10} 
           tickLine={false} 
           axisLine={false}
-          angle={-15}
-          textAnchor="end"
-          height={60}
         />
         <YAxis 
           stroke="#6b7280" 
-          fontSize={11} 
+          fontSize={10} 
           tickLine={false} 
           axisLine={false}
           tickFormatter={formatCompact}
+          width={35}
         />
         <Tooltip 
           contentStyle={{ 
             background: 'rgba(17, 24, 39, 0.95)', 
             border: '1px solid rgba(255,255,255,0.1)', 
-            borderRadius: '12px' 
+            borderRadius: '8px',
+            fontSize: '12px'
           }}
           formatter={(value: number, name: string) => {
             const labels: Record<string, string> = {
-              cash: 'Наличные',
-              kaspi: 'Kaspi',
-              online: 'Online',
-              card: 'Карта'
+              cashBalance: 'Сальдо нал',
+              nonCashBalance: 'Сальдо безнал',
             }
             return [formatMoneyFull(value), labels[name] || name]
           }}
         />
-        <Bar dataKey="cash" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} name="Наличные" />
-        <Bar dataKey="kaspi" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Kaspi" />
-        <Bar dataKey="online" stackId="a" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Online" />
-        <Bar dataKey="card" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Карта" />
-      </BarChart>
+        <Line 
+          type="monotone" 
+          dataKey="cashBalance" 
+          stroke="#10b981" 
+          strokeWidth={2}
+          dot={{ fill: '#10b981', r: 2 }}
+          activeDot={{ r: 4 }}
+        />
+        <Line 
+          type="monotone" 
+          dataKey="nonCashBalance" 
+          stroke="#3b82f6" 
+          strokeWidth={2}
+          dot={{ fill: '#3b82f6', r: 2 }}
+          activeDot={{ r: 4 }}
+        />
+      </LineChart>
     </ResponsiveContainer>
   )
 })
-MemoizedBarChart.displayName = 'MemoizedBarChart'
+BalanceChart.displayName = 'BalanceChart'
 
 // =====================
 // UI COMPONENTS
 // =====================
-const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blue', onClick }: {
+const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blue', onClick, highlight = false }: {
   title: string
   value: string
   subValue?: string
@@ -480,6 +536,7 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
   trend?: number
   color?: 'blue' | 'green' | 'red' | 'amber' | 'violet'
   onClick?: () => void
+  highlight?: boolean
 }) => {
   const colors: Record<string, string> = {
     blue: 'from-blue-500 to-cyan-500',
@@ -492,16 +549,20 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
   return (
     <div 
       onClick={onClick}
-      className={`relative overflow-hidden rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6 hover:bg-gray-800/50 transition-all ${onClick ? 'cursor-pointer' : ''}`}
+      className={`relative overflow-hidden rounded-2xl backdrop-blur-xl border p-5 transition-all ${
+        highlight 
+          ? 'bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border-violet-500/30 shadow-lg shadow-violet-500/10' 
+          : 'bg-gray-900/40 border-white/5 hover:bg-gray-800/50'
+      } ${onClick ? 'cursor-pointer' : ''}`}
     >
       <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colors[color]} opacity-10 rounded-full blur-3xl translate-x-8 -translate-y-8`} />
       <div className="relative z-10">
-        <div className="flex items-center justify-between mb-4">
-          <div className={`p-2.5 rounded-xl bg-gradient-to-br ${colors[color]} bg-opacity-20`}>
-            <Icon className="w-5 h-5 text-white" />
+        <div className="flex items-center justify-between mb-3">
+          <div className={`p-2 rounded-xl bg-gradient-to-br ${colors[color]} bg-opacity-20`}>
+            <Icon className="w-4 h-4 text-white" />
           </div>
           {trend !== undefined && (
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
               trend > 0 ? 'bg-emerald-500/20 text-emerald-400' : 
               trend < 0 ? 'bg-rose-500/20 text-rose-400' : 
               'bg-gray-500/20 text-gray-400'
@@ -510,8 +571,8 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
             </span>
           )}
         </div>
-        <p className="text-gray-400 text-sm mb-1">{title}</p>
-        <p className="text-2xl font-bold text-white mb-1">{value}</p>
+        <p className="text-gray-400 text-xs mb-1">{title}</p>
+        <p className={`text-xl font-bold mb-1 ${highlight ? 'text-white' : 'text-white'}`}>{value}</p>
         {subValue && <p className="text-xs text-gray-500">{subValue}</p>}
       </div>
     </div>
@@ -525,17 +586,17 @@ const InsightCard = memo(({ insight, index }: { insight: AIInsight; index: numbe
   
   return (
     <div 
-      className={`relative overflow-hidden rounded-2xl border p-4 ${styles.bg} ${styles.border}`}
+      className={`relative overflow-hidden rounded-xl border p-3 ${styles.bg} ${styles.border}`}
     >
-      <div className="flex items-start gap-3">
-        <div className={`p-2 rounded-lg ${styles.bg.replace('/5', '/20')} ${styles.text}`}>
-          <Icon className="w-4 h-4" />
+      <div className="flex items-start gap-2">
+        <div className={`p-1.5 rounded-lg ${styles.bg.replace('/5', '/20')} ${styles.text}`}>
+          <Icon className="w-3.5 h-3.5" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white mb-1">{insight.title}</p>
-          <p className="text-xs text-gray-400 line-clamp-2">{insight.description}</p>
+          <p className="text-xs font-medium text-white mb-0.5">{insight.title}</p>
+          <p className="text-[11px] text-gray-400 line-clamp-2">{insight.description}</p>
           {insight.metric && (
-            <p className={`text-lg font-bold mt-2 ${styles.text}`}>{insight.metric}</p>
+            <p className={`text-sm font-bold mt-1 ${styles.text}`}>{insight.metric}</p>
           )}
         </div>
       </div>
@@ -545,39 +606,68 @@ const InsightCard = memo(({ insight, index }: { insight: AIInsight; index: numbe
 InsightCard.displayName = 'InsightCard'
 
 // =====================
-// MAIN COMPONENT
+// LOADING COMPONENT
 // =====================
-function WeeklyReportContent() {
+function OperatorAnalyticsLoading() {
+  return (
+    <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+      <Sidebar />
+      <main className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
+            <Users2 className="w-8 h-8 text-white" />
+          </div>
+          <p className="text-gray-400">Загрузка аналитики операторов...</p>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+// =====================
+// MAIN CONTENT COMPONENT
+// =====================
+function OperatorAnalyticsContent() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
+  const moneyFmt = useMemo(() => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }), [])
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  // Data states
+  // Date states
+  const [datePreset, setDatePreset] = useState<DatePreset>('thisWeek')
+  const [dateFrom, setDateFrom] = useState(() => DATE_PRESETS.thisWeek.getRange().from)
+  const [dateTo, setDateTo] = useState(() => DATE_PRESETS.thisWeek.getRange().to)
+
+  // Static data
   const [companies, setCompanies] = useState<Company[]>([])
-  const [companiesLoaded, setCompaniesLoaded] = useState(false)
-  const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([])
-  const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
+  const [staticLoading, setStaticLoading] = useState(true)
+
+  // Range data
+  const [incomes, setIncomes] = useState<IncomeRow[]>([])
+  const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([])
+  const [debts, setDebts] = useState<DebtRow[]>([])
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Date states
-  const todayISO = useMemo(() => getTodayISO(), [])
-  const currentWeek = useMemo(() => getWeekBounds(todayISO), [todayISO])
-
-  const [startDate, setStartDate] = useState(currentWeek.start)
-  const [endDate, setEndDate] = useState(currentWeek.end)
-
-  // Filter states
-  const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
-  const [comparisonMode, setComparisonMode] = useState(true)
+  // Filters
+  const [includeArena, setIncludeArena] = useState(true)
+  const [includeRamen, setIncludeRamen] = useState(true)
+  const [includeExtra, setIncludeExtra] = useState(true)
+  const [showInactive, setShowInactive] = useState(false)
 
   // UI states
+  const [sortKey, setSortKey] = useState<SortKey>('netTotal')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [search, setSearch] = useState('')
+  const [selectedOperator, setSelectedOperator] = useState<OperatorAnalyticsRow | null>(null)
+  const [showFilters, setShowFilters] = useState(false)
+  const [showCharts, setShowCharts] = useState(true)
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null)
 
   const reqIdRef = useRef(0)
@@ -590,659 +680,761 @@ function WeeklyReportContent() {
     toastTimer.current = window.setTimeout(() => setToast(null), 3000)
   }, [])
 
-  const isCurrentWeek = useMemo(
-    () => startDate === currentWeek.start && endDate === currentWeek.end,
-    [startDate, endDate, currentWeek.start, currentWeek.end],
-  )
-
-  const canGoNext = useMemo(() => {
-    const nextStart = addDaysISO(startDate, 7)
-    return nextStart <= currentWeek.start
-  }, [startDate, currentWeek.start])
-
-  // =====================
-  // NAVIGATION
-  // =====================
-  const handleCurrentWeek = () => {
-    setStartDate(currentWeek.start)
-    setEndDate(currentWeek.end)
-  }
-
-  const shiftWeek = (direction: -1 | 1) => {
-    if (direction === 1 && !canGoNext) return
-    const nextStart = addDaysISO(startDate, direction * 7)
-    const { start, end } = getWeekBounds(nextStart)
-    setStartDate(start)
-    setEndDate(end)
-  }
-
-  // =====================
-  // LOAD COMPANIES
-  // =====================
-  useEffect(() => {
-    let alive = true
-
-    const loadCompanies = async () => {
-      setError(null)
-
-      const { data, error } = await supabase
-        .from('companies')
-        .select('id,name,code')
-        .order('name', { ascending: true })
-
-      if (!alive) return
-
-      if (error) {
-        console.error('loadCompanies error:', error)
-        setError('Не удалось загрузить список компаний')
-        setCompaniesLoaded(true)
-        setLoading(false)
-        return
-      }
-
-      setCompanies((data || []) as Company[])
-      setCompaniesLoaded(true)
-    }
-
-    loadCompanies()
-    return () => { alive = false }
+  // Apply date preset
+  const applyPreset = useCallback((preset: DatePreset) => {
+    if (preset === 'custom') return
+    const { from, to } = DATE_PRESETS[preset].getRange()
+    setDateFrom(from)
+    setDateTo(to)
   }, [])
 
-  // =====================
-  // URL SYNC
-  // =====================
+  const handlePresetChange = (preset: DatePreset) => {
+    setDatePreset(preset)
+    applyPreset(preset)
+  }
+
+  // Protect against dateFrom > dateTo
   useEffect(() => {
-    if (didInitFromUrl.current || !companiesLoaded) return
+    if (dateFrom <= dateTo) return
+    setDateFrom(dateTo)
+    setDateTo(dateFrom)
+  }, [dateFrom, dateTo])
+
+  // URL sync
+  useEffect(() => {
+    if (didInitFromUrl.current) return
 
     const sp = searchParams
-    const pStart = sp.get('start')
-    const pEnd = sp.get('end')
-    const pExtra = sp.get('extra') === '1'
+    const pFrom = sp.get('from')
+    const pTo = sp.get('to')
+    const pArena = sp.get('arena')
+    const pRamen = sp.get('ramen')
+    const pExtra = sp.get('extra')
+    const pSearch = sp.get('q')
+    const pSort = sp.get('sort') as SortKey | null
+    const pDir = sp.get('dir') as SortDirection | null
 
-    if (pStart && pEnd) {
-      setStartDate(pStart)
-      setEndDate(pEnd)
+    if (pFrom && pTo) {
+      setDateFrom(pFrom)
+      setDateTo(pTo)
+      setDatePreset('custom')
     }
 
-    setIncludeExtraInTotals(pExtra)
+    if (pArena !== null) setIncludeArena(pArena === '1')
+    if (pRamen !== null) setIncludeRamen(pRamen === '1')
+    if (pExtra !== null) setIncludeExtra(pExtra === '1')
+    if (pSearch) setSearch(pSearch)
+    if (pSort) setSortKey(pSort)
+    if (pDir) setSortDirection(pDir)
+
     didInitFromUrl.current = true
-  }, [companiesLoaded, searchParams])
+  }, [searchParams])
 
   useEffect(() => {
     if (!didInitFromUrl.current) return
 
     const timeoutId = setTimeout(() => {
       const params = new URLSearchParams()
-      params.set('start', startDate)
-      params.set('end', endDate)
-      params.set('extra', includeExtraInTotals ? '1' : '0')
+      params.set('from', dateFrom)
+      params.set('to', dateTo)
+      params.set('arena', includeArena ? '1' : '0')
+      params.set('ramen', includeRamen ? '1' : '0')
+      params.set('extra', includeExtra ? '1' : '0')
+      if (search) params.set('q', search)
+      params.set('sort', sortKey)
+      params.set('dir', sortDirection)
 
       router.replace(`${pathname}?${params.toString()}`, { scroll: false })
     }, 250)
 
     return () => clearTimeout(timeoutId)
-  }, [startDate, endDate, includeExtraInTotals, pathname, router])
+  }, [dateFrom, dateTo, includeArena, includeRamen, includeExtra, search, sortKey, sortDirection, pathname, router])
 
-  // =====================
-  // LOAD DATA (ИСПРАВЛЕНО - добавлен online_amount)
-  // =====================
+  // Load static data
   useEffect(() => {
-    const load = async () => {
-      if (!companiesLoaded) return
+    const loadStatic = async () => {
+      setStaticLoading(true)
+      setError(null)
+
+      const [compRes, opsRes] = await Promise.all([
+        supabase.from('companies').select('id,name,code'),
+        supabase.from('operators').select('id,name,short_name,is_active').order('name'),
+      ])
+
+      if (compRes.error || opsRes.error) {
+        console.error('Static load error', { compErr: compRes.error, opsErr: opsRes.error })
+        setError('Ошибка загрузки справочников')
+        setCompanies((compRes.data || []) as Company[])
+        setOperators((opsRes.data || []) as Operator[])
+        setStaticLoading(false)
+        return
+      }
+
+      setCompanies((compRes.data || []) as Company[])
+      setOperators((opsRes.data || []) as Operator[])
+      setStaticLoading(false)
+    }
+
+    loadStatic()
+  }, [])
+
+  // Memoized values
+  const allowedCodes = useMemo(() => {
+    const set = new Set<string>()
+    if (includeArena) set.add('arena')
+    if (includeRamen) set.add('ramen')
+    if (includeExtra) set.add('extra')
+    return set
+  }, [includeArena, includeRamen, includeExtra])
+
+  const companyById = useMemo(() => {
+    const m = new Map<string, Company>()
+    for (const c of companies) m.set(c.id, c)
+    return m
+  }, [companies])
+
+  const operatorById = useMemo(() => {
+    const m = new Map<string, Operator>()
+    for (const o of operators) m.set(o.id, o)
+    return m
+  }, [operators])
+
+  const activeOperatorIds = useMemo(() => {
+    return operators
+      .filter(o => showInactive || o.is_active)
+      .map(o => o.id)
+  }, [operators, showInactive])
+
+  const selectedCompanyIds = useMemo(() => {
+    if (!companies.length) return []
+    return companies
+      .filter((c) => allowedCodes.has((c.code || '').toLowerCase()))
+      .map((c) => c.id)
+  }, [companies, allowedCodes])
+
+  const noCompaniesSelected = useMemo(() => selectedCompanyIds.length === 0, [selectedCompanyIds])
+
+  // Load range data
+  useEffect(() => {
+    const loadRange = async () => {
+      if (staticLoading) return
 
       const myId = ++reqIdRef.current
       setLoading(true)
       setError(null)
 
-      const prevStart = addDaysISO(startDate, -7)
-      const rangeFrom = prevStart
-      const rangeTo = endDate
+      const wsFrom = mondayISOOf(dateFrom)
+      const wsTo = mondayISOOf(dateTo)
 
-      try {
-        const incomeQ = supabase
-          .from('incomes')
-          .select('date,company_id,cash_amount,kaspi_amount,online_amount,card_amount') // ✅ добавлен online_amount
-          .gte('date', rangeFrom)
-          .lte('date', rangeTo)
+      const shouldFetchIncomes = selectedCompanyIds.length > 0 && activeOperatorIds.length > 0
 
-        const expenseQ = supabase
-          .from('expenses')
-          .select('date,company_id,category,cash_amount,kaspi_amount')
-          .gte('date', rangeFrom)
-          .lte('date', rangeTo)
+      const incomesQ = shouldFetchIncomes
+        ? supabase
+            .from('incomes')
+            .select('id,date,company_id,shift,cash_amount,kaspi_amount,online_amount,card_amount,operator_id,is_virtual')
+            .gte('date', dateFrom)
+            .lte('date', dateTo)
+            .in('company_id', selectedCompanyIds)
+            .in('operator_id', activeOperatorIds)
+        : null
 
-        const [{ data: inc, error: incErr }, { data: exp, error: expErr }] = await Promise.all([
-          incomeQ,
-          expenseQ,
-        ])
+      const adjQ = activeOperatorIds.length > 0
+        ? supabase
+            .from('operator_salary_adjustments')
+            .select('id,operator_id,date,amount,kind,comment')
+            .gte('date', dateFrom)
+            .lte('date', dateTo)
+            .in('operator_id', activeOperatorIds)
+        : supabase
+            .from('operator_salary_adjustments')
+            .select('id,operator_id,date,amount,kind,comment')
+            .gte('date', dateFrom)
+            .lte('date', dateTo)
 
-        if (myId !== reqIdRef.current) return
+      const debtsQ = activeOperatorIds.length > 0
+        ? supabase
+            .from('debts')
+            .select('id,operator_id,amount,week_start,status')
+            .gte('week_start', wsFrom)
+            .lte('week_start', wsTo)
+            .eq('status', 'active')
+            .in('operator_id', activeOperatorIds)
+        : supabase
+            .from('debts')
+            .select('id,operator_id,amount,week_start,status')
+            .gte('week_start', wsFrom)
+            .lte('week_start', wsTo)
+            .eq('status', 'active')
 
-        if (incErr || expErr) {
-          console.error({ incErr, expErr })
-          setError('Не удалось загрузить данные')
-          setLoading(false)
-          return
-        }
+      const [incRes, adjRes, debtsRes] = await Promise.all([
+        incomesQ ? incomesQ : Promise.resolve({ data: [], error: null }),
+        adjQ,
+        debtsQ,
+      ])
 
-        setIncomeRows((inc || []) as IncomeRow[])
-        setExpenseRows((exp || []) as ExpenseRow[])
-      } catch (err) {
-        if (myId === reqIdRef.current) {
-          setError('Ошибка загрузки данных')
-          console.error(err)
-        }
-      } finally {
-        if (myId === reqIdRef.current) {
-          setLoading(false)
-          setRefreshing(false)
-        }
+      if (myId !== reqIdRef.current) return
+
+      if (incRes.error || adjRes.error || debtsRes.error) {
+        console.error('Range load error', {
+          incErr: incRes.error,
+          adjErr: adjRes.error,
+          debtsErr: debtsRes.error,
+        })
+        setError('Ошибка загрузки данных периода')
       }
+
+      setIncomes((incRes.data || []) as IncomeRow[])
+      setAdjustments((adjRes.data || []) as AdjustmentRow[])
+      setDebts((debtsRes.data || []) as DebtRow[])
+      setLoading(false)
+      setRefreshing(false)
     }
 
-    load()
-  }, [companiesLoaded, startDate, endDate])
+    loadRange()
+  }, [dateFrom, dateTo, selectedCompanyIds.join('|'), activeOperatorIds.join('|'), staticLoading])
 
-  // =====================
-  // PROCESS DATA (ИСПРАВЛЕНО - учтен online_amount)
-  // =====================
-  const extraCompanyId = useMemo(() => {
-    const c = companies.find(
-      (x) => (x.code || '').toLowerCase() === 'extra' || x.name === 'F16 Extra',
-    )
-    return c?.id ?? null
-  }, [companies])
+  // Process analytics with focus on balances
+  const analytics = useMemo(() => {
+    const byOperator = new Map<string, OperatorAnalyticsRow>()
+    const daysByOperator = new Map<string, Set<string>>()
+    const shiftsByOperator = new Map<string, Set<string>>()
+    const dailyByOperator = new Map<string, Map<string, { cash: number; nonCash: number; total: number }>>()
+    const balanceHistoryByOperator = new Map<string, Map<string, { cashBalance: number; nonCashBalance: number }>>()
 
-  const activeCompanies = useMemo(
-    () => companies.filter((c) => (c.code || '').toLowerCase() !== 'extra'),
-    [companies],
-  )
+    // Глобальные счётчики
+    let totalCashIncome = 0
+    let totalNonCashIncome = 0
+    let totalDebts = 0
+    let totalAdvances = 0
+    let totalBonuses = 0
 
-  const totals = useMemo<WeekTotals | null>(() => {
-    if (!companies.length) return null
+    const ensureOp = (id: string | null): OperatorAnalyticsRow | null => {
+      if (!id) return null
+      const meta = operatorById.get(id)
+      if (!meta) return null
+      if (!showInactive && !meta.is_active) return null
 
-    const prevStart = addDaysISO(startDate, -7)
-    const prevEnd = addDaysISO(endDate, -7)
-
-    // Income counters
-    let iCash = 0
-    let iKaspi = 0
-    let iOnline = 0      // ✅ новый счётчик
-    let iCard = 0
-    let iNonCash = 0
-
-    // Expense counters
-    let eCash = 0
-    let eKaspi = 0
-
-    let extraTotal = 0
-
-    let pIncome = 0
-    let pExpense = 0
-
-    // Stats by company (расширено)
-    const statsByCompany: Record<string, { 
-      cash: number; 
-      kaspi: number; 
-      online: number; 
-      card: number; 
-      nonCash: number;
-      total: number;
-    }> = {}
-    
-    for (const c of activeCompanies) {
-      statsByCompany[c.id] = { 
-        cash: 0, 
-        kaspi: 0, 
-        online: 0, 
-        card: 0, 
-        nonCash: 0,
-        total: 0 
+      let op = byOperator.get(id)
+      if (!op) {
+        const name = meta.short_name || meta.name || 'Без имени'
+        op = {
+          operatorId: id,
+          operatorName: meta.name,
+          operatorShortName: meta.short_name,
+          shifts: 0,
+          days: 0,
+          totalTurnover: 0,
+          cashIncome: 0,
+          kaspiIncome: 0,
+          onlineIncome: 0,
+          cardIncome: 0,
+          nonCashIncome: 0,
+          autoDebts: 0,
+          manualMinus: 0,
+          totalDebts: 0,
+          manualPlus: 0,
+          advances: 0,
+          netCash: 0,
+          netNonCash: 0,
+          netEffect: 0,
+          avgPerShift: 0,
+          share: 0,
+          dailyData: [],
+          paymentBreakdown: [],
+          balanceHistory: [],
+        }
+        byOperator.set(id, op)
+        daysByOperator.set(id, new Set())
+        shiftsByOperator.set(id, new Set())
+        dailyByOperator.set(id, new Map())
+        balanceHistoryByOperator.set(id, new Map())
       }
+      return op
     }
 
-    const catMap = new Map<string, number>()
-    const dailyMap = new Map<string, DailyDataPoint>()
+    // Process incomes
+    for (const row of incomes) {
+      if (!row.operator_id) continue
 
-    // Initialize daily data for all days of the week
-    for (let i = 0; i < 7; i++) {
-      const date = addDaysISO(startDate, i)
-      const dayIndex = fromISO(date).getDay()
-      const label = DAY_LABELS[dayIndex === 0 ? 6 : dayIndex - 1]
-      
-      dailyMap.set(date, {
-        day: date,
-        label,
-        income: 0,
-        expense: 0,
-        profit: 0,
-        incomeCash: 0,
-        incomeKaspi: 0,
-        incomeOnline: 0,    // ✅ добавили
-        incomeCard: 0,
-        expenseCash: 0,
-        expenseKaspi: 0,
-      })
-    }
+      const company = companyById.get(row.company_id)
+      const code = (company?.code || '').toLowerCase()
+      if (!code || !allowedCodes.has(code)) continue
 
-    const isExtra = (companyId: string) => !!extraCompanyId && companyId === extraCompanyId
-    const inCurrentWeek = (iso: string) => iso >= startDate && iso <= endDate
-    const inPrevWeek = (iso: string) => iso >= prevStart && iso <= prevEnd
+      const op = ensureOp(row.operator_id)
+      if (!op) continue
 
-    // Process incomes (ГЛАВНОЕ ИСПРАВЛЕНИЕ)
-    for (const r of incomeRows) {
-      const cash = safeNumber(r.cash_amount)
-      const kaspi = safeNumber(r.kaspi_amount)
-      const online = safeNumber(r.online_amount)  // ✅ теперь учитываем
-      const card = safeNumber(r.card_amount)
-      
-      const nonCash = kaspi + online + card  // ✅ все безналичные вместе
+      const cash = safeNumber(row.cash_amount)
+      const kaspi = safeNumber(row.kaspi_amount)
+      const online = safeNumber(row.online_amount)
+      const card = safeNumber(row.card_amount)
+      const nonCash = kaspi + online + card
       const total = cash + nonCash
 
-      if (total <= 0) continue
+      if (!Number.isFinite(total) || total <= 0) continue
 
-      const extra = isExtra(r.company_id)
+      // Доходы
+      op.totalTurnover += total
+      op.cashIncome += cash
+      op.kaspiIncome += kaspi
+      op.onlineIncome += online
+      op.cardIncome += card
+      op.nonCashIncome += nonCash
 
-      // Previous week
-      if (inPrevWeek(r.date)) {
-        if (!extra || includeExtraInTotals) pIncome += total
-        continue
-      }
+      // Глобальные счётчики
+      totalCashIncome += cash
+      totalNonCashIncome += nonCash
 
-      // Current week
-      if (!inCurrentWeek(r.date)) continue
+      daysByOperator.get(row.operator_id)!.add(row.date)
 
-      if (extra) {
-        extraTotal += total
-        if (!includeExtraInTotals) continue
-      }
+      const shiftKey = `${row.date}|${row.shift || 'na'}|${row.company_id}|${row.operator_id}`
+      shiftsByOperator.get(row.operator_id)!.add(shiftKey)
 
-      // Add to totals
-      iCash += cash
-      iKaspi += kaspi
-      iOnline += online    // ✅ добавляем online
-      iCard += card
-      iNonCash += nonCash
+      // Daily data
+      const dailyMap = dailyByOperator.get(row.operator_id)!
+      const existing = dailyMap.get(row.date) || { cash: 0, nonCash: 0, total: 0 }
+      dailyMap.set(row.date, {
+        cash: existing.cash + cash,
+        nonCash: existing.nonCash + nonCash,
+        total: existing.total + total,
+      })
+    }
 
-      // Add to company stats
-      const s = statsByCompany[r.company_id]
-      if (s) {
-        s.cash += cash
-        s.kaspi += kaspi
-        s.online += online
-        s.card += card
-        s.nonCash += nonCash
-        s.total += total
-      }
+    // Process debts
+    for (const d of debts) {
+      const op = ensureOp(d.operator_id)
+      if (!op) continue
+      const amount = safeNumber(d.amount)
+      if (amount <= 0) continue
+      op.autoDebts += amount
+      op.totalDebts += amount
+      totalDebts += amount
+    }
 
-      // Add to daily data
-      const day = dailyMap.get(r.date)
-      if (day) {
-        day.income += total
-        day.incomeCash += cash
-        day.incomeKaspi += kaspi
-        day.incomeOnline += online  // ✅ добавляем online
-        day.incomeCard += card
+    // Process adjustments
+    for (const adj of adjustments) {
+      const op = ensureOp(adj.operator_id)
+      if (!op) continue
+
+      const amount = safeNumber(adj.amount)
+      if (amount <= 0) continue
+
+      if (adj.kind === 'bonus') {
+        op.manualPlus += amount
+        totalBonuses += amount
+      } else if (adj.kind === 'advance') {
+        op.advances += amount
+        totalAdvances += amount
+      } else {
+        op.manualMinus += amount
+        op.totalDebts += amount
+        totalDebts += amount
       }
     }
 
-    // Process expenses
-    for (const r of expenseRows) {
-      const cash = safeNumber(r.cash_amount)
-      const kaspi = safeNumber(r.kaspi_amount)
-      const total = cash + kaspi
+    // Finalize operators
+    for (const op of byOperator.values()) {
+      op.days = daysByOperator.get(op.operatorId)?.size || 0
+      op.shifts = shiftsByOperator.get(op.operatorId)?.size || 0
+      op.avgPerShift = op.shifts > 0 ? op.totalTurnover / op.shifts : 0
+      op.share = totalCashIncome + totalNonCashIncome > 0 
+        ? op.totalTurnover / (totalCashIncome + totalNonCashIncome) 
+        : 0
 
-      if (total <= 0) continue
+      // Расчёт сальдо (здесь нужно уточнить логику - какие расходы из каких источников)
+      // По умолчанию считаем, что все долги/штрафы из наличных, а авансы из безнала
+      op.netCash = op.cashIncome - op.totalDebts
+      op.netNonCash = op.nonCashIncome - op.advances
+      op.netEffect = op.netCash + op.netNonCash + op.manualPlus
 
-      const extra = isExtra(r.company_id)
+      // Daily data for charts
+      const dailyMap = dailyByOperator.get(op.operatorId) || new Map()
+      op.dailyData = Array.from(dailyMap.entries())
+        .map(([date, values]) => ({ 
+          date, 
+          cash: values.cash, 
+          nonCash: values.nonCash, 
+          total: values.total 
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date))
 
-      if (inPrevWeek(r.date)) {
-        if (!extra || includeExtraInTotals) pExpense += total
-        continue
+      // Payment breakdown
+      op.paymentBreakdown = [
+        { name: 'Наличные', value: op.cashIncome, color: PAYMENT_COLORS.cash },
+        { name: 'Kaspi', value: op.kaspiIncome, color: PAYMENT_COLORS.kaspi },
+        { name: 'Online', value: op.onlineIncome, color: PAYMENT_COLORS.online },
+        { name: 'Карта', value: op.cardIncome, color: PAYMENT_COLORS.card },
+      ].filter(item => item.value > 0)
+
+      // Balance history (cumulative)
+      let runningCashBalance = 0
+      let runningNonCashBalance = 0
+      const balanceMap = new Map<string, { cashBalance: number; nonCashBalance: number }>()
+      
+      // Сортируем все дни с доходами
+      const allDays = new Set<string>()
+      for (const inc of incomes.filter(i => i.operator_id === op.operatorId)) {
+        allDays.add(inc.date)
       }
-
-      if (!inCurrentWeek(r.date)) continue
-
-      if (extra && !includeExtraInTotals) continue
-
-      eCash += cash
-      eKaspi += kaspi
-
-      const catName = (r.category || '').trim() || 'Без категории'
-      catMap.set(catName, (catMap.get(catName) || 0) + total)
-
-      const day = dailyMap.get(r.date)
-      if (day) {
-        day.expense += total
-        day.expenseCash += cash
-        day.expenseKaspi += kaspi
+      
+      const sortedDays = Array.from(allDays).sort()
+      
+      for (const day of sortedDays) {
+        const dayIncome = op.dailyData.find(d => d.date === day)
+        if (dayIncome) {
+          runningCashBalance += dayIncome.cash
+          runningNonCashBalance += dayIncome.nonCash
+        }
+        // Здесь нужно вычитать долги/авансы по дням, если есть датированные данные
+        balanceMap.set(day, {
+          cashBalance: runningCashBalance,
+          nonCashBalance: runningNonCashBalance,
+        })
       }
+      
+      op.balanceHistory = Array.from(balanceMap.entries())
+        .map(([date, values]) => ({ date, ...values }))
+        .sort((a, b) => a.date.localeCompare(b.date))
     }
 
-    const incomeTotal = iCash + iNonCash
-    const expenseTotal = eCash + eKaspi
-    const profit = incomeTotal - expenseTotal
-
-    const pProfit = pIncome - pExpense
-
-    // Calculate daily profit
-    for (const day of dailyMap.values()) {
-      day.profit = day.income - day.expense
+    // Глобальные сальдо
+    const globalBalances: GlobalBalances = {
+      totalCashIncome,
+      totalNonCashIncome,
+      totalDebts,
+      totalAdvances,
+      totalBonuses,
+      netCashBalance: totalCashIncome - totalDebts,
+      netNonCashBalance: totalNonCashIncome - totalAdvances,
+      netTotalBalance: (totalCashIncome + totalNonCashIncome) - (totalDebts + totalAdvances) + totalBonuses,
+      // Прогноз на конец периода (простая экстраполяция)
+      projectedCashBalance: (totalCashIncome - totalDebts) * 1.1,
+      projectedNonCashBalance: (totalNonCashIncome - totalAdvances) * 1.1,
+      projectedTotalBalance: ((totalCashIncome + totalNonCashIncome) - (totalDebts + totalAdvances) + totalBonuses) * 1.1,
     }
 
-    const dailyData = Array.from(dailyMap.values()).sort((a, b) => a.day.localeCompare(b.day))
+    // Search
+    const term = search.trim().toLowerCase()
+    const searched = term
+      ? Array.from(byOperator.values()).filter(r => 
+          r.operatorName.toLowerCase().includes(term) ||
+          (r.operatorShortName?.toLowerCase() || '').includes(term)
+        )
+      : Array.from(byOperator.values())
 
-    const expenseCategories = Array.from(catMap.entries())
-      .map(([name, value]) => ({ 
-        name, 
-        value,
-        percentage: expenseTotal > 0 ? (value / expenseTotal) * 100 : 0
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10)
+    // Sort
+    const sorted = [...searched].sort((a, b) => {
+      let aVal: number | string = 0
+      let bVal: number | string = 0
 
-    const topExpense = expenseCategories[0] || null
+      switch (sortKey) {
+        case 'name':
+          aVal = a.operatorName
+          bVal = b.operatorName
+          break
+        case 'netCash':
+          aVal = a.netCash
+          bVal = b.netCash
+          break
+        case 'netNonCash':
+          aVal = a.netNonCash
+          bVal = b.netNonCash
+          break
+        case 'netTotal':
+          aVal = a.netEffect
+          bVal = b.netEffect
+          break
+        case 'turnover':
+          aVal = a.totalTurnover
+          bVal = b.totalTurnover
+          break
+        case 'avg':
+          aVal = a.avgPerShift
+          bVal = b.avgPerShift
+          break
+        case 'shifts':
+          aVal = a.shifts
+          bVal = b.shifts
+          break
+      }
 
-    // Metrics (расширенные)
-    const expenseRate = incomeTotal > 0 ? (expenseTotal / incomeTotal) * 100 : 0
-    const cashShare = incomeTotal > 0 ? (iCash / incomeTotal) * 100 : 0
-    const kaspiShare = incomeTotal > 0 ? (iKaspi / incomeTotal) * 100 : 0
-    const onlineShare = incomeTotal > 0 ? (iOnline / incomeTotal) * 100 : 0
-    const cardShare = incomeTotal > 0 ? (iCard / incomeTotal) * 100 : 0
-    const nonCashShare = incomeTotal > 0 ? (iNonCash / incomeTotal) * 100 : 0
-    const profitMargin = incomeTotal > 0 ? (profit / incomeTotal) * 100 : 0
+      if (typeof aVal === 'string') {
+        return sortDirection === 'asc'
+          ? aVal.localeCompare(String(bVal))
+          : String(bVal).localeCompare(aVal)
+      }
+      return sortDirection === 'asc'
+        ? (aVal as number) - (bVal as number)
+        : (bVal as number) - (aVal as number)
+    })
 
-    const netCash = iCash - eCash
-    const netKaspi = iKaspi - eKaspi
-    const netOnline = iOnline  // расходов online нет
-    const netCard = iCard      // расходов card нет
-    const netNonCash = iNonCash - eKaspi
-
-    const topExpenseShare = expenseTotal > 0 && topExpense ? (topExpense.value / expenseTotal) * 100 : 0
+    // Totals for filtered rows
+    const totalsFiltered = sorted.reduce(
+      (acc, r) => {
+        acc.turnover += r.totalTurnover
+        acc.cashIncome += r.cashIncome
+        acc.nonCashIncome += r.nonCashIncome
+        acc.debts += r.totalDebts
+        acc.advances += r.advances
+        acc.bonuses += r.manualPlus
+        acc.netCash += r.netCash
+        acc.netNonCash += r.netNonCash
+        acc.netTotal += r.netEffect
+        acc.shifts += r.shifts
+        acc.days += r.days
+        return acc
+      },
+      {
+        turnover: 0,
+        cashIncome: 0,
+        nonCashIncome: 0,
+        debts: 0,
+        advances: 0,
+        bonuses: 0,
+        netCash: 0,
+        netNonCash: 0,
+        netTotal: 0,
+        shifts: 0,
+        days: 0,
+      },
+    )
 
     return {
-      incomeCash: iCash,
-      incomeKaspi: iKaspi,
-      incomeOnline: iOnline,
-      incomeCard: iCard,
-      incomeNonCash: iNonCash,
-      incomeTotal,
-
-      expenseCash: eCash,
-      expenseKaspi: eKaspi,
-      expenseTotal,
-
-      profit,
-
-      extraTotal,
-      statsByCompany,
-      expenseCategories,
-
-      prev: {
-        incomeTotal: pIncome,
-        expenseTotal: pExpense,
-        profit: pProfit,
-      },
-
-      change: {
-        income: pctChange(incomeTotal, pIncome),
-        expense: pctChange(expenseTotal, pExpense),
-        profit: pctChange(profit, pProfit),
-      },
-
-      metrics: {
-        expenseRate,
-        cashShare,
-        kaspiShare,
-        onlineShare,
-        cardShare,
-        nonCashShare,
-        netCash,
-        netKaspi,
-        netOnline,
-        netCard,
-        netNonCash,
-        topExpenseName: topExpense?.name ?? null,
-        topExpenseShare,
-        profitMargin,
-      },
-
-      dailyData,
+      rows: sorted,
+      globalBalances,
+      totalsFiltered,
     }
   }, [
-    companies.length,
-    activeCompanies,
-    extraCompanyId,
-    includeExtraInTotals,
-    startDate,
-    endDate,
-    incomeRows,
-    expenseRows,
+    companyById,
+    operatorById,
+    incomes,
+    debts,
+    adjustments,
+    allowedCodes,
+    search,
+    sortKey,
+    sortDirection,
+    showInactive,
   ])
 
-  // =====================
-  // AI INSIGHTS (обновлены)
-  // =====================
+  // AI Insights focused on balances
   const aiInsights = useMemo((): AIInsight[] => {
-    if (!totals) return []
-
     const insights: AIInsight[] = []
+    
+    if (analytics.rows.length === 0) return insights
 
-    // Маржинальность
-    if (totals.metrics.profitMargin < 10) {
-      insights.push({ 
-        type: 'danger', 
-        title: 'Критически низкая маржинальность', 
-        description: `Маржа ${totals.metrics.profitMargin.toFixed(1)}% требует немедленного внимания. Проверьте операционные расходы.`,
-        metric: `${totals.metrics.profitMargin.toFixed(1)}%`,
+    const { globalBalances, rows } = analytics
+
+    // Общее сальдо
+    if (globalBalances.netTotalBalance < 0) {
+      insights.push({
+        type: 'danger',
+        title: 'Отрицательное общее сальдо',
+        description: `Общий баланс отрицательный: ${formatMoneyCompact(globalBalances.netTotalBalance)}. Требуется анализ расходов.`,
+        metric: formatMoneyCompact(globalBalances.netTotalBalance),
         trend: 'down'
       })
-    } else if (totals.metrics.profitMargin < 20) {
-      insights.push({ 
-        type: 'warning', 
-        title: 'Низкая маржинальность', 
-        description: `Маржа ${totals.metrics.profitMargin.toFixed(1)}% ниже рекомендуемой нормы (25-35%).`,
-        metric: `${totals.metrics.profitMargin.toFixed(1)}%`,
-        trend: 'down'
-      })
-    } else if (totals.metrics.profitMargin > 40) {
-      insights.push({ 
-        type: 'success', 
-        title: 'Отличная маржа', 
-        description: `Маржа ${totals.metrics.profitMargin.toFixed(1)}% — значительно выше среднерыночной.`,
-        metric: `${totals.metrics.profitMargin.toFixed(1)}%`,
+    } else if (globalBalances.netTotalBalance > 0) {
+      insights.push({
+        type: 'success',
+        title: 'Положительное сальдо',
+        description: `Общий баланс положительный: ${formatMoneyCompact(globalBalances.netTotalBalance)}. Хороший результат.`,
+        metric: formatMoneyCompact(globalBalances.netTotalBalance),
         trend: 'up'
       })
     }
 
-    // Расходы
-    if (totals.metrics.expenseRate > 80) {
+    // Баланс наличных
+    if (globalBalances.netCashBalance < 0) {
       insights.push({
         type: 'warning',
-        title: 'Высокая доля расходов',
-        description: `Расходы составляют ${totals.metrics.expenseRate.toFixed(1)}% от выручки. Оптимизируйте затраты.`,
-        metric: `${totals.metrics.expenseRate.toFixed(1)}%`,
-        trend: 'down'
+        title: 'Отрицательное сальдо наличных',
+        description: `Долги превышают наличные поступления на ${formatMoneyCompact(Math.abs(globalBalances.netCashBalance))}`,
+        metric: formatMoneyCompact(globalBalances.netCashBalance),
       })
     }
 
-    // Анализ типов платежей
-    if (totals.metrics.cashShare > 70) {
+    // Баланс безнала
+    if (globalBalances.netNonCashBalance < 0) {
+      insights.push({
+        type: 'warning',
+        title: 'Отрицательное сальдо безнала',
+        description: `Авансы превышают безналичные поступления на ${formatMoneyCompact(Math.abs(globalBalances.netNonCashBalance))}`,
+        metric: formatMoneyCompact(globalBalances.netNonCashBalance),
+      })
+    }
+
+    // Лучший по сальдо
+    const bestByNet = [...rows].sort((a, b) => b.netEffect - a.netEffect)[0]
+    if (bestByNet && bestByNet.netEffect > 0) {
+      insights.push({
+        type: 'success',
+        title: 'Лучший по сальдо',
+        description: `${bestByNet.operatorName} — чистый остаток ${formatMoneyCompact(bestByNet.netEffect)}`,
+        metric: formatMoneyCompact(bestByNet.netEffect),
+        operatorId: bestByNet.operatorId,
+      })
+    }
+
+    // Худший по сальдо
+    const worstByNet = [...rows].sort((a, b) => a.netEffect - b.netEffect)[0]
+    if (worstByNet && worstByNet.netEffect < 0) {
+      insights.push({
+        type: 'danger',
+        title: 'Критическое сальдо',
+        description: `${worstByNet.operatorName} должен ${formatMoneyCompact(Math.abs(worstByNet.netEffect))}`,
+        metric: formatMoneyCompact(worstByNet.netEffect),
+        operatorId: worstByNet.operatorId,
+      })
+    }
+
+    // Прогноз
+    if (globalBalances.projectedTotalBalance > globalBalances.netTotalBalance * 1.5) {
       insights.push({
         type: 'opportunity',
-        title: 'Преобладание наличных',
-        description: 'Высокая доля наличных платежей. Рассмотрите стимулирование безналичных расчётов.',
-        metric: `${totals.metrics.cashShare.toFixed(1)}% нал`,
-        trend: 'neutral'
-      })
-    }
-
-    if (totals.metrics.onlineShare > 30) {
-      insights.push({
-        type: 'info',
-        title: 'Активные онлайн-платежи',
-        description: `${totals.metrics.onlineShare.toFixed(1)}% выручки через онлайн-платежи. Хороший канал продаж.`,
-        metric: `${totals.metrics.onlineShare.toFixed(1)}%`,
+        title: 'Оптимистичный прогноз',
+        description: `При сохранении темпов сальдо вырастет до ${formatMoneyCompact(globalBalances.projectedTotalBalance)}`,
+        metric: formatMoneyCompact(globalBalances.projectedTotalBalance),
         trend: 'up'
       })
-    }
-
-    // Концентрация расходов
-    const topExpense = totals.expenseCategories[0]
-    if (topExpense && totals.expenseTotal > 0) {
-      const share = (topExpense.value / totals.expenseTotal) * 100
-      if (share > 40) {
-        insights.push({ 
-          type: 'warning', 
-          title: 'Критическая концентрация расходов', 
-          description: `"${topExpense.name}" составляет ${share.toFixed(0)}% всех расходов.`,
-          metric: `${share.toFixed(0)}%`,
-          trend: 'down'
-        })
-      }
-    }
-
-    // Сравнение с прошлой неделей
-    if (comparisonMode && totals.prev.incomeTotal > 0) {
-      const incomeChange = ((totals.incomeTotal - totals.prev.incomeTotal) / totals.prev.incomeTotal) * 100
-      if (Math.abs(incomeChange) > 20) {
-        insights.push({
-          type: incomeChange > 0 ? 'success' : 'warning',
-          title: incomeChange > 0 ? 'Рост выручки' : 'Падение выручки',
-          description: `${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(1)}% к прошлой неделе`,
-          metric: `${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(1)}%`,
-          trend: incomeChange > 0 ? 'up' : 'down'
-        })
-      }
     }
 
     return insights.slice(0, 5)
-  }, [totals, comparisonMode])
+  }, [analytics])
 
-  // =====================
-  // HANDLERS
-  // =====================
-  const handleShare = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href)
-      showToast('Ссылка скопирована в буфер обмена', 'success')
-    } catch {
-      showToast('Не удалось скопировать ссылку', 'error')
+  // Handlers
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDirection('desc')
     }
-  }, [showToast])
+  }
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true)
-    const load = async () => {
-      if (!companiesLoaded) return
+    const myId = ++reqIdRef.current
 
-      const myId = ++reqIdRef.current
+    const wsFrom = mondayISOOf(dateFrom)
+    const wsTo = mondayISOOf(dateTo)
 
-      const prevStart = addDaysISO(startDate, -7)
-      const rangeFrom = prevStart
-      const rangeTo = endDate
+    const shouldFetchIncomes = selectedCompanyIds.length > 0 && activeOperatorIds.length > 0
 
-      try {
-        const incomeQ = supabase
+    const incomesQ = shouldFetchIncomes
+      ? supabase
           .from('incomes')
-          .select('date,company_id,cash_amount,kaspi_amount,online_amount,card_amount')
-          .gte('date', rangeFrom)
-          .lte('date', rangeTo)
+          .select('id,date,company_id,shift,cash_amount,kaspi_amount,online_amount,card_amount,operator_id,is_virtual')
+          .gte('date', dateFrom)
+          .lte('date', dateTo)
+          .in('company_id', selectedCompanyIds)
+          .in('operator_id', activeOperatorIds)
+      : null
 
-        const expenseQ = supabase
-          .from('expenses')
-          .select('date,company_id,category,cash_amount,kaspi_amount')
-          .gte('date', rangeFrom)
-          .lte('date', rangeTo)
+    const adjQ = activeOperatorIds.length > 0
+      ? supabase
+          .from('operator_salary_adjustments')
+          .select('id,operator_id,date,amount,kind,comment')
+          .gte('date', dateFrom)
+          .lte('date', dateTo)
+          .in('operator_id', activeOperatorIds)
+      : supabase
+          .from('operator_salary_adjustments')
+          .select('id,operator_id,date,amount,kind,comment')
+          .gte('date', dateFrom)
+          .lte('date', dateTo)
 
-        const [{ data: inc }, { data: exp }] = await Promise.all([
-          incomeQ,
-          expenseQ,
-        ])
+    const debtsQ = activeOperatorIds.length > 0
+      ? supabase
+          .from('debts')
+          .select('id,operator_id,amount,week_start,status')
+          .gte('week_start', wsFrom)
+          .lte('week_start', wsTo)
+          .eq('status', 'active')
+          .in('operator_id', activeOperatorIds)
+      : supabase
+          .from('debts')
+          .select('id,operator_id,amount,week_start,status')
+          .gte('week_start', wsFrom)
+          .lte('week_start', wsTo)
+          .eq('status', 'active')
 
-        if (myId === reqIdRef.current) {
-          setIncomeRows((inc || []) as IncomeRow[])
-          setExpenseRows((exp || []) as ExpenseRow[])
-          setRefreshing(false)
-          showToast('Данные обновлены', 'success')
-        }
-      } catch (err) {
-        if (myId === reqIdRef.current) {
-          setRefreshing(false)
-          showToast('Ошибка обновления', 'error')
-        }
-      }
+    const [incRes, adjRes, debtsRes] = await Promise.all([
+      incomesQ ? incomesQ : Promise.resolve({ data: [], error: null }),
+      adjQ,
+      debtsQ,
+    ])
+
+    if (myId === reqIdRef.current) {
+      setIncomes((incRes.data || []) as IncomeRow[])
+      setAdjustments((adjRes.data || []) as AdjustmentRow[])
+      setDebts((debtsRes.data || []) as DebtRow[])
+      setRefreshing(false)
+      showToast('Данные обновлены', 'success')
     }
-
-    load()
-  }, [companiesLoaded, startDate, endDate, showToast])
+  }, [dateFrom, dateTo, selectedCompanyIds, activeOperatorIds, showToast])
 
   const handleDownloadCSV = useCallback(() => {
-    if (!totals) return
-
     const rows: string[][] = []
 
-    rows.push(['НЕДЕЛЬНЫЙ ФИНАНСОВЫЙ ОТЧЁТ'])
+    rows.push(['АНАЛИТИКА ОПЕРАТОРОВ - САЛЬДО'])
     rows.push(['Сгенерирован', new Date().toLocaleString('ru-RU')])
-    rows.push(['Период', `${startDate} — ${endDate}`])
+    rows.push(['Период', `${dateFrom} — ${dateTo}`])
     rows.push([''])
 
-    rows.push(['СВОДНЫЕ ПОКАЗАТЕЛИ'])
-    rows.push(['Показатель', 'Текущая неделя', 'Прошлая неделя', 'Изменение'])
-    rows.push(['Выручка', String(Math.round(totals.incomeTotal)), String(Math.round(totals.prev.incomeTotal)), totals.change.income])
-    rows.push(['Расходы', String(Math.round(totals.expenseTotal)), String(Math.round(totals.prev.expenseTotal)), totals.change.expense])
-    rows.push(['Прибыль', String(Math.round(totals.profit)), String(Math.round(totals.prev.profit)), totals.change.profit])
-    rows.push(['Наличные (доход)', String(Math.round(totals.incomeCash)), '', ''])
-    rows.push(['Kaspi (доход)', String(Math.round(totals.incomeKaspi)), '', ''])
-    rows.push(['Online (доход)', String(Math.round(totals.incomeOnline)), '', ''])
-    rows.push(['Карта (доход)', String(Math.round(totals.incomeCard)), '', ''])
-    rows.push(['Безналичные (доход)', String(Math.round(totals.incomeNonCash)), '', ''])
+    rows.push(['ГЛОБАЛЬНОЕ САЛЬДО'])
+    rows.push(['Показатель', 'Значение'])
+    rows.push(['Наличные доход', String(Math.round(analytics.globalBalances.totalCashIncome))])
+    rows.push(['Безналичные доход', String(Math.round(analytics.globalBalances.totalNonCashIncome))])
+    rows.push(['Всего доход', String(Math.round(analytics.globalBalances.totalCashIncome + analytics.globalBalances.totalNonCashIncome))])
+    rows.push(['Долги и штрафы', String(Math.round(analytics.globalBalances.totalDebts))])
+    rows.push(['Авансы', String(Math.round(analytics.globalBalances.totalAdvances))])
+    rows.push(['Премии', String(Math.round(analytics.globalBalances.totalBonuses))])
+    rows.push(['САЛЬДО НАЛИЧНЫХ', String(Math.round(analytics.globalBalances.netCashBalance))])
+    rows.push(['САЛЬДО БЕЗНАЛА', String(Math.round(analytics.globalBalances.netNonCashBalance))])
+    rows.push(['ОБЩЕЕ САЛЬДО', String(Math.round(analytics.globalBalances.netTotalBalance))])
     rows.push([''])
 
-    rows.push(['РАСХОДЫ ПО КАТЕГОРИЯМ'])
-    rows.push(['Категория', 'Сумма', '% от общих'])
-    for (const cat of totals.expenseCategories) {
-      rows.push([cat.name, String(Math.round(cat.value)), cat.percentage.toFixed(1)])
-    }
-    rows.push([''])
+    rows.push(['ДЕТАЛЬНАЯ ТАБЛИЦА'])
+    rows.push([
+      'Оператор', 'Смен', 'Дней', 'Выручка',
+      'Нал доход', 'Безнал доход',
+      'Долги', 'Авансы', 'Премии',
+      'САЛЬДО НАЛ', 'САЛЬДО БЕЗНАЛ', 'САЛЬДО ОБЩЕЕ'
+    ])
 
-    rows.push(['ДОХОДЫ ПО ТОЧКАМ'])
-    rows.push(['Точка', 'Наличные', 'Kaspi', 'Online', 'Карта', 'Всего', 'Доля'])
-    for (const c of activeCompanies) {
-      const s = totals.statsByCompany[c.id] || { cash: 0, kaspi: 0, online: 0, card: 0, total: 0 }
-      const share = totals.incomeTotal > 0 ? (s.total / totals.incomeTotal) * 100 : 0
+    for (const op of analytics.rows) {
       rows.push([
-        c.name, 
-        String(Math.round(s.cash)), 
-        String(Math.round(s.kaspi)), 
-        String(Math.round(s.online)), 
-        String(Math.round(s.card)), 
-        String(Math.round(s.total)), 
-        share.toFixed(1)
+        op.operatorName,
+        String(op.shifts),
+        String(op.days),
+        String(Math.round(op.totalTurnover)),
+        String(Math.round(op.cashIncome)),
+        String(Math.round(op.nonCashIncome)),
+        String(Math.round(op.totalDebts)),
+        String(Math.round(op.advances)),
+        String(Math.round(op.manualPlus)),
+        String(Math.round(op.netCash)),
+        String(Math.round(op.netNonCash)),
+        String(Math.round(op.netEffect)),
       ])
     }
 
-    downloadTextFile(`weekly_report_${startDate}_${endDate}.csv`, toCSV(rows, ';'))
-    showToast('CSV отчёт скачан', 'success')
-  }, [totals, startDate, endDate, activeCompanies, showToast])
+    const blob = new Blob(['\uFEFF' + rows.map(r => r.join(';')).join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `operators_balance_${dateFrom}_${dateTo}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
 
-  // =====================
-  // LOADING & ERROR
-  // =====================
-  if (loading && companies.length === 0) {
-    return (
-      <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-        <Sidebar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
-              <BarChart3 className="w-8 h-8 text-white" />
-            </div>
-            <p className="text-gray-400">Загрузка недельной аналитики...</p>
-          </div>
-        </main>
-      </div>
-    )
+    showToast('CSV отчёт скачан', 'success')
+  }, [analytics, dateFrom, dateTo, showToast])
+
+  // Loading states
+  if (staticLoading && companies.length === 0) {
+    return <OperatorAnalyticsLoading />
   }
 
   if (error) {
@@ -1266,9 +1458,9 @@ function WeeklyReportContent() {
     )
   }
 
-  // =====================
-  // MAIN RENDER
-  // =====================
+  // Main render
+  const { globalBalances, rows, totalsFiltered } = analytics
+
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100">
       <Sidebar />
@@ -1293,31 +1485,39 @@ function WeeklyReportContent() {
 
             <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div className="flex items-center gap-4">
+                <Link href="/dashboard">
+                  <div className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                    <ArrowLeft className="w-5 h-5 text-gray-400" />
+                  </div>
+                </Link>
                 <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-violet-500/25">
-                  <CalendarDays className="w-8 h-8 text-white" />
+                  <Users2 className="w-8 h-8 text-white" />
                 </div>
                 <div>
                   <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                    Недельный отчёт
+                    Сальдо операторов
                   </h1>
                   <p className="text-gray-400 mt-1 flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
-                    {formatDateRange(startDate, endDate)}
-                    {comparisonMode && <span className="text-violet-400">(сравнение с прошлой неделей)</span>}
+                    {formatDateRange(dateFrom, dateTo)}
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className={`rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 ${comparisonMode ? 'bg-violet-500/20 text-violet-400 border-violet-500/50' : ''}`}
-                  onClick={() => setComparisonMode(!comparisonMode)}
-                  title="Сравнение с прошлой неделей"
-                >
-                  <ArrowUpDown className="w-4 h-4" />
-                </Button>
+                <div className="flex bg-gray-900/50 backdrop-blur-xl rounded-xl p-1 border border-white/10">
+                  {(['thisWeek', 'lastWeek', 'thisMonth'] as DatePreset[]).map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => handlePresetChange(preset)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        datePreset === preset ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {DATE_PRESETS[preset].label}
+                    </button>
+                  ))}
+                </div>
 
                 <Button 
                   variant="outline" 
@@ -1329,85 +1529,22 @@ function WeeklyReportContent() {
                   <RefreshCw className="w-4 h-4" />
                 </Button>
 
-                <div className="relative group">
-                  <Button 
-                    variant="outline" 
-                    className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Экспорт
-                    <ChevronDown className="w-4 h-4 ml-2" />
-                  </Button>
-                  <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                    <button onClick={handleDownloadCSV} className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
-                      <FileSpreadsheet className="w-4 h-4" />
-                      Скачать CSV
-                    </button>
-                  </div>
-                </div>
-
                 <Button 
                   variant="outline" 
                   size="icon" 
                   className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
-                  onClick={handleShare}
-                  title="Поделиться"
+                  onClick={handleDownloadCSV}
+                  title="Скачать CSV"
                 >
-                  <Share2 className="w-4 h-4" />
+                  <Download className="w-4 h-4" />
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Week Navigation */}
-          <Card className="p-4 border-white/5 bg-gray-900/40 backdrop-blur-xl">
-            <div className="flex items-center justify-between">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => shiftWeek(-1)}
-                className="hover:bg-white/10 w-10 h-10 rounded-xl"
-                title="Предыдущая неделя"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-
-              <div className="text-center">
-                <span className="text-lg font-bold text-white block">
-                  {formatRangeTitle(startDate, endDate)}
-                </span>
-                <span className="text-xs text-gray-500 mt-1 block">
-                  {isCurrentWeek ? 'Текущая неделя' : 'Архив'}
-                </span>
-              </div>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => shiftWeek(1)}
-                disabled={!canGoNext}
-                className="hover:bg-white/10 w-10 h-10 rounded-xl disabled:opacity-40"
-                title={!canGoNext ? 'Будущие недели недоступны' : 'Следующая неделя'}
-              >
-                <ChevronRight className="w-5 h-5" />
-              </Button>
-
-              {!isCurrentWeek && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="ml-4 bg-violet-500/20 text-violet-300 hover:bg-violet-500/30 border-0"
-                  onClick={handleCurrentWeek}
-                >
-                  Текущая неделя
-                </Button>
-              )}
-            </div>
-          </Card>
-
           {/* AI Insights */}
           {aiInsights.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
               {aiInsights.map((insight, idx) => (
                 <InsightCard key={idx} insight={insight} index={idx} />
               ))}
@@ -1422,277 +1559,554 @@ function WeeklyReportContent() {
                 <span className="text-sm text-gray-400">Фильтры:</span>
               </div>
 
-              <button 
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800/50 border border-white/10 text-sm hover:bg-gray-700/50 transition-colors"
+              <button
+                onClick={() => setIncludeArena(!includeArena)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                  includeArena
+                    ? 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10'
+                    : 'border-white/10 text-gray-400 hover:bg-white/5'
+                }`}
               >
-                <Filter className="w-4 h-4" />
-                Расширенные
-                <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+                Arena
               </button>
-            </div>
 
-            {showFilters && (
-              <div className="pt-4 border-t border-white/5">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                    type="checkbox"
-                    checked={includeExtraInTotals}
-                    onChange={(e) => setIncludeExtraInTotals(e.target.checked)}
-                    className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
-                  />
-                  <span className="text-sm text-gray-300">Включить F16 Extra в итоги</span>
-                </label>
+              <button
+                onClick={() => setIncludeRamen(!includeRamen)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                  includeRamen
+                    ? 'border-amber-500/50 text-amber-300 bg-amber-500/10'
+                    : 'border-white/10 text-gray-400 hover:bg-white/5'
+                }`}
+              >
+                Ramen
+              </button>
+
+              <button
+                onClick={() => setIncludeExtra(!includeExtra)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                  includeExtra
+                    ? 'border-violet-500/50 text-violet-300 bg-violet-500/10'
+                    : 'border-white/10 text-gray-400 hover:bg-white/5'
+                }`}
+              >
+                Extra
+              </button>
+
+              <div className="h-4 w-px bg-white/10 mx-2" />
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showInactive}
+                  onChange={(e) => setShowInactive(e.target.checked)}
+                  className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
+                />
+                <span className="text-xs text-gray-400">Показывать неактивных</span>
+              </label>
+
+              <button
+                onClick={() => setShowCharts(!showCharts)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-800/50 border border-white/10 text-xs hover:bg-gray-700/50 transition-colors"
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                {showCharts ? 'Скрыть графики' : 'Показать графики'}
+              </button>
+
+              <div className="flex-1" />
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Поиск оператора..."
+                  className="h-8 w-48 pl-8 pr-7 bg-gray-800/50 border border-white/10 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
-          {!loading && totals && (
-            <>
-              {/* Stats Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard 
-                  title="Выручка"
-                  value={formatMoneyFull(totals.incomeTotal)}
-                  subValue={comparisonMode ? `было ${formatMoneyFull(totals.prev.incomeTotal)}` : `${formatMoneyCompact(totals.incomeCash)} нал / ${formatMoneyCompact(totals.incomeNonCash)} безнал`}
-                  icon={DollarSign}
-                  trend={totals.prev.incomeTotal > 0 ? Number(((totals.incomeTotal - totals.prev.incomeTotal) / totals.prev.incomeTotal * 100).toFixed(1)) : undefined}
-                  color="green"
-                />
-                <StatCard 
-                  title="Расходы"
-                  value={formatMoneyFull(totals.expenseTotal)}
-                  subValue={comparisonMode ? `было ${formatMoneyFull(totals.prev.expenseTotal)}` : `${formatMoneyCompact(totals.expenseCash)} нал / ${formatMoneyCompact(totals.expenseKaspi)} Kaspi`}
-                  icon={TrendingDown}
-                  trend={totals.prev.expenseTotal > 0 ? Number(((totals.expenseTotal - totals.prev.expenseTotal) / totals.prev.expenseTotal * 100).toFixed(1)) : undefined}
-                  color="red"
-                />
-                <StatCard 
-                  title="Прибыль"
-                  value={formatMoneyFull(totals.profit)}
-                  subValue={comparisonMode ? `было ${formatMoneyFull(totals.prev.profit)}` : `Маржа ${totals.metrics.profitMargin.toFixed(1)}%`}
-                  icon={Wallet}
-                  trend={totals.prev.profit !== 0 ? Number(((totals.profit - totals.prev.profit) / Math.abs(totals.prev.profit) * 100).toFixed(1)) : undefined}
-                  color={totals.profit >= 0 ? 'blue' : 'red'}
-                />
-                <StatCard 
-                  title="Остаток"
-                  value={formatMoneyFull(totals.metrics.netCash + totals.metrics.netKaspi + totals.metrics.netOnline + totals.metrics.netCard)}
-                  subValue={`Нал: ${formatMoneyCompact(totals.metrics.netCash)} | Безнал: ${formatMoneyCompact(totals.metrics.netNonCash)}`}
-                  icon={Scale}
-                  color="violet"
-                />
-              </div>
+          {/* BALANCE CARDS - ГЛАВНЫЙ ФОКУС */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard
+              title="САЛЬДО НАЛИЧНЫХ"
+              value={formatMoney(globalBalances.netCashBalance, moneyFmt)}
+              subValue={`Доход: ${formatMoneyCompact(globalBalances.totalCashIncome)} | Долги: ${formatMoneyCompact(globalBalances.totalDebts)}`}
+              icon={Coins}
+              color="green"
+              highlight={globalBalances.netCashBalance > 0}
+            />
 
-              {/* Payment Types Breakdown - РАСШИРЕНО */}
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                {[
-                  { label: 'Наличные', value: totals.incomeCash, color: 'text-emerald-400', icon: Wallet },
-                  { label: 'Kaspi', value: totals.incomeKaspi, color: 'text-blue-400', icon: Smartphone },
-                  { label: 'Online', value: totals.incomeOnline, color: 'text-violet-400', icon: Activity },
-                  { label: 'Карта', value: totals.incomeCard, color: 'text-amber-400', icon: CardIcon },
-                  { label: 'Безнал всего', value: totals.incomeNonCash, color: 'text-purple-400', icon: CreditCard },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs text-gray-500">{item.label}</p>
-                      <item.icon className={`w-4 h-4 ${item.color}`} />
+            <StatCard
+              title="САЛЬДО БЕЗНАЛА"
+              value={formatMoney(globalBalances.netNonCashBalance, moneyFmt)}
+              subValue={`Доход: ${formatMoneyCompact(globalBalances.totalNonCashIncome)} | Авансы: ${formatMoneyCompact(globalBalances.totalAdvances)}`}
+              icon={CreditCard}
+              color="blue"
+              highlight={globalBalances.netNonCashBalance > 0}
+            />
+
+            <StatCard
+              title="ОБЩЕЕ САЛЬДО"
+              value={formatMoney(globalBalances.netTotalBalance, moneyFmt)}
+              subValue={`Премии: ${formatMoneyCompact(globalBalances.totalBonuses)}`}
+              icon={Scale}
+              color="violet"
+              highlight={globalBalances.netTotalBalance > 0}
+            />
+
+            <StatCard
+              title="ПРОГНОЗ НА КОНЕЦ ПЕРИОДА"
+              value={formatMoney(globalBalances.projectedTotalBalance, moneyFmt)}
+              subValue={`+10% при сохранении темпов`}
+              icon={Sparkles}
+              color="amber"
+            />
+          </div>
+
+          {/* Income/Expense Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-medium">Доходы</h3>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Наличные</span>
+                  <span className="text-sm font-medium text-emerald-400">{formatMoneyCompact(globalBalances.totalCashIncome)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Kaspi</span>
+                  <span className="text-sm font-medium text-blue-400">{formatMoneyCompact(analytics.rows.reduce((s, r) => s + r.kaspiIncome, 0))}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Online</span>
+                  <span className="text-sm font-medium text-violet-400">{formatMoneyCompact(analytics.rows.reduce((s, r) => s + r.onlineIncome, 0))}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Карта</span>
+                  <span className="text-sm font-medium text-amber-400">{formatMoneyCompact(analytics.rows.reduce((s, r) => s + r.cardIncome, 0))}</span>
+                </div>
+                <div className="border-t border-white/5 pt-2 mt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-400">Всего доход</span>
+                    <span className="text-sm font-bold text-white">{formatMoneyCompact(globalBalances.totalCashIncome + globalBalances.totalNonCashIncome)}</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingDown className="w-4 h-4 text-rose-400" />
+                <h3 className="text-sm font-medium">Расходы</h3>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Долги (авто)</span>
+                  <span className="text-sm font-medium text-rose-400">{formatMoneyCompact(analytics.rows.reduce((s, r) => s + r.autoDebts, 0))}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Штрафы (ручные)</span>
+                  <span className="text-sm font-medium text-rose-400">{formatMoneyCompact(analytics.rows.reduce((s, r) => s + r.manualMinus, 0))}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-400">Авансы</span>
+                  <span className="text-sm font-medium text-amber-400">{formatMoneyCompact(analytics.rows.reduce((s, r) => s + r.advances, 0))}</span>
+                </div>
+                <div className="border-t border-white/5 pt-2 mt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-400">Всего расходов</span>
+                    <span className="text-sm font-bold text-rose-400">{formatMoneyCompact(globalBalances.totalDebts + globalBalances.totalAdvances)}</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Operator Details Modal */}
+          {selectedOperator && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
+                <div className="p-6 border-b border-white/5 flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500">
+                      <User className="w-5 h-5 text-white" />
                     </div>
-                    <p className={`text-xl font-bold ${item.color}`}>{formatMoneyFull(item.value)}</p>
-                    <p className="text-xs text-gray-500 mt-1">{totals.incomeTotal > 0 ? ((item.value / totals.incomeTotal) * 100).toFixed(1) : 0}%</p>
+                    <div>
+                      <h2 className="text-xl font-bold">{selectedOperator.operatorName}</h2>
+                      <p className="text-xs text-gray-500">{selectedOperator.operatorShortName || 'Нет короткого имени'}</p>
+                    </div>
                   </div>
-                ))}
-              </div>
-
-              {/* Main Charts */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-                  <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-violet-400" />
-                    Динамика за неделю
-                  </h3>
-                  <div className="h-80">
-                    {mounted && <MemoizedDailyChart data={totals.dailyData} />}
-                  </div>
+                  <button
+                    onClick={() => setSelectedOperator(null)}
+                    className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
-                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-                  <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                    <PieChart className="w-5 h-5 text-rose-400" />
-                    Структура расходов
-                  </h3>
-                  
-                  <div className="h-64">
-                    {mounted && <MemoizedPieChart data={totals.expenseCategories} />}
+                <div className="p-6 space-y-6">
+                  {/* Balance Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                      <p className="text-xs text-gray-400 mb-1">Сальдо нал</p>
+                      <p className={`text-lg font-bold ${selectedOperator.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {formatMoneyCompact(selectedOperator.netCash)}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                      <p className="text-xs text-gray-400 mb-1">Сальдо безнал</p>
+                      <p className={`text-lg font-bold ${selectedOperator.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>
+                        {formatMoneyCompact(selectedOperator.netNonCash)}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl">
+                      <p className="text-xs text-gray-400 mb-1">Общее сальдо</p>
+                      <p className={`text-lg font-bold ${selectedOperator.netEffect >= 0 ? 'text-violet-400' : 'text-rose-400'}`}>
+                        {formatMoneyCompact(selectedOperator.netEffect)}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="mt-4 space-y-2 max-h-48 overflow-auto">
-                    {totals.expenseCategories.map((cat, idx) => (
-                      <div key={cat.name} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <span 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
-                          />
-                          <span className="text-gray-300 truncate max-w-[120px]">{cat.name}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-white font-medium">{formatMoneyCompact(cat.value)}</span>
-                          <span className="text-gray-500 text-xs ml-2">{cat.percentage.toFixed(1)}%</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Section */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* By Company - УЛУЧШЕНО */}
-                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-                  <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                    <Store className="w-5 h-5 text-blue-400" />
-                    Выручка по точкам (детально)
-                  </h3>
-
-                  <div className="h-80">
-                    {mounted && (
-                      <MemoizedBarChart 
-                        data={activeCompanies.map(c => {
-                          const s = totals.statsByCompany[c.id] || { 
-                            cash: 0, kaspi: 0, online: 0, card: 0, total: 0 
-                          }
-                          return {
-                            name: c.name.length > 15 ? c.name.substring(0, 12) + '...' : c.name,
-                            cash: s.cash,
-                            kaspi: s.kaspi,
-                            online: s.online,
-                            card: s.card,
-                            total: s.total
-                          }
-                        })} 
-                      />
-                    )}
+                  {/* Stats */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="p-3 bg-white/5 rounded-xl">
+                      <p className="text-xs text-gray-500">Смен</p>
+                      <p className="text-xl font-bold">{selectedOperator.shifts}</p>
+                    </div>
+                    <div className="p-3 bg-white/5 rounded-xl">
+                      <p className="text-xs text-gray-500">Дней</p>
+                      <p className="text-xl font-bold">{selectedOperator.days}</p>
+                    </div>
+                    <div className="p-3 bg-white/5 rounded-xl">
+                      <p className="text-xs text-gray-500">Выручка</p>
+                      <p className="text-xl font-bold text-emerald-400">{formatMoneyCompact(selectedOperator.totalTurnover)}</p>
+                    </div>
+                    <div className="p-3 bg-white/5 rounded-xl">
+                      <p className="text-xs text-gray-500">Ср. смена</p>
+                      <p className="text-xl font-bold text-blue-400">{formatMoneyCompact(selectedOperator.avgPerShift)}</p>
+                    </div>
                   </div>
 
-                  {extraCompanyId && (
-                    <div className="mt-4 pt-4 border-t border-white/5">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-400">F16 Extra</span>
-                        <span className="text-sm font-bold text-purple-400">
-                          {formatMoneyFull(totals.extraTotal)}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {includeExtraInTotals ? '(включено)' : '(отдельно)'}
-                        </span>
+                  {/* Daily Chart */}
+                  {selectedOperator.dailyData.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mb-3">Динамика доходов</h3>
+                      <div className="h-40">
+                        <OperatorDailyChart data={selectedOperator.dailyData} />
                       </div>
                     </div>
                   )}
-                </div>
 
-                {/* Metrics Cards - РАСШИРЕНО */}
-                <div className="space-y-4">
-                  <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-                    <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                      <Landmark className="w-5 h-5 text-amber-400" />
-                      Ключевые метрики
-                    </h3>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 bg-white/5 rounded-xl">
-                        <p className="text-xs text-gray-500 mb-1">Расходы / Выручка</p>
-                        <p className="text-2xl font-bold text-white">{totals.metrics.expenseRate.toFixed(1)}%</p>
-                        <p className="text-xs text-gray-500 mt-1">норма &lt; 70%</p>
-                      </div>
-                      <div className="p-4 bg-white/5 rounded-xl">
-                        <p className="text-xs text-gray-500 mb-1">Маржинальность</p>
-                        <p className={`text-2xl font-bold ${totals.metrics.profitMargin >= 20 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                          {totals.metrics.profitMargin.toFixed(1)}%
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">цель &gt; 25%</p>
-                      </div>
-                      <div className="p-4 bg-white/5 rounded-xl">
-                        <p className="text-xs text-gray-500 mb-1">Сальдо нал</p>
-                        <p className={`text-xl font-bold ${totals.metrics.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {formatMoneyCompact(totals.metrics.netCash)}
-                        </p>
-                      </div>
-                      <div className="p-4 bg-white/5 rounded-xl">
-                        <p className="text-xs text-gray-500 mb-1">Сальдо безнал</p>
-                        <p className={`text-xl font-bold ${totals.metrics.netNonCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {formatMoneyCompact(totals.metrics.netNonCash)}
-                        </p>
+                  {/* Balance History */}
+                  {selectedOperator.balanceHistory.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mb-3">Динамика сальдо</h3>
+                      <div className="h-40">
+                        <BalanceChart data={selectedOperator.balanceHistory} />
                       </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <Percent className="w-5 h-5 text-emerald-400" />
-                      Структура выручки (детально)
-                    </h3>
-
-                    <div className="space-y-3">
+                  {/* Payment Breakdown */}
+                  {selectedOperator.paymentBreakdown.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">Наличные</span>
-                          <span className="text-white font-medium">{totals.metrics.cashShare.toFixed(1)}%</span>
-                        </div>
-                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-emerald-500 rounded-full"
-                            style={{ width: `${totals.metrics.cashShare}%` }}
-                          />
+                        <h3 className="text-sm font-medium mb-3">Типы платежей</h3>
+                        <div className="h-40">
+                          <PaymentPieChart data={selectedOperator.paymentBreakdown} />
                         </div>
                       </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">Kaspi</span>
-                          <span className="text-white font-medium">{totals.metrics.kaspiShare.toFixed(1)}%</span>
-                        </div>
-                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-blue-500 rounded-full"
-                            style={{ width: `${totals.metrics.kaspiShare}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">Online</span>
-                          <span className="text-white font-medium">{totals.metrics.onlineShare.toFixed(1)}%</span>
-                        </div>
-                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-violet-500 rounded-full"
-                            style={{ width: `${totals.metrics.onlineShare}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-400">Карта</span>
-                          <span className="text-white font-medium">{totals.metrics.cardShare.toFixed(1)}%</span>
-                        </div>
-                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-amber-500 rounded-full"
-                            style={{ width: `${totals.metrics.cardShare}%` }}
-                          />
-                        </div>
+                      <div className="space-y-2">
+                        {selectedOperator.paymentBreakdown.map((item) => (
+                          <div key={item.name} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                              <span className="text-sm text-gray-400">{item.name}</span>
+                            </div>
+                            <span className="text-sm font-medium">{formatMoneyCompact(item.value)}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
+                  )}
 
-                    <div className="mt-4 pt-4 border-t border-white/5">
-                      <div className="flex justify-between text-sm font-medium">
-                        <span className="text-gray-400">Безналичные всего</span>
-                        <span className="text-purple-400">{totals.metrics.nonCashShare.toFixed(1)}%</span>
-                      </div>
+                  {/* Financial Summary */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                      <p className="text-xs text-gray-500 mb-1">Премии</p>
+                      <p className="text-lg font-bold text-emerald-400">{formatMoneyCompact(selectedOperator.manualPlus)}</p>
+                    </div>
+                    <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl">
+                      <p className="text-xs text-gray-500 mb-1">Авансы</p>
+                      <p className="text-lg font-bold text-amber-400">{formatMoneyCompact(selectedOperator.advances)}</p>
+                    </div>
+                    <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-xl">
+                      <p className="text-xs text-gray-500 mb-1">Долги</p>
+                      <p className="text-lg font-bold text-red-400">{formatMoneyCompact(selectedOperator.autoDebts)}</p>
+                    </div>
+                    <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-xl">
+                      <p className="text-xs text-gray-500 mb-1">Штрафы</p>
+                      <p className="text-lg font-bold text-red-400">{formatMoneyCompact(selectedOperator.manualMinus)}</p>
                     </div>
                   </div>
                 </div>
               </div>
-            </>
+            </div>
+          )}
+
+          {/* Main Table - с фокусом на сальдо */}
+          <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/5">
+                    <th className="py-3 px-2 text-left">
+                      <button
+                        onClick={() => handleSort('name')}
+                        className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+                      >
+                        Оператор
+                        {sortKey === 'name' && (
+                          <ArrowUpDown className={`w-3 h-3 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+                        )}
+                      </button>
+                    </th>
+                    <th className="py-3 px-2 text-center">
+                      <button
+                        onClick={() => handleSort('shifts')}
+                        className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+                      >
+                        Смен
+                        {sortKey === 'shifts' && (
+                          <ArrowUpDown className={`w-3 h-3 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+                        )}
+                      </button>
+                    </th>
+                    <th className="py-3 px-2 text-center">Дней</th>
+                    <th className="py-3 px-2 text-right">
+                      <button
+                        onClick={() => handleSort('turnover')}
+                        className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-white transition-colors ml-auto"
+                      >
+                        Выручка
+                        {sortKey === 'turnover' && (
+                          <ArrowUpDown className={`w-3 h-3 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+                        )}
+                      </button>
+                    </th>
+                    <th className="py-3 px-2 text-right text-emerald-400">Нал доход</th>
+                    <th className="py-3 px-2 text-right text-blue-400">Безнал доход</th>
+                    <th className="py-3 px-2 text-right text-red-400">Долги</th>
+                    <th className="py-3 px-2 text-right text-amber-400">Авансы</th>
+                    <th className="py-3 px-2 text-right text-emerald-400">Премии</th>
+                    <th className="py-3 px-2 text-right">
+                      <button
+                        onClick={() => handleSort('netCash')}
+                        className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-white transition-colors ml-auto"
+                      >
+                        Сальдо нал
+                        {sortKey === 'netCash' && (
+                          <ArrowUpDown className={`w-3 h-3 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+                        )}
+                      </button>
+                    </th>
+                    <th className="py-3 px-2 text-right">
+                      <button
+                        onClick={() => handleSort('netNonCash')}
+                        className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-white transition-colors ml-auto"
+                      >
+                        Сальдо безнал
+                        {sortKey === 'netNonCash' && (
+                          <ArrowUpDown className={`w-3 h-3 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+                        )}
+                      </button>
+                    </th>
+                    <th className="py-3 px-2 text-right">
+                      <button
+                        onClick={() => handleSort('netTotal')}
+                        className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-white transition-colors ml-auto"
+                      >
+                        Общее сальдо
+                        {sortKey === 'netTotal' && (
+                          <ArrowUpDown className={`w-3 h-3 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+                        )}
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {(loading || refreshing) && (
+                    <tr>
+                      <td colSpan={12} className="py-8 text-center text-gray-500">
+                        Загрузка данных...
+                      </td>
+                    </tr>
+                  )}
+
+                  {!loading && !refreshing && rows.length === 0 && (
+                    <tr>
+                      <td colSpan={12} className="py-8 text-center text-gray-500">
+                        Нет данных за выбранный период
+                      </td>
+                    </tr>
+                  )}
+
+                  {!loading && !refreshing && rows.map((op) => (
+                    <tr
+                      key={op.operatorId}
+                      onClick={() => setSelectedOperator(op)}
+                      className="border-t border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      <td className="py-2 px-2 font-medium">{op.operatorName}</td>
+                      <td className="py-2 px-2 text-center">{op.shifts}</td>
+                      <td className="py-2 px-2 text-center">{op.days}</td>
+                      <td className="py-2 px-2 text-right font-medium text-emerald-400">
+                        {formatMoneyCompact(op.totalTurnover)}
+                      </td>
+                      <td className="py-2 px-2 text-right text-emerald-400">{formatMoneyCompact(op.cashIncome)}</td>
+                      <td className="py-2 px-2 text-right text-blue-400">{formatMoneyCompact(op.nonCashIncome)}</td>
+                      <td className="py-2 px-2 text-right text-red-400">{formatMoneyCompact(op.totalDebts)}</td>
+                      <td className="py-2 px-2 text-right text-amber-400">{formatMoneyCompact(op.advances)}</td>
+                      <td className="py-2 px-2 text-right text-emerald-400">{formatMoneyCompact(op.manualPlus)}</td>
+                      <td className={`py-2 px-2 text-right font-medium ${op.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {formatMoneyCompact(op.netCash)}
+                      </td>
+                      <td className={`py-2 px-2 text-right font-medium ${op.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>
+                        {formatMoneyCompact(op.netNonCash)}
+                      </td>
+                      <td className={`py-2 px-2 text-right font-bold ${op.netEffect >= 0 ? 'text-violet-400' : 'text-rose-400'}`}>
+                        {formatMoneyCompact(op.netEffect)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+
+                {rows.length > 0 && (
+                  <tfoot className="border-t border-white/5 bg-white/5">
+                    <tr>
+                      <td className="py-3 px-2 font-semibold">Итого</td>
+                      <td className="py-3 px-2 text-center font-semibold">{totalsFiltered.shifts}</td>
+                      <td className="py-3 px-2 text-center font-semibold">{totalsFiltered.days}</td>
+                      <td className="py-3 px-2 text-right font-semibold text-emerald-400">
+                        {formatMoneyCompact(totalsFiltered.turnover)}
+                      </td>
+                      <td className="py-3 px-2 text-right font-semibold text-emerald-400">
+                        {formatMoneyCompact(totalsFiltered.cashIncome)}
+                      </td>
+                      <td className="py-3 px-2 text-right font-semibold text-blue-400">
+                        {formatMoneyCompact(totalsFiltered.nonCashIncome)}
+                      </td>
+                      <td className="py-3 px-2 text-right font-semibold text-red-400">
+                        {formatMoneyCompact(totalsFiltered.debts)}
+                      </td>
+                      <td className="py-3 px-2 text-right font-semibold text-amber-400">
+                        {formatMoneyCompact(totalsFiltered.advances)}
+                      </td>
+                      <td className="py-3 px-2 text-right font-semibold text-emerald-400">
+                        {formatMoneyCompact(totalsFiltered.bonuses)}
+                      </td>
+                      <td className="py-3 px-2 text-right font-semibold text-emerald-400">
+                        {formatMoneyCompact(totalsFiltered.netCash)}
+                      </td>
+                      <td className="py-3 px-2 text-right font-semibold text-blue-400">
+                        {formatMoneyCompact(totalsFiltered.netNonCash)}
+                      </td>
+                      <td className="py-3 px-2 text-right font-bold text-white">
+                        {formatMoneyCompact(totalsFiltered.netTotal)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </Card>
+
+          {/* Charts Section */}
+          {showCharts && rows.length > 0 && mounted && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Top Operators by Balance */}
+              <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-violet-400" />
+                  Топ-5 операторов по общему сальдо
+                </h3>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={rows.slice(0, 5).map(op => ({
+                        name: op.operatorShortName || op.operatorName.split(' ')[0],
+                        value: op.netEffect,
+                      }))}
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} horizontal={false} />
+                      <XAxis type="number" tickFormatter={formatCompact} stroke="#6b7280" fontSize={10} />
+                      <YAxis type="category" dataKey="name" stroke="#6b7280" fontSize={10} width={80} />
+                      <Tooltip
+                        formatter={(value: number) => formatMoneyFull(value)}
+                        contentStyle={{ background: '#1f2937', border: 'none', borderRadius: '8px' }}
+                      />
+                      <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]}>
+                        {rows.slice(0, 5).map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={entry.netEffect >= 0 ? '#10b981' : '#ef4444'} 
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Balance Composition */}
+              <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                  <PieChart className="w-4 h-4 text-amber-400" />
+                  Состав общего сальдо
+                </h3>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsPieChart>
+                      <Pie
+                        data={[
+                          { name: 'Наличные (сальдо)', value: Math.max(0, globalBalances.netCashBalance), color: '#10b981' },
+                          { name: 'Безнал (сальдо)', value: Math.max(0, globalBalances.netNonCashBalance), color: '#3b82f6' },
+                          { name: 'Отрицательное сальдо', value: Math.max(0, -globalBalances.netTotalBalance), color: '#ef4444' },
+                        ].filter(item => item.value > 0)}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {PIE_COLORS.slice(0, 3).map((color, idx) => (
+                          <Cell key={`cell-${idx}`} fill={color} stroke="transparent" />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number) => formatMoneyFull(value)}
+                        contentStyle={{ background: '#1f2937', border: 'none', borderRadius: '8px' }}
+                      />
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </div>
           )}
         </div>
       </main>
@@ -1701,26 +2115,12 @@ function WeeklyReportContent() {
 }
 
 // =====================
-// EXPORT with Suspense
+// MAIN EXPORT with Suspense
 // =====================
-export default function WeeklyReportPage() {
+export default function OperatorAnalyticsPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-          <Sidebar />
-          <main className="flex-1 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
-                <CalendarDays className="w-8 h-8 text-white" />
-              </div>
-              <p className="text-gray-400">Загрузка недельного отчёта...</p>
-            </div>
-          </main>
-        </div>
-      }
-    >
-      <WeeklyReportContent />
+    <Suspense fallback={<OperatorAnalyticsLoading />}>
+      <OperatorAnalyticsContent />
     </Suspense>
   )
 }
