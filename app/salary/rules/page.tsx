@@ -32,6 +32,7 @@ import {
   Calendar,
   Edit2,
   Copy,
+  Search,
   Trash2,
 } from 'lucide-react'
 
