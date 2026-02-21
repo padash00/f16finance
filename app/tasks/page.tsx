@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Sidebar } from '@/components/sidebar'
@@ -233,9 +233,9 @@ function TasksLoading() {
 }
 
 // =====================
-// MAIN PAGE COMPONENT
+// MAIN CONTENT COMPONENT (with useSearchParams)
 // =====================
-export default function TasksPage() {
+function TasksContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -252,13 +252,13 @@ export default function TasksPage() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
-  // Фильтры
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filterStatus, setFilterStatus] = useState<string>('all')
-  const [filterPriority, setFilterPriority] = useState<string>('all')
-  const [filterCompany, setFilterCompany] = useState<string>('all')
-  const [filterAssignee, setFilterAssignee] = useState<string>('all')
-  const [showArchived, setShowArchived] = useState(false)
+  // Фильтры из URL
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '')
+  const [filterStatus, setFilterStatus] = useState(searchParams.get('status') || 'all')
+  const [filterPriority, setFilterPriority] = useState(searchParams.get('priority') || 'all')
+  const [filterCompany, setFilterCompany] = useState(searchParams.get('company') || 'all')
+  const [filterAssignee, setFilterAssignee] = useState(searchParams.get('assignee') || 'all')
+  const [showArchived, setShowArchived] = useState(searchParams.get('archived') === '1')
 
   // Загрузка данных
   const loadData = useCallback(async (showRefresh = false) => {
@@ -345,6 +345,19 @@ export default function TasksPage() {
     loadData()
   }, [loadData])
 
+  // Синхронизация фильтров с URL
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (searchTerm) params.set('q', searchTerm)
+    if (filterStatus !== 'all') params.set('status', filterStatus)
+    if (filterPriority !== 'all') params.set('priority', filterPriority)
+    if (filterCompany !== 'all') params.set('company', filterCompany)
+    if (filterAssignee !== 'all') params.set('assignee', filterAssignee)
+    if (showArchived) params.set('archived', '1')
+    
+    router.replace(`/tasks?${params.toString()}`, { scroll: false })
+  }, [searchTerm, filterStatus, filterPriority, filterCompany, filterAssignee, showArchived, router])
+
   // Фильтрация задач
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
@@ -366,17 +379,14 @@ export default function TasksPage() {
       if (filterPriority !== 'all' && task.priority !== filterPriority) return false
 
       // Фильтр по компании
-      if (filterCompany !== 'all') {
-        const company = companies.find(c => c.id === filterCompany)
-        if (task.company_id !== filterCompany) return false
-      }
+      if (filterCompany !== 'all' && task.company_id !== filterCompany) return false
 
       // Фильтр по исполнителю
       if (filterAssignee !== 'all' && task.assigned_to !== filterAssignee) return false
 
       return true
     })
-  }, [tasks, searchTerm, filterStatus, filterPriority, filterCompany, filterAssignee, companies])
+  }, [tasks, searchTerm, filterStatus, filterPriority, filterCompany, filterAssignee])
 
   // Группировка по статусам для канбана
   const tasksByStatus = useMemo(() => {
@@ -409,6 +419,7 @@ export default function TasksPage() {
     setFilterPriority('all')
     setFilterCompany('all')
     setFilterAssignee('all')
+    setShowArchived(false)
   }
 
   const handleTaskClick = (task: Task) => {
@@ -1436,5 +1447,16 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, staff, companies, project
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// =====================
+// MAIN EXPORT with Suspense
+// =====================
+export default function TasksPage() {
+  return (
+    <Suspense fallback={<TasksLoading />}>
+      <TasksContent />
+    </Suspense>
   )
 }
