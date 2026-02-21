@@ -31,25 +31,22 @@ import {
   LayoutList,
   Send,
   AlertCircle,
+  Clock,
+  Tag,
+  Briefcase,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // =====================
-// TYPES (под твою структуру)
+// TYPES (исправлено под твою структуру)
 // =====================
 type Operator = {
   id: string
   name: string
   short_name: string | null
-  telegram_id?: string | null  // если есть в таблице
-  company_id: string | null
+  telegram_chat_id: string | null
+  role: string | null
   is_active: boolean
-}
-
-type Staff = {
-  id: string
-  full_name: string
-  short_name: string | null
 }
 
 type Company = {
@@ -63,8 +60,8 @@ type Task = {
   title: string
   description: string | null
   task_number: number
-  status: string
-  priority: string
+  status: 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
+  priority: 'critical' | 'high' | 'medium' | 'low'
   operator_id: string | null
   created_by: string | null
   company_id: string | null
@@ -74,9 +71,10 @@ type Task = {
   updated_at: string
   completed_at: string | null
   
-  // Расширенные поля (будут заполняться отдельно)
+  // Расширенные поля
   operator_name?: string
   operator_short_name?: string | null
+  operator_telegram?: string | null
   company_name?: string
   company_code?: string | null
   comments_count?: number
@@ -95,20 +93,20 @@ type TaskComment = {
 // =====================
 // CONSTANTS
 // =====================
-const STATUS_CONFIG: Record<string, { title: string; color: string }> = {
-  backlog: { title: 'Бэклог', color: 'bg-gray-500/10 text-gray-400' },
-  todo: { title: 'К выполнению', color: 'bg-blue-500/10 text-blue-400' },
-  in_progress: { title: 'В работе', color: 'bg-yellow-500/10 text-yellow-400' },
-  review: { title: 'На проверке', color: 'bg-purple-500/10 text-purple-400' },
-  done: { title: 'Готово', color: 'bg-emerald-500/10 text-emerald-400' },
-  archived: { title: 'Архив', color: 'bg-gray-500/10 text-gray-400' }
+const STATUS_CONFIG: Record<string, { title: string; color: string; icon: any }> = {
+  backlog: { title: 'Бэклог', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20', icon: Clock },
+  todo: { title: 'К выполнению', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', icon: CheckCircle2 },
+  in_progress: { title: 'В работе', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20', icon: Briefcase },
+  review: { title: 'На проверке', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: User },
+  done: { title: 'Готово', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: CheckCircle2 },
+  archived: { title: 'Архив', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20', icon: Archive }
 }
 
 const PRIORITY_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
-  critical: { icon: '🔥', color: 'text-red-400 bg-red-500/10', label: 'Критический' },
-  high: { icon: '⚡', color: 'text-orange-400 bg-orange-500/10', label: 'Высокий' },
-  medium: { icon: '📌', color: 'text-blue-400 bg-blue-500/10', label: 'Средний' },
-  low: { icon: '💧', color: 'text-green-400 bg-green-500/10', label: 'Низкий' }
+  critical: { icon: '🔥', color: 'text-red-400 bg-red-500/10 border-red-500/20', label: 'Критический' },
+  high: { icon: '⚡', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20', label: 'Высокий' },
+  medium: { icon: '📌', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20', label: 'Средний' },
+  low: { icon: '💧', color: 'text-green-400 bg-green-500/10 border-green-500/20', label: 'Низкий' }
 }
 
 // =====================
@@ -116,12 +114,50 @@ const PRIORITY_CONFIG: Record<string, { icon: string; color: string; label: stri
 // =====================
 const formatDate = (date: string | null) => {
   if (!date) return '—'
-  return new Date(date).toLocaleDateString('ru-RU')
+  return new Date(date).toLocaleDateString('ru-RU', { 
+    day: 'numeric', 
+    month: 'short' 
+  })
+}
+
+const formatDateTime = (date: string | null) => {
+  if (!date) return '—'
+  return new Date(date).toLocaleString('ru-RU')
 }
 
 const isOverdue = (dueDate: string | null, status: string) => {
   if (!dueDate || status === 'done' || status === 'archived') return false
   return new Date(dueDate) < new Date()
+}
+
+const getDaysUntilDue = (dueDate: string | null) => {
+  if (!dueDate) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDate)
+  due.setHours(0, 0, 0, 0)
+  const diffTime = due.getTime() - today.getTime()
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  return diffDays
+}
+
+const getCompanyStyle = (code: string | null) => {
+  const colors: Record<string, string> = {
+    arena: 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400',
+    ramen: 'border-amber-500/30 bg-amber-500/5 text-amber-400',
+    extra: 'border-violet-500/30 bg-violet-500/5 text-violet-400'
+  }
+  return colors[code?.toLowerCase() || ''] || 'border-gray-500/30 bg-gray-500/5 text-gray-400'
+}
+
+// Функция отправки в Telegram (заглушка, нужно реализовать)
+const sendTelegramNotification = async (chatId: string, message: string) => {
+  console.log(`Sending to ${chatId}: ${message}`)
+  // Здесь будет вызов твоего API
+  // await fetch('/api/telegram/send', {
+  //   method: 'POST',
+  //   body: JSON.stringify({ chat_id: chatId, text: message })
+  // })
 }
 
 // =====================
@@ -133,7 +169,7 @@ function TasksLoading() {
       <Sidebar />
       <main className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 animate-pulse flex items-center justify-center">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
             <Kanban className="w-8 h-8 text-white" />
           </div>
           <p className="text-gray-400">Загрузка задач...</p>
@@ -154,8 +190,8 @@ function TasksContent() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
-  const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
@@ -165,18 +201,21 @@ function TasksContent() {
   // Фильтры
   const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '')
   const [filterStatus, setFilterStatus] = useState(searchParams.get('status') || 'all')
+  const [filterPriority, setFilterPriority] = useState(searchParams.get('priority') || 'all')
   const [filterOperator, setFilterOperator] = useState(searchParams.get('operator') || 'all')
+  const [filterCompany, setFilterCompany] = useState(searchParams.get('company') || 'all')
 
   // Загрузка данных
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  const loadData = useCallback(async (showRefresh = false) => {
+    if (showRefresh) setRefreshing(true)
+    else setLoading(true)
     setError(null)
 
     try {
       // Загружаем операторов
       const { data: operatorsData, error: operatorsError } = await supabase
         .from('operators')
-        .select('id, name, short_name, company_id, is_active')
+        .select('id, name, short_name, telegram_chat_id, role, is_active')
         .eq('is_active', true)
 
       if (operatorsError) throw operatorsError
@@ -199,21 +238,27 @@ function TasksContent() {
       if (tasksError) throw tasksError
 
       // Обогащаем задачи данными
-      const enrichedTasks = (tasksData || []).map(task => ({
-        ...task,
-        operator_name: operatorsData?.find(o => o.id === task.operator_id)?.name,
-        operator_short_name: operatorsData?.find(o => o.id === task.operator_id)?.short_name,
-        company_name: companiesData?.find(c => c.id === task.company_id)?.name,
-        company_code: companiesData?.find(c => c.id === task.company_id)?.code,
-      }))
+      const enrichedTasks = (tasksData || []).map(task => {
+        const operator = operatorsData?.find(o => o.id === task.operator_id)
+        const company = companiesData?.find(c => c.id === task.company_id)
+        
+        return {
+          ...task,
+          operator_name: operator?.name,
+          operator_short_name: operator?.short_name,
+          operator_telegram: operator?.telegram_chat_id,
+          company_name: company?.name,
+          company_code: company?.code,
+        }
+      })
 
       setTasks(enrichedTasks)
-
     } catch (err) {
       console.error('Error loading data:', err)
       setError('Не удалось загрузить данные')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [])
 
@@ -221,20 +266,46 @@ function TasksContent() {
     loadData()
   }, [loadData])
 
+  // Синхронизация фильтров с URL
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (searchTerm) params.set('q', searchTerm)
+    if (filterStatus !== 'all') params.set('status', filterStatus)
+    if (filterPriority !== 'all') params.set('priority', filterPriority)
+    if (filterOperator !== 'all') params.set('operator', filterOperator)
+    if (filterCompany !== 'all') params.set('company', filterCompany)
+    
+    router.replace(`/tasks?${params.toString()}`, { scroll: false })
+  }, [searchTerm, filterStatus, filterPriority, filterOperator, filterCompany, router])
+
   // Фильтрация задач
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
+      // Поиск
       if (searchTerm) {
         const term = searchTerm.toLowerCase()
-        const matches = task.title.toLowerCase().includes(term) ||
-                       task.operator_name?.toLowerCase().includes(term)
+        const matches = 
+          task.title.toLowerCase().includes(term) ||
+          task.operator_name?.toLowerCase().includes(term) ||
+          task.task_number.toString().includes(term)
         if (!matches) return false
       }
+
+      // Фильтр по статусу
       if (filterStatus !== 'all' && task.status !== filterStatus) return false
+
+      // Фильтр по приоритету
+      if (filterPriority !== 'all' && task.priority !== filterPriority) return false
+
+      // Фильтр по оператору
       if (filterOperator !== 'all' && task.operator_id !== filterOperator) return false
+
+      // Фильтр по компании
+      if (filterCompany !== 'all' && task.company_id !== filterCompany) return false
+
       return true
     })
-  }, [tasks, searchTerm, filterStatus, filterOperator])
+  }, [tasks, searchTerm, filterStatus, filterPriority, filterOperator, filterCompany])
 
   // Группировка по статусам
   const tasksByStatus = useMemo(() => {
@@ -244,6 +315,24 @@ function TasksContent() {
     })
     return grouped
   }, [filteredTasks])
+
+  // Статистика
+  const stats = useMemo(() => {
+    const total = filteredTasks.length
+    const overdue = filteredTasks.filter(t => isOverdue(t.due_date, t.status)).length
+    const critical = filteredTasks.filter(t => t.priority === 'critical').length
+    
+    return { total, overdue, critical }
+  }, [filteredTasks])
+
+  // Обработчики
+  const resetFilters = () => {
+    setSearchTerm('')
+    setFilterStatus('all')
+    setFilterPriority('all')
+    setFilterOperator('all')
+    setFilterCompany('all')
+  }
 
   const handleStatusChange = async (taskId: string, newStatus: string) => {
     const { error } = await supabase
@@ -256,12 +345,37 @@ function TasksContent() {
 
     if (!error) {
       setTasks(prev => prev.map(t => 
-        t.id === taskId ? { ...t, status: newStatus } : t
+        t.id === taskId ? { ...t, status: newStatus as any } : t
       ))
+
+      // Уведомление в Telegram
+      const task = tasks.find(t => t.id === taskId)
+      if (task?.operator_telegram) {
+        await sendTelegramNotification(
+          task.operator_telegram,
+          `📋 Статус задачи #${task.task_number} изменён на "${STATUS_CONFIG[newStatus].title}"`
+        )
+      }
     }
   }
 
-  if (loading) {
+  const handleNotifyOperator = async (task: Task) => {
+    if (!task.operator_telegram) {
+      alert('У оператора нет Telegram ID')
+      return
+    }
+
+    const message = `📋 Задача #${task.task_number}\n\n` +
+      `${task.title}\n\n` +
+      `📅 Дедлайн: ${task.due_date ? formatDate(task.due_date) : 'не указан'}\n` +
+      `🔥 Приоритет: ${PRIORITY_CONFIG[task.priority].label}\n` +
+      `📊 Статус: ${STATUS_CONFIG[task.status].title}`
+
+    await sendTelegramNotification(task.operator_telegram, message)
+    alert('Уведомление отправлено!')
+  }
+
+  if (loading && !refreshing) {
     return <TasksLoading />
   }
 
@@ -275,7 +389,7 @@ function TasksContent() {
               <AlertCircle className="w-5 h-5" />
               <span>{error}</span>
             </div>
-            <Button onClick={loadData} className="mt-4 bg-violet-500 hover:bg-violet-600">
+            <Button onClick={() => loadData(true)} className="mt-4 bg-violet-500 hover:bg-violet-600">
               <RefreshCw className="w-4 h-4 mr-2" />
               Повторить
             </Button>
@@ -293,40 +407,42 @@ function TasksContent() {
         <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
           {/* Header */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl" />
+            <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
 
             <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl">
+                <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-violet-500/25">
                   <Kanban className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold text-white">
+                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                     Задачи операторов
                   </h1>
-                  <p className="text-gray-400 mt-1">
-                    Управление задачами и контроль выполнения
+                  <p className="text-gray-400 mt-1 flex items-center gap-2">
+                    <Send className="w-4 h-4" />
+                    Уведомления приходят в Telegram
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={loadData}
-                  className="border-white/10 bg-gray-900/50 hover:bg-white/10"
+                  className={`rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
+                  onClick={() => loadData(true)}
+                  title="Обновить"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </Button>
 
-                <div className="flex bg-gray-900/50 rounded-xl p-1 border border-white/10">
+                <div className="flex bg-gray-900/50 backdrop-blur-xl rounded-xl p-1 border border-white/10">
                   <button
                     onClick={() => setViewMode('kanban')}
                     className={cn(
                       "p-2 rounded-lg transition-colors",
-                      viewMode === 'kanban' ? 'bg-white/10 text-white' : 'text-gray-400'
+                      viewMode === 'kanban' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'
                     )}
                   >
                     <LayoutGrid className="w-4 h-4" />
@@ -335,7 +451,7 @@ function TasksContent() {
                     onClick={() => setViewMode('list')}
                     className={cn(
                       "p-2 rounded-lg transition-colors",
-                      viewMode === 'list' ? 'bg-white/10 text-white' : 'text-gray-400'
+                      viewMode === 'list' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'
                     )}
                   >
                     <LayoutList className="w-4 h-4" />
@@ -344,13 +460,29 @@ function TasksContent() {
 
                 <Button
                   onClick={() => setIsCreateModalOpen(true)}
-                  className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600"
+                  className="rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 gap-2"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
+                  <Plus className="w-4 h-4" />
                   Новая задача
                 </Button>
               </div>
             </div>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <p className="text-xs text-gray-500">Всего задач</p>
+              <p className="text-2xl font-bold text-white">{stats.total}</p>
+            </Card>
+            <Card className="p-4 bg-red-500/5 border-red-500/20">
+              <p className="text-xs text-red-400">Просрочено</p>
+              <p className="text-2xl font-bold text-red-400">{stats.overdue}</p>
+            </Card>
+            <Card className="p-4 bg-rose-500/5 border-rose-500/20">
+              <p className="text-xs text-rose-400">Критических</p>
+              <p className="text-2xl font-bold text-rose-400">{stats.critical}</p>
+            </Card>
           </div>
 
           {/* Filters */}
@@ -358,6 +490,7 @@ function TasksContent() {
             <div className="flex flex-wrap items-center gap-3">
               <Filter className="w-4 h-4 text-gray-500" />
 
+              {/* Поиск */}
               <div className="relative flex-1 max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
@@ -365,7 +498,7 @@ function TasksContent() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Поиск задач..."
-                  className="w-full pl-9 pr-8 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                  className="w-full pl-9 pr-8 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/50"
                 />
                 {searchTerm && (
                   <button
@@ -377,10 +510,11 @@ function TasksContent() {
                 )}
               </div>
 
+              {/* Фильтр по статусу */}
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                className="px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-violet-500/50"
               >
                 <option value="all">Все статусы</option>
                 {Object.entries(STATUS_CONFIG).map(([key, config]) => (
@@ -388,38 +522,83 @@ function TasksContent() {
                 ))}
               </select>
 
+              {/* Фильтр по приоритету */}
+              <select
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value)}
+                className="px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-violet-500/50"
+              >
+                <option value="all">Все приоритеты</option>
+                {Object.entries(PRIORITY_CONFIG).map(([key, config]) => (
+                  <option key={key} value={key}>{config.icon} {config.label}</option>
+                ))}
+              </select>
+
+              {/* Фильтр по оператору */}
               <select
                 value={filterOperator}
                 onChange={(e) => setFilterOperator(e.target.value)}
-                className="px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white"
+                className="px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-violet-500/50"
               >
                 <option value="all">Все операторы</option>
                 {operators.map(op => (
-                  <option key={op.id} value={op.id}>{op.name}</option>
+                  <option key={op.id} value={op.id}>
+                    {op.short_name || op.name} {op.telegram_chat_id ? '📱' : ''}
+                  </option>
                 ))}
               </select>
+
+              {/* Фильтр по компании */}
+              <select
+                value={filterCompany}
+                onChange={(e) => setFilterCompany(e.target.value)}
+                className="px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-violet-500/50"
+              >
+                <option value="all">Все компании</option>
+                {companies.map(company => (
+                  <option key={company.id} value={company.id}>{company.name}</option>
+                ))}
+              </select>
+
+              {/* Сброс фильтров */}
+              {(searchTerm || filterStatus !== 'all' || filterPriority !== 'all' || 
+                filterOperator !== 'all' || filterCompany !== 'all') && (
+                <button
+                  onClick={resetFilters}
+                  className="text-sm text-gray-500 hover:text-white transition-colors ml-auto"
+                >
+                  Сбросить
+                </button>
+              )}
             </div>
           </Card>
 
-          {/* Kanban Board */}
-          {viewMode === 'kanban' && (
+          {/* Content */}
+          {viewMode === 'kanban' ? (
+            // Kanban View
             <div className="flex gap-4 overflow-x-auto pb-4 min-h-[600px]">
               {Object.entries(STATUS_CONFIG).map(([status, config]) => {
                 const statusTasks = tasksByStatus[status] || []
+                const Icon = config.icon
                 
                 return (
                   <div
                     key={status}
                     className="w-80 flex-shrink-0 rounded-xl border border-white/5 bg-gray-900/40 backdrop-blur-xl p-3"
                   >
+                    {/* Заголовок колонки */}
                     <div className="flex items-center justify-between mb-3 px-2">
-                      <h3 className="font-medium text-sm">{config.title}</h3>
+                      <div className="flex items-center gap-2">
+                        <Icon className={cn("w-4 h-4", config.color.split(' ')[0])} />
+                        <h3 className="font-medium text-sm">{config.title}</h3>
+                      </div>
                       <span className="text-xs bg-white/5 px-2 py-1 rounded-full">
                         {statusTasks.length}
                       </span>
                     </div>
 
-                    <div className="space-y-2">
+                    {/* Задачи */}
+                    <div className="space-y-2 min-h-[200px]">
                       {statusTasks.map(task => (
                         <TaskCard
                           key={task.id}
@@ -429,30 +608,35 @@ function TasksContent() {
                             setIsTaskModalOpen(true)
                           }}
                           onStatusChange={(newStatus) => handleStatusChange(task.id, newStatus)}
+                          onNotify={() => handleNotifyOperator(task)}
                         />
                       ))}
+                      {statusTasks.length === 0 && (
+                        <div className="text-center py-8 text-xs text-gray-500 border border-dashed border-white/5 rounded-lg">
+                          Нет задач
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
               })}
             </div>
-          )}
-
-          {/* List View */}
-          {viewMode === 'list' && (
+          ) : (
+            // List View
             <Card className="bg-gray-900/40 backdrop-blur-xl border-white/5 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/5 bg-gray-900/50">
-                      <th className="py-3 px-4 text-left">Задача</th>
-                      <th className="py-3 px-4 text-left">Статус</th>
-                      <th className="py-3 px-4 text-left">Приоритет</th>
-                      <th className="py-3 px-4 text-left">Оператор</th>
-                      <th className="py-3 px-4 text-left">Дедлайн</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Задача</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Статус</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Приоритет</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Оператор</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Дедлайн</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Компания</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-white/5">
                     {filteredTasks.map(task => (
                       <tr
                         key={task.id}
@@ -460,17 +644,17 @@ function TasksContent() {
                           setSelectedTask(task)
                           setIsTaskModalOpen(true)
                         }}
-                        className="border-t border-white/5 hover:bg-white/5 cursor-pointer"
+                        className="hover:bg-white/5 transition-colors cursor-pointer"
                       >
                         <td className="py-3 px-4">
-                          <div>
-                            <span className="font-medium">#{task.task_number}</span>
-                            <div className="text-sm text-gray-300">{task.title}</div>
+                          <div className="flex flex-col">
+                            <span className="font-medium text-white">#{task.task_number}</span>
+                            <span className="text-sm text-gray-300 line-clamp-1">{task.title}</span>
                           </div>
                         </td>
                         <td className="py-3 px-4">
                           <span className={cn(
-                            "text-xs px-2 py-1 rounded-full",
+                            "text-xs px-2 py-1 rounded-full border",
                             STATUS_CONFIG[task.status]?.color
                           )}>
                             {STATUS_CONFIG[task.status]?.title}
@@ -478,20 +662,48 @@ function TasksContent() {
                         </td>
                         <td className="py-3 px-4">
                           <span className={cn(
-                            "text-xs px-2 py-1 rounded-full",
+                            "text-xs px-2 py-1 rounded-full border",
                             PRIORITY_CONFIG[task.priority]?.color
                           )}>
                             {PRIORITY_CONFIG[task.priority]?.icon} {PRIORITY_CONFIG[task.priority]?.label}
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          {task.operator_name || '—'}
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[10px] font-bold">
+                              {task.operator_short_name?.[0] || task.operator_name?.[0] || '?'}
+                            </div>
+                            <span className="text-sm text-gray-300">
+                              {task.operator_short_name || task.operator_name || 'Не назначен'}
+                            </span>
+                            {task.operator_telegram && (
+                              <Send className="w-3 h-3 text-blue-400" />
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4">
-                          {task.due_date && (
-                            <span className={isOverdue(task.due_date, task.status) ? 'text-red-400' : ''}>
+                          {task.due_date ? (
+                            <div className={cn(
+                              "flex items-center gap-1 text-sm",
+                              isOverdue(task.due_date, task.status) ? "text-red-400" : "text-gray-300"
+                            )}>
+                              <Calendar className="w-3 h-3" />
                               {formatDate(task.due_date)}
+                            </div>
+                          ) : (
+                            <span className="text-gray-500">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          {task.company_name ? (
+                            <span className={cn(
+                              "text-xs px-2 py-1 rounded-full border",
+                              getCompanyStyle(task.company_code)
+                            )}>
+                              {task.company_name}
                             </span>
+                          ) : (
+                            <span className="text-gray-500">—</span>
                           )}
                         </td>
                       </tr>
@@ -501,6 +713,27 @@ function TasksContent() {
               </div>
             </Card>
           )}
+
+          {/* Bottom info */}
+          <div className="flex justify-between items-center text-xs text-gray-500">
+            <div>
+              Показано {filteredTasks.length} из {tasks.length} задач
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Arena
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                Ramen
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-violet-500" />
+                Extra
+              </span>
+            </div>
+          </div>
         </div>
       </main>
 
@@ -514,6 +747,7 @@ function TasksContent() {
             setSelectedTask(null)
           }}
           operators={operators}
+          onNotify={() => handleNotifyOperator(selectedTask)}
         />
       )}
 
@@ -521,7 +755,7 @@ function TasksContent() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={() => {
-          loadData()
+          loadData(true)
           setIsCreateModalOpen(false)
         }}
         operators={operators}
@@ -534,15 +768,30 @@ function TasksContent() {
 // =====================
 // TASK CARD
 // =====================
-function TaskCard({ task, onClick, onStatusChange }: any) {
+function TaskCard({ task, onClick, onStatusChange, onNotify }: any) {
   const [showMenu, setShowMenu] = useState(false)
+  const isTaskOverdue = isOverdue(task.due_date, task.status)
+  const daysUntilDue = getDaysUntilDue(task.due_date)
 
   return (
     <div
       onClick={onClick}
-      className="bg-gray-800/50 border border-white/5 rounded-lg p-3 hover:bg-gray-700/50 cursor-pointer relative group"
+      className="bg-gray-800/50 border border-white/5 rounded-lg p-3 hover:bg-gray-700/50 transition-colors cursor-pointer relative group"
     >
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100">
+      {/* Кнопки действий */}
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+        {task.operator_telegram && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onNotify()
+            }}
+            className="p-1 hover:bg-blue-500/20 rounded text-blue-400"
+            title="Отправить в Telegram"
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -554,7 +803,7 @@ function TaskCard({ task, onClick, onStatusChange }: any) {
         </button>
         
         {showMenu && (
-          <div className="absolute right-0 mt-1 w-40 bg-gray-800 border border-white/10 rounded-lg shadow-xl z-10">
+          <div className="absolute right-0 mt-6 w-40 bg-gray-800 border border-white/10 rounded-lg shadow-xl z-10">
             {Object.entries(STATUS_CONFIG).map(([status, config]) => {
               if (status === task.status) return null
               return (
@@ -565,7 +814,7 @@ function TaskCard({ task, onClick, onStatusChange }: any) {
                     onStatusChange(status)
                     setShowMenu(false)
                   }}
-                  className="w-full px-3 py-2 text-left text-xs hover:bg-white/5"
+                  className="w-full px-3 py-2 text-left text-xs hover:bg-white/5 flex items-center gap-2"
                 >
                   {config.title}
                 </button>
@@ -575,28 +824,58 @@ function TaskCard({ task, onClick, onStatusChange }: any) {
         )}
       </div>
 
-      <div className="pr-8 mb-2">
+      {/* Номер и заголовок */}
+      <div className="pr-16 mb-2">
         <span className="text-[10px] text-gray-500">#{task.task_number}</span>
         <h4 className="font-medium text-sm line-clamp-2 mt-1">{task.title}</h4>
       </div>
 
-      <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-1">
+      {/* Приоритет */}
+      <div className="mb-2">
+        <span className={cn(
+          "text-[10px] px-1.5 py-0.5 rounded-full",
+          PRIORITY_CONFIG[task.priority]?.color
+        )}>
+          {PRIORITY_CONFIG[task.priority]?.icon} {PRIORITY_CONFIG[task.priority]?.label}
+        </span>
+      </div>
+
+      {/* Оператор и компания */}
+      <div className="flex items-center justify-between text-xs mb-2">
+        <div className="flex items-center gap-1 text-gray-400">
           <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[8px] font-bold">
-            {task.operator_name?.[0] || '?'}
+            {task.operator_short_name?.[0] || task.operator_name?.[0] || '?'}
           </div>
-          <span className="text-gray-400">{task.operator_name || 'Не назначен'}</span>
+          <span className="text-[10px]">{task.operator_short_name || task.operator_name || 'Не назначен'}</span>
+          {task.operator_telegram && (
+            <Send className="w-2.5 h-2.5 text-blue-400" />
+          )}
         </div>
 
-        {task.due_date && (
+        {task.company_name && (
           <span className={cn(
-            "text-[10px]",
-            isOverdue(task.due_date, task.status) ? "text-red-400" : "text-gray-500"
+            "text-[8px] px-1.5 py-0.5 rounded-full border",
+            getCompanyStyle(task.company_code)
           )}>
-            {formatDate(task.due_date)}
+            {task.company_name}
           </span>
         )}
       </div>
+
+      {/* Дедлайн */}
+      {task.due_date && (
+        <div className={cn(
+          "flex items-center gap-1 text-[10px]",
+          isTaskOverdue ? "text-red-400" : "text-gray-500"
+        )}>
+          <Calendar className="w-3 h-3" />
+          <span>{formatDate(task.due_date)}</span>
+          {isTaskOverdue && <span className="text-red-400">(просрочено)</span>}
+          {!isTaskOverdue && daysUntilDue !== null && daysUntilDue <= 3 && daysUntilDue >= 0 && (
+            <span className="text-yellow-400">(осталось {daysUntilDue} дн.)</span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -604,7 +883,7 @@ function TaskCard({ task, onClick, onStatusChange }: any) {
 // =====================
 // TASK DETAIL MODAL
 // =====================
-function TaskDetailModal({ task, isOpen, onClose, operators }: any) {
+function TaskDetailModal({ task, isOpen, onClose, operators, onNotify }: any) {
   const [comments, setComments] = useState<TaskComment[]>([])
 
   useEffect(() => {
@@ -628,64 +907,136 @@ function TaskDetailModal({ task, isOpen, onClose, operators }: any) {
     }
   }
 
+  const priorityConfig = PRIORITY_CONFIG[task.priority]
+  const statusConfig = STATUS_CONFIG[task.status]
+  const isTaskOverdue = isOverdue(task.due_date, task.status)
+  const daysUntilDue = getDaysUntilDue(task.due_date)
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-gray-900 border-white/10 text-white max-w-2xl">
+      <DialogContent className="bg-gray-900 border-white/10 text-white max-w-2xl max-h-[90vh] overflow-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl flex items-center gap-2">
-            <span className="text-gray-500">#{task.task_number}</span>
-            <span>{task.title}</span>
-          </DialogTitle>
+          <div className="flex items-start justify-between">
+            <div>
+              <DialogTitle className="text-xl flex items-center gap-2">
+                <span className="text-gray-500">#{task.task_number}</span>
+                <span>{task.title}</span>
+              </DialogTitle>
+              <DialogDescription className="text-gray-400 mt-1">
+                Создано {formatDateTime(task.created_at)}
+              </DialogDescription>
+            </div>
+            {task.operator_telegram && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onNotify}
+                className="gap-2 border-white/10"
+              >
+                <Send className="w-4 h-4" />
+                Уведомить
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-3">
+          {/* Мета-информация */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="p-3 bg-white/5 rounded-lg">
-              <p className="text-xs text-gray-400">Статус</p>
-              <p className="text-sm mt-1">{STATUS_CONFIG[task.status]?.title}</p>
+              <p className="text-xs text-gray-500 mb-1">Статус</p>
+              <div className="flex items-center gap-2">
+                <span className={cn("text-xs px-2 py-1 rounded-full", statusConfig?.color)}>
+                  {statusConfig?.title}
+                </span>
+              </div>
             </div>
             <div className="p-3 bg-white/5 rounded-lg">
-              <p className="text-xs text-gray-400">Приоритет</p>
-              <p className="text-sm mt-1">{PRIORITY_CONFIG[task.priority]?.label}</p>
+              <p className="text-xs text-gray-500 mb-1">Приоритет</p>
+              <div className="flex items-center gap-2">
+                <span className={cn("text-xs px-2 py-1 rounded-full", priorityConfig?.color)}>
+                  {priorityConfig?.icon} {priorityConfig?.label}
+                </span>
+              </div>
             </div>
             <div className="p-3 bg-white/5 rounded-lg">
-              <p className="text-xs text-gray-400">Оператор</p>
-              <p className="text-sm mt-1">{task.operator_name || 'Не назначен'}</p>
+              <p className="text-xs text-gray-500 mb-1">Оператор</p>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold">
+                  {task.operator_short_name?.[0] || task.operator_name?.[0] || '?'}
+                </div>
+                <span className="text-sm">{task.operator_name || 'Не назначен'}</span>
+                {task.operator_telegram && (
+                  <Send className="w-3 h-3 text-blue-400" />
+                )}
+              </div>
             </div>
             <div className="p-3 bg-white/5 rounded-lg">
-              <p className="text-xs text-gray-400">Дедлайн</p>
-              <p className="text-sm mt-1">{formatDate(task.due_date)}</p>
+              <p className="text-xs text-gray-500 mb-1">Дедлайн</p>
+              {task.due_date ? (
+                <div className={cn(
+                  "flex items-center gap-2 text-sm",
+                  isTaskOverdue ? "text-red-400" : "text-gray-300"
+                )}>
+                  <Calendar className="w-4 h-4" />
+                  <span>{formatDate(task.due_date)}</span>
+                  {isTaskOverdue && <span className="text-xs text-red-400">(просрочено)</span>}
+                  {!isTaskOverdue && daysUntilDue !== null && daysUntilDue <= 3 && daysUntilDue >= 0 && (
+                    <span className="text-xs text-yellow-400">(осталось {daysUntilDue} дн.)</span>
+                  )}
+                </div>
+              ) : (
+                <span className="text-sm text-gray-500">Не указан</span>
+              )}
             </div>
           </div>
 
+          {/* Компания */}
+          {task.company_name && (
+            <div className="p-3 bg-white/5 rounded-lg">
+              <p className="text-xs text-gray-500 mb-1">Компания</p>
+              <span className={cn(
+                "text-xs px-2 py-1 rounded-full border",
+                getCompanyStyle(task.company_code)
+              )}>
+                {task.company_name}
+              </span>
+            </div>
+          )}
+
+          {/* Описание */}
           {task.description && (
             <div>
               <h3 className="text-sm font-medium text-gray-400 mb-2">Описание</h3>
-              <div className="bg-gray-800/50 rounded-lg p-3">
+              <div className="bg-gray-800/50 border border-white/5 rounded-lg p-3">
                 <p className="text-sm whitespace-pre-wrap">{task.description}</p>
               </div>
             </div>
           )}
 
+          {/* Комментарии */}
           <div>
             <h3 className="text-sm font-medium text-gray-400 mb-2">Комментарии</h3>
             <div className="space-y-3 max-h-60 overflow-auto">
               {comments.map(comment => (
                 <div key={comment.id} className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold flex-shrink-0">
                     {comment.author_name?.[0] || '?'}
                   </div>
-                  <div className="flex-1 bg-gray-800/50 rounded-lg p-3">
+                  <div className="flex-1 bg-gray-800/50 border border-white/5 rounded-lg p-3">
                     <div className="flex justify-between mb-1">
                       <span className="font-medium text-sm">{comment.author_name}</span>
                       <span className="text-xs text-gray-500">
-                        {new Date(comment.created_at).toLocaleString()}
+                        {formatDateTime(comment.created_at)}
                       </span>
                     </div>
                     <p className="text-sm">{comment.content}</p>
                   </div>
                 </div>
               ))}
+              {comments.length === 0 && (
+                <p className="text-sm text-gray-500 italic">Нет комментариев</p>
+              )}
             </div>
           </div>
         </div>
@@ -705,7 +1056,8 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: a
     status: 'todo',
     operator_id: '',
     company_id: '',
-    due_date: ''
+    due_date: '',
+    tags: ''
   })
   const [loading, setLoading] = useState(false)
 
@@ -713,17 +1065,31 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: a
     e.preventDefault()
     setLoading(true)
 
+    const taskData = {
+      ...form,
+      tags: form.tags ? form.tags.split(',').map(t => t.trim()) : [],
+      created_by: '00000000-0000-0000-0000-000000000000', // TODO: заменить на реальный ID
+    }
+
     const { error } = await supabase
       .from('tasks')
-      .insert([{
-        ...form,
-        created_by: '00000000-0000-0000-0000-000000000000', // временный ID
-      }])
+      .insert([taskData])
 
     setLoading(false)
 
     if (!error) {
       onSuccess()
+      
+      // Уведомление оператору
+      if (form.operator_id) {
+        const operator = operators.find((o: Operator) => o.id === form.operator_id)
+        if (operator?.telegram_chat_id) {
+          await sendTelegramNotification(
+            operator.telegram_chat_id,
+            `📋 Новая задача!\n\n${form.title}\n\n📅 Дедлайн: ${form.due_date ? formatDate(form.due_date) : 'не указан'}`
+          )
+        }
+      }
     }
   }
 
@@ -732,11 +1098,14 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: a
       <DialogContent className="bg-gray-900 border-white/10 text-white sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Новая задача</DialogTitle>
+          <DialogDescription className="text-gray-400">
+            Создайте задачу для оператора
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            placeholder="Название задачи"
+            placeholder="Название задачи *"
             value={form.title}
             onChange={(e) => setForm({...form, title: e.target.value})}
             className="bg-gray-800/50 border-white/10"
@@ -747,7 +1116,7 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: a
             placeholder="Описание"
             value={form.description}
             onChange={(e) => setForm({...form, description: e.target.value})}
-            className="w-full h-24 bg-gray-800/50 border border-white/10 rounded-lg p-2 text-sm"
+            className="w-full h-24 bg-gray-800/50 border border-white/10 rounded-lg p-2 text-sm resize-none"
           />
 
           <select
@@ -757,34 +1126,45 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: a
           >
             <option value="">Выберите оператора</option>
             {operators.map((op: Operator) => (
-              <option key={op.id} value={op.id}>{op.name}</option>
+              <option key={op.id} value={op.id}>
+                {op.name} {op.telegram_chat_id ? '📱' : ''}
+              </option>
             ))}
           </select>
 
-          <select
-            value={form.priority}
-            onChange={(e) => setForm({...form, priority: e.target.value})}
-            className="w-full h-9 bg-gray-800/50 border border-white/10 rounded-lg px-3 text-sm"
-          >
-            <option value="low">💧 Низкий</option>
-            <option value="medium">📌 Средний</option>
-            <option value="high">⚡ Высокий</option>
-            <option value="critical">🔥 Критический</option>
-          </select>
+          <div className="grid grid-cols-2 gap-3">
+            <select
+              value={form.priority}
+              onChange={(e) => setForm({...form, priority: e.target.value})}
+              className="h-9 bg-gray-800/50 border border-white/10 rounded-lg px-3 text-sm"
+            >
+              <option value="low">💧 Низкий</option>
+              <option value="medium">📌 Средний</option>
+              <option value="high">⚡ Высокий</option>
+              <option value="critical">🔥 Критический</option>
+            </select>
+
+            <Input
+              type="date"
+              value={form.due_date}
+              onChange={(e) => setForm({...form, due_date: e.target.value})}
+              className="bg-gray-800/50 border-white/10"
+            />
+          </div>
 
           <Input
-            type="date"
-            value={form.due_date}
-            onChange={(e) => setForm({...form, due_date: e.target.value})}
+            placeholder="Теги (через запятую)"
+            value={form.tags}
+            onChange={(e) => setForm({...form, tags: e.target.value})}
             className="bg-gray-800/50 border-white/10"
           />
 
-          <DialogFooter>
+          <DialogFooter className="pt-4">
             <Button type="button" variant="ghost" onClick={onClose}>
               Отмена
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Создание...' : 'Создать'}
+            <Button type="submit" disabled={loading || !form.title}>
+              {loading ? 'Создание...' : 'Создать задачу'}
             </Button>
           </DialogFooter>
         </form>
