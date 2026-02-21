@@ -46,12 +46,24 @@ import {
   Kanban,
   LayoutGrid,
   LayoutList,
+  Send,
+  Phone,
+  Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // =====================
-// TYPES
+// TYPES (исправлено - используем operators)
 // =====================
+type Operator = {
+  id: string
+  name: string
+  short_name: string | null
+  telegram_id: string | null
+  company_id: string | null
+  is_active: boolean
+}
+
 type Task = {
   id: string
   task_number: number
@@ -61,7 +73,7 @@ type Task = {
   priority: 'critical' | 'high' | 'medium' | 'low'
   project_id: string | null
   company_id: string | null
-  assigned_to: string | null
+  operator_id: string | null  // ✅ вместо assigned_to
   created_by: string | null
   parent_task_id: string | null
   start_date: string | null
@@ -75,13 +87,16 @@ type Task = {
   updated_at: string
   completed_at: string | null
   
-  // Расширенные поля (джуйны)
-  assigned_to_name?: string
+  // Расширенные поля (джойны)
+  operator_name?: string
+  operator_short_name?: string | null
+  operator_telegram_id?: string | null
   created_by_name?: string
   company_name?: string
+  company_code?: string | null
   project_name?: string
+  project_color?: string
   comments_count?: number
-  attachments_count?: number
   checklist?: TaskChecklist[]
 }
 
@@ -98,20 +113,14 @@ type TaskChecklist = {
 type TaskComment = {
   id: string
   task_id: string
-  staff_id: string
+  operator_id: string | null  // ✅ комментарии от операторов
+  staff_id: string | null      // или от staff
   content: string
   parent_comment_id: string | null
   attachments: any | null
   created_at: string
-  staff_name?: string
-}
-
-type Staff = {
-  id: string
-  full_name: string
-  short_name: string | null
-  telegram_id: string | null
-  company_id: string | null
+  author_name?: string
+  author_type?: 'operator' | 'staff'
 }
 
 type Company = {
@@ -128,6 +137,12 @@ type Project = {
   color: string
   icon: string
   is_active: boolean
+}
+
+type Staff = {
+  id: string
+  full_name: string
+  short_name: string | null
 }
 
 // =====================
@@ -213,6 +228,16 @@ const getCompanyStyle = (code: string | null) => {
   return COMPANY_COLORS[code.toLowerCase()] || 'border-gray-500/30 bg-gray-500/5'
 }
 
+const sendTelegramNotification = async (telegramId: string, message: string) => {
+  // Здесь должен быть ваш Telegram Bot API
+  console.log(`Sending to ${telegramId}: ${message}`)
+  // Реальная отправка через бота
+  // const response = await fetch(`/api/telegram/send`, {
+  //   method: 'POST',
+  //   body: JSON.stringify({ chat_id: telegramId, text: message })
+  // })
+}
+
 // =====================
 // LOADING COMPONENT
 // =====================
@@ -233,7 +258,7 @@ function TasksLoading() {
 }
 
 // =====================
-// MAIN CONTENT COMPONENT (with useSearchParams)
+// MAIN CONTENT COMPONENT
 // =====================
 function TasksContent() {
   const router = useRouter()
@@ -241,9 +266,10 @@ function TasksContent() {
 
   // Состояния
   const [tasks, setTasks] = useState<Task[]>([])
-  const [staff, setStaff] = useState<Staff[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+  const [staff, setStaff] = useState<Staff[]>([]) // для created_by
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -257,7 +283,7 @@ function TasksContent() {
   const [filterStatus, setFilterStatus] = useState(searchParams.get('status') || 'all')
   const [filterPriority, setFilterPriority] = useState(searchParams.get('priority') || 'all')
   const [filterCompany, setFilterCompany] = useState(searchParams.get('company') || 'all')
-  const [filterAssignee, setFilterAssignee] = useState(searchParams.get('assignee') || 'all')
+  const [filterOperator, setFilterOperator] = useState(searchParams.get('operator') || 'all')
   const [showArchived, setShowArchived] = useState(searchParams.get('archived') === '1')
 
   // Загрузка данных
@@ -267,13 +293,13 @@ function TasksContent() {
     setError(null)
 
     try {
-      // Загружаем задачи
+      // Загружаем задачи с информацией об операторах
       let tasksQuery = supabase
         .from('tasks')
         .select(`
           *,
-          assigned:staff!assigned_to(full_name, short_name),
-          created:staff!created_by(full_name),
+          operator:operators!operator_id(name, short_name, telegram_id),
+          creator:staff!created_by(full_name),
           company:companies(name, code),
           project:projects(name, color, icon),
           comments:task_comments(count),
@@ -289,14 +315,14 @@ function TasksContent() {
 
       if (tasksError) throw tasksError
 
-      // Загружаем сотрудников
-      const { data: staffData, error: staffError } = await supabase
-        .from('staff')
+      // Загружаем операторов
+      const { data: operatorsData, error: operatorsError } = await supabase
+        .from('operators')
         .select('*')
         .eq('is_active', true)
-        .order('full_name')
+        .order('name')
 
-      if (staffError) throw staffError
+      if (operatorsError) throw operatorsError
 
       // Загружаем компании
       const { data: companiesData, error: companiesError } = await supabase
@@ -315,11 +341,21 @@ function TasksContent() {
 
       if (projectsError) throw projectsError
 
+      // Загружаем staff (для created_by)
+      const { data: staffData, error: staffError } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('is_active', true)
+
+      if (staffError) throw staffError
+
       // Форматируем задачи
       const formattedTasks = tasksData?.map(task => ({
         ...task,
-        assigned_to_name: task.assigned?.[0]?.full_name,
-        created_by_name: task.created?.[0]?.full_name,
+        operator_name: task.operator?.name,
+        operator_short_name: task.operator?.short_name,
+        operator_telegram_id: task.operator?.telegram_id,
+        created_by_name: task.creator?.full_name,
         company_name: task.company?.name,
         company_code: task.company?.code,
         project_name: task.project?.name,
@@ -329,9 +365,10 @@ function TasksContent() {
       })) || []
 
       setTasks(formattedTasks)
-      setStaff(staffData || [])
+      setOperators(operatorsData || [])
       setCompanies(companiesData || [])
       setProjects(projectsData || [])
+      setStaff(staffData || [])
     } catch (err) {
       console.error('Error loading data:', err)
       setError('Не удалось загрузить данные')
@@ -352,11 +389,11 @@ function TasksContent() {
     if (filterStatus !== 'all') params.set('status', filterStatus)
     if (filterPriority !== 'all') params.set('priority', filterPriority)
     if (filterCompany !== 'all') params.set('company', filterCompany)
-    if (filterAssignee !== 'all') params.set('assignee', filterAssignee)
+    if (filterOperator !== 'all') params.set('operator', filterOperator)
     if (showArchived) params.set('archived', '1')
     
     router.replace(`/tasks?${params.toString()}`, { scroll: false })
-  }, [searchTerm, filterStatus, filterPriority, filterCompany, filterAssignee, showArchived, router])
+  }, [searchTerm, filterStatus, filterPriority, filterCompany, filterOperator, showArchived, router])
 
   // Фильтрация задач
   const filteredTasks = useMemo(() => {
@@ -368,7 +405,7 @@ function TasksContent() {
           task.title.toLowerCase().includes(term) ||
           task.task_number.toString().includes(term) ||
           task.description?.toLowerCase().includes(term) ||
-          task.assigned_to_name?.toLowerCase().includes(term)
+          task.operator_name?.toLowerCase().includes(term)
         if (!matches) return false
       }
 
@@ -381,12 +418,12 @@ function TasksContent() {
       // Фильтр по компании
       if (filterCompany !== 'all' && task.company_id !== filterCompany) return false
 
-      // Фильтр по исполнителю
-      if (filterAssignee !== 'all' && task.assigned_to !== filterAssignee) return false
+      // Фильтр по оператору
+      if (filterOperator !== 'all' && task.operator_id !== filterOperator) return false
 
       return true
     })
-  }, [tasks, searchTerm, filterStatus, filterPriority, filterCompany, filterAssignee])
+  }, [tasks, searchTerm, filterStatus, filterPriority, filterCompany, filterOperator])
 
   // Группировка по статусам для канбана
   const tasksByStatus = useMemo(() => {
@@ -418,7 +455,7 @@ function TasksContent() {
     setFilterStatus('all')
     setFilterPriority('all')
     setFilterCompany('all')
-    setFilterAssignee('all')
+    setFilterOperator('all')
     setShowArchived(false)
   }
 
@@ -450,7 +487,32 @@ function TasksContent() {
             } 
           : t
       ))
+
+      // Отправляем уведомление оператору в Telegram
+      const task = tasks.find(t => t.id === taskId)
+      if (task?.operator_telegram_id) {
+        await sendTelegramNotification(
+          task.operator_telegram_id,
+          `📋 Статус задачи #${task.task_number} изменён на "${STATUS_CONFIG[newStatus].title}"`
+        )
+      }
     }
+  }
+
+  const handleNotifyOperator = async (task: Task) => {
+    if (!task.operator_telegram_id) {
+      alert('У оператора нет Telegram ID')
+      return
+    }
+
+    const message = `📋 Задача #${task.task_number}\n` +
+      `${task.title}\n\n` +
+      `📅 Дедлайн: ${task.due_date ? formatDate(task.due_date) : 'не указан'}\n` +
+      `🔥 Приоритет: ${PRIORITY_CONFIG[task.priority].label}\n` +
+      `📊 Статус: ${STATUS_CONFIG[task.status].title}`
+
+    await sendTelegramNotification(task.operator_telegram_id, message)
+    alert('Уведомление отправлено!')
   }
 
   return (
@@ -471,11 +533,11 @@ function TasksContent() {
                 </div>
                 <div>
                   <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                    Задачи и проекты
+                    Задачи операторов
                   </h1>
                   <p className="text-gray-400 mt-1 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Управление задачами операторов
+                    <Send className="w-4 h-4" />
+                    Уведомления приходят в Telegram
                   </p>
                 </div>
               </div>
@@ -604,15 +666,15 @@ function TasksContent() {
                 ))}
               </select>
 
-              {/* Фильтр по исполнителю */}
+              {/* Фильтр по оператору */}
               <select
-                value={filterAssignee}
-                onChange={(e) => setFilterAssignee(e.target.value)}
+                value={filterOperator}
+                onChange={(e) => setFilterOperator(e.target.value)}
                 className="px-3 py-2 bg-gray-800/50 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-violet-500/50"
               >
-                <option value="all">Все исполнители</option>
-                {staff.map(s => (
-                  <option key={s.id} value={s.id}>{s.full_name}</option>
+                <option value="all">Все операторы</option>
+                {operators.map(op => (
+                  <option key={op.id} value={op.id}>{op.name}</option>
                 ))}
               </select>
 
@@ -629,7 +691,7 @@ function TasksContent() {
 
               {/* Сброс фильтров */}
               {(searchTerm || filterStatus !== 'all' || filterPriority !== 'all' || 
-                filterCompany !== 'all' || filterAssignee !== 'all' || showArchived) && (
+                filterCompany !== 'all' || filterOperator !== 'all' || showArchived) && (
                 <button
                   onClick={resetFilters}
                   className="text-sm text-gray-500 hover:text-white transition-colors ml-auto"
@@ -685,6 +747,7 @@ function TasksContent() {
                           task={task}
                           onClick={() => handleTaskClick(task)}
                           onStatusChange={(newStatus) => handleStatusChange(task.id, newStatus)}
+                          onNotify={() => handleNotifyOperator(task)}
                         />
                       ))}
                       {statusTasks.length === 0 && (
@@ -707,7 +770,7 @@ function TasksContent() {
                       <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Задача</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Статус</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Приоритет</th>
-                      <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Исполнитель</th>
+                      <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Оператор</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Дедлайн</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Компания</th>
                       <th className="py-3 px-4 text-right text-xs font-medium text-gray-400">Действия</th>
@@ -745,9 +808,12 @@ function TasksContent() {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[10px] font-bold">
-                              {task.assigned_to_name?.[0] || '?'}
+                              {task.operator_name?.[0] || '?'}
                             </div>
-                            <span className="text-sm text-gray-300">{task.assigned_to_name || 'Не назначен'}</span>
+                            <span className="text-sm text-gray-300">{task.operator_name || 'Не назначен'}</span>
+                            {task.operator_telegram_id && (
+                              <Send className="w-3 h-3 text-blue-400" />
+                            )}
                           </div>
                         </td>
                         <td className="py-3 px-4">
@@ -779,17 +845,33 @@ function TasksContent() {
                           )}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-gray-500 hover:text-white"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              // Меню действий
-                            }}
-                          >
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            {task.operator_telegram_id && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-blue-400 hover:text-blue-300"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleNotifyOperator(task)
+                                }}
+                                title="Отправить в Telegram"
+                              >
+                                <Send className="w-4 h-4" />
+                              </Button>
+                            )}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-gray-500 hover:text-white"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                // Меню действий
+                              }}
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -834,9 +916,10 @@ function TasksContent() {
           onUpdate={(updatedTask) => {
             setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t))
           }}
-          staff={staff}
+          operators={operators}
           companies={companies}
           projects={projects}
+          onNotify={handleNotifyOperator}
         />
       )}
 
@@ -848,7 +931,7 @@ function TasksContent() {
           setTasks(prev => [newTask, ...prev])
           loadData(true)
         }}
-        staff={staff}
+        operators={operators}
         companies={companies}
         projects={projects}
       />
@@ -859,10 +942,11 @@ function TasksContent() {
 // =====================
 // TASK CARD COMPONENT
 // =====================
-function TaskCard({ task, onClick, onStatusChange }: { 
+function TaskCard({ task, onClick, onStatusChange, onNotify }: { 
   task: Task; 
   onClick: () => void;
   onStatusChange: (status: string) => void;
+  onNotify: () => void;
 }) {
   const [showMenu, setShowMenu] = useState(false)
   const isTaskOverdue = isOverdue(task.due_date, task.status)
@@ -873,8 +957,20 @@ function TaskCard({ task, onClick, onStatusChange }: {
       onClick={onClick}
       className="bg-gray-800/50 border border-white/5 rounded-lg p-3 hover:bg-gray-700/50 transition-colors cursor-pointer relative group"
     >
-      {/* Меню статусов (по ховеру) */}
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Кнопки действий (по ховеру) */}
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+        {task.operator_telegram_id && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onNotify()
+            }}
+            className="p-1 hover:bg-blue-500/20 rounded text-blue-400"
+            title="Отправить в Telegram"
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -886,7 +982,7 @@ function TaskCard({ task, onClick, onStatusChange }: {
         </button>
         
         {showMenu && (
-          <div className="absolute right-0 mt-1 w-40 bg-gray-800 border border-white/10 rounded-lg shadow-xl z-10">
+          <div className="absolute right-0 mt-6 w-40 bg-gray-800 border border-white/10 rounded-lg shadow-xl z-10">
             {Object.entries(STATUS_CONFIG).map(([status, config]) => {
               if (status === task.status || status === 'archived') return null
               const Icon = config.icon
@@ -910,7 +1006,7 @@ function TaskCard({ task, onClick, onStatusChange }: {
       </div>
 
       {/* Номер и заголовок */}
-      <div className="pr-8 mb-2">
+      <div className="pr-16 mb-2">
         <span className="text-[10px] text-gray-500">#{task.task_number}</span>
         <h4 className="font-medium text-sm line-clamp-2 mt-0.5">{task.title}</h4>
       </div>
@@ -934,13 +1030,16 @@ function TaskCard({ task, onClick, onStatusChange }: {
         ))}
       </div>
 
-      {/* Исполнитель и компания */}
+      {/* Оператор и компания */}
       <div className="flex items-center justify-between text-xs mb-2">
         <div className="flex items-center gap-1 text-gray-400">
           <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[8px] font-bold">
-            {task.assigned_to_name?.[0] || '?'}
+            {task.operator_name?.[0] || '?'}
           </div>
-          <span className="text-[10px]">{task.assigned_to_name || 'Не назначен'}</span>
+          <span className="text-[10px]">{task.operator_name || 'Не назначен'}</span>
+          {task.operator_telegram_id && (
+            <Send className="w-2.5 h-2.5 text-blue-400" />
+          )}
         </div>
 
         {task.company_name && (
@@ -990,7 +1089,7 @@ function TaskCard({ task, onClick, onStatusChange }: {
 // =====================
 // TASK DETAIL MODAL
 // =====================
-function TaskDetailModal({ task, isOpen, onClose, onUpdate, staff, companies, projects }: any) {
+function TaskDetailModal({ task, isOpen, onClose, onUpdate, operators, companies, projects, onNotify }: any) {
   const [comments, setComments] = useState<TaskComment[]>([])
   const [newComment, setNewComment] = useState('')
   const [loading, setLoading] = useState(false)
@@ -1006,6 +1105,7 @@ function TaskDetailModal({ task, isOpen, onClose, onUpdate, staff, companies, pr
       .from('task_comments')
       .select(`
         *,
+        operator:operator_id(name),
         staff:staff_id(full_name)
       `)
       .eq('task_id', task.id)
@@ -1014,7 +1114,8 @@ function TaskDetailModal({ task, isOpen, onClose, onUpdate, staff, companies, pr
     if (data) {
       setComments(data.map((c: any) => ({
         ...c,
-        staff_name: c.staff?.full_name
+        author_name: c.operator?.name || c.staff?.full_name,
+        author_type: c.operator_id ? 'operator' : 'staff'
       })))
     }
   }
@@ -1023,20 +1124,24 @@ function TaskDetailModal({ task, isOpen, onClose, onUpdate, staff, companies, pr
     if (!newComment.trim()) return
 
     setLoading(true)
+    // TODO: определить текущего пользователя (staff или operator)
+    const commentData = {
+      task_id: task.id,
+      staff_id: 'current-staff-id', // заменить на реальный ID
+      content: newComment
+    }
+
     const { data, error } = await supabase
       .from('task_comments')
-      .insert({
-        task_id: task.id,
-        staff_id: staff[0]?.id, // TODO: get current user
-        content: newComment
-      })
+      .insert(commentData)
       .select()
       .single()
 
     if (!error && data) {
       setComments([...comments, {
         ...data,
-        staff_name: staff.find((s: any) => s.id === data.staff_id)?.full_name
+        author_name: 'Администратор', // заменить на реальное имя
+        author_type: 'staff'
       }])
       setNewComment('')
     }
@@ -1065,6 +1170,17 @@ function TaskDetailModal({ task, isOpen, onClose, onUpdate, staff, companies, pr
                 Создано {formatDateTime(task.created_at)}
               </DialogDescription>
             </div>
+            {task.operator_telegram_id && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onNotify(task)}
+                className="gap-2"
+              >
+                <Send className="w-4 h-4" />
+                Уведомить в Telegram
+              </Button>
+            )}
           </div>
         </DialogHeader>
 
@@ -1087,12 +1203,15 @@ function TaskDetailModal({ task, isOpen, onClose, onUpdate, staff, companies, pr
               </div>
             </div>
             <div className="p-3 bg-white/5 rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Исполнитель</p>
+              <p className="text-xs text-gray-500 mb-1">Оператор</p>
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold">
-                  {task.assigned_to_name?.[0] || '?'}
+                  {task.operator_name?.[0] || '?'}
                 </div>
-                <span className="text-sm">{task.assigned_to_name || 'Не назначен'}</span>
+                <span className="text-sm">{task.operator_name || 'Не назначен'}</span>
+                {task.operator_telegram_id && (
+                  <Send className="w-3 h-3 text-blue-400" />
+                )}
               </div>
             </div>
             <div className="p-3 bg-white/5 rounded-lg">
@@ -1114,6 +1233,32 @@ function TaskDetailModal({ task, isOpen, onClose, onUpdate, staff, companies, pr
               )}
             </div>
           </div>
+
+          {/* Компания и проект */}
+          {(task.company_name || task.project_name) && (
+            <div className="flex gap-4 p-3 bg-white/5 rounded-lg">
+              {task.company_name && (
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "text-xs px-2 py-1 rounded-full border",
+                    getCompanyStyle(task.company_code)
+                  )}>
+                    {task.company_name}
+                  </span>
+                </div>
+              )}
+              {task.project_name && (
+                <div className="flex items-center gap-2">
+                  <span 
+                    className="text-xs px-2 py-1 rounded-full"
+                    style={{ backgroundColor: task.project_color + '20', color: task.project_color }}
+                  >
+                    {task.project_name}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Описание */}
           <div>
@@ -1179,12 +1324,12 @@ function TaskDetailModal({ task, isOpen, onClose, onUpdate, staff, companies, pr
               {comments.map((comment) => (
                 <div key={comment.id} className="flex gap-3">
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                    {comment.staff_name?.[0] || '?'}
+                    {comment.author_name?.[0] || '?'}
                   </div>
                   <div className="flex-1">
                     <div className="bg-gray-800/50 border border-white/5 rounded-lg p-3">
                       <div className="flex justify-between mb-1">
-                        <span className="font-medium text-sm">{comment.staff_name}</span>
+                        <span className="font-medium text-sm">{comment.author_name}</span>
                         <span className="text-xs text-gray-500">
                           {formatDateTime(comment.created_at)}
                         </span>
@@ -1208,7 +1353,7 @@ function TaskDetailModal({ task, isOpen, onClose, onUpdate, staff, companies, pr
 // =====================
 // CREATE TASK MODAL
 // =====================
-function CreateTaskModal({ isOpen, onClose, onSuccess, staff, companies, projects }: any) {
+function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies, projects }: any) {
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -1216,7 +1361,7 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, staff, companies, project
     status: 'todo',
     project_id: '',
     company_id: '',
-    assigned_to: '',
+    operator_id: '',
     due_date: '',
     estimated_hours: '',
     tags: '',
@@ -1233,7 +1378,7 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, staff, companies, project
       ...form,
       estimated_hours: form.estimated_hours ? Number(form.estimated_hours) : null,
       tags: form.tags ? form.tags.split(',').map(t => t.trim()) : [],
-      created_by: staff[0]?.id // TODO: get current user
+      created_by: 'current-staff-id', // TODO: get current staff ID
     }
 
     const { data, error } = await supabase
@@ -1241,8 +1386,7 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, staff, companies, project
       .insert([taskData])
       .select(`
         *,
-        assigned:staff!assigned_to(full_name),
-        created:staff!created_by(full_name),
+        operator:operators!operator_id(name, short_name, telegram_id),
         company:companies(name, code),
         project:projects(name, color)
       `)
@@ -1251,10 +1395,27 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, staff, companies, project
     setLoading(false)
 
     if (!error && data) {
+      // Отправляем уведомление оператору в Telegram
+      if (data.operator?.telegram_id) {
+        const message = `📋 Новая задача #${data.task_number}\n\n` +
+          `${data.title}\n\n` +
+          `📅 Дедлайн: ${data.due_date ? formatDate(data.due_date) : 'не указан'}\n` +
+          `🔥 Приоритет: ${PRIORITY_CONFIG[data.priority].label}`
+
+        await fetch('/api/telegram/send', {
+          method: 'POST',
+          body: JSON.stringify({
+            chat_id: data.operator.telegram_id,
+            text: message
+          })
+        })
+      }
+
       onSuccess({
         ...data,
-        assigned_to_name: data.assigned?.[0]?.full_name,
-        created_by_name: data.created?.[0]?.full_name,
+        operator_name: data.operator?.name,
+        operator_short_name: data.operator?.short_name,
+        operator_telegram_id: data.operator?.telegram_id,
         company_name: data.company?.name,
         company_code: data.company?.code,
         project_name: data.project?.name,
@@ -1359,15 +1520,17 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, staff, companies, project
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-medium">Исполнитель</label>
+              <label className="text-xs text-gray-400 font-medium">Оператор</label>
               <select
-                value={form.assigned_to}
-                onChange={(e) => setForm({...form, assigned_to: e.target.value})}
+                value={form.operator_id}
+                onChange={(e) => setForm({...form, operator_id: e.target.value})}
                 className="w-full h-9 rounded-md border border-white/10 bg-gray-800/50 px-3 py-1 text-sm text-white"
               >
                 <option value="">Не назначен</option>
-                {staff.map((s: any) => (
-                  <option key={s.id} value={s.id}>{s.full_name}</option>
+                {operators.map((op: Operator) => (
+                  <option key={op.id} value={op.id}>
+                    {op.name} {op.telegram_id ? '📱' : ''}
+                  </option>
                 ))}
               </select>
             </div>
