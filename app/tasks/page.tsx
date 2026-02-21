@@ -32,8 +32,11 @@ import {
   Send,
   AlertCircle,
   Clock,
-  Tag,
   Briefcase,
+  Eye,
+  EyeOff,
+  Tag,
+  ArrowUpDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -47,6 +50,12 @@ type Operator = {
   telegram_chat_id: string | null
   role: string | null
   is_active: boolean
+}
+
+type Staff = {
+  id: string
+  full_name: string
+  short_name: string | null
 }
 
 type Company = {
@@ -88,6 +97,7 @@ type TaskComment = {
   content: string
   created_at: string
   author_name?: string
+  author_type?: 'operator' | 'staff'
 }
 
 // =====================
@@ -97,9 +107,9 @@ const STATUS_CONFIG: Record<string, { title: string; color: string; icon: any }>
   backlog: { title: 'Бэклог', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20', icon: Clock },
   todo: { title: 'К выполнению', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', icon: CheckCircle2 },
   in_progress: { title: 'В работе', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20', icon: Briefcase },
-  review: { title: 'На проверке', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: User },
+  review: { title: 'На проверке', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: Eye },
   done: { title: 'Готово', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: CheckCircle2 },
-  archived: { title: 'Архив', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20', icon: Archive }
+  archived: { title: 'Архив', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20', icon: EyeOff }
 }
 
 const PRIORITY_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
@@ -109,6 +119,12 @@ const PRIORITY_CONFIG: Record<string, { icon: string; color: string; label: stri
   low: { icon: '💧', color: 'text-green-400 bg-green-500/10 border-green-500/20', label: 'Низкий' }
 }
 
+const COMPANY_COLORS: Record<string, string> = {
+  arena: 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400',
+  ramen: 'border-amber-500/30 bg-amber-500/5 text-amber-400',
+  extra: 'border-violet-500/30 bg-violet-500/5 text-violet-400'
+}
+
 // =====================
 // UTILS
 // =====================
@@ -116,7 +132,8 @@ const formatDate = (date: string | null) => {
   if (!date) return '—'
   return new Date(date).toLocaleDateString('ru-RU', { 
     day: 'numeric', 
-    month: 'short' 
+    month: 'short',
+    year: 'numeric'
   })
 }
 
@@ -142,26 +159,23 @@ const getDaysUntilDue = (dueDate: string | null) => {
 }
 
 const getCompanyStyle = (code: string | null) => {
-  const colors: Record<string, string> = {
-    arena: 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400',
-    ramen: 'border-amber-500/30 bg-amber-500/5 text-amber-400',
-    extra: 'border-violet-500/30 bg-violet-500/5 text-violet-400'
-  }
-  return colors[code?.toLowerCase() || ''] || 'border-gray-500/30 bg-gray-500/5 text-gray-400'
+  if (!code) return 'border-gray-500/30 bg-gray-500/5 text-gray-400'
+  return COMPANY_COLORS[code.toLowerCase()] || 'border-gray-500/30 bg-gray-500/5 text-gray-400'
 }
 
-// Функция отправки в Telegram (заглушка, нужно реализовать)
+// Функция отправки в Telegram (нужно будет реализовать через API)
 const sendTelegramNotification = async (chatId: string, message: string) => {
   console.log(`Sending to ${chatId}: ${message}`)
-  // Здесь будет вызов твоего API
+  // TODO: Реализовать отправку через твоего бота
   // await fetch('/api/telegram/send', {
   //   method: 'POST',
+  //   headers: { 'Content-Type': 'application/json' },
   //   body: JSON.stringify({ chat_id: chatId, text: message })
   // })
 }
 
 // =====================
-// LOADING
+// LOADING COMPONENT
 // =====================
 function TasksLoading() {
   return (
@@ -180,7 +194,7 @@ function TasksLoading() {
 }
 
 // =====================
-// MAIN CONTENT
+// MAIN CONTENT COMPONENT
 // =====================
 function TasksContent() {
   const router = useRouter()
@@ -197,6 +211,7 @@ function TasksContent() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false)
 
   // Фильтры
   const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '')
@@ -286,8 +301,9 @@ function TasksContent() {
         const term = searchTerm.toLowerCase()
         const matches = 
           task.title.toLowerCase().includes(term) ||
+          task.task_number.toString().includes(term) ||
           task.operator_name?.toLowerCase().includes(term) ||
-          task.task_number.toString().includes(term)
+          task.description?.toLowerCase().includes(term)
         if (!matches) return false
       }
 
@@ -320,7 +336,7 @@ function TasksContent() {
   const stats = useMemo(() => {
     const total = filteredTasks.length
     const overdue = filteredTasks.filter(t => isOverdue(t.due_date, t.status)).length
-    const critical = filteredTasks.filter(t => t.priority === 'critical').length
+    const critical = filteredTasks.filter(t => t.priority === 'critical' && t.status !== 'done').length
     
     return { total, overdue, critical }
   }, [filteredTasks])
@@ -365,7 +381,7 @@ function TasksContent() {
       return
     }
 
-    const message = `📋 Задача #${task.task_number}\n\n` +
+    const message = `📋 *Задача #${task.task_number}*\n\n` +
       `${task.title}\n\n` +
       `📅 Дедлайн: ${task.due_date ? formatDate(task.due_date) : 'не указан'}\n` +
       `🔥 Приоритет: ${PRIORITY_CONFIG[task.priority].label}\n` +
@@ -421,7 +437,7 @@ function TasksContent() {
                   </h1>
                   <p className="text-gray-400 mt-1 flex items-center gap-2">
                     <Send className="w-4 h-4" />
-                    Уведомления приходят в Telegram
+                    Уведомления в Telegram
                   </p>
                 </div>
               </div>
@@ -628,6 +644,7 @@ function TasksContent() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/5 bg-gray-900/50">
+                      <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">#</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Задача</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Статус</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Приоритет</th>
@@ -646,11 +663,9 @@ function TasksContent() {
                         }}
                         className="hover:bg-white/5 transition-colors cursor-pointer"
                       >
+                        <td className="py-3 px-4 text-sm text-gray-400">#{task.task_number}</td>
                         <td className="py-3 px-4">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-white">#{task.task_number}</span>
-                            <span className="text-sm text-gray-300 line-clamp-1">{task.title}</span>
-                          </div>
+                          <span className="text-sm text-white line-clamp-1">{task.title}</span>
                         </td>
                         <td className="py-3 px-4">
                           <span className={cn(
@@ -674,7 +689,7 @@ function TasksContent() {
                               {task.operator_short_name?.[0] || task.operator_name?.[0] || '?'}
                             </div>
                             <span className="text-sm text-gray-300">
-                              {task.operator_short_name || task.operator_name || 'Не назначен'}
+                              {task.operator_short_name || task.operator_name || '—'}
                             </span>
                             {task.operator_telegram && (
                               <Send className="w-3 h-3 text-blue-400" />
@@ -683,13 +698,12 @@ function TasksContent() {
                         </td>
                         <td className="py-3 px-4">
                           {task.due_date ? (
-                            <div className={cn(
-                              "flex items-center gap-1 text-sm",
+                            <span className={cn(
+                              "text-sm",
                               isOverdue(task.due_date, task.status) ? "text-red-400" : "text-gray-300"
                             )}>
-                              <Calendar className="w-3 h-3" />
                               {formatDate(task.due_date)}
-                            </div>
+                            </span>
                           ) : (
                             <span className="text-gray-500">—</span>
                           )}
@@ -737,7 +751,7 @@ function TasksContent() {
         </div>
       </main>
 
-      {/* Modals */}
+      {/* Task Detail Modal */}
       {selectedTask && (
         <TaskDetailModal
           task={selectedTask}
@@ -747,10 +761,12 @@ function TasksContent() {
             setSelectedTask(null)
           }}
           operators={operators}
+          companies={companies}
           onNotify={() => handleNotifyOperator(selectedTask)}
         />
       )}
 
+      {/* Create Task Modal */}
       <CreateTaskModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
@@ -766,7 +782,7 @@ function TasksContent() {
 }
 
 // =====================
-// TASK CARD
+// TASK CARD COMPONENT
 // =====================
 function TaskCard({ task, onClick, onStatusChange, onNotify }: any) {
   const [showMenu, setShowMenu] = useState(false)
@@ -805,7 +821,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify }: any) {
         {showMenu && (
           <div className="absolute right-0 mt-6 w-40 bg-gray-800 border border-white/10 rounded-lg shadow-xl z-10">
             {Object.entries(STATUS_CONFIG).map(([status, config]) => {
-              if (status === task.status) return null
+              if (status === task.status || status === 'archived') return null
               return (
                 <button
                   key={status}
@@ -883,8 +899,10 @@ function TaskCard({ task, onClick, onStatusChange, onNotify }: any) {
 // =====================
 // TASK DETAIL MODAL
 // =====================
-function TaskDetailModal({ task, isOpen, onClose, operators, onNotify }: any) {
+function TaskDetailModal({ task, isOpen, onClose, operators, companies, onNotify }: any) {
   const [comments, setComments] = useState<TaskComment[]>([])
+  const [newComment, setNewComment] = useState('')
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (isOpen && task) {
@@ -907,8 +925,30 @@ function TaskDetailModal({ task, isOpen, onClose, operators, onNotify }: any) {
     }
   }
 
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return
+
+    setLoading(true)
+    // TODO: заменить на реальный ID текущего пользователя
+    const { error } = await supabase
+      .from('task_comments')
+      .insert([{
+        task_id: task.id,
+        staff_id: '00000000-0000-0000-0000-000000000000',
+        content: newComment
+      }])
+
+    setLoading(false)
+
+    if (!error) {
+      setNewComment('')
+      loadComments()
+    }
+  }
+
   const priorityConfig = PRIORITY_CONFIG[task.priority]
   const statusConfig = STATUS_CONFIG[task.status]
+  const StatusIcon = statusConfig.icon
   const isTaskOverdue = isOverdue(task.due_date, task.status)
   const daysUntilDue = getDaysUntilDue(task.due_date)
 
@@ -946,16 +986,15 @@ function TaskDetailModal({ task, isOpen, onClose, operators, onNotify }: any) {
             <div className="p-3 bg-white/5 rounded-lg">
               <p className="text-xs text-gray-500 mb-1">Статус</p>
               <div className="flex items-center gap-2">
-                <span className={cn("text-xs px-2 py-1 rounded-full", statusConfig?.color)}>
-                  {statusConfig?.title}
-                </span>
+                <StatusIcon className={cn("w-4 h-4", statusConfig.color.split(' ')[0])} />
+                <span className="text-sm">{statusConfig.title}</span>
               </div>
             </div>
             <div className="p-3 bg-white/5 rounded-lg">
               <p className="text-xs text-gray-500 mb-1">Приоритет</p>
               <div className="flex items-center gap-2">
-                <span className={cn("text-xs px-2 py-1 rounded-full", priorityConfig?.color)}>
-                  {priorityConfig?.icon} {priorityConfig?.label}
+                <span className={cn("text-sm px-2 py-0.5 rounded-full", priorityConfig.color)}>
+                  {priorityConfig.icon} {priorityConfig.label}
                 </span>
               </div>
             </div>
@@ -1014,9 +1053,46 @@ function TaskDetailModal({ task, isOpen, onClose, operators, onNotify }: any) {
             </div>
           )}
 
+          {/* Теги */}
+          {task.tags && task.tags.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-400 mb-2">Теги</h3>
+              <div className="flex flex-wrap gap-2">
+                {task.tags.map((tag: string) => (
+                  <span
+                    key={tag}
+                    className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-300 border border-white/5"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Комментарии */}
           <div>
             <h3 className="text-sm font-medium text-gray-400 mb-2">Комментарии</h3>
+            
+            {/* Форма комментария */}
+            <div className="flex gap-2 mb-4">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Напишите комментарий..."
+                className="flex-1 bg-gray-800/50 border border-white/10 rounded-lg p-2 text-sm resize-none text-white"
+                rows={2}
+              />
+              <Button
+                onClick={handleAddComment}
+                disabled={loading || !newComment.trim()}
+                className="self-end bg-violet-500 hover:bg-violet-600"
+              >
+                Отправить
+              </Button>
+            </div>
+
+            {/* Список комментариев */}
             <div className="space-y-3 max-h-60 overflow-auto">
               {comments.map(comment => (
                 <div key={comment.id} className="flex gap-3">
@@ -1067,7 +1143,7 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: a
 
     const taskData = {
       ...form,
-      tags: form.tags ? form.tags.split(',').map(t => t.trim()) : [],
+      tags: form.tags ? form.tags.split(',').map((t: string) => t.trim()) : [],
       created_by: '00000000-0000-0000-0000-000000000000', // TODO: заменить на реальный ID
     }
 
@@ -1078,18 +1154,18 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: a
     setLoading(false)
 
     if (!error) {
-      onSuccess()
-      
-      // Уведомление оператору
+      // Уведомление оператору в Telegram
       if (form.operator_id) {
         const operator = operators.find((o: Operator) => o.id === form.operator_id)
         if (operator?.telegram_chat_id) {
           await sendTelegramNotification(
             operator.telegram_chat_id,
-            `📋 Новая задача!\n\n${form.title}\n\n📅 Дедлайн: ${form.due_date ? formatDate(form.due_date) : 'не указан'}`
+            `📋 *Новая задача!*\n\n${form.title}\n\n📅 Дедлайн: ${form.due_date ? formatDate(form.due_date) : 'не указан'}`
           )
         }
       }
+      
+      onSuccess()
     }
   }
 
@@ -1116,27 +1192,40 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: a
             placeholder="Описание"
             value={form.description}
             onChange={(e) => setForm({...form, description: e.target.value})}
-            className="w-full h-24 bg-gray-800/50 border border-white/10 rounded-lg p-2 text-sm resize-none"
+            className="w-full h-24 bg-gray-800/50 border border-white/10 rounded-lg p-2 text-sm resize-none text-white"
           />
 
-          <select
-            value={form.operator_id}
-            onChange={(e) => setForm({...form, operator_id: e.target.value})}
-            className="w-full h-9 bg-gray-800/50 border border-white/10 rounded-lg px-3 text-sm"
-          >
-            <option value="">Выберите оператора</option>
-            {operators.map((op: Operator) => (
-              <option key={op.id} value={op.id}>
-                {op.name} {op.telegram_chat_id ? '📱' : ''}
-              </option>
-            ))}
-          </select>
+          <div className="grid grid-cols-2 gap-3">
+            <select
+              value={form.operator_id}
+              onChange={(e) => setForm({...form, operator_id: e.target.value})}
+              className="h-9 bg-gray-800/50 border border-white/10 rounded-lg px-3 text-sm text-white"
+            >
+              <option value="">Выберите оператора</option>
+              {operators.map((op: Operator) => (
+                <option key={op.id} value={op.id}>
+                  {op.name} {op.telegram_chat_id ? '📱' : ''}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={form.company_id}
+              onChange={(e) => setForm({...form, company_id: e.target.value})}
+              className="h-9 bg-gray-800/50 border border-white/10 rounded-lg px-3 text-sm text-white"
+            >
+              <option value="">Выберите компанию</option>
+              {companies.map((company: Company) => (
+                <option key={company.id} value={company.id}>{company.name}</option>
+              ))}
+            </select>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <select
               value={form.priority}
               onChange={(e) => setForm({...form, priority: e.target.value})}
-              className="h-9 bg-gray-800/50 border border-white/10 rounded-lg px-3 text-sm"
+              className="h-9 bg-gray-800/50 border border-white/10 rounded-lg px-3 text-sm text-white"
             >
               <option value="low">💧 Низкий</option>
               <option value="medium">📌 Средний</option>
