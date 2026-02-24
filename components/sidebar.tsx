@@ -88,7 +88,7 @@ const menuGroups = [
     items: [
       { icon: User, label: 'Операторы', href: '/operators' },
       { icon: Key, label: 'Управление доступом', href: '/pass', special: true },
-      { icon: Trophy, label: 'Достижения', href: '/operator-achievements', special: true },
+      { icon: Trophy, label: 'Достижения', href: '/operator-achievements-all', special: true },
       { icon: Settings, label: 'Настройки операторов', href: '/operator-settings', special: true },
       { icon: User, label: 'Профили', href: '/operator-profile', special: true },
     ],
