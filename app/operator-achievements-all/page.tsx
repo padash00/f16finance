@@ -55,6 +55,7 @@ import {
   BarChart3,
   Filter,
   Search,
+  Eye, // 👈 ВАЖНО: добавить этот импорт!
 } from 'lucide-react'
 
 type Achievement = {
@@ -106,7 +107,27 @@ export default function OperatorAchievementsAllPage() {
       try {
         setLoading(true)
         
+        console.log('📊 Начинаем загрузку данных для страницы всех достижений')
+        console.log('1️⃣ Проверяем авторизацию...')
+        
+        // Проверяем авторизацию
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        
+        if (userError) {
+          console.error('❌ Ошибка авторизации:', userError)
+          throw userError
+        }
+        
+        if (!user) {
+          console.log('👤 Пользователь не авторизован, редирект на /login')
+          router.push('/login')
+          return
+        }
+        
+        console.log('✅ Пользователь авторизован:', user.email)
+        
         // Получаем всех активных операторов
+        console.log('2️⃣ Загружаем список активных операторов из таблицы operators...')
         const { data: operatorsData, error: operatorsError } = await supabase
           .from('operators')
           .select(`
@@ -122,21 +143,50 @@ export default function OperatorAchievementsAllPage() {
           .eq('is_active', true)
           .order('name')
 
-        if (operatorsError) throw operatorsError
+        if (operatorsError) {
+          console.error('❌ Ошибка загрузки операторов:', operatorsError)
+          throw operatorsError
+        }
+
+        console.log(`✅ Загружено ${operatorsData?.length || 0} активных операторов`)
+        console.log('📋 Список операторов:', operatorsData?.map(op => ({ 
+          id: op.id, 
+          name: op.name,
+          has_profile: !!op.operator_profiles 
+        })))
 
         const operatorsWithAchievements: OperatorWithAchievements[] = []
 
         // Для каждого оператора загружаем достижения и уровень
-        for (const op of operatorsData || []) {
+        console.log('3️⃣ Начинаем загрузку достижений для каждого оператора...')
+        
+        for (let i = 0; i < (operatorsData?.length || 0); i++) {
+          const op = operatorsData[i]
           const profile = op.operator_profiles || {}
           
+          console.log(`   🔄 Оператор ${i+1}/${operatorsData?.length}: ${op.name} (ID: ${op.id})`)
+          
           // Получаем уровень и XP
-          const { data: levelData } = await supabase
+          console.log(`      ⏳ Загружаем уровень и XP...`)
+          const { data: levelData, error: levelError } = await supabase
             .rpc('get_operator_level_info', { operator_uuid: op.id })
 
+          if (levelError) {
+            console.error(`      ❌ Ошибка загрузки уровня для ${op.name}:`, levelError)
+          } else {
+            console.log(`      ✅ Уровень загружен:`, levelData)
+          }
+
           // Получаем все ачивки
-          const { data: achievementsData } = await supabase
+          console.log(`      ⏳ Загружаем достижения...`)
+          const { data: achievementsData, error: achievementsError } = await supabase
             .rpc('get_operator_achievements', { operator_uuid: op.id })
+
+          if (achievementsError) {
+            console.error(`      ❌ Ошибка загрузки достижений для ${op.name}:`, achievementsError)
+          } else {
+            console.log(`      ✅ Загружено ${achievementsData?.length || 0} достижений`)
+          }
 
           const achievements = achievementsData || []
           const levelInfo = levelData && levelData.length > 0 ? levelData[0] : { calculated_level: 1, total_xp: 0 }
@@ -148,6 +198,7 @@ export default function OperatorAchievementsAllPage() {
               new Date(b.achieved_at).getTime() - new Date(a.achieved_at).getTime()
             )
             lastAchievement = sorted[0].achievement_name
+            console.log(`      🏆 Последнее достижение: ${lastAchievement}`)
           }
 
           operatorsWithAchievements.push({
@@ -164,6 +215,14 @@ export default function OperatorAchievementsAllPage() {
           })
         }
 
+        console.log('✅ Завершена загрузка всех операторов')
+        console.log('📊 Итоговые данные:', operatorsWithAchievements.map(op => ({
+          name: op.name,
+          level: op.level,
+          xp: op.total_xp,
+          achievements: op.achievements_count
+        })))
+
         // Сортируем по умолчанию (по XP)
         const sorted = [...operatorsWithAchievements].sort((a, b) => b.total_xp - a.total_xp)
         
@@ -172,40 +231,51 @@ export default function OperatorAchievementsAllPage() {
 
         // Рассчитываем статистику
         const totalXP = sorted.reduce((sum, op) => sum + op.total_xp, 0)
-        setStats({
+        const newStats = {
           totalOperators: sorted.length,
           totalAchievements: sorted.reduce((sum, op) => sum + op.achievements_count, 0),
           totalXP: totalXP,
           averageXP: sorted.length > 0 ? Math.round(totalXP / sorted.length) : 0,
           topOperator: sorted.length > 0 ? (sorted[0].short_name || sorted[0].name) : '',
-        })
+        }
+        
+        console.log('📈 Статистика:', newStats)
+        setStats(newStats)
 
       } catch (err: any) {
-        console.error('Ошибка:', err)
+        console.error('❌ Критическая ошибка в loadData:', err)
+        console.error('   Сообщение:', err.message)
+        console.error('   Стек:', err.stack)
         setError(err.message)
       } finally {
+        console.log('🏁 Загрузка данных завершена')
         setLoading(false)
       }
     }
 
     loadData()
-  }, [])
+  }, [router])
 
   const handleLogout = async () => {
+    console.log('🚪 Выход из системы...')
     await supabase.auth.signOut()
     router.push('/login')
   }
 
   // Поиск и сортировка
   useEffect(() => {
+    console.log(`🔍 Поиск: "${searchQuery}", Сортировка: ${sortBy} (${sortDirection})`)
+    
     let filtered = [...operators]
 
     // Поиск по имени
     if (searchQuery) {
+      const query = searchQuery.toLowerCase()
       filtered = filtered.filter(op => 
-        op.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (op.short_name && op.short_name.toLowerCase().includes(searchQuery.toLowerCase()))
+        op.name.toLowerCase().includes(query) ||
+        (op.short_name && op.short_name.toLowerCase().includes(query))
       )
+      console.log(`   Найдено ${filtered.length} операторов по запросу "${searchQuery}"`)
     }
 
     // Сортировка
@@ -248,6 +318,12 @@ export default function OperatorAchievementsAllPage() {
     })
   }
 
+  const handleViewAchievements = (op: OperatorWithAchievements) => {
+    console.log(`👁️ Просмотр достижений оператора: ${op.name} (ID: ${op.id})`)
+    console.log(`   Уровень: ${op.level}, XP: ${op.total_xp}, Достижений: ${op.achievements_count}`)
+    setSelectedOperator(op)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center">
@@ -263,6 +339,7 @@ export default function OperatorAchievementsAllPage() {
   }
 
   if (error) {
+    console.error('❌ Рендер страницы с ошибкой:', error)
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center p-4">
         <Card className="p-8 max-w-md border-red-500/20 bg-red-500/5">
@@ -281,6 +358,8 @@ export default function OperatorAchievementsAllPage() {
     )
   }
 
+  console.log(`🖥️ Рендер страницы: ${filteredOperators.length} операторов отображается`)
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
       {/* Шапка */}
@@ -346,7 +425,10 @@ export default function OperatorAchievementsAllPage() {
                 </div>
               </div>
               <button
-                onClick={() => setSelectedOperator(null)}
+                onClick={() => {
+                  console.log(`❌ Закрытие модального окна для ${selectedOperator.name}`)
+                  setSelectedOperator(null)
+                }}
                 className="p-1 hover:bg-white/10 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-gray-400" />
@@ -396,7 +478,10 @@ export default function OperatorAchievementsAllPage() {
             <div className="flex justify-center pt-4">
               <Button
                 variant="outline"
-                onClick={() => setSelectedOperator(null)}
+                onClick={() => {
+                  console.log(`❌ Закрытие модального окна для ${selectedOperator.name}`)
+                  setSelectedOperator(null)
+                }}
                 className="border-white/10 hover:bg-white/10"
               >
                 Закрыть
@@ -568,7 +653,7 @@ export default function OperatorAchievementsAllPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setSelectedOperator(op)}
+                        onClick={() => handleViewAchievements(op)}
                         className="border-white/10 hover:bg-white/10"
                       >
                         <Eye className="w-4 h-4 mr-2" />
