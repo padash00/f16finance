@@ -42,6 +42,7 @@ import {
   Lock,
   MessageCircle,
   MessageSquare,
+  Eye,
 } from 'lucide-react'
 import { Button } from './ui/button'
 
