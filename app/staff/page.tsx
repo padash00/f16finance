@@ -374,9 +374,9 @@ export default function StaffPageSmart() {
               if (!accountInfo) return item
               return {
                 ...item,
-                full_name: item.full_name || accountInfo.full_name || item.full_name,
-                phone: item.phone || accountInfo.phone || item.phone,
-                email: item.email || accountInfo.email || item.email,
+                full_name: accountInfo.full_name || item.full_name,
+                phone: accountInfo.phone || item.phone,
+                email: accountInfo.email || item.email,
               }
             }),
           )
