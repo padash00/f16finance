@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -60,6 +60,9 @@ type NavSection = {
   accent: string
   items: NavItem[]
 }
+
+const SIDEBAR_SCROLL_KEY = 'f16.sidebar.scrollTop'
+const SIDEBAR_SECTIONS_KEY = 'f16.sidebar.sections'
 
 const navSections: NavSection[] = [
   {
@@ -138,8 +141,8 @@ const navSections: NavSection[] = [
 
 function LogoMark() {
   return (
-    <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(145deg,rgba(255,180,107,0.35),rgba(87,130,255,0.28))] shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
-      <div className="absolute inset-[1px] rounded-[15px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.24),transparent_58%),linear-gradient(180deg,rgba(13,18,28,0.96),rgba(8,12,20,0.98))]" />
+    <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-[1.15rem] border border-white/10 bg-[linear-gradient(145deg,rgba(255,170,92,0.35),rgba(75,132,255,0.32))] shadow-[0_16px_32px_rgba(0,0,0,0.28)]">
+      <div className="absolute inset-[1px] rounded-[1rem] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.22),transparent_56%),linear-gradient(180deg,rgba(8,13,24,0.98),rgba(7,11,20,0.98))]" />
       <Sparkles className="relative z-10 h-5 w-5 text-[#ffd27b]" />
     </div>
   )
@@ -147,33 +150,33 @@ function LogoMark() {
 
 function BrandHeader() {
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02))] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+    <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,179,107,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.32)]">
       <div className="flex items-start gap-3">
         <LogoMark />
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="truncate text-[15px] font-semibold tracking-[-0.03em] text-white">F16 Finance OS</h1>
-            <span className="rounded-full border border-[#ffd27b]/25 bg-[#ffd27b]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.24em] text-[#ffd27b]">
-              Core
+            <span className="rounded-full border border-[#ffd27b]/20 bg-[#ffd27b]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.22em] text-[#ffd27b]">
+              control
             </span>
           </div>
           <p className="mt-1 text-xs leading-5 text-slate-400">
-            Единая панель для денег, команды и операционного ритма.
+            Единая панель для денег, команды, смен и системного контроля.
           </p>
         </div>
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Flow</p>
-          <p className="mt-1 text-sm font-semibold text-white">Cash</p>
+        <div className="rounded-[1.2rem] border border-white/8 bg-black/20 px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Money</p>
+          <p className="mt-1 text-sm font-semibold text-white">Flow</p>
         </div>
-        <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Ops</p>
-          <p className="mt-1 text-sm font-semibold text-white">Team</p>
+        <div className="rounded-[1.2rem] border border-white/8 bg-black/20 px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">People</p>
+          <p className="mt-1 text-sm font-semibold text-white">Ops</p>
         </div>
-        <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Mode</p>
+        <div className="rounded-[1.2rem] border border-white/8 bg-black/20 px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">System</p>
           <p className="mt-1 text-sm font-semibold text-white">Live</p>
         </div>
       </div>
@@ -197,18 +200,18 @@ function SidebarItem({
       href={item.href}
       onClick={onClick}
       className={cn(
-        'group relative flex items-start gap-3 overflow-hidden rounded-2xl border pl-4 pr-3 py-3 transition-all duration-200',
+        'group relative flex items-start gap-3 overflow-hidden rounded-[1.15rem] border pl-3.5 pr-3 py-3 transition-all duration-200',
         active
-          ? 'border-white/15 bg-[linear-gradient(135deg,rgba(255,179,107,0.18),rgba(97,122,255,0.14))] text-white shadow-[0_16px_35px_rgba(0,0,0,0.22)]'
-          : 'border-transparent bg-white/[0.03] text-slate-300 hover:border-white/8 hover:bg-white/[0.06] hover:text-white',
+          ? 'border-[#ffd27b]/18 bg-[linear-gradient(135deg,rgba(255,179,107,0.16),rgba(95,140,255,0.12))] text-white shadow-[0_14px_30px_rgba(0,0,0,0.22)]'
+          : 'border-transparent bg-white/[0.025] text-slate-300 hover:border-white/8 hover:bg-white/[0.055] hover:text-white',
       )}
     >
       <div
         className={cn(
-          'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border transition-all',
+          'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[1rem] border transition-all',
           active
-            ? 'border-white/15 bg-white/10 text-[#ffd27b]'
-            : 'border-white/8 bg-black/15 text-slate-400 group-hover:text-[#ffd27b]',
+            ? 'border-white/14 bg-white/10 text-[#ffd27b]'
+            : 'border-white/8 bg-black/20 text-slate-400 group-hover:text-[#ffd27b]',
         )}
       >
         <Icon className="h-4 w-4" />
@@ -226,7 +229,7 @@ function SidebarItem({
         {item.note ? <p className="mt-1 text-xs leading-4 text-slate-500 group-hover:text-slate-400">{item.note}</p> : null}
       </div>
 
-      {active ? <div className="absolute inset-y-3 left-0 w-[3px] rounded-r-full bg-[#ffd27b]" /> : null}
+      {active ? <div className="absolute inset-y-2.5 left-0 w-[3px] rounded-r-full bg-[#ffd27b]" /> : null}
     </Link>
   )
 }
@@ -249,11 +252,11 @@ function SidebarSection({
   )
 
   return (
-    <section className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-2 shadow-[0_14px_28px_rgba(0,0,0,0.18)]">
+    <section className="rounded-[1.65rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))] p-2 shadow-[0_12px_24px_rgba(0,0,0,0.16)]">
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-3 rounded-[20px] py-3 pl-4 pr-3 text-left transition-colors hover:bg-white/[0.04]"
+        className="flex w-full items-center gap-3 rounded-[1.25rem] py-3 pl-3.5 pr-3 text-left transition-colors hover:bg-white/[0.04]"
       >
         <div className={cn('h-10 w-1 rounded-full bg-gradient-to-b', section.accent)} />
         <div className="min-w-0 flex-1">
@@ -271,7 +274,7 @@ function SidebarSection({
       </button>
 
       {open ? (
-        <div className="space-y-2 pb-1 pl-4 pr-1 pt-2">
+        <div className="space-y-2 pb-1 pl-2 pr-1 pt-2">
           {section.items.map((item) => {
             const active = item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/')
             return <SidebarItem key={item.href} item={item} active={active} onClick={onNavigate} />
@@ -294,9 +297,9 @@ function UserCard({
   roleLabel: string | null
 }) {
   return (
-    <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-4">
+    <div className="rounded-[1.9rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.02))] p-4">
       <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))] text-white">
+        <div className="flex h-11 w-11 items-center justify-center rounded-[1rem] border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))] text-white">
           <ShieldCheck className="h-5 w-5 text-[#ffd27b]" />
         </div>
         <div className="min-w-0 flex-1">
@@ -334,6 +337,8 @@ function UserCard({
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const hasRestoredScrollRef = useRef(false)
   const [isOpen, setIsOpen] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState<string | null>(null)
@@ -342,9 +347,18 @@ export function Sidebar() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [isStaff, setIsStaff] = useState(false)
   const [isOperator, setIsOperator] = useState(false)
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(navSections.map((section, index) => [section.id, index < 3])),
-  )
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== 'undefined') {
+      const raw = window.localStorage.getItem(SIDEBAR_SECTIONS_KEY)
+      if (raw) {
+        try {
+          return JSON.parse(raw) as Record<string, boolean>
+        } catch {}
+      }
+    }
+
+    return Object.fromEntries(navSections.map((section, index) => [section.id, index < 3]))
+  })
 
   useEffect(() => {
     let ignore = false
@@ -375,6 +389,20 @@ export function Sidebar() {
     return () => {
       ignore = true
     }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(SIDEBAR_SECTIONS_KEY, JSON.stringify(openSections))
+  }, [openSections])
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined' || !scrollRef.current || hasRestoredScrollRef.current) return
+    const saved = window.sessionStorage.getItem(SIDEBAR_SCROLL_KEY)
+    if (saved) {
+      scrollRef.current.scrollTop = Number(saved) || 0
+    }
+    hasRestoredScrollRef.current = true
   }, [])
 
   const visibleSections = useMemo(() => {
@@ -427,7 +455,7 @@ export function Sidebar() {
   }
 
   const navContent = (
-    <div className="flex h-full flex-col bg-[linear-gradient(180deg,#0a1019_0%,#08111d_48%,#09131f_100%)] text-white">
+    <div className="flex h-full flex-col bg-[linear-gradient(180deg,#07101a_0%,#09111b_36%,#08121d_100%)] text-white">
       <div className="flex items-center justify-between border-b border-white/6 px-4 py-4 md:px-5">
         <LogoMark />
         <button
@@ -438,26 +466,35 @@ export function Sidebar() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 md:px-5">
-        <BrandHeader />
+      <div
+        ref={scrollRef}
+        onScroll={(event) => {
+          if (typeof window === 'undefined') return
+          window.sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(event.currentTarget.scrollTop))
+        }}
+        className="flex-1 overflow-y-auto px-4 py-4 md:px-5"
+      >
+        <div className="sticky top-0 z-10 -mx-1 bg-[linear-gradient(180deg,rgba(7,16,26,0.96),rgba(7,16,26,0.78),transparent)] px-1 pb-3 pt-1 backdrop-blur-xl">
+          <BrandHeader />
 
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          {stats.map((stat) => {
-            const Icon = stat.icon
-            return (
-              <div
-                key={stat.label}
-                className="rounded-[22px] border border-white/8 bg-white/[0.04] px-3 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,0.14)]"
-              >
-                <Icon className="mx-auto h-3.5 w-3.5 text-slate-500" />
-                <p className="mt-2 text-sm font-semibold text-white">{stat.value}</p>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{stat.label}</p>
-              </div>
-            )
-          })}
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {stats.map((stat) => {
+              const Icon = stat.icon
+              return (
+                <div
+                  key={stat.label}
+                  className="rounded-[1.1rem] border border-white/8 bg-white/[0.04] px-3 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,0.14)]"
+                >
+                  <Icon className="mx-auto h-3.5 w-3.5 text-slate-500" />
+                  <p className="mt-2 text-sm font-semibold text-white">{stat.value}</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{stat.label}</p>
+                </div>
+              )
+            })}
+          </div>
         </div>
 
-        <div className="mt-5 space-y-3 pl-2">
+        <div className="mt-5 space-y-3 pl-1">
           {visibleSections.map((section) => (
             <SidebarSection
               key={section.id}
@@ -507,7 +544,7 @@ export function Sidebar() {
         </div>
       ) : null}
 
-      <aside className="sticky top-0 hidden h-screen w-[368px] shrink-0 border-r border-white/6 bg-[linear-gradient(180deg,#07101a_0%,#08111d_40%,#09131f_100%)] md:block xl:w-[392px]">
+      <aside className="sticky top-0 hidden h-screen w-[380px] shrink-0 border-r border-white/6 bg-[linear-gradient(180deg,#07101a_0%,#08111d_40%,#09131f_100%)] md:block xl:w-[404px]">
         {navContent}
       </aside>
     </>
