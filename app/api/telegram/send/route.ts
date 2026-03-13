@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 
+import { writeNotificationLog } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
-import { requireAdminRequest } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, requireAdminRequest } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type Body = {
   chatId: string
@@ -26,6 +28,9 @@ export async function POST(req: Request) {
     if (!chatId) return json({ error: 'chatId обязателен' }, 400)
     if (!text) return json({ error: 'text обязателен' }, 400)
 
+    const requestClient = createRequestSupabaseClient(req)
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient
+
     const botToken = requiredEnv('TELEGRAM_BOT_TOKEN')
     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
@@ -41,8 +46,21 @@ export async function POST(req: Request) {
     const payload = await response.json().catch(() => null)
     if (!response.ok || !payload?.ok) {
       console.error('Task telegram send error', payload)
+      await writeNotificationLog(supabase, {
+        channel: 'telegram',
+        recipient: chatId,
+        status: 'failed',
+        payload: { kind: 'manual-send', error: payload?.description || 'telegram-error' },
+      })
       return json({ error: payload?.description || 'Telegram не принял сообщение' }, 502)
     }
+
+    await writeNotificationLog(supabase, {
+      channel: 'telegram',
+      recipient: chatId,
+      status: 'sent',
+      payload: { kind: 'manual-send' },
+    })
 
     return json({ ok: true })
   } catch (error: any) {

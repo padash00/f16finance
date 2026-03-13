@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getPublicAppUrl } from '@/lib/core/app-url'
-import { writeAuditLog } from '@/lib/server/audit'
+import { writeAuditLog, writeNotificationLog } from '@/lib/server/audit'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -200,6 +200,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  let requestBody: PostBody | null = null
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
@@ -216,6 +217,7 @@ export async function POST(req: Request) {
     }
 
     const body = (await req.json().catch(() => null)) as PostBody | null
+    requestBody = body
     if (!body?.staffId || (body.action !== 'inviteStaffAccount' && body.action !== 'sendPasswordReset')) {
       return json({ error: 'Неверный формат запроса' }, 400)
     }
@@ -271,6 +273,12 @@ export async function POST(req: Request) {
           action: 'invite',
           payload: { email, staff_role: resolved.staff.role, mode: 'invite' },
         })
+        await writeNotificationLog(supabase, {
+          channel: 'email',
+          recipient: email,
+          status: 'sent',
+          payload: { kind: 'staff-invite', staff_id: resolved.staff.id, role: resolved.staff.role },
+        })
 
         return json({
           ok: true,
@@ -299,6 +307,12 @@ export async function POST(req: Request) {
         entityId: String(resolved.staff.id),
         action: 'access-email',
         payload: { email, staff_role: resolved.staff.role, mode: 'recovery-for-existing-user', user_id: existingUser.id },
+      })
+      await writeNotificationLog(supabase, {
+        channel: 'email',
+        recipient: email,
+        status: 'sent',
+        payload: { kind: 'staff-access-email', staff_id: resolved.staff.id, role: resolved.staff.role, user_id: existingUser.id },
       })
 
       return json({
@@ -333,6 +347,12 @@ export async function POST(req: Request) {
       action: 'password-reset',
       payload: { email, user_id: existingUser.id, staff_role: resolved.staff.role },
     })
+    await writeNotificationLog(supabase, {
+      channel: 'email',
+      recipient: email,
+      status: 'sent',
+      payload: { kind: 'staff-password-reset', staff_id: resolved.staff.id, role: resolved.staff.role, user_id: existingUser.id },
+    })
 
     return json({
       ok: true,
@@ -342,6 +362,19 @@ export async function POST(req: Request) {
     })
   } catch (error: any) {
     console.error('Admin staff accounts POST route error', error)
+    const staffId = requestBody && 'staffId' in requestBody ? requestBody.staffId : null
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
+    if (supabase && staffId) {
+      const resolved = await resolveStaffAccountTarget(supabase, staffId).catch(() => null)
+      if (resolved?.email) {
+        await writeNotificationLog(supabase, {
+          channel: 'email',
+          recipient: resolved.email,
+          status: 'failed',
+          payload: { kind: requestBody?.action || 'staff-account-action', staff_id: staffId, error: error?.message || 'unknown-error' },
+        })
+      }
+    }
     if (isEmailRateLimitError(error)) {
       return json(
         {

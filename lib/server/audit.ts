@@ -8,6 +8,13 @@ type AuditEntry = {
   payload?: Record<string, unknown> | null
 }
 
+type NotificationEntry = {
+  channel: string
+  recipient: string
+  status: string
+  payload?: Record<string, unknown> | null
+}
+
 export async function writeAuditLog(client: any, entry: AuditEntry) {
   try {
     const { error } = await client.from('audit_log').insert([
@@ -25,5 +32,24 @@ export async function writeAuditLog(client: any, entry: AuditEntry) {
     }
   } catch (error) {
     console.warn('Audit log write failed', error)
+  }
+}
+
+export async function writeNotificationLog(client: any, entry: NotificationEntry) {
+  try {
+    const { error } = await client.from('notification_log').insert([
+      {
+        channel: entry.channel,
+        recipient: entry.recipient,
+        status: entry.status,
+        payload: entry.payload || null,
+      },
+    ])
+
+    if (error) {
+      console.warn('Notification log write skipped', error?.message || error)
+    }
+  } catch (error) {
+    console.warn('Notification log write failed', error)
   }
 }

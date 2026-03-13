@@ -16,6 +16,7 @@ export type StaffCapability = 'tasks' | 'shifts' | 'salary' | 'staff' | 'staff_a
 export const ADMIN_PATHS = [
   '/',
   '/welcome',
+  '/logs',
   '/income',
   '/income/add',
   '/income/analytics',
@@ -61,7 +62,7 @@ const MANAGER_PATHS = [
 
 const MARKETER_PATHS = ['/welcome', '/tasks'] as const
 
-const OWNER_BLOCKED_PATHS = ['/settings', '/debug', '/pass'] as const
+const OWNER_BLOCKED_PATHS = ['/settings', '/debug', '/pass', '/logs'] as const
 
 export const OPERATOR_PATHS = [
   '/operator-dashboard',

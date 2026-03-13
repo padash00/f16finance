@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { writeAuditLog } from '@/lib/server/audit'
 import { requireAdminRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -31,6 +32,14 @@ export async function POST(request: Request) {
         { status: 500 }
       )
     }
+
+    await writeAuditLog(supabaseAdmin, {
+      actorUserId: null,
+      entityType: 'auth-user',
+      entityId: String(userId),
+      action: 'admin-password-reset',
+      payload: { via: 'api/reset-password' },
+    })
     
     return NextResponse.json({ 
       success: true,

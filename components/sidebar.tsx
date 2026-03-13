@@ -21,6 +21,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   ListChecks,
+  Logs,
   LogOut,
   Menu,
   MessageSquareText,
@@ -129,6 +130,7 @@ const navSections: NavSection[] = [
     accent: 'from-[#8f9bb3] to-[#596780]',
     items: [
       { href: '/settings', label: 'Настройки системы', icon: Settings2, note: 'Компании и справочники' },
+      { href: '/logs', label: 'Логирование', icon: Logs, note: 'Аудит, уведомления и события' },
       { href: '/debug', label: 'Диагностика', icon: Wrench, note: 'Проверки и отладка' },
     ],
   },

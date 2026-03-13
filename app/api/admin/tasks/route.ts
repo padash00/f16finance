@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { resolveStaffByUser } from '@/lib/server/admin'
-import { writeAuditLog } from '@/lib/server/audit'
+import { writeAuditLog, writeNotificationLog } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
 import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -275,6 +275,18 @@ export async function POST(req: Request) {
     if (!operator?.telegram_chat_id) return json({ error: 'У оператора нет telegram_chat_id' }, 400)
 
     await sendTelegramMessage(String(operator.telegram_chat_id), body.message.trim())
+    await writeNotificationLog(supabase, {
+      channel: 'telegram',
+      recipient: String(operator.telegram_chat_id),
+      status: 'sent',
+      payload: {
+        kind: 'task-notify',
+        task_id: task.id,
+        task_number: task.task_number,
+        operator_id: operator.id,
+        operator_name: getOperatorDisplayName(operator, 'Оператор'),
+      },
+    })
 
     await writeAuditLog(supabase, {
       actorUserId: user?.id || null,

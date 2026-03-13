@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
+import { writeAuditLog, writeNotificationLog } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
 import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -339,9 +340,14 @@ export async function POST(req: Request) {
       return badRequest('Неверный формат запроса')
     }
 
+    const requestClient = createRequestSupabaseClient(req)
+    const {
+      data: { user },
+    } = await requestClient.auth.getUser()
+
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
-      : createRequestSupabaseClient(req)
+      : requestClient
 
     if (body.action === 'saveShift') {
       const result = await upsertShift(supabase, body.payload)
@@ -353,11 +359,55 @@ export async function POST(req: Request) {
       ) {
         try {
           notification = await notifySingleShiftAssignment(supabase, body.payload)
+          if (notification?.sent) {
+            const operator = await findOperatorForShiftName(supabase, body.payload.operatorName.trim())
+            if (operator?.telegram_chat_id) {
+              await writeNotificationLog(supabase, {
+                channel: 'telegram',
+                recipient: String(operator.telegram_chat_id),
+                status: 'sent',
+                payload: {
+                  kind: 'shift-single-assignment',
+                  operator_id: operator.id,
+                  operator_name: notification.operatorLabel || getOperatorDisplayName(operator, 'Оператор'),
+                  company_id: body.payload.companyId,
+                  date: body.payload.date,
+                  shift_type: body.payload.shiftType,
+                },
+              })
+            }
+          }
         } catch (error) {
           console.error('Shift single notification error', error)
           notification = { sent: false, reason: 'send-failed' }
+          await writeNotificationLog(supabase, {
+            channel: 'telegram',
+            recipient: body.payload.operatorName.trim(),
+            status: 'failed',
+            payload: {
+              kind: 'shift-single-assignment',
+              company_id: body.payload.companyId,
+              date: body.payload.date,
+              shift_type: body.payload.shiftType,
+              error: error instanceof Error ? error.message : 'send-failed',
+            },
+          })
         }
       }
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'shift',
+        entityId: `${body.payload.companyId}:${body.payload.date}:${body.payload.shiftType}`,
+        action: result.mode,
+        payload: {
+          company_id: body.payload.companyId,
+          date: body.payload.date,
+          shift_type: body.payload.shiftType,
+          operator_name: body.payload.operatorName.trim() || null,
+          notification,
+        },
+      })
 
       return NextResponse.json({ ...result, notification })
     }
@@ -410,11 +460,59 @@ export async function POST(req: Request) {
             shiftType,
             dates: assignedDates,
           })
+          if (notification?.sent) {
+            const operator = await findOperatorForShiftName(supabase, operatorName.trim())
+            if (operator?.telegram_chat_id) {
+              await writeNotificationLog(supabase, {
+                channel: 'telegram',
+                recipient: String(operator.telegram_chat_id),
+                status: 'sent',
+                payload: {
+                  kind: 'shift-bulk-assignment',
+                  operator_id: operator.id,
+                  operator_name: notification.operatorLabel || getOperatorDisplayName(operator, 'Оператор'),
+                  company_id: companyId,
+                  shift_type: shiftType,
+                  dates: assignedDates,
+                },
+              })
+            }
+          }
         } catch (error) {
           console.error('Shift bulk notification error', error)
           notification = { sent: false, reason: 'send-failed' }
+          await writeNotificationLog(supabase, {
+            channel: 'telegram',
+            recipient: operatorName.trim(),
+            status: 'failed',
+            payload: {
+              kind: 'shift-bulk-assignment',
+              company_id: companyId,
+              shift_type: shiftType,
+              dates: assignedDates,
+              error: error instanceof Error ? error.message : 'send-failed',
+            },
+          })
         }
       }
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'shift',
+        entityId: `${companyId}:${shiftType}:${dates[0] || 'bulk'}`,
+        action: 'bulk-assign-week',
+        payload: {
+          company_id: companyId,
+          operator_name: operatorName.trim(),
+          shift_type: shiftType,
+          dates,
+          created,
+          updated,
+          skipped,
+          conflicts,
+          notification,
+        },
+      })
 
       return NextResponse.json({
         ok: true,
@@ -502,6 +600,21 @@ export async function POST(req: Request) {
           skipped += 1
         }
       }
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'shift',
+        entityId: `${targetWeekStart}:copy-week-template`,
+        action: 'copy-week-template',
+        payload: {
+          sourceWeekStart,
+          targetWeekStart,
+          created,
+          updated,
+          skipped,
+          conflicts,
+        },
+      })
 
       return NextResponse.json({
         ok: true,
