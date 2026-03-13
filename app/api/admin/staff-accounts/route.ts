@@ -31,6 +31,11 @@ function buildRedirectTo(origin: string, nextPath: string) {
   return `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`
 }
 
+function isEmailRateLimitError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '')
+  return message.toLowerCase().includes('email rate limit exceeded')
+}
+
 async function resolveStaffAccountTarget(supabase: any, staffId: string): Promise<ResolvedStaffAccount | null> {
   const { data: staffRow, error: staffError } = await supabase
     .from('staff')
@@ -336,6 +341,16 @@ export async function POST(req: Request) {
     })
   } catch (error: any) {
     console.error('Admin staff accounts POST route error', error)
+    if (isEmailRateLimitError(error)) {
+      return json(
+        {
+          error:
+            'Превышен лимит отправки писем Supabase. Подожди немного и попробуй снова, либо подключи свой SMTP для стабильной отправки.',
+          code: 'email_rate_limit',
+        },
+        429,
+      )
+    }
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
 }

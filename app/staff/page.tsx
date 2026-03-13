@@ -489,6 +489,11 @@ export default function StaffPageSmart() {
         if (json?.code === 'missing_service_role') {
           throw new Error('Не настроен SUPABASE_SERVICE_ROLE_KEY. Добавь service_role ключ в .env и перезапусти dev сервер.')
         }
+        if (json?.code === 'email_rate_limit') {
+          throw new Error(
+            'Supabase временно ограничил отправку писем. Подожди немного и попробуй снова. Для частых писем лучше подключить свой SMTP.',
+          )
+        }
         if (json?.code === 'user_not_found' && action === 'sendPasswordReset') {
           throw new Error('Аккаунт для этого email ещё не создан. Сначала отправь приглашение.')
         }
