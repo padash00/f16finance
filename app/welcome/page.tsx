@@ -43,6 +43,7 @@ const MANAGER_ACTIONS: WelcomeAction[] = [
   { href: '/income', label: 'Доходы', note: 'Оборот, выручка и приток денег', icon: TrendingUp },
   { href: '/expenses', label: 'Расходы', note: 'Списание средств и контроль статей', icon: TrendingDown },
   { href: '/weekly-report', label: 'Недельный отчёт', note: 'Итоги недели и план-факт', icon: CalendarRange },
+  { href: '/tasks', label: 'Задачи', note: 'Контроль поручений, сроков и текущей работы', icon: FolderKanban },
 ]
 
 const MARKETER_ACTIONS: WelcomeAction[] = [
@@ -105,7 +106,7 @@ export default function WelcomePage() {
         checklist: [
           'Проверьте график смен и расставьте операторов на текущую неделю.',
           'Откройте зарплату и убедитесь, что расчёты по сменам актуальны.',
-          'Сверьте доходы, расходы и недельный отчёт перед началом работы.',
+          'Сверьте доходы, расходы, задачи и недельный отчёт перед началом работы.',
         ],
         actions: MANAGER_ACTIONS,
       }

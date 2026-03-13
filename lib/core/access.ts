@@ -45,6 +45,7 @@ export const ADMIN_PATHS = [
 
 const MANAGER_PATHS = [
   '/welcome',
+  '/tasks',
   '/income',
   '/income/add',
   '/income/analytics',
