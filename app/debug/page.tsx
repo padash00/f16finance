@@ -237,12 +237,12 @@ export default function DebugPage() {
           time: Date.now() - storageStart,
         })
       } else {
-        const hasBucket = buckets?.some(b => b.name === 'operator-files')
+        const hasBucket = buckets?.some((b: any) => b.name === 'operator-files')
         results.push({
           name: 'Storage bucket operator-files',
           status: hasBucket ? 'success' : 'warning',
           message: hasBucket ? 'Bucket найден' : 'Bucket operator-files не найден',
-          details: buckets?.map(b => b.name),
+          details: buckets?.map((b: any) => b.name),
           time: Date.now() - storageStart,
         })
       }

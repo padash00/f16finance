@@ -106,7 +106,7 @@ export default function AccessPage() {
       }
 
       // Объединяем данные
-      const combined: Operator[] = (operatorsData || []).map(op => {
+      const combined: Operator[] = (operatorsData || []).map((op: any) => {
         const profile = profileMap.get(op.id) || {}
         const auth = authMap.get(op.id) || { 
           user_id: null,

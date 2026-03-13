@@ -324,16 +324,16 @@ export default function OperatorDashboardPage() {
             threshold2_turnover: number | null
             threshold2_bonus: number | null
           }>,
-          incomes: (shifts || []).map((shift) => ({
+          incomes: (shifts || []).map((shift: any) => ({
             ...shift,
             operator_id: operatorId,
           })),
-          adjustments: (adjustments || []).map((adjustment) => ({
+          adjustments: (adjustments || []).map((adjustment: any) => ({
             operator_id: operatorId,
             amount: adjustment.amount,
             kind: adjustment.kind,
           })),
-          debts: (autoDebtsData || []).map((debt) => ({
+          debts: (autoDebtsData || []).map((debt: any) => ({
             operator_id: operatorId,
             amount: Number(debt.amount || 0),
           })),

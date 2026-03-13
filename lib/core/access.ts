@@ -2,6 +2,7 @@ export const PUBLIC_PATHS = [
   '/login',
   '/operator-login',
   '/unauthorized',
+  '/setup-required',
   '/forgot-password',
   '/reset-password',
   '/auth/callback',

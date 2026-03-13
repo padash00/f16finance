@@ -4,6 +4,27 @@ import { canAccessPath, getDefaultAppPath, normalizeStaffRole, isPublicPath } fr
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 
 export async function middleware(request: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    const url = request.nextUrl.clone()
+
+    if (url.pathname.startsWith('/api/')) {
+      return NextResponse.next()
+    }
+
+    if (url.pathname !== '/setup-required') {
+      url.pathname = '/setup-required'
+      return NextResponse.redirect(url)
+    }
+
+    return NextResponse.next()
+  }
+
+  const safeSupabaseUrl = supabaseUrl
+  const safeSupabaseAnonKey = supabaseAnonKey
+
   // 1. Инициализируем ответ
   let response = NextResponse.next({
     request: {
@@ -13,8 +34,8 @@ export async function middleware(request: NextRequest) {
 
   // 2. Создаем клиент Supabase для работы с куками
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    safeSupabaseUrl,
+    safeSupabaseAnonKey,
     {
       cookies: {
         get(name: string) {

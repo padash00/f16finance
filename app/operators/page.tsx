@@ -153,7 +153,7 @@ export default function OperatorsPage() {
             .eq('operator_id', op.id)
             .gte('date', dateStr)
 
-          const totalTurnover = (incomesData || []).reduce((sum, inc) => 
+          const totalTurnover = (incomesData || []).reduce((sum: any, inc: any) => 
             sum + (inc.cash_amount || 0) + (inc.kaspi_amount || 0) + 
             (inc.online_amount || 0) + (inc.card_amount || 0), 0
           )
@@ -167,7 +167,7 @@ export default function OperatorsPage() {
             .eq('operator_id', op.id)
             .eq('status', 'active')
 
-          const totalDebts = (debtsData || []).reduce((sum, d) => sum + (d.amount || 0), 0)
+          const totalDebts = (debtsData || []).reduce((sum: any, d: any) => sum + (d.amount || 0), 0)
 
           // Получаем премии
           const { data: bonusesData } = await supabase
@@ -177,7 +177,7 @@ export default function OperatorsPage() {
             .eq('kind', 'bonus')
             .gte('date', dateStr)
 
-          const totalBonuses = (bonusesData || []).reduce((sum, b) => sum + (b.amount || 0), 0)
+          const totalBonuses = (bonusesData || []).reduce((sum: any, b: any) => sum + (b.amount || 0), 0)
 
           statsMap.set(op.id, {
             totalShifts,

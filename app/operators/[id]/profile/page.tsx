@@ -1043,7 +1043,7 @@ export default function OperatorProfilePage() {
           if (workError) {
             console.error('Work history error:', workError)
           } else if (workData) {
-            setWorkHistory(workData.map(w => ({
+            setWorkHistory(workData.map((w: any) => ({
               ...w,
               company_name: w.companies?.name,
               company_code: w.companies?.code
@@ -1086,7 +1086,7 @@ export default function OperatorProfilePage() {
           if (notesError) {
             console.error('Notes error:', notesError)
           } else if (notesData) {
-            setNotes(notesData.map(n => ({
+            setNotes(notesData.map((n: any) => ({
               ...n,
               created_by_name: 'Система'
             })))

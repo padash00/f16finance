@@ -975,7 +975,7 @@ function ReportsContent() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'incomes' },
-        (payload) => {
+        (payload: any) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             // Refresh data if the new record is in our date range
             const newDate = (payload.new as IncomeRow).date
@@ -988,7 +988,7 @@ function ReportsContent() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'expenses' },
-        (payload) => {
+        (payload: any) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const newDate = (payload.new as ExpenseRow).date
             if (newDate >= dateFrom && newDate <= dateTo) {

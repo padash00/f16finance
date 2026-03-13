@@ -292,7 +292,7 @@ export default function OperatorChatPage() {
               schema: 'public',
               table: 'operator_chat_messages'
             },
-            (payload) => {
+            (payload: any) => {
               console.log('7️⃣ 🔔 НОВОЕ СООБЩЕНИЕ!', payload.new)
               if (isSubscribed) {
                 setMessages(prev => [...prev, payload.new as Message])
@@ -321,7 +321,7 @@ export default function OperatorChatPage() {
               schema: 'public',
               table: 'operator_auth'
             },
-            (payload) => {
+            (payload: any) => {
               console.log('🔄 Статус изменен:', payload.new)
               setOnlineUsers(prev => 
                 prev.map(u => 

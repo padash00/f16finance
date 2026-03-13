@@ -86,7 +86,7 @@ export default function ExpensesDashboard() {
   
   // ================== LOAD ==================
   useEffect(() => {
-    supabase.from('companies').select('id, name, code').order('name').then(({data}) => {
+    supabase.from('companies').select('id, name, code').order('name').then(({ data }: { data: any }) => {
         if(data) setCompanies(data)
     })
   }, [])

@@ -149,7 +149,7 @@ export default function OperatorAchievementsAllPage() {
         }
 
         console.log(`✅ Загружено ${operatorsData?.length || 0} активных операторов`)
-        console.log('📋 Список операторов:', operatorsData?.map(op => ({ 
+        console.log('📋 Список операторов:', operatorsData?.map((op: any) => ({ 
           id: op.id, 
           name: op.name,
           has_profile: !!op.operator_profiles 
@@ -162,7 +162,9 @@ export default function OperatorAchievementsAllPage() {
         
         for (let i = 0; i < (operatorsData?.length || 0); i++) {
           const op = operatorsData[i]
-          const profile = op.operator_profiles || {}
+          const profile = Array.isArray(op.operator_profiles)
+            ? op.operator_profiles[0] || null
+            : op.operator_profiles || null
           
           console.log(`   🔄 Оператор ${i+1}/${operatorsData?.length}: ${op.name} (ID: ${op.id})`)
           
@@ -205,8 +207,8 @@ export default function OperatorAchievementsAllPage() {
             id: op.id,
             name: op.name,
             short_name: op.short_name,
-            photo_url: profile.photo_url || null,
-            position: profile.position || null,
+            photo_url: profile?.photo_url || null,
+            position: profile?.position || null,
             achievements,
             total_xp: levelInfo.total_xp || 0,
             level: levelInfo.calculated_level || 1,
