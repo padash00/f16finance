@@ -245,6 +245,24 @@ const escapeCSV = (value: any) => {
   return needsQuotes ? `"${escaped}"` : escaped
 }
 
+async function logExpenseEvent(event: {
+  entityType?: 'expense' | 'expense-export'
+  entityId: string
+  action: string
+  payload?: Record<string, unknown>
+}) {
+  await fetch('/api/admin/audit-event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      entityType: event.entityType || 'expense',
+      entityId: event.entityId,
+      action: event.action,
+      payload: event.payload || null,
+    }),
+  }).catch(() => null)
+}
+
 // ================== MAIN COMPONENT ==================
 export default function ExpensesPage() {
   const [rows, setRows] = useState<ExpenseRow[]>([])
@@ -551,6 +569,19 @@ export default function ExpensesPage() {
     link.href = URL.createObjectURL(blob)
     link.download = `expenses_${DateUtils.todayISO()}.csv`
     link.click()
+    logExpenseEvent({
+      entityType: 'expense-export',
+      entityId: `export:${DateUtils.todayISO()}`,
+      action: 'download-csv',
+      payload: {
+        rows: rows.length,
+        date_from: dateFrom || null,
+        date_to: dateTo || null,
+        company_filter: companyFilter,
+        category_filter: categoryFilter,
+        pay_filter: payFilter,
+      },
+    })
   }
 
   if (loading && rows.length === 0) {

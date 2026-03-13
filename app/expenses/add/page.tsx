@@ -77,6 +77,23 @@ const parseAmount = (v: string) => {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : 0
 }
 
+async function logExpenseAudit(event: {
+  entityId: string
+  action: string
+  payload?: Record<string, unknown>
+}) {
+  await fetch('/api/admin/audit-event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      entityType: 'expense',
+      entityId: event.entityId,
+      action: event.action,
+      payload: event.payload || null,
+    }),
+  }).catch(() => null)
+}
+
 export default function AddExpensePage() {
   const router = useRouter()
 
@@ -207,12 +224,31 @@ export default function AddExpensePage() {
         comment: comment.trim() || null,
       }
 
-      const { error: insertError } = await supabase.from('expenses').insert([payload])
+      const { data, error: insertError } = await supabase.from('expenses').insert([payload]).select('id').single()
       if (insertError) throw insertError
+
+      await logExpenseAudit({
+        entityId: String(data.id),
+        action: 'create',
+        payload: {
+          ...payload,
+          total_amount: cashVal + kaspiVal,
+        },
+      })
 
       setShowSuccess(true)
       setTimeout(() => router.push('/expenses'), 800)
     } catch (err: any) {
+      await logExpenseAudit({
+        entityId: `${date}:${companyId || 'no-company'}`,
+        action: 'create-failed',
+        payload: {
+          message: err?.message || 'Ошибка при сохранении',
+          company_id: companyId || null,
+          operator_id: operatorId || null,
+          category: categoryName || null,
+        },
+      })
       setError(err?.message || 'Ошибка при сохранении')
       setSaving(false)
       savingRef.current = false

@@ -269,6 +269,24 @@ const parseMoneyInput = (raw: string): number | null => {
   return Math.max(0, n)
 }
 
+async function logIncomeEvent(event: {
+  entityType?: 'income' | 'income-export'
+  entityId: string
+  action: string
+  payload?: Record<string, unknown>
+}) {
+  await fetch('/api/admin/audit-event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      entityType: event.entityType || 'income',
+      entityId: event.entityId,
+      action: event.action,
+      payload: event.payload || null,
+    }),
+  }).catch(() => null)
+}
+
 // --- Главный компонент ---
 export default function IncomePage() {
   const LIMIT = 2000
@@ -575,6 +593,17 @@ export default function IncomePage() {
     if (error) {
       setRows(curr => curr.map(x => x.id === row.id ? { ...x, online_amount: prev } : x))
       setError('Не удалось сохранить Online')
+      await logIncomeEvent({
+        entityId: row.id,
+        action: 'update-online-failed',
+        payload: { previous: prev, next: nextValue, message: error.message },
+      })
+    } else {
+      await logIncomeEvent({
+        entityId: row.id,
+        action: 'update-online',
+        payload: { previous: prev, next: nextValue, date: row.date, company_id: row.company_id },
+      })
     }
     setSavingOnlineId(null)
   }, [rows])
@@ -649,6 +678,19 @@ export default function IncomePage() {
     link.href = URL.createObjectURL(blob)
     link.download = `incomes_${DateUtils.todayISO()}.csv`
     link.click()
+    logIncomeEvent({
+      entityType: 'income-export',
+      entityId: `export:${DateUtils.todayISO()}`,
+      action: 'download-csv',
+      payload: {
+        rows: displayRows.length,
+        date_from: dateFrom || null,
+        date_to: dateTo || null,
+        company_filter: companyFilter,
+        operator_filter: operatorFilter,
+        pay_filter: payFilter,
+      },
+    })
   }
 
   const periodLabel = dateFrom && dateTo 

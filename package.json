@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "verify:release": "npm run typecheck && npm run lint && npm run build"
+    "verify:release": "npm run typecheck && npm run lint && npm run build",
+    "smoke:live": "node scripts/smoke-live.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "3.10.0",

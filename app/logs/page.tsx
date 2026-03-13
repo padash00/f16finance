@@ -46,6 +46,7 @@ export default function LogsPage() {
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<LogResponse | null>(null)
   const [search, setSearch] = useState('')
+  const [domain, setDomain] = useState('')
   const [kind, setKind] = useState('')
   const [entityType, setEntityType] = useState('')
   const [action, setAction] = useState('')
@@ -54,6 +55,57 @@ export default function LogsPage() {
   const [status, setStatus] = useState('')
   const [onlyErrors, setOnlyErrors] = useState(false)
   const [page, setPage] = useState(1)
+
+  const applyPreset = (preset: 'all' | 'auth' | 'finance' | 'errors') => {
+    setPage(1)
+    if (preset === 'all') {
+      setDomain('')
+      setKind('')
+      setEntityType('')
+      setAction('')
+      setActor('')
+      setChannel('')
+      setStatus('')
+      setOnlyErrors(false)
+      return
+    }
+
+    if (preset === 'auth') {
+      setDomain('auth')
+      setKind('audit')
+      setEntityType('')
+      setAction('')
+      setActor('')
+      setChannel('')
+      setStatus('')
+      setOnlyErrors(false)
+      setSearch('')
+      return
+    }
+
+    if (preset === 'finance') {
+      setDomain('finance')
+      setKind('audit')
+      setEntityType('')
+      setAction('')
+      setActor('')
+      setChannel('')
+      setStatus('')
+      setOnlyErrors(false)
+      setSearch('')
+      return
+    }
+
+    setDomain('')
+    setKind('')
+    setEntityType('system-error')
+    setAction('')
+    setActor('')
+    setChannel('')
+    setStatus('failed')
+    setOnlyErrors(true)
+    setSearch('')
+  }
 
   const loadLogs = async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true)
@@ -65,6 +117,7 @@ export default function LogsPage() {
       params.set('page', String(page))
       params.set('limit', '80')
       if (search.trim()) params.set('q', search.trim())
+      if (domain) params.set('domain', domain)
       if (kind) params.set('kind', kind)
       if (entityType) params.set('entityType', entityType)
       if (action) params.set('action', action)
@@ -93,6 +146,7 @@ export default function LogsPage() {
     const params = new URLSearchParams()
     params.set('format', 'csv')
     if (search.trim()) params.set('q', search.trim())
+    if (domain) params.set('domain', domain)
     if (kind) params.set('kind', kind)
     if (entityType) params.set('entityType', entityType)
     if (action) params.set('action', action)
@@ -174,6 +228,13 @@ export default function LogsPage() {
           </div>
 
           <Card className="border-white/10 bg-slate-950/65 p-6 text-white">
+            <div className="mb-5 flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => applyPreset('all')}>Все</Button>
+              <Button variant="outline" onClick={() => applyPreset('auth')}>Авторизация</Button>
+              <Button variant="outline" onClick={() => applyPreset('finance')}>Финансы</Button>
+              <Button variant="outline" onClick={() => applyPreset('errors')}>Только ошибки</Button>
+            </div>
+
             <div className="grid gap-3 lg:grid-cols-6">
               <div className="lg:col-span-2">
                 <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Поиск</label>
@@ -262,6 +323,7 @@ export default function LogsPage() {
                 variant="outline"
                 onClick={() => {
                   setSearch('')
+                  setDomain('')
                   setKind('')
                   setEntityType('')
                   setAction('')

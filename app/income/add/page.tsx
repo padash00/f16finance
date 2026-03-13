@@ -61,6 +61,23 @@ const parseAmount = (v: string) => {
 
 const formatMoney = (v: number) => v.toLocaleString('ru-RU') + ' ₸'
 
+async function logIncomeAudit(event: {
+  entityId: string
+  action: string
+  payload?: Record<string, unknown>
+}) {
+  await fetch('/api/admin/audit-event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      entityType: 'income',
+      entityId: event.entityId,
+      action: event.action,
+      payload: event.payload || null,
+    }),
+  }).catch(() => null)
+}
+
 export default function AddIncomePage() {
   const router = useRouter()
 
@@ -226,30 +243,76 @@ export default function AddIncomePage() {
           })
         }
 
-        const { error } = await supabase.from('incomes').insert(rows)
+        const { data, error } = await supabase.from('incomes').insert(rows).select('id')
         if (error) throw error
-      } else {
-        const { error } = await supabase.from('incomes').insert([
-          {
+        await logIncomeAudit({
+          entityId: `batch:${(data || []).map((item: { id: string }) => item.id).join(',') || `${date}:${companyId}`}`,
+          action: 'create-batch',
+          payload: {
             date,
             company_id: companyId,
             operator_id: operatorId,
             shift,
-            zone: getZone(),
-            cash_amount: parseAmount(cash),
-            kaspi_amount: parseAmount(kaspi),
-            online_amount: showOnline ? parseAmount(online) : 0,
-            card_amount: parseAmount(card),
-            comment: comment.trim() || null,
-            is_virtual: false,
+            rows_count: rows.length,
+            total_amount: rows.reduce(
+              (sum, item) =>
+                sum +
+                Number(item.cash_amount || 0) +
+                Number(item.kaspi_amount || 0) +
+                Number(item.online_amount || 0) +
+                Number(item.card_amount || 0),
+              0,
+            ),
           },
-        ])
+        })
+      } else {
+        const payload = {
+          date,
+          company_id: companyId,
+          operator_id: operatorId,
+          shift,
+          zone: getZone(),
+          cash_amount: parseAmount(cash),
+          kaspi_amount: parseAmount(kaspi),
+          online_amount: showOnline ? parseAmount(online) : 0,
+          card_amount: parseAmount(card),
+          comment: comment.trim() || null,
+          is_virtual: false,
+        }
+
+        const { data, error } = await supabase.from('incomes').insert([
+          {
+            ...payload,
+          },
+        ]).select('id').single()
         if (error) throw error
+        await logIncomeAudit({
+          entityId: String(data.id),
+          action: 'create',
+          payload: {
+            ...payload,
+            total_amount:
+              Number(payload.cash_amount || 0) +
+              Number(payload.kaspi_amount || 0) +
+              Number(payload.online_amount || 0) +
+              Number(payload.card_amount || 0),
+          },
+        })
       }
 
       setShowSuccess(true)
       setTimeout(() => router.push('/income'), 800)
     } catch (err: any) {
+      await logIncomeAudit({
+        entityId: `${date}:${companyId || 'no-company'}`,
+        action: 'create-failed',
+        payload: {
+          message: err?.message || 'Ошибка при сохранении',
+          company_id: companyId || null,
+          operator_id: operatorId || null,
+          shift,
+        },
+      })
       setError(err?.message || 'Ошибка при сохранении')
       setSaving(false)
     }

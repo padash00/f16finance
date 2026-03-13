@@ -42,6 +42,7 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url)
     const search = url.searchParams.get('q')?.trim().toLowerCase() || ''
+    const domain = url.searchParams.get('domain')?.trim().toLowerCase() || ''
     const kind = url.searchParams.get('kind')?.trim().toLowerCase() || ''
     const entityType = url.searchParams.get('entityType')?.trim().toLowerCase() || ''
     const action = url.searchParams.get('action')?.trim().toLowerCase() || ''
@@ -112,6 +113,23 @@ export async function GET(req: Request) {
       })),
     ]
       .filter((item) => {
+        if (domain === 'auth') {
+          const authEntityTypes = ['auth-attempt', 'auth-session']
+          if (!authEntityTypes.includes((item.entityType || '').toLowerCase())) return false
+        }
+
+        if (domain === 'finance') {
+          const financeEntityTypes = [
+            'income',
+            'income-export',
+            'expense',
+            'expense-export',
+            'operator-salary-adjustment',
+            'staff-payment',
+          ]
+          if (!financeEntityTypes.includes((item.entityType || '').toLowerCase())) return false
+        }
+
         if (kind && item.kind.toLowerCase() !== kind) return false
         if (entityType && (item.entityType || '').toLowerCase() !== entityType) return false
         if (action && (item.action || '').toLowerCase() !== action) return false
