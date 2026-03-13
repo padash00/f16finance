@@ -73,6 +73,12 @@ export default function UnifiedLoginPage() {
 
         if (error) throw error
 
+        await fetch('/api/auth/login-attempt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method: 'email', target: 'staff', status: 'success', identifier: email }),
+        }).catch(() => null)
+
         await fetch('/api/auth/login-log', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -107,6 +113,12 @@ export default function UnifiedLoginPage() {
 
       if (signInError) throw new Error('Неверный логин или пароль')
 
+      await fetch('/api/auth/login-attempt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'operator', target: 'operator', status: 'success', identifier: username }),
+      }).catch(() => null)
+
       await fetch('/api/auth/login-log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -123,6 +135,17 @@ export default function UnifiedLoginPage() {
       router.refresh()
     } catch (err: any) {
       console.error('Login error:', err)
+      await fetch('/api/auth/login-attempt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: mode === 'email' ? 'email' : 'operator',
+          target: mode === 'email' ? 'staff' : 'operator',
+          status: 'failed',
+          identifier: mode === 'email' ? login.trim().toLowerCase() : normalizeOperatorUsername(login),
+          reason: err?.message || null,
+        }),
+      }).catch(() => null)
       setError(
         err?.message ||
           (mode === 'email'

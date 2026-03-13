@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, BellRing, Filter, Loader2, RefreshCw, Search, ShieldCheck } from 'lucide-react'
+import { Activity, BellRing, CircleAlert, Download, Filter, Loader2, RefreshCw, Search, ShieldCheck } from 'lucide-react'
 
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
@@ -31,8 +31,10 @@ type LogResponse = {
   limit: number
   items: LogItem[]
   filters: {
+    kinds: string[]
     entityTypes: string[]
     actions: string[]
+    actors: string[]
     channels: string[]
     statuses: string[]
   }
@@ -44,10 +46,13 @@ export default function LogsPage() {
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<LogResponse | null>(null)
   const [search, setSearch] = useState('')
+  const [kind, setKind] = useState('')
   const [entityType, setEntityType] = useState('')
   const [action, setAction] = useState('')
+  const [actor, setActor] = useState('')
   const [channel, setChannel] = useState('')
   const [status, setStatus] = useState('')
+  const [onlyErrors, setOnlyErrors] = useState(false)
   const [page, setPage] = useState(1)
 
   const loadLogs = async (showRefresh = false) => {
@@ -60,10 +65,13 @@ export default function LogsPage() {
       params.set('page', String(page))
       params.set('limit', '80')
       if (search.trim()) params.set('q', search.trim())
+      if (kind) params.set('kind', kind)
       if (entityType) params.set('entityType', entityType)
       if (action) params.set('action', action)
+      if (actor) params.set('actor', actor)
       if (channel) params.set('channel', channel)
       if (status) params.set('status', status)
+      if (onlyErrors) params.set('onlyErrors', 'true')
 
       const response = await fetch(`/api/admin/logs?${params.toString()}`)
       const json = (await response.json().catch(() => null)) as LogResponse | { error?: string } | null
@@ -81,6 +89,20 @@ export default function LogsPage() {
     }
   }
 
+  const exportLogs = () => {
+    const params = new URLSearchParams()
+    params.set('format', 'csv')
+    if (search.trim()) params.set('q', search.trim())
+    if (kind) params.set('kind', kind)
+    if (entityType) params.set('entityType', entityType)
+    if (action) params.set('action', action)
+    if (actor) params.set('actor', actor)
+    if (channel) params.set('channel', channel)
+    if (status) params.set('status', status)
+    if (onlyErrors) params.set('onlyErrors', 'true')
+    window.open(`/api/admin/logs?${params.toString()}`, '_blank')
+  }
+
   useEffect(() => {
     loadLogs()
   }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -92,6 +114,7 @@ export default function LogsPage() {
       audit: items.filter((item) => item.kind === 'audit').length,
       notifications: items.filter((item) => item.kind === 'notification').length,
       failed: items.filter((item) => item.status === 'failed').length,
+      systemErrors: items.filter((item) => item.entityType === 'system-error').length,
     }
   }, [data])
 
@@ -112,19 +135,26 @@ export default function LogsPage() {
                 </p>
               </div>
 
-              <Button onClick={() => loadLogs(true)} disabled={refreshing} className="min-w-[180px]">
-                {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                Обновить логи
-              </Button>
+              <div className="flex flex-wrap gap-3">
+                <Button variant="outline" onClick={exportLogs} className="min-w-[180px]">
+                  <Download className="mr-2 h-4 w-4" />
+                  Экспорт CSV
+                </Button>
+                <Button onClick={() => loadLogs(true)} disabled={refreshing} className="min-w-[180px]">
+                  {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                  Обновить логи
+                </Button>
+              </div>
             </div>
           </Card>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             {[
               { label: 'Всего событий', value: stats.total, icon: Activity },
               { label: 'Аудит', value: stats.audit, icon: ShieldCheck },
               { label: 'Уведомления', value: stats.notifications, icon: BellRing },
               { label: 'Ошибки отправки', value: stats.failed, icon: Filter },
+              { label: 'System errors', value: stats.systemErrors, icon: CircleAlert },
             ].map((stat) => {
               const Icon = stat.icon
               return (
@@ -144,7 +174,7 @@ export default function LogsPage() {
           </div>
 
           <Card className="border-white/10 bg-slate-950/65 p-6 text-white">
-            <div className="grid gap-3 lg:grid-cols-5">
+            <div className="grid gap-3 lg:grid-cols-6">
               <div className="lg:col-span-2">
                 <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Поиск</label>
                 <div className="relative">
@@ -159,10 +189,11 @@ export default function LogsPage() {
               </div>
 
               {[
+                { label: 'Тип', value: kind, setter: setKind, options: data?.filters.kinds || [] },
                 { label: 'Сущность', value: entityType, setter: setEntityType, options: data?.filters.entityTypes || [] },
                 { label: 'Действие', value: action, setter: setAction, options: data?.filters.actions || [] },
-                { label: 'Канал/статус', value: channel || status, setter: (_: string) => {}, options: [] },
-              ].slice(0, 2).map((filter) => (
+                { label: 'Кто', value: actor, setter: setActor, options: data?.filters.actors || [] },
+              ].map((filter) => (
                 <div key={filter.label}>
                   <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">{filter.label}</label>
                   <select
@@ -180,7 +211,8 @@ export default function LogsPage() {
                 </div>
               ))}
 
-              <div>
+              <div className="lg:col-span-2 grid gap-3 sm:grid-cols-3 lg:grid-cols-3">
+                <div>
                 <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Канал</label>
                 <select
                   value={channel}
@@ -192,24 +224,35 @@ export default function LogsPage() {
                     <option key={option} value={option}>
                       {option}
                     </option>
-                  ))}
-                </select>
-              </div>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Статус</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="h-10 w-full rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white"
-                >
-                  <option value="">Все</option>
-                  {(data?.filters.statuses || []).map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                <div>
+                  <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Статус</label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    className="h-10 w-full rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white"
+                  >
+                    <option value="">Все</option>
+                    {(data?.filters.statuses || []).map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <label className="flex h-10 items-center gap-3 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={onlyErrors}
+                    onChange={(e) => setOnlyErrors(e.target.checked)}
+                    className="h-4 w-4 rounded border-white/20 bg-transparent"
+                  />
+                  Только ошибки
+                </label>
               </div>
             </div>
 
@@ -219,10 +262,13 @@ export default function LogsPage() {
                 variant="outline"
                 onClick={() => {
                   setSearch('')
+                  setKind('')
                   setEntityType('')
                   setAction('')
+                  setActor('')
                   setChannel('')
                   setStatus('')
+                  setOnlyErrors(false)
                   setPage(1)
                 }}
               >
@@ -256,6 +302,11 @@ export default function LogsPage() {
                         {item.status ? (
                           <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${item.status === 'failed' ? 'bg-red-500/10 text-red-300' : 'bg-emerald-500/10 text-emerald-300'}`}>
                             {item.status}
+                          </span>
+                        ) : null}
+                        {item.entityType === 'system-error' ? (
+                          <span className="rounded-full bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-300">
+                            error
                           </span>
                         ) : null}
                       </div>

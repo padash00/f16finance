@@ -22,6 +22,12 @@ type NotificationRow = {
   created_at: string
 }
 
+function toCsvValue(value: unknown) {
+  const stringValue =
+    value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value)
+  return `"${stringValue.replace(/"/g, '""')}"`
+}
+
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
@@ -36,10 +42,14 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url)
     const search = url.searchParams.get('q')?.trim().toLowerCase() || ''
+    const kind = url.searchParams.get('kind')?.trim().toLowerCase() || ''
     const entityType = url.searchParams.get('entityType')?.trim().toLowerCase() || ''
     const action = url.searchParams.get('action')?.trim().toLowerCase() || ''
     const channel = url.searchParams.get('channel')?.trim().toLowerCase() || ''
     const status = url.searchParams.get('status')?.trim().toLowerCase() || ''
+    const actor = url.searchParams.get('actor')?.trim().toLowerCase() || ''
+    const onlyErrors = url.searchParams.get('onlyErrors') === 'true'
+    const format = url.searchParams.get('format')?.trim().toLowerCase() || 'json'
     const page = Math.max(1, Number(url.searchParams.get('page') || 1))
     const limit = Math.min(200, Math.max(20, Number(url.searchParams.get('limit') || 80)))
 
@@ -102,16 +112,56 @@ export async function GET(req: Request) {
       })),
     ]
       .filter((item) => {
+        if (kind && item.kind.toLowerCase() !== kind) return false
         if (entityType && (item.entityType || '').toLowerCase() !== entityType) return false
         if (action && (item.action || '').toLowerCase() !== action) return false
         if (channel && (item.channel || '').toLowerCase() !== channel) return false
         if (status && (item.status || '').toLowerCase() !== status) return false
+        if (actor && (item.actorEmail || '').toLowerCase() !== actor) return false
+        if (
+          onlyErrors &&
+          item.status !== 'failed' &&
+          item.entityType !== 'system-error' &&
+          !(item.action || '').toLowerCase().includes('error') &&
+          !(item.action || '').toLowerCase().includes('failed')
+        ) {
+          return false
+        }
         if (!search) return true
 
         const haystack = JSON.stringify(item).toLowerCase()
         return haystack.includes(search)
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+    if (format === 'csv') {
+      const csvHeader = ['kind', 'createdAt', 'title', 'subtitle', 'entityType', 'action', 'actorEmail', 'channel', 'status', 'recipient', 'payload']
+      const csvRows = combined.map((item) =>
+        [
+          item.kind,
+          item.createdAt,
+          item.title,
+          item.subtitle,
+          item.entityType,
+          item.action,
+          item.actorEmail,
+          item.channel,
+          item.status,
+          item.recipient,
+          item.payload,
+        ]
+          .map(toCsvValue)
+          .join(','),
+      )
+
+      return new NextResponse([csvHeader.join(','), ...csvRows].join('\n'), {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="f16-logs-${new Date().toISOString().slice(0, 10)}.csv"`,
+        },
+      })
+    }
 
     const total = combined.length
     const start = (page - 1) * limit
@@ -124,8 +174,10 @@ export async function GET(req: Request) {
       limit,
       items,
       filters: {
+        kinds: Array.from(new Set(combined.map((item) => item.kind).filter(Boolean))).sort(),
         entityTypes: Array.from(new Set(combined.map((item) => item.entityType).filter(Boolean))).sort(),
         actions: Array.from(new Set(combined.map((item) => item.action).filter(Boolean))).sort(),
+        actors: Array.from(new Set(combined.map((item) => item.actorEmail).filter(Boolean))).sort(),
         channels: Array.from(new Set(combined.map((item) => item.channel).filter(Boolean))).sort(),
         statuses: Array.from(new Set(combined.map((item) => item.status).filter(Boolean))).sort(),
       },

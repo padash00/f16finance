@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -54,17 +54,25 @@ export async function POST(req: Request) {
     if (!body?.entity || !body?.action) return badRequest('Неверный формат запроса')
 
     const supabase = createAdminSupabaseClient()
+    const actorUserId = access.user?.id || null
 
     if (body.entity === 'company') {
       if (body.action === 'create') {
         if (!body.payload.name?.trim()) return badRequest('Название компании обязательно')
-        const { error } = await supabase.from('companies').insert([
+        const { data, error } = await supabase.from('companies').insert([
           {
             name: body.payload.name.trim(),
             code: body.payload.code?.trim() || null,
           },
-        ])
+        ]).select('id,name,code').single()
         if (error) throw error
+        await writeAuditLog(supabase, {
+          actorUserId,
+          entityType: 'company',
+          entityId: String(data.id),
+          action: 'create',
+          payload: { name: data.name, code: data.code },
+        })
         return NextResponse.json({ ok: true })
       }
 
@@ -72,33 +80,55 @@ export async function POST(req: Request) {
 
       if (body.action === 'update') {
         if (!body.payload.name?.trim()) return badRequest('Название компании обязательно')
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('companies')
           .update({
             name: body.payload.name.trim(),
             code: body.payload.code?.trim() || null,
           })
           .eq('id', body.id)
+          .select('id,name,code')
+          .single()
         if (error) throw error
+        await writeAuditLog(supabase, {
+          actorUserId,
+          entityType: 'company',
+          entityId: String(data.id),
+          action: 'update',
+          payload: { name: data.name, code: data.code },
+        })
         return NextResponse.json({ ok: true })
       }
 
       const { error } = await supabase.from('companies').delete().eq('id', body.id)
       if (error) throw error
+      await writeAuditLog(supabase, {
+        actorUserId,
+        entityType: 'company',
+        entityId: body.id,
+        action: 'delete',
+      })
       return NextResponse.json({ ok: true })
     }
 
     if (body.action === 'create') {
       if (!body.payload.name?.trim()) return badRequest('Имя сотрудника обязательно')
-      const { error } = await supabase.from('staff').insert([
+      const { data, error } = await supabase.from('staff').insert([
         {
           full_name: body.payload.name.trim(),
           phone: body.payload.phone?.trim() || null,
           email: body.payload.email?.trim() || null,
           role: body.payload.role?.trim() || 'operator',
         },
-      ])
+      ]).select('id,full_name,email,role').single()
       if (error) throw error
+      await writeAuditLog(supabase, {
+        actorUserId,
+        entityType: 'staff',
+        entityId: String(data.id),
+        action: 'create',
+        payload: { full_name: data.full_name, email: data.email, role: data.role },
+      })
       return NextResponse.json({ ok: true })
     }
 
@@ -106,7 +136,7 @@ export async function POST(req: Request) {
 
     if (body.action === 'update') {
       if (!body.payload.name?.trim()) return badRequest('Имя сотрудника обязательно')
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('staff')
         .update({
           full_name: body.payload.name.trim(),
@@ -115,12 +145,27 @@ export async function POST(req: Request) {
           role: body.payload.role?.trim() || 'operator',
         })
         .eq('id', body.id)
+        .select('id,full_name,email,role')
+        .single()
       if (error) throw error
+      await writeAuditLog(supabase, {
+        actorUserId,
+        entityType: 'staff',
+        entityId: String(data.id),
+        action: 'update',
+        payload: { full_name: data.full_name, email: data.email, role: data.role },
+      })
       return NextResponse.json({ ok: true })
     }
 
     const { error } = await supabase.from('staff').delete().eq('id', body.id)
     if (error) throw error
+    await writeAuditLog(supabase, {
+      actorUserId,
+      entityType: 'staff',
+      entityId: body.id,
+      action: 'delete',
+    })
     return NextResponse.json({ ok: true })
   } catch (error: any) {
     console.error('Admin settings mutation error', error)

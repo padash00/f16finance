@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 type MutationBody =
@@ -25,6 +25,11 @@ export async function POST(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'salary')
     if (guard) return guard
+
+    const requestClient = createRequestSupabaseClient(req)
+    const {
+      data: { user },
+    } = await requestClient.auth.getUser()
 
     const body = (await req.json().catch(() => null)) as MutationBody | null
     if (!body?.action) {
@@ -53,6 +58,13 @@ export async function POST(req: Request) {
         .single()
 
       if (error) throw error
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'operator-salary-adjustment',
+        entityId: String(data.id),
+        action: 'create',
+        payload: data,
+      })
       return NextResponse.json({ ok: true, data })
     }
 
@@ -69,6 +81,17 @@ export async function POST(req: Request) {
       .single()
 
     if (error) throw error
+    await writeAuditLog(supabase, {
+      actorUserId: user?.id || null,
+      entityType: 'operator',
+      entityId: String(data.id),
+      action: 'update-telegram-chat-id',
+      payload: {
+        name: data.name,
+        short_name: data.short_name,
+        telegram_chat_id: data.telegram_chat_id,
+      },
+    })
     return NextResponse.json({ ok: true, data })
   } catch (error: any) {
     console.error('Admin salary mutation error', error)
