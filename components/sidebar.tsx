@@ -141,43 +141,60 @@ const navSections: NavSection[] = [
 
 function LogoMark() {
   return (
-    <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-[1.15rem] border border-white/10 bg-[linear-gradient(145deg,rgba(255,170,92,0.35),rgba(75,132,255,0.32))] shadow-[0_16px_32px_rgba(0,0,0,0.28)]">
-      <div className="absolute inset-[1px] rounded-[1rem] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.22),transparent_56%),linear-gradient(180deg,rgba(8,13,24,0.98),rgba(7,11,20,0.98))]" />
-      <Sparkles className="relative z-10 h-5 w-5 text-[#ffd27b]" />
+    <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-[1.2rem] border border-white/10 bg-[linear-gradient(145deg,rgba(255,164,84,0.26),rgba(59,130,246,0.22))] shadow-[0_18px_38px_rgba(0,0,0,0.34)]">
+      <div className="absolute inset-[1px] rounded-[1.05rem] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.2),transparent_56%),linear-gradient(180deg,rgba(8,14,26,0.98),rgba(7,12,22,0.98))]" />
+      <div className="absolute h-6 w-6 rounded-full border border-[#ffd27b]/35" />
+      <Sparkles className="relative z-10 h-4 w-4 text-[#ffd27b]" />
     </div>
   )
 }
 
-function BrandHeader() {
+function BrandHeader({
+  roleLabel,
+  moduleCount,
+  sectionCount,
+}: {
+  roleLabel: string | null
+  moduleCount: number
+  sectionCount: number
+}) {
   return (
-    <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,179,107,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.32)]">
+    <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(96,165,250,0.14),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(255,179,107,0.12),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.34)]">
       <div className="flex items-start gap-3">
         <LogoMark />
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-[15px] font-semibold tracking-[-0.03em] text-white">F16 Finance OS</h1>
-            <span className="rounded-full border border-[#ffd27b]/20 bg-[#ffd27b]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.22em] text-[#ffd27b]">
-              control
+            <h1 className="truncate text-[16px] font-semibold tracking-[-0.03em] text-white">F16 Finance</h1>
+            <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-300">
+              workspace
             </span>
           </div>
           <p className="mt-1 text-xs leading-5 text-slate-400">
-            Единая панель для денег, команды, смен и системного контроля.
+            Навигация по рабочим модулям, ролям и ключевым действиям.
           </p>
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        <div className="rounded-[1.2rem] border border-white/8 bg-black/20 px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Money</p>
-          <p className="mt-1 text-sm font-semibold text-white">Flow</p>
+      <div className="mt-4 rounded-[1.45rem] border border-white/8 bg-black/20 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Текущий контур</p>
+            <p className="mt-1 text-sm font-semibold text-white">{roleLabel || 'Панель управления'}</p>
+          </div>
+          <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-300">
+            online
+          </div>
         </div>
-        <div className="rounded-[1.2rem] border border-white/8 bg-black/20 px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">People</p>
-          <p className="mt-1 text-sm font-semibold text-white">Ops</p>
-        </div>
-        <div className="rounded-[1.2rem] border border-white/8 bg-black/20 px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">System</p>
-          <p className="mt-1 text-sm font-semibold text-white">Live</p>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-[1rem] border border-white/8 bg-white/[0.03] px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Разделов</p>
+            <p className="mt-1 text-base font-semibold text-white">{moduleCount}</p>
+          </div>
+          <div className="rounded-[1rem] border border-white/8 bg-white/[0.03] px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Групп</p>
+            <p className="mt-1 text-base font-semibold text-white">{sectionCount}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -200,18 +217,18 @@ function SidebarItem({
       href={item.href}
       onClick={onClick}
       className={cn(
-        'group relative flex items-start gap-3 overflow-hidden rounded-[1.15rem] border pl-3.5 pr-3 py-3 transition-all duration-200',
+        'group relative flex items-start gap-3 overflow-hidden rounded-[1.05rem] border pl-3.5 pr-3 py-3 transition-all duration-200',
         active
-          ? 'border-[#ffd27b]/18 bg-[linear-gradient(135deg,rgba(255,179,107,0.16),rgba(95,140,255,0.12))] text-white shadow-[0_14px_30px_rgba(0,0,0,0.22)]'
-          : 'border-transparent bg-white/[0.025] text-slate-300 hover:border-white/8 hover:bg-white/[0.055] hover:text-white',
+          ? 'border-white/12 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] text-white shadow-[0_10px_24px_rgba(0,0,0,0.2)]'
+          : 'border-transparent bg-transparent text-slate-300 hover:border-white/8 hover:bg-white/[0.045] hover:text-white',
       )}
     >
       <div
         className={cn(
           'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[1rem] border transition-all',
           active
-            ? 'border-white/14 bg-white/10 text-[#ffd27b]'
-            : 'border-white/8 bg-black/20 text-slate-400 group-hover:text-[#ffd27b]',
+            ? 'border-white/12 bg-white/10 text-[#ffd27b]'
+            : 'border-white/8 bg-black/20 text-slate-400 group-hover:border-white/12 group-hover:text-[#ffd27b]',
         )}
       >
         <Icon className="h-4 w-4" />
@@ -252,21 +269,21 @@ function SidebarSection({
   )
 
   return (
-    <section className="rounded-[1.65rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))] p-2 shadow-[0_12px_24px_rgba(0,0,0,0.16)]">
+    <section className="rounded-[1.5rem] border border-white/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.012))] p-2 shadow-[0_10px_22px_rgba(0,0,0,0.16)]">
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-3 rounded-[1.25rem] py-3 pl-3.5 pr-3 text-left transition-colors hover:bg-white/[0.04]"
+        className="flex w-full items-center gap-3 rounded-[1.15rem] py-3 pl-3.5 pr-3 text-left transition-colors hover:bg-white/[0.035]"
       >
-        <div className={cn('h-10 w-1 rounded-full bg-gradient-to-b', section.accent)} />
+        <div className={cn('h-9 w-1 rounded-full bg-gradient-to-b', section.accent)} />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold tracking-[-0.02em] text-white">{section.title}</p>
+          <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">{section.title}</p>
           <p className="text-[11px] text-slate-500">{section.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           {hasActiveItem ? (
-            <span className="rounded-full border border-[#ffd27b]/20 bg-[#ffd27b]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#ffd27b]">
-              active
+            <span className="rounded-full border border-[#ffd27b]/18 bg-[#ffd27b]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#ffd27b]">
+              here
             </span>
           ) : null}
           <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', open && 'rotate-180 text-slate-200')} />
@@ -422,6 +439,11 @@ export function Sidebar() {
       .filter((section) => section.items.length > 0)
   }, [isOperator, isStaff, isSuperAdmin, staffRole])
 
+  const moduleCount = useMemo(
+    () => visibleSections.reduce((sum, section) => sum + section.items.length, 0),
+    [visibleSections],
+  )
+
   useEffect(() => {
     const activeSection = visibleSections.find((section) =>
       section.items.some((item) => (item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/'))),
@@ -434,15 +456,6 @@ export function Sidebar() {
       [activeSection.id]: true,
     }))
   }, [pathname, visibleSections])
-
-  const stats = useMemo(
-    () => [
-      { label: 'Модулей', value: String(visibleSections.reduce((sum, section) => sum + section.items.length, 0)).padStart(2, '0'), icon: Sparkles },
-      { label: 'Групп', value: String(visibleSections.length).padStart(2, '0'), icon: FolderKanban },
-      { label: 'Фокус', value: 'OS', icon: CreditCard },
-    ],
-    [visibleSections],
-  )
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -475,23 +488,7 @@ export function Sidebar() {
         className="flex-1 overflow-y-auto px-4 py-4 md:px-5"
       >
         <div className="sticky top-0 z-10 -mx-1 bg-[linear-gradient(180deg,rgba(7,16,26,0.96),rgba(7,16,26,0.78),transparent)] px-1 pb-3 pt-1 backdrop-blur-xl">
-          <BrandHeader />
-
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {stats.map((stat) => {
-              const Icon = stat.icon
-              return (
-                <div
-                  key={stat.label}
-                  className="rounded-[1.1rem] border border-white/8 bg-white/[0.04] px-3 py-3 text-center shadow-[0_10px_24px_rgba(0,0,0,0.14)]"
-                >
-                  <Icon className="mx-auto h-3.5 w-3.5 text-slate-500" />
-                  <p className="mt-2 text-sm font-semibold text-white">{stat.value}</p>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{stat.label}</p>
-                </div>
-              )
-            })}
-          </div>
+          <BrandHeader roleLabel={roleLabel} moduleCount={moduleCount} sectionCount={visibleSections.length} />
         </div>
 
         <div className="mt-5 space-y-3 pl-1">
@@ -544,7 +541,7 @@ export function Sidebar() {
         </div>
       ) : null}
 
-      <aside className="sticky top-0 hidden h-screen w-[380px] shrink-0 border-r border-white/6 bg-[linear-gradient(180deg,#07101a_0%,#08111d_40%,#09131f_100%)] md:block xl:w-[404px]">
+      <aside className="sticky top-0 hidden h-screen w-[376px] shrink-0 border-r border-white/6 bg-[linear-gradient(180deg,#07101a_0%,#08111d_40%,#09131f_100%)] md:block xl:w-[396px]">
         {navContent}
       </aside>
     </>
