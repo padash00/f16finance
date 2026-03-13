@@ -283,9 +283,13 @@ function SidebarSection({
 function UserCard({
   onLogout,
   email,
+  displayName,
+  roleLabel,
 }: {
   onLogout: () => Promise<void>
   email: string | null
+  displayName: string | null
+  roleLabel: string | null
 }) {
   return (
     <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-4">
@@ -294,7 +298,7 @@ function UserCard({
           <ShieldCheck className="h-5 w-5 text-[#ffd27b]" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-white">Панель управления</p>
+          <p className="truncate text-sm font-semibold text-white">{displayName || 'Панель управления'}</p>
           <p className="truncate text-xs text-slate-500">{email || 'admin@system.local'}</p>
         </div>
       </div>
@@ -306,7 +310,7 @@ function UserCard({
         </div>
         <div className="flex items-center gap-1 rounded-full border border-white/8 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
           <Building2 className="h-3 w-3" />
-          control
+          {roleLabel || 'control'}
         </div>
       </div>
 
@@ -330,7 +334,9 @@ export function Sidebar() {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [displayName, setDisplayName] = useState<string | null>(null)
   const [staffRole, setStaffRole] = useState<StaffRole | null>(null)
+  const [roleLabel, setRoleLabel] = useState<string | null>(null)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [isStaff, setIsStaff] = useState(false)
   const [isOperator, setIsOperator] = useState(false)
@@ -358,6 +364,8 @@ export function Sidebar() {
         setIsStaff(!!json?.isStaff)
         setIsOperator(!!json?.isOperator)
         setStaffRole((json?.staffRole as StaffRole | null) || null)
+        setDisplayName((json?.displayName as string | null) || null)
+        setRoleLabel((json?.roleLabel as string | null) || null)
       }
     }
 
@@ -462,7 +470,7 @@ export function Sidebar() {
       </div>
 
       <div className="border-t border-white/6 px-4 py-4 md:px-5">
-        <UserCard onLogout={handleLogout} email={userEmail} />
+        <UserCard onLogout={handleLogout} email={userEmail} displayName={displayName} roleLabel={roleLabel} />
       </div>
     </div>
   )

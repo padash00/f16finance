@@ -25,6 +25,8 @@ type SessionRoleResponse = {
   isSuperAdmin?: boolean
   isStaff?: boolean
   staffRole?: StaffRole | null
+  roleLabel?: string | null
+  displayName?: string | null
   defaultPath?: string
 }
 
@@ -51,6 +53,8 @@ export default function WelcomePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [staffRole, setStaffRole] = useState<StaffRole | null>(null)
+  const [roleLabel, setRoleLabel] = useState<string | null>(null)
+  const [displayName, setDisplayName] = useState<string | null>(null)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
   useEffect(() => {
@@ -70,6 +74,8 @@ export default function WelcomePage() {
 
         setIsSuperAdmin(!!json.isSuperAdmin)
         setStaffRole((json.staffRole as StaffRole | null) || null)
+        setRoleLabel((json.roleLabel as string | null) || null)
+        setDisplayName((json.displayName as string | null) || null)
 
         if (json.isSuperAdmin) {
           router.replace('/')
@@ -96,6 +102,11 @@ export default function WelcomePage() {
       return {
         title: 'Добро пожаловать, руководитель',
         description: 'У вас открыт доступ только к ключевым операционным и финансовым разделам.',
+        checklist: [
+          'Проверьте график смен и расставьте операторов на текущую неделю.',
+          'Откройте зарплату и убедитесь, что расчёты по сменам актуальны.',
+          'Сверьте доходы, расходы и недельный отчёт перед началом работы.',
+        ],
         actions: MANAGER_ACTIONS,
       }
     }
@@ -103,6 +114,11 @@ export default function WelcomePage() {
     return {
       title: 'Добро пожаловать, маркетолог',
       description: 'У вас открыт доступ только к разделу задач. Остальные модули скрыты.',
+      checklist: [
+        'Откройте задачи и проверьте активные карточки.',
+        'Создайте новые задачи для операторов или команды, если это нужно.',
+        'Отслеживайте статусы и дедлайны только в рабочем блоке задач.',
+      ],
       actions: MARKETER_ACTIONS,
     }
   }, [staffRole])
@@ -137,6 +153,16 @@ export default function WelcomePage() {
           <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.18),transparent_34%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.32)] sm:p-8">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-3xl">
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-200">
+                    {roleLabel || 'Рабочий контур'}
+                  </span>
+                  {displayName ? (
+                    <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] font-medium text-slate-300">
+                      {displayName}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="mb-4 inline-flex rounded-2xl bg-violet-500/12 p-4">
                   <ShieldCheck className="h-7 w-7 text-violet-300" />
                 </div>
@@ -148,6 +174,15 @@ export default function WelcomePage() {
                 После входа вы будете видеть только разрешённые разделы для своей роли.
               </div>
             </div>
+          </Card>
+
+          <Card className="border-white/10 bg-slate-950/65 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
+            <h2 className="text-xl font-semibold">С чего начать</h2>
+            <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-6 text-slate-300">
+              {welcomeConfig.checklist.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ol>
           </Card>
 
           <div className={`grid gap-4 ${welcomeConfig.actions.length === 1 ? 'md:max-w-xl' : 'xl:grid-cols-2'}`}>

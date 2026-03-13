@@ -4,6 +4,17 @@ import { getDefaultAppPath, normalizeStaffRole } from '@/lib/core/access'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { createRequestSupabaseClient } from '@/lib/server/request-auth'
 
+function getRoleLabel(params: { isSuperAdmin: boolean; staffRole: ReturnType<typeof normalizeStaffRole>; isOperator: boolean }) {
+  const { isSuperAdmin, staffRole, isOperator } = params
+
+  if (isSuperAdmin) return 'Супер-администратор'
+  if (staffRole === 'manager') return 'Руководитель'
+  if (staffRole === 'marketer') return 'Маркетолог'
+  if (staffRole === 'owner') return 'Владелец'
+  if (isOperator) return 'Оператор'
+  return 'Пользователь'
+}
+
 export async function GET(req: Request) {
   try {
     const supabase = createRequestSupabaseClient(req)
@@ -24,14 +35,21 @@ export async function GET(req: Request) {
       .eq('user_id', user.id)
       .maybeSingle()
     const isOperator = !!operatorAuth
+    const displayName =
+      (isSuperAdmin ? null : staffMember?.full_name || staffMember?.short_name) ||
+      user.user_metadata?.name ||
+      user.email ||
+      null
 
     return NextResponse.json({
       ok: true,
       email: user.email || null,
+      displayName,
       isSuperAdmin,
       isStaff: isSuperAdmin || !!staffMember,
       isOperator,
       staffRole,
+      roleLabel: getRoleLabel({ isSuperAdmin, staffRole, isOperator }),
       defaultPath: getDefaultAppPath({
         isSuperAdmin,
         isStaff: isSuperAdmin || !!staffMember,
