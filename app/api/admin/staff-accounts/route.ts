@@ -80,15 +80,15 @@ async function resolveStaffAccountTarget(supabase: any, staffId: string): Promis
   }
 
   const fullName =
-    staffRow.full_name?.trim() ||
     operatorProfile?.full_name?.trim() ||
+    staffRow.full_name?.trim() ||
     operator?.name?.trim() ||
     staffRow.short_name?.trim() ||
     operator?.short_name?.trim() ||
     null
 
-  const email = staffRow.email?.trim()?.toLowerCase() || operatorProfile?.email?.trim()?.toLowerCase() || null
-  const phone = staffRow.phone?.trim() || operatorProfile?.phone?.trim() || null
+  const email = operatorProfile?.email?.trim()?.toLowerCase() || staffRow.email?.trim()?.toLowerCase() || null
+  const phone = operatorProfile?.phone?.trim() || staffRow.phone?.trim() || null
 
   if (
     (email && email !== (staffRow.email?.trim()?.toLowerCase() || null)) ||
