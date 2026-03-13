@@ -158,7 +158,7 @@ export function getDefaultAppPath(params: {
 
 export function staffRoleHasCapability(role: StaffRole, capability: StaffCapability) {
   if (role === 'manager') {
-    return capability === 'shifts' || capability === 'salary'
+    return capability === 'tasks' || capability === 'shifts' || capability === 'salary'
   }
 
   if (role === 'marketer') {
