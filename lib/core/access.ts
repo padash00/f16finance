@@ -5,6 +5,7 @@ export const PUBLIC_PATHS = [
   '/setup-required',
   '/forgot-password',
   '/reset-password',
+  '/set-password',
   '/auth/callback',
   '/auth/complete',
 ] as const

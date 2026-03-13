@@ -241,7 +241,7 @@ export async function POST(req: Request) {
 
     const email = resolved.email
     const origin = getPublicAppUrl(new URL(req.url).origin)
-    const accessRedirectTo = buildRedirectTo(origin, '/reset-password?mode=invite')
+    const accessRedirectTo = buildRedirectTo(origin, '/set-password')
     const recoveryRedirectTo = buildRedirectTo(origin, '/reset-password?mode=recovery')
 
     const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
@@ -276,7 +276,7 @@ export async function POST(req: Request) {
           ok: true,
           email,
           accountState: 'invited',
-          message: `Приглашение отправлено на ${email}`,
+          message: `Приглашение отправлено на ${email}. Сотрудник сам задаст пароль по ссылке из письма.`,
         })
       }
 
@@ -305,7 +305,7 @@ export async function POST(req: Request) {
         ok: true,
         email,
         accountState: mapUserState(existingUser, true),
-        message: `Письмо для входа отправлено на ${email}`,
+        message: `Письмо отправлено на ${email}. По ссылке сотрудник сможет задать новый пароль и войти в систему.`,
       })
     }
 
@@ -338,7 +338,7 @@ export async function POST(req: Request) {
       ok: true,
       email,
       accountState: mapUserState(existingUser, true),
-      message: `Письмо для сброса пароля отправлено на ${email}`,
+      message: `Письмо для смены пароля отправлено на ${email}. После перехода сотрудник сам задаст новый пароль.`,
     })
   } catch (error: any) {
     console.error('Admin staff accounts POST route error', error)

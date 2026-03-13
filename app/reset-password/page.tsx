@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle,
   CheckCircle2,
@@ -25,8 +25,10 @@ function parseHashParams() {
 
 function ResetPasswordContent() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const mode = searchParams.get('mode')
+  const isInviteFlow = mode === 'invite' || pathname === '/set-password'
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -37,11 +39,11 @@ function ResetPasswordContent() {
   const [defaultPath, setDefaultPath] = useState('/')
 
   const copy = useMemo(() => {
-    if (mode === 'invite') {
+    if (isInviteFlow) {
       return {
-        title: 'Создание пароля',
-        description: 'Это первый вход в систему. Придумайте пароль для своего рабочего аккаунта.',
-        success: 'Пароль установлен. Теперь можно перейти в свой рабочий кабинет или войти позже через экран входа.',
+        title: 'Установите пароль',
+        description: 'Это первый вход в систему. Придумайте свой пароль для рабочего аккаунта. Временный пароль не нужен.',
+        success: 'Пароль установлен. Этот пароль стал вашим основным паролем для входа в систему.',
       }
     }
 
@@ -50,7 +52,7 @@ function ResetPasswordContent() {
       description: 'Придумайте новый пароль для входа в систему.',
       success: 'Пароль успешно обновлён. Теперь можно войти с новым паролем.',
     }
-  }, [mode])
+  }, [isInviteFlow])
 
   useEffect(() => {
     let active = true
@@ -148,7 +150,7 @@ function ResetPasswordContent() {
             <div className="flex h-full flex-col justify-between">
               <div>
                 <div className="mb-5 inline-flex rounded-2xl bg-violet-500/10 p-4">
-                  {mode === 'invite' ? <ShieldCheck className="h-7 w-7 text-violet-400" /> : <KeyRound className="h-7 w-7 text-violet-400" />}
+                  {isInviteFlow ? <ShieldCheck className="h-7 w-7 text-violet-400" /> : <KeyRound className="h-7 w-7 text-violet-400" />}
                 </div>
                 <h1 className="text-3xl font-semibold text-white">{copy.title}</h1>
                 <p className="mt-3 text-sm leading-6 text-slate-400">{copy.description}</p>
@@ -164,7 +166,7 @@ function ResetPasswordContent() {
                   </ol>
                 </div>
                 <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-                  Если вы попали сюда из письма-приглашения, этот шаг завершает активацию аккаунта.
+                  Если вы попали сюда из письма-приглашения, этот шаг завершает активацию аккаунта. После сохранения этот пароль станет постоянным.
                 </div>
               </div>
             </div>
@@ -173,7 +175,7 @@ function ResetPasswordContent() {
           <Card className="border-white/10 bg-slate-950/70 p-6 text-white backdrop-blur-xl sm:p-8">
             <div className="mb-5 flex items-center gap-3">
               <div className="rounded-2xl bg-violet-500/10 p-3">
-                {mode === 'invite' ? <ShieldCheck className="h-6 w-6 text-violet-400" /> : <KeyRound className="h-6 w-6 text-violet-400" />}
+                  {isInviteFlow ? <ShieldCheck className="h-6 w-6 text-violet-400" /> : <KeyRound className="h-6 w-6 text-violet-400" />}
               </div>
               <div>
                 <h1 className="text-lg font-semibold">{copy.title}</h1>

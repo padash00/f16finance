@@ -505,8 +505,8 @@ export default function StaffPageSmart() {
         text:
           json?.message ||
           (action === 'sendPasswordReset'
-            ? `Письмо для сброса пароля отправлено на ${staffMember.email}`
-            : `Письмо для входа отправлено на ${staffMember.email}`),
+            ? `Письмо для смены пароля отправлено на ${staffMember.email}.`
+            : `Письмо-приглашение отправлено на ${staffMember.email}. Сотрудник сам задаст пароль по ссылке.`),
       })
 
       await loadData(true)
@@ -1065,17 +1065,17 @@ function StaffRow({
                 )}
                 onClick={onInviteAccount}
                 disabled={inviteBusy}
-                title={
-                  inviteBlockedReason ||
-                  (accountState === 'no_account'
-                    ? `Создать аккаунт и отправить письмо на ${effectiveEmail}`
-                    : `Отправить письмо для входа на ${effectiveEmail}`)
-                }
-              >
-                <KeyRound className="w-3.5 h-3.5" />
-                {inviteBusy ? 'Отправка...' : inviteBlockedReason ? 'Проверить' : accountState === 'no_account' ? 'Аккаунт' : 'Письмо'}
-              </Button>
-            )}
+                  title={
+                    inviteBlockedReason ||
+                    (accountState === 'no_account'
+                      ? `Создать аккаунт и отправить приглашение на ${effectiveEmail}`
+                      : `Отправить письмо для повторной установки пароля на ${effectiveEmail}`)
+                  }
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  {inviteBusy ? 'Отправка...' : inviteBlockedReason ? 'Проверить' : accountState === 'no_account' ? 'Пригласить' : 'Переотправить'}
+                </Button>
+              )}
 
             {canInviteAccount && canResetPassword && (
               <Button
@@ -1084,10 +1084,10 @@ function StaffRow({
                 className="h-8 px-3 text-xs gap-1.5 border-white/10 bg-white/[0.03]"
                 onClick={onResetPassword}
                 disabled={resetBusy || !staff.is_active}
-                title={!staff.is_active ? 'Нельзя отправить письмо архивному сотруднику' : `Отправить письмо для сброса пароля на ${effectiveEmail}`}
+                title={!staff.is_active ? 'Нельзя отправить письмо архивному сотруднику' : `Отправить письмо для смены пароля на ${effectiveEmail}`}
               >
                 <Mail className="w-3.5 h-3.5" />
-                {resetBusy ? 'Отправка...' : 'Сброс'}
+                {resetBusy ? 'Отправка...' : 'Сменить пароль'}
               </Button>
             )}
             
