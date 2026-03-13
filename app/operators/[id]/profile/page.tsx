@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { getPublicAppUrl } from '@/lib/core/app-url'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
 import {
@@ -228,6 +229,8 @@ function AccountInfo({ account, onCopyUsername, onCopyPassword, onClose }: {
   onClose: () => void
 }) {
   if (!account) return null
+  const publicAppUrl =
+    typeof window !== 'undefined' ? getPublicAppUrl(window.location.origin) : getPublicAppUrl()
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -293,12 +296,12 @@ function AccountInfo({ account, onCopyUsername, onCopyPassword, onClose }: {
             <p className="text-sm text-blue-400 mb-2">Ссылка для входа:</p>
             <div className="flex items-center gap-2">
               <code className="flex-1 p-2 bg-gray-800 rounded-lg text-xs text-white truncate">
-                {typeof window !== 'undefined' ? `${window.location.origin}/operator-login` : '/operator-login'}
+                {`${publicAppUrl}/operator-login`}
               </code>
               <button
                 onClick={() => {
                   if (typeof window !== 'undefined') {
-                    navigator.clipboard.writeText(`${window.location.origin}/operator-login`)
+                    navigator.clipboard.writeText(`${publicAppUrl}/operator-login`)
                   }
                 }}
                 className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"

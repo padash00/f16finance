@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { getPublicAppUrl } from '@/lib/core/app-url'
 import { writeAuditLog } from '@/lib/server/audit'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -239,7 +240,7 @@ export async function POST(req: Request) {
     }
 
     const email = resolved.email
-    const origin = new URL(req.url).origin
+    const origin = getPublicAppUrl(new URL(req.url).origin)
     const accessRedirectTo = buildRedirectTo(origin, '/reset-password?mode=invite')
     const recoveryRedirectTo = buildRedirectTo(origin, '/reset-password?mode=recovery')
 

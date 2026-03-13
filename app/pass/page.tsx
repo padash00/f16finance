@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { getPublicAppUrl } from '@/lib/core/app-url'
 import { supabase } from '@/lib/supabaseClient'
 import {
   Users,
@@ -41,6 +42,7 @@ type Operator = {
 }
 
 export default function AccessPage() {
+  const publicAppUrl = typeof window !== 'undefined' ? getPublicAppUrl(window.location.origin) : getPublicAppUrl()
   const [operators, setOperators] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
   const [resetting, setResetting] = useState<string | null>(null)
@@ -274,7 +276,7 @@ export default function AccessPage() {
 📞 Телефон: ${op.phone || 'не указан'}
 📧 Email: ${op.email || 'не указан'}
 💬 Telegram ID: ${op.telegram_chat_id || 'не указан'}
-🌐 Ссылка для входа: ${window.location.origin}/login`
+🌐 Ссылка для входа: ${publicAppUrl}/login`
 
     navigator.clipboard.writeText(text)
     setCopiedId(op.id)
@@ -285,7 +287,7 @@ export default function AccessPage() {
   const copyAllData = () => {
     let text = '🔐 ДАННЫЕ ДЛЯ ВХОДА ОПЕРАТОРОВ\n'
     text += '='.repeat(60) + '\n'
-    text += `🌐 Ссылка для входа: ${window.location.origin}/login\n`
+    text += `🌐 Ссылка для входа: ${publicAppUrl}/login\n`
     text += '='.repeat(60) + '\n\n'
 
     operators.forEach(op => {
@@ -315,7 +317,7 @@ export default function AccessPage() {
       op.phone || '',
       op.email || '',
       op.telegram_chat_id || '',
-      `${window.location.origin}/login`
+      `${publicAppUrl}/login`
     ])
 
     const csvContent = [

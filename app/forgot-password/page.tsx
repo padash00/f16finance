@@ -7,6 +7,7 @@ import { AlertCircle, CheckCircle2, KeyRound, Loader2, Mail, ArrowRight } from '
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { getPublicAppUrl } from '@/lib/core/app-url'
 import { supabase } from '@/lib/supabaseClient'
 
 export default function ForgotPasswordPage() {
@@ -22,7 +23,7 @@ export default function ForgotPasswordPage() {
     setSuccess(null)
 
     try {
-      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent('/reset-password?mode=recovery')}`
+      const redirectTo = `${getPublicAppUrl(window.location.origin)}/auth/callback?next=${encodeURIComponent('/reset-password?mode=recovery')}`
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo })
       if (resetError) throw resetError
 
