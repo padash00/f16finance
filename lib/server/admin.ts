@@ -14,9 +14,20 @@ export function isAdminEmail(email: string | null | undefined) {
 
 export async function resolveStaffByUser(
   supabase: any,
-  user: { id: string; email?: string | null } | null,
+  user: { id: string; email?: string | null; user_metadata?: Record<string, any> | null } | null,
 ) {
   if (!user?.id) return null
+
+  const metadataStaffId = typeof user.user_metadata?.staff_id === 'string' ? user.user_metadata.staff_id : null
+  if (metadataStaffId) {
+    const { data, error } = await supabase
+      .from('staff')
+      .select('id, email, full_name, short_name, role, is_active')
+      .eq('id', metadataStaffId)
+      .maybeSingle()
+
+    if (!error && data) return data
+  }
 
   if (user.email) {
     const { data, error } = await supabase
