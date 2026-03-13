@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getPublicAppUrl } from '@/lib/core/app-url'
-import { writeAuditLog, writeNotificationLog } from '@/lib/server/audit'
+import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -195,6 +195,11 @@ export async function GET(req: Request) {
     return json({ ok: true, items: items.filter(Boolean) })
   } catch (error: any) {
     console.error('Admin staff accounts GET route error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/staff-accounts:get',
+      message: error?.message || 'Admin staff accounts GET route error',
+    })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
 }
@@ -362,6 +367,11 @@ export async function POST(req: Request) {
     })
   } catch (error: any) {
     console.error('Admin staff accounts POST route error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/staff-accounts:post',
+      message: error?.message || 'Admin staff accounts POST route error',
+    })
     const staffId = requestBody && 'staffId' in requestBody ? requestBody.staffId : null
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
     if (supabase && staffId) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getAdminEmails } from '@/lib/server/admin'
+import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -77,6 +78,11 @@ export async function GET(req: Request) {
     })
   } catch (error: any) {
     console.error('Admin health route error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/health',
+      message: error?.message || 'Admin health route error',
+    })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getDefaultAppPath, normalizeStaffRole } from '@/lib/core/access'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
+import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createRequestSupabaseClient } from '@/lib/server/request-auth'
 
 function getRoleLabel(params: { isSuperAdmin: boolean; staffRole: ReturnType<typeof normalizeStaffRole>; isOperator: boolean }) {
@@ -59,6 +60,11 @@ export async function GET(req: Request) {
     })
   } catch (error: any) {
     console.error('Session role route error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/auth/session-role',
+      message: error?.message || 'Session role route error',
+    })
     return NextResponse.json({ error: error?.message || 'Ошибка сервера' }, { status: 500 })
   }
 }

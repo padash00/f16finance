@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { writeAuditLog } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireAdminRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -47,6 +47,11 @@ export async function POST(request: Request) {
     })
   } catch (error: any) {
     console.error('Server error:', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/reset-password',
+      message: error?.message || 'Server error',
+    })
     return NextResponse.json(
       { error: error.message || 'Внутренняя ошибка сервера' },
       { status: 500 }

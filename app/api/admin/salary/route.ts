@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -71,6 +72,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, data })
   } catch (error: any) {
     console.error('Admin salary mutation error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/salary',
+      message: error?.message || 'Admin salary mutation error',
+    })
     return NextResponse.json({ error: error?.message || 'Ошибка сервера' }, { status: 500 })
   }
 }

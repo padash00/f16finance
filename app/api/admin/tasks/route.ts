@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { resolveStaffByUser } from '@/lib/server/admin'
-import { writeAuditLog, writeNotificationLog } from '@/lib/server/audit'
+import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
 import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -299,6 +299,11 @@ export async function POST(req: Request) {
     return json({ ok: true })
   } catch (error: any) {
     console.error('Admin tasks route error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/tasks',
+      message: error?.message || 'Admin tasks route error',
+    })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
 }

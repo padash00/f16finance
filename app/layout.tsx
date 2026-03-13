@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { IBM_Plex_Mono, Space_Grotesk } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { ClientErrorReporter } from '@/components/client-error-reporter'
 import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 
@@ -48,6 +49,7 @@ export default function RootLayout({
       <head />
       <body className={`${spaceGrotesk.variable} ${ibmPlexMono.variable} app-shell font-sans antialiased dark`}>
         {children}
+        <ClientErrorReporter />
         <Toaster />
         <Analytics />
       </body>

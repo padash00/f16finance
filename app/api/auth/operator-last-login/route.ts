@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { writeAuditLog } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireOperatorAuthRow } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -33,6 +33,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true })
   } catch (error: any) {
     console.error('Operator last_login update error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/auth/operator-last-login',
+      message: error?.message || 'Operator last_login update error',
+    })
     return NextResponse.json({ error: error?.message || 'Ошибка сервера' }, { status: 500 })
   }
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { writeAuditLog } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -125,6 +125,11 @@ export async function POST(req: Request) {
     return json({ ok: true, data })
   } catch (error: any) {
     console.error('Admin staff mutation error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/staff',
+      message: error?.message || 'Admin staff mutation error',
+    })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
 }

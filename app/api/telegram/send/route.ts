@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { writeNotificationLog } from '@/lib/server/audit'
+import { writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
 import { createRequestSupabaseClient, requireAdminRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -65,6 +65,11 @@ export async function POST(req: Request) {
     return json({ ok: true })
   } catch (error: any) {
     console.error('Task telegram route error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/telegram/send',
+      message: error?.message || 'Task telegram route error',
+    })
     return json({ error: error?.message || 'Server error' }, 500)
   }
 }

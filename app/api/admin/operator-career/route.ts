@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { normalizeStaffRole } from '@/lib/core/access'
-import { writeAuditLog } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -37,6 +37,11 @@ export async function GET(req: Request) {
     return json({ ok: true, data: data || null })
   } catch (error: any) {
     console.error('Operator career GET route error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/operator-career:get',
+      message: error?.message || 'Operator career GET route error',
+    })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
 }
@@ -153,6 +158,11 @@ export async function POST(req: Request) {
     })
   } catch (error: any) {
     console.error('Operator career POST route error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/operator-career:post',
+      message: error?.message || 'Operator career POST route error',
+    })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
 }

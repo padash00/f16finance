@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -123,6 +124,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true })
   } catch (error: any) {
     console.error('Admin settings mutation error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/settings',
+      message: error?.message || 'Admin settings mutation error',
+    })
     return NextResponse.json({ error: error?.message || 'Ошибка сервера' }, { status: 500 })
   }
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
-import { writeAuditLog, writeNotificationLog } from '@/lib/server/audit'
+import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
 import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -631,6 +631,11 @@ export async function POST(req: Request) {
     return badRequest('Неизвестное действие')
   } catch (error: any) {
     console.error('Admin shifts mutation error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/shifts',
+      message: error?.message || 'Admin shifts mutation error',
+    })
     const rawMessage =
       error?.message ||
       error?.details ||
