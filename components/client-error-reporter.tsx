@@ -7,11 +7,24 @@ export function ClientErrorReporter() {
   const pathname = usePathname()
 
   useEffect(() => {
+    fetch('/api/client-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: 'page_view',
+        area: pathname,
+        pathname,
+        source: 'client-navigation',
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      }),
+    }).catch(() => null)
+
     const report = (payload: { area: string; message: string; source: string; stack?: string | null }) => {
       fetch('/api/client-log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          eventType: 'client_error',
           ...payload,
           pathname,
           userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,

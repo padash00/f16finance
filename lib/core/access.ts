@@ -62,7 +62,20 @@ const MANAGER_PATHS = [
 
 const MARKETER_PATHS = ['/welcome', '/tasks'] as const
 
-const OWNER_BLOCKED_PATHS = ['/settings', '/debug', '/pass', '/logs'] as const
+const OWNER_PATHS = [
+  '/',
+  '/welcome',
+  '/reports',
+  '/analysis',
+  '/weekly-report',
+  '/salary',
+  '/salary/*',
+  '/salary/rules',
+  '/operators',
+  '/operators/*',
+  '/staff',
+  '/tasks',
+] as const
 
 export const OPERATOR_PATHS = [
   '/operator-dashboard',
@@ -100,11 +113,7 @@ export function isPublicPath(pathname: string): boolean {
 export function getAllowedStaffPaths(role: StaffRole): readonly string[] {
   if (role === 'manager') return MANAGER_PATHS
   if (role === 'marketer') return MARKETER_PATHS
-  if (role === 'owner') {
-    return ADMIN_PATHS.filter(
-      (rule) => !OWNER_BLOCKED_PATHS.some((blockedRule) => blockedRule === rule),
-    )
-  }
+  if (role === 'owner') return OWNER_PATHS
 
   return []
 }
@@ -167,7 +176,7 @@ export function staffRoleHasCapability(role: StaffRole, capability: StaffCapabil
   }
 
   if (role === 'owner') {
-    return capability === 'tasks' || capability === 'shifts' || capability === 'salary' || capability === 'staff'
+    return capability === 'tasks' || capability === 'salary' || capability === 'staff'
   }
 
   return false

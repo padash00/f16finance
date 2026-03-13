@@ -73,6 +73,12 @@ export default function UnifiedLoginPage() {
 
         if (error) throw error
 
+        await fetch('/api/auth/login-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method: 'email', target: 'staff' }),
+        }).catch(() => null)
+
         const response = await fetch('/api/auth/session-role').catch(() => null)
         const json = await response?.json().catch(() => null)
         const defaultPath = response?.ok && json?.defaultPath ? String(json.defaultPath) : '/'
@@ -100,6 +106,12 @@ export default function UnifiedLoginPage() {
       })
 
       if (signInError) throw new Error('Неверный логин или пароль')
+
+      await fetch('/api/auth/login-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'operator', target: 'operator' }),
+      }).catch(() => null)
 
       await fetch('/api/auth/operator-last-login', {
         method: 'POST',
