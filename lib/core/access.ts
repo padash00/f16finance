@@ -15,6 +15,7 @@ export type StaffCapability = 'tasks' | 'shifts' | 'salary' | 'staff' | 'staff_a
 
 export const ADMIN_PATHS = [
   '/',
+  '/welcome',
   '/income',
   '/income/add',
   '/income/analytics',
@@ -43,6 +44,7 @@ export const ADMIN_PATHS = [
 ] as const
 
 const MANAGER_PATHS = [
+  '/welcome',
   '/income',
   '/income/add',
   '/income/analytics',
@@ -56,7 +58,7 @@ const MANAGER_PATHS = [
   '/salary/*',
 ] as const
 
-const MARKETER_PATHS = ['/tasks'] as const
+const MARKETER_PATHS = ['/welcome', '/tasks'] as const
 
 const OWNER_BLOCKED_PATHS = ['/settings', '/debug', '/pass'] as const
 
@@ -125,12 +127,16 @@ export function canAccessPath(params: {
   const staffAllowed = isStaff && canStaffRoleAccessPath(normalizeStaffRole(staffRole), pathname)
   const operatorAllowed = isOperator && OPERATOR_PATHS.some((rule) => matchesPath(pathname, rule))
 
-  return staffAllowed || operatorAllowed
+  if (isStaff) {
+    return staffAllowed
+  }
+
+  return operatorAllowed
 }
 
 export function getDefaultPathForStaffRole(role: StaffRole) {
-  if (role === 'manager') return '/income'
-  if (role === 'marketer') return '/tasks'
+  if (role === 'manager') return '/welcome'
+  if (role === 'marketer') return '/welcome'
   if (role === 'owner') return '/'
   return '/unauthorized'
 }
