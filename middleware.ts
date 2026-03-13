@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { canAccessPath, getDefaultAppPath, normalizeStaffRole, isPublicPath } from '@/lib/core/access'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 
+const AUTH_SELF_SERVICE_PATHS = ['/forgot-password', '/reset-password', '/set-password', '/auth/callback', '/auth/complete'] as const
+
 export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -109,6 +111,12 @@ export async function middleware(request: NextRequest) {
   const isStaff = isSuperAdmin || !!staffMember
   const isOperator = !!operatorAuth
   const defaultPath = getDefaultAppPath({ isSuperAdmin, isStaff, isOperator, staffRole })
+
+  // Разрешаем сервисные auth-страницы и после авторизации:
+  // invite/recovery flow сначала создает сессию, а уже потом ведет на set/reset password.
+  if (AUTH_SELF_SERVICE_PATHS.some((path) => url.pathname.startsWith(path))) {
+    return response
+  }
 
   // Если пытается зайти на страницы входа - редирект в домашний раздел по роли
   if (url.pathname.startsWith('/login') || url.pathname.startsWith('/operator-login')) {
