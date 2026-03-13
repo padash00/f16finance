@@ -118,6 +118,8 @@ const parseIntSafe = (v: string | number | null): number | null => {
   return Math.round(num)
 }
 
+type EditableRuleField = Exclude<keyof RuleRow, 'id'>
+
 const ruleKey = (company_code: string, shift_type: ShiftType) =>
   `${company_code}__${shift_type}`
 
@@ -319,10 +321,10 @@ function SalaryRulesContent() {
     setSuccessMsg(null)
   }
 
-  const handleFieldChange = (
+  const handleFieldChange = <K extends EditableRuleField>(
     id: number,
-    field: keyof RuleRow,
-    value: string | boolean,
+    field: K,
+    value: RuleRow[K],
   ) => {
     setRules((prev) =>
       prev.map((r) => (r.id === id ? { ...r, [field]: value } as RuleRow : r))
@@ -330,9 +332,13 @@ function SalaryRulesContent() {
     markDirty(id)
   }
 
-  const handleNumberChange = (id: number, field: keyof RuleRow, value: string) => {
+  const handleNumberChange = (
+    id: number,
+    field: 'base_per_shift' | 'threshold1_turnover' | 'threshold1_bonus' | 'threshold2_turnover' | 'threshold2_bonus',
+    value: string,
+  ) => {
     const num = parseIntSafe(value)
-    handleFieldChange(id, field, num ?? '')
+    handleFieldChange(id, field, num)
   }
 
   const buildPayload = (row: RuleRow) => ({
@@ -519,8 +525,8 @@ function SalaryRulesContent() {
     <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100">
       <Sidebar />
 
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <main className="app-main">
+        <div className="app-page max-w-7xl space-y-6">
           {/* Header */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
             <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />

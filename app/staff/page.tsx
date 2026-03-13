@@ -47,6 +47,8 @@ import {
   Percent,
   Scale,
   Sparkles,
+  KeyRound,
+  Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -66,6 +68,20 @@ type Staff = {
   email?: string | null
 }
 
+type StaffAccountState = 'no_email' | 'no_account' | 'invited' | 'active'
+
+type StaffAccountInfo = {
+  staffId: string
+  email: string | null
+  phone: string | null
+  full_name: string | null
+  accountState: StaffAccountState
+  hasAccount: boolean
+  emailConfirmedAt: string | null
+  lastSignInAt: string | null
+  userId: string | null
+}
+
 type StaffPayment = {
   id: number
   staff_id: string
@@ -74,6 +90,26 @@ type StaffPayment = {
   amount: number
   comment: string | null
   created_at?: string
+}
+
+type AddStaffDialogProps = {
+  isOpen: boolean
+  onClose: () => void
+  onSuccess: (newStaff: Staff) => void
+}
+
+type AddPaymentDialogProps = {
+  isOpen: boolean
+  onClose: () => void
+  staff: Staff
+  paidSoFar: number
+  dateDefault: string
+  onSuccess: (newPayment: StaffPayment) => void
+}
+
+type PageNotice = {
+  tone: 'success' | 'error'
+  text: string
 }
 
 // --- Constants ---
@@ -104,6 +140,25 @@ const PAY_SLOT_LABEL: Record<PaySlot, { label: string; icon: any }> = {
   first: { label: 'Аванс (1-е число)', icon: CalendarDays },
   second: { label: 'Зарплата (15-е число)', icon: DollarSign },
   other: { label: 'Другое', icon: Clock },
+}
+
+const ACCOUNT_STATE_LABEL: Record<StaffAccountState, { label: string; className: string }> = {
+  no_email: {
+    label: 'Нет email',
+    className: 'text-amber-300 bg-amber-500/10 border-amber-500/20',
+  },
+  no_account: {
+    label: 'Нет аккаунта',
+    className: 'text-sky-300 bg-sky-500/10 border-sky-500/20',
+  },
+  invited: {
+    label: 'Приглашён',
+    className: 'text-violet-300 bg-violet-500/10 border-violet-500/20',
+  },
+  active: {
+    label: 'Активен',
+    className: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
+  },
 }
 
 // --- Utils ---
@@ -174,6 +229,10 @@ export default function StaffPageSmart() {
     isOpen: false,
     staffId: null,
   })
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [accountActionBusyKey, setAccountActionBusyKey] = useState<string | null>(null)
+  const [accountInfoByStaffId, setAccountInfoByStaffId] = useState<Record<string, StaffAccountInfo>>({})
+  const [pageNotice, setPageNotice] = useState<PageNotice | null>(null)
   const [showInactive, setShowInactive] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'name' | 'salary' | 'progress'>('name')
@@ -296,8 +355,37 @@ export default function StaffPageSmart() {
     ])
 
     if (!staffRes.error && !payRes.error) {
-      setStaff(staffRes.data as Staff[])
+      const staffRows = (staffRes.data as Staff[]) || []
+      setStaff(staffRows)
       setPayments(payRes.data as StaffPayment[])
+
+      if (staffRows.length > 0) {
+        const response = await fetch(`/api/admin/staff-accounts?staffIds=${encodeURIComponent(staffRows.map((item) => item.id).join(','))}`).catch(() => null)
+        const json = await response?.json().catch(() => null)
+
+        if (response?.ok && Array.isArray(json?.items)) {
+          const nextAccountInfoByStaffId = Object.fromEntries(
+            (json.items as StaffAccountInfo[]).map((item) => [item.staffId, item]),
+          )
+          setAccountInfoByStaffId(nextAccountInfoByStaffId)
+          setStaff((prev) =>
+            prev.map((item) => {
+              const accountInfo = nextAccountInfoByStaffId[item.id]
+              if (!accountInfo) return item
+              return {
+                ...item,
+                full_name: item.full_name || accountInfo.full_name || item.full_name,
+                phone: item.phone || accountInfo.phone || item.phone,
+                email: item.email || accountInfo.email || item.email,
+              }
+            }),
+          )
+        } else if (staffRows.length > 0) {
+          setAccountInfoByStaffId({})
+        }
+      } else {
+        setAccountInfoByStaffId({})
+      }
     }
     
     setLoading(false)
@@ -307,6 +395,24 @@ export default function StaffPageSmart() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  useEffect(() => {
+    let ignore = false
+
+    const loadAccess = async () => {
+      const response = await fetch('/api/auth/session-role').catch(() => null)
+      const json = await response?.json().catch(() => null)
+
+      if (!ignore && response?.ok) {
+        setIsSuperAdmin(!!json?.isSuperAdmin)
+      }
+    }
+
+    loadAccess()
+    return () => {
+      ignore = true
+    }
+  }, [])
 
   // --- Actions ---
   const handleDeletePayment = async (id: number) => {
@@ -333,6 +439,88 @@ export default function StaffPageSmart() {
     setShowInactive(false)
     setSortBy('name')
     setSortDir('asc')
+  }
+
+  const showPageNotice = (notice: PageNotice) => {
+    setPageNotice(notice)
+
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      })
+    }
+  }
+
+  const runStaffAccountAction = async (
+    action: 'inviteStaffAccount' | 'sendPasswordReset',
+    staffMember: Staff,
+  ) => {
+    if (!staffMember.email?.trim()) {
+      showPageNotice({
+        tone: 'error',
+        text: `У сотрудника ${staffMember.full_name || staffMember.short_name || ''} не заполнен email.`,
+      })
+      return
+    }
+
+    if (!staffMember.is_active) {
+      showPageNotice({
+        tone: 'error',
+        text: `Сотрудник ${staffMember.full_name || staffMember.short_name || ''} находится в архиве. Сначала активируй его.`,
+      })
+      return
+    }
+
+    setAccountActionBusyKey(`${action}:${staffMember.id}`)
+    setPageNotice(null)
+
+    try {
+      const response = await fetch('/api/admin/staff-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          staffId: staffMember.id,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        if (json?.code === 'missing_service_role') {
+          throw new Error('Не настроен SUPABASE_SERVICE_ROLE_KEY. Добавь service_role ключ в .env и перезапусти dev сервер.')
+        }
+        if (json?.code === 'user_not_found' && action === 'sendPasswordReset') {
+          throw new Error('Аккаунт для этого email ещё не создан. Сначала отправь приглашение.')
+        }
+        throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      }
+
+      showPageNotice({
+        tone: 'success',
+        text:
+          json?.message ||
+          (action === 'sendPasswordReset'
+            ? `Письмо для сброса пароля отправлено на ${staffMember.email}`
+            : `Письмо для входа отправлено на ${staffMember.email}`),
+      })
+
+      await loadData(true)
+    } catch (error: any) {
+      showPageNotice({
+        tone: 'error',
+        text: error?.message || 'Не удалось отправить приглашение',
+      })
+    } finally {
+      setAccountActionBusyKey(null)
+    }
+  }
+
+  const handleInviteStaffAccount = async (staffMember: Staff) => {
+    await runStaffAccountAction('inviteStaffAccount', staffMember)
+  }
+
+  const handleResetStaffPassword = async (staffMember: Staff) => {
+    await runStaffAccountAction('sendPasswordReset', staffMember)
   }
 
   const handleExport = () => {
@@ -367,8 +555,8 @@ export default function StaffPageSmart() {
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <main className="app-main">
+        <div className="app-page max-w-7xl space-y-6">
           
           {/* Header */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600/20 via-teal-600/20 to-cyan-600/20 border border-white/10 p-6 lg:p-8">
@@ -432,6 +620,27 @@ export default function StaffPageSmart() {
               </div>
             </div>
           </div>
+
+          {pageNotice && (
+            <Card
+              className={cn(
+                'p-4 border',
+                pageNotice.tone === 'success'
+                  ? 'border-emerald-500/30 bg-emerald-500/10'
+                  : 'border-red-500/30 bg-red-500/10',
+              )}
+            >
+              <div
+                className={cn(
+                  'flex items-center gap-2 text-sm',
+                  pageNotice.tone === 'success' ? 'text-emerald-300' : 'text-red-300',
+                )}
+              >
+                {pageNotice.tone === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                <span>{pageNotice.text}</span>
+              </div>
+            </Card>
+          )}
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -634,6 +843,12 @@ export default function StaffPageSmart() {
                         onPay={() => setPaymentModal({ isOpen: true, staffId: s.id })}
                         onDeletePayment={handleDeletePayment}
                         onToggleStatus={() => toggleStaffStatus(s)}
+                        onInviteAccount={() => handleInviteStaffAccount(s)}
+                        onResetPassword={() => handleResetStaffPassword(s)}
+                        canInviteAccount={isSuperAdmin}
+                        accountInfo={accountInfoByStaffId[s.id] || null}
+                        inviteBusy={accountActionBusyKey === `inviteStaffAccount:${s.id}`}
+                        resetBusy={accountActionBusyKey === `sendPasswordReset:${s.id}`}
                       />
                     )
                   })}
@@ -701,9 +916,24 @@ function StaffRow({
   RoleIcon,
   onPay, 
   onDeletePayment, 
-  onToggleStatus 
+  onToggleStatus,
+  onInviteAccount,
+  onResetPassword,
+  canInviteAccount,
+  accountInfo,
+  inviteBusy,
+  resetBusy,
 }: any) {
   const [showHistory, setShowHistory] = useState(false)
+  const effectiveEmail = accountInfo?.email || staff.email || null
+  const accountState = (accountInfo?.accountState || (!effectiveEmail ? 'no_email' : 'no_account')) as StaffAccountState
+  const accountStateLabel = ACCOUNT_STATE_LABEL[accountState]
+  const inviteBlockedReason = !effectiveEmail?.trim()
+    ? 'У сотрудника не заполнен email'
+    : !staff.is_active
+      ? 'Нельзя отправить приглашение архивному сотруднику'
+      : null
+  const canResetPassword = accountState === 'invited' || accountState === 'active'
 
   return (
     <>
@@ -735,6 +965,22 @@ function StaffRow({
                 )}
                 {!staff.is_active && (
                   <span className="text-[10px] text-red-500 font-medium">Архив</span>
+                )}
+              </div>
+              <span className={cn(
+                "mt-1 text-[11px]",
+                effectiveEmail?.trim() ? "text-gray-500" : "text-amber-300"
+              )}>
+                {effectiveEmail?.trim() || 'Email не заполнен'}
+              </span>
+              <div className="mt-1 flex items-center gap-2">
+                <span className={cn("text-[10px] px-1.5 py-0.5 rounded border", accountStateLabel.className)}>
+                  {accountStateLabel.label}
+                </span>
+                {accountInfo?.lastSignInAt && (
+                  <span className="text-[10px] text-gray-500">
+                    Вход: {new Date(accountInfo.lastSignInAt).toLocaleDateString('ru-RU')}
+                  </span>
                 )}
               </div>
             </div>
@@ -802,6 +1048,43 @@ function StaffRow({
               <Wallet className="w-3.5 h-3.5" />
               {isFullyPaid ? 'Выплачено' : 'Выплатить'}
             </Button>
+
+            {canInviteAccount && (
+              <Button
+                size="sm"
+                variant="outline"
+                className={cn(
+                  "h-8 px-3 text-xs gap-1.5 border-white/10 bg-white/[0.03]",
+                  !effectiveEmail?.trim() && "border-amber-500/30 text-amber-300 hover:bg-amber-500/10",
+                  !staff.is_active && "border-gray-700 text-gray-500"
+                )}
+                onClick={onInviteAccount}
+                disabled={inviteBusy}
+                title={
+                  inviteBlockedReason ||
+                  (accountState === 'no_account'
+                    ? `Создать аккаунт и отправить письмо на ${effectiveEmail}`
+                    : `Отправить письмо для входа на ${effectiveEmail}`)
+                }
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                {inviteBusy ? 'Отправка...' : inviteBlockedReason ? 'Проверить' : accountState === 'no_account' ? 'Аккаунт' : 'Письмо'}
+              </Button>
+            )}
+
+            {canInviteAccount && canResetPassword && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 px-3 text-xs gap-1.5 border-white/10 bg-white/[0.03]"
+                onClick={onResetPassword}
+                disabled={resetBusy || !staff.is_active}
+                title={!staff.is_active ? 'Нельзя отправить письмо архивному сотруднику' : `Отправить письмо для сброса пароля на ${effectiveEmail}`}
+              >
+                <Mail className="w-3.5 h-3.5" />
+                {resetBusy ? 'Отправка...' : 'Сброс'}
+              </Button>
+            )}
             
             <Button
               size="icon"
@@ -890,7 +1173,7 @@ function StaffRow({
 }
 
 // --- Add Staff Dialog ---
-function AddStaffDialog({ isOpen, onClose, onSuccess }: any) {
+function AddStaffDialog({ isOpen, onClose, onSuccess }: AddStaffDialogProps) {
   const [form, setForm] = useState({ 
     full_name: '', 
     short_name: '',
@@ -901,20 +1184,29 @@ function AddStaffDialog({ isOpen, onClose, onSuccess }: any) {
     hire_date: toISODateLocal(new Date()),
   })
   const [loading, setLoading] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    
-    const { data, error } = await supabase.from('staff').insert([{
-      ...form, 
-      monthly_salary: Number(form.monthly_salary), 
-      is_active: true
-    }]).select().single()
-    
+    setSubmitError(null)
+
+    const response = await fetch('/api/admin/staff', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'createStaff',
+        payload: {
+          ...form,
+          monthly_salary: Number(form.monthly_salary),
+        },
+      }),
+    })
+    const json = await response.json().catch(() => null)
+
     setLoading(false)
-    if (!error) {
-      onSuccess(data)
+    if (response.ok) {
+      onSuccess(json.data as Staff)
       setForm({ 
         full_name: '', 
         short_name: '',
@@ -925,7 +1217,10 @@ function AddStaffDialog({ isOpen, onClose, onSuccess }: any) {
         hire_date: toISODateLocal(new Date()),
       })
       onClose()
+      return
     }
+
+    setSubmitError(json?.error || 'Не удалось создать сотрудника')
   }
 
   return (
@@ -939,6 +1234,12 @@ function AddStaffDialog({ isOpen, onClose, onSuccess }: any) {
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
+          {submitError && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {submitError}
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-xs text-gray-400 font-medium">ФИО *</label>
             <Input 
@@ -1044,7 +1345,7 @@ function AddStaffDialog({ isOpen, onClose, onSuccess }: any) {
 }
 
 // --- Add Payment Dialog ---
-function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSuccess }: any) {
+function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSuccess }: AddPaymentDialogProps) {
   const salary = staff.monthly_salary || 0
   const remainder = Math.max(0, salary - paidSoFar)
   
@@ -1053,6 +1354,7 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
   const [slot, setSlot] = useState<PaySlot>('other')
   const [comment, setComment] = useState('')
   const [loading, setLoading] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   // Suggest slot based on date
   useEffect(() => {
@@ -1065,20 +1367,32 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    
-    const { data, error } = await supabase.from('staff_salary_payments').insert([{
-      staff_id: staff.id,
-      pay_date: date,
-      slot,
-      amount: Number(amount),
-      comment: comment || null
-    }]).select().single()
+    setSubmitError(null)
+
+    const response = await fetch('/api/admin/staff', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'createPayment',
+        payload: {
+          staff_id: staff.id,
+          pay_date: date,
+          slot,
+          amount: Number(amount),
+          comment: comment || null,
+        },
+      }),
+    })
+    const json = await response.json().catch(() => null)
 
     setLoading(false)
-    if (!error) {
-      onSuccess(data)
+    if (response.ok) {
+      onSuccess(json.data as StaffPayment)
       onClose()
+      return
     }
+
+    setSubmitError(json?.error || 'Не удалось сохранить выплату')
   }
 
   const roleStyle = ROLE_LABEL[staff.role as StaffRole] || ROLE_LABEL.other
@@ -1103,6 +1417,12 @@ function AddPaymentDialog({ isOpen, onClose, staff, paidSoFar, dateDefault, onSu
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          {submitError && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {submitError}
+            </div>
+          )}
+
           {Number(amount) > remainder && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-lg flex items-center gap-2">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />

@@ -4,15 +4,19 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  CalendarDays, 
-  Users, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  Users,
   Briefcase,
-  RefreshCw, 
-  Loader2
+  RefreshCw,
+  Loader2,
+  AlertTriangle,
+  Copy,
+  Search,
 } from 'lucide-react'
 import {
   startOfWeek,
@@ -21,11 +25,10 @@ import {
   format,
   addWeeks,
   subWeeks,
-  isSameDay
+  isSameDay,
 } from 'date-fns'
 import { ru } from 'date-fns/locale/ru'
 
-// --- Типы данных ---
 type Company = {
   id: string
   name: string
@@ -34,10 +37,19 @@ type Company = {
 
 type Shift = {
   id: string
-  date: string 
+  date: string
   operator_name: string
   shift_type: 'day' | 'night'
   company_id: string
+}
+
+type Operator = {
+  id: string
+  name: string
+  short_name: string | null
+  full_name?: string | null
+  operator_profiles?: { full_name?: string | null }[] | null
+  is_active: boolean
 }
 
 type ShiftCellData = {
@@ -45,7 +57,6 @@ type ShiftCellData = {
   name: string
 }
 
-// Карта смен
 type ShiftsMap = {
   [companyId: string]: {
     [date: string]: {
@@ -62,11 +73,62 @@ type WeekDay = {
   dateObj: Date
 }
 
-// --- Хелперы ---
+type ConflictEntry = Shift & {
+  companyName: string
+}
+
+type ConflictItem = {
+  key: string
+  operatorName: string
+  date: string
+  entries: ConflictEntry[]
+}
+
+type ActionNotice = {
+  tone: 'success' | 'error' | 'info'
+  text: string
+}
+
+type BulkAssignResult = {
+  created: number
+  updated: number
+  skipped: number
+  conflicts: string[]
+  notification?: {
+    sent: boolean
+    reason?: string
+    operatorLabel?: string
+    count?: number
+  }
+}
+
+type ScheduleGridProps = {
+  companies: Company[]
+  operators: Operator[]
+  weekDays: WeekDay[]
+  shiftsMap: ShiftsMap
+  refetchData: () => Promise<void>
+  loading: boolean
+  selectedOperator: string
+  conflictCellKeys: Set<string>
+  companySearch: string
+}
+
+type EditableCellProps = {
+  companyId: string
+  date: string
+  shiftType: 'day' | 'night'
+  operators: Operator[]
+  shiftData?: ShiftCellData
+  refetchData: () => Promise<void>
+  isSelectedOperator: boolean
+  isConflict: boolean
+}
+
 const getWeekDetails = (date: Date): { range: string; days: WeekDay[] } => {
-  const start = startOfWeek(date, { weekStartsOn: 1 }) 
+  const start = startOfWeek(date, { weekStartsOn: 1 })
   const end = endOfWeek(date, { weekStartsOn: 1 })
-  
+
   const days: WeekDay[] = []
   for (let i = 0; i < 7; i++) {
     const day = addDays(start, i)
@@ -74,49 +136,97 @@ const getWeekDetails = (date: Date): { range: string; days: WeekDay[] } => {
       dateISO: format(day, 'yyyy-MM-dd'),
       dayName: format(day, 'eeee', { locale: ru }),
       dayShort: format(day, 'dd.MM'),
-      dateObj: day
+      dateObj: day,
     })
   }
-  
+
   const range = `${format(start, 'd MMM', { locale: ru })} — ${format(end, 'd MMM', { locale: ru })}`
   return { range, days }
 }
 
-// --- ГЛАВНЫЙ КОМПОНЕНТ СТРАНИЦЫ ---
+const normalizeOperatorName = (value: string | null | undefined) => (value || '').trim().toLowerCase()
+const getCellKey = (companyId: string, date: string, shiftType: 'day' | 'night') => `${companyId}|${date}|${shiftType}`
+const hasNightShift = (company: Company) => (company.code || '').toLowerCase() !== 'extra'
+
+function buildShiftConflicts(shifts: Shift[], companyNames: Record<string, string>): ConflictItem[] {
+  const grouped = new Map<string, ConflictEntry[]>()
+
+  for (const shift of shifts) {
+    const normalizedName = normalizeOperatorName(shift.operator_name)
+    if (!normalizedName) continue
+
+    const key = `${normalizedName}|${shift.date}`
+    const nextEntry: ConflictEntry = {
+      ...shift,
+      companyName: companyNames[shift.company_id] || 'Неизвестная точка',
+    }
+
+    const existing = grouped.get(key) || []
+    existing.push(nextEntry)
+    grouped.set(key, existing)
+  }
+
+  return Array.from(grouped.entries())
+    .filter(([, entries]) => entries.length > 1)
+    .map(([key, entries]) => ({
+      key,
+      operatorName: entries[0].operator_name,
+      date: entries[0].date,
+      entries,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.operatorName.localeCompare(b.operatorName))
+}
+
 export default function ShiftsPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [companies, setCompanies] = useState<Company[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [companySearch, setCompanySearch] = useState('')
+  const [selectedOperator, setSelectedOperator] = useState('all')
+  const [copyingWeek, setCopyingWeek] = useState(false)
+  const [bulkAssigning, setBulkAssigning] = useState(false)
+  const [actionNotice, setActionNotice] = useState<ActionNotice | null>(null)
+  const [bulkCompanyId, setBulkCompanyId] = useState('')
+  const [bulkOperatorName, setBulkOperatorName] = useState('')
+  const [bulkShiftType, setBulkShiftType] = useState<'day' | 'night'>('day')
+  const [bulkDates, setBulkDates] = useState<string[]>([])
 
   const { range: weekRange, days: weekDays } = useMemo(
     () => getWeekDetails(currentDate),
-    [currentDate]
+    [currentDate],
   )
 
-  // --- ЗАГРУЗКА ДАННЫХ ---
   const fetchScheduleData = useCallback(async () => {
     console.log('🔄 Обновление данных...')
-    
+
     const weekStart = weekDays[0].dateISO
     const weekEnd = weekDays[6].dateISO
 
     try {
-      const [companiesRes, shiftsRes] = await Promise.all([
+      const [companiesRes, shiftsRes, operatorsRes] = await Promise.all([
         supabase.from('companies').select('id, name, code').order('name'),
         supabase
           .from('shifts')
           .select('id, date, operator_name, shift_type, company_id')
           .gte('date', weekStart)
           .lte('date', weekEnd),
+        supabase
+          .from('operators')
+          .select('id, name, short_name, is_active, operator_profiles(*)')
+          .eq('is_active', true)
+          .order('name'),
       ])
 
       if (companiesRes.error) throw companiesRes.error
       if (shiftsRes.error) throw shiftsRes.error
+      if (operatorsRes.error) throw operatorsRes.error
 
       setCompanies(companiesRes.data || [])
       setShifts(shiftsRes.data || [])
+      setOperators(operatorsRes.data || [])
       setError(null)
     } catch (err: any) {
       console.error('❌ Ошибка загрузки:', err)
@@ -131,7 +241,6 @@ export default function ShiftsPage() {
     fetchScheduleData()
   }, [fetchScheduleData])
 
-  // Преобразование в Map для быстрого доступа
   const shiftsMap: ShiftsMap = useMemo(() => {
     return shifts.reduce<ShiftsMap>((acc, shift) => {
       const { company_id, date, shift_type, operator_name, id } = shift
@@ -143,300 +252,815 @@ export default function ShiftsPage() {
     }, {})
   }, [shifts])
 
+  const companyNames = useMemo(
+    () =>
+      companies.reduce<Record<string, string>>((acc, company) => {
+        acc[company.id] = company.name
+        return acc
+      }, {}),
+    [companies],
+  )
+
+  const conflicts = useMemo(() => buildShiftConflicts(shifts, companyNames), [shifts, companyNames])
+
+  const conflictCellKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const conflict of conflicts) {
+      for (const entry of conflict.entries) {
+        keys.add(getCellKey(entry.company_id, entry.date, entry.shift_type))
+      }
+    }
+    return keys
+  }, [conflicts])
+
+  const visibleCompanies = useMemo(() => {
+    const query = companySearch.trim().toLowerCase()
+    const selectedNormalized = selectedOperator === 'all' ? '' : normalizeOperatorName(selectedOperator)
+
+    return companies.filter((company) => {
+      const code = (company.code || '').toLowerCase()
+      const name = (company.name || '').toLowerCase()
+      if (code === 'general' || name === 'general') return false
+
+      if (query && !name.includes(query) && !code.includes(query)) {
+        return false
+      }
+
+      if (!selectedNormalized) return true
+
+      return weekDays.some((day) => {
+        const dayData = shiftsMap[company.id]?.[day.dateISO]
+        return [dayData?.day?.name, dayData?.night?.name].some(
+          (value) => normalizeOperatorName(value) === selectedNormalized,
+        )
+      })
+    })
+  }, [companies, companySearch, selectedOperator, shiftsMap, weekDays])
+
+  const assignableCompanies = useMemo(
+    () =>
+      companies.filter((company) => {
+        const code = (company.code || '').toLowerCase()
+        const name = (company.name || '').toLowerCase()
+        return code !== 'general' && name !== 'general'
+      }),
+    [companies],
+  )
+
+  const bulkCompany = useMemo(
+    () => assignableCompanies.find((company) => company.id === bulkCompanyId) || null,
+    [assignableCompanies, bulkCompanyId],
+  )
+
+  const bulkCompanySupportsNight = bulkCompany ? hasNightShift(bulkCompany) : true
+
+  const totalSlots = useMemo(
+    () => visibleCompanies.reduce((sum, company) => sum + weekDays.length * (hasNightShift(company) ? 2 : 1), 0),
+    [visibleCompanies, weekDays],
+  )
+
+  const filledSlots = useMemo(() => {
+    let count = 0
+
+    for (const company of visibleCompanies) {
+      for (const day of weekDays) {
+        const dayData = shiftsMap[company.id]?.[day.dateISO]
+        if (dayData?.day?.name) count += 1
+        if (hasNightShift(company) && dayData?.night?.name) count += 1
+      }
+    }
+
+    return count
+  }, [visibleCompanies, weekDays, shiftsMap])
+
+  const selectedOperatorAssignments = useMemo(() => {
+    if (selectedOperator === 'all') return 0
+    const selectedNormalized = normalizeOperatorName(selectedOperator)
+    return shifts.filter((shift) => normalizeOperatorName(shift.operator_name) === selectedNormalized).length
+  }, [selectedOperator, shifts])
+
+  useEffect(() => {
+    if (!bulkCompanyId && assignableCompanies.length > 0) {
+      setBulkCompanyId(assignableCompanies[0].id)
+    }
+  }, [assignableCompanies, bulkCompanyId])
+
+  useEffect(() => {
+    if (!bulkOperatorName && operators.length > 0) {
+      setBulkOperatorName(getOperatorDisplayName(operators[0]))
+    }
+  }, [operators, bulkOperatorName])
+
+  useEffect(() => {
+    if (bulkDates.length === 0 && weekDays.length > 0) {
+      setBulkDates(weekDays.map((day) => day.dateISO))
+    }
+  }, [weekDays, bulkDates.length])
+
+  useEffect(() => {
+    const currentWeekDates = new Set(weekDays.map((day) => day.dateISO))
+    const containsForeignDate = bulkDates.some((date) => !currentWeekDates.has(date))
+    if (containsForeignDate) {
+      setBulkDates(weekDays.map((day) => day.dateISO))
+    }
+  }, [weekDays, bulkDates])
+
+  useEffect(() => {
+    if (bulkShiftType === 'night' && bulkCompany && !hasNightShift(bulkCompany)) {
+      setBulkShiftType('day')
+    }
+  }, [bulkShiftType, bulkCompany])
+
   const goToPrevWeek = () => setCurrentDate(subWeeks(currentDate, 1))
   const goToNextWeek = () => setCurrentDate(addWeeks(currentDate, 1))
   const goToToday = () => setCurrentDate(new Date())
 
+  const handleCopyPreviousWeek = async () => {
+    setCopyingWeek(true)
+    setActionNotice(null)
+
+    try {
+      const response = await fetch('/api/admin/shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'copyWeekTemplate',
+          payload: {
+            targetWeekStart: weekDays[0].dateISO,
+          },
+        }),
+      })
+
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      }
+
+      const created = Number(json?.created || 0)
+      const updated = Number(json?.updated || 0)
+      const skipped = Number(json?.skipped || 0)
+
+      setActionNotice({
+        tone: 'success',
+        text: `Шаблон прошлой недели перенесён: создано ${created}, обновлено ${updated}, пропущено ${skipped}.`,
+      })
+
+      await fetchScheduleData()
+    } catch (err: any) {
+      setActionNotice({
+        tone: 'error',
+        text: err?.message || 'Не удалось перенести шаблон прошлой недели.',
+      })
+    } finally {
+      setCopyingWeek(false)
+    }
+  }
+
+  const toggleBulkDate = (dateISO: string) => {
+    setBulkDates((prev) =>
+      prev.includes(dateISO) ? prev.filter((item) => item !== dateISO) : [...prev, dateISO].sort(),
+    )
+  }
+
+  const setBulkWeekPreset = (preset: 'all' | 'weekdays' | 'weekend') => {
+    if (preset === 'all') {
+      setBulkDates(weekDays.map((day) => day.dateISO))
+      return
+    }
+
+    if (preset === 'weekdays') {
+      setBulkDates(weekDays.slice(0, 5).map((day) => day.dateISO))
+      return
+    }
+
+    setBulkDates(weekDays.slice(5).map((day) => day.dateISO))
+  }
+
+  const handleBulkAssign = async () => {
+    if (!bulkCompanyId || !bulkOperatorName.trim() || bulkDates.length === 0) {
+      setActionNotice({
+        tone: 'error',
+        text: 'Для массового назначения выбери компанию, оператора и хотя бы один день.',
+      })
+      return
+    }
+
+    if (bulkShiftType === 'night' && !bulkCompanySupportsNight) {
+      setActionNotice({
+        tone: 'error',
+        text: 'Для выбранной точки ночная смена недоступна.',
+      })
+      return
+    }
+
+    setBulkAssigning(true)
+    setActionNotice(null)
+
+    try {
+      const response = await fetch('/api/admin/shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'bulkAssignWeek',
+          payload: {
+            companyId: bulkCompanyId,
+            operatorName: bulkOperatorName,
+            shiftType: bulkShiftType,
+            dates: bulkDates,
+          },
+        }),
+      })
+
+      const json = (await response.json().catch(() => null)) as BulkAssignResult | { error?: string } | null
+      if (!response.ok) {
+        throw new Error(json && 'error' in json ? json.error || `Ошибка запроса (${response.status})` : `Ошибка запроса (${response.status})`)
+      }
+
+      const result = json as BulkAssignResult
+      const conflictPart = result.conflicts.length > 0 ? ` Конфликтов пропущено: ${result.conflicts.length}.` : ''
+      const notificationPart = result.notification?.sent
+        ? ` Уведомление отправлено ${result.notification.operatorLabel || 'оператору'} по ${result.notification.count || 0} дн.`
+        : ''
+
+      setActionNotice({
+        tone: result.conflicts.length > 0 ? 'info' : 'success',
+        text: `Массовое назначение завершено: создано ${result.created}, обновлено ${result.updated}, пропущено ${result.skipped}.${conflictPart}${notificationPart}`,
+      })
+
+      await fetchScheduleData()
+    } catch (err: any) {
+      setActionNotice({
+        tone: 'error',
+        text: err?.message || 'Не удалось выполнить массовое назначение.',
+      })
+    } finally {
+      setBulkAssigning(false)
+    }
+  }
+
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="app-shell-layout">
       <Sidebar />
-      <main className="flex-1 overflow-auto p-4 md:p-8">
-        
-        {/* Шапка */}
-        <div className="flex flex-col md:flex-row justify-between md:items-center mb-8 gap-4">
-          <div>
-             <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-                <Users className="w-8 h-8 text-purple-500" /> График смен
-             </h1>
-             <p className="text-muted-foreground text-sm mt-1">
-                Управление расписанием операторов
-             </p>
-          </div>
-          
-          <Card className="flex items-center p-1 border-border bg-card neon-glow">
-             <Button variant="ghost" size="icon" onClick={goToPrevWeek}><ChevronLeft className="w-5 h-5" /></Button>
-             
-             <div className="px-4 text-center min-w-[160px]">
-                <div className="text-sm font-bold flex items-center justify-center gap-2">
-                    <CalendarDays className="w-4 h-4 text-accent" />
+      <main className="app-main">
+        <div className="app-page max-w-7xl">
+          <div className="mb-8 flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+            <div>
+              <h1 className="flex items-center gap-2 text-3xl font-bold text-foreground">
+                <Users className="h-8 w-8 text-purple-500" /> График смен
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Управление расписанием операторов, контроль конфликтов и быстрые действия по неделе
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+              <Card className="!flex-row !items-center !gap-0 self-start shrink-0 border-border bg-card !px-1 !py-1 neon-glow">
+                <Button variant="ghost" size="icon" onClick={goToPrevWeek}>
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+
+                <div className="min-w-[160px] px-4 text-center">
+                  <div className="flex items-center justify-center gap-2 text-sm font-bold">
+                    <CalendarDays className="h-4 w-4 text-accent" />
                     {weekRange}
+                  </div>
                 </div>
-             </div>
 
-             <Button variant="ghost" size="icon" onClick={goToNextWeek}><ChevronRight className="w-5 h-5" /></Button>
-             
-             <div className="w-px h-6 bg-border mx-1" />
-             
-             <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => { setLoading(true); fetchScheduleData(); }} 
-                title="Обновить данные"
-             >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-             </Button>
-             
-             <Button variant="secondary" size="sm" className="text-xs ml-1" onClick={goToToday}>Сегодня</Button>
-          </Card>
-        </div>
+                <Button variant="ghost" size="icon" onClick={goToNextWeek}>
+                  <ChevronRight className="h-5 w-5" />
+                </Button>
 
-        <div className="space-y-6">
-          {error && (
-              <div className="p-4 border border-red-500/30 bg-red-500/10 text-red-400 rounded-lg">
-                  {error}
+                <div className="mx-1 h-6 w-px bg-border" />
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setLoading(true)
+                    fetchScheduleData()
+                  }}
+                  title="Обновить данные"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+
+                <Button variant="secondary" size="sm" className="ml-1 text-xs" onClick={goToToday}>
+                  Сегодня
+                </Button>
+              </Card>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={handleCopyPreviousWeek}
+                disabled={copyingWeek || loading}
+              >
+                {copyingWeek ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                Заполнить по прошлой неделе
+              </Button>
+            </div>
+          </div>
+
+          <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Card className="border-border bg-card p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Заполнено</div>
+              <div className="mt-2 text-2xl font-semibold text-foreground">{filledSlots}</div>
+              <div className="mt-1 text-xs text-muted-foreground">из {totalSlots} смен за неделю</div>
+            </Card>
+
+            <Card className="border-border bg-card p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Пустые слоты</div>
+              <div className="mt-2 text-2xl font-semibold text-foreground">{Math.max(totalSlots - filledSlots, 0)}</div>
+              <div className="mt-1 text-xs text-muted-foreground">можно быстро дозаполнить</div>
+            </Card>
+
+            <Card className="border-border bg-card p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Конфликты</div>
+              <div className="mt-2 text-2xl font-semibold text-amber-400">{conflicts.length}</div>
+              <div className="mt-1 text-xs text-muted-foreground">оператор в нескольких сменах за день</div>
+            </Card>
+
+            <Card className="border-border bg-card p-4">
+              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">По фильтру</div>
+              <div className="mt-2 text-2xl font-semibold text-foreground">
+                {selectedOperator === 'all' ? visibleCompanies.length : selectedOperatorAssignments}
               </div>
-          )}
+              <div className="mt-1 text-xs text-muted-foreground">
+                {selectedOperator === 'all' ? 'активных точек видно' : 'смен у выбранного оператора'}
+              </div>
+            </Card>
+          </div>
 
-          <ScheduleGrid
-            companies={companies}
-            weekDays={weekDays}
-            shiftsMap={shiftsMap}
-            refetchData={fetchScheduleData}
-            loading={loading}
-          />
+          <Card className="mb-6 border-border bg-card p-4 neon-glow">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={companySearch}
+                  onChange={(e) => setCompanySearch(e.target.value)}
+                  placeholder="Поиск по компании или коду"
+                  className="h-10 w-full rounded-2xl border border-border bg-background pl-10 pr-4 text-sm text-foreground outline-none ring-0 transition-colors placeholder:text-muted-foreground focus:border-accent"
+                />
+              </label>
+
+              <select
+                value={selectedOperator}
+                onChange={(e) => setSelectedOperator(e.target.value)}
+                className="h-10 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors focus:border-accent"
+              >
+                <option value="all">Все операторы</option>
+                {operators.map((operator) => {
+                  const label = getOperatorDisplayName(operator)
+                  return (
+                    <option key={operator.id} value={label}>
+                      {label}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+          </Card>
+
+          <Card className="mb-6 border-border bg-card p-4">
+            <div className="mb-4 flex flex-col gap-1">
+              <div className="text-sm font-semibold text-foreground">Массовое назначение на неделю</div>
+              <div className="text-xs text-muted-foreground">
+                Выбери точку, оператора и дни недели. Конфликтные смены не перезапишутся и попадут в отчёт.
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_180px_auto]">
+              <select
+                value={bulkCompanyId}
+                onChange={(e) => setBulkCompanyId(e.target.value)}
+                className="h-10 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors focus:border-accent"
+              >
+                {assignableCompanies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={bulkOperatorName}
+                onChange={(e) => setBulkOperatorName(e.target.value)}
+                className="h-10 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors focus:border-accent"
+              >
+                {operators.map((operator) => {
+                  const label = getOperatorDisplayName(operator)
+                  return (
+                    <option key={operator.id} value={label}>
+                      {label}
+                    </option>
+                  )
+                })}
+              </select>
+
+              <select
+                value={bulkShiftType}
+                onChange={(e) => setBulkShiftType(e.target.value as 'day' | 'night')}
+                className="h-10 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors focus:border-accent"
+              >
+                <option value="day">Дневные смены</option>
+                <option value="night" disabled={!bulkCompanySupportsNight}>
+                  Ночные смены
+                </option>
+              </select>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={handleBulkAssign}
+                disabled={bulkAssigning || loading || assignableCompanies.length === 0 || operators.length === 0}
+              >
+                {bulkAssigning ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Назначить
+              </Button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setBulkWeekPreset('all')}>
+                Вся неделя
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setBulkWeekPreset('weekdays')}>
+                Пн-Пт
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setBulkWeekPreset('weekend')}>
+                Выходные
+              </Button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+              {weekDays.map((day) => {
+                const checked = bulkDates.includes(day.dateISO)
+                return (
+                  <button
+                    key={day.dateISO}
+                    type="button"
+                    onClick={() => toggleBulkDate(day.dateISO)}
+                    className={`rounded-2xl border px-3 py-3 text-left transition-all ${
+                      checked
+                        ? 'border-accent bg-accent/15 text-foreground'
+                        : 'border-border bg-background text-muted-foreground hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    <div className="text-xs uppercase">{day.dayName}</div>
+                    <div className="mt-1 text-sm font-semibold">{day.dayShort}</div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {!bulkCompanySupportsNight && (
+              <div className="mt-3 text-xs text-amber-300">
+                Для точки {bulkCompany?.name} ночные смены отключены.
+              </div>
+            )}
+          </Card>
+
+          <div className="space-y-6">
+            {error && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-400">
+                {error}
+              </div>
+            )}
+
+            {actionNotice && (
+              <div
+                className={
+                  actionNotice.tone === 'success'
+                    ? 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-300'
+                    : actionNotice.tone === 'error'
+                      ? 'rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-300'
+                      : 'rounded-lg border border-white/10 bg-white/[0.04] p-4 text-foreground'
+                }
+              >
+                {actionNotice.text}
+              </div>
+            )}
+
+            {conflicts.length > 0 && (
+              <Card className="border-amber-500/20 bg-amber-500/5 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-400" />
+                  <div className="min-w-0">
+                    <div className="font-semibold text-amber-300">Найдены потенциальные конфликты по операторам</div>
+                    <div className="mt-1 text-sm text-amber-100/80">
+                      Один и тот же оператор стоит в нескольких сменах за один день. Проверь эти назначения:
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {conflicts.slice(0, 6).map((conflict) => (
+                        <div key={conflict.key} className="rounded-2xl border border-amber-500/15 bg-black/10 px-3 py-2 text-sm">
+                          <span className="font-medium text-foreground">{conflict.operatorName}</span>{' '}
+                          <span className="text-muted-foreground">• {conflict.date} • </span>
+                          <span className="text-muted-foreground">
+                            {conflict.entries
+                              .map((entry) => `${entry.companyName} (${entry.shift_type === 'day' ? 'день' : 'ночь'})`)
+                              .join(', ')}
+                          </span>
+                        </div>
+                      ))}
+                      {conflicts.length > 6 && (
+                        <div className="text-xs text-muted-foreground">И ещё {conflicts.length - 6} конфликтов в таблице ниже.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            <ScheduleGrid
+              companies={visibleCompanies}
+              operators={operators}
+              weekDays={weekDays}
+              shiftsMap={shiftsMap}
+              refetchData={fetchScheduleData}
+              loading={loading}
+              selectedOperator={selectedOperator}
+              conflictCellKeys={conflictCellKeys}
+              companySearch={companySearch}
+            />
+          </div>
         </div>
       </main>
     </div>
   )
 }
 
-// --- КОМПОНЕНТ: СЕТКА ГРАФИКА ---
-function ScheduleGrid({ companies, weekDays, shiftsMap, refetchData, loading }: any) {
-  
-  // Фильтрация "General"
-  const visibleCompanies = useMemo(() => {
-      return companies.filter((c: Company) => {
-        const code = (c.code || '').toLowerCase()
-        const name = (c.name || '').toLowerCase()
-        return code !== 'general' && name !== 'general'
-      })
-  }, [companies])
-
+function ScheduleGrid({
+  companies,
+  operators,
+  weekDays,
+  shiftsMap,
+  refetchData,
+  loading,
+  selectedOperator,
+  conflictCellKeys,
+  companySearch,
+}: ScheduleGridProps) {
   if (loading && companies.length === 0) {
-     return <div className="p-12 text-center text-muted-foreground animate-pulse">Загрузка структуры...</div>
+    return <div className="p-12 text-center text-muted-foreground animate-pulse">Загрузка структуры...</div>
   }
 
-  if (visibleCompanies.length === 0) {
-    return <p className="text-center text-muted-foreground">Нет активных точек для отображения.</p>
+  if (companies.length === 0) {
+    return (
+      <p className="text-center text-muted-foreground">
+        {companySearch || selectedOperator !== 'all'
+          ? 'По выбранным фильтрам ничего не найдено.'
+          : 'Нет активных точек для отображения.'}
+      </p>
+    )
   }
-  
+
   return (
     <div className="grid grid-cols-1 gap-8">
-      {visibleCompanies.map((company: Company) => (
-        <Card key={company.id} className="p-0 overflow-hidden border-border bg-card neon-glow">
-            <div className="p-3 border-b border-border bg-muted/30 flex items-center gap-2">
-                <Briefcase className="w-4 h-4 text-accent" />
-                <span className="font-bold text-foreground">{company.name}</span>
-            </div>
+      {companies.map((company) => (
+        <Card key={company.id} className="overflow-hidden border-border bg-card p-0 neon-glow">
+          <div className="flex items-center gap-2 border-b border-border bg-muted/30 p-3">
+            <Briefcase className="h-4 w-4 text-accent" />
+            <span className="font-bold text-foreground">{company.name}</span>
+          </div>
 
-            <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                    <thead>
-                        <tr>
-                            <th className="p-3 text-left w-24 bg-muted/10 text-muted-foreground font-medium border-b border-border">
-                                Смена
-                            </th>
-                            {weekDays.map((day: WeekDay) => {
-                                const isToday = isSameDay(day.dateObj, new Date());
-                                return (
-                                    <th key={day.dateISO} className={`p-2 text-center border-b border-l border-border min-w-[100px] ${isToday ? 'bg-accent/10' : ''}`}>
-                                        <div className={`text-xs uppercase font-bold ${isToday ? 'text-accent' : 'text-muted-foreground'}`}>
-                                            {day.dayName}
-                                        </div>
-                                        <div className={`text-xs ${isToday ? 'text-foreground font-bold' : 'text-muted-foreground/70'}`}>
-                                            {day.dayShort}
-                                        </div>
-                                    </th>
-                                )
-                            })}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {/* День */}
-                        <tr>
-                            <td className="p-3 font-semibold text-yellow-500 border-r border-border bg-yellow-500/5">День ☀️</td>
-                            {weekDays.map((day: WeekDay) => (
-                                <EditableShiftCell
-                                    key={`day-${day.dateISO}`}
-                                    companyId={company.id}
-                                    date={day.dateISO}
-                                    shiftType="day"
-                                    shiftData={shiftsMap[company.id]?.[day.dateISO]?.['day']}
-                                    refetchData={refetchData}
-                                />
-                            ))}
-                        </tr>
-                        {/* Ночь */}
-                        {(company.code || '').toLowerCase() !== 'extra' && (
-                            <tr>
-                                <td className="p-3 font-semibold text-blue-400 border-r border-border bg-blue-500/5">Ночь 🌙</td>
-                                {weekDays.map((day: WeekDay) => (
-                                    <EditableShiftCell
-                                        key={`night-${day.dateISO}`}
-                                        companyId={company.id}
-                                        date={day.dateISO}
-                                        shiftType="night"
-                                        shiftData={shiftsMap[company.id]?.[day.dateISO]?.['night']}
-                                        refetchData={refetchData}
-                                    />
-                                ))}
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className="w-24 border-b border-border bg-muted/10 p-3 text-left font-medium text-muted-foreground">
+                    Смена
+                  </th>
+                  {weekDays.map((day) => {
+                    const isToday = isSameDay(day.dateObj, new Date())
+                    return (
+                      <th
+                        key={day.dateISO}
+                        className={`min-w-[100px] border-b border-l border-border p-2 text-center ${isToday ? 'bg-accent/10' : ''}`}
+                      >
+                        <div className={`text-xs font-bold uppercase ${isToday ? 'text-accent' : 'text-muted-foreground'}`}>
+                          {day.dayName}
+                        </div>
+                        <div className={`text-xs ${isToday ? 'font-bold text-foreground' : 'text-muted-foreground/70'}`}>
+                          {day.dayShort}
+                        </div>
+                      </th>
+                    )
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border-r border-border bg-yellow-500/5 p-3 font-semibold text-yellow-500">День ☀️</td>
+                  {weekDays.map((day) => {
+                    const shiftData = shiftsMap[company.id]?.[day.dateISO]?.day
+                    return (
+                      <EditableShiftCell
+                        key={`day-${day.dateISO}`}
+                        companyId={company.id}
+                        date={day.dateISO}
+                        shiftType="day"
+                        operators={operators}
+                        shiftData={shiftData}
+                        refetchData={refetchData}
+                        isSelectedOperator={
+                          selectedOperator !== 'all' &&
+                          normalizeOperatorName(shiftData?.name) === normalizeOperatorName(selectedOperator)
+                        }
+                        isConflict={conflictCellKeys.has(getCellKey(company.id, day.dateISO, 'day'))}
+                      />
+                    )
+                  })}
+                </tr>
+
+                {hasNightShift(company) && (
+                  <tr>
+                    <td className="border-r border-border bg-blue-500/5 p-3 font-semibold text-blue-400">Ночь 🌙</td>
+                    {weekDays.map((day) => {
+                      const shiftData = shiftsMap[company.id]?.[day.dateISO]?.night
+                      return (
+                        <EditableShiftCell
+                          key={`night-${day.dateISO}`}
+                          companyId={company.id}
+                          date={day.dateISO}
+                          shiftType="night"
+                          operators={operators}
+                          shiftData={shiftData}
+                          refetchData={refetchData}
+                          isSelectedOperator={
+                            selectedOperator !== 'all' &&
+                            normalizeOperatorName(shiftData?.name) === normalizeOperatorName(selectedOperator)
+                          }
+                          isConflict={conflictCellKeys.has(getCellKey(company.id, day.dateISO, 'night'))}
+                        />
+                      )
+                    })}
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </Card>
       ))}
     </div>
   )
 }
 
-// --- КОМПОНЕНТ: УМНАЯ РЕДАКТИРУЕМАЯ ЯЧЕЙКА ---
-type EditableCellProps = {
-  companyId: string
-  date: string
-  shiftType: 'day' | 'night'
-  shiftData?: ShiftCellData
-  refetchData: () => Promise<void>
-}
-
-function EditableShiftCell({ companyId, date, shiftType, shiftData, refetchData }: EditableCellProps) {
+function EditableShiftCell({
+  companyId,
+  date,
+  shiftType,
+  operators,
+  shiftData,
+  refetchData,
+  isSelectedOperator,
+  isConflict,
+}: EditableCellProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [val, setVal] = useState(shiftData?.name || '')
-  
-  // Статусы: idle (обычный), saving (сохраняем), success (готово), error (ошибка)
   const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
-  
-  const inputRef = useRef<HTMLInputElement>(null)
+  const selectRef = useRef<HTMLSelectElement>(null)
 
-  // Синхронизация с пропсами (если данные обновились извне)
   useEffect(() => {
-      if (!isEditing) {
-          setVal(shiftData?.name || '')
-      }
+    if (!isEditing) {
+      setVal(shiftData?.name || '')
+    }
   }, [shiftData, isEditing])
 
-  // Фокус при клике
   useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus()
+    if (isEditing) {
+      selectRef.current?.focus()
     }
   }, [isEditing])
 
-  const handleSave = async () => {
-    const newName = val.trim()
+  const handleSave = async (nextNameArg?: string) => {
+    const newName = (nextNameArg ?? val).trim()
     const oldName = shiftData?.name || ''
 
-    // Если ничего не изменилось, просто выходим
     if (newName === oldName) {
-        setIsEditing(false)
-        return
+      setIsEditing(false)
+      return
     }
 
-    // Начало сохранения
     setStatus('saving')
     console.log(`💾 Сохранение: ${date} | ${shiftType} | "${oldName}" -> "${newName}"`)
 
     try {
-        let error = null;
+      const response = await fetch('/api/admin/shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'saveShift',
+          payload: {
+            shiftId: shiftData?.id || null,
+            companyId,
+            date,
+            shiftType,
+            operatorName: newName,
+          },
+        }),
+      })
 
-        // 1. Если было имя, а стало пусто -> УДАЛЯЕМ
-        if (shiftData?.id && !newName) {
-            const res = await supabase.from('shifts').delete().eq('id', shiftData.id)
-            error = res.error
-        } 
-        // 2. Если было имя, и новое имя есть -> ОБНОВЛЯЕМ
-        else if (shiftData?.id && newName) {
-            const res = await supabase.from('shifts').update({ operator_name: newName }).eq('id', shiftData.id)
-            error = res.error
-        } 
-        // 3. Если не было имени, и новое есть -> СОЗДАЕМ
-        else if (!shiftData?.id && newName) {
-            const res = await supabase.from('shifts').insert({
-                company_id: companyId,
-                date: date,
-                shift_type: shiftType,
-                operator_name: newName,
-                cash_amount: 0, kaspi_amount: 0, card_amount: 0, debt_amount: 0 // Дефолтные значения
-            })
-            error = res.error
-        }
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      }
 
-        if (error) throw error;
-
-        setStatus('success')
-        // 🔥 Ждем, пока родитель получит свежие данные из БД
-        await refetchData()
-        
-        setTimeout(() => setStatus('idle'), 1000)
-
+      setStatus('success')
+      await refetchData()
+      setTimeout(() => setStatus('idle'), 1000)
     } catch (e: any) {
-        console.error("❌ Ошибка при сохранении:", e)
-        setStatus('error')
-        alert(`Ошибка: ${e.message}`)
-        setVal(oldName) // Возвращаем старое значение
+      console.error('❌ Ошибка при сохранении:', e?.message || e)
+      setStatus('error')
+      alert(`Ошибка: ${e?.message || 'Не удалось сохранить смену'}`)
+      setVal(oldName)
     } finally {
-        setIsEditing(false)
+      setIsEditing(false)
     }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-          e.preventDefault()
-          handleSave()
-      }
-      if (e.key === 'Escape') {
-          setVal(shiftData?.name || '')
-          setIsEditing(false)
-      }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSave()
+    }
+    if (e.key === 'Escape') {
+      setVal(shiftData?.name || '')
+      setIsEditing(false)
+    }
   }
 
-  // Цвет границы в зависимости от статуса
-  const getBorderClass = () => {
-      if (status === 'saving') return 'bg-blue-500/20 shadow-[inset_0_0_10px_rgba(59,130,246,0.5)]'
-      if (status === 'success') return 'bg-green-500/20 shadow-[inset_0_0_10px_rgba(34,197,94,0.5)]'
-      if (status === 'error') return 'bg-red-500/20'
-      return 'hover:bg-white/5'
+  const getCellClass = () => {
+    if (status === 'saving') return 'bg-blue-500/20 shadow-[inset_0_0_10px_rgba(59,130,246,0.5)]'
+    if (status === 'success') return 'bg-green-500/20 shadow-[inset_0_0_10px_rgba(34,197,94,0.5)]'
+    if (status === 'error') return 'bg-red-500/20'
+    if (isConflict) return 'bg-amber-500/15 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]'
+    if (isSelectedOperator) return 'bg-emerald-500/12 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.28)]'
+    return 'hover:bg-white/5'
   }
 
   return (
-      <td 
-        className={`border-l border-border p-0 h-12 relative group transition-all cursor-pointer ${getBorderClass()}`}
-        onDoubleClick={() => {
+    <td className={`group relative h-12 border-l border-border p-0 transition-all ${getCellClass()}`}>
+      {isEditing ? (
+        <select
+          ref={selectRef}
+          value={val}
+          onChange={async (e) => {
+            const nextValue = e.target.value
+            setVal(nextValue)
+            await handleSave(nextValue)
+          }}
+          onBlur={() => {
+            if (status !== 'saving') setIsEditing(false)
+          }}
+          onKeyDown={handleKeyDown}
+          disabled={status === 'saving'}
+          className="h-full w-full bg-background px-2 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent"
+        >
+          <option value="">Без оператора</option>
+          {operators.map((operator) => {
+                  const label = getOperatorDisplayName(operator)
+            return (
+              <option key={operator.id} value={label}>
+                {label}
+              </option>
+            )
+          })}
+        </select>
+      ) : (
+        <button
+          type="button"
+          className="flex h-full w-full items-center justify-center px-2 text-sm"
+          onClick={() => {
             if (status !== 'saving') setIsEditing(true)
-        }}
-      >
-          {isEditing ? (
-              <input 
-                 ref={inputRef}
-                 value={val}
-                 onChange={e => setVal(e.target.value)}
-                 onBlur={handleSave}
-                 onKeyDown={handleKeyDown}
-                 disabled={status === 'saving'}
-                 className="w-full h-full bg-background text-center text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent font-medium"
-              />
+          }}
+          title={
+            isConflict
+              ? `Проверь назначение: ${val || 'оператор не выбран'}`
+              : val
+                ? `Оператор: ${val}`
+                : 'Нажмите, чтобы выбрать оператора'
+          }
+        >
+          {status === 'saving' ? (
+            <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
           ) : (
-              <div className="w-full h-full flex items-center justify-center text-sm">
-                  {status === 'saving' ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
-                  ) : (
-                      <span className={val ? "text-foreground font-medium" : "text-muted-foreground/20 group-hover:text-muted-foreground/50 text-xs"}>
-                          {val || '—'}
-                      </span>
-                  )}
-              </div>
+            <span
+              className={
+                val
+                  ? `font-medium ${isConflict ? 'text-amber-100' : 'text-foreground'}`
+                  : 'text-xs text-muted-foreground/20 group-hover:text-muted-foreground/50'
+              }
+            >
+              {val || '—'}
+            </span>
           )}
-      </td>
+        </button>
+      )}
+
+      {isConflict && !isEditing && (
+        <AlertTriangle className="pointer-events-none absolute right-1 top-1 h-3.5 w-3.5 text-amber-400" />
+      )}
+    </td>
   )
 }

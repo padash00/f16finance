@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -83,6 +84,7 @@ type LevelInfo = {
 type Operator = {
   id: string
   name: string
+  full_name?: string | null
   short_name: string | null
   photo_url: string | null
   position: string | null
@@ -412,13 +414,7 @@ export default function OperatorAchievementsPage() {
               id,
               name,
               short_name,
-              operator_profiles (
-                photo_url,
-                position,
-                phone,
-                email,
-                hire_date
-              )
+              operator_profiles (*)
             )
           `)
           .eq('user_id', user.id)
@@ -437,6 +433,7 @@ export default function OperatorAchievementsPage() {
         setOperator({
           id: op.id,
           name: op.name,
+          full_name: profile.full_name,
           short_name: op.short_name,
           photo_url: profile.photo_url,
           position: profile.position,
@@ -586,7 +583,7 @@ export default function OperatorAchievementsPage() {
             </Link>
             <div>
               <h1 className="text-xl font-bold text-white">Достижения</h1>
-              <p className="text-xs text-gray-400">{operator.short_name || operator.name}</p>
+              <p className="text-xs text-gray-400">{getOperatorDisplayName(operator)}</p>
             </div>
           </div>
 
@@ -701,11 +698,11 @@ export default function OperatorAchievementsPage() {
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-white text-3xl font-bold">
-                    {operator.name.charAt(0)}
+                    {getOperatorDisplayName(operator).charAt(0)}
                   </div>
                 )}
               </div>
-              <h2 className="text-xl font-bold text-white">{operator.short_name || operator.name}</h2>
+              <h2 className="text-xl font-bold text-white">{getOperatorDisplayName(operator)}</h2>
               <p className="text-sm text-gray-400 mb-4">{operator.position || 'Оператор'}</p>
               
               {levelInfo ? (

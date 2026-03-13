@@ -1798,8 +1798,8 @@ function ReportsContent() {
     <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100">
       <Sidebar />
 
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 lg:p-8 max-w-[1800px] mx-auto space-y-6">
+      <main className="app-main">
+        <div className="app-page-ultra max-w-[1800px] space-y-6">
           {/* Toast */}
           {toast && (
             <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${

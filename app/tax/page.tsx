@@ -161,10 +161,10 @@ export default function TaxPage() {
   }, [incomes, companies]); // Пересчитываем при изменении данных
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="app-shell-layout">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-8 space-y-8 max-w-7xl mx-auto">
+      <main className="app-main">
+        <div className="app-page max-w-7xl space-y-8">
           
           {/* Заголовок и Даты */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

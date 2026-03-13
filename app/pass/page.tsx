@@ -361,8 +361,8 @@ export default function AccessPage() {
     <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
       <Sidebar />
       
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <main className="app-main">
+        <div className="app-page max-w-7xl space-y-6">
           
           {/* Уведомления */}
           {error && (

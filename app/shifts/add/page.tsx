@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
@@ -11,6 +12,15 @@ type Company = {
   id: string
   name: string
   code?: string
+}
+
+type Operator = {
+  id: string
+  name: string
+  short_name: string | null
+  full_name?: string | null
+  operator_profiles?: { full_name?: string | null }[] | null
+  is_active: boolean
 }
 
 const todayISO = () => {
@@ -24,6 +34,7 @@ const todayISO = () => {
 export default function AddShiftPage() {
   const router = useRouter()
   const [companies, setCompanies] = useState<Company[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
   const [loadingCompanies, setLoadingCompanies] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,21 +50,37 @@ export default function AddShiftPage() {
   useEffect(() => {
     const loadCompanies = async () => {
       setLoadingCompanies(true)
-      const { data, error } = await supabase
-        .from('companies')
-        .select('id, name, code')
-        .order('name', { ascending: true })
+      const [companiesRes, operatorsRes] = await Promise.all([
+        supabase
+          .from('companies')
+          .select('id, name, code')
+          .order('name', { ascending: true }),
+        supabase
+          .from('operators')
+          .select('id, name, short_name, is_active, operator_profiles(*)')
+          .eq('is_active', true)
+          .order('name', { ascending: true }),
+      ])
 
-      if (error) {
-        console.error('Error loading companies for shifts:', error)
-        setError('Не удалось загрузить список компаний')
+      if (companiesRes.error || operatorsRes.error) {
+        console.error('Error loading shift references:', companiesRes.error, operatorsRes.error)
+        setError('Не удалось загрузить список компаний и операторов')
         setLoadingCompanies(false)
         return
       }
 
-      setCompanies((data || []) as Company[])
-      if (data && data.length > 0) {
-        setCompanyId(data[0].id)
+      const companiesData = (companiesRes.data || []) as Company[]
+      const operatorsData = (operatorsRes.data || []) as Operator[]
+
+      setCompanies(companiesData)
+      setOperators(operatorsData)
+
+      if (companiesData.length > 0) {
+        setCompanyId(companiesData[0].id)
+      }
+
+      if (operatorsData.length > 0) {
+        setOperatorName(getOperatorDisplayName(operatorsData[0]))
       }
       setLoadingCompanies(false)
     }
@@ -104,13 +131,25 @@ export default function AddShiftPage() {
       comment: comment.trim() || null,
     }
 
-    const { error: insertError } = await supabase
-      .from('shifts')
-      .insert([payload])
+    const response = await fetch('/api/admin/shifts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'saveShift',
+        payload: {
+          companyId: payload.company_id,
+          date: payload.date,
+          shiftType: payload.shift_type,
+          operatorName: payload.operator_name,
+          comment: payload.comment,
+        },
+      }),
+    })
 
-    if (insertError) {
-      console.error('Error inserting shift:', insertError)
-      setError('Ошибка при сохранении смены')
+    const json = await response.json().catch(() => null)
+    if (!response.ok) {
+      console.error('Error inserting shift:', json)
+      setError(json?.error || 'Ошибка при сохранении смены')
       setSaving(false)
       return
     }
@@ -120,10 +159,10 @@ export default function AddShiftPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="app-shell-layout">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-8 max-w-3xl mx-auto">
+      <main className="app-main">
+        <div className="app-page-tight max-w-3xl">
           <h1 className="text-3xl font-bold text-foreground mb-2">
             Добавить смену
           </h1>
@@ -191,13 +230,24 @@ export default function AddShiftPage() {
                 <label className="text-xs text-muted-foreground block mb-2">
                   Оператор
                 </label>
-                <input
-                  type="text"
+                <select
                   value={operatorName}
                   onChange={(e) => setOperatorName(e.target.value)}
-                  placeholder="Например: Дарын, Никита..."
                   className="w-full bg-input border border-border rounded px-3 py-2 text-sm text-foreground"
-                />
+                >
+                  <option value="">Выберите оператора</option>
+                  {operators.map((operator) => {
+                    const label = getOperatorDisplayName(operator)
+                    return (
+                      <option key={operator.id} value={label}>
+                        {label}
+                      </option>
+                    )
+                  })}
+                </select>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Список подтягивается из таблицы `operators`.
+                </p>
               </div>
 
               <div>

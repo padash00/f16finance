@@ -15,6 +15,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { supabase } from '@/lib/supabaseClient'
+import { useToast } from '@/hooks/use-toast'
 import {
   Plus,
   Search,
@@ -39,6 +40,7 @@ import {
   ArrowUpDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getOperatorDisplayName, getOperatorShortLabel } from '@/lib/core/operator-name'
 
 // =====================
 // TYPES (исправлено под твою структуру)
@@ -47,6 +49,8 @@ type Operator = {
   id: string
   name: string
   short_name: string | null
+  full_name?: string | null
+  operator_profiles?: { full_name?: string | null }[] | null
   telegram_chat_id: string | null
   role: string | null
   is_active: boolean
@@ -64,13 +68,27 @@ type Company = {
   code: string | null
 }
 
+type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
+type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
+
+type TaskFormState = {
+  title: string
+  description: string
+  priority: TaskPriority
+  status: TaskStatus
+  operator_id: string
+  company_id: string
+  due_date: string
+  tags: string
+}
+
 type Task = {
   id: string
   title: string
   description: string | null
   task_number: number
-  status: 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
-  priority: 'critical' | 'high' | 'medium' | 'low'
+  status: TaskStatus
+  priority: TaskPriority
   operator_id: string | null
   created_by: string | null
   company_id: string | null
@@ -100,10 +118,41 @@ type TaskComment = {
   author_type?: 'operator' | 'staff'
 }
 
+type TasksQueryTask = Omit<Task, 'operator_name' | 'operator_short_name' | 'operator_telegram' | 'company_name' | 'company_code' | 'comments_count'>
+
+type TaskCardProps = {
+  task: Task
+  onClick: () => void
+  onStatusChange: (status: TaskStatus) => void
+  onNotify: () => void
+  onDragStart: (task: Task) => void
+  onDragEnd: () => void
+  isDragging: boolean
+}
+
+type TaskDetailModalProps = {
+  task: Task
+  isOpen: boolean
+  onClose: () => void
+  operators: Operator[]
+  companies: Company[]
+  onNotify: () => void
+  onTaskUpdated: () => Promise<void> | void
+}
+
+type CreateTaskModalProps = {
+  isOpen: boolean
+  onClose: () => void
+  onSuccess: () => void
+  operators: Operator[]
+  companies: Company[]
+  nextTaskNumber: number
+}
+
 // =====================
 // CONSTANTS
 // =====================
-const STATUS_CONFIG: Record<string, { title: string; color: string; icon: any }> = {
+const STATUS_CONFIG: Record<TaskStatus, { title: string; color: string; icon: any }> = {
   backlog: { title: 'Бэклог', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20', icon: Clock },
   todo: { title: 'К выполнению', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', icon: CheckCircle2 },
   in_progress: { title: 'В работе', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20', icon: Briefcase },
@@ -112,7 +161,7 @@ const STATUS_CONFIG: Record<string, { title: string; color: string; icon: any }>
   archived: { title: 'Архив', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20', icon: EyeOff }
 }
 
-const PRIORITY_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
+const PRIORITY_CONFIG: Record<TaskPriority, { icon: string; color: string; label: string }> = {
   critical: { icon: '🔥', color: 'text-red-400 bg-red-500/10 border-red-500/20', label: 'Критический' },
   high: { icon: '⚡', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20', label: 'Высокий' },
   medium: { icon: '📌', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20', label: 'Средний' },
@@ -163,16 +212,48 @@ const getCompanyStyle = (code: string | null) => {
   return COMPANY_COLORS[code.toLowerCase()] || 'border-gray-500/30 bg-gray-500/5 text-gray-400'
 }
 
-// Функция отправки в Telegram (нужно будет реализовать через API)
-const sendTelegramNotification = async (chatId: string, message: string) => {
-  console.log(`Sending to ${chatId}: ${message}`)
-  // TODO: Реализовать отправку через твоего бота
-  // await fetch('/api/telegram/send', {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({ chat_id: chatId, text: message })
-  // })
-}
+const createEmptyTaskForm = (): TaskFormState => ({
+  title: '',
+  description: '',
+  priority: 'medium',
+  status: 'todo',
+  operator_id: '',
+  company_id: '',
+  due_date: '',
+  tags: '',
+})
+
+const toTaskFormState = (task: Task): TaskFormState => ({
+  title: task.title,
+  description: task.description || '',
+  priority: task.priority,
+  status: task.status,
+  operator_id: task.operator_id || '',
+  company_id: task.company_id || '',
+  due_date: task.due_date || '',
+  tags: task.tags?.join(', ') || '',
+})
+
+const parseTags = (value: string) =>
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+const enrichTasks = (taskRows: TasksQueryTask[], operators: Operator[], companies: Company[]): Task[] =>
+  taskRows.map((task) => {
+    const operator = operators.find((item) => item.id === task.operator_id)
+    const company = companies.find((item) => item.id === task.company_id)
+
+    return {
+      ...task,
+      operator_name: operator ? getOperatorDisplayName(operator, 'Оператор') : undefined,
+      operator_short_name: operator ? getOperatorShortLabel(operator, 'Оператор') : undefined,
+      operator_telegram: operator?.telegram_chat_id,
+      company_name: company?.name,
+      company_code: company?.code ?? null,
+    }
+  })
 
 // =====================
 // LOADING COMPONENT
@@ -199,6 +280,7 @@ function TasksLoading() {
 function TasksContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { toast } = useToast()
 
   // Состояния
   const [tasks, setTasks] = useState<Task[]>([])
@@ -211,8 +293,8 @@ function TasksContent() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false)
-
+  const [draggedTask, setDraggedTask] = useState<Task | null>(null)
+  const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null)
   // Фильтры
   const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '')
   const [filterStatus, setFilterStatus] = useState(searchParams.get('status') || 'all')
@@ -227,47 +309,29 @@ function TasksContent() {
     setError(null)
 
     try {
-      // Загружаем операторов
-      const { data: operatorsData, error: operatorsError } = await supabase
-        .from('operators')
-        .select('id, name, short_name, telegram_chat_id, role, is_active')
-        .eq('is_active', true)
+      const [{ data: operatorsData, error: operatorsError }, { data: companiesData, error: companiesError }, { data: tasksData, error: tasksError }] = await Promise.all([
+        supabase
+          .from('operators')
+          .select('id, name, short_name, telegram_chat_id, role, is_active, operator_profiles(*)')
+          .eq('is_active', true),
+        supabase
+          .from('companies')
+          .select('id, name, code'),
+        supabase
+          .from('tasks')
+          .select('*')
+          .order('created_at', { ascending: false }),
+      ])
 
       if (operatorsError) throw operatorsError
       setOperators(operatorsData || [])
 
-      // Загружаем компании
-      const { data: companiesData, error: companiesError } = await supabase
-        .from('companies')
-        .select('id, name, code')
-
       if (companiesError) throw companiesError
       setCompanies(companiesData || [])
 
-      // Загружаем задачи
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select('*')
-        .order('created_at', { ascending: false })
-
       if (tasksError) throw tasksError
 
-      // Обогащаем задачи данными
-      const enrichedTasks = (tasksData || []).map(task => {
-        const operator = operatorsData?.find(o => o.id === task.operator_id)
-        const company = companiesData?.find(c => c.id === task.company_id)
-        
-        return {
-          ...task,
-          operator_name: operator?.name,
-          operator_short_name: operator?.short_name,
-          operator_telegram: operator?.telegram_chat_id,
-          company_name: company?.name,
-          company_code: company?.code,
-        }
-      })
-
-      setTasks(enrichedTasks)
+      setTasks(enrichTasks((tasksData || []) as TasksQueryTask[], operatorsData || [], companiesData || []))
     } catch (err) {
       console.error('Error loading data:', err)
       setError('Не удалось загрузить данные')
@@ -341,6 +405,11 @@ function TasksContent() {
     return { total, overdue, critical }
   }, [filteredTasks])
 
+  const nextTaskNumber = useMemo(
+    () => tasks.reduce((maxNumber, task) => Math.max(maxNumber, task.task_number || 0), 0) + 1,
+    [tasks],
+  )
+
   // Обработчики
   const resetFilters = () => {
     setSearchTerm('')
@@ -350,34 +419,56 @@ function TasksContent() {
     setFilterCompany('all')
   }
 
-  const handleStatusChange = async (taskId: string, newStatus: string) => {
-    const { error } = await supabase
-      .from('tasks')
-      .update({ 
-        status: newStatus,
-        completed_at: newStatus === 'done' ? new Date().toISOString() : null
+  const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
+    try {
+      const response = await fetch('/api/admin/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'changeStatus',
+          taskId,
+          status: newStatus,
+        }),
       })
-      .eq('id', taskId)
-
-    if (!error) {
-      setTasks(prev => prev.map(t => 
-        t.id === taskId ? { ...t, status: newStatus as any } : t
-      ))
-
-      // Уведомление в Telegram
-      const task = tasks.find(t => t.id === taskId)
-      if (task?.operator_telegram) {
-        await sendTelegramNotification(
-          task.operator_telegram,
-          `📋 Статус задачи #${task.task_number} изменён на "${STATUS_CONFIG[newStatus].title}"`
-        )
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || `Ошибка запроса (${response.status})`)
       }
+
+      const task = tasks.find((item) => item.id === taskId)
+      if (task?.operator_telegram) {
+        await fetch('/api/admin/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'notifyTask',
+            taskId,
+            message: `📋 *Статус задачи #${task.task_number}*\n\n${task.title}\n\n📊 Новый статус: ${STATUS_CONFIG[newStatus].title}`,
+          }),
+        })
+      }
+
+      await loadData(true)
+      toast({
+        title: 'Статус обновлён',
+        description: `Задача переведена в статус "${STATUS_CONFIG[newStatus].title}".`,
+      })
+    } catch (error: any) {
+      toast({
+        title: 'Не удалось обновить статус',
+        description: error?.message || 'Попробуй ещё раз',
+        variant: 'destructive',
+      })
     }
   }
 
   const handleNotifyOperator = async (task: Task) => {
     if (!task.operator_telegram) {
-      alert('У оператора нет Telegram ID')
+      toast({
+        title: 'Telegram не настроен',
+        description: 'У оператора нет telegram_chat_id.',
+        variant: 'destructive',
+      })
       return
     }
 
@@ -387,8 +478,43 @@ function TasksContent() {
       `🔥 Приоритет: ${PRIORITY_CONFIG[task.priority].label}\n` +
       `📊 Статус: ${STATUS_CONFIG[task.status].title}`
 
-    await sendTelegramNotification(task.operator_telegram, message)
-    alert('Уведомление отправлено!')
+    try {
+      const response = await fetch('/api/admin/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'notifyTask',
+          taskId: task.id,
+          message,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      }
+
+      toast({
+        title: 'Уведомление отправлено',
+        description: `${task.operator_name || task.operator_short_name || 'Оператор'} получил сообщение в Telegram.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: 'Telegram не отправлен',
+        description: error?.message || 'Не удалось отправить уведомление в Telegram',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleTaskDrop = async (targetStatus: TaskStatus) => {
+    if (!draggedTask) return
+
+    const taskToMove = draggedTask
+    setDraggedTask(null)
+    setDragOverStatus(null)
+
+    if (taskToMove.status === targetStatus) return
+    await handleStatusChange(taskToMove.id, targetStatus)
   }
 
   if (loading && !refreshing) {
@@ -397,9 +523,10 @@ function TasksContent() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+    <div className="app-shell-layout bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
         <Sidebar />
-        <main className="flex-1 p-8">
+        <main className="app-main">
+          <div className="app-page max-w-7xl">
           <Card className="p-6 border-red-500/30 bg-red-500/10">
             <div className="flex items-center gap-2 text-red-300">
               <AlertCircle className="w-5 h-5" />
@@ -410,17 +537,18 @@ function TasksContent() {
               Повторить
             </Button>
           </Card>
+          </div>
         </main>
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100">
+    <div className="app-shell-layout bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100">
       <Sidebar />
 
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <main className="app-main">
+        <div className="app-page max-w-7xl space-y-6">
           {/* Header */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
             <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
@@ -559,7 +687,7 @@ function TasksContent() {
                 <option value="all">Все операторы</option>
                 {operators.map(op => (
                   <option key={op.id} value={op.id}>
-                    {op.short_name || op.name} {op.telegram_chat_id ? '📱' : ''}
+                    {getOperatorDisplayName(op)} {op.telegram_chat_id ? '📱' : ''}
                   </option>
                 ))}
               </select>
@@ -600,7 +728,23 @@ function TasksContent() {
                 return (
                   <div
                     key={status}
-                    className="w-80 flex-shrink-0 rounded-xl border border-white/5 bg-gray-900/40 backdrop-blur-xl p-3"
+                    onDragOver={(event) => {
+                      event.preventDefault()
+                      setDragOverStatus(status as TaskStatus)
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverStatus === status) setDragOverStatus(null)
+                    }}
+                    onDrop={async (event) => {
+                      event.preventDefault()
+                      await handleTaskDrop(status as TaskStatus)
+                    }}
+                    className={cn(
+                      "w-80 flex-shrink-0 rounded-xl border backdrop-blur-xl p-3 transition-colors",
+                      dragOverStatus === status
+                        ? 'border-violet-400/50 bg-violet-500/10'
+                        : 'border-white/5 bg-gray-900/40',
+                    )}
                   >
                     {/* Заголовок колонки */}
                     <div className="flex items-center justify-between mb-3 px-2">
@@ -625,10 +769,21 @@ function TasksContent() {
                           }}
                           onStatusChange={(newStatus) => handleStatusChange(task.id, newStatus)}
                           onNotify={() => handleNotifyOperator(task)}
+                          onDragStart={(currentTask) => setDraggedTask(currentTask)}
+                          onDragEnd={() => {
+                            setDraggedTask(null)
+                            setDragOverStatus(null)
+                          }}
+                          isDragging={draggedTask?.id === task.id}
                         />
                       ))}
                       {statusTasks.length === 0 && (
-                        <div className="text-center py-8 text-xs text-gray-500 border border-dashed border-white/5 rounded-lg">
+                        <div
+                          className={cn(
+                            "text-center py-8 text-xs text-gray-500 border border-dashed rounded-lg transition-colors",
+                            dragOverStatus === status ? 'border-violet-400/50 bg-violet-500/5' : 'border-white/5',
+                          )}
+                        >
                           Нет задач
                         </div>
                       )}
@@ -686,10 +841,10 @@ function TasksContent() {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[10px] font-bold">
-                              {task.operator_short_name?.[0] || task.operator_name?.[0] || '?'}
+                              {task.operator_name?.[0] || task.operator_short_name?.[0] || '?'}
                             </div>
                             <span className="text-sm text-gray-300">
-                              {task.operator_short_name || task.operator_name || '—'}
+                              {task.operator_name || task.operator_short_name || '—'}
                             </span>
                             {task.operator_telegram && (
                               <Send className="w-3 h-3 text-blue-400" />
@@ -712,7 +867,7 @@ function TasksContent() {
                           {task.company_name ? (
                             <span className={cn(
                               "text-xs px-2 py-1 rounded-full border",
-                              getCompanyStyle(task.company_code)
+                              getCompanyStyle(task.company_code ?? null)
                             )}>
                               {task.company_name}
                             </span>
@@ -763,6 +918,7 @@ function TasksContent() {
           operators={operators}
           companies={companies}
           onNotify={() => handleNotifyOperator(selectedTask)}
+          onTaskUpdated={() => loadData(true)}
         />
       )}
 
@@ -776,6 +932,7 @@ function TasksContent() {
         }}
         operators={operators}
         companies={companies}
+        nextTaskNumber={nextTaskNumber}
       />
     </div>
   )
@@ -784,15 +941,25 @@ function TasksContent() {
 // =====================
 // TASK CARD COMPONENT
 // =====================
-function TaskCard({ task, onClick, onStatusChange, onNotify }: any) {
+function TaskCard({ task, onClick, onStatusChange, onNotify, onDragStart, onDragEnd, isDragging }: TaskCardProps) {
   const [showMenu, setShowMenu] = useState(false)
   const isTaskOverdue = isOverdue(task.due_date, task.status)
   const daysUntilDue = getDaysUntilDue(task.due_date)
 
   return (
     <div
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'move'
+        event.dataTransfer.setData('text/plain', task.id)
+        onDragStart(task)
+      }}
+      onDragEnd={onDragEnd}
       onClick={onClick}
-      className="bg-gray-800/50 border border-white/5 rounded-lg p-3 hover:bg-gray-700/50 transition-colors cursor-pointer relative group"
+      className={cn(
+        "bg-gray-800/50 border border-white/5 rounded-lg p-3 hover:bg-gray-700/50 transition-colors cursor-pointer relative group",
+        isDragging && 'opacity-50 ring-1 ring-violet-400/40',
+      )}
     >
       {/* Кнопки действий */}
       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
@@ -827,7 +994,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify }: any) {
                   key={status}
                   onClick={(e) => {
                     e.stopPropagation()
-                    onStatusChange(status)
+                    onStatusChange(status as TaskStatus)
                     setShowMenu(false)
                   }}
                   className="w-full px-3 py-2 text-left text-xs hover:bg-white/5 flex items-center gap-2"
@@ -862,7 +1029,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify }: any) {
           <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[8px] font-bold">
             {task.operator_short_name?.[0] || task.operator_name?.[0] || '?'}
           </div>
-          <span className="text-[10px]">{task.operator_short_name || task.operator_name || 'Не назначен'}</span>
+                            <span className="text-[10px]">{task.operator_name || task.operator_short_name || 'Не назначен'}</span>
           {task.operator_telegram && (
             <Send className="w-2.5 h-2.5 text-blue-400" />
           )}
@@ -871,7 +1038,7 @@ function TaskCard({ task, onClick, onStatusChange, onNotify }: any) {
         {task.company_name && (
           <span className={cn(
             "text-[8px] px-1.5 py-0.5 rounded-full border",
-            getCompanyStyle(task.company_code)
+            getCompanyStyle(task.company_code ?? null)
           )}>
             {task.company_name}
           </span>
@@ -899,18 +1066,25 @@ function TaskCard({ task, onClick, onStatusChange, onNotify }: any) {
 // =====================
 // TASK DETAIL MODAL
 // =====================
-function TaskDetailModal({ task, isOpen, onClose, operators, companies, onNotify }: any) {
+function TaskDetailModal({
+  task,
+  isOpen,
+  onClose,
+  operators,
+  companies,
+  onNotify,
+  onTaskUpdated,
+}: TaskDetailModalProps) {
+  const { toast } = useToast()
   const [comments, setComments] = useState<TaskComment[]>([])
   const [newComment, setNewComment] = useState('')
   const [loading, setLoading] = useState(false)
+  const [savingTask, setSavingTask] = useState(false)
+  const [editForm, setEditForm] = useState<TaskFormState>(() => toTaskFormState(task))
 
-  useEffect(() => {
-    if (isOpen && task) {
-      loadComments()
-    }
-  }, [isOpen, task])
+  const loadComments = useCallback(async () => {
+    if (!task?.id) return
 
-  const loadComments = async () => {
     const { data } = await supabase
       .from('task_comments')
       .select('*')
@@ -923,27 +1097,89 @@ function TaskDetailModal({ task, isOpen, onClose, operators, companies, onNotify
         author_name: operators.find((o: Operator) => o.id === c.operator_id)?.name || 'Админ'
       })))
     }
-  }
+  }, [operators, task])
+
+  useEffect(() => {
+    if (isOpen && task) {
+      setEditForm(toTaskFormState(task))
+      loadComments()
+    }
+  }, [isOpen, task, loadComments])
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return
 
     setLoading(true)
-    // TODO: заменить на реальный ID текущего пользователя
-    const { error } = await supabase
-      .from('task_comments')
-      .insert([{
-        task_id: task.id,
-        staff_id: '00000000-0000-0000-0000-000000000000',
-        content: newComment
-      }])
+    const response = await fetch('/api/admin/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'addComment',
+        taskId: task.id,
+        content: newComment,
+      }),
+    })
+    const json = await response.json().catch(() => null)
 
     setLoading(false)
 
-    if (!error) {
+    if (response.ok) {
       setNewComment('')
       loadComments()
+      return
     }
+
+    toast({
+      title: 'Комментарий не добавлен',
+      description: json?.error || 'Не удалось сохранить комментарий',
+      variant: 'destructive',
+    })
+  }
+
+  const handleTaskSave = async () => {
+    if (!editForm.title.trim()) return
+
+    setSavingTask(true)
+    const payload = {
+      title: editForm.title.trim(),
+      description: editForm.description.trim() || null,
+      priority: editForm.priority,
+      status: editForm.status,
+      operator_id: editForm.operator_id || null,
+      company_id: editForm.company_id || null,
+      due_date: editForm.due_date || null,
+      tags: parseTags(editForm.tags),
+      completed_at: editForm.status === 'done' ? (task.completed_at || new Date().toISOString()) : null,
+    }
+
+    const response = await fetch('/api/admin/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'updateTask',
+        taskId: task.id,
+        payload,
+      }),
+    })
+    const json = await response.json().catch(() => null)
+
+    setSavingTask(false)
+
+    if (response.ok) {
+      await onTaskUpdated()
+      onClose()
+      toast({
+        title: 'Задача обновлена',
+        description: 'Изменения сохранены.',
+      })
+      return
+    }
+
+    toast({
+      title: 'Не удалось сохранить задачу',
+      description: json?.error || 'Попробуй ещё раз',
+      variant: 'destructive',
+    })
   }
 
   const priorityConfig = PRIORITY_CONFIG[task.priority]
@@ -981,6 +1217,104 @@ function TaskDetailModal({ task, isOpen, onClose, operators, companies, onNotify
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="mb-3 text-sm font-medium text-white">Редактирование задачи</div>
+
+            <div className="space-y-3">
+              <Input
+                value={editForm.title}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
+                className="bg-gray-800/50 border-white/10"
+                placeholder="Название задачи"
+              />
+
+              <textarea
+                value={editForm.description}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
+                className="min-h-24 w-full resize-none rounded-lg border border-white/10 bg-gray-800/50 p-3 text-sm text-white"
+                placeholder="Описание задачи"
+              />
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <select
+                  value={editForm.operator_id}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, operator_id: e.target.value }))}
+                  className="h-10 rounded-lg border border-white/10 bg-gray-800/50 px-3 text-sm text-white"
+                >
+                  <option value="">Без оператора</option>
+                  {operators.map((operator) => (
+                    <option key={operator.id} value={operator.id}>
+                      {getOperatorDisplayName(operator)}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={editForm.company_id}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, company_id: e.target.value }))}
+                  className="h-10 rounded-lg border border-white/10 bg-gray-800/50 px-3 text-sm text-white"
+                >
+                  <option value="">Без компании</option>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value as TaskStatus }))}
+                  className="h-10 rounded-lg border border-white/10 bg-gray-800/50 px-3 text-sm text-white"
+                >
+                  {Object.entries(STATUS_CONFIG).map(([status, config]) => (
+                    <option key={status} value={status}>
+                      {config.title}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={editForm.priority}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, priority: e.target.value as TaskPriority }))}
+                  className="h-10 rounded-lg border border-white/10 bg-gray-800/50 px-3 text-sm text-white"
+                >
+                  {Object.entries(PRIORITY_CONFIG).map(([priority, config]) => (
+                    <option key={priority} value={priority}>
+                      {config.icon} {config.label}
+                    </option>
+                  ))}
+                </select>
+
+                <Input
+                  type="date"
+                  value={editForm.due_date}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, due_date: e.target.value }))}
+                  className="bg-gray-800/50 border-white/10"
+                />
+              </div>
+
+              <Input
+                value={editForm.tags}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, tags: e.target.value }))}
+                className="bg-gray-800/50 border-white/10"
+                placeholder="Теги через запятую"
+              />
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleTaskSave}
+                  disabled={savingTask || !editForm.title.trim()}
+                  className="gap-2"
+                >
+                  {savingTask ? 'Сохраняем...' : 'Сохранить изменения'}
+                </Button>
+              </div>
+            </div>
+          </div>
+
           {/* Мета-информация */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="p-3 bg-white/5 rounded-lg">
@@ -1036,7 +1370,7 @@ function TaskDetailModal({ task, isOpen, onClose, operators, companies, onNotify
               <p className="text-xs text-gray-500 mb-1">Компания</p>
               <span className={cn(
                 "text-xs px-2 py-1 rounded-full border",
-                getCompanyStyle(task.company_code)
+                getCompanyStyle(task.company_code ?? null)
               )}>
                 {task.company_name}
               </span>
@@ -1124,49 +1458,108 @@ function TaskDetailModal({ task, isOpen, onClose, operators, companies, onNotify
 // =====================
 // CREATE TASK MODAL
 // =====================
-function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: any) {
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    priority: 'medium',
-    status: 'todo',
-    operator_id: '',
-    company_id: '',
-    due_date: '',
-    tags: ''
-  })
+function CreateTaskModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  operators,
+  companies,
+  nextTaskNumber,
+}: CreateTaskModalProps) {
+  const { toast } = useToast()
+  const [form, setForm] = useState<TaskFormState>(createEmptyTaskForm())
   const [loading, setLoading] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      setForm(createEmptyTaskForm())
+      setSubmitError(null)
+    }
+  }, [isOpen])
+
+  const buildTaskData = (taskNumber: number) => {
+    const payload: {
+      title: string
+      description: string | null
+      priority: TaskPriority
+      status: TaskStatus
+      operator_id: string | null
+      company_id: string | null
+      due_date: string | null
+      tags: string[]
+      task_number: number
+    } = {
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      priority: form.priority,
+      status: form.status,
+      operator_id: form.operator_id || null,
+      company_id: form.company_id || null,
+      due_date: form.due_date || null,
+      tags: parseTags(form.tags),
+      task_number: taskNumber,
+    }
+
+    return payload
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
-    const taskData = {
-      ...form,
-      tags: form.tags ? form.tags.split(',').map((t: string) => t.trim()) : [],
-      created_by: '00000000-0000-0000-0000-000000000000', // TODO: заменить на реальный ID
-    }
-
-    const { error } = await supabase
-      .from('tasks')
-      .insert([taskData])
+    setSubmitError(null)
+    const response = await fetch('/api/admin/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'createTask',
+        payload: buildTaskData(nextTaskNumber),
+      }),
+    })
+    const json = await response.json().catch(() => null)
 
     setLoading(false)
 
-    if (!error) {
+    if (response.ok) {
       // Уведомление оператору в Telegram
       if (form.operator_id) {
         const operator = operators.find((o: Operator) => o.id === form.operator_id)
         if (operator?.telegram_chat_id) {
-          await sendTelegramNotification(
-            operator.telegram_chat_id,
-            `📋 *Новая задача!*\n\n${form.title}\n\n📅 Дедлайн: ${form.due_date ? formatDate(form.due_date) : 'не указан'}`
-          )
+          try {
+            const notifyResponse = await fetch('/api/admin/tasks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'notifyTask',
+                taskId: json?.data?.id,
+                message: `📋 *Новая задача!*\n\n${form.title}\n\n📅 Дедлайн: ${form.due_date ? formatDate(form.due_date) : 'не указан'}`,
+              }),
+            })
+            const notifyJson = await notifyResponse.json().catch(() => null)
+            if (!notifyResponse.ok) {
+              throw new Error(notifyJson?.error || `Ошибка запроса (${notifyResponse.status})`)
+            }
+          } catch (error: any) {
+            toast({
+              title: 'Задача создана',
+              description: `Telegram не отправлен: ${error?.message || 'неизвестная ошибка'}`,
+              variant: 'destructive',
+            })
+            onSuccess()
+            return
+          }
         }
       }
-      
+
+      toast({
+        title: 'Задача создана',
+        description: 'Новая задача добавлена в систему.',
+      })
       onSuccess()
+      return
     }
+
+    setSubmitError(json?.error || 'Не удалось создать задачу')
   }
 
   return (
@@ -1180,6 +1573,12 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: a
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {submitError && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {submitError}
+            </div>
+          )}
+
           <Input
             placeholder="Название задачи *"
             value={form.title}
@@ -1204,7 +1603,7 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: a
               <option value="">Выберите оператора</option>
               {operators.map((op: Operator) => (
                 <option key={op.id} value={op.id}>
-                  {op.name} {op.telegram_chat_id ? '📱' : ''}
+                  {getOperatorDisplayName(op)} {op.telegram_chat_id ? '📱' : ''}
                 </option>
               ))}
             </select>
@@ -1224,7 +1623,7 @@ function CreateTaskModal({ isOpen, onClose, onSuccess, operators, companies }: a
           <div className="grid grid-cols-2 gap-3">
             <select
               value={form.priority}
-              onChange={(e) => setForm({...form, priority: e.target.value})}
+              onChange={(e) => setForm({...form, priority: e.target.value as TaskPriority})}
               className="h-9 bg-gray-800/50 border border-white/10 rounded-lg px-3 text-sm text-white"
             >
               <option value="low">💧 Низкий</option>

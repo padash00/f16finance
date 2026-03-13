@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
 import {
   ArrowLeft,
@@ -44,7 +45,9 @@ type Company = {
 type Operator = {
   id: string
   name: string
+  full_name?: string | null
   short_name: string | null
+  operator_profiles?: { full_name?: string | null }[] | null
   is_active: boolean
 }
 
@@ -196,7 +199,7 @@ export default function OperatorSalaryPage({ params }: PageProps) {
       ] = await Promise.all([
         supabase
           .from('operators')
-          .select('id, name, short_name, is_active')
+          .select('id, name, short_name, is_active, operator_profiles(*)')
           .eq('id', operatorId)
           .single(),
         supabase.from('companies').select('id, name, code').order('name'),
@@ -445,7 +448,7 @@ export default function OperatorSalaryPage({ params }: PageProps) {
                 <div className="flex items-center gap-2">
                   <UserCircle2 className="w-6 h-6 text-purple-500" />
                   <h1 className="text-2xl md:text-3xl font-bold">
-                    {operator.short_name || operator.name}
+                    {getOperatorDisplayName(operator)}
                   </h1>
                   {!operator.is_active && (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/40">

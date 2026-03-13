@@ -1,8 +1,12 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireAdminRequest } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 export async function POST(request: Request) {
   try {
+    const guard = await requireAdminRequest(request)
+    if (guard) return guard
+
     const { userId, password } = await request.json()
     
     if (!userId || !password) {
@@ -12,26 +16,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // Проверяем наличие переменных окружения
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('Missing environment variables')
-      return NextResponse.json(
-        { error: 'Ошибка конфигурации сервера' },
-        { status: 500 }
-      )
-    }
-
-    // Создаем admin клиент с service role key
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
+    const supabaseAdmin = createAdminSupabaseClient()
     
     // Обновляем пароль через admin API
     const { data, error } = await supabaseAdmin.auth.admin.updateUserById(

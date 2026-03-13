@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 export async function POST(request: Request) {
   console.log('🚀 API called: /api/admin/create-operator-account')
   
   try {
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
+    if (!access.isSuperAdmin) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    }
+
     // 1. Парсим тело запроса
     const body = await request.json()
     console.log('Request body:', { 
@@ -36,29 +43,13 @@ export async function POST(request: Request) {
     }
 
     // 4. Проверяем переменные окружения
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
     console.log('Environment check:', {
-      hasUrl: !!supabaseUrl,
-      hasKey: !!supabaseServiceKey
+      hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL || !!process.env.SUPABASE_URL,
+      hasKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY || !!process.env.SUPABASE_SERVICE_KEY
     })
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Missing environment variables')
-      return NextResponse.json(
-        { error: 'Server configuration error' },
-        { status: 500 }
-      )
-    }
 
     // 5. Создаем клиент с service role key
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
+    const supabase = createAdminSupabaseClient()
 
     // 6. Проверяем, не существует ли уже аккаунт
     const { data: existingAuth, error: checkError } = await supabase

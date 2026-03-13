@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
 import {
   ArrowLeft,
@@ -93,6 +94,7 @@ type Company = {
 type OperatorProfile = {
   id: string
   operator_id: string
+  full_name: string | null
   birth_date: string | null
   phone: string | null
   email: string | null
@@ -172,6 +174,33 @@ type OperatorAccount = {
   created_at: string
   last_login: string | null
   is_active: boolean
+}
+
+type CareerRole = 'manager' | 'marketer' | 'owner' | 'other'
+
+type OperatorCareerLink = {
+  id: string
+  assigned_role: CareerRole
+  assigned_at: string
+  updated_at: string
+  staff: {
+    id: string
+    full_name: string | null
+    short_name: string | null
+    role: CareerRole | null
+    monthly_salary: number | null
+    email: string | null
+    phone: string | null
+    hire_date: string | null
+    is_active: boolean
+  } | null
+}
+
+const CAREER_ROLE_LABEL: Record<CareerRole, string> = {
+  manager: 'Руководитель',
+  marketer: 'Маркетолог',
+  owner: 'Владелец',
+  other: 'Без роли',
 }
 
 // Компонент загрузки
@@ -875,6 +904,13 @@ export default function OperatorProfilePage() {
   const [notes, setNotes] = useState<Note[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [operatorAccount, setOperatorAccount] = useState<OperatorAccount | null>(null)
+  const [careerLink, setCareerLink] = useState<OperatorCareerLink | null>(null)
+  const [careerLoading, setCareerLoading] = useState(true)
+  const [careerSaving, setCareerSaving] = useState(false)
+  const [careerForm, setCareerForm] = useState<{ role: CareerRole; monthly_salary: string }>({
+    role: 'manager',
+    monthly_salary: '',
+  })
   const [showAccountModal, setShowAccountModal] = useState(false)
   const [newAccount, setNewAccount] = useState<{ username: string; password: string } | null>(null)
   
@@ -1113,6 +1149,40 @@ export default function OperatorProfilePage() {
     loadOperatorData()
   }, [operatorId])
 
+  useEffect(() => {
+    let ignore = false
+
+    const loadCareerLink = async () => {
+      try {
+        setCareerLoading(true)
+        const response = await fetch(`/api/admin/operator-career?operatorId=${encodeURIComponent(operatorId)}`).catch(() => null)
+        const json = await response?.json().catch(() => null)
+
+        if (ignore) return
+
+        if (response?.ok) {
+          const data = (json?.data || null) as OperatorCareerLink | null
+          setCareerLink(data)
+          setCareerForm({
+            role: (data?.staff?.role as CareerRole | null) || (data?.assigned_role as CareerRole | null) || 'manager',
+            monthly_salary: data?.staff?.monthly_salary != null ? String(data.staff.monthly_salary) : '',
+          })
+        } else {
+          setCareerLink(null)
+        }
+      } catch (error) {
+        console.error('Error loading operator career:', error)
+      } finally {
+        if (!ignore) setCareerLoading(false)
+      }
+    }
+
+    loadCareerLink()
+    return () => {
+      ignore = true
+    }
+  }, [operatorId])
+
   // Сохранение профиля
   const handleSaveProfile = async () => {
     if (!operator) return
@@ -1251,6 +1321,55 @@ export default function OperatorProfilePage() {
       setError(err.message || 'Ошибка создания аккаунта')
     } finally {
       setCreatingAccount(false)
+    }
+  }
+
+  const handlePromoteOperator = async () => {
+    if (!operator) return
+
+    try {
+      setCareerSaving(true)
+      setError(null)
+
+      const monthlySalaryValue = careerForm.monthly_salary.trim()
+      const monthlySalary = monthlySalaryValue === '' ? null : Number(monthlySalaryValue)
+
+      if (monthlySalaryValue !== '' && !Number.isFinite(monthlySalary)) {
+        throw new Error('Оклад должен быть числом')
+      }
+
+      const response = await fetch('/api/admin/operator-career', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'promoteOperator',
+          payload: {
+            operatorId: operator.id,
+            role: careerForm.role,
+            monthly_salary: monthlySalary,
+          },
+        }),
+      })
+
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || 'Не удалось сохранить карьерный рост')
+      }
+
+      setCareerLink((prev) => ({
+        id: prev?.id || `career-${operator.id}`,
+        assigned_role: careerForm.role,
+        assigned_at: prev?.assigned_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        staff: json?.data?.staff || null,
+      }))
+      setUploadSuccess('Карьерная роль сохранена. Оператор получил staff-доступ.')
+      setTimeout(() => setUploadSuccess(null), 4000)
+    } catch (err: any) {
+      console.error('Error promoting operator:', err)
+      setError(err.message || 'Ошибка сохранения карьерной роли')
+    } finally {
+      setCareerSaving(false)
     }
   }
 
@@ -1610,10 +1729,10 @@ export default function OperatorProfilePage() {
 
                 <div>
                   <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                    {operator.name}
+                    {getOperatorDisplayName({ ...operator, full_name: profile?.full_name })}
                   </h1>
                   <div className="flex flex-wrap items-center gap-3 mt-2">
-                    <span className="text-sm text-gray-400">{operator.short_name || 'Нет короткого имени'}</span>
+                    <span className="text-sm text-gray-400">{operator.short_name || operator.name || 'Нет короткого имени'}</span>
                     <span className="w-1 h-1 rounded-full bg-gray-600" />
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       operator.is_active 
@@ -1800,7 +1919,84 @@ export default function OperatorProfilePage() {
 
           {/* Основная информация */}
           {activeTab === 'info' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="space-y-6">
+              <Card className="p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-emerald-400" />
+                      <h3 className="text-lg font-semibold text-white">Карьерный рост</h3>
+                    </div>
+                    <p className="text-sm text-gray-400">
+                      Повышение создаёт или обновляет staff-профиль, но операторский аккаунт и история сохраняются.
+                    </p>
+                    {careerLoading ? (
+                      <p className="text-sm text-gray-500">Загружаем статус повышения...</p>
+                    ) : careerLink?.staff ? (
+                      <>
+                        <p className="text-sm text-emerald-300">
+                          Текущая staff-роль: <span className="font-semibold">{CAREER_ROLE_LABEL[(careerLink.staff.role as CareerRole) || careerLink.assigned_role]}</span>
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          После входа оператор сможет открыть и staff-разделы, и операторский кабинет.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-amber-300">
+                        Роль ещё не назначена. Здесь можно перевести оператора в руководителя, маркетолога или владельца.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid w-full gap-3 lg:max-w-xl lg:grid-cols-[1fr_180px_auto]">
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Роль роста</label>
+                      <select
+                        value={careerForm.role}
+                        onChange={(e) => setCareerForm((prev) => ({ ...prev, role: e.target.value as CareerRole }))}
+                        className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                      >
+                        <option value="manager">Руководитель</option>
+                        <option value="marketer">Маркетолог</option>
+                        <option value="owner">Владелец</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Оклад staff</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={careerForm.monthly_salary}
+                        onChange={(e) => setCareerForm((prev) => ({ ...prev, monthly_salary: e.target.value }))}
+                        placeholder="Например 250000"
+                        className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                      />
+                    </div>
+
+                    <div className="flex items-end">
+                      <Button
+                        onClick={handlePromoteOperator}
+                        disabled={careerSaving || careerLoading}
+                        className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white border-0"
+                      >
+                        {careerSaving ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Сохраняем
+                          </>
+                        ) : careerLink?.staff ? (
+                          'Обновить роль'
+                        ) : (
+                          'Повысить'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Card className="lg:col-span-2 p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">
                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                   <User className="w-5 h-5 text-violet-400" />
@@ -1808,6 +2004,24 @@ export default function OperatorProfilePage() {
                 </h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+                      <FileSignature className="w-3 h-3" />
+                      Полное ФИО
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editedProfile.full_name || ''}
+                        onChange={(e) => setEditedProfile({ ...editedProfile, full_name: e.target.value })}
+                        placeholder="Фамилия Имя Отчество"
+                        className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      />
+                    ) : (
+                      <p className="text-sm">{profile?.full_name || operator.name || 'Не указано'}</p>
+                    )}
+                  </div>
+
                   {/* Дата рождения */}
                   <div>
                     <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
@@ -2110,6 +2324,7 @@ export default function OperatorProfilePage() {
                   </div>
                 </div>
               </Card>
+              </div>
             </div>
           )}
 

@@ -255,10 +255,10 @@ export default function AnalyticsPage() {
   }, [rows])
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="app-shell-layout">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-8 space-y-8">
+      <main className="app-main">
+        <div className="app-page max-w-7xl space-y-8">
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>

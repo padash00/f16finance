@@ -47,6 +47,32 @@ type TableInfo = {
   error?: string
 }
 
+type HealthSummary = {
+  env: {
+    supabaseUrl: boolean
+    supabaseAnonKey: boolean
+    telegramBotToken: boolean
+    serviceRole: boolean
+    adminEmails: string[]
+  }
+  checks?: {
+    totals?: {
+      tasks: number
+      taskComments: number
+      shifts: number
+      operators: number
+    }
+    dataQuality?: {
+      tasksWithoutOperator: number
+      overdueOpenTasks: number
+      activeOperatorsWithoutTelegram: number
+    }
+    summary?: {
+      warnings?: string[]
+    }
+  }
+}
+
 export default function DebugPage() {
   const [tests, setTests] = useState<TestResult[]>([
     { name: 'Подключение к Supabase', status: 'pending' },
@@ -77,6 +103,7 @@ export default function DebugPage() {
     urlExists: false,
     keyExists: false,
   })
+  const [healthSummary, setHealthSummary] = useState<HealthSummary | null>(null)
 
   const runAllTests = async () => {
     setLoading(true)
@@ -238,6 +265,16 @@ export default function DebugPage() {
       })
       return newTests
     })
+
+    try {
+      const response = await fetch('/api/admin/health')
+      const json = await response.json().catch(() => null)
+      if (response.ok) {
+        setHealthSummary(json)
+      }
+    } catch (error) {
+      console.error('Health summary error', error)
+    }
     
     setLoading(false)
   }
@@ -288,8 +325,8 @@ export default function DebugPage() {
     <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100">
       <Sidebar />
       
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-6">
+      <main className="app-main">
+        <div className="app-page-tight max-w-5xl space-y-6">
           {/* Header */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
             <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
@@ -556,6 +593,71 @@ export default function DebugPage() {
               )}
             </div>
           </Card>
+
+          {healthSummary ? (
+            <Card className="p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Zap className="w-5 h-5 text-cyan-400" />
+                Централизованный Health Check
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+                <div className="p-4 rounded-xl bg-gray-800/30 border border-white/5">
+                  <p className="text-xs text-gray-500">Tasks</p>
+                  <p className="text-2xl font-bold text-white">{healthSummary.checks?.totals?.tasks ?? 0}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-gray-800/30 border border-white/5">
+                  <p className="text-xs text-gray-500">Comments</p>
+                  <p className="text-2xl font-bold text-white">{healthSummary.checks?.totals?.taskComments ?? 0}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-gray-800/30 border border-white/5">
+                  <p className="text-xs text-gray-500">Shifts</p>
+                  <p className="text-2xl font-bold text-white">{healthSummary.checks?.totals?.shifts ?? 0}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-gray-800/30 border border-white/5">
+                  <p className="text-xs text-gray-500">Operators</p>
+                  <p className="text-2xl font-bold text-white">{healthSummary.checks?.totals?.operators ?? 0}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-xs text-amber-300">Задачи без оператора</p>
+                  <p className="text-xl font-bold text-white">{healthSummary.checks?.dataQuality?.tasksWithoutOperator ?? 0}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                  <p className="text-xs text-rose-300">Просроченные открытые задачи</p>
+                  <p className="text-xl font-bold text-white">{healthSummary.checks?.dataQuality?.overdueOpenTasks ?? 0}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                  <p className="text-xs text-blue-300">Активные без Telegram</p>
+                  <p className="text-xl font-bold text-white">{healthSummary.checks?.dataQuality?.activeOperatorsWithoutTelegram ?? 0}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <span className={`text-xs px-2 py-1 rounded-full ${healthSummary.env.telegramBotToken ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                  Telegram token: {healthSummary.env.telegramBotToken ? 'OK' : 'missing'}
+                </span>
+                <span className={`text-xs px-2 py-1 rounded-full ${healthSummary.env.serviceRole ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                  Service role: {healthSummary.env.serviceRole ? 'OK' : 'limited'}
+                </span>
+                <span className="text-xs px-2 py-1 rounded-full bg-white/5 text-gray-300">
+                  Admin emails: {healthSummary.env.adminEmails.join(', ') || 'not set'}
+                </span>
+              </div>
+
+              {healthSummary.checks?.summary?.warnings?.length ? (
+                <div className="mt-4 space-y-2">
+                  {healthSummary.checks.summary.warnings.map((warning) => (
+                    <div key={warning} className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                      {warning}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </Card>
+          ) : null}
 
           {/* SQL для создания таблиц */}
           <Card className="p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">

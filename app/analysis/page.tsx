@@ -1081,46 +1081,18 @@ export default function AIAnalysisPage() {
   const dataForAi = useMemo(() => {
     if (!analysis) return null
     return {
-      range: { start: analysis.dataRangeStart, end: analysis.dataRangeEnd },
-      includeZeroDays,
-      granularity,
       avgIncome: Math.round(analysis.avgIncome),
       avgExpense: Math.round(analysis.avgExpense),
-      avgProfit: Math.round(analysis.avgProfit),
-      avgMargin: analysis.avgMargin,
-      profitVolatility: Math.round(analysis.profitVolatility),
       predictedProfit: Math.round(analysis.totalForecastProfit),
-      predictedIncome: Math.round(analysis.totalForecastIncome),
-      trendIncomePerDay: analysis.trendIncome,
-      trendExpensePerDay: analysis.trendExpense,
-      bestDayOfWeek: dayNames[analysis.bestDow.dow],
-      worstDayOfWeek: dayNames[analysis.worstDow.dow],
-      paymentMethods: {
-        cash: { total: analysis.totalCash, percentage: analysis.paymentTrends.find(p => p.method === 'cash')?.percentage || 0 },
-        kaspi: { total: analysis.totalKaspi, percentage: analysis.paymentTrends.find(p => p.method === 'kaspi')?.percentage || 0 },
-        card: { total: analysis.totalCard, percentage: analysis.paymentTrends.find(p => p.method === 'card')?.percentage || 0 },
-        online: { total: analysis.totalOnline, percentage: analysis.paymentTrends.find(p => p.method === 'online')?.percentage || 0 },
-      },
-      onlineShare: analysis.onlineShare,
-      cashlessShare: analysis.cashlessShare,
-      seasonalityStrength: analysis.seasonalityStrength,
-      growthRate: analysis.growthRate,
-      riskLevel: analysis.riskLevel,
+      trend: analysis.trendIncome,
       expensesByCategory: expenseCategories,
-      plan: {
-        totalPlanIncome: Math.round(analysis.totalPlanIncome),
-        incomeAchievementPct: Number(analysis.planIncomeAchievementPct.toFixed(1)),
-      },
       anomalies: analysis.anomalies.map((a) => ({
         date: a.date,
         type: a.type === "income_low" ? "Низкий доход" : a.type === "income_high" ? "Высокий доход" : "Высокий расход",
         amount: a.amount,
-        normalForDay: a.avgForDay,
-        paymentMethod: a.paymentMethod,
       })),
-      confidenceScore: analysis.confidenceScore,
     }
-  }, [analysis, expenseCategories, includeZeroDays, granularity])
+  }, [analysis, expenseCategories])
 
   const handleAskAi = async () => {
     if (!dataForAi) return
@@ -1162,8 +1134,8 @@ export default function AIAnalysisPage() {
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-foreground">
       <Sidebar />
-      <main className="flex-1 overflow-auto pt-16 md:pt-0">
-        <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
+      <main className="app-main">
+        <div className="app-page max-w-7xl space-y-6">
           {/* Header */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 p-6 border border-purple-500/20">
             <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 rounded-full blur-3xl opacity-20 pointer-events-none" />

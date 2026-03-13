@@ -720,10 +720,10 @@ export default function SmartDashboardPage() {
   const { current, previous, chartData, insight, topIncomeCategories, topExpenseCategories } = analytics
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-foreground">
+    <div className="app-shell-layout bg-gradient-to-br from-gray-900 to-gray-950 text-foreground">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      <main className="app-main">
+        <div className="app-page max-w-7xl space-y-6">
           <HeaderBlock
             dateFrom={dateFrom}
             dateTo={dateTo}
@@ -787,7 +787,7 @@ export default function SmartDashboardPage() {
 
 function Tabs({ active, onChange }: { active: 'overview' | 'details' | 'forecast'; onChange: (v: any) => void }) {
   return (
-    <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
+    <div className="flex w-full gap-2 overflow-x-auto rounded-xl border border-gray-700 bg-gray-800/50 p-1 sm:w-fit">
       <TabButton active={active === 'overview'} onClick={() => onChange('overview')} icon={<Activity className="w-4 h-4" />} label="Обзор" />
       <TabButton active={active === 'details'} onClick={() => onChange('details')} icon={<BarChart2 className="w-4 h-4" />} label="Детали" />
       <TabButton active={active === 'forecast'} onClick={() => onChange('forecast')} icon={<Sparkles className="w-4 h-4" />} label="Прогноз" />

@@ -1,5 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { canAccessPath, getDefaultAppPath, normalizeStaffRole, isPublicPath } from '@/lib/core/access'
+import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 
 export async function middleware(request: NextRequest) {
   // 1. Инициализируем ответ
@@ -43,14 +45,15 @@ export async function middleware(request: NextRequest) {
 
   const url = request.nextUrl.clone()
 
-  // --- СПИСОК ПУБЛИЧНЫХ СТРАНИЦ (доступны без авторизации) ---
-  const publicPaths = ['/login', '/operator-login', '/unauthorized']
-  const isPublicPath = publicPaths.some(path => url.pathname.startsWith(path))
+  // API-маршруты живут по собственной авторизации в route handlers.
+  if (url.pathname.startsWith('/api/')) {
+    return response
+  }
 
   // --- СЦЕНАРИЙ 1: Пользователь НЕ вошел в систему (Гость) ---
   if (!user) {
     // Если это публичная страница - пускаем
-    if (isPublicPath) {
+    if (isPublicPath(url.pathname)) {
       return response
     }
     // Иначе отправляем на страницу выбора входа
@@ -59,33 +62,12 @@ export async function middleware(request: NextRequest) {
   }
 
   // --- СЦЕНАРИЙ 2: Пользователь ВОШЕЛ в систему (Авторизован) ---
-  
-  // Если пытается зайти на страницы входа - редирект
-  if (url.pathname.startsWith('/login') || url.pathname.startsWith('/operator-login')) {
-    url.pathname = '/'
-    return NextResponse.redirect(url)
-  }
 
-  // 🛑 ПРОВЕРКА ПРАВ ДОСТУПА 🛑
-  
-  // 1. Бэкдор для ГЛАВНОГО АДМИНА
-  const MY_EMAIL = 'padash00@gmail.com'
-  
-  if (user.email === MY_EMAIL) {
-    // Админа пускаем везде
-    if (url.pathname.startsWith('/unauthorized')) {
-      url.pathname = '/'
-      return NextResponse.redirect(url)
-    }
-    return response
-  }
+  const isSuperAdmin = isAdminEmail(user.email)
 
   // 2. Проверяем, является ли пользователь сотрудником (staff)
-  const { data: staffMember } = await supabase
-    .from('staff')
-    .select('id, role')
-    .eq('email', user.email)
-    .maybeSingle()
+  const staffMember = isSuperAdmin ? null : await resolveStaffByUser(supabase, user)
+  const staffRole = normalizeStaffRole(staffMember?.role)
 
   // 3. Проверяем, является ли пользователь оператором
   const { data: operatorAuth } = await supabase
@@ -103,79 +85,33 @@ export async function middleware(request: NextRequest) {
     .maybeSingle()
 
   // Определяем роль пользователя
-  const isStaff = !!staffMember
+  const isStaff = isSuperAdmin || !!staffMember
   const isOperator = !!operatorAuth
-  const staffRole = staffMember?.role || null
-  const operatorRole = operatorAuth?.role || null
+  const defaultPath = getDefaultAppPath({ isSuperAdmin, isStaff, isOperator, staffRole })
 
-  // --- СПИСОК СТРАНИЦ ПО РОЛЯМ ---
-  const adminPaths = [
-    '/',
-    '/income',
-    '/income/add',
-    '/expenses',
-    '/expenses/add',
-    '/salary',
-    '/salary/rules',
-    '/reports',
-    '/analysis',
-    '/weekly-report',
-    '/staff',
-    '/tax',
-    '/operators',
-    '/operators/*',
-    '/operator-analytics',
-    '/debug',
-    '/settings',
-    '/pass',
-  ]
-
-  const operatorPaths = [
-    '/operator-dashboard',
-    '/operator-dashboard/*',
-    '/operator-profile',
-    '/operator-profile/*',
-    '/operator-chat',
-    '/operator-chat/*',
-    '/operator-settings',
-    '/operator-settings/*',
-    '/operator-achievements',
-    '/operator-achievements/*',
-  ]
+  // Если пытается зайти на страницы входа - редирект в домашний раздел по роли
+  if (url.pathname.startsWith('/login') || url.pathname.startsWith('/operator-login')) {
+    url.pathname = defaultPath
+    return NextResponse.redirect(url)
+  }
 
   // Проверяем, имеет ли пользователь доступ к запрашиваемой странице
   const requestedPath = url.pathname
+  const hasAccess = canAccessPath({
+    pathname: requestedPath,
+    isStaff,
+    isOperator,
+    staffRole,
+    isSuperAdmin,
+  })
 
-  // Функция проверки доступа
-  const hasAccess = () => {
-    // Сотрудники имеют доступ к админским страницам
-    if (isStaff) {
-      const hasAccessToAdminPath = adminPaths.some(path => {
-        if (path.endsWith('/*')) {
-          return requestedPath.startsWith(path.slice(0, -2))
-        }
-        return requestedPath === path
-      })
-      return hasAccessToAdminPath
-    }
-
-    // Операторы имеют доступ только к своим страницам
-    if (isOperator) {
-      const hasAccessToOperatorPath = operatorPaths.some(path => {
-        if (path.endsWith('/*')) {
-          return requestedPath.startsWith(path.slice(0, -2))
-        }
-        return requestedPath === path
-      })
-      return hasAccessToOperatorPath
-    }
-
-    // Неизвестный пользователь - нет доступа
-    return false
+  if (requestedPath === '/' && !hasAccess) {
+    url.pathname = defaultPath
+    return NextResponse.redirect(url)
   }
 
   // Проверяем доступ
-  if (!hasAccess()) {
+  if (!hasAccess) {
     // Если нет доступа и еще не на странице ошибки - отправляем туда
     if (!requestedPath.startsWith('/unauthorized')) {
       url.pathname = '/unauthorized'
@@ -186,8 +122,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // Если пользователь на странице ошибки, но имеет доступ - редирект на главную
-  if (requestedPath.startsWith('/unauthorized') && hasAccess()) {
-    url.pathname = isStaff ? '/' : '/operator-dashboard'
+  if (requestedPath.startsWith('/unauthorized') && hasAccess) {
+    url.pathname = defaultPath
     return NextResponse.redirect(url)
   }
 

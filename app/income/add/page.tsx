@@ -317,8 +317,8 @@ export default function AddIncomePage() {
     <div className="flex min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-foreground">
       <Sidebar />
 
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 md:p-8 max-w-4xl mx-auto">
+      <main className="app-main">
+        <div className="app-page-tight max-w-4xl">
           {/* Хедер */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 p-6 border border-purple-500/20 mb-6">
             <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600 rounded-full blur-3xl opacity-20 pointer-events-none" />

@@ -1,17 +1,20 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'  // 👈 ЭТОТ ИМПОРТ НУЖЕН
 import Image from 'next/image'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { 
-  Send, 
-  LogOut, 
-  Home, 
-  Smile, 
-  Paperclip, 
+import { Card } from '@/components/ui/card'
+import {
+  Send,
+  LogOut,
+  Home,
+  Smile,
+  Paperclip,
   MoreVertical,
   Check,
   CheckCheck,
@@ -20,9 +23,20 @@ import {
   Users,
   User as UserIcon,
   Settings,
-  Loader2
+  Loader2,
+  X,
+  Phone,
+  Mail,
+  Briefcase,
+  Calendar,
+  Award,
+  Clock,
+  Star,
+  MessageCircle,
+  UserCircle,
+  ChevronRight,
+  Trophy,
 } from 'lucide-react'
-import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 type Message = {
@@ -39,6 +53,31 @@ type OnlineUser = {
   name: string
   is_online: boolean
   last_seen: string
+  photo_url?: string | null
+  position?: string | null
+  phone?: string | null
+  email?: string | null
+  hire_date?: string | null
+  total_xp?: number
+  level?: number
+  achievements_count?: number
+}
+
+type OperatorProfile = {
+  id: string
+  name: string
+  full_name?: string | null
+  short_name: string | null
+  photo_url: string | null
+  position: string | null
+  phone: string | null
+  email: string | null
+  hire_date: string | null
+  total_xp: number
+  level: number
+  achievements_count: number
+  last_seen: string
+  is_online: boolean
 }
 
 export default function OperatorChatPage() {
@@ -54,9 +93,11 @@ export default function OperatorChatPage() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [showSidebar, setShowSidebar] = useState(false)
   const [typingUsers, setTypingUsers] = useState<string[]>([])
+  const [selectedProfile, setSelectedProfile] = useState<OperatorProfile | null>(null)
+  const [loadingProfile, setLoadingProfile] = useState(false)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const typingTimeoutRef = useRef<NodeJS.Timeout>()
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Скролл вниз при новых сообщениях
   useEffect(() => {
@@ -75,6 +116,79 @@ export default function OperatorChatPage() {
       })
       .eq('id', operatorId)
   }, [operatorId])
+
+  // Загрузка профиля оператора
+  const loadOperatorProfile = async (userId: string) => {
+    try {
+      setLoadingProfile(true)
+      console.log(`📥 Загрузка профиля пользователя ${userId}`)
+      
+      // Получаем данные оператора
+      const { data: authData, error: authError } = await supabase
+        .from('operator_auth')
+        .select(`
+          id,
+          operator_id,
+          operators (
+            id,
+            name,
+            short_name,
+            operator_profiles (*)
+          )
+        `)
+        .eq('id', userId)
+        .maybeSingle()
+
+      if (authError) throw authError
+      if (!authData) {
+        console.log('❌ Оператор не найден')
+        return
+      }
+
+      const op = authData.operators as any
+      const profile = op?.operator_profiles || {}
+      const operatorId = op.id
+
+      // Получаем уровень и XP
+      const { data: levelData } = await supabase
+        .rpc('get_operator_level_info', { operator_uuid: operatorId })
+
+      // Получаем количество достижений
+      const { data: achievementsData } = await supabase
+        .rpc('get_operator_achievements', { operator_uuid: operatorId })
+
+      const levelInfo = levelData && levelData.length > 0 ? levelData[0] : { calculated_level: 1, total_xp: 0 }
+      const achievementsCount = achievementsData?.length || 0
+
+      // Получаем статус онлайн
+      const { data: statusData } = await supabase
+        .from('operator_auth')
+        .select('is_online, last_seen')
+        .eq('id', userId)
+        .maybeSingle()
+
+      setSelectedProfile({
+        id: userId,
+        name: op.name,
+        short_name: op.short_name,
+        photo_url: profile.photo_url,
+        position: profile.position,
+        phone: profile.phone,
+        email: profile.email,
+        hire_date: profile.hire_date,
+        total_xp: levelInfo.total_xp || 0,
+        level: levelInfo.calculated_level || 1,
+        achievements_count: achievementsCount,
+        last_seen: statusData?.last_seen || new Date().toISOString(),
+        is_online: statusData?.is_online || false,
+      })
+
+    } catch (err) {
+      console.error('❌ Ошибка загрузки профиля:', err)
+    } finally {
+      setLoadingProfile(false)
+    }
+  }
 
   // Загрузка данных и подписка
   useEffect(() => {
@@ -95,7 +209,7 @@ export default function OperatorChatPage() {
           return
         }
 
-        // ✅ ИСПРАВЛЕНО: используем maybeSingle() вместо single()
+        // Получаем данные оператора
         const { data: authData, error: authError } = await supabase
           .from('operator_auth')
           .select(`
@@ -103,32 +217,22 @@ export default function OperatorChatPage() {
             operators (
               short_name,
               name,
-              operator_profiles (
-                photo_url
-              )
+              operator_profiles (*)
             )
           `)
           .eq('user_id', user.id)
-          .maybeSingle()  // вместо .single()
-
-        if (authError) {
-          console.error('❌ Ошибка получения данных оператора:', authError)
-          return
-        }
+          .maybeSingle()
 
         console.log('3️⃣ Данные оператора:', authData)
 
         if (authData && isSubscribed) {
           const op = authData.operators as any
           setOperatorId(authData.id)
-          setOperatorName(op?.short_name || op?.name || 'Оператор')
+          setOperatorName(getOperatorDisplayName(op, 'Оператор'))
           setOperatorAvatar(op?.operator_profiles?.photo_url)
           
           // Устанавливаем статус онлайн
           await updateOnlineStatus(true)
-        } else {
-          console.log('❌ Оператор не найден для user_id:', user.id)
-          // Возможно, нужно создать запись?
         }
 
         // Загружаем онлайн пользователей
@@ -140,7 +244,8 @@ export default function OperatorChatPage() {
             last_seen,
             operators (
               short_name,
-              name
+              name,
+              operator_profiles (*)
             )
           `)
           .order('is_online', { ascending: false })
@@ -148,9 +253,14 @@ export default function OperatorChatPage() {
         if (onlineData) {
           setOnlineUsers(onlineData.map((u: any) => ({
             id: u.id,
-            name: u.operators?.short_name || u.operators?.name || 'Оператор',
+            name: getOperatorDisplayName(u.operators, 'Оператор'),
             is_online: u.is_online,
-            last_seen: u.last_seen
+            last_seen: u.last_seen,
+            photo_url: u.operators?.operator_profiles?.photo_url,
+            position: u.operators?.operator_profiles?.position,
+            phone: u.operators?.operator_profiles?.phone,
+            email: u.operators?.operator_profiles?.email,
+            hire_date: u.operators?.operator_profiles?.hire_date,
           })))
         }
 
@@ -286,12 +396,10 @@ export default function OperatorChatPage() {
   }
 
   const handleTyping = () => {
-    // Здесь можно добавить индикатор "печатает"
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current)
     }
     
-    // Отправляем событие что печатаем
     typingTimeoutRef.current = setTimeout(() => {
       // Убираем индикатор через 2 секунды
     }, 2000)
@@ -335,6 +443,22 @@ export default function OperatorChatPage() {
     return `${days} дн назад`
   }
 
+  const getLevelTitle = (level: number) => {
+    const titles = [
+      'Новичок',
+      'Стажер',
+      'Опытный',
+      'Профессионал',
+      'Эксперт',
+      'Мастер',
+      'Грандмастер',
+      'Легенда',
+      'Миф',
+      'Бог'
+    ]
+    return titles[level - 1] || 'Новичок'
+  }
+
   const emojis = ['😊', '😂', '❤️', '👍', '🎉', '🔥', '👋', '😢', '😡', '🤔']
 
   if (loading) {
@@ -347,6 +471,120 @@ export default function OperatorChatPage() {
 
   return (
     <div className="h-screen bg-gray-950 flex">
+      {/* Модальное окно профиля */}
+      {selectedProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <Card className="max-w-md w-full bg-gray-900 border-white/10 p-6">
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 overflow-hidden">
+                  {selectedProfile.photo_url ? (
+                    <Image
+                      src={selectedProfile.photo_url}
+                      alt={selectedProfile.name}
+                      width={48}
+                      height={48}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white text-lg font-bold">
+                      {selectedProfile.name.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">{getOperatorDisplayName(selectedProfile, 'Оператор')}</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className={`w-2 h-2 rounded-full ${selectedProfile.is_online ? 'bg-green-500' : 'bg-gray-500'}`} />
+                    <span className="text-xs text-gray-400">
+                      {selectedProfile.is_online ? 'онлайн' : `был ${formatLastSeen(selectedProfile.last_seen)}`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedProfile(null)}
+                className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {loadingProfile ? (
+              <div className="py-8 flex justify-center">
+                <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Должность */}
+                {selectedProfile.position && (
+                  <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
+                    <Briefcase className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-white">{selectedProfile.position}</span>
+                  </div>
+                )}
+
+                {/* Контакты */}
+                {selectedProfile.phone && (
+                  <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-white">{selectedProfile.phone}</span>
+                  </div>
+                )}
+
+                {selectedProfile.email && (
+                  <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
+                    <Mail className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-white">{selectedProfile.email}</span>
+                  </div>
+                )}
+
+                {/* Дата устройства */}
+                {selectedProfile.hire_date && (
+                  <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-white">
+                      С {new Date(selectedProfile.hire_date).toLocaleDateString('ru-RU')}
+                    </span>
+                  </div>
+                )}
+
+                {/* Достижения */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-3 bg-yellow-500/10 rounded-lg text-center">
+                    <Star className="w-4 h-4 text-yellow-400 mx-auto mb-1" />
+                    <p className="text-lg font-bold text-yellow-400">{selectedProfile.level}</p>
+                    <p className="text-xs text-gray-500">Уровень</p>
+                  </div>
+                  <div className="p-3 bg-blue-500/10 rounded-lg text-center">
+                    <Award className="w-4 h-4 text-blue-400 mx-auto mb-1" />
+                    <p className="text-lg font-bold text-blue-400">{selectedProfile.total_xp}</p>
+                    <p className="text-xs text-gray-500">XP</p>
+                  </div>
+                  <div className="p-3 bg-emerald-500/10 rounded-lg text-center">
+                    <Trophy className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
+                    <p className="text-lg font-bold text-emerald-400">{selectedProfile.achievements_count}</p>
+                    <p className="text-xs text-gray-500">Достижений</p>
+                  </div>
+                </div>
+
+                {/* Кнопка "Написать" */}
+                <Button
+                  className="w-full mt-2 bg-gradient-to-r from-violet-500 to-fuchsia-500"
+                  onClick={() => {
+                    setSelectedProfile(null)
+                    // Можно добавить фокус на ввод сообщения
+                  }}
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Написать сообщение
+                </Button>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
       {/* Основной чат */}
       <div className="flex-1 flex flex-col">
         {/* Шапка */}
@@ -429,9 +667,13 @@ export default function OperatorChatPage() {
                 >
                   <div className={`max-w-[70%] ${isMe ? 'order-2' : 'order-1'}`}>
                     {!isMe && (
-                      <p className="text-xs text-gray-500 mb-1 ml-1">
+                      <button
+                        onClick={() => loadOperatorProfile(msg.sender_id)}
+                        className="text-xs text-gray-500 hover:text-violet-400 mb-1 ml-1 transition-colors flex items-center gap-1"
+                      >
+                        <UserCircle className="w-3 h-3" />
                         {msg.sender_name}
-                      </p>
+                      </button>
                     )}
                     <div
                       className={cn(
@@ -527,12 +769,24 @@ export default function OperatorChatPage() {
 
         <div className="space-y-3">
           {onlineUsers.map(user => (
-            <div key={user.id} className="flex items-center gap-3 p-2 hover:bg-gray-800 rounded-lg">
+            <button
+              key={user.id}
+              onClick={() => loadOperatorProfile(user.id)}
+              className="w-full flex items-center gap-3 p-2 hover:bg-gray-800 rounded-lg transition-colors text-left"
+            >
               <div className="relative">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 overflow-hidden">
                   {user.id === operatorId && operatorAvatar ? (
                     <Image
                       src={operatorAvatar}
+                      alt={user.name}
+                      width={32}
+                      height={32}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : user.photo_url ? (
+                    <Image
+                      src={user.photo_url}
                       alt={user.name}
                       width={32}
                       height={32}
@@ -548,8 +802,8 @@ export default function OperatorChatPage() {
                   <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-gray-900" />
                 )}
               </div>
-              <div className="flex-1">
-                <p className="text-sm text-white">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white truncate">
                   {user.name}
                   {user.id === operatorId && <span className="text-xs text-gray-500 ml-2">(вы)</span>}
                 </p>
@@ -557,7 +811,8 @@ export default function OperatorChatPage() {
                   {user.is_online ? 'онлайн' : `был ${formatLastSeen(user.last_seen)}`}
                 </p>
               </div>
-            </div>
+              <ChevronRight className="w-4 h-4 text-gray-600 flex-shrink-0" />
+            </button>
           ))}
         </div>
       </div>

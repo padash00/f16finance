@@ -6,6 +6,11 @@ import Image from 'next/image'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { DEFAULT_SHIFT_BASE_PAY } from '@/lib/core/constants'
+import { addDaysISO, formatRuDate, mondayOfDate, parseISODate, toISODateLocal, todayISO } from '@/lib/core/date'
+import { formatMoney, formatPhone } from '@/lib/core/format'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
+import { calculateSalaryBoard } from '@/lib/domain/salary'
 import { supabase } from '@/lib/supabaseClient'
 import {
   CalendarDays,
@@ -68,6 +73,7 @@ type SalaryRule = {
 type Operator = {
   id: string
   name: string
+  full_name?: string | null
   short_name: string | null
   is_active: boolean
   telegram_chat_id: string | null
@@ -75,6 +81,7 @@ type Operator = {
 
 // Расширенный тип оператора с данными из профиля
 type OperatorExtended = Operator & {
+  full_name?: string | null
   photo_url: string | null
   position: string | null
   phone: string | null
@@ -82,15 +89,6 @@ type OperatorExtended = Operator & {
   hire_date: string | null
   documents_count: number
   expiring_documents: number
-}
-
-type AggregatedShift = {
-  operatorId: string
-  operatorName: string
-  companyCode: string
-  date: string
-  shift: 'day' | 'night'
-  turnover: number
 }
 
 type AdjustmentKind = 'debt' | 'fine' | 'bonus' | 'advance'
@@ -149,56 +147,18 @@ type OperatorWeekStat = {
 
 // ================== DATE HELPERS ==================
 const DateUtils = {
-  toISODateLocal: (d: Date) => {
-    const t = d.getTime() - d.getTimezoneOffset() * 60_000
-    return new Date(t).toISOString().slice(0, 10)
-  },
-  
-  fromISO: (iso: string): Date => {
-    const [y, m, d] = iso.split('-').map(Number)
-    return new Date(y, (m || 1) - 1, d || 1)
-  },
-
-  todayISO: () => DateUtils.toISODateLocal(new Date()),
-
-  formatDate: (iso: string, format: 'short' | 'full' = 'short'): string => {
-    if (!iso) return ''
-    const d = DateUtils.fromISO(iso)
-    if (format === 'short') {
-      return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-    }
-    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-  },
-
-  getMonday: (d: Date) => {
-    const date = new Date(d)
-    const day = date.getDay() || 7
-    if (day !== 1) date.setDate(date.getDate() - (day - 1))
-    return date
-  },
-
-  addDaysISO: (iso: string, diff: number) => {
-    const d = DateUtils.fromISO(iso)
-    d.setDate(d.getDate() + diff)
-    return DateUtils.toISODateLocal(d)
-  }
+  toISODateLocal,
+  fromISO: parseISODate,
+  todayISO,
+  formatDate: formatRuDate,
+  getMonday: mondayOfDate,
+  addDaysISO,
 }
 
 // ================== FORMATTERS ==================
 const Formatters = {
-  money: (v: number): string => 
-    v.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₸',
-  
-  phone: (phone: string | null): string => {
-    if (!phone) return ''
-    // Форматируем телефон: +7 (777) 777-77-77
-    const cleaned = phone.replace(/\D/g, '')
-    const match = cleaned.match(/^(\d{1})(\d{3})(\d{3})(\d{2})(\d{2})$/)
-    if (match) {
-      return `+${match[1]} (${match[2]}) ${match[3]}-${match[4]}-${match[5]}`
-    }
-    return phone
-  },
+  money: formatMoney,
+  phone: formatPhone,
 
   date: (date: string | null): string => {
     if (!date) return ''
@@ -362,7 +322,7 @@ export default function SalaryPage() {
           )
           .eq('is_active', true),
         supabase.from('operators').select('id,name,short_name,is_active,telegram_chat_id'),
-        supabase.from('operator_profiles').select('operator_id,photo_url,position,phone,email,hire_date'),
+        supabase.from('operator_profiles').select('*'),
         supabase.from('operator_documents').select('operator_id,expiry_date'),
       ])
 
@@ -405,6 +365,7 @@ export default function SalaryPage() {
         const profile = profileMap.get(op.id) || {}
         return {
           ...op,
+          full_name: profile.full_name || null,
           photo_url: profile.photo_url || null,
           position: profile.position || null,
           phone: profile.phone || null,
@@ -426,18 +387,6 @@ export default function SalaryPage() {
       alive = false
     }
   }, [])
-
-  const companyById = useMemo(() => {
-    const map: Record<string, Company> = {}
-    for (const c of companies) map[c.id] = c
-    return map
-  }, [companies])
-
-  const rulesMap = useMemo(() => {
-    const map: Record<string, SalaryRule> = {}
-    for (const r of rules) map[`${r.company_code}_${r.shift_type}`] = r
-    return map
-  }, [rules])
 
   // 2) Диапазон
   useEffect(() => {
@@ -518,139 +467,40 @@ export default function SalaryPage() {
 
   // Основная математика
   const stats = useMemo(() => {
-    const aggregated = new Map<string, AggregatedShift>()
-    const byOperator = new Map<string, OperatorWeekStat>()
+    const calculated = calculateSalaryBoard({
+      operators,
+      companies,
+      rules,
+      incomes,
+      adjustments,
+      debts,
+    })
 
-    const DEFAULT_BASE = 8000
+    const mappedOperators: OperatorWeekStat[] = calculated.operators.map((operator) => ({
+      operatorId: operator.operatorId,
+      operatorName: operator.operatorName,
+      shifts: operator.shifts,
+      basePerShift: operator.basePerShift || DEFAULT_SHIFT_BASE_PAY,
+      baseSalary: operator.baseSalary,
+      bonusSalary: operator.autoBonuses,
+      totalSalary: operator.totalSalary,
+      autoDebts: operator.autoDebts,
+      manualPlus: operator.manualPlus,
+      manualMinus: operator.manualMinus,
+      advances: operator.advances,
+      finalSalary: operator.finalSalary,
+      photo_url: operator.photo_url,
+      position: operator.position,
+      phone: operator.phone,
+      email: operator.email,
+      hire_date: operator.hire_date,
+      documents_count: operator.documents_count,
+      expiring_documents: operator.expiring_documents,
+      telegram_chat_id: operator.telegram_chat_id,
+    }))
 
-    const ensureOperator = (id: string | null): OperatorWeekStat | null => {
-      if (!id) return null
-
-      let op = byOperator.get(id)
-      if (!op) {
-        const meta = operatorById[id]
-        const displayName = meta?.short_name || meta?.name || 'Без имени'
-
-        op = {
-          operatorId: id,
-          operatorName: displayName,
-          shifts: 0,
-          basePerShift: DEFAULT_BASE,
-          baseSalary: 0,
-          bonusSalary: 0,
-          totalSalary: 0,
-          autoDebts: 0,
-          manualPlus: 0,
-          manualMinus: 0,
-          advances: 0,
-          finalSalary: 0,
-          // Данные из профиля
-          photo_url: meta?.photo_url || null,
-          position: meta?.position || null,
-          phone: meta?.phone || null,
-          email: meta?.email || null,
-          hire_date: meta?.hire_date || null,
-          documents_count: meta?.documents_count || 0,
-          expiring_documents: meta?.expiring_documents || 0,
-          telegram_chat_id: meta?.telegram_chat_id || null,
-        }
-        byOperator.set(id, op)
-      }
-      return op
-    }
-
-    // 1) Смены (агрегация)
-    for (const row of incomes) {
-      if (!row.operator_id) continue
-
-      const company = companyById[row.company_id]
-      const code = company?.code?.toLowerCase() || null
-      if (!code) continue
-      if (!['arena', 'ramen', 'extra'].includes(code)) continue
-
-      const shift: 'day' | 'night' = row.shift === 'night' ? 'night' : 'day'
-
-      const total = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0)
-      if (total <= 0) continue
-
-      const meta = operatorById[row.operator_id]
-      const displayName = meta?.short_name || meta?.name || row.operator_name || 'Без имени'
-
-      const key = `${row.operator_id}_${code}_${row.date}_${shift}`
-
-      const ex =
-        aggregated.get(key) || {
-          operatorId: row.operator_id,
-          operatorName: displayName,
-          companyCode: code,
-          date: row.date,
-          shift,
-          turnover: 0,
-        }
-
-      ex.turnover += total
-      aggregated.set(key, ex)
-    }
-
-    // 2) База + авто-бонусы
-    for (const sh of aggregated.values()) {
-      const rule = rulesMap[`${sh.companyCode}_${sh.shift}`]
-      const basePerShift = rule?.base_per_shift ?? DEFAULT_BASE
-
-      let bonus = 0
-      if (rule?.threshold1_turnover && sh.turnover >= rule.threshold1_turnover) bonus += rule.threshold1_bonus || 0
-      if (rule?.threshold2_turnover && sh.turnover >= rule.threshold2_turnover) bonus += rule.threshold2_bonus || 0
-
-      const op = ensureOperator(sh.operatorId)
-      if (!op) continue
-
-      op.basePerShift = basePerShift
-      op.shifts += 1
-      op.baseSalary += basePerShift
-      op.bonusSalary += bonus
-      op.totalSalary += basePerShift + bonus
-    }
-
-    // 2a) Все активные операторы — в таблицу
-    for (const o of operators) {
-      if (!o.is_active) continue
-      ensureOperator(o.id)
-    }
-
-    // 3) Ручные корректировки
-    for (const adj of adjustments) {
-      const op = ensureOperator(adj.operator_id)
-      if (!op) continue
-
-      const amount = Number(adj.amount || 0)
-      if (!Number.isFinite(amount) || amount <= 0) continue
-
-      if (adj.kind === 'bonus') op.manualPlus += amount
-      else if (adj.kind === 'advance') op.advances += amount
-      else op.manualMinus += amount
-    }
-
-    // 4) Долги недели (авто)
-    for (const d of debts) {
-      const op = ensureOperator(d.operator_id)
-      if (!op) continue
-
-      const amount = Number(d.amount || 0)
-      if (!Number.isFinite(amount) || amount <= 0) continue
-
-      op.autoDebts += amount
-    }
-
-    // 5) Итог
-    let totalSalary = 0
-    for (const op of byOperator.values()) {
-      op.finalSalary = op.totalSalary + op.manualPlus - op.manualMinus - op.autoDebts - op.advances
-      totalSalary += op.finalSalary
-    }
-
-    const operatorsStats = Array.from(byOperator.values()).sort((a, b) => a.operatorName.localeCompare(b.operatorName, 'ru'))
-    return { operators: operatorsStats, totalSalary }
-  }, [incomes, companyById, rulesMap, adjustments, operators, debts, operatorById])
+    return { operators: mappedOperators, totalSalary: calculated.totalSalary }
+  }, [adjustments, companies, debts, incomes, operators, rules])
 
   const totalShifts = stats.operators.reduce((s, o) => s + o.shifts, 0)
   const totalBase = stats.operators.reduce((s, o) => s + o.baseSalary, 0)
@@ -690,15 +540,19 @@ export default function SalaryPage() {
         comment: adjComment.trim() || null,
       }
 
-      const { data, error } = await supabase
-        .from('operator_salary_adjustments')
-        .insert([payload])
-        .select('id,operator_id,date,amount,kind,comment')
-        .single()
+      const response = await fetch('/api/admin/salary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createAdjustment',
+          payload,
+        }),
+      })
 
-      if (error) throw error
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
 
-      setAdjustments((prev) => [...prev, data as AdjustmentRow])
+      setAdjustments((prev) => [...prev, json.data as AdjustmentRow])
       setAdjAmount('')
       setAdjComment('')
       setAdjKind('debt')
@@ -780,10 +634,10 @@ export default function SalaryPage() {
 
           if (!resp.ok) {
             const msg = json?.error || `HTTP ${resp.status}`
-            setBroadcastErrors((prev) => [...prev, `${op.short_name || op.name}: ${msg}`])
+              setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(op)}: ${msg}`])
           }
         } catch (e: any) {
-          setBroadcastErrors((prev) => [...prev, `${op.short_name || op.name}: ${e?.message || 'ошибка'}`])
+            setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(op)}: ${e?.message || 'ошибка'}`])
         }
 
         setBroadcastDone(i + 1)
@@ -812,14 +666,18 @@ export default function SalaryPage() {
 
     setChatSaving(true)
     try {
-      const { data, error } = await supabase
-        .from('operators')
-        .update({ telegram_chat_id: v || null })
-        .eq('id', chatEditOperatorId)
-        .select('id,name,short_name,is_active,telegram_chat_id')
-        .single()
+      const response = await fetch('/api/admin/salary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateOperatorChatId',
+          operatorId: chatEditOperatorId,
+          telegram_chat_id: v || null,
+        }),
+      })
 
-      if (error) throw error
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
 
       setOperators((prev) => prev.map((o) => (o.id === chatEditOperatorId ? { ...o, telegram_chat_id: v || null } : o)))
       setChatEditOperatorId(null)
@@ -896,8 +754,8 @@ export default function SalaryPage() {
         </div>
       )}
 
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 md:p-8 max-w-[1600px] mx-auto space-y-6">
+      <main className="app-main">
+        <div className="app-page-wide max-w-[1600px] space-y-6">
           {/* Хедер */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900/30 via-gray-900 to-blue-900/30 p-6 border border-emerald-500/20 mb-6">
             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
@@ -1317,7 +1175,7 @@ export default function SalaryPage() {
                     <option value="">Выберите...</option>
                     {operatorOptions.map((op) => (
                       <option key={op.id} value={op.id}>
-                        {op.short_name || op.name}
+                        {getOperatorDisplayName(op)}
                       </option>
                     ))}
                   </select>

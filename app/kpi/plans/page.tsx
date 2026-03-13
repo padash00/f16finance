@@ -636,10 +636,10 @@ export default function KPIStatusAndPayoutPage() {
   )
 
   return (
-    <div className="flex min-h-screen bg-[#050505] text-foreground">
+    <div className="app-shell-layout bg-[#050505] text-foreground">
       <Sidebar />
-      <main className="flex-1 overflow-auto p-6 md:p-10">
-        <div className="max-w-6xl mx-auto space-y-8">
+      <main className="app-main">
+        <div className="app-page-tight max-w-6xl space-y-8">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-5 pb-6 border-b border-white/5">
             <div className="space-y-2">
               <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">

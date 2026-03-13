@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   Users2, 
@@ -54,6 +55,7 @@ type Operator = {
 type OperatorProfile = {
   id: string
   operator_id: string
+  full_name: string | null
   phone: string | null
   email: string | null
   hire_date: string | null
@@ -81,6 +83,7 @@ export default function OperatorsPage() {
 
   // Форма добавления
   const [name, setName] = useState('')
+  const [fullName, setFullName] = useState('')
   const [shortName, setShortName] = useState('')
   const [position, setPosition] = useState('')
   const [phone, setPhone] = useState('')
@@ -97,6 +100,7 @@ export default function OperatorsPage() {
   // Модальное окно для редактирования
   const [editingOperator, setEditingOperator] = useState<Operator | null>(null)
   const [editName, setEditName] = useState('')
+  const [editFullName, setEditFullName] = useState('')
   const [editShortName, setEditShortName] = useState('')
   const [editPosition, setEditPosition] = useState('')
   const [editPhone, setEditPhone] = useState('')
@@ -228,6 +232,7 @@ export default function OperatorsPage() {
         .insert([
           {
             operator_id: operatorData.id,
+            full_name: fullName.trim() || null,
             position: position.trim() || null,
             phone: phone.trim() || null,
             email: email.trim() || null,
@@ -241,6 +246,7 @@ export default function OperatorsPage() {
 
       // Очищаем форму
       setName('')
+      setFullName('')
       setShortName('')
       setPosition('')
       setPhone('')
@@ -260,6 +266,7 @@ export default function OperatorsPage() {
   const handleEdit = (op: Operator) => {
     setEditingOperator(op)
     setEditName(op.name)
+    setEditFullName(profiles.get(op.id)?.full_name || '')
     setEditShortName(op.short_name || '')
     
     const profile = profiles.get(op.id)
@@ -294,6 +301,7 @@ export default function OperatorsPage() {
         const { error: profileError } = await supabase
           .from('operator_profiles')
           .update({
+            full_name: editFullName.trim() || null,
             position: editPosition.trim() || null,
             phone: editPhone.trim() || null,
             email: editEmail.trim() || null,
@@ -307,6 +315,7 @@ export default function OperatorsPage() {
           .insert([
             {
               operator_id: editingOperator.id,
+              full_name: editFullName.trim() || null,
               position: editPosition.trim() || null,
               phone: editPhone.trim() || null,
               email: editEmail.trim() || null,
@@ -405,6 +414,7 @@ export default function OperatorsPage() {
     return operators.filter(op => {
       const matchesSearch = search === '' || 
         op.name.toLowerCase().includes(search.toLowerCase()) ||
+        (profiles.get(op.id)?.full_name?.toLowerCase() || '').includes(search.toLowerCase()) ||
         (op.short_name?.toLowerCase() || '').includes(search.toLowerCase()) ||
         (profiles.get(op.id)?.position?.toLowerCase() || '').includes(search.toLowerCase()) ||
         (profiles.get(op.id)?.email?.toLowerCase() || '').includes(search.toLowerCase())
@@ -445,8 +455,8 @@ export default function OperatorsPage() {
     <div className="flex min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100">
       <Sidebar />
       
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <main className="app-main">
+        <div className="app-page max-w-7xl space-y-6">
           {/* Header */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
             <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
@@ -521,6 +531,18 @@ export default function OperatorsPage() {
                     className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                     placeholder="Например: Маржан"
                     required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">
+                    Полное ФИО
+                  </label>
+                  <input
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                    placeholder="Например: Жумабекова Маржан Нурлановна"
                   />
                 </div>
 
@@ -740,10 +762,10 @@ export default function OperatorsPage() {
                             </div>
                             <div className="min-w-0">
                               <p className="font-medium truncate group-hover:text-violet-400 transition-colors">
-                                {op.name}
+                                {getOperatorDisplayName({ ...op, full_name: profile?.full_name })}
                               </p>
                               <p className="text-xs text-gray-500 truncate">
-                                {op.short_name || 'Нет краткого имени'}
+                                {op.short_name || op.name || 'Нет краткого имени'}
                                 {profile?.position && ` • ${profile.position}`}
                               </p>
                             </div>
@@ -953,6 +975,17 @@ export default function OperatorsPage() {
                   onChange={(e) => setEditName(e.target.value)}
                   className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                   required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">
+                  Полное ФИО
+                </label>
+                <input
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
                 />
               </div>
 

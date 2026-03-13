@@ -1,3 +1,4 @@
+// app/operator-settings/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -5,97 +6,123 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card } from '@/components/ui/card'
-import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import {
   User,
-  Bell,
-  Lock,
-  Camera,
-  Moon,
-  Sun,
-  Globe,
-  Shield,
-  Smartphone,
-  Mail,
+  Settings,
+  LogOut,
+  Home,
+  Loader2,
+  AlertTriangle,
+  CheckCircle,
+  X,
   Phone,
+  Mail,
   Briefcase,
   Calendar,
+  MapPin,
+  Key,
+  Bell,
+  BellRing,
+  Camera,
   Save,
-  Loader2,
+  Lock,
   Eye,
   EyeOff,
-  CheckCircle2,
-  AlertCircle,
-  ArrowLeft,
-  Upload,
-  X,
-  Palette,
-  Languages,
-  Volume2,
-  Vibrate,
+  MessageCircle,
+  DollarSign,
+  AtSign,
 } from 'lucide-react'
 
-type Operator = {
+type OperatorProfile = {
   id: string
   name: string
-  short_name: string
+  full_name: string | null
+  short_name: string | null
   photo_url: string | null
   position: string | null
   phone: string | null
   email: string | null
   hire_date: string | null
+  birth_date: string | null
+  city: string | null
+  about: string | null
+  username?: string | null
 }
 
-type ProfileSettings = {
-  // Личная информация (из operator_profiles)
-  photo_url: string | null
-  position: string | null
-  phone: string | null
-  email: string | null
-  hire_date: string | null
-  
-  // Настройки уведомлений
-  notification_email: boolean
-  notification_push: boolean
-  notification_sound: boolean
-  notification_vibration: boolean
-  notification_preview: boolean
-  show_online_status: boolean
-  
-  // Настройки оформления
-  theme: 'dark' | 'light'
-  language: 'ru' | 'kk' | 'en'
+type NotificationSettings = {
+  telegram: boolean
+  chat: boolean
+  salary: boolean
 }
 
 export default function OperatorSettingsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [operator, setOperator] = useState<Operator | null>(null)
-  const [profile, setProfile] = useState<ProfileSettings | null>(null)
-  const [operatorId, setOperatorId] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [operator, setOperator] = useState<OperatorProfile | null>(null)
+  const [username, setUsername] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-
-  // Состояния для изменения пароля
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [activeTab, setActiveTab] = useState('profile')
+  
+  // Форма профиля
+  const [formData, setFormData] = useState({
+    full_name: '',
+    short_name: '',
+    position: '',
+    phone: '',
+    email: '',
+    birth_date: '',
+    city: '',
+    about: '',
+  })
+  
+  // Настройки уведомлений (хранятся локально)
+  const [notifications, setNotifications] = useState<NotificationSettings>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('operator_notifications')
+      return saved ? JSON.parse(saved) : {
+        telegram: true,
+        chat: true,
+        salary: true,
+      }
+    }
+    return {
+      telegram: true,
+      chat: true,
+      salary: true,
+    }
+  })
+  
+  // Смена пароля
+  const [passwordData, setPasswordData] = useState({
+    current: '',
+    new: '',
+    confirm: '',
+  })
+  const [showCurrent, setShowCurrent] = useState(false)
+  const [showNew, setShowNew] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
 
-  // Загрузка данных
+  // Смена логина
+  const [loginData, setLoginData] = useState({
+    current: '',
+    new: '',
+  })
+  const [changingLogin, setChangingLogin] = useState(false)
+
   useEffect(() => {
-    const loadSettings = async () => {
+    const loadProfile = async () => {
       try {
         setLoading(true)
-
+        
         // Получаем пользователя
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) {
@@ -103,175 +130,88 @@ export default function OperatorSettingsPage() {
           return
         }
 
-        // Получаем данные оператора из auth
-        const { data: authData } = await supabase
+        // Получаем данные оператора
+        const { data: authData, error: authError } = await supabase
           .from('operator_auth')
           .select(`
-            id,
+            operator_id,
+            username,
             operators (
               id,
               name,
-              short_name
+              short_name,
+              operator_profiles (*)
             )
           `)
           .eq('user_id', user.id)
-          .single()
+          .maybeSingle()
 
+        if (authError) throw authError
         if (!authData) {
           router.push('/login')
           return
         }
 
-        setOperatorId(authData.id)
-
         const op = authData.operators as any
+        const profile = op?.operator_profiles || {}
 
-        // Получаем профиль оператора
-        const { data: profileData } = await supabase
-          .from('operator_profiles')
-          .select('*')
-          .eq('operator_id', op.id)
-          .single()
+        setUsername(authData.username || '')
 
         setOperator({
           id: op.id,
           name: op.name,
-          short_name: op.short_name || op.name,
-          photo_url: profileData?.photo_url || null,
-          position: profileData?.position || null,
-          phone: profileData?.phone || null,
-          email: profileData?.email || null,
-          hire_date: profileData?.hire_date || null,
+          full_name: profile.full_name,
+          short_name: op.short_name,
+          photo_url: profile.photo_url,
+          position: profile.position,
+          phone: profile.phone,
+          email: profile.email,
+          hire_date: profile.hire_date,
+          birth_date: profile.birth_date,
+          city: profile.city,
+          about: profile.about,
+          username: authData.username,
         })
 
-        // Загружаем настройки
-        setProfile({
-          photo_url: profileData?.photo_url || null,
-          position: profileData?.position || null,
-          phone: profileData?.phone || null,
-          email: profileData?.email || null,
-          hire_date: profileData?.hire_date || null,
-          notification_email: profileData?.notification_email ?? true,
-          notification_push: profileData?.notification_push ?? true,
-          notification_sound: profileData?.notification_sound ?? true,
-          notification_vibration: profileData?.notification_vibration ?? true,
-          notification_preview: profileData?.notification_preview ?? true,
-          show_online_status: profileData?.show_online_status ?? true,
-          theme: profileData?.theme || 'dark',
-          language: profileData?.language || 'ru',
+        // Заполняем форму
+        setFormData({
+          full_name: profile.full_name || '',
+          short_name: op.short_name || '',
+          position: profile.position || '',
+          phone: profile.phone || '',
+          email: profile.email || '',
+          birth_date: profile.birth_date || '',
+          city: profile.city || '',
+          about: profile.about || '',
         })
 
-      } catch (err) {
-        console.error('Error loading settings:', err)
-        setError('Ошибка загрузки настроек')
+      } catch (err: any) {
+        console.error('Ошибка загрузки профиля:', err)
+        setError(err.message)
       } finally {
         setLoading(false)
       }
     }
 
-    loadSettings()
+    loadProfile()
   }, [router])
 
-  // Сохранение настроек в БД
-  const saveSettings = async () => {
-    if (!operator || !profile) return
+  // Сохраняем уведомления в localStorage при изменении
+  useEffect(() => {
+    localStorage.setItem('operator_notifications', JSON.stringify(notifications))
+  }, [notifications])
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  const uploadAvatar = async (file: File) => {
     try {
-      setSaving(true)
+      setUploading(true)
       setError(null)
 
-      const { error: updateError } = await supabase
-        .from('operator_profiles')
-        .update({
-          phone: profile.phone,
-          email: profile.email,
-          notification_email: profile.notification_email,
-          notification_push: profile.notification_push,
-          notification_sound: profile.notification_sound,
-          notification_vibration: profile.notification_vibration,
-          notification_preview: profile.notification_preview,
-          show_online_status: profile.show_online_status,
-          theme: profile.theme,
-          language: profile.language,
-          updated_at: new Date().toISOString()
-        })
-        .eq('operator_id', operator.id)
-
-      if (updateError) throw updateError
-
-      setSuccess('Настройки сохранены')
-      setTimeout(() => setSuccess(null), 3000)
-
-    } catch (err: any) {
-      console.error('Error saving settings:', err)
-      setError(err.message || 'Ошибка сохранения настроек')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // Обновление полей профиля
-  const updateProfileField = (field: keyof ProfileSettings, value: any) => {
-    setProfile(prev => prev ? { ...prev, [field]: value } : null)
-  }
-
-  // Смена пароля
-  const changePassword = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setError('Заполните все поля')
-      return
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError('Пароли не совпадают')
-      return
-    }
-
-    if (newPassword.length < 6) {
-      setError('Пароль должен быть не менее 6 символов')
-      return
-    }
-
-    try {
-      setChangingPassword(true)
-      setError(null)
-
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      })
-
-      if (error) throw error
-
-      setSuccess('Пароль успешно изменен')
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
-      setTimeout(() => setSuccess(null), 3000)
-
-    } catch (err: any) {
-      setError(err.message || 'Ошибка при смене пароля')
-    } finally {
-      setChangingPassword(false)
-    }
-  }
-
-  // Загрузка аватара
-  const uploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file || !operator) return
-
-    try {
-      setSaving(true)
-
-      if (file.size > 5 * 1024 * 1024) {
-        setError('Файл слишком большой. Максимум 5MB')
-        return
-      }
-
-      if (!file.type.startsWith('image/')) {
-        setError('Пожалуйста, выберите изображение')
-        return
-      }
+      if (!operator) return
 
       const fileExt = file.name.split('.').pop()
       const fileName = `${operator.id}-${Date.now()}.${fileExt}`
@@ -283,56 +223,185 @@ export default function OperatorSettingsPage() {
 
       if (uploadError) throw uploadError
 
-      const { data: { publicUrl } } = supabase.storage
+      const { data: urlData } = supabase.storage
         .from('operator-files')
         .getPublicUrl(filePath)
 
+      const photo_url = urlData.publicUrl
+
       const { error: updateError } = await supabase
         .from('operator_profiles')
-        .upsert({
-          operator_id: operator.id,
-          photo_url: publicUrl
-        }, { onConflict: 'operator_id' })
+        .update({ photo_url })
+        .eq('operator_id', operator.id)
 
       if (updateError) throw updateError
 
-      setOperator(prev => prev ? { ...prev, photo_url: publicUrl } : null)
-      updateProfileField('photo_url', publicUrl)
-      setSuccess('Аватар обновлен')
+      setOperator(prev => prev ? { ...prev, photo_url } : null)
+      setSuccess('Фото успешно обновлено')
       setTimeout(() => setSuccess(null), 3000)
 
     } catch (err: any) {
-      setError(err.message || 'Ошибка загрузки аватара')
+      console.error('Ошибка загрузки фото:', err)
+      setError(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const removeAvatar = async () => {
+    try {
+      setUploading(true)
+      setError(null)
+
+      if (!operator?.photo_url || !operator) return
+
+      const { error: updateError } = await supabase
+        .from('operator_profiles')
+        .update({ photo_url: null })
+        .eq('operator_id', operator.id)
+
+      if (updateError) throw updateError
+
+      setOperator(prev => prev ? { ...prev, photo_url: null } : null)
+      setSuccess('Фото удалено')
+      setTimeout(() => setSuccess(null), 3000)
+
+    } catch (err: any) {
+      console.error('Ошибка удаления фото:', err)
+      setError(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const saveProfile = async () => {
+    try {
+      setSaving(true)
+      setError(null)
+
+      if (!operator) return
+
+      const { error: updateError } = await supabase
+        .from('operators')
+        .update({ short_name: formData.short_name || null })
+        .eq('id', operator.id)
+
+      if (updateError) throw updateError
+
+      const { error: profileError } = await supabase
+        .from('operator_profiles')
+        .update({
+          full_name: formData.full_name || null,
+          position: formData.position || null,
+          phone: formData.phone || null,
+          email: formData.email || null,
+          birth_date: formData.birth_date || null,
+          city: formData.city || null,
+          about: formData.about || null,
+        })
+        .eq('operator_id', operator.id)
+
+      if (profileError) throw profileError
+
+      setSuccess('Настройки профиля сохранены')
+      setTimeout(() => setSuccess(null), 3000)
+
+    } catch (err: any) {
+      console.error('Ошибка сохранения:', err)
+      setError(err.message)
     } finally {
       setSaving(false)
     }
   }
 
-  // Удаление аватара
-  const removeAvatar = async () => {
-    if (!operator?.photo_url) return
-
+  const changePassword = async () => {
     try {
-      setSaving(true)
+      setChangingPassword(true)
+      setError(null)
 
-      const { error } = await supabase
-        .from('operator_profiles')
-        .upsert({
-          operator_id: operator.id,
-          photo_url: null
-        }, { onConflict: 'operator_id' })
+      if (!passwordData.current || !passwordData.new || !passwordData.confirm) {
+        throw new Error('Заполните все поля')
+      }
 
-      if (error) throw error
+      if (passwordData.new !== passwordData.confirm) {
+        throw new Error('Новые пароли не совпадают')
+      }
 
-      setOperator(prev => prev ? { ...prev, photo_url: null } : null)
-      updateProfileField('photo_url', null)
-      setSuccess('Аватар удален')
+      if (passwordData.new.length < 6) {
+        throw new Error('Пароль должен быть не менее 6 символов')
+      }
+
+      const response = await fetch('/api/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: operator?.id,
+          password: passwordData.new
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Ошибка смены пароля')
+      }
+
+      setSuccess('Пароль успешно изменен')
+      setPasswordData({ current: '', new: '', confirm: '' })
       setTimeout(() => setSuccess(null), 3000)
 
-    } catch (err) {
-      setError('Ошибка удаления аватара')
+    } catch (err: any) {
+      console.error('Ошибка смены пароля:', err)
+      setError(err.message)
     } finally {
-      setSaving(false)
+      setChangingPassword(false)
+    }
+  }
+
+  const changeLogin = async () => {
+    try {
+      setChangingLogin(true)
+      setError(null)
+
+      if (!loginData.current || !loginData.new) {
+        throw new Error('Заполните все поля')
+      }
+
+      if (loginData.new.length < 3) {
+        throw new Error('Логин должен быть не менее 3 символов')
+      }
+
+      if (loginData.current !== username) {
+        throw new Error('Текущий логин неверен')
+      }
+
+      const { data: existingUser } = await supabase
+        .from('operator_auth')
+        .select('id')
+        .eq('username', loginData.new)
+        .maybeSingle()
+
+      if (existingUser) {
+        throw new Error('Этот логин уже занят')
+      }
+
+      const { error: updateError } = await supabase
+        .from('operator_auth')
+        .update({ username: loginData.new })
+        .eq('operator_id', operator?.id)
+
+      if (updateError) throw updateError
+
+      setUsername(loginData.new)
+      setSuccess('Логин успешно изменен')
+      setLoginData({ current: '', new: '' })
+      setTimeout(() => setSuccess(null), 3000)
+
+    } catch (err: any) {
+      console.error('Ошибка смены логина:', err)
+      setError(err.message)
+    } finally {
+      setChangingLogin(false)
     }
   }
 
@@ -344,29 +413,41 @@ export default function OperatorSettingsPage() {
     )
   }
 
+  if (!operator) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center">
+        <Card className="p-8 border-red-500/20 bg-red-500/5">
+          <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-4" />
+          <p className="text-gray-400">Оператор не найден</p>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
       {/* Шапка */}
       <header className="sticky top-0 z-10 bg-gray-900/80 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/operator-dashboard" className="p-2 hover:bg-white/5 rounded-lg transition-colors">
-              <ArrowLeft className="w-5 h-5 text-gray-400" />
+            <Link href="/operator-dashboard">
+              <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white">
+                <Home className="w-5 h-5" />
+              </Button>
             </Link>
-            <h1 className="text-xl font-bold text-white">Настройки</h1>
+            <div>
+              <h1 className="text-xl font-bold text-white">Настройки</h1>
+              <p className="text-xs text-gray-400">{getOperatorDisplayName(operator)}</p>
+            </div>
           </div>
 
           <Button
-            onClick={saveSettings}
-            disabled={saving}
-            className="bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600"
+            variant="ghost"
+            size="icon"
+            className="text-gray-400 hover:text-rose-400"
+            onClick={handleLogout}
           >
-            {saving ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4 mr-2" />
-            )}
-            Сохранить
+            <LogOut className="w-5 h-5" />
           </Button>
         </div>
       </header>
@@ -374,20 +455,20 @@ export default function OperatorSettingsPage() {
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Уведомления */}
         {error && (
-          <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg flex items-center gap-2 text-rose-400">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <div className="mb-4 p-4 bg-rose-500/10 border border-rose-500/20 rounded-lg flex items-center gap-2 text-rose-400">
+            <AlertTriangle className="w-4 h-4" />
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-2 text-emerald-400">
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+          <div className="mb-4 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-2 text-emerald-400">
+            <CheckCircle className="w-4 h-4" />
             {success}
           </div>
         )}
 
-        <Tabs defaultValue="profile" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-gray-900/50 border-white/5">
             <TabsTrigger value="profile" className="data-[state=active]:bg-violet-500/20">
               <User className="w-4 h-4 mr-2" />
@@ -401,21 +482,17 @@ export default function OperatorSettingsPage() {
               <Lock className="w-4 h-4 mr-2" />
               Безопасность
             </TabsTrigger>
-            <TabsTrigger value="appearance" className="data-[state=active]:bg-violet-500/20">
-              <Palette className="w-4 h-4 mr-2" />
-              Оформление
-            </TabsTrigger>
           </TabsList>
 
-          {/* Вкладка: Профиль */}
+          {/* Вкладка Профиль */}
           <TabsContent value="profile" className="space-y-6">
-            <Card className="p-6 bg-gray-900/50 border-white/5">
-              <h3 className="text-lg font-medium text-white mb-4">Фото профиля</h3>
+            <Card className="p-6 bg-gray-900/40 border-white/5">
+              <h3 className="text-sm font-medium text-white mb-4">Фото профиля</h3>
               
               <div className="flex items-center gap-6">
                 <div className="relative">
                   <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 overflow-hidden">
-                    {operator?.photo_url ? (
+                    {operator.photo_url ? (
                       <Image
                         src={operator.photo_url}
                         alt={operator.name}
@@ -425,317 +502,347 @@ export default function OperatorSettingsPage() {
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-white text-3xl font-bold">
-                        {operator?.name.charAt(0)}
+                        {getOperatorDisplayName(operator).charAt(0)}
                       </div>
                     )}
                   </div>
-
-                  <label className="absolute -bottom-2 -right-2 p-2 bg-gray-800 rounded-lg border border-white/10 cursor-pointer hover:bg-gray-700 transition-colors">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={uploadAvatar}
-                      className="hidden"
-                    />
-                    <Camera className="w-4 h-4 text-gray-400" />
-                  </label>
-
-                  {operator?.photo_url && (
-                    <button
-                      onClick={removeAvatar}
-                      className="absolute -top-2 -right-2 p-1.5 bg-rose-500 rounded-lg hover:bg-rose-600 transition-colors"
-                    >
-                      <X className="w-3 h-3 text-white" />
-                    </button>
+                  {uploading && (
+                    <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 text-white animate-spin" />
+                    </div>
                   )}
                 </div>
 
-                <div className="flex-1">
-                  <p className="text-sm text-gray-400 mb-2">
-                    Рекомендуемый размер: до 5MB. Форматы: JPG, PNG, GIF
-                  </p>
+                <div className="space-y-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('avatar-upload')?.click()}
+                    disabled={uploading}
+                    className="border-white/10 hover:bg-white/10"
+                  >
+                    <Camera className="w-4 h-4 mr-2" />
+                    Загрузить фото
+                  </Button>
+                  <input
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) uploadAvatar(file)
+                    }}
+                  />
+                  {operator.photo_url && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={removeAvatar}
+                      disabled={uploading}
+                      className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Удалить
+                    </Button>
+                  )}
                 </div>
               </div>
             </Card>
 
-            <Card className="p-6 bg-gray-900/50 border-white/5">
-              <h3 className="text-lg font-medium text-white mb-4">Личная информация</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Имя</label>
-                  <div className="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg">
-                    <User className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm text-white">{operator?.name}</span>
-                  </div>
-                </div>
-
-                {operator?.short_name && (
-                  <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Краткое имя</label>
-                    <div className="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg">
-                      <Briefcase className="w-4 h-4 text-gray-500" />
-                      <span className="text-sm text-white">{operator.short_name}</span>
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Телефон</label>
-                  <Input
-                    value={profile?.phone || ''}
-                    onChange={(e) => updateProfileField('phone', e.target.value)}
-                    className="bg-gray-800/50 border-white/10"
-                    placeholder="+7 (777) 777-77-77"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Email</label>
-                  <Input
-                    type="email"
-                    value={profile?.email || ''}
-                    onChange={(e) => updateProfileField('email', e.target.value)}
-                    className="bg-gray-800/50 border-white/10"
-                    placeholder="email@example.com"
-                  />
-                </div>
-
-                {operator?.position && (
-                  <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Должность</label>
-                    <div className="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg">
-                      <Briefcase className="w-4 h-4 text-gray-500" />
-                      <span className="text-sm text-white">{operator.position}</span>
-                    </div>
-                  </div>
-                )}
-
-                {operator?.hire_date && (
-                  <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Дата найма</label>
-                    <div className="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg">
-                      <Calendar className="w-4 h-4 text-gray-500" />
-                      <span className="text-sm text-white">
-                        {new Date(operator.hire_date).toLocaleDateString('ru-RU')}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Card>
-          </TabsContent>
-
-          {/* Вкладка: Уведомления */}
-          <TabsContent value="notifications" className="space-y-6">
-            <Card className="p-6 bg-gray-900/50 border-white/5">
-              <h3 className="text-lg font-medium text-white mb-4">Настройки уведомлений</h3>
+            <Card className="p-6 bg-gray-900/40 border-white/5">
+              <h3 className="text-sm font-medium text-white mb-4">Личная информация</h3>
               
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Полное ФИО</label>
+                  <Input
+                    value={formData.full_name}
+                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                    placeholder="Фамилия Имя Отчество"
+                    className="bg-gray-800 border-white/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Отображаемое имя</label>
+                  <Input
+                    value={formData.short_name}
+                    onChange={(e) => setFormData({ ...formData, short_name: e.target.value })}
+                    placeholder="Как вас называть в чате"
+                    className="bg-gray-800 border-white/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Должность</label>
+                  <Input
+                    value={formData.position}
+                    onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                    placeholder="Ваша должность"
+                    className="bg-gray-800 border-white/10"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-white">Email уведомления</p>
-                    <p className="text-xs text-gray-500">Получать уведомления на email</p>
+                    <label className="text-xs text-gray-400 mb-1 block">Телефон</label>
+                    <Input
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="+7 (777) 777-77-77"
+                      className="bg-gray-800 border-white/10"
+                    />
                   </div>
-                  <Switch
-                    checked={profile?.notification_email ?? true}
-                    onCheckedChange={(checked) => updateProfileField('notification_email', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
                   <div>
-                    <p className="text-sm text-white">Push уведомления</p>
-                    <p className="text-xs text-gray-500">Уведомления в браузере</p>
+                    <label className="text-xs text-gray-400 mb-1 block">Email</label>
+                    <Input
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="mail@example.com"
+                      className="bg-gray-800 border-white/10"
+                    />
                   </div>
-                  <Switch
-                    checked={profile?.notification_push ?? true}
-                    onCheckedChange={(checked) => updateProfileField('notification_push', checked)}
-                  />
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Volume2 className="w-4 h-4 text-gray-500" />
-                    <div>
-                      <p className="text-sm text-white">Звук</p>
-                      <p className="text-xs text-gray-500">Звуковое оповещение</p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={profile?.notification_sound ?? true}
-                    onCheckedChange={(checked) => updateProfileField('notification_sound', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Vibrate className="w-4 h-4 text-gray-500" />
-                    <div>
-                      <p className="text-sm text-white">Вибрация</p>
-                      <p className="text-xs text-gray-500">Вибросигнал на телефоне</p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={profile?.notification_vibration ?? true}
-                    onCheckedChange={(checked) => updateProfileField('notification_vibration', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-white">Превью сообщений</p>
-                    <p className="text-xs text-gray-500">Показывать текст сообщений в уведомлениях</p>
+                    <label className="text-xs text-gray-400 mb-1 block">Дата рождения</label>
+                    <Input
+                      type="date"
+                      value={formData.birth_date}
+                      onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                      className="bg-gray-800 border-white/10"
+                    />
                   </div>
-                  <Switch
-                    checked={profile?.notification_preview ?? true}
-                    onCheckedChange={(checked) => updateProfileField('notification_preview', checked)}
-                  />
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Город</label>
+                    <Input
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      placeholder="Алматы"
+                      className="bg-gray-800 border-white/10"
+                    />
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
-                  <div>
-                    <p className="text-sm text-white">Показывать онлайн статус</p>
-                    <p className="text-xs text-gray-500">Другие видят когда вы онлайн</p>
-                  </div>
-                  <Switch
-                    checked={profile?.show_online_status ?? true}
-                    onCheckedChange={(checked) => updateProfileField('show_online_status', checked)}
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">О себе</label>
+                  <textarea
+                    value={formData.about}
+                    onChange={(e) => setFormData({ ...formData, about: e.target.value })}
+                    placeholder="Расскажите немного о себе..."
+                    rows={4}
+                    className="w-full bg-gray-800 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-violet-500 focus:outline-none"
                   />
                 </div>
               </div>
             </Card>
           </TabsContent>
 
-          {/* Вкладка: Безопасность */}
-          <TabsContent value="security" className="space-y-6">
-            <Card className="p-6 bg-gray-900/50 border-white/5">
-              <h3 className="text-lg font-medium text-white mb-4">Смена пароля</h3>
+          {/* Вкладка Уведомления */}
+          <TabsContent value="notifications">
+            <Card className="p-6 bg-gray-900/40 border-white/5">
+              <h3 className="text-sm font-medium text-white mb-4">Настройки уведомлений</h3>
+              <p className="text-xs text-gray-500 mb-4">Настройки сохраняются локально в вашем браузере</p>
+              
+              <div className="space-y-4">
+                <label className="flex items-center justify-between p-4 bg-white/5 rounded-lg cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <BellRing className="w-5 h-5 text-emerald-400" />
+                    <div>
+                      <p className="text-sm text-white">Telegram уведомления</p>
+                      <p className="text-xs text-gray-500">О долгах и зарплате</p>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifications.telegram}
+                    onChange={(e) => setNotifications({ ...notifications, telegram: e.target.checked })}
+                    className="w-5 h-5 rounded border-white/10 bg-gray-800 text-violet-500"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-4 bg-white/5 rounded-lg cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <MessageCircle className="w-5 h-5 text-blue-400" />
+                    <div>
+                      <p className="text-sm text-white">Уведомления в чате</p>
+                      <p className="text-xs text-gray-500">О новых сообщениях</p>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifications.chat}
+                    onChange={(e) => setNotifications({ ...notifications, chat: e.target.checked })}
+                    className="w-5 h-5 rounded border-white/10 bg-gray-800 text-violet-500"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-4 bg-white/5 rounded-lg cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <DollarSign className="w-5 h-5 text-amber-400" />
+                    <div>
+                      <p className="text-sm text-white">Уведомления о зарплате</p>
+                      <p className="text-xs text-gray-500">При начислении зарплаты</p>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifications.salary}
+                    onChange={(e) => setNotifications({ ...notifications, salary: e.target.checked })}
+                    className="w-5 h-5 rounded border-white/10 bg-gray-800 text-violet-500"
+                  />
+                </label>
+              </div>
+            </Card>
+          </TabsContent>
+
+          {/* Вкладка Безопасность */}
+          <TabsContent value="security">
+            <Card className="p-6 bg-gray-900/40 border-white/5">
+              <h3 className="text-sm font-medium text-white mb-4">Ваш логин</h3>
+              <div className="p-4 bg-white/5 rounded-lg mb-6">
+                <div className="flex items-center gap-3">
+                  <AtSign className="w-5 h-5 text-blue-400" />
+                  <div>
+                    <p className="text-sm text-white font-mono">{username}</p>
+                    <p className="text-xs text-gray-500">Используется для входа</p>
+                  </div>
+                </div>
+              </div>
+
+              <h3 className="text-sm font-medium text-white mb-4">Смена логина</h3>
+              
+              <div className="space-y-4 mb-8">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Текущий логин</label>
+                  <Input
+                    type="text"
+                    value={loginData.current}
+                    onChange={(e) => setLoginData({ ...loginData, current: e.target.value })}
+                    placeholder="Введите текущий логин"
+                    className="bg-gray-800 border-white/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Новый логин</label>
+                  <Input
+                    type="text"
+                    value={loginData.new}
+                    onChange={(e) => setLoginData({ ...loginData, new: e.target.value })}
+                    placeholder="Введите новый логин"
+                    className="bg-gray-800 border-white/10"
+                  />
+                </div>
+
+                <Button
+                  onClick={changeLogin}
+                  disabled={changingLogin}
+                  className="w-full bg-gradient-to-r from-blue-500 to-cyan-500"
+                >
+                  {changingLogin ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <AtSign className="w-4 h-4 mr-2" />
+                  )}
+                  Сменить логин
+                </Button>
+              </div>
+
+              <h3 className="text-sm font-medium text-white mb-4">Смена пароля</h3>
               
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Текущий пароль</label>
+                  <label className="text-xs text-gray-400 mb-1 block">Текущий пароль</label>
                   <div className="relative">
                     <Input
-                      type={showCurrentPassword ? 'text' : 'password'}
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      className="bg-gray-800/50 border-white/10 pr-10"
-                      placeholder="Введите текущий пароль"
+                      type={showCurrent ? 'text' : 'password'}
+                      value={passwordData.current}
+                      onChange={(e) => setPasswordData({ ...passwordData, current: e.target.value })}
+                      className="bg-gray-800 border-white/10 pr-10"
                     />
                     <button
-                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                      type="button"
+                      onClick={() => setShowCurrent(!showCurrent)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
                     >
-                      {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Новый пароль</label>
+                  <label className="text-xs text-gray-400 mb-1 block">Новый пароль</label>
                   <div className="relative">
                     <Input
-                      type={showNewPassword ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="bg-gray-800/50 border-white/10 pr-10"
-                      placeholder="Введите новый пароль"
+                      type={showNew ? 'text' : 'password'}
+                      value={passwordData.new}
+                      onChange={(e) => setPasswordData({ ...passwordData, new: e.target.value })}
+                      className="bg-gray-800 border-white/10 pr-10"
                     />
                     <button
-                      onClick={() => setShowNewPassword(!showNewPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                      type="button"
+                      onClick={() => setShowNew(!showNew)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
                     >
-                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Подтверждение пароля</label>
+                  <label className="text-xs text-gray-400 mb-1 block">Подтвердите пароль</label>
                   <div className="relative">
                     <Input
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="bg-gray-800/50 border-white/10 pr-10"
-                      placeholder="Подтвердите новый пароль"
+                      type={showConfirm ? 'text' : 'password'}
+                      value={passwordData.confirm}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirm: e.target.value })}
+                      className="bg-gray-800 border-white/10 pr-10"
                     />
                     <button
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                      type="button"
+                      onClick={() => setShowConfirm(!showConfirm)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
                     >
-                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
                 <Button
                   onClick={changePassword}
-                  disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
-                  className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600"
+                  disabled={changingPassword}
+                  className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
                 >
                   {changingPassword ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
-                    <Lock className="w-4 h-4 mr-2" />
+                    <Key className="w-4 h-4 mr-2" />
                   )}
-                  Изменить пароль
+                  Сменить пароль
                 </Button>
               </div>
             </Card>
           </TabsContent>
-
-          {/* Вкладка: Оформление */}
-          <TabsContent value="appearance" className="space-y-6">
-            <Card className="p-6 bg-gray-900/50 border-white/5">
-              <h3 className="text-lg font-medium text-white mb-4">Оформление</h3>
-              
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    {profile?.theme === 'dark' ? (
-                      <Moon className="w-4 h-4 text-gray-500" />
-                    ) : (
-                      <Sun className="w-4 h-4 text-gray-500" />
-                    )}
-                    <div>
-                      <p className="text-sm text-white">Тема оформления</p>
-                      <p className="text-xs text-gray-500">Выберите тему интерфейса</p>
-                    </div>
-                  </div>
-                  <select
-                    value={profile?.theme || 'dark'}
-                    onChange={(e) => updateProfileField('theme', e.target.value as 'dark' | 'light')}
-                    className="bg-gray-800/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500/50"
-                  >
-                    <option value="dark">Тёмная</option>
-                    <option value="light">Светлая</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-gray-500" />
-                    <div>
-                      <p className="text-sm text-white">Язык интерфейса</p>
-                      <p className="text-xs text-gray-500">Выберите язык</p>
-                    </div>
-                  </div>
-                  <select
-                    value={profile?.language || 'ru'}
-                    onChange={(e) => updateProfileField('language', e.target.value as 'ru' | 'kk' | 'en')}
-                    className="bg-gray-800/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500/50"
-                  >
-                    <option value="ru">Русский</option>
-                    <option value="kk">Қазақша</option>
-                    <option value="en">English</option>
-                  </select>
-                </div>
-              </div>
-            </Card>
-          </TabsContent>
         </Tabs>
+
+        {/* Кнопка сохранения */}
+        <div className="mt-6 flex justify-end">
+          <Button
+            onClick={saveProfile}
+            disabled={saving}
+            className="bg-gradient-to-r from-emerald-500 to-green-500"
+          >
+            {saving ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-2" />
+            )}
+            Сохранить изменения
+          </Button>
+        </div>
       </main>
     </div>
   )

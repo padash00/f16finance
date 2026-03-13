@@ -76,6 +76,7 @@ type ChartPoint = {
   kaspi: number
   total: number
   formattedDate?: string
+  movingAvg?: number
 }
 
 type CategoryData = {
@@ -195,11 +196,14 @@ class ExpenseAnalytics {
     
     return data
       .filter(d => d.total > avg + stdDev * 2 || d.total < avg - stdDev * 2)
-      .map(d => ({
-        date: d.date,
-        amount: d.total,
-        type: d.total > avg ? 'spike' : 'drop'
-      }))
+      .map(d => {
+        const type: 'spike' | 'drop' = d.total > avg ? 'spike' : 'drop'
+        return {
+          date: d.date,
+          amount: d.total,
+          type,
+        }
+      })
       .slice(0, 3)
   }
 
@@ -567,10 +571,10 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-foreground">
+    <div className="app-shell-layout bg-gradient-to-br from-gray-900 to-gray-950 text-foreground">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      <main className="app-main">
+        <div className="app-page max-w-7xl space-y-6">
           {/* Header */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-900/30 via-gray-900 to-orange-900/30 p-6 border border-red-500/20">
             <div className="absolute top-0 right-0 w-64 h-64 bg-red-600 rounded-full blur-3xl opacity-20 pointer-events-none" />
@@ -667,7 +671,7 @@ export default function ExpensesPage() {
                       </button>
                     ))}
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                       <label className="text-xs text-gray-500 uppercase mb-1 block">С</label>
                       <input

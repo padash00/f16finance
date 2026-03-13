@@ -7,6 +7,10 @@ import { supabase } from '@/lib/supabaseClient'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { DEFAULT_SHIFT_BASE_PAY, SYSTEM_START_DATE } from '@/lib/core/constants'
+import { formatDateForInput, getMonthRange, getWeekRange } from '@/lib/core/date'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
+import { calculateOperatorSalarySummary } from '@/lib/domain/salary'
 import {
   User,
   Wallet,
@@ -60,6 +64,7 @@ type LevelInfo = {
 type Operator = {
   id: string
   name: string
+  full_name?: string | null
   short_name: string | null
   photo_url: string | null
   position: string | null
@@ -90,24 +95,6 @@ type PaymentHistory = {
   comment: string | null
 }
 
-type Company = {
-  id: string
-  code: string
-}
-
-type SalaryRule = {
-  company_code: string
-  shift_type: 'day' | 'night'
-  base_per_shift: number
-  threshold1_turnover: number
-  threshold1_bonus: number
-  threshold2_turnover: number
-  threshold2_bonus: number
-}
-
-// Константа с датой запуска системы (1 ноября 2025)
-const SYSTEM_START_DATE = '2025-11-01'
-
 export default function OperatorDashboardPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -119,49 +106,6 @@ export default function OperatorDashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [customRange, setCustomRange] = useState(false)
   const [periodType, setPeriodType] = useState<'week' | 'month' | 'all'>('week')
-
-  // Функция для форматирования даты в локальный формат
-  const formatDateForInput = (date: Date): string => {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
-  // Функция для получения диапазона текущей недели (пн-вс)
-  const getWeekRange = () => {
-    const now = new Date()
-    
-    // Находим понедельник текущей недели
-    const monday = new Date(now)
-    const day = monday.getDay() || 7 // воскресенье = 7
-    if (day !== 1) {
-      monday.setDate(monday.getDate() - (day - 1))
-    }
-    monday.setHours(0, 0, 0, 0)
-    
-    // Находим воскресенье
-    const sunday = new Date(monday)
-    sunday.setDate(monday.getDate() + 6)
-    sunday.setHours(23, 59, 59, 999)
-    
-    return {
-      from: formatDateForInput(monday),
-      to: formatDateForInput(sunday)
-    }
-  }
-
-  // Функция для получения диапазона текущего месяца
-  const getMonthRange = () => {
-    const now = new Date()
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-    
-    return {
-      from: formatDateForInput(firstDay),
-      to: formatDateForInput(lastDay)
-    }
-  }
 
   // Функция для установки периода
   const setPeriod = (type: 'week' | 'month' | 'all') => {
@@ -250,13 +194,7 @@ export default function OperatorDashboardPage() {
               id,
               name,
               short_name,
-              operator_profiles (
-                photo_url,
-                position,
-                phone,
-                email,
-                hire_date
-              )
+              operator_profiles (*)
             )
           `)
           .eq('user_id', user.id)
@@ -274,6 +212,7 @@ export default function OperatorDashboardPage() {
         setOperator({
           id: op.id,
           name: op.name,
+          full_name: profile.full_name,
           short_name: op.short_name,
           photo_url: profile.photo_url,
           position: profile.position,
@@ -294,24 +233,12 @@ export default function OperatorDashboardPage() {
 
         if (companiesError) throw new Error(companiesError.message)
 
-        const companyMap = new Map<string, string>()
-        for (const c of companies || []) {
-          companyMap.set(c.id, c.code)
-        }
-
-        // Загружаем правила зарплаты
         const { data: rulesList, error: rulesError } = await supabase
           .from('operator_salary_rules')
           .select('company_code, shift_type, base_per_shift, threshold1_turnover, threshold1_bonus, threshold2_turnover, threshold2_bonus')
           .eq('is_active', true)
 
         if (rulesError) throw new Error(rulesError.message)
-
-        const rulesMap = new Map<string, SalaryRule>()
-        for (const rule of rulesList || []) {
-          const key = `${rule.company_code}_${rule.shift_type}`
-          rulesMap.set(key, rule as SalaryRule)
-        }
 
         // Загружаем смены
         const { data: shifts, error: shiftsError } = await supabase
@@ -325,45 +252,6 @@ export default function OperatorDashboardPage() {
 
         console.log(`📊 Загружено смен: ${shifts?.length || 0} за период ${dateRange.from} - ${dateRange.to}`)
 
-        // Подсчет уникальных смен
-        const shiftSet = new Set<string>()
-        for (const shift of shifts || []) {
-          const turnover = (shift.cash_amount || 0) + (shift.kaspi_amount || 0) + (shift.card_amount || 0)
-          if (turnover > 0) {
-            const shiftKey = `${shift.date}|${shift.company_id}|${shift.shift || 'day'}`
-            shiftSet.add(shiftKey)
-          }
-        }
-        
-        const totalShifts = shiftSet.size
-        const basePerShift = 8000
-        const baseSalary = totalShifts * basePerShift
-
-        // Расчет авто-бонусов
-        let totalAutoBonuses = 0
-        
-        for (const shift of shifts || []) {
-          const turnover = (shift.cash_amount || 0) + (shift.kaspi_amount || 0) + (shift.card_amount || 0)
-          const companyCode = companyMap.get(shift.company_id)
-          if (!companyCode) continue
-          
-          const shiftType = shift.shift || 'day'
-          const ruleKey = `${companyCode}_${shiftType}`
-          const rule = rulesMap.get(ruleKey)
-          
-          if (!rule) continue
-          
-          let shiftBonus = 0
-          if (rule.threshold1_turnover && turnover >= rule.threshold1_turnover) {
-            shiftBonus += rule.threshold1_bonus || 0
-          }
-          if (rule.threshold2_turnover && turnover >= rule.threshold2_turnover) {
-            shiftBonus += rule.threshold2_bonus || 0
-          }
-          
-          totalAutoBonuses += shiftBonus
-        }
-
         // Загружаем корректировки
         const { data: adjustments, error: adjustmentsError } = await supabase
           .from('operator_salary_adjustments')
@@ -373,15 +261,10 @@ export default function OperatorDashboardPage() {
           .lte('date', dateRange.to)
 
         if (adjustmentsError) throw new Error(adjustmentsError.message)
-
-        let totalManualBonuses = 0
-        let totalFines = 0
-        let totalAdvances = 0
         const history: PaymentHistory[] = []
 
         for (const adj of adjustments || []) {
           if (adj.kind === 'bonus') {
-            totalManualBonuses += adj.amount
             history.push({
               id: Date.now() + Math.random(),
               date: adj.date,
@@ -390,7 +273,6 @@ export default function OperatorDashboardPage() {
               comment: adj.comment || 'Премия'
             })
           } else if (adj.kind === 'advance') {
-            totalAdvances += adj.amount
             history.push({
               id: Date.now() + Math.random(),
               date: adj.date,
@@ -399,7 +281,6 @@ export default function OperatorDashboardPage() {
               comment: adj.comment || 'Аванс'
             })
           } else {
-            totalFines += adj.amount
             history.push({
               id: Date.now() + Math.random(),
               date: adj.date,
@@ -413,67 +294,86 @@ export default function OperatorDashboardPage() {
         // Загружаем автоматические долги
         const { data: autoDebtsData, error: debtsError } = await supabase
           .from('debts')
-          .select('amount, date, comment')
+          .select('amount, week_start, comment, operator_id')
           .eq('operator_id', operatorId)
-          .gte('date', dateRange.from)
-          .lte('date', dateRange.to)
+          .gte('week_start', dateRange.from)
+          .lte('week_start', dateRange.to)
           .eq('status', 'active')
 
         if (debtsError) throw new Error(debtsError.message)
-
-        const totalAutoDebts = (autoDebtsData || []).reduce((sum, d) => sum + (Number(d.amount) || 0), 0)
         
         for (const debt of autoDebtsData || []) {
           history.push({
             id: Date.now() + Math.random(),
-            date: debt.date,
+            date: debt.week_start,
             amount: Number(debt.amount),
             kind: 'debt',
             comment: debt.comment ? debt.comment.substring(0, 50) + '...' : 'Авто долг'
           })
         }
 
-        // Добавляем авто-бонусы в историю
-        if (totalAutoBonuses > 0) {
+        const salarySummary = calculateOperatorSalarySummary({
+          operatorId,
+          companies: (companies || []) as Array<{ id: string; code: string | null }>,
+          rules: (rulesList || []) as Array<{
+            company_code: string
+            shift_type: 'day' | 'night'
+            base_per_shift: number | null
+            threshold1_turnover: number | null
+            threshold1_bonus: number | null
+            threshold2_turnover: number | null
+            threshold2_bonus: number | null
+          }>,
+          incomes: (shifts || []).map((shift) => ({
+            ...shift,
+            operator_id: operatorId,
+          })),
+          adjustments: (adjustments || []).map((adjustment) => ({
+            operator_id: operatorId,
+            amount: adjustment.amount,
+            kind: adjustment.kind,
+          })),
+          debts: (autoDebtsData || []).map((debt) => ({
+            operator_id: operatorId,
+            amount: Number(debt.amount || 0),
+          })),
+        })
+
+        if (salarySummary.autoBonuses > 0) {
           history.push({
             id: Date.now() + Math.random(),
             date: dateRange.to,
-            amount: totalAutoBonuses,
+            amount: salarySummary.autoBonuses,
             kind: 'auto_bonus',
             comment: 'Бонусы за выполнение плана'
           })
         }
 
-        // Итоговый расчет
-        const totalAccrued = baseSalary + totalAutoBonuses + totalManualBonuses
-        const totalDeductions = totalAutoDebts + totalFines + totalAdvances
-        const remainingAmount = totalAccrued - totalDeductions
-
         console.log('🧮 ИТОГО:', {
-          totalShifts,
-          baseSalary,
-          autoBonuses: totalAutoBonuses,
-          manualBonuses: totalManualBonuses,
-          totalAccrued,
-          autoDebts: totalAutoDebts,
-          fines: totalFines,
-          advances: totalAdvances,
-          totalDeductions,
-          remaining: remainingAmount
+          totalShifts: salarySummary.shifts,
+          baseSalary: salarySummary.baseSalary,
+          autoBonuses: salarySummary.autoBonuses,
+          manualBonuses: salarySummary.manualBonuses,
+          totalAccrued: salarySummary.totalAccrued,
+          autoDebts: salarySummary.autoDebts,
+          fines: salarySummary.totalFines,
+          advances: salarySummary.totalAdvances,
+          totalDeductions: salarySummary.totalDeductions,
+          remaining: salarySummary.remainingAmount
         })
 
         setSalaryStats({
-          totalShifts,
-          baseSalary,
-          autoBonuses: totalAutoBonuses,
-          manualBonuses: totalManualBonuses,
-          totalAccrued,
-          autoDebts: totalAutoDebts,
-          totalFines,
-          totalAdvances,
-          totalDeductions,
+          totalShifts: salarySummary.shifts,
+          baseSalary: salarySummary.baseSalary,
+          autoBonuses: salarySummary.autoBonuses,
+          manualBonuses: salarySummary.manualBonuses,
+          totalAccrued: salarySummary.totalAccrued,
+          autoDebts: salarySummary.autoDebts,
+          totalFines: salarySummary.totalFines,
+          totalAdvances: salarySummary.totalAdvances,
+          totalDeductions: salarySummary.totalDeductions,
           paidAmount: 0,
-          remainingAmount
+          remainingAmount: salarySummary.remainingAmount
         })
 
         history.sort((a, b) => b.date.localeCompare(a.date))
@@ -598,13 +498,13 @@ export default function OperatorDashboardPage() {
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-white font-bold">
-                  {operator.name.charAt(0)}
+                  {getOperatorDisplayName(operator).charAt(0)}
                 </div>
               )}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-white">{operator.short_name || operator.name}</h1>
+                <h1 className="text-xl font-bold text-white">{getOperatorDisplayName(operator)}</h1>
                 {levelInfo && (
                   <div className="px-2 py-0.5 bg-violet-500/20 rounded-full border border-violet-500/30 flex items-center gap-1">
                     <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
@@ -687,7 +587,7 @@ export default function OperatorDashboardPage() {
                 </div>
                 <div className="p-3 bg-white/5 rounded-xl">
                   <p className="text-xs text-gray-500">Ставка</p>
-                  <p className="text-xl font-bold text-emerald-400">8 000 ₸</p>
+              <p className="text-xl font-bold text-emerald-400">{DEFAULT_SHIFT_BASE_PAY.toLocaleString('ru-RU')} ₸</p>
                 </div>
               </div>
             </div>
@@ -947,7 +847,7 @@ export default function OperatorDashboardPage() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
                   <span className="text-sm text-gray-400">
-                    Базовая зарплата ({salaryStats?.totalShifts} смен × 8 000 ₸)
+                    Базовая зарплата ({salaryStats?.totalShifts} смен × {DEFAULT_SHIFT_BASE_PAY.toLocaleString('ru-RU')} ₸)
                   </span>
                   <span className="text-sm font-medium text-white">+{salaryStats?.baseSalary.toLocaleString()} ₸</span>
                 </div>
@@ -1049,7 +949,7 @@ export default function OperatorDashboardPage() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-white text-3xl font-bold">
-                      {operator.name.charAt(0)}
+                      {getOperatorDisplayName(operator).charAt(0)}
                     </div>
                   )}
                 </div>

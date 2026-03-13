@@ -62,6 +62,19 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const mutateSettings = async (payload: unknown) => {
+    const response = await fetch('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    const json = await response.json().catch(() => null)
+    if (!response.ok) {
+      throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+    }
+  }
+
   // --- ЗАГРУЗКА ---
   const fetchData = async () => {
     setLoading(true)
@@ -105,14 +118,17 @@ export default function SettingsPage() {
     e.preventDefault()
     if (!newComp.name.trim()) return
     setSaving(true)
-    
-    const { error } = await supabase.from('companies').insert([{ name: newComp.name, code: newComp.code || null }])
-    
-    if (!error) {
-        setNewComp({ name: '', code: '' })
-        fetchData()
-    } else {
-        alert(error.message)
+
+    try {
+      await mutateSettings({
+        entity: 'company',
+        action: 'create',
+        payload: { name: newComp.name, code: newComp.code || null },
+      })
+      setNewComp({ name: '', code: '' })
+      fetchData()
+    } catch (err: any) {
+      alert(err.message)
     }
     setSaving(false)
   }
@@ -120,21 +136,30 @@ export default function SettingsPage() {
   const handleSaveCompany = async () => {
     if (!editCompId) return
     setSaving(true)
-    const { error } = await supabase.from('companies')
-        .update({ name: editCompData.name, code: editCompData.code || null })
-        .eq('id', editCompId)
-    
-    if (!error) {
-        setEditCompId(null)
-        fetchData()
+    try {
+      await mutateSettings({
+        entity: 'company',
+        action: 'update',
+        id: editCompId,
+        payload: { name: editCompData.name, code: editCompData.code || null },
+      })
+      setEditCompId(null)
+      fetchData()
+    }
+    catch (err: any) {
+      alert(err.message)
     }
     setSaving(false)
   }
 
   const handleDeleteCompany = async (id: string) => {
       if (!confirm('Удалить компанию? Это может сломать отчеты!')) return
-      const { error } = await supabase.from('companies').delete().eq('id', id)
-      if (!error) fetchData()
+      try {
+        await mutateSettings({ entity: 'company', action: 'delete', id })
+        fetchData()
+      } catch (err: any) {
+        alert(err.message)
+      }
   }
 
   // --- ЛОГИКА СОТРУДНИКОВ ---
@@ -142,19 +167,22 @@ export default function SettingsPage() {
     e.preventDefault()
     if (!newStaff.name.trim()) return
     setSaving(true)
-    
-    const { error } = await supabase.from('staff').insert([{ 
-        full_name: newStaff.name, 
-        phone: newStaff.phone || null,
-        email: newStaff.email || null, // Теперь сохраняем Email!
-        role: newStaff.role
-    }])
-    
-    if (!error) {
-        setNewStaff({ name: '', phone: '', email: '', role: 'operator' })
-        fetchData()
-    } else {
-        alert(error.message)
+
+    try {
+      await mutateSettings({
+        entity: 'staff',
+        action: 'create',
+        payload: {
+          name: newStaff.name,
+          phone: newStaff.phone || null,
+          email: newStaff.email || null,
+          role: newStaff.role,
+        },
+      })
+      setNewStaff({ name: '', phone: '', email: '', role: 'operator' })
+      fetchData()
+    } catch (err: any) {
+      alert(err.message)
     }
     setSaving(false)
   }
@@ -162,34 +190,42 @@ export default function SettingsPage() {
   const handleSaveStaff = async () => {
     if (!editStaffId) return
     setSaving(true)
-    const { error } = await supabase.from('staff')
-        .update({ 
-            full_name: editStaffData.name, 
-            phone: editStaffData.phone || null,
-            email: editStaffData.email || null,
-            role: editStaffData.role
-        })
-        .eq('id', editStaffId)
-    
-    if (!error) {
-        setEditStaffId(null)
-        fetchData()
+    try {
+      await mutateSettings({
+        entity: 'staff',
+        action: 'update',
+        id: editStaffId,
+        payload: {
+          name: editStaffData.name,
+          phone: editStaffData.phone || null,
+          email: editStaffData.email || null,
+          role: editStaffData.role,
+        },
+      })
+      setEditStaffId(null)
+      fetchData()
+    } catch (err: any) {
+      alert(err.message)
     }
     setSaving(false)
   }
 
   const handleDeleteStaff = async (id: string) => {
       if (!confirm('Удалить сотрудника?')) return
-      const { error } = await supabase.from('staff').delete().eq('id', id)
-      if (!error) fetchData()
+      try {
+        await mutateSettings({ entity: 'staff', action: 'delete', id })
+        fetchData()
+      } catch (err: any) {
+        alert(err.message)
+      }
   }
 
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="app-shell-layout">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-8 max-w-7xl mx-auto space-y-8">
+      <main className="app-main">
+        <div className="app-page max-w-7xl space-y-8">
           
           {/* Хедер */}
           <div className="flex items-center gap-4">
@@ -202,7 +238,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:gap-8">
             
             {/* 🏢 КОМПАНИИ */}
             <div className="space-y-6">
