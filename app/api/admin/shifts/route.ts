@@ -4,6 +4,7 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
 import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { loadShiftWeekWorkflow, publishShiftWeekForCompany, resolveShiftChangeRequest } from '@/lib/server/shift-workflow'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type ShiftWritePayload = {
@@ -33,6 +34,21 @@ type ShiftMutationBody =
       action: 'copyWeekTemplate'
       payload: {
         targetWeekStart: string
+      }
+    }
+  | {
+      action: 'publishWeek'
+      payload: {
+        companyId: string
+        weekStart: string
+      }
+    }
+  | {
+      action: 'resolveIssue'
+      payload: {
+        requestId: string
+        status: 'resolved' | 'dismissed'
+        resolutionNote?: string | null
       }
     }
 
@@ -353,49 +369,6 @@ export async function POST(req: Request) {
 
     if (body.action === 'saveShift') {
       const result = await upsertShift(supabase, body.payload)
-      let notification: { sent: boolean; reason?: string; operatorLabel?: string } | undefined
-
-      if (
-        body.payload.operatorName.trim() &&
-        (result.mode === 'created' || result.mode === 'updated' || result.mode === 'updated-existing')
-      ) {
-        try {
-          notification = await notifySingleShiftAssignment(supabase, body.payload)
-          if (notification?.sent) {
-            const operator = await findOperatorForShiftName(supabase, body.payload.operatorName.trim())
-            if (operator?.telegram_chat_id) {
-              await writeNotificationLog(supabase, {
-                channel: 'telegram',
-                recipient: String(operator.telegram_chat_id),
-                status: 'sent',
-                payload: {
-                  kind: 'shift-single-assignment',
-                  operator_id: operator.id,
-                  operator_name: notification.operatorLabel || getOperatorDisplayName(operator, 'Оператор'),
-                  company_id: body.payload.companyId,
-                  date: body.payload.date,
-                  shift_type: body.payload.shiftType,
-                },
-              })
-            }
-          }
-        } catch (error) {
-          console.error('Shift single notification error', error)
-          notification = { sent: false, reason: 'send-failed' }
-          await writeNotificationLog(supabase, {
-            channel: 'telegram',
-            recipient: body.payload.operatorName.trim(),
-            status: 'failed',
-            payload: {
-              kind: 'shift-single-assignment',
-              company_id: body.payload.companyId,
-              date: body.payload.date,
-              shift_type: body.payload.shiftType,
-              error: error instanceof Error ? error.message : 'send-failed',
-            },
-          })
-        }
-      }
 
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
@@ -407,11 +380,11 @@ export async function POST(req: Request) {
           date: body.payload.date,
           shift_type: body.payload.shiftType,
           operator_name: body.payload.operatorName.trim() || null,
-          notification,
+          publication_required: !!body.payload.operatorName.trim(),
         },
       })
 
-      return NextResponse.json({ ...result, notification })
+      return NextResponse.json({ ...result })
     }
 
     if (body.action === 'bulkAssignWeek') {
@@ -453,51 +426,6 @@ export async function POST(req: Request) {
         }
       }
 
-      let notification: { sent: boolean; reason?: string; operatorLabel?: string; count?: number } | undefined
-      if (assignedDates.length > 0) {
-        try {
-          notification = await notifyBulkShiftAssignment(supabase, {
-            companyId,
-            operatorName,
-            shiftType,
-            dates: assignedDates,
-          })
-          if (notification?.sent) {
-            const operator = await findOperatorForShiftName(supabase, operatorName.trim())
-            if (operator?.telegram_chat_id) {
-              await writeNotificationLog(supabase, {
-                channel: 'telegram',
-                recipient: String(operator.telegram_chat_id),
-                status: 'sent',
-                payload: {
-                  kind: 'shift-bulk-assignment',
-                  operator_id: operator.id,
-                  operator_name: notification.operatorLabel || getOperatorDisplayName(operator, 'Оператор'),
-                  company_id: companyId,
-                  shift_type: shiftType,
-                  dates: assignedDates,
-                },
-              })
-            }
-          }
-        } catch (error) {
-          console.error('Shift bulk notification error', error)
-          notification = { sent: false, reason: 'send-failed' }
-          await writeNotificationLog(supabase, {
-            channel: 'telegram',
-            recipient: operatorName.trim(),
-            status: 'failed',
-            payload: {
-              kind: 'shift-bulk-assignment',
-              company_id: companyId,
-              shift_type: shiftType,
-              dates: assignedDates,
-              error: error instanceof Error ? error.message : 'send-failed',
-            },
-          })
-        }
-      }
-
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
         entityType: 'shift',
@@ -512,7 +440,7 @@ export async function POST(req: Request) {
           updated,
           skipped,
           conflicts,
-          notification,
+          publication_required: assignedDates.length > 0,
         },
       })
 
@@ -523,7 +451,6 @@ export async function POST(req: Request) {
         updated,
         skipped,
         conflicts,
-        notification,
       })
     }
 
@@ -630,6 +557,75 @@ export async function POST(req: Request) {
       })
     }
 
+    if (body.action === 'publishWeek') {
+      const { companyId, weekStart } = body.payload
+      if (!companyId || !weekStart) {
+        return badRequest('companyId и weekStart обязательны')
+      }
+
+      const result = await publishShiftWeekForCompany({
+        supabase,
+        companyId,
+        weekStart,
+        actorUserId: user?.id || null,
+      })
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'shift-publication',
+        entityId: result.publication.id,
+        action: 'publish-week',
+        payload: {
+          company_id: companyId,
+          week_start: weekStart,
+          week_end: result.weekEnd,
+          delivered: result.delivered,
+          missing_telegram: result.missingTelegram,
+          failed: result.failed,
+          total_operators: result.totalOperators,
+          version: result.publication.version,
+        },
+      })
+
+      return NextResponse.json({
+        ok: true,
+        mode: 'published-week',
+        publication: result.publication,
+        companyName: result.companyName,
+        delivered: result.delivered,
+        missingTelegram: result.missingTelegram,
+        failed: result.failed,
+        totalOperators: result.totalOperators,
+      })
+    }
+
+    if (body.action === 'resolveIssue') {
+      const { requestId, status, resolutionNote } = body.payload
+      if (!requestId || !status) {
+        return badRequest('requestId и status обязательны')
+      }
+
+      const result = await resolveShiftChangeRequest({
+        supabase,
+        requestId,
+        status,
+        resolutionNote,
+        actorUserId: user?.id || null,
+      })
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'shift-change-request',
+        entityId: requestId,
+        action: status,
+        payload: {
+          resolution_note: resolutionNote?.trim() || null,
+        },
+      })
+
+      return NextResponse.json({ ok: true, data: result })
+    }
+
     return badRequest('Неизвестное действие')
   } catch (error: any) {
     console.error('Admin shifts mutation error', error)
@@ -654,5 +650,32 @@ export async function POST(req: Request) {
       },
       { status: error instanceof RouteError ? error.status : 500 },
     )
+  }
+}
+
+export async function GET(req: Request) {
+  try {
+    const guard = await requireStaffCapabilityRequest(req, 'shifts')
+    if (guard) return guard
+
+    const url = new URL(req.url)
+    const weekStart = url.searchParams.get('weekStart')?.trim()
+    if (!weekStart) {
+      return badRequest('weekStart обязателен')
+    }
+
+    const requestClient = createRequestSupabaseClient(req)
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient
+    const workflow = await loadShiftWeekWorkflow(supabase, weekStart)
+
+    return NextResponse.json({ ok: true, ...workflow })
+  } catch (error: any) {
+    console.error('Admin shifts workflow GET error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/shifts:get',
+      message: error?.message || 'Admin shifts workflow GET error',
+    })
+    return NextResponse.json({ error: error?.message || 'Ошибка сервера' }, { status: 500 })
   }
 }

@@ -102,6 +102,51 @@ type BulkAssignResult = {
   }
 }
 
+type PublicationStatus = {
+  id: string
+  company_id: string
+  company_name: string
+  week_start: string
+  week_end: string
+  version: number
+  status: string
+  published_at: string
+  pending_count: number
+  confirmed_count: number
+  issue_count: number
+  total_count: number
+}
+
+type PublicationResponse = {
+  id: string
+  publication_id: string
+  company_id: string
+  operator_id: string
+  operator_name: string
+  status: string
+  response_source: string | null
+  note: string | null
+  responded_at: string | null
+  created_at: string
+}
+
+type ChangeRequest = {
+  id: string
+  publication_id: string
+  company_id: string
+  operator_id: string
+  operator_name: string
+  shift_date: string
+  shift_type: 'day' | 'night'
+  status: string
+  source: string | null
+  reason: string | null
+  resolution_note: string | null
+  responded_at: string | null
+  resolved_at: string | null
+  created_at: string
+}
+
 type ScheduleGridProps = {
   companies: Company[]
   operators: Operator[]
@@ -147,6 +192,12 @@ const getWeekDetails = (date: Date): { range: string; days: WeekDay[] } => {
 const normalizeOperatorName = (value: string | null | undefined) => (value || '').trim().toLowerCase()
 const getCellKey = (companyId: string, date: string, shiftType: 'day' | 'night') => `${companyId}|${date}|${shiftType}`
 const hasNightShift = (company: Company) => (company.code || '').toLowerCase() !== 'extra'
+const formatShiftDate = (isoDate: string) =>
+  new Date(`${isoDate}T12:00:00`).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    weekday: 'short',
+  })
 
 function buildShiftConflicts(shifts: Shift[], companyNames: Record<string, string>): ConflictItem[] {
   const grouped = new Map<string, ConflictEntry[]>()
@@ -188,6 +239,14 @@ export default function ShiftsPage() {
   const [selectedOperator, setSelectedOperator] = useState('all')
   const [copyingWeek, setCopyingWeek] = useState(false)
   const [bulkAssigning, setBulkAssigning] = useState(false)
+  const [publishingCompanyId, setPublishingCompanyId] = useState<string | null>(null)
+  const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(null)
+  const [workflowLoading, setWorkflowLoading] = useState(false)
+  const [workflowError, setWorkflowError] = useState<string | null>(null)
+  const [publications, setPublications] = useState<PublicationStatus[]>([])
+  const [publicationResponses, setPublicationResponses] = useState<PublicationResponse[]>([])
+  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([])
+  const [panelCompanyId, setPanelCompanyId] = useState('')
   const [actionNotice, setActionNotice] = useState<ActionNotice | null>(null)
   const [bulkCompanyId, setBulkCompanyId] = useState('')
   const [bulkOperatorName, setBulkOperatorName] = useState('')
@@ -236,10 +295,36 @@ export default function ShiftsPage() {
     }
   }, [weekDays])
 
+  const fetchWorkflowData = useCallback(async () => {
+    const weekStart = weekDays[0].dateISO
+    setWorkflowLoading(true)
+    try {
+      const response = await fetch(`/api/admin/shifts?weekStart=${weekStart}`)
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      }
+
+      setPublications(json?.publications || [])
+      setPublicationResponses(json?.responses || [])
+      setChangeRequests(json?.requests || [])
+      setWorkflowError(null)
+    } catch (err: any) {
+      console.error('❌ Ошибка workflow shifts:', err)
+      setWorkflowError(err?.message || 'Не удалось загрузить согласования')
+    } finally {
+      setWorkflowLoading(false)
+    }
+  }, [weekDays])
+
   useEffect(() => {
     setLoading(true)
     fetchScheduleData()
   }, [fetchScheduleData])
+
+  useEffect(() => {
+    fetchWorkflowData()
+  }, [fetchWorkflowData])
 
   const shiftsMap: ShiftsMap = useMemo(() => {
     return shifts.reduce<ShiftsMap>((acc, shift) => {
@@ -314,6 +399,44 @@ export default function ShiftsPage() {
 
   const bulkCompanySupportsNight = bulkCompany ? hasNightShift(bulkCompany) : true
 
+  const latestPublicationByCompany = useMemo(() => {
+    const map = new Map<string, PublicationStatus>()
+    for (const publication of publications) {
+      if (!map.has(publication.company_id)) {
+        map.set(publication.company_id, publication)
+      }
+    }
+    return map
+  }, [publications])
+
+  const panelCompany = useMemo(
+    () => assignableCompanies.find((company) => company.id === panelCompanyId) || null,
+    [assignableCompanies, panelCompanyId],
+  )
+
+  const panelPublication = useMemo(
+    () => (panelCompanyId ? latestPublicationByCompany.get(panelCompanyId) || null : null),
+    [latestPublicationByCompany, panelCompanyId],
+  )
+
+  const panelResponses = useMemo(
+    () =>
+      panelPublication
+        ? publicationResponses
+            .filter((response) => response.publication_id === panelPublication.id)
+            .sort((a, b) => a.operator_name.localeCompare(b.operator_name))
+        : [],
+    [panelPublication, publicationResponses],
+  )
+
+  const panelRequests = useMemo(
+    () =>
+      panelPublication
+        ? changeRequests.filter((request) => request.publication_id === panelPublication.id)
+        : [],
+    [panelPublication, changeRequests],
+  )
+
   const totalSlots = useMemo(
     () => visibleCompanies.reduce((sum, company) => sum + weekDays.length * (hasNightShift(company) ? 2 : 1), 0),
     [visibleCompanies, weekDays],
@@ -370,6 +493,17 @@ export default function ShiftsPage() {
       setBulkShiftType('day')
     }
   }, [bulkShiftType, bulkCompany])
+
+  useEffect(() => {
+    if (!panelCompanyId && assignableCompanies.length > 0) {
+      setPanelCompanyId(assignableCompanies[0].id)
+      return
+    }
+
+    if (panelCompanyId && !assignableCompanies.some((company) => company.id === panelCompanyId)) {
+      setPanelCompanyId(assignableCompanies[0]?.id || '')
+    }
+  }, [assignableCompanies, panelCompanyId])
 
   const goToPrevWeek = () => setCurrentDate(subWeeks(currentDate, 1))
   const goToNextWeek = () => setCurrentDate(addWeeks(currentDate, 1))
@@ -478,13 +612,10 @@ export default function ShiftsPage() {
 
       const result = json as BulkAssignResult
       const conflictPart = result.conflicts.length > 0 ? ` Конфликтов пропущено: ${result.conflicts.length}.` : ''
-      const notificationPart = result.notification?.sent
-        ? ` Уведомление отправлено ${result.notification.operatorLabel || 'оператору'} по ${result.notification.count || 0} дн.`
-        : ''
 
       setActionNotice({
         tone: result.conflicts.length > 0 ? 'info' : 'success',
-        text: `Массовое назначение завершено: создано ${result.created}, обновлено ${result.updated}, пропущено ${result.skipped}.${conflictPart}${notificationPart}`,
+        text: `Массовое назначение завершено: создано ${result.created}, обновлено ${result.updated}, пропущено ${result.skipped}.${conflictPart} Операторов уведомим после публикации недели.`,
       })
 
       await fetchScheduleData()
@@ -495,6 +626,89 @@ export default function ShiftsPage() {
       })
     } finally {
       setBulkAssigning(false)
+    }
+  }
+
+  const handlePublishWeek = async () => {
+    if (!panelCompanyId) {
+      setActionNotice({
+        tone: 'error',
+        text: 'Сначала выбери компанию в правой панели.',
+      })
+      return
+    }
+
+    setPublishingCompanyId(panelCompanyId)
+    setActionNotice(null)
+
+    try {
+      const response = await fetch('/api/admin/shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'publishWeek',
+          payload: {
+            companyId: panelCompanyId,
+            weekStart: weekDays[0].dateISO,
+          },
+        }),
+      })
+
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      }
+
+      setActionNotice({
+        tone: 'success',
+        text: `Неделя по ${json?.companyName || 'точке'} опубликована. Доставлено ${json?.delivered || 0} из ${json?.totalOperators || 0} операторов, без Telegram: ${json?.missingTelegram || 0}, ошибок отправки: ${json?.failed || 0}.`,
+      })
+
+      await Promise.all([fetchScheduleData(), fetchWorkflowData()])
+    } catch (err: any) {
+      setActionNotice({
+        tone: 'error',
+        text: err?.message || 'Не удалось опубликовать неделю.',
+      })
+    } finally {
+      setPublishingCompanyId(null)
+    }
+  }
+
+  const handleResolveIssue = async (requestId: string, status: 'resolved' | 'dismissed') => {
+    setResolvingRequestId(requestId)
+
+    try {
+      const response = await fetch('/api/admin/shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'resolveIssue',
+          payload: {
+            requestId,
+            status,
+          },
+        }),
+      })
+
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      }
+
+      setActionNotice({
+        tone: 'success',
+        text: status === 'resolved' ? 'Запрос отмечен как обработанный.' : 'Запрос отклонён и скрыт из активных.',
+      })
+
+      await fetchWorkflowData()
+    } catch (err: any) {
+      setActionNotice({
+        tone: 'error',
+        text: err?.message || 'Не удалось обновить статус запроса.',
+      })
+    } finally {
+      setResolvingRequestId(null)
     }
   }
 
@@ -772,17 +986,210 @@ export default function ShiftsPage() {
               </Card>
             )}
 
-            <ScheduleGrid
-              companies={visibleCompanies}
-              operators={operators}
-              weekDays={weekDays}
-              shiftsMap={shiftsMap}
-              refetchData={fetchScheduleData}
-              loading={loading}
-              selectedOperator={selectedOperator}
-              conflictCellKeys={conflictCellKeys}
-              companySearch={companySearch}
-            />
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+              <ScheduleGrid
+                companies={visibleCompanies}
+                operators={operators}
+                weekDays={weekDays}
+                shiftsMap={shiftsMap}
+                refetchData={fetchScheduleData}
+                loading={loading}
+                selectedOperator={selectedOperator}
+                conflictCellKeys={conflictCellKeys}
+                companySearch={companySearch}
+              />
+
+              <Card className="h-fit border-border bg-card p-4 xl:sticky xl:top-6">
+                <div className="mb-4">
+                  <div className="text-sm font-semibold text-foreground">Согласование недели</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Публикуй график только после заполнения недели. Операторы подтвердят его или отправят проблемные даты сюда.
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <select
+                    value={panelCompanyId}
+                    onChange={(e) => setPanelCompanyId(e.target.value)}
+                    className="h-10 w-full rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors focus:border-accent"
+                  >
+                    {assignableCompanies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {company.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">{panelCompany?.name || 'Компания не выбрана'}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">Неделя: {weekRange}</div>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={handlePublishWeek}
+                        disabled={!panelCompanyId || publishingCompanyId === panelCompanyId}
+                      >
+                        {publishingCompanyId === panelCompanyId ? 'Публикуем...' : 'Опубликовать'}
+                      </Button>
+                    </div>
+
+                    {panelPublication ? (
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <div className="rounded-xl border border-border bg-card px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Версия</div>
+                          <div className="mt-1 text-sm font-semibold text-foreground">v{panelPublication.version}</div>
+                        </div>
+                        <div className="rounded-xl border border-border bg-card px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Опубликован</div>
+                          <div className="mt-1 text-sm font-semibold text-foreground">
+                            {new Date(panelPublication.published_at).toLocaleDateString('ru-RU', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-border bg-card px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Подтвердили</div>
+                          <div className="mt-1 text-sm font-semibold text-emerald-300">
+                            {panelPublication.confirmed_count}/{panelPublication.total_count}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-border bg-card px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Проблемы</div>
+                          <div className="mt-1 text-sm font-semibold text-amber-300">{panelPublication.issue_count}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                        Эту неделю по выбранной компании ещё не публиковали.
+                      </div>
+                    )}
+                  </div>
+
+                  {workflowError && (
+                    <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-3 text-sm text-red-300">
+                      {workflowError}
+                    </div>
+                  )}
+
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="text-sm font-semibold text-foreground">Ответы операторов</div>
+                      {workflowLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                    </div>
+
+                    <div className="space-y-2">
+                      {panelResponses.length > 0 ? (
+                        panelResponses.map((response) => (
+                          <div key={response.id} className="rounded-xl border border-border bg-card px-3 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-sm font-medium text-foreground">{response.operator_name}</div>
+                              <div
+                                className={`rounded-full px-2 py-1 text-[11px] ${
+                                  response.status === 'confirmed'
+                                    ? 'bg-emerald-500/15 text-emerald-300'
+                                    : response.status === 'issue_reported'
+                                      ? 'bg-amber-500/15 text-amber-300'
+                                      : 'bg-white/5 text-muted-foreground'
+                                }`}
+                              >
+                                {response.status === 'confirmed'
+                                  ? 'Согласен'
+                                  : response.status === 'issue_reported'
+                                    ? 'Есть проблема'
+                                    : 'Ждём ответ'}
+                              </div>
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {response.responded_at
+                                ? `Ответил ${new Date(response.responded_at).toLocaleString('ru-RU')}`
+                                : 'Пока не ответил'}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                          После публикации недели здесь появятся ответы операторов.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <div className="mb-3 text-sm font-semibold text-foreground">Лента проблемных смен</div>
+
+                    <div className="space-y-3">
+                      {panelRequests.length > 0 ? (
+                        panelRequests.map((request) => (
+                          <div key={request.id} className="rounded-xl border border-border bg-card px-3 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium text-foreground">{request.operator_name}</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {formatShiftDate(request.shift_date)} · {request.shift_type === 'day' ? 'день' : 'ночь'}
+                                </div>
+                              </div>
+                              <div
+                                className={`rounded-full px-2 py-1 text-[11px] ${
+                                  request.status === 'open'
+                                    ? 'bg-amber-500/15 text-amber-300'
+                                    : request.status === 'resolved'
+                                      ? 'bg-emerald-500/15 text-emerald-300'
+                                      : request.status === 'dismissed'
+                                        ? 'bg-white/10 text-muted-foreground'
+                                        : 'bg-sky-500/15 text-sky-300'
+                                }`}
+                              >
+                                {request.status === 'open'
+                                  ? 'Нужна замена'
+                                  : request.status === 'resolved'
+                                    ? 'Обработано'
+                                    : request.status === 'dismissed'
+                                      ? 'Закрыто'
+                                      : 'Ждём причину'}
+                              </div>
+                            </div>
+
+                            <div className="mt-3 rounded-lg bg-black/10 px-3 py-2 text-sm text-foreground">
+                              {request.reason || 'Оператор ещё не прислал причину, бот ждёт ответ.'}
+                            </div>
+
+                            {request.status === 'open' && (
+                              <div className="mt-3 flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleResolveIssue(request.id, 'resolved')}
+                                  disabled={resolvingRequestId === request.id}
+                                >
+                                  Обработано
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleResolveIssue(request.id, 'dismissed')}
+                                  disabled={resolvingRequestId === request.id}
+                                >
+                                  Закрыть
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                          Когда оператор укажет проблемную дату, она появится здесь как отдельный запрос.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
           </div>
         </div>
       </main>

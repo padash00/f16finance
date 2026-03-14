@@ -3,6 +3,12 @@ import { NextResponse } from 'next/server'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
+import {
+  confirmShiftPublicationWeek,
+  createShiftIssueDraft,
+  startShiftIssueSelection,
+  submitPendingShiftIssueReason,
+} from '@/lib/server/shift-workflow'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
@@ -326,6 +332,99 @@ export async function POST(req: Request) {
       const chatId = update.callback_query.message?.chat?.id
       const messageId = update.callback_query.message?.message_id
 
+      const shiftWeekMatch = callbackData.match(/^shiftweek:([0-9a-f-]+):([0-9a-f-]+):(confirm|issue)$/i)
+      if (shiftWeekMatch) {
+        await answerCallbackQuery(callbackQueryId, 'Обрабатываю ответ...').catch(() => null)
+
+        try {
+          if (shiftWeekMatch[3] === 'confirm') {
+            const result = await confirmShiftPublicationWeek({
+              supabase,
+              publicationId: shiftWeekMatch[1],
+              operatorId: shiftWeekMatch[2],
+              telegramUserId,
+              source: 'telegram',
+            })
+
+            if (chatId && messageId) {
+              await clearCallbackButtons(chatId, messageId).catch(() => null)
+            }
+
+            if (chatId) {
+              await sendTelegramText(
+                chatId,
+                `<b>Неделя подтверждена</b>\n\nСпасибо. Руководитель увидит, что вы согласны с графиком.`,
+              )
+            }
+
+            await writeAuditLog(supabase, {
+              entityType: 'shift-week-response',
+              entityId: `${shiftWeekMatch[1]}:${shiftWeekMatch[2]}`,
+              action: 'telegram-confirm-week',
+              payload: {
+                company_id: result.companyId,
+                operator_id: shiftWeekMatch[2],
+              },
+            })
+          } else {
+            const result = await startShiftIssueSelection({
+              supabase,
+              publicationId: shiftWeekMatch[1],
+              operatorId: shiftWeekMatch[2],
+              telegramUserId,
+            })
+
+            if (chatId) {
+              await sendTelegramText(
+                chatId,
+                `<b>Выберите проблемную смену</b>\n\nНажмите на дату, по которой есть проблема. После этого бот попросит написать причину одним сообщением.`,
+              )
+              await callTelegram('sendMessage', {
+                chat_id: String(chatId),
+                text: 'Даты ваших смен на эту неделю:',
+                reply_markup: result.keyboard,
+              })
+            }
+          }
+        } catch (error: any) {
+          if (chatId) {
+            await sendTelegramText(chatId, error?.message || 'Не удалось обработать ответ по неделе.').catch(() => null)
+          }
+        }
+
+        return json({ ok: true })
+      }
+
+      const shiftIssueMatch = callbackData.match(/^shiftissue:([0-9a-f-]+):([0-9a-f-]+):(\d{4}-\d{2}-\d{2}):(day|night)$/i)
+      if (shiftIssueMatch) {
+        await answerCallbackQuery(callbackQueryId, 'Записываю смену...').catch(() => null)
+
+        try {
+          const result = await createShiftIssueDraft({
+            supabase,
+            publicationId: shiftIssueMatch[1],
+            operatorId: shiftIssueMatch[2],
+            telegramUserId,
+            shiftDate: shiftIssueMatch[3],
+            shiftType: shiftIssueMatch[4] as 'day' | 'night',
+            source: 'telegram',
+          })
+
+          if (chatId) {
+            await sendTelegramText(
+              chatId,
+              `<b>Смена отмечена как проблемная</b>\n\n${result.operatorName}, теперь одним сообщением напишите, почему вы не можете выйти на <b>${result.shiftDate}</b> (${result.shiftType === 'day' ? 'день' : 'ночь'}).`,
+            )
+          }
+        } catch (error: any) {
+          if (chatId) {
+            await sendTelegramText(chatId, error?.message || 'Не удалось записать проблемную смену.').catch(() => null)
+          }
+        }
+
+        return json({ ok: true })
+      }
+
       const match = callbackData.match(/^task:([0-9a-f-]+):(accept|need_info|blocked|already_done|complete)$/i)
       if (!match) {
         await answerCallbackQuery(callbackQueryId, 'Неизвестное действие', true)
@@ -372,6 +471,32 @@ export async function POST(req: Request) {
       }
 
       const parsed = parseTextResponse(text)
+      const pendingShiftIssue = await submitPendingShiftIssueReason({
+        supabase,
+        telegramUserId,
+        reason: text,
+        source: 'telegram',
+      })
+
+      if (pendingShiftIssue) {
+        await writeAuditLog(supabase, {
+          entityType: 'shift-change-request',
+          entityId: pendingShiftIssue.requestId,
+          action: 'telegram-submit-reason',
+          payload: {
+            operator_name: pendingShiftIssue.operatorName,
+            shift_date: pendingShiftIssue.shiftDate,
+            shift_type: pendingShiftIssue.shiftType,
+          },
+        })
+
+        await sendTelegramText(
+          chatId,
+          `<b>Запрос на изменение смены отправлен</b>\n\n${pendingShiftIssue.operatorName}, руководитель увидит, что вы не согласны с <b>${pendingShiftIssue.shiftDate}</b> (${pendingShiftIssue.shiftType === 'day' ? 'день' : 'ночь'}), и свяжется с вами после пересмотра графика.`,
+        )
+        return json({ ok: true })
+      }
+
       if (!parsed) {
         await sendTelegramText(chatId, getHelpText())
         return json({ ok: true })
