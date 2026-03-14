@@ -4,8 +4,9 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
 import {
-  confirmShiftPublicationWeek,
+  confirmShiftPublicationWeekByResponse,
   createShiftIssueDraft,
+  parseShiftIssuePayload,
   startShiftIssueSelection,
   submitPendingShiftIssueReason,
 } from '@/lib/server/shift-workflow'
@@ -332,16 +333,15 @@ export async function POST(req: Request) {
       const chatId = update.callback_query.message?.chat?.id
       const messageId = update.callback_query.message?.message_id
 
-      const shiftWeekMatch = callbackData.match(/^shiftweek:([0-9a-f-]+):([0-9a-f-]+):(confirm|issue)$/i)
+      const shiftWeekMatch = callbackData.match(/^sw:([0-9a-f-]+):(c|i)$/i)
       if (shiftWeekMatch) {
         await answerCallbackQuery(callbackQueryId, 'Обрабатываю ответ...').catch(() => null)
 
         try {
-          if (shiftWeekMatch[3] === 'confirm') {
-            const result = await confirmShiftPublicationWeek({
+          if (shiftWeekMatch[2] === 'c') {
+            const result = await confirmShiftPublicationWeekByResponse({
               supabase,
-              publicationId: shiftWeekMatch[1],
-              operatorId: shiftWeekMatch[2],
+              responseId: shiftWeekMatch[1],
               telegramUserId,
               source: 'telegram',
             })
@@ -359,18 +359,17 @@ export async function POST(req: Request) {
 
             await writeAuditLog(supabase, {
               entityType: 'shift-week-response',
-              entityId: `${shiftWeekMatch[1]}:${shiftWeekMatch[2]}`,
+              entityId: `${result.publicationId}:${result.operatorId}`,
               action: 'telegram-confirm-week',
               payload: {
                 company_id: result.companyId,
-                operator_id: shiftWeekMatch[2],
+                operator_id: result.operatorId,
               },
             })
           } else {
             const result = await startShiftIssueSelection({
               supabase,
-              publicationId: shiftWeekMatch[1],
-              operatorId: shiftWeekMatch[2],
+              responseId: shiftWeekMatch[1],
               telegramUserId,
             })
 
@@ -395,18 +394,18 @@ export async function POST(req: Request) {
         return json({ ok: true })
       }
 
-      const shiftIssueMatch = callbackData.match(/^shiftissue:([0-9a-f-]+):([0-9a-f-]+):(\d{4}-\d{2}-\d{2}):(day|night)$/i)
+      const shiftIssueMatch = callbackData.match(/^si:([0-9a-f-]+):(\d{6}):(d|n)$/i)
       if (shiftIssueMatch) {
         await answerCallbackQuery(callbackQueryId, 'Записываю смену...').catch(() => null)
 
         try {
+          const issuePayload = parseShiftIssuePayload(shiftIssueMatch[2], shiftIssueMatch[3])
           const result = await createShiftIssueDraft({
             supabase,
-            publicationId: shiftIssueMatch[1],
-            operatorId: shiftIssueMatch[2],
+            responseId: shiftIssueMatch[1],
             telegramUserId,
-            shiftDate: shiftIssueMatch[3],
-            shiftType: shiftIssueMatch[4] as 'day' | 'night',
+            shiftDate: issuePayload.shiftDate,
+            shiftType: issuePayload.shiftType,
             source: 'telegram',
           })
 

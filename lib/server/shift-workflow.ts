@@ -97,6 +97,18 @@ function formatShiftDate(isoDate: string) {
   })
 }
 
+function compactShiftDate(isoDate: string) {
+  return isoDate.replaceAll('-', '').slice(2)
+}
+
+function expandShiftDate(compactDate: string) {
+  if (!/^\d{6}$/.test(compactDate)) {
+    throw new Error('Некорректная дата смены')
+  }
+
+  return `20${compactDate.slice(0, 2)}-${compactDate.slice(2, 4)}-${compactDate.slice(4, 6)}`
+}
+
 async function sendTelegramMessage(chatId: string, text: string, replyMarkup?: Record<string, unknown>) {
   const token = requiredEnv('TELEGRAM_BOT_TOKEN')
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -179,23 +191,23 @@ function getOperatorAssignmentsFromShifts(shifts: ShiftRow[], operator: Operator
   })
 }
 
-function buildPublicationKeyboard(publicationId: string, operatorId: string) {
+function buildPublicationKeyboard(responseId: string) {
   return {
     inline_keyboard: [
       [
-        { text: 'Подтверждаю неделю', callback_data: `shiftweek:${publicationId}:${operatorId}:confirm` },
-        { text: 'Есть проблема', callback_data: `shiftweek:${publicationId}:${operatorId}:issue` },
+        { text: 'Подтверждаю неделю', callback_data: `sw:${responseId}:c` },
+        { text: 'Есть проблема', callback_data: `sw:${responseId}:i` },
       ],
     ],
   }
 }
 
-function buildIssueSelectionKeyboard(publicationId: string, operatorId: string, assignments: ShiftRow[]) {
+function buildIssueSelectionKeyboard(responseId: string, assignments: ShiftRow[]) {
   return {
     inline_keyboard: assignments.map((shift) => [
       {
         text: `${formatShiftDate(shift.date)} · ${formatShiftType(shift.shift_type)}`,
-        callback_data: `shiftissue:${publicationId}:${operatorId}:${shift.date}:${shift.shift_type}`,
+        callback_data: `si:${responseId}:${compactShiftDate(shift.date)}:${shift.shift_type === 'day' ? 'd' : 'n'}`,
       },
     ]),
   }
@@ -314,8 +326,17 @@ export async function publishShiftWeekForCompany(params: {
     response_source: 'system',
   }))
 
-  const { error: responseError } = await params.supabase.from('shift_operator_week_responses').insert(responseRows)
+  const { data: insertedResponses, error: responseError } = await params.supabase
+    .from('shift_operator_week_responses')
+    .insert(responseRows)
+    .select('id, operator_id')
+
   if (responseError) throw responseError
+
+  const responseIdByOperatorId = new Map<string, string>()
+  for (const item of insertedResponses || []) {
+    responseIdByOperatorId.set(String(item.operator_id), String(item.id))
+  }
 
   const teamRoster = buildTeamRoster(shifts)
   let delivered = 0
@@ -343,6 +364,11 @@ export async function publishShiftWeekForCompany(params: {
     }
 
     try {
+      const responseId = responseIdByOperatorId.get(operator.id)
+      if (!responseId) {
+        throw new Error('Не удалось создать response-запись недели для оператора.')
+      }
+
       const text = buildOperatorWeekMessage({
         companyName,
         weekStart: params.weekStart,
@@ -354,7 +380,7 @@ export async function publishShiftWeekForCompany(params: {
       await sendTelegramMessage(
         String(operator.telegram_chat_id),
         text,
-        buildPublicationKeyboard(publication.id, operator.id),
+        buildPublicationKeyboard(responseId),
       )
 
       delivered += 1
@@ -446,6 +472,31 @@ async function verifyPublicationOperator(supabase: DbClient, publicationId: stri
   }
 }
 
+async function verifyResponseOperator(supabase: DbClient, responseId: string, telegramUserId: string) {
+  const { data: responseRow, error: responseError } = await supabase
+    .from('shift_operator_week_responses')
+    .select('id, publication_id, operator_id, company_id')
+    .eq('id', responseId)
+    .maybeSingle()
+
+  if (responseError) throw responseError
+  if (!responseRow) throw new Error('Ответ по неделе не найден')
+
+  const { operator, publication } = await verifyPublicationOperator(
+    supabase,
+    String(responseRow.publication_id),
+    String(responseRow.operator_id),
+    telegramUserId,
+  )
+
+  return {
+    responseId: String(responseRow.id),
+    companyId: String(responseRow.company_id),
+    operator,
+    publication,
+  }
+}
+
 export async function confirmShiftPublicationWeek(params: {
   supabase: DbClient
   publicationId: string
@@ -479,18 +530,44 @@ export async function confirmShiftPublicationWeek(params: {
   }
 }
 
-export async function startShiftIssueSelection(params: {
+export async function confirmShiftPublicationWeekByResponse(params: {
   supabase: DbClient
-  publicationId: string
-  operatorId: string
+  responseId: string
   telegramUserId: string
+  source: string
 }) {
-  const { operator, publication } = await verifyPublicationOperator(
+  const { operator, publication, responseId } = await verifyResponseOperator(
     params.supabase,
-    params.publicationId,
-    params.operatorId,
+    params.responseId,
     params.telegramUserId,
   )
+
+  const { error } = await params.supabase
+    .from('shift_operator_week_responses')
+    .update({
+      status: 'confirmed',
+      response_source: params.source,
+      responded_at: new Date().toISOString(),
+      note: 'Оператор подтвердил недельный график.',
+    })
+    .eq('id', responseId)
+
+  if (error) throw error
+
+  return {
+    operatorName: getOperatorDisplayName(operator, 'Оператор'),
+    companyId: publication.company_id,
+    operatorId: operator.id,
+    publicationId: publication.id,
+  }
+}
+
+export async function startShiftIssueSelection(params: {
+  supabase: DbClient
+  responseId: string
+  telegramUserId: string
+}) {
+  const { operator, publication, responseId } = await verifyResponseOperator(params.supabase, params.responseId, params.telegramUserId)
 
   const shifts = await getWeekShiftsForCompany(
     params.supabase,
@@ -512,38 +589,31 @@ export async function startShiftIssueSelection(params: {
       responded_at: new Date().toISOString(),
       note: 'Оператор открыл запрос на изменение недели.',
     })
-    .eq('publication_id', params.publicationId)
-    .eq('operator_id', params.operatorId)
+    .eq('id', responseId)
 
   return {
     operatorName: getOperatorDisplayName(operator, 'Оператор'),
     publication,
     assignments,
-    keyboard: buildIssueSelectionKeyboard(params.publicationId, params.operatorId, assignments),
+    keyboard: buildIssueSelectionKeyboard(responseId, assignments),
   }
 }
 
 export async function createShiftIssueDraft(params: {
   supabase: DbClient
-  publicationId: string
-  operatorId: string
+  responseId: string
   telegramUserId: string
   shiftDate: string
   shiftType: ShiftType
   source: string
 }) {
-  const { operator, publication } = await verifyPublicationOperator(
-    params.supabase,
-    params.publicationId,
-    params.operatorId,
-    params.telegramUserId,
-  )
+  const { operator, publication } = await verifyResponseOperator(params.supabase, params.responseId, params.telegramUserId)
 
   const { data: existing, error: existingError } = await params.supabase
     .from('shift_change_requests')
     .select('id')
-    .eq('publication_id', params.publicationId)
-    .eq('operator_id', params.operatorId)
+    .eq('publication_id', publication.id)
+    .eq('operator_id', operator.id)
     .eq('shift_date', params.shiftDate)
     .eq('shift_type', params.shiftType)
     .in('status', ['awaiting_reason', 'open'])
@@ -567,9 +637,9 @@ export async function createShiftIssueDraft(params: {
   } else {
     const { error } = await params.supabase.from('shift_change_requests').insert([
       {
-        publication_id: params.publicationId,
+        publication_id: publication.id,
         company_id: publication.company_id,
-        operator_id: params.operatorId,
+        operator_id: operator.id,
         shift_date: params.shiftDate,
         shift_type: params.shiftType,
         status: 'awaiting_reason',
@@ -585,6 +655,13 @@ export async function createShiftIssueDraft(params: {
     shiftDate: params.shiftDate,
     shiftType: params.shiftType,
   }
+}
+
+export function parseShiftIssuePayload(compactDate: string, shiftCode: string) {
+  return {
+    shiftDate: expandShiftDate(compactDate),
+    shiftType: shiftCode === 'd' ? 'day' : 'night',
+  } as const
 }
 
 export async function submitPendingShiftIssueReason(params: {
