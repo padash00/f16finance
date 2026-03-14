@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { startTransition, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabaseClient'
@@ -182,6 +182,16 @@ export default function OperatorDashboardPage() {
   })
   const [workspaceSummaryLoading, setWorkspaceSummaryLoading] = useState(true)
 
+  useEffect(() => {
+    ;[
+      '/operator-schedule',
+      '/operator-tasks',
+      '/operator-chat',
+      '/operator-achievements',
+      '/operator-settings',
+    ].forEach((route) => router.prefetch(route))
+  }, [router])
+
   // Функция для установки периода
   const setPeriod = (type: 'week' | 'month' | 'all') => {
     setPeriodType(type)
@@ -301,41 +311,57 @@ export default function OperatorDashboardPage() {
         // ========== ЗАГРУЖАЕМ ДАННЫЕ ЗА ВЫБРАННЫЙ ПЕРИОД ==========
         console.log('📅 Период:', dateRange.from, '→', dateRange.to)
 
-        // Загружаем компании
-        const { data: companies, error: companiesError } = await supabase
-          .from('companies')
-          .select('id, code')
+        const [
+          companiesRes,
+          rulesRes,
+          shiftsRes,
+          adjustmentsRes,
+          debtsRes,
+          levelRes,
+          achievementsRes,
+        ] = await Promise.all([
+          supabase.from('companies').select('id, code'),
+          supabase
+            .from('operator_salary_rules')
+            .select(
+              'company_code, shift_type, base_per_shift, threshold1_turnover, threshold1_bonus, threshold2_turnover, threshold2_bonus',
+            )
+            .eq('is_active', true),
+          supabase
+            .from('incomes')
+            .select('id, date, shift, cash_amount, kaspi_amount, card_amount, company_id')
+            .eq('operator_id', operatorId)
+            .gte('date', dateRange.from)
+            .lte('date', dateRange.to),
+          supabase
+            .from('operator_salary_adjustments')
+            .select('amount, kind, date, comment')
+            .eq('operator_id', operatorId)
+            .gte('date', dateRange.from)
+            .lte('date', dateRange.to),
+          supabase
+            .from('debts')
+            .select('amount, week_start, comment, operator_id')
+            .eq('operator_id', operatorId)
+            .gte('week_start', dateRange.from)
+            .lte('week_start', dateRange.to)
+            .eq('status', 'active'),
+          supabase.rpc('get_operator_level_info', { operator_uuid: operatorId }),
+          supabase.rpc('get_operator_achievements', { operator_uuid: operatorId }),
+        ])
 
-        if (companiesError) throw new Error(companiesError.message)
+        if (companiesRes.error) throw new Error(companiesRes.error.message)
+        if (rulesRes.error) throw new Error(rulesRes.error.message)
+        if (shiftsRes.error) throw new Error(shiftsRes.error.message)
+        if (adjustmentsRes.error) throw new Error(adjustmentsRes.error.message)
+        if (debtsRes.error) throw new Error(debtsRes.error.message)
 
-        const { data: rulesList, error: rulesError } = await supabase
-          .from('operator_salary_rules')
-          .select('company_code, shift_type, base_per_shift, threshold1_turnover, threshold1_bonus, threshold2_turnover, threshold2_bonus')
-          .eq('is_active', true)
-
-        if (rulesError) throw new Error(rulesError.message)
-
-        // Загружаем смены
-        const { data: shifts, error: shiftsError } = await supabase
-          .from('incomes')
-          .select('id, date, shift, cash_amount, kaspi_amount, card_amount, company_id')
-          .eq('operator_id', operatorId)
-          .gte('date', dateRange.from)
-          .lte('date', dateRange.to)
-
-        if (shiftsError) throw new Error(shiftsError.message)
+        const companies = companiesRes.data
+        const rulesList = rulesRes.data
+        const shifts = shiftsRes.data
+        const adjustments = adjustmentsRes.data
 
         console.log(`📊 Загружено смен: ${shifts?.length || 0} за период ${dateRange.from} - ${dateRange.to}`)
-
-        // Загружаем корректировки
-        const { data: adjustments, error: adjustmentsError } = await supabase
-          .from('operator_salary_adjustments')
-          .select('amount, kind, date, comment')
-          .eq('operator_id', operatorId)
-          .gte('date', dateRange.from)
-          .lte('date', dateRange.to)
-
-        if (adjustmentsError) throw new Error(adjustmentsError.message)
         const history: PaymentHistory[] = []
 
         for (const adj of adjustments || []) {
@@ -366,16 +392,7 @@ export default function OperatorDashboardPage() {
           }
         }
 
-        // Загружаем автоматические долги
-        const { data: autoDebtsData, error: debtsError } = await supabase
-          .from('debts')
-          .select('amount, week_start, comment, operator_id')
-          .eq('operator_id', operatorId)
-          .gte('week_start', dateRange.from)
-          .lte('week_start', dateRange.to)
-          .eq('status', 'active')
-
-        if (debtsError) throw new Error(debtsError.message)
+        const autoDebtsData = debtsRes.data
         
         for (const debt of autoDebtsData || []) {
           history.push({
@@ -454,23 +471,12 @@ export default function OperatorDashboardPage() {
         history.sort((a, b) => b.date.localeCompare(a.date))
         setPaymentHistory(history.slice(0, 15))
 
-        // ========== ЗАГРУЖАЕМ ДАННЫЕ О ДОСТИЖЕНИЯХ ==========
-        console.log('🏆 Загружаем достижения...')
-        
-        // Получаем уровень и XP
-        const { data: levelData, error: levelError } = await supabase
-          .rpc('get_operator_level_info', { operator_uuid: operatorId })
-
-        if (!levelError && levelData && levelData.length > 0) {
-          setLevelInfo(levelData[0])
+        if (!levelRes.error && levelRes.data && levelRes.data.length > 0) {
+          setLevelInfo(levelRes.data[0])
         }
 
-        // Получаем все ачивки
-        const { data: achievementsData, error: achievementsError } = await supabase
-          .rpc('get_operator_achievements', { operator_uuid: operatorId })
-
-        if (!achievementsError && achievementsData) {
-          setAchievements(achievementsData)
+        if (!achievementsRes.error && achievementsRes.data) {
+          setAchievements(achievementsRes.data)
         }
 
       } catch (err: any) {
@@ -545,7 +551,16 @@ export default function OperatorDashboardPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.push('/login')
+    startTransition(() => {
+      router.push('/login')
+    })
+  }
+
+  const navigateTo = (path: string) => {
+    router.prefetch(path)
+    startTransition(() => {
+      router.push(path)
+    })
   }
 
   const formatDate = (date: string) => {
@@ -618,16 +633,16 @@ export default function OperatorDashboardPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
       {/* Шапка */}
-      <header className="sticky top-0 z-10 bg-gray-900/80 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 overflow-hidden">
+      <header className="sticky top-0 z-10 border-b border-white/5 bg-gray-900/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="h-10 w-10 overflow-hidden rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 sm:h-11 sm:w-11">
               {operator.photo_url ? (
                 <Image
                   src={operator.photo_url}
                   alt={operator.name}
-                  width={40}
-                  height={40}
+                  width={44}
+                  height={44}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -636,9 +651,9 @@ export default function OperatorDashboardPage() {
                 </div>
               )}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-white">{getOperatorDisplayName(operator)}</h1>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-lg font-bold text-white sm:text-xl">{getOperatorDisplayName(operator)}</h1>
                 {levelInfo && (
                   <div className="px-2 py-0.5 bg-violet-500/20 rounded-full border border-violet-500/30 flex items-center gap-1">
                     <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
@@ -650,13 +665,13 @@ export default function OperatorDashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:items-center">
             {/* Кнопка чата */}
             <Button
               variant="ghost"
               size="icon"
               className="text-gray-400 hover:text-emerald-400"
-              onClick={() => router.push('/operator-chat')}
+              onClick={() => navigateTo('/operator-chat')}
               title="Общий чат"
             >
               <MessageCircle className="w-5 h-5" />
@@ -667,7 +682,7 @@ export default function OperatorDashboardPage() {
               variant="ghost"
               size="icon"
               className="text-gray-400 hover:text-yellow-400"
-              onClick={() => router.push('/operator-achievements')}
+              onClick={() => navigateTo('/operator-achievements')}
               title="Достижения"
             >
               <Trophy className="w-5 h-5" />
@@ -678,7 +693,7 @@ export default function OperatorDashboardPage() {
               variant="ghost"
               size="icon"
               className="text-gray-400 hover:text-white"
-              onClick={() => router.push('/operator-settings')}
+              onClick={() => navigateTo('/operator-settings')}
             >
               <Settings className="w-5 h-5" />
             </Button>
@@ -696,9 +711,9 @@ export default function OperatorDashboardPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+      <main className="mx-auto max-w-7xl space-y-6 px-3 py-5 sm:px-4 sm:py-8 sm:space-y-8">
         {/* Баланс и уровень */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
           {/* Баланс */}
           <Card className="lg:col-span-3 p-6 bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border-white/5">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -706,10 +721,10 @@ export default function OperatorDashboardPage() {
                 <p className="text-sm text-gray-400 mb-2">
                   Баланс за {formatDateRange(dateRange.from, dateRange.to)}
                 </p>
-                <p className="text-4xl font-bold text-white">
+                <p className="text-3xl font-bold text-white sm:text-4xl">
                   {salaryStats?.remainingAmount.toLocaleString()} ₸
                 </p>
-                <div className="flex items-center gap-4 mt-4 text-xs">
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
                   <span className="text-gray-500">Начислено: {salaryStats?.totalAccrued.toLocaleString()} ₸</span>
                   <span className="text-gray-500">Вычтено: {salaryStats?.totalDeductions.toLocaleString()} ₸</span>
                 </div>
@@ -789,12 +804,12 @@ export default function OperatorDashboardPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={() => router.push('/operator-schedule')} className="bg-violet-500 hover:bg-violet-400">
+            <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+              <Button onClick={() => navigateTo('/operator-schedule')} className="w-full bg-violet-500 hover:bg-violet-400 sm:w-auto">
                 <CalendarRange className="w-4 h-4 mr-2" />
                 Мой график
               </Button>
-              <Button variant="outline" className="border-white/10" onClick={() => router.push('/operator-tasks')}>
+              <Button variant="outline" className="w-full border-white/10 sm:w-auto" onClick={() => navigateTo('/operator-tasks')}>
                 <Target className="w-4 h-4 mr-2" />
                 Мои задачи
               </Button>
@@ -861,9 +876,9 @@ export default function OperatorDashboardPage() {
         </Card>
 
         {/* Фильтр дат */}
-        <Card className="p-4 bg-gray-900/40 border-white/5">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
+        <Card className="border-white/5 bg-gray-900/40 p-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
               <Calendar className="w-4 h-4 text-violet-400" />
               <span className="text-sm text-gray-400">Период:</span>
               
@@ -897,7 +912,8 @@ export default function OperatorDashboardPage() {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="overflow-x-auto">
+              <div className="flex min-w-max items-center gap-2">
               {/* Кнопки выбора периода */}
               <Button
                 size="sm"
@@ -965,13 +981,14 @@ export default function OperatorDashboardPage() {
                   Сброс
                 </Button>
               )}
+              </div>
             </div>
           </div>
         </Card>
 
         {/* Tabs */}
         <Tabs defaultValue="salary" className="space-y-6">
-          <TabsList className="bg-gray-900/50 border-white/5">
+          <TabsList className="h-auto w-full justify-start overflow-x-auto border-white/5 bg-gray-900/50">
             <TabsTrigger value="salary" className="data-[state=active]:bg-violet-500/20">
               <Wallet className="w-4 h-4 mr-2" />
               Зарплата

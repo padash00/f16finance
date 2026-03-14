@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -74,6 +75,7 @@ function formatDateTime(date: string) {
 }
 
 export default function OperatorTasksPage() {
+  const router = useRouter()
   const realtimeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -87,6 +89,10 @@ export default function OperatorTasksPage() {
   const [notice, setNotice] = useState<Notice | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    ;['/operator-dashboard', '/operator-schedule'].forEach((route) => router.prefetch(route))
+  }, [router])
+
   const loadData = useCallback(async (silent = false) => {
     try {
       if (!silent) {
@@ -95,7 +101,7 @@ export default function OperatorTasksPage() {
         setRefreshing(true)
       }
 
-      const response = await fetch('/api/operator/tasks')
+      const response = await fetch('/api/operator/tasks', { cache: 'no-store' })
       const json = await response.json().catch(() => null)
       if (!response.ok) {
         throw new Error(json?.error || `Ошибка запроса (${response.status})`)
@@ -269,29 +275,44 @@ export default function OperatorTasksPage() {
     }
   }
 
+  const navigateTo = (path: string) => {
+    router.prefetch(path)
+    startTransition(() => {
+      router.push(path)
+    })
+  }
+
   return (
     <div className="app-shell-layout">
       <Sidebar />
       <main className="app-main">
-        <div className="app-page max-w-7xl space-y-6">
-          <div className="rounded-[2rem] border border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(128,90,213,0.18),transparent_35%),linear-gradient(180deg,rgba(10,18,30,0.98),rgba(8,14,24,0.98))] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.24)]">
+        <div className="app-page max-w-7xl space-y-5 sm:space-y-6">
+          <div className="rounded-[1.7rem] border border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(128,90,213,0.18),transparent_35%),linear-gradient(180deg,rgba(10,18,30,0.98),rgba(8,14,24,0.98))] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.24)] sm:rounded-[2rem] sm:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="flex items-center gap-3 text-white">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-[1rem] border border-white/10 bg-white/[0.04]">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-[1rem] border border-white/10 bg-white/[0.04] sm:h-12 sm:w-12">
                     <SquareKanban className="h-6 w-6 text-[#ffd27b]" />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-semibold tracking-[-0.04em]">Мои задачи</h1>
+                    <h1 className="text-xl font-semibold tracking-[-0.04em] sm:text-2xl">Мои задачи</h1>
                     <p className="mt-1 text-sm text-slate-400">Рабочий контур для {operatorName}</p>
                   </div>
                 </div>
               </div>
 
-              <Button variant="outline" onClick={() => loadData(true)} className="gap-2 self-start">
-                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                Обновить
-              </Button>
+              <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+                <Button variant="outline" className="w-full border-white/10 sm:w-auto" onClick={() => navigateTo('/operator-dashboard')}>
+                  Назад в кабинет
+                </Button>
+                <Button variant="outline" className="w-full border-white/10 sm:w-auto" onClick={() => navigateTo('/operator-schedule')}>
+                  Перейти в мой график
+                </Button>
+                <Button variant="outline" onClick={() => loadData(true)} className="w-full gap-2 sm:w-auto">
+                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  Обновить
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -313,7 +334,7 @@ export default function OperatorTasksPage() {
             <Card className="border-rose-500/25 bg-rose-500/10 p-4 text-sm text-rose-200">{error}</Card>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[360px_minmax(0,1fr)] xl:gap-6">
             <div className="space-y-4">
               <Card className="border-border bg-card p-4">
                 <div className="grid grid-cols-3 gap-3 text-center">
@@ -372,7 +393,7 @@ export default function OperatorTasksPage() {
               </Card>
             </div>
 
-            <Card className="border-border bg-card p-5">
+            <Card className="border-border bg-card p-4 sm:p-5">
               {loading && !selectedTask ? (
                 <div className="flex items-center gap-2 text-sm text-slate-400">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -397,7 +418,7 @@ export default function OperatorTasksPage() {
                     {selectedTask.description?.trim() || 'Описание задачи пока не заполнено.'}
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                     {(['accept', 'need_info', 'blocked', 'already_done', 'complete'] as TaskResponse[]).map((responseType) => (
                       <Button
                         key={responseType}
@@ -445,7 +466,7 @@ export default function OperatorTasksPage() {
                         placeholder="Напишите комментарий или уточнение по задаче"
                         className="min-h-[96px] flex-1 rounded-[1.1rem] border border-white/8 bg-black/10 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-[#ffd27b]/25"
                       />
-                      <Button onClick={handleComment} disabled={commenting || !commentText.trim()} className="gap-2 self-start">
+                      <Button onClick={handleComment} disabled={commenting || !commentText.trim()} className="w-full gap-2 self-start md:w-auto">
                         {commenting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                         Отправить
                       </Button>

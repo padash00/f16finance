@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -69,6 +70,7 @@ function formatDate(date: string) {
 }
 
 export default function OperatorSchedulePage() {
+  const router = useRouter()
   const realtimeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [weekStart, setWeekStart] = useState(getWeekStart())
   const [loading, setLoading] = useState(true)
@@ -81,6 +83,10 @@ export default function OperatorSchedulePage() {
   const [notice, setNotice] = useState<Notice | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    ;['/operator-dashboard', '/operator-tasks'].forEach((route) => router.prefetch(route))
+  }, [router])
+
   const loadData = useCallback(async (silent = false) => {
     try {
       if (!silent) {
@@ -89,7 +95,7 @@ export default function OperatorSchedulePage() {
         setRefreshing(true)
       }
 
-      const response = await fetch(`/api/operator/shifts?weekStart=${weekStart}`)
+      const response = await fetch(`/api/operator/shifts?weekStart=${weekStart}`, { cache: 'no-store' })
       const json = await response.json().catch(() => null)
       if (!response.ok) {
         throw new Error(json?.error || `Ошибка запроса (${response.status})`)
@@ -202,28 +208,35 @@ export default function OperatorSchedulePage() {
     }
   }
 
+  const navigateTo = (path: string) => {
+    router.prefetch(path)
+    startTransition(() => {
+      router.push(path)
+    })
+  }
+
   return (
     <div className="app-shell-layout">
       <Sidebar />
       <main className="app-main">
-        <div className="app-page max-w-7xl space-y-6">
-          <div className="rounded-[2rem] border border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(60,179,113,0.16),transparent_36%),linear-gradient(180deg,rgba(10,18,30,0.98),rgba(8,14,24,0.98))] p-6 shadow-[0_22px_70px_rgba(0,0,0,0.24)]">
+        <div className="app-page max-w-7xl space-y-5 sm:space-y-6">
+          <div className="rounded-[1.7rem] border border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(60,179,113,0.16),transparent_36%),linear-gradient(180deg,rgba(10,18,30,0.98),rgba(8,14,24,0.98))] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.24)] sm:rounded-[2rem] sm:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-3 text-white">
-                <div className="flex h-12 w-12 items-center justify-center rounded-[1rem] border border-white/10 bg-white/[0.04]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-[1rem] border border-white/10 bg-white/[0.04] sm:h-12 sm:w-12">
                   <CalendarDays className="h-6 w-6 text-[#7ef0cf]" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-semibold tracking-[-0.04em]">Мой график</h1>
+                  <h1 className="text-xl font-semibold tracking-[-0.04em] sm:text-2xl">Мой график</h1>
                   <p className="mt-1 text-sm text-slate-400">Недельные смены и согласование для {operatorName}</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="icon" onClick={() => setWeekStart(shiftIsoDate(weekStart, -7))}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <div className="rounded-xl border border-white/8 bg-white/[0.04] px-4 py-2 text-sm text-white">
+                <div className="min-w-0 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-2 text-xs text-white sm:px-4 sm:text-sm">
                   {formatDate(weekStart)} — {formatDate(shiftIsoDate(weekStart, 6))}
                 </div>
                 <Button variant="outline" size="icon" onClick={() => setWeekStart(shiftIsoDate(weekStart, 7))}>
@@ -234,6 +247,15 @@ export default function OperatorSchedulePage() {
                   Обновить
                 </Button>
               </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+              <Button variant="outline" className="w-full border-white/10 sm:w-auto" onClick={() => navigateTo('/operator-dashboard')}>
+                Назад в кабинет
+              </Button>
+              <Button variant="outline" className="w-full border-white/10 sm:w-auto" onClick={() => navigateTo('/operator-tasks')}>
+                Перейти в мои задачи
+              </Button>
             </div>
           </div>
 
@@ -255,7 +277,7 @@ export default function OperatorSchedulePage() {
             <Card className="border-rose-500/25 bg-rose-500/10 p-4 text-sm text-rose-200">{error}</Card>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)] xl:gap-6">
             <Card className="border-border bg-card p-4">
               <div className="mb-3 text-sm font-semibold text-white">Мои точки на неделю</div>
               <div className="space-y-3">
@@ -290,7 +312,7 @@ export default function OperatorSchedulePage() {
               </div>
             </Card>
 
-            <Card className="border-border bg-card p-5">
+            <Card className="border-border bg-card p-4 sm:p-5">
               {loading && !selectedBlock ? (
                 <div className="flex items-center gap-2 text-sm text-slate-400">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -379,7 +401,7 @@ export default function OperatorSchedulePage() {
                     <div className="space-y-4">
                       <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.025] p-4">
                         <div className="text-sm font-semibold text-white">Команда на неделю</div>
-                        <div className="mt-4 space-y-3">
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
                           {selectedBlock.teamRoster.map((shift) => (
                             <div key={shift.id} className="rounded-xl border border-white/8 bg-black/10 px-4 py-3">
                               <div className="text-sm font-medium text-white">{formatDate(shift.date)}</div>
