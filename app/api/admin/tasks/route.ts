@@ -293,7 +293,7 @@ async function addTaskComment(
   supabase: ClientLike,
   payload: { taskId: string; content: string; staffId?: string | null; operatorId?: string | null },
 ) {
-  const { data, error } = await supabase
+  const primaryInsert = await supabase
     .from('task_comments')
     .insert([
       {
@@ -306,8 +306,31 @@ async function addTaskComment(
     .select('*')
     .single()
 
-  if (error) throw error
-  return data
+  if (!primaryInsert.error) return primaryInsert.data
+
+  const errorMessage = String(primaryInsert.error?.message || '')
+  const canRetryWithoutOperatorId =
+    payload.operatorId &&
+    (errorMessage.includes("Could not find the 'operator_id' column") || errorMessage.includes('schema cache'))
+
+  if (!canRetryWithoutOperatorId) {
+    throw primaryInsert.error
+  }
+
+  const fallbackInsert = await supabase
+    .from('task_comments')
+    .insert([
+      {
+        task_id: payload.taskId,
+        staff_id: payload.staffId || null,
+        content: payload.content,
+      },
+    ])
+    .select('*')
+    .single()
+
+  if (fallbackInsert.error) throw fallbackInsert.error
+  return fallbackInsert.data
 }
 
 async function notifyTaskAssignee(

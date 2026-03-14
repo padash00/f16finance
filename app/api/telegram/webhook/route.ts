@@ -191,7 +191,9 @@ async function processTaskResponse(params: {
     .filter(Boolean)
     .join(' ')
 
-  const { data: comment, error: commentError } = await params.supabase
+  let comment: { id: string } | null = null
+
+  const primaryInsert = await params.supabase
     .from('task_comments')
     .insert([
       {
@@ -203,7 +205,28 @@ async function processTaskResponse(params: {
     .select('id')
     .single()
 
-  if (commentError) throw commentError
+  if (!primaryInsert.error) {
+    comment = primaryInsert.data
+  } else if (
+    String(primaryInsert.error?.message || '').includes("Could not find the 'operator_id' column") ||
+    String(primaryInsert.error?.message || '').includes('schema cache')
+  ) {
+    const fallbackInsert = await params.supabase
+      .from('task_comments')
+      .insert([
+        {
+          task_id: task.id,
+          content: `${getOperatorDisplayName(operator, 'Оператор')}: ${commentText}`,
+        },
+      ])
+      .select('id')
+      .single()
+
+    if (fallbackInsert.error) throw fallbackInsert.error
+    comment = fallbackInsert.data
+  } else {
+    throw primaryInsert.error
+  }
 
   await writeAuditLog(params.supabase, {
     entityType: 'task',
@@ -216,7 +239,7 @@ async function processTaskResponse(params: {
       response: params.response,
       status: config.status,
       note: params.note?.trim() || null,
-      comment_id: comment.id,
+      comment_id: comment?.id || null,
     },
   })
 
