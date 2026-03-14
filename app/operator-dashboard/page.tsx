@@ -95,6 +95,73 @@ type PaymentHistory = {
   comment: string | null
 }
 
+type OperatorTaskItem = {
+  id: string
+  status: 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
+  due_date: string | null
+}
+
+type OperatorShiftGroup = {
+  publication?: { id: string } | null
+  response?: { id: string; status?: string | null } | null
+  requests?: Array<{ id: string; status?: string | null }>
+  shifts?: Array<{ date: string; shift_type: 'day' | 'night' }>
+}
+
+type OperatorWorkspaceSummary = {
+  activeTasks: number
+  reviewTasks: number
+  pendingWeekConfirmations: number
+  openShiftIssues: number
+  nextShiftLabel: string | null
+}
+
+function getCurrentWeekStart(date = new Date()) {
+  const copy = new Date(date)
+  const day = copy.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  copy.setDate(copy.getDate() + diff)
+  copy.setHours(0, 0, 0, 0)
+  return copy.toISOString().slice(0, 10)
+}
+
+function formatShiftDateLabel(date: string, shiftType: 'day' | 'night') {
+  const shiftLabel = shiftType === 'day' ? 'день' : 'ночь'
+  return `${new Date(`${date}T12:00:00`).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+  })}, ${shiftLabel}`
+}
+
+function buildWorkspaceSummary(
+  tasks: OperatorTaskItem[],
+  schedule: OperatorShiftGroup[],
+): OperatorWorkspaceSummary {
+  const activeTasks = tasks.filter((task) => ['todo', 'in_progress', 'backlog'].includes(task.status)).length
+  const reviewTasks = tasks.filter((task) => task.status === 'review').length
+  const pendingWeekConfirmations = schedule.filter(
+    (company) => company.publication?.id && company.response?.status !== 'confirmed',
+  ).length
+  const openShiftIssues = schedule.reduce(
+    (sum, company) =>
+      sum +
+      (company.requests || []).filter((request) => !['resolved', 'dismissed'].includes(request.status || '')).length,
+    0,
+  )
+  const nextShift = schedule
+    .flatMap((company) => company.shifts || [])
+    .filter((shift) => new Date(`${shift.date}T00:00:00`).getTime() >= new Date().setHours(0, 0, 0, 0))
+    .sort((a, b) => a.date.localeCompare(b.date))[0]
+
+  return {
+    activeTasks,
+    reviewTasks,
+    pendingWeekConfirmations,
+    openShiftIssues,
+    nextShiftLabel: nextShift ? formatShiftDateLabel(nextShift.date, nextShift.shift_type) : null,
+  }
+}
+
 export default function OperatorDashboardPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -106,6 +173,14 @@ export default function OperatorDashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [customRange, setCustomRange] = useState(false)
   const [periodType, setPeriodType] = useState<'week' | 'month' | 'all'>('week')
+  const [workspaceSummary, setWorkspaceSummary] = useState<OperatorWorkspaceSummary>({
+    activeTasks: 0,
+    reviewTasks: 0,
+    pendingWeekConfirmations: 0,
+    openShiftIssues: 0,
+    nextShiftLabel: null,
+  })
+  const [workspaceSummaryLoading, setWorkspaceSummaryLoading] = useState(true)
 
   // Функция для установки периода
   const setPeriod = (type: 'week' | 'month' | 'all') => {
@@ -409,6 +484,65 @@ export default function OperatorDashboardPage() {
     loadOperatorData()
   }, [router, dateRange])
 
+  useEffect(() => {
+    let mounted = true
+
+    const syncWorkspaceSummary = async (quiet = false) => {
+      try {
+        if (!quiet) {
+          setWorkspaceSummaryLoading(true)
+        }
+
+        const weekStart = getCurrentWeekStart()
+        const [tasksRes, shiftsRes] = await Promise.all([
+          fetch('/api/operator/tasks', { cache: 'no-store' }),
+          fetch(`/api/operator/shifts?weekStart=${weekStart}`, { cache: 'no-store' }),
+        ])
+
+        if (!tasksRes.ok || !shiftsRes.ok) {
+          throw new Error('Не удалось обновить статус-центр')
+        }
+
+        const [tasksPayload, shiftsPayload] = await Promise.all([tasksRes.json(), shiftsRes.json()])
+        if (!mounted) return
+
+        const nextSummary = buildWorkspaceSummary(
+          Array.isArray(tasksPayload?.tasks) ? tasksPayload.tasks : [],
+          Array.isArray(shiftsPayload?.schedule) ? shiftsPayload.schedule : [],
+        )
+        setWorkspaceSummary(nextSummary)
+      } catch (workspaceError) {
+        console.error('Workspace summary sync error', workspaceError)
+      } finally {
+        if (mounted) {
+          setWorkspaceSummaryLoading(false)
+        }
+      }
+    }
+
+    void syncWorkspaceSummary()
+
+    const interval = window.setInterval(() => {
+      void syncWorkspaceSummary(true)
+    }, 10000)
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void syncWorkspaceSummary(true)
+      }
+    }
+
+    window.addEventListener('focus', handleVisibility)
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      mounted = false
+      window.clearInterval(interval)
+      window.removeEventListener('focus', handleVisibility)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [])
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
@@ -641,6 +775,90 @@ export default function OperatorDashboardPage() {
             </Card>
           )}
         </div>
+
+        <Card className="p-5 bg-gray-900/50 border-white/5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-violet-400" />
+                <h2 className="text-lg font-semibold text-white">Статус-центр</h2>
+              </div>
+              <p className="text-sm text-gray-400 max-w-2xl">
+                Быстрый обзор ваших задач и смен на текущую неделю. Блок обновляется сам, так что
+                можно сразу видеть новые ответы руководителя и изменения по графику.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => router.push('/operator-schedule')} className="bg-violet-500 hover:bg-violet-400">
+                <CalendarRange className="w-4 h-4 mr-2" />
+                Мой график
+              </Button>
+              <Button variant="outline" className="border-white/10" onClick={() => router.push('/operator-tasks')}>
+                <Target className="w-4 h-4 mr-2" />
+                Мои задачи
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-5">
+            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+              <div className="flex items-center gap-2 text-emerald-400 mb-2">
+                <Target className="w-4 h-4" />
+                <span className="text-xs uppercase tracking-[0.2em]">Активные задачи</span>
+              </div>
+              <p className="text-3xl font-semibold text-white">{workspaceSummary.activeTasks}</p>
+              <p className="text-xs text-gray-500 mt-2">
+                В работе, в бэклоге и ожидают запуска
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+              <div className="flex items-center gap-2 text-amber-400 mb-2">
+                <History className="w-4 h-4" />
+                <span className="text-xs uppercase tracking-[0.2em]">На проверке</span>
+              </div>
+              <p className="text-3xl font-semibold text-white">{workspaceSummary.reviewTasks}</p>
+              <p className="text-xs text-gray-500 mt-2">
+                Задачи, где ждём решение руководителя
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+              <div className="flex items-center gap-2 text-sky-400 mb-2">
+                <Calendar className="w-4 h-4" />
+                <span className="text-xs uppercase tracking-[0.2em]">Подтвердить неделю</span>
+              </div>
+              <p className="text-3xl font-semibold text-white">{workspaceSummary.pendingWeekConfirmations}</p>
+              <p className="text-xs text-gray-500 mt-2">
+                Недели, где ещё нужен ваш ответ
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+              <div className="flex items-center gap-2 text-rose-400 mb-2">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="text-xs uppercase tracking-[0.2em]">Открытые вопросы</span>
+              </div>
+              <p className="text-3xl font-semibold text-white">{workspaceSummary.openShiftIssues}</p>
+              <p className="text-xs text-gray-500 mt-2">
+                Запросы по сменам, которые ещё не закрыты
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-white/8 bg-black/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Следующая смена</p>
+              <p className="text-sm font-medium text-white mt-1">
+                {workspaceSummary.nextShiftLabel || 'Смены на текущую неделю пока не назначены'}
+              </p>
+            </div>
+            <div className="text-xs text-gray-500">
+              {workspaceSummaryLoading ? 'Обновляем статус-центр...' : 'Сводка синхронизируется автоматически'}
+            </div>
+          </div>
+        </Card>
 
         {/* Фильтр дат */}
         <Card className="p-4 bg-gray-900/40 border-white/5">

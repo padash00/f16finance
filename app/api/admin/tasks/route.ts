@@ -399,6 +399,31 @@ async function notifyTaskAssignee(
   return { sent: true as const }
 }
 
+async function logTaskNotificationFailure(
+  supabase: ClientLike,
+  params: {
+    context: { task: LoadedTask; operator: LoadedOperator | null }
+    kind: string
+    error: unknown
+  },
+) {
+  await writeNotificationLog(supabase, {
+    channel: 'telegram',
+    recipient:
+      params.context.operator?.telegram_chat_id ||
+      params.context.operator?.id ||
+      'unknown-operator',
+    status: 'failed',
+    payload: {
+      kind: params.kind,
+      task_id: params.context.task.id,
+      task_number: params.context.task.task_number,
+      operator_id: params.context.operator?.id || null,
+      error: params.error instanceof Error ? params.error.message : 'send-failed',
+    },
+  })
+}
+
 export async function POST(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'tasks')
@@ -668,6 +693,30 @@ export async function POST(req: Request) {
         action: 'create',
         payload: { task_id: body.taskId },
       })
+
+      try {
+        const context = await loadTaskContext(supabase, body.taskId)
+        await notifyTaskAssignee(supabase, {
+          task: context.task,
+          operator: context.operator,
+          company: context.company,
+          type: 'status',
+          statusLabel: STATUS_LABELS[context.task.status],
+          note: body.content.trim(),
+        })
+      } catch (notifyError) {
+        console.error('Task comment notify error', notifyError)
+        try {
+          const context = await loadTaskContext(supabase, body.taskId)
+          await logTaskNotificationFailure(supabase, {
+            context,
+            kind: 'task-comment-update',
+            error: notifyError,
+          })
+        } catch (logError) {
+          console.error('Task comment notify failure log error', logError)
+        }
+      }
 
       return json({ ok: true, data })
     }
