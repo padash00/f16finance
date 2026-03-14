@@ -236,6 +236,7 @@ function buildShiftConflicts(shifts: Shift[], companyNames: Record<string, strin
 }
 
 export default function ShiftsPage() {
+  const realtimeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [companies, setCompanies] = useState<Company[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
@@ -303,9 +304,11 @@ export default function ShiftsPage() {
     }
   }, [weekDays])
 
-  const fetchWorkflowData = useCallback(async () => {
+  const fetchWorkflowData = useCallback(async (silent = false) => {
     const weekStart = weekDays[0].dateISO
-    setWorkflowLoading(true)
+    if (!silent) {
+      setWorkflowLoading(true)
+    }
     try {
       const response = await fetch(`/api/admin/shifts?weekStart=${weekStart}`)
       const json = await response.json().catch(() => null)
@@ -321,9 +324,15 @@ export default function ShiftsPage() {
       console.error('❌ Ошибка workflow shifts:', err)
       setWorkflowError(err?.message || 'Не удалось загрузить согласования')
     } finally {
-      setWorkflowLoading(false)
+      if (!silent) {
+        setWorkflowLoading(false)
+      }
     }
   }, [weekDays])
+
+  const refreshLiveData = useCallback(async () => {
+    await Promise.all([fetchScheduleData(), fetchWorkflowData(true)])
+  }, [fetchScheduleData, fetchWorkflowData])
 
   useEffect(() => {
     setLoading(true)
@@ -333,6 +342,70 @@ export default function ShiftsPage() {
   useEffect(() => {
     fetchWorkflowData()
   }, [fetchWorkflowData])
+
+  useEffect(() => {
+    const scheduleRefresh = () => {
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current)
+      }
+
+      realtimeRefreshRef.current = setTimeout(() => {
+        refreshLiveData()
+      }, 250)
+    }
+
+    const channel = supabase
+      .channel(`shifts-live-${weekDays[0].dateISO}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_week_publications' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_operator_week_responses' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_change_requests' }, scheduleRefresh)
+      .subscribe()
+
+    return () => {
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current)
+      }
+      supabase.removeChannel(channel)
+    }
+  }, [refreshLiveData, weekDays])
+
+  useEffect(() => {
+    let isRefreshing = false
+
+    const refreshIfVisible = async () => {
+      if (document.visibilityState !== 'visible' || isRefreshing) return
+      isRefreshing = true
+      try {
+        await refreshLiveData()
+      } finally {
+        isRefreshing = false
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      refreshIfVisible()
+    }, 4000)
+
+    const onFocus = () => {
+      refreshIfVisible()
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshIfVisible()
+      }
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [refreshLiveData])
 
   const shiftsMap: ShiftsMap = useMemo(() => {
     return shifts.reduce<ShiftsMap>((acc, shift) => {
