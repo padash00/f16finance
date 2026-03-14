@@ -211,35 +211,24 @@ export default function OperatorsPage() {
       setSaving(true)
       setError(null)
 
-      // Добавляем оператора
-      const { data: operatorData, error: operatorError } = await supabase
-        .from('operators')
-        .insert([
-          {
+      const response = await fetch('/api/admin/operators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createOperator',
+          payload: {
             name: name.trim(),
-            short_name: shortName.trim() || null,
-            is_active: true,
-          },
-        ])
-        .select()
-        .single()
-
-      if (operatorError) throw operatorError
-
-      // Создаем профиль
-      const { error: profileError } = await supabase
-        .from('operator_profiles')
-        .insert([
-          {
-            operator_id: operatorData.id,
             full_name: fullName.trim() || null,
+            short_name: shortName.trim() || null,
             position: position.trim() || null,
             phone: phone.trim() || null,
             email: email.trim() || null,
-          }
-        ])
+          },
+        }),
+      })
 
-      if (profileError) throw profileError
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
 
       setSuccess('Оператор успешно добавлен')
       setTimeout(() => setSuccess(null), 3000)
@@ -284,46 +273,25 @@ export default function OperatorsPage() {
       setSaving(true)
       setError(null)
 
-      // Обновляем оператора
-      const { error: operatorError } = await supabase
-        .from('operators')
-        .update({
-          name: editName.trim(),
-          short_name: editShortName.trim() || null,
-        })
-        .eq('id', editingOperator.id)
-
-      if (operatorError) throw operatorError
-
-      // Обновляем профиль
-      const profile = profiles.get(editingOperator.id)
-      if (profile) {
-        const { error: profileError } = await supabase
-          .from('operator_profiles')
-          .update({
+      const response = await fetch('/api/admin/operators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateOperator',
+          operatorId: editingOperator.id,
+          payload: {
+            name: editName.trim(),
             full_name: editFullName.trim() || null,
+            short_name: editShortName.trim() || null,
             position: editPosition.trim() || null,
             phone: editPhone.trim() || null,
             email: editEmail.trim() || null,
-          })
-          .eq('operator_id', editingOperator.id)
+          },
+        }),
+      })
 
-        if (profileError) throw profileError
-      } else {
-        const { error: profileError } = await supabase
-          .from('operator_profiles')
-          .insert([
-            {
-              operator_id: editingOperator.id,
-              full_name: editFullName.trim() || null,
-              position: editPosition.trim() || null,
-              phone: editPhone.trim() || null,
-              email: editEmail.trim() || null,
-            }
-          ])
-
-        if (profileError) throw profileError
-      }
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
 
       setSuccess('Оператор успешно обновлен')
       setTimeout(() => setSuccess(null), 3000)
@@ -341,12 +309,18 @@ export default function OperatorsPage() {
 
   const toggleActive = async (op: Operator) => {
     try {
-      const { error } = await supabase
-        .from('operators')
-        .update({ is_active: !op.is_active })
-        .eq('id', op.id)
+      const response = await fetch('/api/admin/operators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'toggleOperatorActive',
+          operatorId: op.id,
+          is_active: !op.is_active,
+        }),
+      })
 
-      if (error) throw error
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
       
       await load()
       setSuccess(`Оператор ${op.is_active ? 'деактивирован' : 'активирован'}`)
@@ -364,12 +338,17 @@ export default function OperatorsPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('operators')
-        .delete()
-        .eq('id', id)
+      const response = await fetch('/api/admin/operators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'deleteOperator',
+          operatorId: id,
+        }),
+      })
 
-      if (error) throw error
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
 
       setSuccess('Оператор удален')
       setTimeout(() => setSuccess(null), 3000)
@@ -389,12 +368,17 @@ export default function OperatorsPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('operators')
-        .delete()
-        .in('id', Array.from(selectedOperators))
+      const response = await fetch('/api/admin/operators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'bulkDeleteOperators',
+          operatorIds: Array.from(selectedOperators),
+        }),
+      })
 
-      if (error) throw error
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
 
       setSuccess(`Удалено ${selectedOperators.size} операторов`)
       setTimeout(() => setSuccess(null), 3000)

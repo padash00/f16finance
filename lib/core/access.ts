@@ -11,7 +11,7 @@ export const PUBLIC_PATHS = [
 ] as const
 
 export type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
-export type StaffCapability = 'tasks' | 'shifts' | 'salary' | 'staff' | 'staff_accounts'
+export type StaffCapability = 'tasks' | 'shifts' | 'salary' | 'staff' | 'staff_accounts' | 'operators' | 'finance'
 
 export const ADMIN_PATHS = [
   '/',
@@ -65,6 +65,9 @@ const MARKETER_PATHS = ['/welcome', '/tasks'] as const
 const OWNER_PATHS = [
   '/',
   '/welcome',
+  '/income',
+  '/income/add',
+  '/income/analytics',
   '/reports',
   '/analysis',
   '/weekly-report',
@@ -180,7 +183,13 @@ export function staffRoleHasCapability(role: StaffRole, capability: StaffCapabil
   }
 
   if (role === 'owner') {
-    return capability === 'tasks' || capability === 'salary' || capability === 'staff'
+    return (
+      capability === 'tasks' ||
+      capability === 'salary' ||
+      capability === 'staff' ||
+      capability === 'operators' ||
+      capability === 'finance'
+    )
   }
 
   return false

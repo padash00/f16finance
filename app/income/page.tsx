@@ -78,6 +78,11 @@ type IncomeRow = {
   comment: string | null
 }
 
+type SessionRoleInfo = {
+  isSuperAdmin?: boolean
+  staffRole?: 'manager' | 'marketer' | 'owner' | 'other'
+}
+
 type Company = {
   id: string
   name: string
@@ -325,6 +330,17 @@ export default function IncomePage() {
   const [onlineDraft, setOnlineDraft] = useState<string>('')
   const [savingOnlineId, setSavingOnlineId] = useState<string | null>(null)
   const skipBlurSaveRef = useRef(false)
+  const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
+  const [editingIncome, setEditingIncome] = useState<IncomeRow | null>(null)
+  const [editIncomeDate, setEditIncomeDate] = useState('')
+  const [editIncomeOperatorId, setEditIncomeOperatorId] = useState<string>('none')
+  const [editCashDraft, setEditCashDraft] = useState('')
+  const [editKaspiDraft, setEditKaspiDraft] = useState('')
+  const [editOnlineDraft, setEditOnlineDraft] = useState('')
+  const [editCardDraft, setEditCardDraft] = useState('')
+  const [editCommentDraft, setEditCommentDraft] = useState('')
+  const [savingIncomeEdit, setSavingIncomeEdit] = useState(false)
+  const [deletingIncomeId, setDeletingIncomeId] = useState<string | null>(null)
 
   // Загрузка справочников
   useEffect(() => {
@@ -337,6 +353,20 @@ export default function IncomePage() {
       if (!opRes.error && opRes.data) setOperators(opRes.data)
     }
     fetchRefs()
+  }, [])
+
+  useEffect(() => {
+    const loadSessionRole = async () => {
+      const response = await fetch('/api/auth/session-role', { cache: 'no-store' }).catch(() => null)
+      const json = await response?.json().catch(() => null)
+      if (response?.ok) {
+        setSessionRole({
+          isSuperAdmin: json?.isSuperAdmin,
+          staffRole: json?.staffRole,
+        })
+      }
+    }
+    loadSessionRole()
   }, [])
 
   const companyMap = useMemo(() => {
@@ -365,6 +395,7 @@ export default function IncomePage() {
   }, [companies])
 
   const isExtraRow = useCallback((r: IncomeRow) => !!extraCompanyId && r.company_id === extraCompanyId, [extraCompanyId])
+  const canManageIncome = !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner'
 
   // Загрузка данных с учетом фильтров
   useEffect(() => {
@@ -588,15 +619,24 @@ export default function IncomePage() {
     }
 
     setRows(curr => curr.map(x => x.id === row.id ? { ...x, online_amount: nextValue } : x))
-    const { error } = await supabase.from('incomes').update({ online_amount: nextValue }).eq('id', row.id)
+    const response = await fetch('/api/admin/incomes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'updateOnlineAmount',
+        incomeId: row.id,
+        online_amount: nextValue,
+      }),
+    })
+    const json = await response.json().catch(() => null)
 
-    if (error) {
+    if (!response.ok) {
       setRows(curr => curr.map(x => x.id === row.id ? { ...x, online_amount: prev } : x))
-      setError('Не удалось сохранить Online')
+      setError(json?.error || 'Не удалось сохранить Online')
       await logIncomeEvent({
         entityId: row.id,
         action: 'update-online-failed',
-        payload: { previous: prev, next: nextValue, message: error.message },
+        payload: { previous: prev, next: nextValue, message: json?.error || `Ошибка запроса (${response.status})` },
       })
     } else {
       await logIncomeEvent({
@@ -607,6 +647,98 @@ export default function IncomePage() {
     }
     setSavingOnlineId(null)
   }, [rows])
+
+  const openIncomeEditor = useCallback((row: IncomeRow) => {
+    setEditingIncome(row)
+    setEditIncomeDate(row.date)
+    setEditIncomeOperatorId(row.operator_id || 'none')
+    setEditCashDraft(String(row.cash_amount ?? 0))
+    setEditKaspiDraft(String(row.kaspi_amount ?? 0))
+    setEditOnlineDraft(String(row.online_amount ?? 0))
+    setEditCardDraft(String(row.card_amount ?? 0))
+    setEditCommentDraft(row.comment || '')
+  }, [])
+
+  const closeIncomeEditor = useCallback(() => {
+    setEditingIncome(null)
+    setEditIncomeDate('')
+    setEditIncomeOperatorId('none')
+    setEditCashDraft('')
+    setEditKaspiDraft('')
+    setEditOnlineDraft('')
+    setEditCardDraft('')
+    setEditCommentDraft('')
+  }, [])
+
+  const saveIncomeEdit = useCallback(async () => {
+    if (!editingIncome) return
+
+    setSavingIncomeEdit(true)
+    try {
+      const payload = {
+        date: editIncomeDate,
+        operator_id: editIncomeOperatorId === 'none' ? null : editIncomeOperatorId,
+        cash_amount: parseMoneyInput(editCashDraft) ?? 0,
+        kaspi_amount: parseMoneyInput(editKaspiDraft) ?? 0,
+        online_amount: parseMoneyInput(editOnlineDraft) ?? 0,
+        card_amount: parseMoneyInput(editCardDraft) ?? 0,
+        comment: editCommentDraft.trim() || null,
+      }
+
+      const response = await fetch('/api/admin/incomes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateIncome',
+          incomeId: editingIncome.id,
+          payload,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+
+      setRows((curr) => curr.map((item) => (item.id === editingIncome.id ? { ...item, ...json.data } : item)))
+      closeIncomeEditor()
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось обновить доход')
+    } finally {
+      setSavingIncomeEdit(false)
+    }
+  }, [
+    closeIncomeEditor,
+    editCardDraft,
+    editCashDraft,
+    editCommentDraft,
+    editIncomeDate,
+    editIncomeOperatorId,
+    editKaspiDraft,
+    editOnlineDraft,
+    editingIncome,
+  ])
+
+  const deleteIncome = useCallback(async (row: IncomeRow) => {
+    if (!confirm('Удалить эту запись дохода?')) return
+
+    setDeletingIncomeId(row.id)
+    try {
+      const response = await fetch('/api/admin/incomes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'deleteIncome',
+          incomeId: row.id,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+
+      setRows((curr) => curr.filter((item) => item.id !== row.id))
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось удалить доход')
+    } finally {
+      setDeletingIncomeId(null)
+    }
+  }, [])
 
   // Пресеты дат
   const setPreset = (preset: DateRangePreset) => {
@@ -1044,6 +1176,7 @@ export default function IncomePage() {
               companyName={companyName}
               operatorName={operatorName}
               isExtraRow={isExtraRow}
+              canManageIncome={canManageIncome}
               editingOnlineId={editingOnlineId}
               setEditingOnlineId={setEditingOnlineId}
               onlineDraft={onlineDraft}
@@ -1068,6 +1201,7 @@ export default function IncomePage() {
               companyName={companyName}
               operatorName={operatorName}
               isExtraRow={isExtraRow}
+              canManageIncome={canManageIncome}
               editingOnlineId={editingOnlineId}
               setEditingOnlineId={setEditingOnlineId}
               onlineDraft={onlineDraft}
@@ -1075,7 +1209,91 @@ export default function IncomePage() {
               savingOnlineId={savingOnlineId}
               saveOnlineAmount={saveOnlineAmount}
               skipBlurSaveRef={skipBlurSaveRef}
+              openIncomeEditor={openIncomeEditor}
+              deleteIncome={deleteIncome}
+              deletingIncomeId={deletingIncomeId}
             />
+          )}
+
+          {editingIncome && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+              <Card className="w-full max-w-2xl border-white/10 bg-gray-900 p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Редактирование дохода</h3>
+                    <p className="text-sm text-gray-400">Эту операцию может выполнить только владелец или супер-админ</p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={closeIncomeEditor}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <label className="space-y-2 text-sm text-gray-300">
+                    <span>Дата</span>
+                    <input
+                      type="date"
+                      value={editIncomeDate}
+                      onChange={(e) => setEditIncomeDate(e.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40"
+                    />
+                  </label>
+
+                  <label className="space-y-2 text-sm text-gray-300">
+                    <span>Оператор</span>
+                    <select
+                      value={editIncomeOperatorId}
+                      onChange={(e) => setEditIncomeOperatorId(e.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40"
+                    >
+                      <option value="none">Без оператора</option>
+                      {operators.map((operator) => (
+                        <option key={operator.id} value={operator.id}>
+                          {operator.short_name || operator.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2 text-sm text-gray-300">
+                    <span>Наличные</span>
+                    <input value={editCashDraft} onChange={(e) => setEditCashDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40" />
+                  </label>
+
+                  <label className="space-y-2 text-sm text-gray-300">
+                    <span>Kaspi POS</span>
+                    <input value={editKaspiDraft} onChange={(e) => setEditKaspiDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40" />
+                  </label>
+
+                  <label className="space-y-2 text-sm text-gray-300">
+                    <span>Online</span>
+                    <input value={editOnlineDraft} onChange={(e) => setEditOnlineDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40" />
+                  </label>
+
+                  <label className="space-y-2 text-sm text-gray-300">
+                    <span>Карта</span>
+                    <input value={editCardDraft} onChange={(e) => setEditCardDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40" />
+                  </label>
+
+                  <label className="space-y-2 text-sm text-gray-300 md:col-span-2">
+                    <span>Комментарий</span>
+                    <textarea
+                      rows={3}
+                      value={editCommentDraft}
+                      onChange={(e) => setEditCommentDraft(e.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button variant="outline" onClick={closeIncomeEditor}>Отмена</Button>
+                  <Button onClick={saveIncomeEdit} disabled={savingIncomeEdit}>
+                    {savingIncomeEdit ? 'Сохранение...' : 'Сохранить'}
+                  </Button>
+                </div>
+              </Card>
+            </div>
           )}
         </div>
       </main>
@@ -1107,6 +1325,7 @@ function OverviewTab({
   companyName,
   operatorName,
   isExtraRow,
+  canManageIncome,
   editingOnlineId,
   setEditingOnlineId,
   onlineDraft,
@@ -1316,6 +1535,7 @@ function OverviewTab({
               companyName={companyName(row.company_id)}
               operatorName={operatorName(row.operator_id)}
               isExtra={isExtraRow(row)}
+              canManageIncome={canManageIncome}
               editingOnlineId={editingOnlineId}
               setEditingOnlineId={setEditingOnlineId}
               onlineDraft={onlineDraft}
@@ -1358,6 +1578,7 @@ function IncomeRowCompact({
   companyName, 
   operatorName, 
   isExtra,
+  canManageIncome,
   editingOnlineId,
   setEditingOnlineId,
   onlineDraft,
@@ -1390,6 +1611,8 @@ function IncomeRowCompact({
         
         {/* Online с inline редактированием */}
         {String(row.id).startsWith('extra-') ? (
+          <span className="text-pink-400 font-mono">{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</span>
+        ) : !canManageIncome ? (
           <span className="text-pink-400 font-mono">{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</span>
         ) : editingOnlineId === row.id ? (
           <div className="flex items-center gap-1">
@@ -1525,13 +1748,17 @@ function FeedTab({
   companyName,
   operatorName,
   isExtraRow,
+  canManageIncome,
   editingOnlineId,
   setEditingOnlineId,
   onlineDraft,
   setOnlineDraft,
   savingOnlineId,
   saveOnlineAmount,
-  skipBlurSaveRef
+  skipBlurSaveRef,
+  openIncomeEditor,
+  deleteIncome,
+  deletingIncomeId,
 }: any) {
   return (
     <Card className="p-0 border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden">
@@ -1552,6 +1779,7 @@ function FeedTab({
               companyName={companyName(row.company_id)}
               operatorName={operatorName(row.operator_id)}
               isExtra={isExtraRow(row)}
+              canManageIncome={canManageIncome}
               editingOnlineId={editingOnlineId}
               setEditingOnlineId={setEditingOnlineId}
               onlineDraft={onlineDraft}
@@ -1559,6 +1787,9 @@ function FeedTab({
               savingOnlineId={savingOnlineId}
               saveOnlineAmount={saveOnlineAmount}
               skipBlurSaveRef={skipBlurSaveRef}
+              openIncomeEditor={openIncomeEditor}
+              deleteIncome={deleteIncome}
+              deletingIncomeId={deletingIncomeId}
             />
           ))
         )}
@@ -1572,13 +1803,17 @@ function IncomeRowFull({
   companyName, 
   operatorName, 
   isExtra,
+  canManageIncome,
   editingOnlineId,
   setEditingOnlineId,
   onlineDraft,
   setOnlineDraft,
   savingOnlineId,
   saveOnlineAmount,
-  skipBlurSaveRef
+  skipBlurSaveRef,
+  openIncomeEditor,
+  deleteIncome,
+  deletingIncomeId,
 }: any) {
   const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.online_amount || 0) + (row.card_amount || 0)
   
@@ -1605,8 +1840,8 @@ function IncomeRowFull({
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 text-sm">
             {row.cash_amount > 0 && (
               <div className="text-right">
                 <div className="text-[10px] text-gray-500">Нал</div>
@@ -1630,6 +1865,8 @@ function IncomeRowFull({
             <div className="text-right">
               <div className="text-[10px] text-gray-500">Online</div>
               {String(row.id).startsWith('extra-') ? (
+                <div className="text-pink-400 font-mono">{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</div>
+              ) : !canManageIncome ? (
                 <div className="text-pink-400 font-mono">{row.online_amount ? Formatters.moneyDetailed(row.online_amount) : '—'}</div>
               ) : editingOnlineId === row.id ? (
                 <input
@@ -1677,12 +1914,28 @@ function IncomeRowFull({
             </div>
           </div>
 
-          <div className="text-right min-w-[100px]">
-            <div className="text-[10px] text-gray-500">Итого</div>
-            <div className="text-lg font-bold text-white font-mono">{Formatters.moneyDetailed(total)}</div>
+            <div className="text-right min-w-[100px]">
+              <div className="text-[10px] text-gray-500">Итого</div>
+              <div className="text-lg font-bold text-white font-mono">{Formatters.moneyDetailed(total)}</div>
+            </div>
+
+            {canManageIncome && !String(row.id).startsWith('extra-') ? (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon-sm" onClick={() => openIncomeEditor(row)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="icon-sm"
+                  onClick={() => deleteIncome(row)}
+                  disabled={deletingIncomeId === row.id}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : null}
           </div>
         </div>
-      </div>
       {row.comment && (
         <div className="mt-2 text-xs text-gray-500 pl-12">{row.comment}</div>
       )}
