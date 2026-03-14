@@ -257,6 +257,8 @@ export default function ShiftsPage() {
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([])
   const [panelCompanyId, setPanelCompanyId] = useState('')
   const [actionNotice, setActionNotice] = useState<ActionNotice | null>(null)
+  const [resolutionNotes, setResolutionNotes] = useState<Record<string, string>>({})
+  const [replacementOperators, setReplacementOperators] = useState<Record<string, string>>({})
   const [bulkCompanyId, setBulkCompanyId] = useState('')
   const [bulkOperatorName, setBulkOperatorName] = useState('')
   const [bulkShiftType, setBulkShiftType] = useState<'day' | 'night'>('day')
@@ -758,10 +760,16 @@ export default function ShiftsPage() {
     }
   }
 
-  const handleResolveIssue = async (requestId: string, status: 'resolved' | 'dismissed') => {
+  const handleResolveIssue = async (
+    requestId: string,
+    status: 'resolved' | 'dismissed',
+    resolutionAction: 'keep' | 'remove' | 'replace' = 'keep',
+  ) => {
     setResolvingRequestId(requestId)
 
     try {
+      const replacementOperatorName = replacementOperators[requestId]?.trim() || null
+      const resolutionNote = resolutionNotes[requestId]?.trim() || null
       const response = await fetch('/api/admin/shifts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -770,6 +778,9 @@ export default function ShiftsPage() {
           payload: {
             requestId,
             status,
+            resolutionAction,
+            replacementOperatorName,
+            resolutionNote,
           },
         }),
       })
@@ -781,10 +792,28 @@ export default function ShiftsPage() {
 
       setActionNotice({
         tone: 'success',
-        text: status === 'resolved' ? 'Запрос отмечен как обработанный.' : 'Запрос отклонён и скрыт из активных.',
+        text:
+          status === 'resolved'
+            ? resolutionAction === 'replace'
+              ? 'Запрос обработан: на смену назначен другой оператор.'
+              : resolutionAction === 'remove'
+                ? 'Запрос обработан: оператор снят со смены.'
+                : 'Запрос обработан: график оставлен без изменений.'
+            : 'Запрос закрыт без изменения графика.',
       })
 
-      await fetchWorkflowData()
+      setResolutionNotes((prev) => {
+        const next = { ...prev }
+        delete next[requestId]
+        return next
+      })
+      setReplacementOperators((prev) => {
+        const next = { ...prev }
+        delete next[requestId]
+        return next
+      })
+
+      await Promise.all([fetchScheduleData(), fetchWorkflowData()])
     } catch (err: any) {
       setActionNotice({
         tone: 'error',
@@ -1274,24 +1303,89 @@ export default function ShiftsPage() {
                               {request.reason || 'Оператор ещё не прислал причину, бот ждёт ответ.'}
                             </div>
 
+                            {request.resolution_note && request.status !== 'open' && (
+                              <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-100">
+                                <div className="text-[11px] uppercase tracking-[0.16em] text-emerald-300/80">Как обработано</div>
+                                <div className="mt-1">{request.resolution_note}</div>
+                              </div>
+                            )}
+
                             {request.status === 'open' && (
-                              <div className="mt-3 flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleResolveIssue(request.id, 'resolved')}
-                                  disabled={resolvingRequestId === request.id}
+                              <div className="mt-3 space-y-3">
+                                <textarea
+                                  value={resolutionNotes[request.id] || ''}
+                                  onChange={(e) =>
+                                    setResolutionNotes((prev) => ({
+                                      ...prev,
+                                      [request.id]: e.target.value,
+                                    }))
+                                  }
+                                  rows={2}
+                                  placeholder="Комментарий руководителя: что именно сделали со сменой"
+                                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-accent"
+                                />
+
+                                <select
+                                  value={replacementOperators[request.id] || ''}
+                                  onChange={(e) =>
+                                    setReplacementOperators((prev) => ({
+                                      ...prev,
+                                      [request.id]: e.target.value,
+                                    }))
+                                  }
+                                  className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-accent"
                                 >
-                                  Обработано
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleResolveIssue(request.id, 'dismissed')}
-                                  disabled={resolvingRequestId === request.id}
-                                >
-                                  Закрыть
-                                </Button>
+                                  <option value="">Выбери оператора для замены</option>
+                                  {operators
+                                    .filter(
+                                      (operator) =>
+                                        normalizeOperatorName(getOperatorDisplayName(operator)) !==
+                                        normalizeOperatorName(request.operator_name),
+                                    )
+                                    .map((operator) => {
+                                      const label = getOperatorDisplayName(operator)
+                                      return (
+                                        <option key={`${request.id}-${operator.id}`} value={label}>
+                                          {label}
+                                        </option>
+                                      )
+                                    })}
+                                </select>
+
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleResolveIssue(request.id, 'resolved', 'remove')}
+                                    disabled={resolvingRequestId === request.id}
+                                  >
+                                    Снять со смены
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleResolveIssue(request.id, 'resolved', 'replace')}
+                                    disabled={resolvingRequestId === request.id}
+                                  >
+                                    Поставить замену
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleResolveIssue(request.id, 'resolved', 'keep')}
+                                    disabled={resolvingRequestId === request.id}
+                                  >
+                                    Оставить как есть
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleResolveIssue(request.id, 'dismissed', 'keep')}
+                                    disabled={resolvingRequestId === request.id}
+                                  >
+                                    Закрыть без изменений
+                                  </Button>
+                                </div>
                               </div>
                             )}
                           </div>

@@ -48,6 +48,8 @@ type ShiftMutationBody =
       payload: {
         requestId: string
         status: 'resolved' | 'dismissed'
+        resolutionAction?: 'keep' | 'remove' | 'replace'
+        replacementOperatorName?: string | null
         resolutionNote?: string | null
       }
     }
@@ -68,6 +70,17 @@ type OperatorMatch = {
   short_name: string | null
   operator_profiles?: { full_name?: string | null }[] | null
   telegram_chat_id: string | null
+}
+
+type ShiftChangeRequestRow = {
+  id: string
+  publication_id: string
+  company_id: string
+  operator_id: string
+  shift_date: string
+  shift_type: 'day' | 'night'
+  status: string
+  reason: string | null
 }
 
 class RouteError extends Error {
@@ -246,6 +259,38 @@ async function getExistingShiftForSlot(
   return data
 }
 
+async function getShiftForSlot(
+  supabase: ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createRequestSupabaseClient>,
+  companyId: string,
+  date: string,
+  shiftType: 'day' | 'night',
+) {
+  const { data, error } = await supabase
+    .from('shifts')
+    .select('id, company_id, date, shift_type, operator_name, comment')
+    .eq('company_id', companyId)
+    .eq('date', date)
+    .eq('shift_type', shiftType)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data || null) as ShiftRow | null
+}
+
+async function getOperatorById(
+  supabase: ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createRequestSupabaseClient>,
+  operatorId: string,
+) {
+  const { data, error } = await supabase
+    .from('operators')
+    .select('id, name, short_name, telegram_chat_id, operator_profiles(*)')
+    .eq('id', operatorId)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data || null) as OperatorMatch | null
+}
+
 async function ensureNoOperatorConflict(
   supabase: ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createRequestSupabaseClient>,
   payload: ShiftWritePayload,
@@ -342,6 +387,191 @@ async function upsertShift(
   if (error) throw error
 
   return { ok: true, mode: 'created' as const }
+}
+
+async function applyShiftIssueResolution(
+  supabase: ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createRequestSupabaseClient>,
+  params: {
+    requestId: string
+    status: 'resolved' | 'dismissed'
+    resolutionAction: 'keep' | 'remove' | 'replace'
+    replacementOperatorName?: string | null
+    resolutionNote?: string | null
+    actorUserId?: string | null
+  },
+) {
+  const { data: request, error: requestError } = await supabase
+    .from('shift_change_requests')
+    .select('id, publication_id, company_id, operator_id, shift_date, shift_type, status, reason')
+    .eq('id', params.requestId)
+    .maybeSingle()
+
+  if (requestError) throw requestError
+  if (!request) {
+    throw new Error('Запрос на изменение смены не найден')
+  }
+
+  const requestRow = request as ShiftChangeRequestRow
+  const requester = await getOperatorById(supabase, requestRow.operator_id)
+  const companyName = await getCompanyNameById(supabase, requestRow.company_id)
+  const currentShift = await getShiftForSlot(supabase, requestRow.company_id, requestRow.shift_date, requestRow.shift_type)
+
+  let effectiveAction = params.resolutionAction
+  let effectiveNote = params.resolutionNote?.trim() || ''
+  let replacementLabel: string | null = null
+  let replacementOperator: OperatorMatch | null = null
+
+  if (params.status === 'resolved') {
+    if (params.resolutionAction === 'remove') {
+      if (currentShift?.id) {
+        const { error } = await supabase.from('shifts').delete().eq('id', currentShift.id)
+        if (error) throw error
+      }
+
+      if (!effectiveNote) {
+        effectiveNote = `Оператор снят со смены ${formatShiftDate(requestRow.shift_date)} (${requestRow.shift_type === 'day' ? 'день' : 'ночь'}).`
+      }
+    }
+
+    if (params.resolutionAction === 'replace') {
+      const nextName = params.replacementOperatorName?.trim()
+      if (!nextName) {
+        throw new Error('Для замены выбери нового оператора')
+      }
+
+      replacementOperator = await findOperatorForShiftName(supabase, nextName)
+      if (!replacementOperator) {
+        throw new Error('Не удалось найти выбранного оператора для замены')
+      }
+
+      replacementLabel = getOperatorDisplayName(replacementOperator, nextName)
+      await upsertShift(supabase, {
+        shiftId: currentShift?.id || null,
+        companyId: requestRow.company_id,
+        date: requestRow.shift_date,
+        shiftType: requestRow.shift_type,
+        operatorName: replacementLabel,
+        comment: currentShift?.comment || null,
+      })
+
+      if (!effectiveNote) {
+        effectiveNote = `На смену назначен ${replacementLabel} вместо прежнего оператора.`
+      }
+    }
+
+    if (params.resolutionAction === 'keep') {
+      if (!effectiveNote) {
+        effectiveNote = 'График оставлен без изменений после рассмотрения запроса.'
+      }
+    }
+  } else {
+    effectiveAction = 'keep'
+    if (!effectiveNote) {
+      effectiveNote = 'Запрос закрыт без изменения графика.'
+    }
+  }
+
+  const resolvedRequest = await resolveShiftChangeRequest({
+    supabase,
+    requestId: params.requestId,
+    status: params.status,
+    resolutionNote: effectiveNote,
+    actorUserId: params.actorUserId || null,
+  })
+
+  const shiftLabel = `${formatShiftDate(requestRow.shift_date)} (${requestRow.shift_type === 'day' ? 'день' : 'ночь'})`
+
+  if (requester?.telegram_chat_id && process.env.TELEGRAM_BOT_TOKEN) {
+    const requesterText =
+      params.status === 'resolved'
+        ? `<b>Запрос по смене обработан</b>\n\n<b>Точка:</b> ${companyName}\n<b>Дата:</b> ${shiftLabel}\n<b>Решение:</b> ${effectiveNote}`
+        : `<b>Запрос по смене закрыт</b>\n\n<b>Точка:</b> ${companyName}\n<b>Дата:</b> ${shiftLabel}\n<b>Комментарий:</b> ${effectiveNote}`
+
+    try {
+      await sendTelegramMessage(String(requester.telegram_chat_id), requesterText)
+      await writeNotificationLog(supabase, {
+        channel: 'telegram',
+        recipient: String(requester.telegram_chat_id),
+        status: 'sent',
+        payload: {
+          kind: 'shift-request-resolution',
+          request_id: params.requestId,
+          operator_id: requester.id,
+          operator_name: getOperatorDisplayName(requester, 'Оператор'),
+          action: effectiveAction,
+          status: params.status,
+          resolution_note: effectiveNote,
+        },
+      })
+    } catch (error) {
+      await writeNotificationLog(supabase, {
+        channel: 'telegram',
+        recipient: String(requester.telegram_chat_id),
+        status: 'failed',
+        payload: {
+          kind: 'shift-request-resolution',
+          request_id: params.requestId,
+          operator_id: requester.id,
+          operator_name: getOperatorDisplayName(requester, 'Оператор'),
+          action: effectiveAction,
+          status: params.status,
+          resolution_note: effectiveNote,
+          error: error instanceof Error ? error.message : 'telegram-send-failed',
+        },
+      })
+    }
+  }
+
+  if (
+    params.status === 'resolved' &&
+    effectiveAction === 'replace' &&
+    replacementOperator?.telegram_chat_id &&
+    process.env.TELEGRAM_BOT_TOKEN
+  ) {
+    try {
+      await sendTelegramMessage(
+        String(replacementOperator.telegram_chat_id),
+        `<b>Вам назначена смена после замены</b>\n\n<b>Точка:</b> ${companyName}\n<b>Дата:</b> ${shiftLabel}\nПроверьте обновлённый график.`,
+      )
+      await writeNotificationLog(supabase, {
+        channel: 'telegram',
+        recipient: String(replacementOperator.telegram_chat_id),
+        status: 'sent',
+        payload: {
+          kind: 'shift-reassignment',
+          request_id: params.requestId,
+          operator_id: replacementOperator.id,
+          operator_name: replacementLabel,
+          company_id: requestRow.company_id,
+          shift_date: requestRow.shift_date,
+          shift_type: requestRow.shift_type,
+        },
+      })
+    } catch (error) {
+      await writeNotificationLog(supabase, {
+        channel: 'telegram',
+        recipient: String(replacementOperator.telegram_chat_id),
+        status: 'failed',
+        payload: {
+          kind: 'shift-reassignment',
+          request_id: params.requestId,
+          operator_id: replacementOperator.id,
+          operator_name: replacementLabel,
+          company_id: requestRow.company_id,
+          shift_date: requestRow.shift_date,
+          shift_type: requestRow.shift_type,
+          error: error instanceof Error ? error.message : 'telegram-send-failed',
+        },
+      })
+    }
+  }
+
+  return {
+    request: resolvedRequest,
+    action: effectiveAction,
+    resolutionNote: effectiveNote,
+    replacementOperatorName: replacementLabel,
+  }
 }
 
 function badRequest(message: string) {
@@ -602,15 +832,22 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'resolveIssue') {
-      const { requestId, status, resolutionNote } = body.payload
+      const {
+        requestId,
+        status,
+        resolutionAction = status === 'dismissed' ? 'keep' : 'keep',
+        replacementOperatorName,
+        resolutionNote,
+      } = body.payload
       if (!requestId || !status) {
         return badRequest('requestId и status обязательны')
       }
 
-      const result = await resolveShiftChangeRequest({
-        supabase,
+      const result = await applyShiftIssueResolution(supabase, {
         requestId,
         status,
+        resolutionAction,
+        replacementOperatorName,
         resolutionNote,
         actorUserId: user?.id || null,
       })
@@ -621,7 +858,9 @@ export async function POST(req: Request) {
         entityId: requestId,
         action: status,
         payload: {
-          resolution_note: resolutionNote?.trim() || null,
+          resolution_action: result.action,
+          resolution_note: result.resolutionNote,
+          replacement_operator_name: result.replacementOperatorName,
         },
       })
 
