@@ -41,6 +41,7 @@ import {
   Wrench,
   X,
   Zap,
+  ClipboardCheck,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -120,6 +121,9 @@ const navSections: NavSection[] = [
     subtitle: 'Коммуникация и мотивация',
     accent: 'from-[#ee9ae5] to-[#5961f9]',
     items: [
+      { href: '/operator-dashboard', label: 'Мой кабинет', icon: User, note: 'Сводка оператора' },
+      { href: '/operator-schedule', label: 'Мой график', icon: CalendarClock, note: 'Смены и подтверждения' },
+      { href: '/operator-tasks', label: 'Мои задачи', icon: ClipboardCheck, note: 'Личный контур задач', badge: 'new' },
       { href: '/operator-analytics', label: 'Аналитика операторов', icon: Zap, note: 'Эффективность по людям' },
       { href: '/operator-chat', label: 'Чат операторов', icon: MessageSquareText, note: 'Коммуникация', badge: 'live' },
       { href: '/operator-achievements', label: 'Достижения', icon: Trophy, note: 'Мотивация и XP' },

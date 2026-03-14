@@ -136,3 +136,68 @@ export async function requireOperatorAuthRow(request: Request, authId: string) {
 
   return null
 }
+
+export async function getRequestOperatorContext(request: Request): Promise<
+  | {
+      response: NextResponse
+    }
+  | {
+      supabase: ReturnType<typeof createRequestSupabaseClient>
+      user: Awaited<ReturnType<typeof getRequestUser>>
+      operatorAuth: {
+        id: string
+        operator_id: string
+        username?: string | null
+        role?: string | null
+      }
+      operator: {
+        id: string
+        name: string
+        short_name: string | null
+        telegram_chat_id: string | null
+        operator_profiles?: { full_name?: string | null }[] | null
+      }
+    }
+> {
+  const supabase = createRequestSupabaseClient(request)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return {
+      response: NextResponse.json({ error: 'unauthorized' }, { status: 401 }),
+    }
+  }
+
+  const { data: operatorAuth, error: authError } = await supabase
+    .from('operator_auth')
+    .select('id, operator_id, username, role')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (authError || !operatorAuth?.operator_id) {
+    return {
+      response: NextResponse.json({ error: 'forbidden' }, { status: 403 }),
+    }
+  }
+
+  const { data: operator, error: operatorError } = await supabase
+    .from('operators')
+    .select('id, name, short_name, telegram_chat_id, operator_profiles(*)')
+    .eq('id', operatorAuth.operator_id)
+    .maybeSingle()
+
+  if (operatorError || !operator) {
+    return {
+      response: NextResponse.json({ error: 'operator-not-found' }, { status: 404 }),
+    }
+  }
+
+  return {
+    supabase,
+    user,
+    operatorAuth,
+    operator,
+  }
+}

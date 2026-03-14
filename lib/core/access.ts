@@ -80,6 +80,10 @@ const OWNER_PATHS = [
 export const OPERATOR_PATHS = [
   '/operator-dashboard',
   '/operator-dashboard/*',
+  '/operator-schedule',
+  '/operator-schedule/*',
+  '/operator-tasks',
+  '/operator-tasks/*',
   '/operator-profile',
   '/operator-profile/*',
   '/operator-chat',

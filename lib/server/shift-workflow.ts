@@ -472,7 +472,7 @@ async function verifyPublicationOperator(supabase: DbClient, publicationId: stri
   }
 }
 
-async function verifyResponseOperator(supabase: DbClient, responseId: string, telegramUserId: string) {
+async function verifyResponseOwnership(supabase: DbClient, responseId: string, operatorId: string) {
   const { data: responseRow, error: responseError } = await supabase
     .from('shift_operator_week_responses')
     .select('id, publication_id, operator_id, company_id')
@@ -481,20 +481,50 @@ async function verifyResponseOperator(supabase: DbClient, responseId: string, te
 
   if (responseError) throw responseError
   if (!responseRow) throw new Error('Ответ по неделе не найден')
+  if (String(responseRow.operator_id) !== String(operatorId)) {
+    throw new Error('Этот ответ по неделе назначен другому оператору')
+  }
 
-  const { operator, publication } = await verifyPublicationOperator(
-    supabase,
-    String(responseRow.publication_id),
-    String(responseRow.operator_id),
-    telegramUserId,
-  )
+  const { data: operator, error: operatorError } = await supabase
+    .from('operators')
+    .select('id, name, short_name, telegram_chat_id, operator_profiles(*)')
+    .eq('id', responseRow.operator_id)
+    .maybeSingle()
+
+  if (operatorError) throw operatorError
+  if (!operator) throw new Error('Оператор не найден')
+
+  const { data: publication, error: publicationError } = await supabase
+    .from('shift_week_publications')
+    .select('*')
+    .eq('id', responseRow.publication_id)
+    .maybeSingle()
+
+  if (publicationError) throw publicationError
+  if (!publication) throw new Error('Публикация недели не найдена')
 
   return {
     responseId: String(responseRow.id),
     companyId: String(responseRow.company_id),
-    operator,
-    publication,
+    operator: operator as OperatorRow,
+    publication: publication as PublicationRow,
   }
+}
+
+async function verifyResponseOperator(supabase: DbClient, responseId: string, telegramUserId: string) {
+  const { data: operator, error: operatorError } = await supabase
+    .from('operators')
+    .select('id, name, short_name, telegram_chat_id, operator_profiles(*)')
+    .eq('telegram_chat_id', telegramUserId)
+    .maybeSingle()
+
+  if (operatorError) throw operatorError
+  if (!operator) throw new Error('Оператор не найден')
+  if (String(operator.telegram_chat_id || '') !== String(telegramUserId)) {
+    throw new Error('Это сообщение назначено другому оператору')
+  }
+
+  return verifyResponseOwnership(supabase, responseId, String(operator.id))
 }
 
 export async function confirmShiftPublicationWeek(params: {
@@ -540,6 +570,38 @@ export async function confirmShiftPublicationWeekByResponse(params: {
     params.supabase,
     params.responseId,
     params.telegramUserId,
+  )
+
+  const { error } = await params.supabase
+    .from('shift_operator_week_responses')
+    .update({
+      status: 'confirmed',
+      response_source: params.source,
+      responded_at: new Date().toISOString(),
+      note: 'Оператор подтвердил недельный график.',
+    })
+    .eq('id', responseId)
+
+  if (error) throw error
+
+  return {
+    operatorName: getOperatorDisplayName(operator, 'Оператор'),
+    companyId: publication.company_id,
+    operatorId: operator.id,
+    publicationId: publication.id,
+  }
+}
+
+export async function confirmShiftPublicationWeekByOperator(params: {
+  supabase: DbClient
+  responseId: string
+  operatorId: string
+  source: string
+}) {
+  const { operator, publication, responseId } = await verifyResponseOwnership(
+    params.supabase,
+    params.responseId,
+    params.operatorId,
   )
 
   const { error } = await params.supabase
@@ -654,6 +716,87 @@ export async function createShiftIssueDraft(params: {
     operatorName: getOperatorDisplayName(operator, 'Оператор'),
     shiftDate: params.shiftDate,
     shiftType: params.shiftType,
+  }
+}
+
+export async function createShiftIssueByOperator(params: {
+  supabase: DbClient
+  responseId: string
+  operatorId: string
+  shiftDate: string
+  shiftType: ShiftType
+  reason: string
+  source: string
+}) {
+  const { operator, publication, responseId } = await verifyResponseOwnership(
+    params.supabase,
+    params.responseId,
+    params.operatorId,
+  )
+
+  const normalizedReason = params.reason.trim()
+  if (!normalizedReason) {
+    throw new Error('Нужно указать причину проблемы по смене')
+  }
+
+  const { data: existing, error: existingError } = await params.supabase
+    .from('shift_change_requests')
+    .select('id')
+    .eq('publication_id', publication.id)
+    .eq('operator_id', operator.id)
+    .eq('shift_date', params.shiftDate)
+    .eq('shift_type', params.shiftType)
+    .in('status', ['awaiting_reason', 'open'])
+    .maybeSingle()
+
+  if (existingError) throw existingError
+
+  if (existing?.id) {
+    const { error } = await params.supabase
+      .from('shift_change_requests')
+      .update({
+        status: 'open',
+        source: params.source,
+        reason: normalizedReason,
+        responded_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id)
+
+    if (error) throw error
+  } else {
+    const { error } = await params.supabase.from('shift_change_requests').insert([
+      {
+        publication_id: publication.id,
+        company_id: publication.company_id,
+        operator_id: operator.id,
+        shift_date: params.shiftDate,
+        shift_type: params.shiftType,
+        status: 'open',
+        source: params.source,
+        reason: normalizedReason,
+        responded_at: new Date().toISOString(),
+      },
+    ])
+
+    if (error) throw error
+  }
+
+  const { error: responseError } = await params.supabase
+    .from('shift_operator_week_responses')
+    .update({
+      status: 'issue_reported',
+      response_source: params.source,
+      responded_at: new Date().toISOString(),
+      note: 'Оператор сообщил о проблемной смене в кабинете.',
+    })
+    .eq('id', responseId)
+
+  if (responseError) throw responseError
+
+  return {
+    operatorName: getOperatorDisplayName(operator, 'Оператор'),
+    publicationId: publication.id,
+    companyId: publication.company_id,
   }
 }
 
