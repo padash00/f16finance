@@ -164,6 +164,7 @@ type ScheduleGridProps = {
   selectedOperator: string
   conflictCellKeys: Set<string>
   companySearch: string
+  workflowStateByCell: Map<string, { kind: 'confirmed' | 'issue' | 'resolved' | 'dismissed'; label: string }>
 }
 
 type EditableCellProps = {
@@ -175,6 +176,10 @@ type EditableCellProps = {
   refetchData: () => Promise<void>
   isSelectedOperator: boolean
   isConflict: boolean
+  workflowState?: {
+    kind: 'confirmed' | 'issue' | 'resolved' | 'dismissed'
+    label: string
+  } | null
 }
 
 const getWeekDetails = (date: Date): { range: string; days: WeekDay[] } => {
@@ -491,6 +496,74 @@ export default function ShiftsPage() {
     }
     return map
   }, [publications])
+
+  const operatorIdByName = useMemo(() => {
+    const map = new Map<string, string>()
+
+    for (const operator of operators) {
+      const labels = [getOperatorDisplayName(operator), operator.name, operator.short_name || '']
+      for (const label of labels) {
+        const normalized = normalizeOperatorName(label)
+        if (normalized) {
+          map.set(normalized, operator.id)
+        }
+      }
+    }
+
+    return map
+  }, [operators])
+
+  const workflowStateByCell = useMemo(() => {
+    const map = new Map<string, { kind: 'confirmed' | 'issue' | 'resolved' | 'dismissed'; label: string }>()
+
+    for (const request of changeRequests) {
+      const publication = latestPublicationByCompany.get(request.company_id)
+      if (!publication || publication.id !== request.publication_id) continue
+
+      const cellKey = getCellKey(request.company_id, request.shift_date, request.shift_type)
+      const kind =
+        request.status === 'open' || request.status === 'awaiting_reason'
+          ? 'issue'
+          : request.status === 'resolved'
+            ? 'resolved'
+            : 'dismissed'
+
+      const label =
+        request.status === 'open'
+          ? 'Есть проблема'
+          : request.status === 'awaiting_reason'
+            ? 'Ждём причину'
+            : request.status === 'resolved'
+              ? 'Обработано'
+              : 'Закрыто'
+
+      map.set(cellKey, { kind, label })
+    }
+
+    for (const shift of shifts) {
+      const publication = latestPublicationByCompany.get(shift.company_id)
+      if (!publication) continue
+
+      const operatorId = operatorIdByName.get(normalizeOperatorName(shift.operator_name))
+      if (!operatorId) continue
+
+      const response = publicationResponses.find(
+        (item) => item.publication_id === publication.id && item.operator_id === operatorId,
+      )
+      if (!response) continue
+
+      const cellKey = getCellKey(shift.company_id, shift.date, shift.shift_type)
+      if (map.has(cellKey)) continue
+
+      if (response.status === 'confirmed') {
+        map.set(cellKey, { kind: 'confirmed', label: 'Подтверждено' })
+      } else if (response.status === 'issue_reported') {
+        map.set(cellKey, { kind: 'issue', label: 'Есть проблема' })
+      }
+    }
+
+    return map
+  }, [changeRequests, latestPublicationByCompany, operatorIdByName, publicationResponses, shifts])
 
   const panelCompany = useMemo(
     () => assignableCompanies.find((company) => company.id === panelCompanyId) || null,
@@ -1109,6 +1182,7 @@ export default function ShiftsPage() {
                 selectedOperator={selectedOperator}
                 conflictCellKeys={conflictCellKeys}
                 companySearch={companySearch}
+                workflowStateByCell={workflowStateByCell}
               />
 
               <Card className="h-fit border-border bg-card p-4 xl:sticky xl:top-6">
@@ -1417,6 +1491,7 @@ function ScheduleGrid({
   selectedOperator,
   conflictCellKeys,
   companySearch,
+  workflowStateByCell,
 }: ScheduleGridProps) {
   if (loading && companies.length === 0) {
     return <div className="p-12 text-center text-muted-foreground animate-pulse">Загрузка структуры...</div>
@@ -1485,6 +1560,7 @@ function ScheduleGrid({
                           normalizeOperatorName(shiftData?.name) === normalizeOperatorName(selectedOperator)
                         }
                         isConflict={conflictCellKeys.has(getCellKey(company.id, day.dateISO, 'day'))}
+                        workflowState={workflowStateByCell.get(getCellKey(company.id, day.dateISO, 'day')) || null}
                       />
                     )
                   })}
@@ -1509,6 +1585,7 @@ function ScheduleGrid({
                             normalizeOperatorName(shiftData?.name) === normalizeOperatorName(selectedOperator)
                           }
                           isConflict={conflictCellKeys.has(getCellKey(company.id, day.dateISO, 'night'))}
+                          workflowState={workflowStateByCell.get(getCellKey(company.id, day.dateISO, 'night')) || null}
                         />
                       )
                     })}
@@ -1532,6 +1609,7 @@ function EditableShiftCell({
   refetchData,
   isSelectedOperator,
   isConflict,
+  workflowState,
 }: EditableCellProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [val, setVal] = useState(shiftData?.name || '')
@@ -1612,6 +1690,10 @@ function EditableShiftCell({
     if (status === 'success') return 'bg-green-500/20 shadow-[inset_0_0_10px_rgba(34,197,94,0.5)]'
     if (status === 'error') return 'bg-red-500/20'
     if (isConflict) return 'bg-amber-500/15 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]'
+    if (workflowState?.kind === 'issue') return 'bg-amber-500/10 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]'
+    if (workflowState?.kind === 'resolved') return 'bg-sky-500/10 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.22)]'
+    if (workflowState?.kind === 'dismissed') return 'bg-white/[0.03] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
+    if (workflowState?.kind === 'confirmed') return 'bg-emerald-500/10 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.24)]'
     if (isSelectedOperator) return 'bg-emerald-500/12 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.28)]'
     return 'hover:bg-white/5'
   }
@@ -1654,6 +1736,8 @@ function EditableShiftCell({
           title={
             isConflict
               ? `Проверь назначение: ${val || 'оператор не выбран'}`
+              : workflowState
+                ? `${workflowState.label}: ${val || 'оператор не выбран'}`
               : val
                 ? `Оператор: ${val}`
                 : 'Нажмите, чтобы выбрать оператора'
@@ -1673,6 +1757,28 @@ function EditableShiftCell({
             </span>
           )}
         </button>
+      )}
+
+      {workflowState && !isEditing && (
+        <div
+          className={`pointer-events-none absolute left-1 top-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+            workflowState.kind === 'confirmed'
+              ? 'bg-emerald-500/15 text-emerald-300'
+              : workflowState.kind === 'issue'
+                ? 'bg-amber-500/15 text-amber-300'
+                : workflowState.kind === 'resolved'
+                  ? 'bg-sky-500/15 text-sky-300'
+                  : 'bg-white/10 text-muted-foreground'
+          }`}
+        >
+          {workflowState.kind === 'confirmed'
+            ? 'OK'
+            : workflowState.kind === 'issue'
+              ? '!'
+              : workflowState.kind === 'resolved'
+                ? 'Fix'
+                : 'X'}
+        </div>
       )}
 
       {isConflict && !isEditing && (
