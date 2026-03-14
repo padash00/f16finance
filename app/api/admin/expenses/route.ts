@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type ExpensePayload = {
@@ -60,8 +60,8 @@ function validatePayload(payload: ExpensePayload | null | undefined) {
 
 export async function POST(req: Request) {
   try {
-    const guard = await requireStaffCapabilityRequest(req, 'finance')
-    if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const requestClient = createRequestSupabaseClient(req)
     const {
@@ -72,7 +72,11 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as Body | null
     if (!body?.action) return json({ error: 'Неверный формат запроса' }, 400)
 
+    const canCreateFinance = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+    const canManageFinance = access.isSuperAdmin || access.staffRole === 'owner'
+
     if (body.action === 'createExpense') {
+      if (!canCreateFinance) return json({ error: 'forbidden' }, 403)
       const validationError = validatePayload(body.payload)
       if (validationError) return json({ error: validationError }, 400)
 
@@ -95,6 +99,7 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateExpense') {
+      if (!canManageFinance) return json({ error: 'forbidden' }, 403)
       if (!body.expenseId?.trim()) return json({ error: 'expenseId обязателен' }, 400)
       const validationError = validatePayload(body.payload)
       if (validationError) return json({ error: validationError }, 400)
@@ -128,6 +133,7 @@ export async function POST(req: Request) {
       return json({ ok: true, data })
     }
 
+    if (!canManageFinance) return json({ error: 'forbidden' }, 403)
     if (!body.expenseId?.trim()) return json({ error: 'expenseId обязателен' }, 400)
 
     const { data: existing, error: existingError } = await supabase.from('expenses').select('*').eq('id', body.expenseId).single()

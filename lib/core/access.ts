@@ -11,7 +11,15 @@ export const PUBLIC_PATHS = [
 ] as const
 
 export type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
-export type StaffCapability = 'tasks' | 'shifts' | 'salary' | 'staff' | 'staff_accounts' | 'operators' | 'finance'
+export type StaffCapability =
+  | 'tasks'
+  | 'shifts'
+  | 'salary'
+  | 'staff'
+  | 'staff_accounts'
+  | 'operators'
+  | 'finance_create'
+  | 'finance_manage'
 export type RoleMatrixEntry = {
   label: string
   home: string
@@ -56,8 +64,10 @@ const MANAGER_PATHS = [
   '/welcome',
   '/tasks',
   '/income',
+  '/income/add',
   '/income/analytics',
   '/expenses',
+  '/expenses/add',
   '/expenses/analysis',
   '/weekly-report',
   '/shifts',
@@ -94,10 +104,11 @@ export const STAFF_ROLE_MATRIX: Record<StaffRole, RoleMatrixEntry> = {
     label: 'Руководитель',
     home: '/welcome',
     paths: MANAGER_PATHS,
-    capabilities: ['tasks', 'shifts', 'salary'],
-    summary: 'Контролирует задачи, смены, зарплату и обзор финансов без критичных правок.',
+    capabilities: ['tasks', 'shifts', 'salary', 'finance_create'],
+    summary: 'Контролирует задачи, смены, зарплату и может вносить новые доходы и расходы без критичных правок.',
     actions: [
       'Смотрит доходы и расходы',
+      'Добавляет новые доходы и расходы',
       'Работает с задачами',
       'Назначает и меняет смены',
       'Работает с зарплатой',
@@ -123,7 +134,7 @@ export const STAFF_ROLE_MATRIX: Record<StaffRole, RoleMatrixEntry> = {
     label: 'Владелец',
     home: '/',
     paths: OWNER_PATHS,
-    capabilities: ['tasks', 'salary', 'staff', 'operators', 'finance'],
+    capabilities: ['tasks', 'salary', 'staff', 'operators', 'finance_create', 'finance_manage'],
     summary: 'Имеет управленческий доступ к команде, операторам и критичным финансам без системного администрирования.',
     actions: [
       'Управляет доходами и расходами',
@@ -148,7 +159,7 @@ export const SUPER_ADMIN_MATRIX_ENTRY = {
   label: 'Супер-администратор',
   home: '/',
   paths: ADMIN_PATHS,
-  capabilities: ['tasks', 'shifts', 'salary', 'staff', 'staff_accounts', 'operators', 'finance'] as const,
+  capabilities: ['tasks', 'shifts', 'salary', 'staff', 'staff_accounts', 'operators', 'finance_create', 'finance_manage'] as const,
   summary: 'Имеет полный доступ ко всем разделам, аккаунтам, настройкам, логам и системным операциям.',
   actions: [
     'Видит все разделы',

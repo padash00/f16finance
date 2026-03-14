@@ -395,6 +395,8 @@ export default function IncomePage() {
   }, [companies])
 
   const isExtraRow = useCallback((r: IncomeRow) => !!extraCompanyId && r.company_id === extraCompanyId, [extraCompanyId])
+  const canCreateIncome =
+    !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner' || sessionRole?.staffRole === 'manager'
   const canManageIncome = !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner'
 
   // Загрузка данных с учетом фильтров
@@ -925,7 +927,7 @@ export default function IncomePage() {
                     <Download className="w-4 h-4 mr-1" /> Экспорт
                   </Button>
 
-                  {canManageIncome ? (
+                  {canCreateIncome ? (
                     <Link href="/income/add">
                       <Button size="sm" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-500/25">
                         <Plus className="w-4 h-4 mr-1" /> Добавить

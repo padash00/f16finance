@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type Body =
@@ -94,8 +94,8 @@ function normalizeIncomePayload(payload: {
 
 export async function POST(req: Request) {
   try {
-    const guard = await requireStaffCapabilityRequest(req, 'finance')
-    if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const requestClient = createRequestSupabaseClient(req)
     const {
@@ -106,7 +106,11 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as Body | null
     if (!body?.action) return json({ error: 'Неверный формат запроса' }, 400)
 
+    const canCreateFinance = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+    const canManageFinance = access.isSuperAdmin || access.staffRole === 'owner'
+
     if (body.action === 'createIncome') {
+      if (!canCreateFinance) return json({ error: 'forbidden' }, 403)
       if (!body.payload.date?.trim()) return json({ error: 'Дата обязательна' }, 400)
       if (!body.payload.company_id?.trim()) return json({ error: 'Компания обязательна' }, 400)
       if (!body.payload.operator_id?.trim()) return json({ error: 'Оператор обязателен' }, 400)
@@ -137,6 +141,7 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'createIncomeBatch') {
+      if (!canCreateFinance) return json({ error: 'forbidden' }, 403)
       const rows = Array.isArray(body.payload) ? body.payload : []
       if (rows.length === 0) return json({ error: 'Нужен список доходов' }, 400)
 
@@ -183,6 +188,7 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateOnlineAmount') {
+      if (!canManageFinance) return json({ error: 'forbidden' }, 403)
       if (!body.incomeId?.trim()) return json({ error: 'incomeId обязателен' }, 400)
 
       const { data: existing, error: existingError } = await supabase
@@ -217,6 +223,7 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'updateIncome') {
+      if (!canManageFinance) return json({ error: 'forbidden' }, 403)
       if (!body.incomeId?.trim()) return json({ error: 'incomeId обязателен' }, 400)
       if (!body.payload.date?.trim()) return json({ error: 'Дата обязательна' }, 400)
 
@@ -259,6 +266,7 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'deleteIncome') {
+      if (!canManageFinance) return json({ error: 'forbidden' }, 403)
       if (!body.incomeId?.trim()) return json({ error: 'incomeId обязателен' }, 400)
 
       const { data: existing, error: existingError } = await supabase.from('incomes').select('*').eq('id', body.incomeId).single()

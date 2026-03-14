@@ -381,6 +381,8 @@ export default function ExpensesPage() {
     [operatorMap]
   )
 
+  const canCreateExpense =
+    !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner' || sessionRole?.staffRole === 'manager'
   const canManageExpense = !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner'
 
   const extraCompanyId = useMemo(() => {
@@ -850,7 +852,7 @@ export default function ExpensesPage() {
                     </Button>
                   </Link>
 
-                  {canManageExpense ? (
+                  {canCreateExpense ? (
                     <Link href="/expenses/add">
                       <Button size="sm" className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white shadow-lg shadow-red-500/25">
                         <Plus className="w-4 h-4 mr-1" /> Добавить
