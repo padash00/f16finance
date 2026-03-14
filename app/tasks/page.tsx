@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo, Suspense } from 'react'
+import { useEffect, useState, useCallback, useMemo, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
@@ -336,6 +336,7 @@ function TasksContent() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [draggedTask, setDraggedTask] = useState<Task | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null)
+  const realtimeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Фильтры
   const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '')
   const [filterStatus, setFilterStatus] = useState(searchParams.get('status') || 'all')
@@ -396,6 +397,55 @@ function TasksContent() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  useEffect(() => {
+    const scheduleRefresh = () => {
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current)
+      }
+
+      realtimeRefreshRef.current = setTimeout(() => {
+        loadData(true)
+      }, 250)
+    }
+
+    const channel = supabase
+      .channel('tasks-live-updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks' },
+        scheduleRefresh,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'task_comments' },
+        scheduleRefresh,
+      )
+      .subscribe()
+
+    return () => {
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current)
+      }
+      supabase.removeChannel(channel)
+    }
+  }, [loadData])
+
+  useEffect(() => {
+    if (!selectedTask) return
+
+    const freshTask = tasks.find((task) => task.id === selectedTask.id)
+    if (freshTask) {
+      const hasChanged =
+        freshTask.updated_at !== selectedTask.updated_at ||
+        freshTask.status !== selectedTask.status ||
+        freshTask.title !== selectedTask.title
+
+      if (hasChanged) {
+        setSelectedTask(freshTask)
+      }
+    }
+  }, [tasks, selectedTask])
 
   // Синхронизация фильтров с URL
   useEffect(() => {
