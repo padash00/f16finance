@@ -11,6 +11,7 @@ import { DEFAULT_SHIFT_BASE_PAY, SYSTEM_START_DATE } from '@/lib/core/constants'
 import { formatDateForInput, getMonthRange, getWeekRange } from '@/lib/core/date'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { calculateOperatorSalarySummary } from '@/lib/domain/salary'
+import { OperatorSchedulePanel } from '@/components/operator/operator-schedule-panel'
 import {
   User,
   Wallet,
@@ -181,16 +182,24 @@ export default function OperatorDashboardPage() {
     nextShiftLabel: null,
   })
   const [workspaceSummaryLoading, setWorkspaceSummaryLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'salary' | 'schedule' | 'history' | 'profile'>('salary')
 
   useEffect(() => {
     ;[
-      '/operator-schedule',
       '/operator-tasks',
       '/operator-chat',
       '/operator-achievements',
       '/operator-settings',
     ].forEach((route) => router.prefetch(route))
   }, [router])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    if (tab === 'schedule' || tab === 'history' || tab === 'profile' || tab === 'salary') {
+      setActiveTab(tab)
+    }
+  }, [])
 
   // Функция для установки периода
   const setPeriod = (type: 'week' | 'month' | 'all') => {
@@ -563,6 +572,21 @@ export default function OperatorDashboardPage() {
     })
   }
 
+  const changeTab = (tab: 'salary' | 'schedule' | 'history' | 'profile') => {
+    setActiveTab(tab)
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (tab === 'salary') {
+      params.delete('tab')
+    } else {
+      params.set('tab', tab)
+    }
+    const nextUrl = params.toString() ? `/operator-dashboard?${params.toString()}` : '/operator-dashboard'
+    startTransition(() => {
+      router.replace(nextUrl, { scroll: false })
+    })
+  }
+
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
   }
@@ -805,7 +829,7 @@ export default function OperatorDashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
-              <Button onClick={() => navigateTo('/operator-schedule')} className="w-full bg-violet-500 hover:bg-violet-400 sm:w-auto">
+              <Button onClick={() => changeTab('schedule')} className="w-full bg-violet-500 hover:bg-violet-400 sm:w-auto">
                 <CalendarRange className="w-4 h-4 mr-2" />
                 Мой график
               </Button>
@@ -987,11 +1011,15 @@ export default function OperatorDashboardPage() {
         </Card>
 
         {/* Tabs */}
-        <Tabs defaultValue="salary" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={(value) => changeTab(value as 'salary' | 'schedule' | 'history' | 'profile')} className="space-y-6">
           <TabsList className="h-auto w-full justify-start overflow-x-auto border-white/5 bg-gray-900/50">
             <TabsTrigger value="salary" className="data-[state=active]:bg-violet-500/20">
               <Wallet className="w-4 h-4 mr-2" />
               Зарплата
+            </TabsTrigger>
+            <TabsTrigger value="schedule" className="data-[state=active]:bg-violet-500/20">
+              <CalendarRange className="w-4 h-4 mr-2" />
+              График
             </TabsTrigger>
             <TabsTrigger value="history" className="data-[state=active]:bg-violet-500/20">
               <History className="w-4 h-4 mr-2" />
@@ -1129,6 +1157,10 @@ export default function OperatorDashboardPage() {
                 </div>
               </div>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="schedule" className="space-y-6">
+            <OperatorSchedulePanel onOpenTasks={() => navigateTo('/operator-tasks')} />
           </TabsContent>
 
           <TabsContent value="history" className="space-y-6">

@@ -90,7 +90,7 @@ export default function OperatorTasksPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    ;['/operator-dashboard', '/operator-schedule'].forEach((route) => router.prefetch(route))
+    ;['/operator-dashboard', '/operator-dashboard?tab=schedule'].forEach((route) => router.prefetch(route))
   }, [router])
 
   const loadData = useCallback(async (silent = false) => {
@@ -305,7 +305,11 @@ export default function OperatorTasksPage() {
                 <Button variant="outline" className="w-full border-white/10 sm:w-auto" onClick={() => navigateTo('/operator-dashboard')}>
                   Назад в кабинет
                 </Button>
-                <Button variant="outline" className="w-full border-white/10 sm:w-auto" onClick={() => navigateTo('/operator-schedule')}>
+                <Button
+                  variant="outline"
+                  className="w-full border-white/10 sm:w-auto"
+                  onClick={() => navigateTo('/operator-dashboard?tab=schedule')}
+                >
                   Перейти в мой график
                 </Button>
                 <Button variant="outline" onClick={() => loadData(true)} className="w-full gap-2 sm:w-auto">
