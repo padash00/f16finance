@@ -34,7 +34,7 @@ type Staff = {
   full_name: string
   phone: string | null
   email: string | null
-  role: string | null
+  role: 'manager' | 'marketer' | 'owner' | 'other' | null
   created_at?: string
 }
 
@@ -50,14 +50,14 @@ export default function SettingsPage() {
 
   // Формы создания
   const [newComp, setNewComp] = useState({ name: '', code: '' })
-  const [newStaff, setNewStaff] = useState({ name: '', phone: '', email: '', role: 'operator' })
+  const [newStaff, setNewStaff] = useState({ name: '', phone: '', email: '', role: 'other' })
 
   // Редактирование
   const [editCompId, setEditCompId] = useState<string | null>(null)
   const [editCompData, setEditCompData] = useState({ name: '', code: '' })
 
   const [editStaffId, setEditStaffId] = useState<string | null>(null)
-  const [editStaffData, setEditStaffData] = useState({ name: '', phone: '', email: '', role: 'operator' })
+  const [editStaffData, setEditStaffData] = useState({ name: '', phone: '', email: '', role: 'other' })
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -179,7 +179,7 @@ export default function SettingsPage() {
           role: newStaff.role,
         },
       })
-      setNewStaff({ name: '', phone: '', email: '', role: 'operator' })
+      setNewStaff({ name: '', phone: '', email: '', role: 'other' })
       fetchData()
     } catch (err: any) {
       alert(err.message)
@@ -392,8 +392,10 @@ export default function SettingsPage() {
                                                 onChange={e => setEditStaffData({...editStaffData, role: e.target.value})} 
                                                 className="bg-input border border-border rounded px-2 py-1 text-xs"
                                             >
-                                                <option value="operator">Оператор</option>
-                                                <option value="admin">Админ</option>
+                                                <option value="other">Сотрудник</option>
+                                                <option value="manager">Руководитель</option>
+                                                <option value="marketer">Маркетолог</option>
+                                                <option value="owner">Владелец</option>
                                             </select>
                                         </div>
                                         <div className="flex justify-end gap-2 mt-2">
@@ -405,16 +407,24 @@ export default function SettingsPage() {
                                     // РЕЖИМ ПРОСМОТРА
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3 overflow-hidden">
-                                            <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-xs ${s.role === 'admin' ? 'bg-purple-600' : 'bg-gray-700'}`}>
-                                                {s.role === 'admin' ? <Shield className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                                            <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-xs ${
+                                              s.role === 'owner' ? 'bg-amber-600' :
+                                              s.role === 'manager' ? 'bg-blue-600' :
+                                              s.role === 'marketer' ? 'bg-purple-600' :
+                                              'bg-gray-700'
+                                            }`}>
+                                                {s.role === 'owner' || s.role === 'manager' || s.role === 'marketer' ? <Shield className="w-3 h-3" /> : <User className="w-3 h-3" />}
                                             </div>
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2">
                                                     <p className="text-sm font-medium text-foreground truncate">{s.full_name}</p>
                                                     <span className={`text-[9px] px-1.5 rounded border uppercase shrink-0 ${
-                                                        s.role === 'admin' ? 'text-purple-400 border-purple-500/30 bg-purple-500/10' : 'text-muted-foreground border-white/10 bg-white/5'
+                                                        s.role === 'owner' ? 'text-amber-400 border-amber-500/30 bg-amber-500/10' :
+                                                        s.role === 'manager' ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' :
+                                                        s.role === 'marketer' ? 'text-purple-400 border-purple-500/30 bg-purple-500/10' :
+                                                        'text-muted-foreground border-white/10 bg-white/5'
                                                     }`}>
-                                                        {s.role === 'admin' ? 'Admin' : 'Operator'}
+                                                        {s.role === 'owner' ? 'Owner' : s.role === 'manager' ? 'Manager' : s.role === 'marketer' ? 'Marketer' : 'Other'}
                                                     </span>
                                                 </div>
                                                 <div className="flex flex-col gap-0.5 mt-0.5 text-[10px] text-muted-foreground">
@@ -424,7 +434,7 @@ export default function SettingsPage() {
                                             </div>
                                         </div>
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-purple-400" onClick={() => { setEditStaffId(s.id); setEditStaffData({ name: s.full_name, phone: s.phone || '', email: s.email || '', role: s.role || 'operator' }) }}>
+                                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-purple-400" onClick={() => { setEditStaffId(s.id); setEditStaffData({ name: s.full_name, phone: s.phone || '', email: s.email || '', role: s.role || 'other' }) }}>
                                                 <Pencil className="w-3 h-3" />
                                             </Button>
                                             <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDeleteStaff(s.id)}>
@@ -465,8 +475,10 @@ export default function SettingsPage() {
                                     onChange={e => setNewStaff({...newStaff, role: e.target.value})}
                                     className="w-28 bg-input border border-border rounded-lg px-2 py-2 text-xs focus:border-purple-500"
                                 >
-                                    <option value="operator">Оператор</option>
-                                    <option value="admin">Админ</option>
+                                    <option value="other">Сотрудник</option>
+                                    <option value="manager">Руководитель</option>
+                                    <option value="marketer">Маркетолог</option>
+                                    <option value="owner">Владелец</option>
                                 </select>
                             </div>
                             <Button type="submit" disabled={!newStaff.name.trim() || saving} className="w-full bg-purple-600 hover:bg-purple-700 mt-2">

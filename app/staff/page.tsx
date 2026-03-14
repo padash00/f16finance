@@ -417,21 +417,55 @@ export default function StaffPageSmart() {
   // --- Actions ---
   const handleDeletePayment = async (id: number) => {
     if (!confirm('Удалить эту выплату?')) return
-    const { error } = await supabase.from('staff_salary_payments').delete().eq('id', id)
-    if (!error) {
-      setPayments((prev) => prev.filter((p) => p.id !== id))
+    const response = await fetch('/api/admin/staff', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'deletePayment',
+        paymentId: id,
+      }),
+    })
+    const json = await response.json().catch(() => null)
+    if (!response.ok) {
+      showPageNotice({
+        tone: 'error',
+        text: json?.error || 'Не удалось удалить выплату',
+      })
+      return
     }
+
+    setPayments((prev) => prev.filter((p) => p.id !== id))
+    showPageNotice({
+      tone: 'success',
+      text: 'Выплата удалена.',
+    })
   }
 
   const toggleStaffStatus = async (s: Staff) => {
-    const { error } = await supabase
-      .from('staff')
-      .update({ is_active: !s.is_active })
-      .eq('id', s.id)
-    
-    if (!error) {
-      setStaff(prev => prev.map(item => item.id === s.id ? { ...item, is_active: !item.is_active } : item))
+    const response = await fetch('/api/admin/staff', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'toggleStaffStatus',
+        staffId: s.id,
+        is_active: !s.is_active,
+      }),
+    })
+    const json = await response.json().catch(() => null)
+
+    if (!response.ok) {
+      showPageNotice({
+        tone: 'error',
+        text: json?.error || 'Не удалось изменить статус сотрудника',
+      })
+      return
     }
+
+    setStaff(prev => prev.map(item => item.id === s.id ? { ...item, is_active: !item.is_active } : item))
+    showPageNotice({
+      tone: 'success',
+      text: !s.is_active ? 'Сотрудник активирован.' : 'Сотрудник отправлен в архив.',
+    })
   }
 
   const resetFilters = () => {
