@@ -102,6 +102,13 @@ type BulkAssignResult = {
   }
 }
 
+type PublicationDeliveryDetail = {
+  operator_id: string
+  operator_name: string
+  status: 'sent' | 'missing_telegram' | 'failed'
+  reason?: string | null
+}
+
 type PublicationStatus = {
   id: string
   company_id: string
@@ -243,6 +250,7 @@ export default function ShiftsPage() {
   const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(null)
   const [workflowLoading, setWorkflowLoading] = useState(false)
   const [workflowError, setWorkflowError] = useState<string | null>(null)
+  const [lastPublicationDetails, setLastPublicationDetails] = useState<PublicationDeliveryDetail[]>([])
   const [publications, setPublications] = useState<PublicationStatus[]>([])
   const [publicationResponses, setPublicationResponses] = useState<PublicationResponse[]>([])
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([])
@@ -663,6 +671,7 @@ export default function ShiftsPage() {
         tone: 'success',
         text: `Неделя по ${json?.companyName || 'точке'} опубликована. Доставлено ${json?.delivered || 0} из ${json?.totalOperators || 0} операторов, без Telegram: ${json?.missingTelegram || 0}, ошибок отправки: ${json?.failed || 0}.`,
       })
+      setLastPublicationDetails(json?.deliveryDetails || [])
 
       await Promise.all([fetchScheduleData(), fetchWorkflowData()])
     } catch (err: any) {
@@ -670,6 +679,7 @@ export default function ShiftsPage() {
         tone: 'error',
         text: err?.message || 'Не удалось опубликовать неделю.',
       })
+      setLastPublicationDetails([])
     } finally {
       setPublishingCompanyId(null)
     }
@@ -1073,6 +1083,39 @@ export default function ShiftsPage() {
                   {workflowError && (
                     <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-3 text-sm text-red-300">
                       {workflowError}
+                    </div>
+                  )}
+
+                  {lastPublicationDetails.length > 0 && (
+                    <div className="rounded-2xl border border-border bg-background p-4">
+                      <div className="mb-3 text-sm font-semibold text-foreground">Результат последней отправки</div>
+                      <div className="space-y-2">
+                        {lastPublicationDetails.map((item) => (
+                          <div key={`${item.operator_id}-${item.status}`} className="rounded-xl border border-border bg-card px-3 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-sm font-medium text-foreground">{item.operator_name}</div>
+                              <div
+                                className={`rounded-full px-2 py-1 text-[11px] ${
+                                  item.status === 'sent'
+                                    ? 'bg-emerald-500/15 text-emerald-300'
+                                    : item.status === 'missing_telegram'
+                                      ? 'bg-sky-500/15 text-sky-300'
+                                      : 'bg-rose-500/15 text-rose-300'
+                                }`}
+                              >
+                                {item.status === 'sent'
+                                  ? 'Отправлено'
+                                  : item.status === 'missing_telegram'
+                                    ? 'Нет Telegram'
+                                    : 'Ошибка'}
+                              </div>
+                            </div>
+                            {item.reason && (
+                              <div className="mt-2 text-xs leading-5 text-muted-foreground">{item.reason}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 

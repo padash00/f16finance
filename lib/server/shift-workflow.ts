@@ -321,10 +321,24 @@ export async function publishShiftWeekForCompany(params: {
   let delivered = 0
   let missingTelegram = 0
   let failed = 0
+  const deliveryDetails: Array<{
+    operator_id: string
+    operator_name: string
+    status: 'sent' | 'missing_telegram' | 'failed'
+    reason?: string | null
+  }> = []
 
   for (const { operator, assignments } of uniqueAssignments.values()) {
+    const operatorLabel = getOperatorDisplayName(operator, 'Оператор')
+
     if (!operator.telegram_chat_id || !process.env.TELEGRAM_BOT_TOKEN) {
       missingTelegram += 1
+      deliveryDetails.push({
+        operator_id: operator.id,
+        operator_name: operatorLabel,
+        status: 'missing_telegram',
+        reason: !operator.telegram_chat_id ? 'У оператора не заполнен telegram_chat_id.' : 'TELEGRAM_BOT_TOKEN не настроен.',
+      })
       continue
     }
 
@@ -344,6 +358,11 @@ export async function publishShiftWeekForCompany(params: {
       )
 
       delivered += 1
+      deliveryDetails.push({
+        operator_id: operator.id,
+        operator_name: operatorLabel,
+        status: 'sent',
+      })
 
       await writeNotificationLog(params.supabase, {
         channel: 'telegram',
@@ -355,7 +374,7 @@ export async function publishShiftWeekForCompany(params: {
           company_id: params.companyId,
           company_name: companyName,
           operator_id: operator.id,
-          operator_name: getOperatorDisplayName(operator, 'Оператор'),
+          operator_name: operatorLabel,
           assignments: assignments.map((assignment) => ({
             date: assignment.date,
             shift_type: assignment.shift_type,
@@ -364,6 +383,13 @@ export async function publishShiftWeekForCompany(params: {
       })
     } catch (error) {
       failed += 1
+      const reason = error instanceof Error ? error.message : 'telegram-send-failed'
+      deliveryDetails.push({
+        operator_id: operator.id,
+        operator_name: operatorLabel,
+        status: 'failed',
+        reason,
+      })
       await writeNotificationLog(params.supabase, {
         channel: 'telegram',
         recipient: String(operator.telegram_chat_id),
@@ -373,8 +399,8 @@ export async function publishShiftWeekForCompany(params: {
           publication_id: publication.id,
           company_id: params.companyId,
           operator_id: operator.id,
-          operator_name: getOperatorDisplayName(operator, 'Оператор'),
-          error: error instanceof Error ? error.message : 'telegram-send-failed',
+          operator_name: operatorLabel,
+          error: reason,
         },
       })
     }
@@ -388,6 +414,7 @@ export async function publishShiftWeekForCompany(params: {
     delivered,
     missingTelegram,
     failed,
+    deliveryDetails,
   }
 }
 

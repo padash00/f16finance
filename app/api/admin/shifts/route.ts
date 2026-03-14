@@ -584,6 +584,7 @@ export async function POST(req: Request) {
           failed: result.failed,
           total_operators: result.totalOperators,
           version: result.publication.version,
+          delivery_details: result.deliveryDetails,
         },
       })
 
@@ -596,6 +597,7 @@ export async function POST(req: Request) {
         missingTelegram: result.missingTelegram,
         failed: result.failed,
         totalOperators: result.totalOperators,
+        deliveryDetails: result.deliveryDetails,
       })
     }
 
