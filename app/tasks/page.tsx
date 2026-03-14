@@ -70,6 +70,7 @@ type Company = {
 
 type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
 type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
+type TaskResponse = 'accept' | 'need_info' | 'blocked' | 'already_done' | 'complete'
 
 type TaskFormState = {
   title: string
@@ -135,6 +136,7 @@ type TaskDetailModalProps = {
   isOpen: boolean
   onClose: () => void
   operators: Operator[]
+  staff: Staff[]
   companies: Company[]
   onNotify: () => void
   onTaskUpdated: () => Promise<void> | void
@@ -167,6 +169,44 @@ const PRIORITY_CONFIG: Record<TaskPriority, { icon: string; color: string; label
   medium: { icon: '📌', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20', label: 'Средний' },
   low: { icon: '💧', color: 'text-green-400 bg-green-500/10 border-green-500/20', label: 'Низкий' }
 }
+
+const RESPONSE_CONFIG: Record<
+  TaskResponse,
+  { label: string; status: TaskStatus; tone: string; helper: string }
+> = {
+  accept: {
+    label: 'Принял в работу',
+    status: 'in_progress',
+    tone: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+    helper: 'Задача сразу перейдет в колонку "В работе".',
+  },
+  need_info: {
+    label: 'Нужны уточнения',
+    status: 'backlog',
+    tone: 'border-sky-500/30 bg-sky-500/10 text-sky-200',
+    helper: 'Задача вернется в ожидание уточнений.',
+  },
+  blocked: {
+    label: 'Не могу выполнить',
+    status: 'backlog',
+    tone: 'border-rose-500/30 bg-rose-500/10 text-rose-200',
+    helper: 'Руководитель увидит, что задача заблокирована.',
+  },
+  already_done: {
+    label: 'Уже сделано',
+    status: 'review',
+    tone: 'border-violet-500/30 bg-violet-500/10 text-violet-200',
+    helper: 'Задача уйдет на проверку.',
+  },
+  complete: {
+    label: 'Завершил задачу',
+    status: 'done',
+    tone: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
+    helper: 'Задача будет закрыта как выполненная.',
+  },
+}
+
+const TASK_RESPONSE_ORDER: TaskResponse[] = ['accept', 'need_info', 'blocked', 'already_done', 'complete']
 
 const COMPANY_COLORS: Record<string, string> = {
   arena: 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400',
@@ -285,6 +325,7 @@ function TasksContent() {
   // Состояния
   const [tasks, setTasks] = useState<Task[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
+  const [staff, setStaff] = useState<Staff[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -309,11 +350,19 @@ function TasksContent() {
     setError(null)
 
     try {
-      const [{ data: operatorsData, error: operatorsError }, { data: companiesData, error: companiesError }, { data: tasksData, error: tasksError }] = await Promise.all([
+      const [
+        { data: operatorsData, error: operatorsError },
+        { data: staffData, error: staffError },
+        { data: companiesData, error: companiesError },
+        { data: tasksData, error: tasksError },
+      ] = await Promise.all([
         supabase
           .from('operators')
           .select('id, name, short_name, telegram_chat_id, role, is_active, operator_profiles(*)')
           .eq('is_active', true),
+        supabase
+          .from('staff')
+          .select('id, full_name, short_name'),
         supabase
           .from('companies')
           .select('id, name, code'),
@@ -325,6 +374,9 @@ function TasksContent() {
 
       if (operatorsError) throw operatorsError
       setOperators(operatorsData || [])
+
+      if (staffError) throw staffError
+      setStaff(staffData || [])
 
       if (companiesError) throw companiesError
       setCompanies(companiesData || [])
@@ -435,19 +487,6 @@ function TasksContent() {
         throw new Error(json?.error || `Ошибка запроса (${response.status})`)
       }
 
-      const task = tasks.find((item) => item.id === taskId)
-      if (task?.operator_telegram) {
-        await fetch('/api/admin/tasks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'notifyTask',
-            taskId,
-            message: `📋 *Статус задачи #${task.task_number}*\n\n${task.title}\n\n📊 Новый статус: ${STATUS_CONFIG[newStatus].title}`,
-          }),
-        })
-      }
-
       await loadData(true)
       toast({
         title: 'Статус обновлён',
@@ -472,12 +511,6 @@ function TasksContent() {
       return
     }
 
-    const message = `📋 *Задача #${task.task_number}*\n\n` +
-      `${task.title}\n\n` +
-      `📅 Дедлайн: ${task.due_date ? formatDate(task.due_date) : 'не указан'}\n` +
-      `🔥 Приоритет: ${PRIORITY_CONFIG[task.priority].label}\n` +
-      `📊 Статус: ${STATUS_CONFIG[task.status].title}`
-
     try {
       const response = await fetch('/api/admin/tasks', {
         method: 'POST',
@@ -485,7 +518,6 @@ function TasksContent() {
         body: JSON.stringify({
           action: 'notifyTask',
           taskId: task.id,
-          message,
         }),
       })
       const json = await response.json().catch(() => null)
@@ -916,6 +948,7 @@ function TasksContent() {
             setSelectedTask(null)
           }}
           operators={operators}
+          staff={staff}
           companies={companies}
           onNotify={() => handleNotifyOperator(selectedTask)}
           onTaskUpdated={() => loadData(true)}
@@ -1071,6 +1104,7 @@ function TaskDetailModal({
   isOpen,
   onClose,
   operators,
+  staff,
   companies,
   onNotify,
   onTaskUpdated,
@@ -1078,8 +1112,10 @@ function TaskDetailModal({
   const { toast } = useToast()
   const [comments, setComments] = useState<TaskComment[]>([])
   const [newComment, setNewComment] = useState('')
+  const [responseNote, setResponseNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [savingTask, setSavingTask] = useState(false)
+  const [responding, setResponding] = useState<TaskResponse | null>(null)
   const [editForm, setEditForm] = useState<TaskFormState>(() => toTaskFormState(task))
 
   const loadComments = useCallback(async () => {
@@ -1094,14 +1130,21 @@ function TaskDetailModal({
     if (data) {
       setComments(data.map((c: any) => ({
         ...c,
-        author_name: operators.find((o: Operator) => o.id === c.operator_id)?.name || 'Админ'
+        author_name:
+          (c.operator_id
+            ? getOperatorDisplayName(operators.find((o: Operator) => o.id === c.operator_id), 'Оператор')
+            : null) ||
+          (c.staff_id ? staff.find((item) => item.id === c.staff_id)?.full_name : null) ||
+          'Система',
+        author_type: c.operator_id ? 'operator' : c.staff_id ? 'staff' : undefined,
       })))
     }
-  }, [operators, task])
+  }, [operators, staff, task])
 
   useEffect(() => {
     if (isOpen && task) {
       setEditForm(toTaskFormState(task))
+      setResponseNote('')
       loadComments()
     }
   }, [isOpen, task, loadComments])
@@ -1177,6 +1220,41 @@ function TaskDetailModal({
 
     toast({
       title: 'Не удалось сохранить задачу',
+      description: json?.error || 'Попробуй ещё раз',
+      variant: 'destructive',
+    })
+  }
+
+  const handleQuickResponse = async (responseType: TaskResponse) => {
+    setResponding(responseType)
+
+    const response = await fetch('/api/admin/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'respondTask',
+        taskId: task.id,
+        response: responseType,
+        note: responseNote.trim() || null,
+      }),
+    })
+    const json = await response.json().catch(() => null)
+
+    setResponding(null)
+
+    if (response.ok) {
+      setResponseNote('')
+      await onTaskUpdated()
+      await loadComments()
+      toast({
+        title: 'Ответ сохранён',
+        description: `${RESPONSE_CONFIG[responseType].label}. Задача перешла в "${STATUS_CONFIG[RESPONSE_CONFIG[responseType].status].title}".`,
+      })
+      return
+    }
+
+    toast({
+      title: 'Не удалось сохранить ответ',
       description: json?.error || 'Попробуй ещё раз',
       variant: 'destructive',
     })
@@ -1387,6 +1465,44 @@ function TaskDetailModal({
             </div>
           )}
 
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-violet-300" />
+              <h3 className="text-sm font-medium text-white">Быстрый ответ по задаче</h3>
+            </div>
+            <p className="mb-3 text-xs leading-5 text-gray-400">
+              Используй быстрый ответ, если задачу приняли в работу, нужна помощь или нужно сразу отправить её на проверку.
+            </p>
+
+            <textarea
+              value={responseNote}
+              onChange={(e) => setResponseNote(e.target.value)}
+              placeholder="Короткий комментарий для истории задачи и уведомления..."
+              className="mb-3 min-h-20 w-full resize-none rounded-lg border border-white/10 bg-gray-800/50 p-3 text-sm text-white"
+            />
+
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              {TASK_RESPONSE_ORDER.map((key) => {
+                const config = RESPONSE_CONFIG[key]
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handleQuickResponse(key)}
+                    disabled={responding !== null}
+                    className={cn(
+                      'rounded-xl border px-3 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                      config.tone,
+                    )}
+                  >
+                    <div className="text-sm font-medium">{config.label}</div>
+                    <div className="mt-1 text-xs opacity-80">{config.helper}</div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           {/* Теги */}
           {task.tags && task.tags.length > 0 && (
             <div>
@@ -1521,39 +1637,14 @@ function CreateTaskModal({
     setLoading(false)
 
     if (response.ok) {
-      // Уведомление оператору в Telegram
-      if (form.operator_id) {
-        const operator = operators.find((o: Operator) => o.id === form.operator_id)
-        if (operator?.telegram_chat_id) {
-          try {
-            const notifyResponse = await fetch('/api/admin/tasks', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'notifyTask',
-                taskId: json?.data?.id,
-                message: `📋 *Новая задача!*\n\n${form.title}\n\n📅 Дедлайн: ${form.due_date ? formatDate(form.due_date) : 'не указан'}`,
-              }),
-            })
-            const notifyJson = await notifyResponse.json().catch(() => null)
-            if (!notifyResponse.ok) {
-              throw new Error(notifyJson?.error || `Ошибка запроса (${notifyResponse.status})`)
-            }
-          } catch (error: any) {
-            toast({
-              title: 'Задача создана',
-              description: `Telegram не отправлен: ${error?.message || 'неизвестная ошибка'}`,
-              variant: 'destructive',
-            })
-            onSuccess()
-            return
-          }
-        }
-      }
-
       toast({
         title: 'Задача создана',
-        description: 'Новая задача добавлена в систему.',
+        description:
+          json?.notification?.sent === false
+            ? 'Новая задача добавлена в систему. Уведомление сотруднику не отправилось автоматически.'
+            : form.operator_id
+              ? 'Новая задача добавлена в систему и отправлена исполнителю.'
+              : 'Новая задача добавлена в систему.',
       })
       onSuccess()
       return

@@ -131,7 +131,7 @@ async function sendTelegramMessage(chatId: string, text: string) {
     body: new URLSearchParams({
       chat_id: chatId,
       text,
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       disable_web_page_preview: 'true',
     }),
   })
@@ -160,10 +160,11 @@ async function notifySingleShiftAssignment(
 
   const companyName = await getCompanyNameById(supabase, payload.companyId)
   const text =
-    `📅 *Новая смена*\n\n` +
-    `Точка: *${companyName}*\n` +
-    `Дата: *${formatShiftDate(payload.date)}*\n` +
-    `Смена: *${formatShiftType(payload.shiftType)}*`
+    `<b>Вам назначена новая смена</b>\n\n` +
+    `<b>Точка:</b> ${companyName}\n` +
+    `<b>Дата:</b> ${formatShiftDate(payload.date)}\n` +
+    `<b>Смена:</b> ${formatShiftType(payload.shiftType)}\n\n` +
+    `Проверьте график в кабинете и заранее подтвердите, что вы видели это назначение.`
 
   await sendTelegramMessage(String(operator.telegram_chat_id), text)
   return { sent: true as const, operatorLabel: getOperatorDisplayName(operator, 'Оператор') }
@@ -196,11 +197,12 @@ async function notifyBulkShiftAssignment(
   const periodEnd = formatShiftDate(sortedDates[sortedDates.length - 1])
   const dateList = sortedDates.map((date) => `• ${formatShiftDate(date)}`).join('\n')
   const text =
-    `📅 *График смен обновлён*\n\n` +
-    `Точка: *${companyName}*\n` +
-    `Период: *${periodStart} — ${periodEnd}*\n` +
-    `Тип смены: *${formatShiftType(payload.shiftType)}*\n\n` +
-    `Твои даты выхода:\n${dateList}`
+    `<b>График смен обновлен</b>\n\n` +
+    `<b>Точка:</b> ${companyName}\n` +
+    `<b>Период:</b> ${periodStart} — ${periodEnd}\n` +
+    `<b>Тип смены:</b> ${formatShiftType(payload.shiftType)}\n\n` +
+    `<b>Ваши даты выхода:</b>\n${dateList}\n\n` +
+    `Если одна из дат вам не подходит, предупредите руководителя заранее.`
 
   await sendTelegramMessage(String(operator.telegram_chat_id), text)
   return {
