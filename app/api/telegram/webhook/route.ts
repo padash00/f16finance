@@ -309,6 +309,8 @@ export async function POST(req: Request) {
         return json({ ok: true })
       }
 
+      await answerCallbackQuery(callbackQueryId, 'Обрабатываю ответ...').catch(() => null)
+
       try {
         const result = await processTaskResponse({
           supabase,
@@ -321,8 +323,6 @@ export async function POST(req: Request) {
           await clearCallbackButtons(chatId, messageId).catch(() => null)
         }
 
-        await answerCallbackQuery(callbackQueryId, `Ответ принят: ${result.responseLabel}`)
-
         if (chatId) {
           await sendTelegramText(
             chatId,
@@ -330,7 +330,9 @@ export async function POST(req: Request) {
           )
         }
       } catch (error: any) {
-        await answerCallbackQuery(callbackQueryId, error?.message || 'Не удалось обработать ответ', true).catch(() => null)
+        if (chatId) {
+          await sendTelegramText(chatId, error?.message || 'Не удалось обработать ответ по задаче.').catch(() => null)
+        }
       }
 
       return json({ ok: true })
