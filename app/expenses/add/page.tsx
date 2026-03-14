@@ -224,11 +224,19 @@ export default function AddExpensePage() {
         comment: comment.trim() || null,
       }
 
-      const { data, error: insertError } = await supabase.from('expenses').insert([payload]).select('id').single()
-      if (insertError) throw insertError
+      const response = await fetch('/api/admin/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createExpense',
+          payload,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || 'Не удалось сохранить расход')
 
       await logExpenseAudit({
-        entityId: String(data.id),
+        entityId: String(json?.data?.id || `${date}:${companyId}`),
         action: 'create',
         payload: {
           ...payload,

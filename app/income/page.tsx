@@ -925,11 +925,13 @@ export default function IncomePage() {
                     <Download className="w-4 h-4 mr-1" /> Экспорт
                   </Button>
 
-                  <Link href="/income/add">
-                    <Button size="sm" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-500/25">
-                      <Plus className="w-4 h-4 mr-1" /> Добавить
-                    </Button>
-                  </Link>
+                  {canManageIncome ? (
+                    <Link href="/income/add">
+                      <Button size="sm" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-500/25">
+                        <Plus className="w-4 h-4 mr-1" /> Добавить
+                      </Button>
+                    </Link>
+                  ) : null}
                 </div>
               </div>
 

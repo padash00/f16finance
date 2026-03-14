@@ -31,6 +31,8 @@ import {
   Activity,
   Target,
   Zap,
+  Pencil,
+  X,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -54,6 +56,7 @@ type ExpenseRow = {
   id: string
   date: string
   company_id: string
+  operator_id: string | null
   category: string | null
   cash_amount: number | null
   kaspi_amount: number | null
@@ -64,6 +67,18 @@ type Company = {
   id: string
   name: string
   code?: string | null
+}
+
+type Operator = {
+  id: string
+  name: string
+  short_name: string | null
+  is_active: boolean
+}
+
+type SessionRoleInfo = {
+  isSuperAdmin?: boolean
+  staffRole?: 'manager' | 'marketer' | 'owner' | 'other'
 }
 
 type PayFilter = 'all' | 'cash' | 'kaspi'
@@ -238,6 +253,14 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
 
 const rowTotal = (r: ExpenseRow) => (r.cash_amount || 0) + (r.kaspi_amount || 0)
 
+const parseMoneyInput = (raw: string): number | null => {
+  const cleaned = raw.replace(/[^\d]/g, '')
+  if (cleaned === '') return null
+  const numeric = Number(cleaned)
+  if (!Number.isFinite(numeric)) return null
+  return Math.max(0, numeric)
+}
+
 const escapeCSV = (value: any) => {
   const s = value === null || value === undefined ? '' : String(value)
   const needsQuotes = s.includes(';') || s.includes('"') || s.includes('\n') || s.includes('\r')
@@ -267,10 +290,12 @@ async function logExpenseEvent(event: {
 export default function ExpensesPage() {
   const [rows, setRows] = useState<ExpenseRow[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
 
   // Filters
   const [dateFrom, setDateFrom] = useState(DateUtils.addDaysISO(DateUtils.todayISO(), -29))
@@ -289,16 +314,45 @@ export default function ExpensesPage() {
 
   const [page, setPage] = useState(0)
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'list'>('overview')
+  const [editingExpense, setEditingExpense] = useState<ExpenseRow | null>(null)
+  const [editExpenseDate, setEditExpenseDate] = useState('')
+  const [editExpenseCompanyId, setEditExpenseCompanyId] = useState('')
+  const [editExpenseOperatorId, setEditExpenseOperatorId] = useState('none')
+  const [editExpenseCategory, setEditExpenseCategory] = useState('')
+  const [editExpenseCashDraft, setEditExpenseCashDraft] = useState('')
+  const [editExpenseKaspiDraft, setEditExpenseKaspiDraft] = useState('')
+  const [editExpenseCommentDraft, setEditExpenseCommentDraft] = useState('')
+  const [savingExpenseEdit, setSavingExpenseEdit] = useState(false)
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null)
   
   const reqIdRef = useRef(0)
 
   // Load companies
   useEffect(() => {
-    const fetchCompanies = async () => {
-      const { data, error } = await supabase.from('companies').select('id, name, code').order('name')
-      if (!error && data) setCompanies(data as Company[])
+    const fetchReferences = async () => {
+      const [companyRes, operatorRes] = await Promise.all([
+        supabase.from('companies').select('id, name, code').order('name'),
+        supabase.from('operators').select('id, name, short_name, is_active').eq('is_active', true).order('name'),
+      ])
+      if (!companyRes.error && companyRes.data) setCompanies(companyRes.data as Company[])
+      if (!operatorRes.error && operatorRes.data) setOperators(operatorRes.data as Operator[])
     }
-    fetchCompanies()
+    fetchReferences()
+  }, [])
+
+  useEffect(() => {
+    const loadSessionRole = async () => {
+      const response = await fetch('/api/auth/session-role', { cache: 'no-store' }).catch(() => null)
+      const json = await response?.json().catch(() => null)
+      if (response?.ok) {
+        setSessionRole({
+          isSuperAdmin: json?.isSuperAdmin,
+          staffRole: json?.staffRole,
+        })
+      }
+    }
+
+    loadSessionRole()
   }, [])
 
   const companyMap = useMemo(() => {
@@ -311,6 +365,23 @@ export default function ExpensesPage() {
     (companyId: string) => companyMap.get(companyId)?.name ?? '—',
     [companyMap]
   )
+
+  const operatorMap = useMemo(() => {
+    const map = new Map<string, Operator>()
+    for (const operator of operators) map.set(operator.id, operator)
+    return map
+  }, [operators])
+
+  const operatorName = useCallback(
+    (operatorId: string | null) => {
+      if (!operatorId) return 'Без оператора'
+      const operator = operatorMap.get(operatorId)
+      return operator?.short_name || operator?.name || 'Без оператора'
+    },
+    [operatorMap]
+  )
+
+  const canManageExpense = !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner'
 
   const extraCompanyId = useMemo(() => {
     const extra = companies.find((c) => c.code === 'extra' || c.name === 'F16 Extra')
@@ -328,7 +399,7 @@ export default function ExpensesPage() {
     (forPage: number) => {
       let q = supabase
         .from('expenses')
-        .select('id, date, company_id, category, cash_amount, kaspi_amount, comment')
+        .select('id, date, company_id, operator_id, category, cash_amount, kaspi_amount, comment')
         .range(forPage * PAGE_SIZE, forPage * PAGE_SIZE + PAGE_SIZE - 1)
 
       if (dateFrom) q = q.gte('date', dateFrom)
@@ -584,6 +655,109 @@ export default function ExpensesPage() {
     })
   }
 
+  const openExpenseEditor = (row: ExpenseRow) => {
+    setEditingExpense(row)
+    setEditExpenseDate(row.date)
+    setEditExpenseCompanyId(row.company_id)
+    setEditExpenseOperatorId(row.operator_id || 'none')
+    setEditExpenseCategory(row.category || '')
+    setEditExpenseCashDraft(String(row.cash_amount ?? ''))
+    setEditExpenseKaspiDraft(String(row.kaspi_amount ?? ''))
+    setEditExpenseCommentDraft(row.comment || '')
+  }
+
+  const closeExpenseEditor = () => {
+    if (savingExpenseEdit) return
+    setEditingExpense(null)
+    setEditExpenseDate('')
+    setEditExpenseCompanyId('')
+    setEditExpenseOperatorId('none')
+    setEditExpenseCategory('')
+    setEditExpenseCashDraft('')
+    setEditExpenseKaspiDraft('')
+    setEditExpenseCommentDraft('')
+  }
+
+  const saveExpenseEdit = async () => {
+    if (!editingExpense) return
+
+    const cashAmount = parseMoneyInput(editExpenseCashDraft)
+    const kaspiAmount = parseMoneyInput(editExpenseKaspiDraft)
+
+    setSavingExpenseEdit(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/admin/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateExpense',
+          expenseId: editingExpense.id,
+          payload: {
+            date: editExpenseDate,
+            company_id: editExpenseCompanyId,
+            operator_id: editExpenseOperatorId === 'none' ? null : editExpenseOperatorId,
+            category: editExpenseCategory,
+            cash_amount: cashAmount,
+            kaspi_amount: kaspiAmount,
+            comment: editExpenseCommentDraft.trim() || null,
+          },
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || 'Не удалось обновить расход')
+
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === editingExpense.id
+            ? {
+                ...row,
+                date: editExpenseDate,
+                company_id: editExpenseCompanyId,
+                operator_id: editExpenseOperatorId === 'none' ? null : editExpenseOperatorId,
+                category: editExpenseCategory,
+                cash_amount: cashAmount,
+                kaspi_amount: kaspiAmount,
+                comment: editExpenseCommentDraft.trim() || null,
+              }
+            : row,
+        ),
+      )
+      closeExpenseEditor()
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось обновить расход')
+    } finally {
+      setSavingExpenseEdit(false)
+    }
+  }
+
+  const deleteExpense = async (row: ExpenseRow) => {
+    if (!confirm(`Удалить расход от ${DateUtils.formatDate(row.date)}?`)) return
+
+    setDeletingExpenseId(row.id)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/admin/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'deleteExpense',
+          expenseId: row.id,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || 'Не удалось удалить расход')
+
+      setRows((prev) => prev.filter((item) => item.id !== row.id))
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось удалить расход')
+    } finally {
+      setDeletingExpenseId(null)
+    }
+  }
+
   if (loading && rows.length === 0) {
     return (
       <div className="flex min-h-screen bg-gradient-to-br from-gray-900 to-gray-950">
@@ -676,11 +850,13 @@ export default function ExpensesPage() {
                     </Button>
                   </Link>
 
-                  <Link href="/expenses/add">
-                    <Button size="sm" className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white shadow-lg shadow-red-500/25">
-                      <Plus className="w-4 h-4 mr-1" /> Добавить
-                    </Button>
-                  </Link>
+                  {canManageExpense ? (
+                    <Link href="/expenses/add">
+                      <Button size="sm" className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white shadow-lg shadow-red-500/25">
+                        <Plus className="w-4 h-4 mr-1" /> Добавить
+                      </Button>
+                    </Link>
+                  ) : null}
                 </div>
               </div>
 
@@ -905,10 +1081,124 @@ export default function ExpensesPage() {
               loadMore={loadMore}
               companyName={companyName}
               companyMap={companyMap}
+              operatorName={operatorName}
+              canManageExpense={canManageExpense}
+              openExpenseEditor={openExpenseEditor}
+              deleteExpense={deleteExpense}
+              deletingExpenseId={deletingExpenseId}
             />
           )}
         </div>
       </main>
+
+      {editingExpense ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-white shadow-2xl">
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">Редактирование расхода</h2>
+                <p className="mt-1 text-sm text-slate-400">Изменения сохранятся сразу в базе и попадут в аудит.</p>
+              </div>
+              <button
+                onClick={closeExpenseEditor}
+                className="rounded-xl border border-white/10 p-2 text-slate-400 transition hover:border-white/20 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Дата</label>
+                <input
+                  type="date"
+                  value={editExpenseDate}
+                  onChange={(e) => setEditExpenseDate(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Компания</label>
+                <select
+                  value={editExpenseCompanyId}
+                  onChange={(e) => setEditExpenseCompanyId(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
+                >
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Оператор</label>
+                <select
+                  value={editExpenseOperatorId}
+                  onChange={(e) => setEditExpenseOperatorId(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
+                >
+                  <option value="none">Без оператора</option>
+                  {operators.map((operator) => (
+                    <option key={operator.id} value={operator.id}>
+                      {operator.short_name || operator.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Категория</label>
+                <input
+                  value={editExpenseCategory}
+                  onChange={(e) => setEditExpenseCategory(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
+                  placeholder="Категория"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Наличные</label>
+                <input
+                  inputMode="numeric"
+                  value={editExpenseCashDraft}
+                  onChange={(e) => setEditExpenseCashDraft(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Kaspi</label>
+                <input
+                  inputMode="numeric"
+                  value={editExpenseKaspiDraft}
+                  onChange={(e) => setEditExpenseKaspiDraft(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Комментарий</label>
+              <textarea
+                value={editExpenseCommentDraft}
+                onChange={(e) => setEditExpenseCommentDraft(e.target.value)}
+                rows={3}
+                className="w-full rounded-2xl border border-white/10 bg-slate-900 px-3 py-3 text-sm text-white outline-none focus:border-red-500/50"
+                placeholder="Комментарий к расходу"
+              />
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <Button variant="outline" onClick={closeExpenseEditor} disabled={savingExpenseEdit}>
+                Отмена
+              </Button>
+              <Button onClick={saveExpenseEdit} disabled={savingExpenseEdit}>
+                {savingExpenseEdit ? 'Сохраняю...' : 'Сохранить изменения'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -1210,7 +1500,19 @@ function AnalyticsTab({ analytics }: any) {
   )
 }
 
-function ListTab({ rows, loading, loadingMore, hasMore, loadMore, companyName, companyMap }: any) {
+function ListTab({
+  rows,
+  loading,
+  loadingMore,
+  hasMore,
+  loadMore,
+  companyMap,
+  operatorName,
+  canManageExpense,
+  openExpenseEditor,
+  deleteExpense,
+  deletingExpenseId,
+}: any) {
   return (
     <Card className="border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -1224,6 +1526,7 @@ function ListTab({ rows, loading, loadingMore, hasMore, loadMore, companyName, c
               <th className="px-4 py-3 text-right text-red-400">Kaspi</th>
               <th className="px-4 py-3 text-right text-white">Итого</th>
               <th className="px-4 py-3 text-left">Комментарий</th>
+              {canManageExpense ? <th className="px-4 py-3 text-right">Действия</th> : null}
             </tr>
           </thead>
           <tbody className="text-sm">
@@ -1254,6 +1557,7 @@ function ListTab({ rows, loading, loadingMore, hasMore, loadMore, companyName, c
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700">
                       {row.category || 'Общее'}
                     </span>
+                    <div className="mt-1 text-[11px] text-gray-500">{operatorName(row.operator_id)}</div>
                   </td>
                   <td className={`px-4 py-3 text-right font-mono ${row.cash_amount ? 'text-amber-400' : 'text-gray-700'}`}>
                     {row.cash_amount ? Formatters.moneyDetailed(row.cash_amount) : '—'}
@@ -1267,6 +1571,23 @@ function ListTab({ rows, loading, loadingMore, hasMore, loadMore, companyName, c
                   <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate">
                     {row.comment || '—'}
                   </td>
+                  {canManageExpense ? (
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="icon-sm" onClick={() => openExpenseEditor(row)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="icon-sm"
+                          onClick={() => deleteExpense(row)}
+                          disabled={deletingExpenseId === row.id}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                  ) : null}
                 </tr>
               )
             })}

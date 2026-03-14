@@ -130,6 +130,23 @@ export async function GET(req: Request) {
           if (!financeEntityTypes.includes((item.entityType || '').toLowerCase())) return false
         }
 
+        if (domain === 'staff') {
+          const staffEntityTypes = [
+            'staff',
+            'staff-payment',
+            'operator',
+            'operator-staff-link',
+            'auth-session',
+            'auth-attempt',
+          ]
+          if (!staffEntityTypes.includes((item.entityType || '').toLowerCase())) return false
+        }
+
+        if (domain === 'operations') {
+          const operationsEntityTypes = ['task', 'task-comment', 'shift', 'shift-week', 'shift-change-request']
+          if (!operationsEntityTypes.includes((item.entityType || '').toLowerCase())) return false
+        }
+
         if (kind && item.kind.toLowerCase() !== kind) return false
         if (entityType && (item.entityType || '').toLowerCase() !== entityType) return false
         if (action && (item.action || '').toLowerCase() !== action) return false

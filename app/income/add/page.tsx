@@ -243,10 +243,18 @@ export default function AddIncomePage() {
           })
         }
 
-        const { data, error } = await supabase.from('incomes').insert(rows).select('id')
-        if (error) throw error
+        const response = await fetch('/api/admin/incomes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'createIncomeBatch',
+            payload: rows,
+          }),
+        })
+        const json = await response.json().catch(() => null)
+        if (!response.ok) throw new Error(json?.error || 'Не удалось сохранить доход')
         await logIncomeAudit({
-          entityId: `batch:${(data || []).map((item: { id: string }) => item.id).join(',') || `${date}:${companyId}`}`,
+          entityId: `batch:${(json?.data || []).map((item: { id: string }) => item.id).join(',') || `${date}:${companyId}`}`,
           action: 'create-batch',
           payload: {
             date,
@@ -280,14 +288,18 @@ export default function AddIncomePage() {
           is_virtual: false,
         }
 
-        const { data, error } = await supabase.from('incomes').insert([
-          {
-            ...payload,
-          },
-        ]).select('id').single()
-        if (error) throw error
+        const response = await fetch('/api/admin/incomes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'createIncome',
+            payload,
+          }),
+        })
+        const json = await response.json().catch(() => null)
+        if (!response.ok) throw new Error(json?.error || 'Не удалось сохранить доход')
         await logIncomeAudit({
-          entityId: String(data.id),
+          entityId: String(json?.data?.id || `${date}:${companyId}`),
           action: 'create',
           payload: {
             ...payload,

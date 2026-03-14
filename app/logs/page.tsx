@@ -56,7 +56,7 @@ export default function LogsPage() {
   const [onlyErrors, setOnlyErrors] = useState(false)
   const [page, setPage] = useState(1)
 
-  const applyPreset = (preset: 'all' | 'auth' | 'finance' | 'errors') => {
+  const applyPreset = (preset: 'all' | 'auth' | 'finance' | 'staff' | 'operations' | 'errors') => {
     setPage(1)
     if (preset === 'all') {
       setDomain('')
@@ -86,6 +86,32 @@ export default function LogsPage() {
     if (preset === 'finance') {
       setDomain('finance')
       setKind('audit')
+      setEntityType('')
+      setAction('')
+      setActor('')
+      setChannel('')
+      setStatus('')
+      setOnlyErrors(false)
+      setSearch('')
+      return
+    }
+
+    if (preset === 'staff') {
+      setDomain('staff')
+      setKind('audit')
+      setEntityType('')
+      setAction('')
+      setActor('')
+      setChannel('')
+      setStatus('')
+      setOnlyErrors(false)
+      setSearch('')
+      return
+    }
+
+    if (preset === 'operations') {
+      setDomain('operations')
+      setKind('')
       setEntityType('')
       setAction('')
       setActor('')
@@ -232,6 +258,8 @@ export default function LogsPage() {
               <Button variant="outline" onClick={() => applyPreset('all')}>Все</Button>
               <Button variant="outline" onClick={() => applyPreset('auth')}>Авторизация</Button>
               <Button variant="outline" onClick={() => applyPreset('finance')}>Финансы</Button>
+              <Button variant="outline" onClick={() => applyPreset('staff')}>Кадры</Button>
+              <Button variant="outline" onClick={() => applyPreset('operations')}>Операции</Button>
               <Button variant="outline" onClick={() => applyPreset('errors')}>Только ошибки</Button>
             </div>
 
