@@ -80,6 +80,12 @@ type OperatorProfile = {
   is_online: boolean
 }
 
+const CHAT_RETENTION_HOURS = 24
+
+function getChatRetentionCutoffISO() {
+  return new Date(Date.now() - CHAT_RETENTION_HOURS * 60 * 60 * 1000).toISOString()
+}
+
 export default function OperatorChatPage() {
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
@@ -266,9 +272,11 @@ export default function OperatorChatPage() {
 
         // Загружаем последние 50 сообщений
         console.log('4️⃣ Загружаем сообщения...')
+        const retentionCutoff = getChatRetentionCutoffISO()
         const { data, error } = await supabase
           .from('operator_chat_messages')
           .select('*')
+          .gte('created_at', retentionCutoff)
           .order('created_at', { ascending: true })
           .limit(50)
 
@@ -294,6 +302,9 @@ export default function OperatorChatPage() {
             },
             (payload: any) => {
               console.log('7️⃣ 🔔 НОВОЕ СООБЩЕНИЕ!', payload.new)
+              if (new Date((payload.new as any).created_at).getTime() < Date.now() - CHAT_RETENTION_HOURS * 60 * 60 * 1000) {
+                return
+              }
               if (isSubscribed) {
                 setMessages(prev => [...prev, payload.new as Message])
                 
@@ -387,7 +398,9 @@ export default function OperatorChatPage() {
         setNewMessage(text)
       } else {
         console.log('✅ Сообщение отправлено')
-        setMessages(prev => [...prev, data])
+        if (new Date((data as any).created_at).getTime() >= Date.now() - CHAT_RETENTION_HOURS * 60 * 60 * 1000) {
+          setMessages(prev => [...prev, data])
+        }
       }
     } catch (err) {
       console.error('❌ Ошибка:', err)

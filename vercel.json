@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/cleanup-operator-chat",
+      "schedule": "0 * * * *"
+    },
+    {
       "path": "/api/cron/send-weekly",
       "schedule": "1 19 * * 0"
     }
