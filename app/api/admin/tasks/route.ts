@@ -157,12 +157,13 @@ async function sendTelegramMessage(chatId: string, text: string) {
   const token = requiredEnv('TELEGRAM_BOT_TOKEN')
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
       chat_id: chatId,
       text,
       parse_mode: 'HTML',
-      disable_web_page_preview: 'true',
+      disable_web_page_preview: true,
+      reply_markup: undefined,
     }),
   })
 
@@ -182,6 +183,22 @@ async function getNextTaskNumber(supabase: ClientLike) {
 
   if (error) throw error
   return Number(data?.task_number || 0) + 1
+}
+
+function buildTaskResponseKeyboard(taskId: string) {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Принял', callback_data: `task:${taskId}:accept` },
+        { text: 'Нужны уточнения', callback_data: `task:${taskId}:need_info` },
+      ],
+      [
+        { text: 'Не могу', callback_data: `task:${taskId}:blocked` },
+        { text: 'Уже сделано', callback_data: `task:${taskId}:already_done` },
+      ],
+      [{ text: 'Завершил', callback_data: `task:${taskId}:complete` }],
+    ],
+  }
 }
 
 async function loadTaskContext(supabase: ClientLike, taskId: string) {
@@ -256,7 +273,11 @@ function buildTaskTelegramMessage(params: {
   if (type === 'assigned') {
     lines.push(
       '',
-      '<b>Дальше в кабинете можно ответить:</b>',
+      '<b>Можно ответить прямо в Telegram:</b>',
+      '• Нажмите кнопку под сообщением',
+      '• Или напишите, например: <code>#123 принял</code>',
+      '',
+      '<b>Также можно ответить в кабинете:</b>',
       '• Принял в работу',
       '• Нужны уточнения',
       '• Уже выполнено',
@@ -317,7 +338,26 @@ async function notifyTaskAssignee(
     note: params.note,
   })
 
-  await sendTelegramMessage(String(params.operator.telegram_chat_id), text)
+  const token = requiredEnv('TELEGRAM_BOT_TOKEN')
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: String(params.operator.telegram_chat_id),
+      text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup:
+        params.type === 'assigned' && params.task.status !== 'done' && params.task.status !== 'archived'
+          ? buildTaskResponseKeyboard(params.task.id)
+          : undefined,
+    }),
+  })
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.description || 'Telegram не принял сообщение')
+  }
 
   await writeNotificationLog(supabase, {
     channel: 'telegram',
