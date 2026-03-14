@@ -12,6 +12,14 @@ export const PUBLIC_PATHS = [
 
 export type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
 export type StaffCapability = 'tasks' | 'shifts' | 'salary' | 'staff' | 'staff_accounts' | 'operators' | 'finance'
+export type RoleMatrixEntry = {
+  label: string
+  home: string
+  paths: readonly string[]
+  capabilities: readonly StaffCapability[]
+  summary: string
+  actions: readonly string[]
+}
 
 export const ADMIN_PATHS = [
   '/',
@@ -81,6 +89,76 @@ const OWNER_PATHS = [
   '/tasks',
 ] as const
 
+export const STAFF_ROLE_MATRIX: Record<StaffRole, RoleMatrixEntry> = {
+  manager: {
+    label: 'Руководитель',
+    home: '/welcome',
+    paths: MANAGER_PATHS,
+    capabilities: ['tasks', 'shifts', 'salary'],
+    summary: 'Контролирует задачи, смены, зарплату и обзор финансов без критичных правок.',
+    actions: [
+      'Смотрит доходы и расходы',
+      'Работает с задачами',
+      'Назначает и меняет смены',
+      'Работает с зарплатой',
+      'Не может удалять/править критичные финансы',
+      'Не управляет staff-аккаунтами и операторами',
+    ],
+  },
+  marketer: {
+    label: 'Маркетолог',
+    home: '/welcome',
+    paths: MARKETER_PATHS,
+    capabilities: ['tasks'],
+    summary: 'Работает только в контуре задач и не видит операционные и финансовые разделы.',
+    actions: [
+      'Смотрит задачи',
+      'Создаёт задачи',
+      'Меняет статусы задач',
+      'Комментирует задачи',
+      'Не видит смены, зарплаты, staff и финансы',
+    ],
+  },
+  owner: {
+    label: 'Владелец',
+    home: '/',
+    paths: OWNER_PATHS,
+    capabilities: ['tasks', 'salary', 'staff', 'operators', 'finance'],
+    summary: 'Имеет управленческий доступ к команде, операторам и критичным финансам без системного администрирования.',
+    actions: [
+      'Управляет доходами и расходами',
+      'Создаёт, редактирует и удаляет операторов',
+      'Работает со staff и зарплатой',
+      'Работает с задачами',
+      'Не видит доступы, логи, диагностику и системные настройки',
+      'Не создаёт staff-аккаунты и не повышает операторов',
+    ],
+  },
+  other: {
+    label: 'Сотрудник',
+    home: '/unauthorized',
+    paths: [],
+    capabilities: [],
+    summary: 'Техническая роль без доступа к staff-контуру.',
+    actions: ['Нет доступа к staff-разделам'],
+  },
+}
+
+export const SUPER_ADMIN_MATRIX_ENTRY = {
+  label: 'Супер-администратор',
+  home: '/',
+  paths: ADMIN_PATHS,
+  capabilities: ['tasks', 'shifts', 'salary', 'staff', 'staff_accounts', 'operators', 'finance'] as const,
+  summary: 'Имеет полный доступ ко всем разделам, аккаунтам, настройкам, логам и системным операциям.',
+  actions: [
+    'Видит все разделы',
+    'Создаёт staff-аккаунты и отправляет инвайты',
+    'Повышает операторов',
+    'Управляет системными настройками, логами и диагностикой',
+    'Имеет полный доступ к финансам, задачам, сменам и зарплатам',
+  ],
+} satisfies RoleMatrixEntry
+
 export const OPERATOR_PATHS = [
   '/operator-dashboard',
   '/operator-dashboard/*',
@@ -119,11 +197,7 @@ export function isPublicPath(pathname: string): boolean {
 }
 
 export function getAllowedStaffPaths(role: StaffRole): readonly string[] {
-  if (role === 'manager') return MANAGER_PATHS
-  if (role === 'marketer') return MARKETER_PATHS
-  if (role === 'owner') return OWNER_PATHS
-
-  return []
+  return STAFF_ROLE_MATRIX[role].paths
 }
 
 export function canStaffRoleAccessPath(role: StaffRole, pathname: string): boolean {
@@ -154,10 +228,7 @@ export function canAccessPath(params: {
 }
 
 export function getDefaultPathForStaffRole(role: StaffRole) {
-  if (role === 'manager') return '/welcome'
-  if (role === 'marketer') return '/welcome'
-  if (role === 'owner') return '/'
-  return '/unauthorized'
+  return STAFF_ROLE_MATRIX[role].home
 }
 
 export function getDefaultAppPath(params: {
@@ -175,23 +246,5 @@ export function getDefaultAppPath(params: {
 }
 
 export function staffRoleHasCapability(role: StaffRole, capability: StaffCapability) {
-  if (role === 'manager') {
-    return capability === 'tasks' || capability === 'shifts' || capability === 'salary'
-  }
-
-  if (role === 'marketer') {
-    return capability === 'tasks'
-  }
-
-  if (role === 'owner') {
-    return (
-      capability === 'tasks' ||
-      capability === 'salary' ||
-      capability === 'staff' ||
-      capability === 'operators' ||
-      capability === 'finance'
-    )
-  }
-
-  return false
+  return STAFF_ROLE_MATRIX[role].capabilities.includes(capability)
 }
