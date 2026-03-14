@@ -432,6 +432,43 @@ function TasksContent() {
   }, [loadData])
 
   useEffect(() => {
+    let isRefreshing = false
+
+    const refreshIfVisible = async () => {
+      if (document.visibilityState !== 'visible' || isRefreshing) return
+      isRefreshing = true
+      try {
+        await loadData(true)
+      } finally {
+        isRefreshing = false
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      refreshIfVisible()
+    }, 4000)
+
+    const onFocus = () => {
+      refreshIfVisible()
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshIfVisible()
+      }
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [loadData])
+
+  useEffect(() => {
     if (!selectedTask) return
 
     const freshTask = tasks.find((task) => task.id === selectedTask.id)
