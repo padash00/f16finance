@@ -42,7 +42,7 @@ class PointMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Orda Control Point")
-        self.resize(1040, 760)
+        self.resize(1180, 820)
 
         self.config = load_config()
         self.queue = OfflineQueue()
@@ -57,6 +57,7 @@ class PointMainWindow(QMainWindow):
         self.scanner_tab: ScannerTab | None = None
         self.products_tab: ProductsTab | None = None
         self.reports_tab: ReportsTab | None = None
+        self.auth_mode = "operator"
 
         api_url = (self.config.get("api_base_url") or "").strip()
         self.api = PointApiClient(api_url or "https://ordaops.kz", str(self.config.get("device_token") or ""))
@@ -69,9 +70,9 @@ class PointMainWindow(QMainWindow):
 
         header = QHBoxLayout()
         self.title_label = QLabel("Orda Control Point")
-        self.title_label.setStyleSheet("font-size: 24px; font-weight: 700;")
+        self.title_label.setStyleSheet("font-size: 26px; font-weight: 800; color: #f8fbff;")
         self.status_label = QLabel("Ожидание входа...")
-        self.status_label.setStyleSheet("color: #94a3b8; font-size: 13px;")
+        self.status_label.setStyleSheet("color: #8ba3bf; font-size: 13px;")
         header.addWidget(self.title_label)
         header.addStretch(1)
         header.addWidget(self.status_label)
@@ -94,20 +95,43 @@ class PointMainWindow(QMainWindow):
     def build_login_view(self):
         wrapper = QWidget()
         layout = QVBoxLayout(wrapper)
-        layout.addStretch(1)
+        layout.setSpacing(18)
+
+        hero = QFrame()
+        hero.setStyleSheet(
+            "QFrame { background: #081423; border: 1px solid #17304a; border-radius: 26px; }"
+        )
+        hero_layout = QVBoxLayout(hero)
+        hero_layout.setContentsMargins(26, 24, 26, 24)
+        hero_layout.setSpacing(10)
+
+        eyebrow = QLabel("Orda Control Point")
+        eyebrow.setStyleSheet("font-size: 12px; letter-spacing: 1px; color: #7fb9ff; font-weight: 700;")
+        hero_title = QLabel("Единая программа точки")
+        hero_title.setStyleSheet("font-size: 30px; font-weight: 800; color: #f8fbff;")
+        hero_subtitle = QLabel(
+            "Терминал определяется централизованно, оператор входит своим логином от сайта, "
+            "а рабочие модули открываются по точке и правам."
+        )
+        hero_subtitle.setWordWrap(True)
+        hero_subtitle.setStyleSheet("font-size: 14px; color: #9cb0c7; line-height: 1.4;")
+        hero_layout.addWidget(eyebrow)
+        hero_layout.addWidget(hero_title)
+        hero_layout.addWidget(hero_subtitle)
+        layout.addWidget(hero)
 
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: #0f172a; border: 1px solid #1f2937; border-radius: 24px; }"
+            "QFrame { background: #081423; border: 1px solid #17304a; border-radius: 26px; }"
         )
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(28, 28, 28, 28)
-        card_layout.setSpacing(16)
+        card_layout.setSpacing(18)
 
-        title = QLabel("Вход в программу точки")
-        title.setStyleSheet("font-size: 28px; font-weight: 700; color: #f8fafc;")
+        title = QLabel("Авторизация")
+        title.setStyleSheet("font-size: 24px; font-weight: 800; color: #f8fbff;")
         subtitle = QLabel(
-            "Оператор входит своим логином и паролем с сайта. Настройка терминала доступна только super-admin."
+            "Оператор и super-admin входят в разные режимы. Настройка терминала скрыта от оператора."
         )
         subtitle.setWordWrap(True)
         subtitle.setStyleSheet("font-size: 14px; color: #94a3b8;")
@@ -116,37 +140,85 @@ class PointMainWindow(QMainWindow):
 
         self.login_point_label = QLabel("Точка: терминал ещё не привязан")
         self.login_point_label.setStyleSheet(
-            "font-size: 14px; color: #e2e8f0; background: #111827; border: 1px solid #1f2937; "
-            "border-radius: 12px; padding: 10px 14px;"
+            "font-size: 14px; color: #e2e8f0; background: #0c1b2d; border: 1px solid #1b3550; "
+            "border-radius: 14px; padding: 12px 14px;"
         )
         card_layout.addWidget(self.login_point_label)
 
         self.login_error = QLabel("")
         self.login_error.setWordWrap(True)
-        self.login_error.setStyleSheet("font-size: 13px; color: #fca5a5;")
+        self.login_error.setStyleSheet(
+            "font-size: 13px; color: #fecaca; background: #3b1218; border: 1px solid #7f1d1d; "
+            "border-radius: 12px; padding: 10px 12px;"
+        )
         self.login_error.hide()
         card_layout.addWidget(self.login_error)
 
-        self.login_input = QLineEdit()
-        self.login_input.setPlaceholderText("Логин оператора или email super-admin")
-        self.login_input.setText(str(self.config.get("last_operator_username") or ""))
-        self.password_input = QLineEdit()
-        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password_input.setPlaceholderText("Пароль")
-        card_layout.addWidget(self.login_input)
-        card_layout.addWidget(self.password_input)
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(10)
+        self.operator_mode_btn = QPushButton("Оператор")
+        self.operator_mode_btn.clicked.connect(lambda: self.set_auth_mode("operator"))
+        self.admin_mode_btn = QPushButton("Super Admin")
+        self.admin_mode_btn.clicked.connect(lambda: self.set_auth_mode("admin"))
+        mode_row.addWidget(self.operator_mode_btn)
+        mode_row.addWidget(self.admin_mode_btn)
+        card_layout.addLayout(mode_row)
 
-        buttons = QHBoxLayout()
-        self.operator_login_btn = QPushButton("Войти как оператор")
+        self.auth_hint = QLabel("")
+        self.auth_hint.setWordWrap(True)
+        self.auth_hint.setStyleSheet("font-size: 13px; color: #8ba3bf;")
+        card_layout.addWidget(self.auth_hint)
+
+        self.auth_form_stack = QStackedWidget()
+        card_layout.addWidget(self.auth_form_stack)
+
+        operator_form = QWidget()
+        operator_layout = QVBoxLayout(operator_form)
+        operator_layout.setContentsMargins(0, 0, 0, 0)
+        operator_layout.setSpacing(12)
+        self.operator_login_input = QLineEdit()
+        self.operator_login_input.setPlaceholderText("Логин оператора")
+        self.operator_login_input.setText(str(self.config.get("last_operator_username") or ""))
+        self.operator_password_input = QLineEdit()
+        self.operator_password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.operator_password_input.setPlaceholderText("Пароль оператора")
+        self.operator_state_label = QLabel("")
+        self.operator_state_label.setWordWrap(True)
+        self.operator_state_label.setStyleSheet("font-size: 13px; color: #9cb0c7;")
+        self.operator_login_btn = QPushButton("Войти в смену")
         self.operator_login_btn.clicked.connect(self.handle_operator_login)
-        self.admin_login_btn = QPushButton("Super Admin")
-        self.admin_login_btn.clicked.connect(self.handle_admin_login)
-        buttons.addWidget(self.operator_login_btn)
-        buttons.addWidget(self.admin_login_btn)
-        card_layout.addLayout(buttons)
+        operator_layout.addWidget(self.operator_login_input)
+        operator_layout.addWidget(self.operator_password_input)
+        operator_layout.addWidget(self.operator_state_label)
+        operator_layout.addWidget(self.operator_login_btn)
 
-        layout.addWidget(card, 0)
+        admin_form = QWidget()
+        admin_layout = QVBoxLayout(admin_form)
+        admin_layout.setContentsMargins(0, 0, 0, 0)
+        admin_layout.setSpacing(12)
+        self.admin_email_input = QLineEdit()
+        self.admin_email_input.setPlaceholderText("Email super-admin")
+        self.admin_password_input = QLineEdit()
+        self.admin_password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.admin_password_input.setPlaceholderText("Пароль super-admin")
+        self.admin_state_label = QLabel(
+            "Этот режим нужен только для привязки терминала, выбора точки и настройки каталога."
+        )
+        self.admin_state_label.setWordWrap(True)
+        self.admin_state_label.setStyleSheet("font-size: 13px; color: #9cb0c7;")
+        self.admin_login_btn = QPushButton("Открыть режим super-admin")
+        self.admin_login_btn.clicked.connect(self.handle_admin_login)
+        admin_layout.addWidget(self.admin_email_input)
+        admin_layout.addWidget(self.admin_password_input)
+        admin_layout.addWidget(self.admin_state_label)
+        admin_layout.addWidget(self.admin_login_btn)
+
+        self.auth_form_stack.addWidget(operator_form)
+        self.auth_form_stack.addWidget(admin_form)
+
+        layout.addWidget(card)
         layout.addStretch(1)
+        self.refresh_auth_mode_ui()
         return wrapper
 
     def build_workspace_view(self):
@@ -156,7 +228,10 @@ class PointMainWindow(QMainWindow):
         root.setSpacing(16)
 
         self.company_label = QLabel("Точка: —")
-        self.company_label.setStyleSheet("font-size: 14px; color: #cbd5e1;")
+        self.company_label.setStyleSheet(
+            "font-size: 15px; color: #e2e8f0; background: #0c1b2d; border: 1px solid #1b3550; "
+            "border-radius: 14px; padding: 12px 14px;"
+        )
         root.addWidget(self.company_label)
 
         toolbar = QHBoxLayout()
@@ -174,8 +249,8 @@ class PointMainWindow(QMainWindow):
 
         self.session_label = QLabel("Сессия не активна")
         self.session_label.setStyleSheet(
-            "font-size: 14px; color: #e2e8f0; background: #111827; border: 1px solid #1f2937; "
-            "border-radius: 12px; padding: 10px 14px;"
+            "font-size: 14px; color: #e2e8f0; background: #0c1b2d; border: 1px solid #1b3550; "
+            "border-radius: 14px; padding: 12px 14px;"
         )
         root.addWidget(self.session_label)
 
@@ -198,6 +273,7 @@ class PointMainWindow(QMainWindow):
             self.login_point_label.setText("Точка: token сохранён, пробую подключиться к серверу")
         else:
             self.login_point_label.setText("Точка: терминал ещё не привязан")
+        self.refresh_auth_mode_ui()
 
     def set_login_error(self, message: str | None):
         text = (message or "").strip()
@@ -209,9 +285,45 @@ class PointMainWindow(QMainWindow):
         self.status_label.setText("Ожидание входа...")
         self.title_label.setText("Orda Control Point")
         self.update_login_point_label()
+        self.refresh_auth_mode_ui()
 
     def show_workspace_mode(self):
         self.stack.setCurrentWidget(self.workspace_view)
+
+    def set_auth_mode(self, mode: str):
+        self.auth_mode = "admin" if mode == "admin" else "operator"
+        self.refresh_auth_mode_ui()
+
+    def refresh_auth_mode_ui(self):
+        operator_ready = self.bootstrap_data is not None
+        if self.auth_mode == "admin":
+            self.auth_form_stack.setCurrentIndex(1)
+            self.operator_mode_btn.setStyleSheet("")
+            self.admin_mode_btn.setStyleSheet("background: #4ea4ff; color: #03111f; border: none;")
+            self.auth_hint.setText(
+                "Super-admin использует этот режим для привязки точки, смены терминала и сервисных настроек."
+            )
+        else:
+            self.auth_form_stack.setCurrentIndex(0)
+            self.operator_mode_btn.setStyleSheet("background: #4ea4ff; color: #03111f; border: none;")
+            self.admin_mode_btn.setStyleSheet("")
+            self.auth_hint.setText(
+                "Оператор видит только рабочие модули своей точки. Настройки терминала в этот режим не попадают."
+            )
+
+        self.operator_login_btn.setEnabled(operator_ready)
+        self.operator_login_input.setEnabled(operator_ready)
+        self.operator_password_input.setEnabled(operator_ready)
+        if operator_ready:
+            company = (self.bootstrap_data or {}).get("company") or {}
+            device = (self.bootstrap_data or {}).get("device") or {}
+            self.operator_state_label.setText(
+                f"Терминал готов: {company.get('name', 'Точка')} • {device.get('name', 'device')}"
+            )
+        else:
+            self.operator_state_label.setText(
+                "Терминал ещё не привязан. Сначала войдите как super-admin и выберите устройство точки."
+            )
 
     def bootstrap_if_possible(self, show_error: bool = False) -> bool:
         api_url = (self.config.get("api_base_url") or "").strip() or "https://ordaops.kz"
@@ -298,8 +410,8 @@ class PointMainWindow(QMainWindow):
 
     def handle_operator_login(self):
         self.set_login_error(None)
-        username = self.login_input.text().strip()
-        password = self.password_input.text()
+        username = self.operator_login_input.text().strip()
+        password = self.operator_password_input.text()
         if not username or not password:
             self.set_login_error("Введите логин и пароль оператора.")
             return
@@ -316,15 +428,15 @@ class PointMainWindow(QMainWindow):
             self.config["last_operator_username"] = username
             self.save_config()
             self.status_label.setText("Оператор вошёл")
-            self.password_input.clear()
+            self.operator_password_input.clear()
             self.build_workspace_for_role()
         except Exception as error:
             self.set_login_error(str(error))
 
     def handle_admin_login(self):
         self.set_login_error(None)
-        email = self.login_input.text().strip()
-        password = self.password_input.text()
+        email = self.admin_email_input.text().strip()
+        password = self.admin_password_input.text()
         if not email or not password:
             self.set_login_error("Введите email и пароль super-admin.")
             return
@@ -347,7 +459,8 @@ class PointMainWindow(QMainWindow):
         self.current_operator = None
         self.current_admin = None
         self.admin_credentials = None
-        self.password_input.clear()
+        self.operator_password_input.clear()
+        self.admin_password_input.clear()
         self.show_login_mode()
 
     def flush_queues(self):
