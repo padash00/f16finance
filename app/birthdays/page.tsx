@@ -270,6 +270,58 @@ export default function BirthdaysPage() {
                   )}
                 </div>
               </section>
+
+              <section className="space-y-4">
+                <div className="flex items-center gap-2 text-white">
+                  <CalendarDays className="h-5 w-5 text-amber-300" />
+                  <h2 className="text-xl font-semibold">Все ближайшие дни рождения по порядку</h2>
+                </div>
+
+                <Card className="border-white/10 bg-slate-950/60 p-0 text-white overflow-hidden">
+                  {items.length > 0 ? (
+                    <div className="divide-y divide-white/6">
+                      {items.map((item, index) => (
+                        <div
+                          key={`sorted-${item.id}`}
+                          className="flex flex-col gap-4 px-5 py-4 transition-colors hover:bg-white/[0.03] lg:flex-row lg:items-center lg:justify-between"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-slate-200">
+                              {index + 1}
+                            </div>
+
+                            <div>
+                              <div className="text-base font-semibold text-white">{item.name}</div>
+                              <div className="mt-1 text-sm text-slate-400">
+                                {item.company_name || 'Точка не назначена'}
+                                {item.position ? ` • ${item.position}` : ''}
+                                {item.assignment_count > 1 ? ` • ${item.assignment_count} точки` : ''}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[520px]">
+                            <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Когда</div>
+                              <div className="mt-1 text-sm text-slate-200">{formatBirthdayDate(item.birth_date)}</div>
+                            </div>
+                            <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Скоро</div>
+                              <div className="mt-1 text-sm text-slate-200">{formatUpcomingLabel(item.daysUntil)}</div>
+                            </div>
+                            <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Возраст</div>
+                              <div className="mt-1 text-sm text-slate-200">{item.age ? `${item.age} лет` : 'Не указан'}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-5 text-sm text-slate-500">Дни рождения пока не найдены.</div>
+                  )}
+                </Card>
+              </section>
             </>
           )}
         </div>
