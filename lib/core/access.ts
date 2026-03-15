@@ -1,4 +1,5 @@
 export const PUBLIC_PATHS = [
+  '/',
   '/login',
   '/operator-login',
   '/unauthorized',

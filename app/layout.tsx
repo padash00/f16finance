@@ -17,8 +17,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'F16 Finance',
-  description: 'Financial management system for F16 Arena, Extra, and Ramen',
+  title: 'Orda Control',
+  description: 'Операционная система для клуба, команды, задач, смен и финансового контроля',
   generator: 'v0.app',
   icons: {
     icon: [

@@ -198,7 +198,7 @@ export default function UnifiedLoginPage() {
               <div className="mb-4 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 p-4 shadow-lg shadow-violet-500/20">
                 <Brain className="h-7 w-7 text-white" />
               </div>
-              <h2 className="text-2xl font-semibold">Вход в F16 Finance</h2>
+              <h2 className="text-2xl font-semibold">Вход в Orda Control</h2>
               <p className="mt-2 max-w-sm text-sm text-slate-400">
                 Выберите свой тип входа и используйте тот способ, который вам выдал администратор.
               </p>
@@ -325,7 +325,7 @@ export default function UnifiedLoginPage() {
               <span className="text-slate-500">Нет доступа? Обратитесь к администратору</span>
             </div>
 
-            <p className="mt-6 text-center text-[11px] text-slate-600">F16 Finance • Единый вход для сотрудников и операторов</p>
+              <p className="mt-6 text-center text-[11px] text-slate-600">Orda Control • Единый вход для сотрудников и операторов</p>
           </Card>
         </div>
       </div>

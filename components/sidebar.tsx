@@ -559,7 +559,7 @@ export function Sidebar() {
           <LogoMark />
           <div>
             <h1 className="bg-gradient-to-r from-white to-slate-300 bg-clip-text text-lg font-bold text-transparent">
-              F16 Finance
+              Orda Control
             </h1>
             <p className="text-xs text-slate-500">v2.0.1</p>
           </div>
@@ -610,7 +610,7 @@ export function Sidebar() {
         <div className="flex items-center gap-3">
           <LogoMark />
           <div>
-            <p className="text-sm font-semibold text-white">F16 Finance</p>
+            <p className="text-sm font-semibold text-white">Orda Control</p>
             <p className="text-xs text-slate-500">workspace</p>
           </div>
         </div>

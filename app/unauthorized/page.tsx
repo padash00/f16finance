@@ -55,7 +55,7 @@ export default function UnauthorizedPage() {
           </div>
 
           <p className="text-[10px] text-muted-foreground/70 mt-2">
-            F16 Finance · Панель управления клубом
+          Orda Control · Панель управления клубом
           </p>
         </div>
       </div>

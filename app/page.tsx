@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabaseClient'
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   BarChart2,
   Brain,
   Calendar,
@@ -313,9 +314,179 @@ function buildSummary(status: AIInsight['status'], profitTrend: 'up' | 'down' | 
   return `⚠️ Критично: надо резать лишнее и чинить маржу`
 }
 
+function ProductLanding() {
+  const roleCards = [
+    { title: 'Владелец', text: 'Видит контроль бизнеса, структуру команды, деньги и ключевые сигналы.', icon: Globe },
+    { title: 'Руководитель', text: 'Управляет сменами, задачами, командами по точкам и рабочим ритмом.', icon: Calendar },
+    { title: 'Оператор', text: 'Получает задачи, график, подтверждает смены и работает через кабинет и Telegram.', icon: Activity },
+  ]
+
+  const productCards = [
+    { title: 'Смены и подтверждение', text: 'Недельный график, ответы через Telegram и согласование спорных смен.', icon: Calendar },
+    { title: 'Задачи и контроль', text: 'Постановка задач, статусы, комментарии и точечная ответственность.', icon: Target },
+    { title: 'Финансы и метрики', text: 'Доходы, расходы, зарплата, правила начислений и прозрачный аудит.', icon: Wallet },
+  ]
+
+  const flow = [
+    'Назначили роли и собрали структуру команды',
+    'Заполнили смены и поставили задачи по точкам',
+    'Сотрудники подтвердили график и взяли задачи в работу',
+    'Руководство увидело деньги, статусы и проблемные места в одном окне',
+  ]
+
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(245,158,11,0.12),_transparent_28%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.12),_transparent_26%),linear-gradient(180deg,#070b12_0%,#0a0f18_52%,#070b12_100%)] text-white">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <header className="flex flex-col gap-6 rounded-[2rem] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between lg:p-8">
+          <div className="max-w-2xl">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-amber-300">
+              <Sparkles className="h-3.5 w-3.5" />
+              Orda Control
+            </div>
+            <h1 className="text-4xl font-semibold leading-tight tracking-[-0.05em] text-white lg:text-6xl">
+              Операционная система для клуба, команды и контроля точки.
+            </h1>
+            <p className="mt-4 max-w-xl text-base leading-7 text-slate-300">
+              Orda Control объединяет график смен, задачи, финансы, структуру команды и рабочие сигналы в одной системе.
+              Подходит для владельца, руководителя, старшего по точке и оператора.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link href="/login">
+                <Button className="rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 text-slate-950 hover:from-amber-400 hover:to-orange-400">
+                  Войти
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+              <a href="https://t.me/" target="_blank" rel="noreferrer">
+                <Button variant="outline" className="rounded-2xl border-white/10 bg-white/[0.03] px-6 text-white hover:bg-white/[0.06]">
+                  Связаться
+                </Button>
+              </a>
+            </div>
+          </div>
+
+          <div className="grid gap-3 rounded-[1.75rem] border border-white/10 bg-black/20 p-4 lg:min-w-[22rem]">
+            <div className="rounded-[1.4rem] border border-white/8 bg-gradient-to-br from-slate-900 to-slate-800 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Что внутри</p>
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-2xl bg-white/[0.04] p-3">
+                  <p className="text-sm font-medium text-white">Смены</p>
+                  <p className="mt-1 text-xs text-slate-400">Подтверждение недели, проблемы, замены и живой статус.</p>
+                </div>
+                <div className="rounded-2xl bg-white/[0.04] p-3">
+                  <p className="text-sm font-medium text-white">Задачи</p>
+                  <p className="mt-1 text-xs text-slate-400">Работа по ролям, комментарии и быстрые ответы из Telegram.</p>
+                </div>
+                <div className="rounded-2xl bg-white/[0.04] p-3">
+                  <p className="text-sm font-medium text-white">Финансы</p>
+                  <p className="mt-1 text-xs text-slate-400">Доходы, расходы, зарплата и лог всех критичных действий.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <section className="mt-8 grid gap-4 lg:grid-cols-3">
+          {roleCards.map((card) => {
+            const Icon = card.icon
+            return (
+              <Card key={card.title} className="border-white/10 bg-slate-950/55 p-6 text-white backdrop-blur-xl">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-300">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h2 className="mt-4 text-xl font-semibold">{card.title}</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-400">{card.text}</p>
+              </Card>
+            )
+          })}
+        </section>
+
+        <section className="mt-8 rounded-[2rem] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl lg:p-8">
+          <div className="max-w-2xl">
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Что умеет система</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">Для кого, что делает и как помогает каждый день</h2>
+          </div>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            {productCards.map((card) => {
+              const Icon = card.icon
+              return (
+                <div key={card.title} className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.06] text-amber-300">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white">{card.title}</h3>
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-slate-400">{card.text}</p>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        <section className="mt-8 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <Card className="border-white/10 bg-slate-950/55 p-6 text-white backdrop-blur-xl lg:p-8">
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Как это работает</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Один рабочий цикл от роли до результата</h2>
+            <div className="mt-6 space-y-4">
+              {flow.map((step, index) => (
+                <div key={step} className="flex gap-4 rounded-[1.4rem] border border-white/8 bg-white/[0.03] p-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-500/10 text-sm font-semibold text-amber-300">
+                    {index + 1}
+                  </div>
+                  <p className="text-sm leading-6 text-slate-300">{step}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="border-white/10 bg-gradient-to-br from-amber-500/10 via-slate-950/60 to-slate-950/60 p-6 text-white backdrop-blur-xl lg:p-8">
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Почему удобно</p>
+            <div className="mt-5 space-y-3">
+              {[
+                'Задачи, смены, финансы и структура живут в одной системе',
+                'Telegram и кабинет дополняют друг друга, а не дублируют хаос',
+                'Каждое важное действие можно отследить по логам',
+                'Роли разделены: владелец, руководитель, старший, оператор',
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-3 rounded-2xl bg-black/20 p-3">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-400" />
+                  <p className="text-sm leading-6 text-slate-300">{item}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </section>
+
+        <section className="mt-8 rounded-[2rem] border border-white/10 bg-slate-950/55 p-6 text-white backdrop-blur-xl lg:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Вход в систему</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Открыть рабочий кабинет Orda Control</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-400">
+                Если у вас уже есть доступ, входите в рабочий контур по email или по операторскому логину.
+                Если доступ ещё не выдан, администратор может отправить приглашение и ссылку для входа.
+              </p>
+            </div>
+            <Link href="/login">
+              <Button className="rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 text-slate-950 hover:from-amber-400 hover:to-orange-400">
+                Перейти ко входу
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
 // ==================== PAGE ====================
 
 export default function SmartDashboardPage() {
+  const [authResolved, setAuthResolved] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [dateFrom, setDateFrom] = useState(() => DateUtils.addDaysISO(DateUtils.todayISO(), -29))
   const [dateTo, setDateTo] = useState(() => DateUtils.todayISO())
   const [rangeType, setRangeType] = useState<RangeType>('month')
@@ -333,8 +504,32 @@ export default function SmartDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    let mounted = true
+
+    ;(async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!mounted) return
+      setIsAuthenticated(!!user)
+      setAuthResolved(true)
+    })()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   // ---------- data load ----------
   useEffect(() => {
+    if (!authResolved) return
+    if (!isAuthenticated) {
+      setLoading(false)
+      return
+    }
+
     let mounted = true
     ;(async () => {
       setLoading(true)
@@ -375,7 +570,7 @@ export default function SmartDashboardPage() {
     return () => {
       mounted = false
     }
-  }, [dateFrom, dateTo])
+  }, [authResolved, isAuthenticated, dateFrom, dateTo])
 
   const companyById = useMemo(() => {
     const map: Record<string, Company> = {}
@@ -421,6 +616,21 @@ export default function SmartDashboardPage() {
     }
     setRangeType(type)
   }, [])
+
+  if (!authResolved) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#070b12_0%,#0a0f18_100%)] text-white">
+        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-5 py-4 backdrop-blur-xl">
+          <Sparkles className="h-5 w-5 text-amber-300" />
+          <span className="text-sm text-slate-300">Загрузка Orda Control...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <ProductLanding />
+  }
 
   const onDateFromChange = useCallback((v: string) => {
     setDateFrom(v)
