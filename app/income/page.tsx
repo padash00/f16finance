@@ -509,6 +509,10 @@ export default function IncomePage() {
     return out
   }, [filteredRows, extraCompanyId])
 
+  // Для операций и ручного редактирования показываем реальные строки,
+  // чтобы Extra можно было менять так же, как Arena и Ramen.
+  const operationRows = useMemo(() => filteredRows, [filteredRows])
+
   // Аналитика
   const analytics = useMemo(() => {
     const dates = DateUtils.getDatesInRange(dateFrom, dateTo)
@@ -1173,13 +1177,13 @@ export default function IncomePage() {
           </div>
 
           {/* Контент табов */}
-          {activeTab === 'overview' && (
-            <OverviewTab 
-              analytics={analytics} 
-              displayRows={displayRows}
-              companyName={companyName}
-              operatorName={operatorName}
-              isExtraRow={isExtraRow}
+            {activeTab === 'overview' && (
+              <OverviewTab 
+                analytics={analytics} 
+                displayRows={operationRows}
+                companyName={companyName}
+                operatorName={operatorName}
+                isExtraRow={isExtraRow}
               canManageIncome={canManageIncome}
               editingOnlineId={editingOnlineId}
               setEditingOnlineId={setEditingOnlineId}
@@ -1199,12 +1203,12 @@ export default function IncomePage() {
             />
           )}
 
-          {activeTab === 'feed' && (
-            <FeedTab 
-              displayRows={displayRows}
-              companyName={companyName}
-              operatorName={operatorName}
-              isExtraRow={isExtraRow}
+            {activeTab === 'feed' && (
+              <FeedTab 
+                displayRows={operationRows}
+                companyName={companyName}
+                operatorName={operatorName}
+                isExtraRow={isExtraRow}
               canManageIncome={canManageIncome}
               editingOnlineId={editingOnlineId}
               setEditingOnlineId={setEditingOnlineId}
