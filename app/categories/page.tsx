@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
+import { FINANCIAL_GROUP_OPTIONS, getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
 import { 
   Plus, 
   Pencil, 
@@ -21,6 +22,7 @@ type Category = {
   id: string
   name: string
   type: string | null
+  accounting_group: FinancialGroup | null
   created_at: string
 }
 
@@ -33,11 +35,13 @@ export default function CategoriesPage() {
   // Форма добавления
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState('')
+  const [newAccountingGroup, setNewAccountingGroup] = useState<FinancialGroup>('operating')
 
   // Редактирование
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editType, setEditType] = useState('')
+  const [editAccountingGroup, setEditAccountingGroup] = useState<FinancialGroup>('operating')
 
   const [saving, setSaving] = useState(false)
 
@@ -73,7 +77,8 @@ export default function CategoriesPage() {
 
     const { error } = await supabase.from('expense_categories').insert([{
         name: newName.trim(),
-        type: newType.trim() || 'Общее'
+        type: newType.trim() || 'Общее',
+        accounting_group: newAccountingGroup,
     }])
 
     if (error) {
@@ -81,6 +86,7 @@ export default function CategoriesPage() {
     } else {
         setNewName('')
         setNewType('')
+        setNewAccountingGroup('operating')
         loadCategories()
     }
     setSaving(false)
@@ -91,6 +97,7 @@ export default function CategoriesPage() {
     setEditingId(cat.id)
     setEditName(cat.name)
     setEditType(cat.type || '')
+    setEditAccountingGroup((cat.accounting_group as FinancialGroup) || 'operating')
   }
 
   const handleSaveEdit = async () => {
@@ -98,7 +105,7 @@ export default function CategoriesPage() {
     setSaving(true)
 
     const { error } = await supabase.from('expense_categories')
-      .update({ name: editName.trim(), type: editType.trim() || null })
+      .update({ name: editName.trim(), type: editType.trim() || null, accounting_group: editAccountingGroup })
       .eq('id', editingId)
 
     if (error) {
@@ -193,6 +200,18 @@ export default function CategoriesPage() {
                                             className="w-full bg-input border border-border rounded px-2 py-1 text-xs"
                                         />
                                     </div>
+                                    <div>
+                                        <label className="text-[10px] text-muted-foreground">Финансовая группа</label>
+                                        <select
+                                            value={editAccountingGroup}
+                                            onChange={e => setEditAccountingGroup(e.target.value as FinancialGroup)}
+                                            className="w-full bg-input border border-border rounded px-2 py-1 text-xs"
+                                        >
+                                            {FINANCIAL_GROUP_OPTIONS.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                     <div className="flex gap-2 pt-1">
                                         <Button size="sm" onClick={handleSaveEdit} disabled={saving} className="h-7 text-xs bg-green-600 hover:bg-green-700">
                                             <Save className="w-3 h-3 mr-1"/> Сохранить
@@ -212,6 +231,9 @@ export default function CategoriesPage() {
                                         </div>
                                         <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 text-muted-foreground border border-white/10">
                                             {cat.type || 'Общее'}
+                                        </span>
+                                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-accent/10 text-accent border border-accent/20">
+                                            {getFinancialGroupLabel(cat.accounting_group)}
                                         </span>
                                     </div>
                                     
@@ -266,6 +288,21 @@ export default function CategoriesPage() {
                                 placeholder="Например: Транспорт"
                                 className="w-full bg-input border border-border rounded-lg px-3 py-2.5 text-sm focus:border-accent transition-colors"
                             />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Финансовая группа</label>
+                            <select
+                                value={newAccountingGroup}
+                                onChange={e => setNewAccountingGroup(e.target.value as FinancialGroup)}
+                                className="w-full bg-input border border-border rounded-lg px-3 py-2.5 text-sm focus:border-accent transition-colors"
+                            >
+                                {FINANCIAL_GROUP_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                            </select>
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                                {FINANCIAL_GROUP_OPTIONS.find((option) => option.value === newAccountingGroup)?.description}
+                            </p>
                         </div>
                         
                         <Button 

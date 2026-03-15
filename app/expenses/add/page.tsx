@@ -29,8 +29,9 @@ import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
+import { getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
 
-type ExpenseCategory = { id: string; name: string }
+type ExpenseCategory = { id: string; name: string; accounting_group: FinancialGroup | null }
 type Company = { id: string; name: string; code?: string | null }
 type Operator = { id: string; name: string; short_name: string | null; is_active: boolean }
 
@@ -126,7 +127,7 @@ export default function AddExpensePage() {
       setError(null)
 
       const [catRes, compRes, opRes] = await Promise.all([
-        supabase.from('expense_categories').select('id, name').order('name'),
+        supabase.from('expense_categories').select('id, name, accounting_group').order('name'),
         supabase.from('companies').select('id, name, code').order('name'),
         supabase.from('operators').select('id, name, short_name, is_active').eq('is_active', true).order('name'),
       ])
@@ -162,6 +163,10 @@ export default function AddExpensePage() {
   const cashVal = useMemo(() => parseAmount(cash), [cash])
   const kaspiVal = useMemo(() => parseAmount(kaspi), [kaspi])
   const total = useMemo(() => cashVal + kaspiVal, [cashVal, kaspiVal])
+  const selectedCategory = useMemo(
+    () => categories.find((cat) => cat.name === categoryName) || null,
+    [categories, categoryName],
+  )
 
   // AI рекомендация на основе выбранной категории
   const aiRecommendation = useMemo(() => {
@@ -503,6 +508,15 @@ export default function AddExpensePage() {
                   </div>
                 </div>
               )}
+              {selectedCategory ? (
+                <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-emerald-300">Финансовая группа</p>
+                  <p className="mt-1 text-sm text-white">{getFinancialGroupLabel(selectedCategory.accounting_group)}</p>
+                  <p className="mt-1 text-xs text-emerald-100/80">
+                    Именно в эту группу расход потом попадёт в `ОПиУ / EBITDA`.
+                  </p>
+                </div>
+              ) : null}
             </Card>
 
             {/* 3. Amount */}

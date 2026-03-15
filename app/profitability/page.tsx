@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { supabase } from '@/lib/supabaseClient'
+import { resolveFinancialGroup, type FinancialGroup } from '@/lib/core/financial-groups'
 import { Calculator, CalendarDays, CreditCard, Landmark, Save, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 
 type IncomeRow = { date: string; cash_amount: number | null; kaspi_amount: number | null; card_amount: number | null; online_amount: number | null }
-type ExpenseRow = { date: string; cash_amount: number | null; kaspi_amount: number | null }
+type ExpenseRow = { date: string; category: string | null; cash_amount: number | null; kaspi_amount: number | null }
+type ExpenseCategoryRow = { name: string; accounting_group: FinancialGroup | null }
 type ProfitabilityInputRow = {
   month: string
   cash_revenue_override: number; pos_revenue_override: number
@@ -63,6 +65,7 @@ export default function ProfitabilityPage() {
   const [selectedMonth, setSelectedMonth] = useState(defaults.to)
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
+  const [expenseCategories, setExpenseCategories] = useState<Record<string, FinancialGroup>>({})
   const [inputs, setInputs] = useState<Record<string, ProfitabilityInputRow>>({})
   const [draft, setDraft] = useState<Draft>(draftFromRow())
   const [loading, setLoading] = useState(true)
@@ -80,17 +83,27 @@ export default function ProfitabilityPage() {
     const load = async () => {
       setLoading(true); setError(null)
       try {
-        const [incomeRes, expenseRes, inputsRes] = await Promise.all([
+        const [incomeRes, expenseRes, categoriesRes, inputsRes] = await Promise.all([
           supabase.from('incomes').select('date,cash_amount,kaspi_amount,card_amount,online_amount').gte('date', monthStart(monthFrom)).lte('date', monthEnd(monthTo)).order('date'),
-          supabase.from('expenses').select('date,cash_amount,kaspi_amount').gte('date', monthStart(monthFrom)).lte('date', monthEnd(monthTo)).order('date'),
+          supabase.from('expenses').select('date,category,cash_amount,kaspi_amount').gte('date', monthStart(monthFrom)).lte('date', monthEnd(monthTo)).order('date'),
+          supabase.from('expense_categories').select('name,accounting_group'),
           fetch(`/api/admin/profitability?from=${monthFrom}&to=${monthTo}`),
         ])
         if (incomeRes.error) throw incomeRes.error
         if (expenseRes.error) throw expenseRes.error
+        if (categoriesRes.error) throw categoriesRes.error
         if (!inputsRes.ok) throw new Error((await inputsRes.json().catch(() => null))?.error || 'Не удалось загрузить месячные вводы')
         const payload = (await inputsRes.json()) as { items?: ProfitabilityInputRow[] }
         setIncomes((incomeRes.data || []) as IncomeRow[])
         setExpenses((expenseRes.data || []) as ExpenseRow[])
+        setExpenseCategories(
+          Object.fromEntries(
+            (((categoriesRes.data || []) as ExpenseCategoryRow[]).map((row) => [
+              String(row.name || '').trim().toLowerCase(),
+              resolveFinancialGroup(row.name, row.accounting_group),
+            ])),
+          ) as Record<string, FinancialGroup>,
+        )
         setInputs(Object.fromEntries((payload.items || []).map((row) => [row.month.slice(0, 7), row])) as Record<string, ProfitabilityInputRow>)
       } catch (e: any) {
         setError(e?.message || 'Не удалось загрузить страницу прибыли')
@@ -108,7 +121,20 @@ export default function ProfitabilityPage() {
       const cash = Number(row.cash_amount || 0), kaspi = Number(row.kaspi_amount || 0), card = Number(row.card_amount || 0), online = Number(row.online_amount || 0)
       acc.revenue += cash + kaspi + card + online; acc.cash += cash; acc.cashless += kaspi + card + online; return acc
     }, { revenue: 0, cash: 0, cashless: 0 })
-    const journalExpenses = expenses.filter((row) => row.date.startsWith(month)).reduce((acc, row) => acc + Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0), 0)
+    const journalSplit = expenses.filter((row) => row.date.startsWith(month)).reduce((acc, row) => {
+      const amount = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0)
+      const normalizedCategory = String(row.category || '').trim().toLowerCase()
+      const group = resolveFinancialGroup(row.category, expenseCategories[normalizedCategory] || null)
+
+      acc.total += amount
+      if (group === 'payroll' || group === 'payroll_advance') acc.payroll += amount
+      else if (group === 'payroll_tax') acc.payrollTaxes += amount
+      else if (group === 'income_tax') acc.incomeTax += amount
+      else if (group === 'non_operating') acc.nonOperating += amount
+      else acc.operating += amount
+
+      return acc
+    }, { total: 0, operating: 0, payroll: 0, payrollTaxes: 0, incomeTax: 0, nonOperating: 0 })
     const manual = inputs[month]
     const cashRevenueOverride = Number(manual?.cash_revenue_override || 0)
     const posRevenueOverride = Number(manual?.pos_revenue_override || 0)
@@ -137,11 +163,20 @@ export default function ProfitabilityPage() {
     const kaspiKreditCommission = kaspiKreditTurnover * kaspiKreditRate / 100
     const posTurnover = kaspiQrTurnover + kaspiGoldTurnover + otherCardsTurnover + kaspiRedTurnover + kaspiKreditTurnover + (hasSplitQrAndGold ? 0 : legacyQrGoldTurnover)
     const posCommission = kaspiQrCommission + kaspiGoldCommission + otherCardsCommission + kaspiRedCommission + kaspiKreditCommission + legacyQrGoldCommission
-    const payroll = Number(manual?.payroll_amount || 0), payrollTaxes = Number(manual?.payroll_taxes_amount || 0), otherOperating = Number(manual?.other_operating_amount || 0)
-    const depreciation = Number(manual?.depreciation_amount || 0), amortization = Number(manual?.amortization_amount || 0), incomeTax = Number(manual?.income_tax_amount || 0)
-    const ebitda = revenue - journalExpenses - posCommission - payroll - payrollTaxes - otherOperating
+    const payrollManual = Number(manual?.payroll_amount || 0)
+    const payrollTaxesManual = Number(manual?.payroll_taxes_amount || 0)
+    const incomeTaxManual = Number(manual?.income_tax_amount || 0)
+    const otherOperating = Number(manual?.other_operating_amount || 0)
+    const depreciation = Number(manual?.depreciation_amount || 0)
+    const amortization = Number(manual?.amortization_amount || 0)
+    const payroll = payrollManual > 0 ? payrollManual : journalSplit.payroll
+    const payrollTaxes = payrollTaxesManual > 0 ? payrollTaxesManual : journalSplit.payrollTaxes
+    const incomeTax = incomeTaxManual > 0 ? incomeTaxManual : journalSplit.incomeTax
+    const journalOperatingExpenses = journalSplit.operating
+    const nonOperatingJournalExpenses = journalSplit.nonOperating
+    const ebitda = revenue - journalOperatingExpenses - posCommission - payroll - payrollTaxes - otherOperating
     const operatingProfit = ebitda - depreciation - amortization
-    const netProfit = operatingProfit - incomeTax
+    const netProfit = operatingProfit - nonOperatingJournalExpenses - incomeTax
     return {
       month,
       label: monthLabel(month),
@@ -154,7 +189,12 @@ export default function ProfitabilityPage() {
       cashRevenueOverride,
       posRevenueOverride,
       hasRevenueOverride,
-      journalExpenses,
+      journalExpenses: journalSplit.total,
+      journalOperatingExpenses,
+      journalPayrollExpenses: journalSplit.payroll,
+      journalPayrollTaxes: journalSplit.payrollTaxes,
+      journalIncomeTax: journalSplit.incomeTax,
+      nonOperatingJournalExpenses,
       posTurnover,
       posCommission,
       kaspiQrTurnover,
@@ -176,17 +216,20 @@ export default function ProfitabilityPage() {
       legacyQrGoldRate,
       legacyQrGoldCommission,
       payroll,
+      payrollManual,
       payrollTaxes,
+      payrollTaxesManual,
       otherOperating,
       ebitda,
       depreciation,
       amortization,
       operatingProfit,
       incomeTax,
+      incomeTaxManual,
       netProfit,
       notes: manual?.notes || null,
     }
-  }), [expenses, incomes, inputs, months])
+  }), [expenseCategories, expenses, incomes, inputs, months])
 
   const selected = useMemo(() => rows.find((row) => row.month === selectedMonth) || rows[rows.length - 1] || null, [rows, selectedMonth])
   const totals = useMemo(() => rows.reduce((acc, row) => ({ revenue: acc.revenue + row.revenue, ebitda: acc.ebitda + row.ebitda, operatingProfit: acc.operatingProfit + row.operatingProfit, netProfit: acc.netProfit + row.netProfit }), { revenue: 0, ebitda: 0, operatingProfit: 0, netProfit: 0 }), [rows])
@@ -208,9 +251,9 @@ export default function ProfitabilityPage() {
     const kaspiRedRate = toNumber(draft.kaspi_red_rate || '')
     const kaspiKreditTurnover = toNumber(draft.kaspi_kredit_turnover || '')
     const kaspiKreditRate = toNumber(draft.kaspi_kredit_rate || '')
-    const payroll = toNumber(draft.payroll_amount || '')
-    const payrollTaxes = toNumber(draft.payroll_taxes_amount || '')
-    const incomeTax = toNumber(draft.income_tax_amount || '')
+    const payrollManual = toNumber(draft.payroll_amount || '')
+    const payrollTaxesManual = toNumber(draft.payroll_taxes_amount || '')
+    const incomeTaxManual = toNumber(draft.income_tax_amount || '')
     const depreciation = toNumber(draft.depreciation_amount || '')
     const amortization = toNumber(draft.amortization_amount || '')
     const otherOperating = toNumber(draft.other_operating_amount || '')
@@ -222,9 +265,12 @@ export default function ProfitabilityPage() {
       kaspiRedTurnover * kaspiRedRate / 100 +
       kaspiKreditTurnover * kaspiKreditRate / 100
 
-    const ebitda = revenue - selected.journalExpenses - posCommission - payroll - payrollTaxes - otherOperating
+    const payroll = payrollManual > 0 ? payrollManual : selected.journalPayrollExpenses
+    const payrollTaxes = payrollTaxesManual > 0 ? payrollTaxesManual : selected.journalPayrollTaxes
+    const incomeTax = incomeTaxManual > 0 ? incomeTaxManual : selected.journalIncomeTax
+    const ebitda = revenue - selected.journalOperatingExpenses - posCommission - payroll - payrollTaxes - otherOperating
     const operatingProfit = ebitda - depreciation - amortization
-    const netProfit = operatingProfit - incomeTax
+    const netProfit = operatingProfit - selected.nonOperatingJournalExpenses - incomeTax
 
     return {
       revenue,
@@ -234,6 +280,7 @@ export default function ProfitabilityPage() {
       posCommission,
       payroll,
       payrollTaxes,
+      incomeTax,
       otherOperating,
       ebitda,
       operatingProfit,
@@ -313,6 +360,10 @@ export default function ProfitabilityPage() {
                 <p className="mt-2 text-sm text-slate-300">По умолчанию это доходы из журнала: наличные, Kaspi POS, online и карта. Если вы сверху заполнили общую выручку по POS и общую наличку, страница возьмёт именно их как базу месяца.</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                <div className="text-sm font-medium text-white">Что теперь идёт из журнала автоматически</div>
+                <p className="mt-2 text-sm text-slate-300">Если у категории расхода задана финансовая группа, страница сама разносит журнал на операционные расходы, ФОТ, налоги на зарплату и налог 3%. Ручные поля ниже нужны только если надо переопределить или дополнить журнал.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                 <div className="text-sm font-medium text-white">Оборот POS</div>
                 <p className="mt-2 text-sm text-slate-300">Это объём оплат, прошедших через терминал или сервис Kaspi по конкретному типу оплаты. Он нужен только для расчёта комиссии банка.</p>
               </div>
@@ -355,10 +406,19 @@ export default function ProfitabilityPage() {
                   <div className="overflow-hidden rounded-2xl border border-white/10">
                     <table className="w-full text-sm"><tbody>
                       {[
-                        ['Выручка', selected.revenue], ['Расходы из журнала', -selected.journalExpenses], ['Комиссия Kaspi POS', -selected.posCommission],
-                        ['Фонд оплаты труда', -selected.payroll], ['Налоги на зарплату', -selected.payrollTaxes], ['Прочие операционные', -selected.otherOperating],
-                        ['EBITDA', selected.ebitda], ['Износ', -selected.depreciation], ['Амортизация', -selected.amortization],
-                        ['Операционная прибыль', selected.operatingProfit], ['Налог на прибыль / 3%', -selected.incomeTax], ['Чистая прибыль', selected.netProfit],
+                        ['Выручка', selected.revenue],
+                        ['Операционные расходы из журнала', -selected.journalOperatingExpenses],
+                        ['Комиссия Kaspi POS', -selected.posCommission],
+                        ['Фонд оплаты труда', -selected.payroll],
+                        ['Налоги на зарплату', -selected.payrollTaxes],
+                        ['Прочие операционные', -selected.otherOperating],
+                        ['EBITDA', selected.ebitda],
+                        ['Износ', -selected.depreciation],
+                        ['Амортизация', -selected.amortization],
+                        ['Операционная прибыль', selected.operatingProfit],
+                        ['Неоперационные расходы из журнала', -selected.nonOperatingJournalExpenses],
+                        ['Налог на прибыль / 3%', -selected.incomeTax],
+                        ['Чистая прибыль', selected.netProfit],
                       ].map(([label, value]) => <tr key={String(label)} className="border-b border-white/5 last:border-b-0"><td className="px-4 py-3 text-slate-300">{label}</td><td className={`px-4 py-3 text-right font-medium ${(Number(value) >= 0) ? 'text-emerald-300' : 'text-rose-300'}`}>{money(Number(value))}</td></tr>)}
                     </tbody></table>
                   </div>
@@ -377,7 +437,25 @@ export default function ProfitabilityPage() {
                         <div className="flex justify-between border-t border-white/10 pt-2 font-medium text-white"><span>Итого комиссия POS</span><span>{money(selected.posCommission)}</span></div>
                       </div>
                     </Card>
-                    <Card className="border border-white/10 bg-slate-950/60 p-4"><div className="mb-2 text-sm font-medium text-white">Комментарий месяца</div><p className="text-sm text-slate-300">{selected.notes || 'Комментарий не заполнен. Здесь можно фиксировать изменения по ставкам Kaspi и ручные допущения месяца.'}</p></Card>
+                    <Card className="border border-white/10 bg-slate-950/60 p-4">
+                      <div className="mb-2 text-sm font-medium text-white">Автоматическая раскладка журнала</div>
+                      <div className="space-y-2 text-sm text-slate-300">
+                        <div className="flex justify-between"><span>Операционные</span><span>{money(selected.journalOperatingExpenses)}</span></div>
+                        <div className="flex justify-between"><span>ФОТ</span><span>{money(selected.journalPayrollExpenses)}</span></div>
+                        <div className="flex justify-between"><span>Налоги на зарплату</span><span>{money(selected.journalPayrollTaxes)}</span></div>
+                        <div className="flex justify-between"><span>Налог 3% / прибыль</span><span>{money(selected.journalIncomeTax)}</span></div>
+                        <div className="flex justify-between"><span>Неоперационные</span><span>{money(selected.nonOperatingJournalExpenses)}</span></div>
+                        <div className="border-t border-white/10 pt-2 text-xs text-slate-400">
+                          Общая сумма журнала: {money(selected.journalExpenses)}
+                        </div>
+                        <div className="border-t border-white/10 pt-2">
+                          <div className="text-xs uppercase tracking-wide text-slate-500">Комментарий месяца</div>
+                          <div className="mt-1 text-sm text-slate-300">
+                            {selected.notes || 'Комментарий не заполнен. Здесь можно фиксировать изменения по ставкам Kaspi и ручные допущения месяца.'}
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
                   </div>
                   {selected.hasRevenueOverride ? <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">Для этого месяца выручка считается от ручных верхних вводов: наличка {money(selected.cashRevenueOverride)} и POS {money(selected.posRevenueOverride)}. Если очистить эти поля и сохранить, страница снова возьмёт выручку из журнала доходов.</div> : null}
                   {selected.legacyQrGoldTurnover > 0 ? <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Для этого месяца найдены старые объединённые данные QR/Gold. Лучше переписать их отдельно в полях Kaspi QR и Kaspi Gold, чтобы комиссия считалась точнее.</div> : null}
@@ -388,7 +466,7 @@ export default function ProfitabilityPage() {
             <Card className="border border-white/10 bg-white/[0.03] p-6">
               <div className="space-y-1">
                 <h2 className="text-xl font-semibold text-white">Ручные месячные вводы</h2>
-                <p className="text-sm text-slate-400">Сначала при необходимости задайте общую выручку по POS и общую наличку за месяц. Ниже внесите комиссии и расходы, которые будут уменьшать прибыль от этой базы.</p>
+                <p className="text-sm text-slate-400">Сначала при необходимости задайте общую выручку по POS и общую наличку за месяц. Ниже внесите комиссии и только те суммы, которые должны переопределить или дополнить автоматическую раскладку журнала.</p>
               </div>
               <div className="mt-6 space-y-4">
                 <div className="grid grid-cols-1 gap-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 md:grid-cols-2">
@@ -428,8 +506,15 @@ export default function ProfitabilityPage() {
                     <li>Kaspi Red и Kaspi Kredit: указывайте отдельно, если по ним другая ставка банка.</li>
                   </ul>
                 </div>
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+                  <div className="font-medium text-white">Как теперь работают ФОТ и налоги</div>
+                  <div className="mt-2 space-y-1">
+                    <div>Если категория расхода привязана к финансовой группе, страница сама подтянет ФОТ и налоги из журнала.</div>
+                    <div>Ручные поля ниже нужны только если вы хотите переопределить сумму из журнала для конкретного месяца.</div>
+                  </div>
+                </div>
                 {[
-                  ['payroll_amount', 'ФОТ за месяц'], ['payroll_taxes_amount', 'Налоги на зарплату'], ['income_tax_amount', 'Налог на прибыль / 3%'],
+                  ['payroll_amount', 'ФОТ вручную (если нужно переопределить журнал)'], ['payroll_taxes_amount', 'Налоги на зарплату вручную'], ['income_tax_amount', 'Налог на прибыль / 3% вручную'],
                   ['depreciation_amount', 'Износ'], ['amortization_amount', 'Амортизация'], ['other_operating_amount', 'Прочие операционные'],
                 ].map(([key, label]) => (
                   <div key={String(key)} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px] md:items-center">
@@ -454,6 +539,8 @@ export default function ProfitabilityPage() {
                           <div className="flex justify-between"><span>Выручка</span><span>{money(selected.revenue)}</span></div>
                           <div className="flex justify-between"><span>Наличка</span><span>{money(selected.cashRevenue)}</span></div>
                           <div className="flex justify-between"><span>POS / безнал</span><span>{money(selected.cashlessRevenue)}</span></div>
+                          <div className="flex justify-between"><span>Опер. журнал</span><span>{money(selected.journalOperatingExpenses)}</span></div>
+                          <div className="flex justify-between"><span>ФОТ</span><span>{money(selected.payroll)}</span></div>
                           <div className="flex justify-between"><span>Комиссия POS</span><span>{money(selected.posCommission)}</span></div>
                           <div className="flex justify-between"><span>EBITDA</span><span>{money(selected.ebitda)}</span></div>
                           <div className="flex justify-between"><span>Опер. прибыль</span><span>{money(selected.operatingProfit)}</span></div>
@@ -466,6 +553,8 @@ export default function ProfitabilityPage() {
                           <div className="flex justify-between"><span>Выручка</span><span>{money(draftPreview.revenue)}</span></div>
                           <div className="flex justify-between"><span>Наличка</span><span>{money(draftPreview.cashRevenue)}</span></div>
                           <div className="flex justify-between"><span>POS / безнал</span><span>{money(draftPreview.posRevenue)}</span></div>
+                          <div className="flex justify-between"><span>Опер. журнал</span><span>{money(selected.journalOperatingExpenses)}</span></div>
+                          <div className="flex justify-between"><span>ФОТ</span><span>{money(draftPreview.payroll)}</span></div>
                           <div className="flex justify-between"><span>Комиссия POS</span><span>{money(draftPreview.posCommission)}</span></div>
                           <div className="flex justify-between"><span>EBITDA</span><span>{money(draftPreview.ebitda)}</span></div>
                           <div className="flex justify-between"><span>Опер. прибыль</span><span>{money(draftPreview.operatingProfit)}</span></div>
@@ -487,8 +576,8 @@ export default function ProfitabilityPage() {
             <div className="mb-4"><h2 className="text-xl font-semibold text-white">Помесячная таблица прибыли</h2><p className="text-sm text-slate-400">Факт из системы объединён с ручными месячными вводами по комиссиям и корректировкам.</p></div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-sm">
-                <thead><tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-slate-400"><th className="px-3 py-3">Месяц</th><th className="px-3 py-3 text-right">Выручка</th><th className="px-3 py-3 text-right">Расходы</th><th className="px-3 py-3 text-right">POS</th><th className="px-3 py-3 text-right">EBITDA</th><th className="px-3 py-3 text-right">Опер. прибыль</th><th className="px-3 py-3 text-right">Чистая прибыль</th></tr></thead>
-                <tbody>{rows.map((row) => <tr key={row.month} className="border-b border-white/5 text-slate-200 hover:bg-white/[0.03]"><td className="px-3 py-3 font-medium">{row.label}</td><td className="px-3 py-3 text-right">{money(row.revenue)}</td><td className="px-3 py-3 text-right">{money(row.journalExpenses)}</td><td className="px-3 py-3 text-right">{money(row.posCommission)}</td><td className={`px-3 py-3 text-right font-medium ${row.ebitda >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.ebitda)}</td><td className={`px-3 py-3 text-right font-medium ${row.operatingProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.operatingProfit)}</td><td className={`px-3 py-3 text-right font-semibold ${row.netProfit >= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>{money(row.netProfit)}</td></tr>)}</tbody>
+                <thead><tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-slate-400"><th className="px-3 py-3">Месяц</th><th className="px-3 py-3 text-right">Выручка</th><th className="px-3 py-3 text-right">Опер. журнал</th><th className="px-3 py-3 text-right">POS</th><th className="px-3 py-3 text-right">EBITDA</th><th className="px-3 py-3 text-right">Опер. прибыль</th><th className="px-3 py-3 text-right">Чистая прибыль</th></tr></thead>
+                <tbody>{rows.map((row) => <tr key={row.month} className="border-b border-white/5 text-slate-200 hover:bg-white/[0.03]"><td className="px-3 py-3 font-medium">{row.label}</td><td className="px-3 py-3 text-right">{money(row.revenue)}</td><td className="px-3 py-3 text-right">{money(row.journalOperatingExpenses)}</td><td className="px-3 py-3 text-right">{money(row.posCommission)}</td><td className={`px-3 py-3 text-right font-medium ${row.ebitda >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.ebitda)}</td><td className={`px-3 py-3 text-right font-medium ${row.operatingProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.operatingProfit)}</td><td className={`px-3 py-3 text-right font-semibold ${row.netProfit >= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>{money(row.netProfit)}</td></tr>)}</tbody>
               </table>
             </div>
           </Card>
