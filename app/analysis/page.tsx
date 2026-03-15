@@ -5,7 +5,6 @@ import { Sidebar } from "@/components/sidebar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabaseClient"
-import { getOpenAIAdvice } from "../actions"
 import {
   BrainCircuit,
   TrendingUp,
@@ -1223,7 +1222,22 @@ export default function AIAnalysisPage() {
       setAiLoading(true)
       setAiError(null)
       try {
-        const text = await getOpenAIAdvice(dataForAi)
+        const response = await fetch('/api/analysis/ai', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-store',
+          body: JSON.stringify(dataForAi),
+        })
+
+        const result = (await response.json().catch(() => null)) as { text?: string; error?: string } | null
+        const text = typeof result?.text === 'string' ? result.text : result?.error || 'Не удалось получить AI-разбор. Проверьте подключение к OpenAI.'
+
+        if (!response.ok) {
+          throw new Error(text)
+        }
+
         if (cancelled) return
 
         const now = new Date().toISOString()
@@ -1251,7 +1265,7 @@ export default function AIAnalysisPage() {
         console.error('getOpenAIAdvice error:', error)
         lastAiCacheKeyRef.current = null
         setAiAdvice(null)
-        setAiError('Не удалось получить AI-разбор. Проверьте подключение к OpenAI.')
+        setAiError(error instanceof Error ? error.message : 'Не удалось получить AI-разбор. Проверьте подключение к OpenAI.')
       } finally {
         if (aiRequestKeyRef.current === cacheKey) {
           aiRequestKeyRef.current = null
