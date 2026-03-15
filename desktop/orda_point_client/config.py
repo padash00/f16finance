@@ -11,6 +11,9 @@ CONFIG_PATH = APP_DIR / "config.json"
 DEFAULT_CONFIG = {
     "api_base_url": "https://ordaops.kz",
     "device_token": "",
+    "last_operator_username": "",
+    "draft": {},
+    "debt_draft": {},
 }
 
 
@@ -32,6 +35,9 @@ def load_config() -> dict:
     return {
         "api_base_url": str(data.get("api_base_url") or DEFAULT_CONFIG["api_base_url"]).rstrip("/"),
         "device_token": str(data.get("device_token") or ""),
+        "last_operator_username": str(data.get("last_operator_username") or ""),
+        "draft": data.get("draft") if isinstance(data.get("draft"), dict) else {},
+        "debt_draft": data.get("debt_draft") if isinstance(data.get("debt_draft"), dict) else {},
     }
 
 
@@ -40,5 +46,8 @@ def save_config(config: dict) -> None:
     payload = {
         "api_base_url": str(config.get("api_base_url") or DEFAULT_CONFIG["api_base_url"]).rstrip("/"),
         "device_token": str(config.get("device_token") or ""),
+        "last_operator_username": str(config.get("last_operator_username") or ""),
+        "draft": config.get("draft") if isinstance(config.get("draft"), dict) else {},
+        "debt_draft": config.get("debt_draft") if isinstance(config.get("debt_draft"), dict) else {},
     }
     CONFIG_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

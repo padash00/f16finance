@@ -53,6 +53,41 @@ class PointApiClient:
         self._raise_for_status(response)
         return response.json()
 
+    def list_debts(self) -> dict[str, Any]:
+        response = self.session.get(
+            f"{self.api_base_url}/api/point/debts",
+            headers=self._headers(),
+            timeout=20,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
+    def create_debt(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self.session.post(
+            f"{self.api_base_url}/api/point/debts",
+            headers=self._headers(),
+            json={
+                "action": "createDebt",
+                "payload": payload,
+            },
+            timeout=20,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
+    def delete_debt(self, item_id: str) -> dict[str, Any]:
+        response = self.session.post(
+            f"{self.api_base_url}/api/point/debts",
+            headers=self._headers(),
+            json={
+                "action": "deleteDebt",
+                "itemId": item_id,
+            },
+            timeout=20,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
     def _raise_for_status(self, response: requests.Response):
         if response.ok:
             return
