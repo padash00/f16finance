@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/sidebar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabaseClient"
-import { getGeminiAdvice } from "../actions"
+import { getOpenAIAdvice } from "../actions"
 import {
   BrainCircuit,
   TrendingUp,
@@ -287,6 +287,41 @@ const startOfWeekISO = (dateStr: string) => {
   const diffToMon = (day + 6) % 7
   d.setDate(d.getDate() - diffToMon)
   return toISODateLocal(d)
+}
+
+const getMonthKey = (dateStr: string) => dateStr.slice(0, 7)
+
+const shiftMonthKey = (monthKey: string, diff: number) => {
+  const [year, month] = monthKey.split('-').map(Number)
+  const date = new Date(year, (month || 1) - 1 + diff, 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+const summarizeMonthFacts = (rows: DataPoint[], monthKey: string) => {
+  return rows
+    .filter((row) => getMonthKey(row.date) === monthKey)
+    .reduce(
+      (acc, row) => {
+        acc.income += row.income
+        acc.expense += row.expense
+        acc.profit += row.profit ?? row.income - row.expense
+        return acc
+      },
+      { income: 0, expense: 0, profit: 0 },
+    )
+}
+
+const summarizeMonthForecast = (rows: DataPoint[], monthKey: string) => {
+  return rows
+    .filter((row) => getMonthKey(row.date) === monthKey)
+    .reduce(
+      (acc, row) => {
+        acc.income += row.income
+        acc.profit += row.profit ?? row.income - row.expense
+        return acc
+      },
+      { income: 0, profit: 0 },
+    )
 }
 
 const downloadCSV = (filename: string, rows: Record<string, any>[]) => {
@@ -818,8 +853,10 @@ export default function AIAnalysisPage() {
 
   const [aiAdvice, setAiAdvice] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiUpdatedAt, setAiUpdatedAt] = useState<string | null>(null)
 
-  const [rangePreset, setRangePreset] = useState<RangePreset>("90")
+  const [rangePreset, setRangePreset] = useState<RangePreset>("365")
   const [customStart, setCustomStart] = useState<string>("")
   const [customEnd, setCustomEnd] = useState<string>("")
 
@@ -829,6 +866,7 @@ export default function AIAnalysisPage() {
   const [granularity, setGranularity] = useState<Granularity>("daily")
 
   const aliveRef = useRef(true)
+  const lastAiCacheKeyRef = useRef<string | null>(null)
 
   const computeRange = () => {
     const today = new Date()
@@ -1080,33 +1118,141 @@ export default function AIAnalysisPage() {
 
   const dataForAi = useMemo(() => {
     if (!analysis) return null
+    const currentMonthKey = getMonthKey(toISODateLocal(new Date()))
+    const previousMonthKey = shiftMonthKey(currentMonthKey, -1)
+    const nextMonthKey = shiftMonthKey(currentMonthKey, 1)
+
+    const currentMonthFacts = summarizeMonthFacts(history, currentMonthKey)
+    const previousMonthFacts = summarizeMonthFacts(history, previousMonthKey)
+    const currentMonthForecast = summarizeMonthForecast(analysis.forecastData, currentMonthKey)
+    const nextMonthForecast = summarizeMonthForecast(analysis.forecastData, nextMonthKey)
+
     return {
+      dataRangeStart: analysis.dataRangeStart,
+      dataRangeEnd: analysis.dataRangeEnd,
       avgIncome: Math.round(analysis.avgIncome),
       avgExpense: Math.round(analysis.avgExpense),
+      avgProfit: Math.round(analysis.avgProfit),
+      avgMargin: Number(analysis.avgMargin.toFixed(1)),
+      totalIncome: Math.round(analysis.totalIncome),
+      totalExpense: Math.round(analysis.totalExpense),
+      totalCash: Math.round(analysis.totalCash),
+      totalKaspi: Math.round(analysis.totalKaspi),
+      totalCard: Math.round(analysis.totalCard),
+      totalOnline: Math.round(analysis.totalOnline),
+      cashlessShare: Number(analysis.cashlessShare.toFixed(1)),
+      onlineShare: Number(analysis.onlineShare.toFixed(1)),
+      predictedIncome: Math.round(analysis.totalForecastIncome),
       predictedProfit: Math.round(analysis.totalForecastProfit),
       trend: analysis.trendIncome,
+      trendExpense: analysis.trendExpense,
+      confidenceScore: Number(analysis.confidenceScore.toFixed(1)),
+      riskLevel: analysis.riskLevel,
+      seasonalityStrength: Number(analysis.seasonalityStrength.toFixed(1)),
+      growthRate: Number(analysis.growthRate.toFixed(1)),
+      profitVolatility: Math.round(analysis.profitVolatility),
+      totalPlanIncome: Math.round(analysis.totalPlanIncome),
+      planIncomeAchievementPct: Number(analysis.planIncomeAchievementPct.toFixed(1)),
+      bestDayName: analysis.bestDow ? dayNames[analysis.bestDow.dow] : "—",
+      worstDayName: analysis.worstDow ? dayNames[analysis.worstDow.dow] : "—",
       expensesByCategory: expenseCategories,
       anomalies: analysis.anomalies.map((a) => ({
         date: a.date,
         type: a.type === "income_low" ? "Низкий доход" : a.type === "income_high" ? "Высокий доход" : "Высокий расход",
         amount: a.amount,
       })),
+      currentMonth: {
+        income: Math.round(currentMonthFacts.income),
+        expense: Math.round(currentMonthFacts.expense),
+        profit: Math.round(currentMonthFacts.profit),
+        projectedIncome: Math.round(currentMonthFacts.income + currentMonthForecast.income),
+        projectedProfit: Math.round(currentMonthFacts.profit + currentMonthForecast.profit),
+      },
+      previousMonth: {
+        income: Math.round(previousMonthFacts.income),
+        expense: Math.round(previousMonthFacts.expense),
+        profit: Math.round(previousMonthFacts.profit),
+      },
+      nextMonthForecast: {
+        income: Math.round(nextMonthForecast.income),
+        profit: Math.round(nextMonthForecast.profit),
+      },
     }
-  }, [analysis, expenseCategories])
+  }, [analysis, expenseCategories, history])
 
-  const handleAskAi = async () => {
-    if (!dataForAi) return
-    setAiLoading(true)
-    try {
-      const text = await getGeminiAdvice(dataForAi)
-      setAiAdvice(text)
-    } catch (e) {
-      console.error("getGeminiAdvice error:", e)
-      setAiAdvice("Не удалось получить совет. Проверьте подключение к AI.")
-    } finally {
-      setAiLoading(false)
+  useEffect(() => {
+    if (!dataForAi) {
+      setAiAdvice(null)
+      setAiError(null)
+      setAiUpdatedAt(null)
+      lastAiCacheKeyRef.current = null
+      return
     }
-  }
+
+    const cacheKey = JSON.stringify(dataForAi)
+    if (lastAiCacheKeyRef.current === cacheKey && (aiAdvice || aiLoading)) return
+
+    const storageKey = 'orda.ai-analysis.cache.v2'
+    const cacheTtlMs = 3 * 60 * 60 * 1000
+
+    try {
+      const raw = window.sessionStorage.getItem(storageKey)
+      if (raw) {
+        const parsed = JSON.parse(raw) as { key: string; text: string; timestamp: string } | null
+        if (parsed?.key === cacheKey) {
+          const age = Date.now() - new Date(parsed.timestamp).getTime()
+          if (age < cacheTtlMs && parsed.text) {
+            lastAiCacheKeyRef.current = cacheKey
+            setAiAdvice(parsed.text)
+            setAiError(null)
+            setAiUpdatedAt(parsed.timestamp)
+            return
+          }
+        }
+      }
+    } catch {}
+
+    let cancelled = false
+
+    const run = async () => {
+      setAiLoading(true)
+      setAiError(null)
+      try {
+        const text = await getOpenAIAdvice(dataForAi)
+        if (cancelled) return
+
+        const now = new Date().toISOString()
+        lastAiCacheKeyRef.current = cacheKey
+        setAiAdvice(text)
+        setAiUpdatedAt(now)
+
+        if (text.toLowerCase().startsWith('ошибка')) {
+          setAiError(text)
+        }
+
+        window.sessionStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            key: cacheKey,
+            text,
+            timestamp: now,
+          }),
+        )
+      } catch (error) {
+        if (cancelled) return
+        console.error('getOpenAIAdvice error:', error)
+        setAiAdvice(null)
+        setAiError('Не удалось получить AI-разбор. Проверьте подключение к OpenAI.')
+      } finally {
+        if (!cancelled) setAiLoading(false)
+      }
+    }
+
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [aiAdvice, aiLoading, dataForAi])
 
   const handleExport = () => {
     if (!analysis) return
@@ -1177,14 +1323,10 @@ export default function AIAnalysisPage() {
                   Экспорт CSV
                 </Button>
 
-                <Button
-                  onClick={handleAskAi}
-                  disabled={aiLoading || !analysis}
-                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-500/25"
-                >
-                  {aiLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
-                  {aiAdvice ? "Обновить совет" : "Совет AI"}
-                </Button>
+                <div className="flex items-center gap-2 rounded-xl border border-purple-500/20 bg-purple-500/10 px-3 py-2 text-xs text-purple-200">
+                  {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  AI-разбор обновляется автоматически
+                </div>
               </div>
             </div>
           </div>
@@ -1313,15 +1455,34 @@ export default function AIAnalysisPage() {
           </Card>
 
           {/* AI advice */}
-          {aiAdvice && (
+          {(aiLoading || aiAdvice || aiError) && (
             <Card className="p-6 border-0 bg-gradient-to-br from-purple-900/30 via-gray-900 to-blue-900/30 backdrop-blur-sm shadow-lg shadow-purple-500/10">
               <div className="flex items-start gap-4">
                 <div className="p-2 bg-purple-500/20 rounded-xl shrink-0">
                   <Sparkles className="w-6 h-6 text-purple-400" />
                 </div>
                 <div className="space-y-2 w-full">
-                  <h3 className="font-bold text-white text-lg">Рекомендации AI-директора</h3>
-                  <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{aiAdvice}</div>
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <h3 className="font-bold text-white text-lg">AI-разбор директора</h3>
+                    {aiUpdatedAt ? (
+                      <div className="text-xs text-gray-500">
+                        Обновлено: {new Date(aiUpdatedAt).toLocaleString('ru-RU')}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {aiLoading ? (
+                    <div className="flex items-center gap-3 text-sm text-gray-300">
+                      <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                      AI собирает прогноз, аномалии и рекомендации по текущему и следующему месяцу...
+                    </div>
+                  ) : aiError ? (
+                    <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                      {aiError}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{aiAdvice}</div>
+                  )}
                 </div>
               </div>
             </Card>

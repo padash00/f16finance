@@ -1,179 +1,229 @@
 'use server'
 
-// Определяем тип входящих данных для строгости
 type AnalysisData = {
-  avgIncome: number;
-  avgExpense: number;
-  predictedProfit: number;
-  trend: number;
-  expensesByCategory: Record<string, number>;
-  anomalies: Array<{ date: string; type: string; amount: number }>;
+  dataRangeStart: string
+  dataRangeEnd: string
+  avgIncome: number
+  avgExpense: number
+  avgProfit: number
+  avgMargin: number
+  totalIncome: number
+  totalExpense: number
+  totalCash: number
+  totalKaspi: number
+  totalCard: number
+  totalOnline: number
+  cashlessShare: number
+  onlineShare: number
+  predictedIncome: number
+  predictedProfit: number
+  trend: number
+  trendExpense: number
+  confidenceScore: number
+  riskLevel: 'low' | 'medium' | 'high'
+  seasonalityStrength: number
+  growthRate: number
+  profitVolatility: number
+  planIncomeAchievementPct: number
+  totalPlanIncome: number
+  bestDayName: string
+  worstDayName: string
+  expensesByCategory: Record<string, number>
+  anomalies: Array<{ date: string; type: string; amount: number }>
+  currentMonth: {
+    income: number
+    expense: number
+    profit: number
+    projectedIncome: number
+    projectedProfit: number
+  }
+  previousMonth: {
+    income: number
+    expense: number
+    profit: number
+  }
+  nextMonthForecast: {
+    income: number
+    profit: number
+  }
 }
 
-export async function getGeminiAdvice(data: AnalysisData) {
-  const apiKey = process.env.GEMINI_API_KEY;
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5-mini'
+
+function formatMoney(value: number) {
+  return Number(value || 0).toLocaleString('ru-RU') + ' ₸'
+}
+
+function formatPercent(value: number) {
+  return `${Number(value || 0).toFixed(1)}%`
+}
+
+function summarizeExpenses(expensesByCategory: Record<string, number>) {
+  const total = Object.values(expensesByCategory || {}).reduce((sum, value) => sum + Number(value || 0), 0)
+  const sorted = Object.entries(expensesByCategory || {}).sort(([, a], [, b]) => b - a)
+  const details = sorted
+    .map(([category, amount]) => {
+      const share = total > 0 ? (amount / total) * 100 : 0
+      return `- ${category}: ${formatMoney(amount)} (${formatPercent(share)})`
+    })
+    .join('\n')
+
+  const [topCategoryName, topCategoryAmount] = sorted[0] || ['—', 0]
+  const topCategoryShare = total > 0 ? (Number(topCategoryAmount || 0) / total) * 100 : 0
+
+  return {
+    total,
+    details: details || '- Нет данных по категориям расходов',
+    topCategoryName,
+    topCategoryAmount: Number(topCategoryAmount || 0),
+    topCategoryShare,
+  }
+}
+
+function anomaliesText(anomalies: AnalysisData['anomalies']) {
+  if (!anomalies.length) return 'Аномалий не обнаружено.'
+  return anomalies
+    .map((item) => `- ${item.date}: ${item.type} (${formatMoney(item.amount)})`)
+    .join('\n')
+}
+
+export async function getOpenAIAdvice(data: AnalysisData) {
+  const apiKey = process.env.OPENAI_API_KEY
 
   if (!apiKey) {
-    console.error("❌ API Key is missing");
-    return "Ошибка: Не настроен API ключ Gemini.";
+    console.error('OPENAI_API_KEY is missing')
+    return 'Ошибка: Не настроен OPENAI_API_KEY.'
   }
 
-  // 1. ПОДГОТОВКА ДАННЫХ
+  const expenses = summarizeExpenses(data.expensesByCategory)
 
-  // Общий расход за период
-  const totalExpenseForPeriod = Object
-    .values(data.expensesByCategory || {})
-    .reduce((a, b) => a + b, 0);
+  const systemPrompt = `
+Ты — жёсткий финансовый директор и антикризисный управляющий с большим опытом в офлайн-бизнесе.
+Пишешь кратко, по делу, как человек, который отвечает за деньги.
+Никаких фраз "как ИИ", никаких извинений, никакой воды.
+Только управленческий разбор, прогнозы, риски и действия.
+`
 
-  // Топ-категория расходов
-  const sortedExpenses = Object.entries(data.expensesByCategory || {})
-    .sort(([, a], [, b]) => b - a);
+  const userPrompt = `
+Сделай автономный CFO-разбор бизнеса на основе готовой аналитики.
 
-  const [topCategoryNameRaw, topCategoryAmountRaw] = sortedExpenses[0] || ['—', 0];
-  const topCategoryName = topCategoryNameRaw || '—';
-  const topCategoryAmount = topCategoryAmountRaw || 0;
+КОНТЕКСТ:
+- Период анализа: ${data.dataRangeStart} -> ${data.dataRangeEnd}
+- Средний доход в день: ${formatMoney(data.avgIncome)}
+- Средний расход в день: ${formatMoney(data.avgExpense)}
+- Средняя прибыль в день: ${formatMoney(data.avgProfit)}
+- Средняя маржа: ${formatPercent(data.avgMargin)}
+- Тренд дохода: ${formatMoney(data.trend)} в день
+- Тренд расхода: ${formatMoney(data.trendExpense)} в день
+- Уровень риска: ${data.riskLevel}
+- Достоверность прогноза: ${formatPercent(data.confidenceScore)}
+- Сезонность: ${formatPercent(data.seasonalityStrength)}
+- Темп роста: ${formatPercent(data.growthRate)}
+- Волатильность прибыли: ${formatMoney(data.profitVolatility)}
 
-  const topCategoryShare = totalExpenseForPeriod > 0
-    ? (topCategoryAmount / totalExpenseForPeriod) * 100
-    : 0;
+ТЕКУЩАЯ СТРУКТУРА ДЕНЕГ:
+- Общий доход за период: ${formatMoney(data.totalIncome)}
+- Общий расход за период: ${formatMoney(data.totalExpense)}
+- Наличные: ${formatMoney(data.totalCash)}
+- Kaspi: ${formatMoney(data.totalKaspi)}
+- Карта: ${formatMoney(data.totalCard)}
+- Online: ${formatMoney(data.totalOnline)}
+- Доля безнала: ${formatPercent(data.cashlessShare)}
+- Доля online: ${formatPercent(data.onlineShare)}
 
-  // Маржа и структура
-  const dailyProfit = data.avgIncome - data.avgExpense;
-  const marginPercent = data.avgIncome > 0
-    ? (dailyProfit / data.avgIncome) * 100
-    : 0;
+ПЛАН И ПРОГНОЗ:
+- План дохода: ${formatMoney(data.totalPlanIncome)}
+- Выполнение плана: ${formatPercent(data.planIncomeAchievementPct)}
+- Прогноз дохода на ближайшие 30 дней: ${formatMoney(data.predictedIncome)}
+- Прогноз прибыли на ближайшие 30 дней: ${formatMoney(data.predictedProfit)}
+- Текущий месяц факт: доход ${formatMoney(data.currentMonth.income)}, расход ${formatMoney(data.currentMonth.expense)}, прибыль ${formatMoney(data.currentMonth.profit)}
+- Текущий месяц прогноз до закрытия: доход ${formatMoney(data.currentMonth.projectedIncome)}, прибыль ${formatMoney(data.currentMonth.projectedProfit)}
+- Прошлый месяц факт: доход ${formatMoney(data.previousMonth.income)}, расход ${formatMoney(data.previousMonth.expense)}, прибыль ${formatMoney(data.previousMonth.profit)}
+- Следующий месяц прогноз: доход ${formatMoney(data.nextMonthForecast.income)}, прибыль ${formatMoney(data.nextMonthForecast.profit)}
 
-  const expenseSharePercent = data.avgIncome > 0
-    ? (data.avgExpense / data.avgIncome) * 100
-    : 0;
+ОПЕРАЦИОННЫЕ СИГНАЛЫ:
+- Лучший день недели по доходу: ${data.bestDayName}
+- Худший день недели по доходу: ${data.worstDayName}
+- Самая тяжёлая категория расходов: ${String(expenses.topCategoryName || '—')} — ${formatMoney(expenses.topCategoryAmount)} (${formatPercent(expenses.topCategoryShare)})
 
-  // Текст расходов с процентами (для разборки по категориям)
-  const expensesText = sortedExpenses
-    .map(([cat, amount]) => {
-      const percent = totalExpenseForPeriod > 0
-        ? ((amount / totalExpenseForPeriod) * 100).toFixed(1)
-        : '0.0';
-      return `- ${cat}: ${amount.toLocaleString('ru-RU')} ₸ (${percent}%)`;
-    })
-    .join('\n');
+КАТЕГОРИИ РАСХОДОВ:
+${expenses.details}
 
-  // Текст аномалий
-  const anomaliesText = data.anomalies.length > 0
-    ? data.anomalies
-        .map(a => `- ${a.date}: ${a.type} (${a.amount.toLocaleString('ru-RU')} ₸)`)
-        .join('\n')
-    : "Аномалий не обнаружено. Выручка и расходы ведут себя предсказуемо.";
+АНОМАЛИИ:
+${anomaliesText(data.anomalies)}
 
-  // 2. ПРОМПТ — ПЕРСОНА + ЖЁСТКАЯ СТРУКТУРА
+ОТВЕТ ДАЙ СТРОГО В СТРУКТУРЕ:
 
-  const prompt = `
-РОЛЬ:
-Ты — жёсткий, прагматичный финансовый директор и антикризисный консультант
-с 30–40 годами опыта в крупных корпорациях. Несколько компаний ты вытянул
-из предбанкротного состояния. Ты не боишься говорить неприятную правду.
-Ты не пишешь как студент, ты пишешь как человек, который отвечает за деньги.
+1. **Диагноз**
+Коротко и жёстко оцени состояние бизнеса сейчас.
 
-НИКАКИХ фраз вида "как ИИ", никаких извинений, никаких рассуждений о себе.
-Только сухой профессиональный анализ и конкретные управленческие выводы.
+2. **Что происходит сейчас**
+- деньги
+- расходы
+- маржа
+- выполнение плана
+- структура оплат
 
-ОТРАСЛЕВЫЕ БЕНЧМАРКИ (компьютерные клубы / офлайн-развлечения):
-- Целевая операционная маржа (после основных расходов): 20–30%+.
-- ФОТ (зарплаты): до 30% от выручки.
-- Аренда: до 15–20% от выручки.
-- Маркетинг: 5–10% от выручки.
-Если фактические значения выше — это уже зона риска.
+3. **Прогноз**
+- чем, скорее всего, закончится текущий месяц
+- что ждёт в следующем месяце
+- где риск провала, а где потенциал роста
 
-ВХОДНЫЕ ДАННЫЕ (за последние ~30 дней, агрегированные):
+4. **Аномалии и закономерности**
+- что выглядит системной проблемой
+- что похоже на разовый выброс
+- какие дни/каналы/расходы проседают или перегреты
 
-1) ФИНАНСОВЫЕ ПОКАЗАТЕЛИ:
-- Средняя выручка в день: ${data.avgIncome.toLocaleString('ru-RU')} ₸
-- Средний расход в день: ${data.avgExpense.toLocaleString('ru-RU')} ₸
-- Средняя дневная прибыль: ${dailyProfit.toLocaleString('ru-RU')} ₸
-- Операционная маржа по прибыли: ${marginPercent.toFixed(1)}%
-- Доля расходов от выручки: ${expenseSharePercent.toFixed(1)}%
-- Прогноз прибыли на следующий месяц: ${data.predictedProfit.toLocaleString('ru-RU')} ₸
-- Тренд выручки: ${data.trend > 0 ? 'рост' : (data.trend < 0 ? 'падение' : 'боковик')} на ${Math.abs(data.trend).toFixed(0)} ₸ в день
+5. **Решения на 30 дней**
+Дай 5-7 конкретных управленческих действий в формате:
+**[действие] — [как сделать] — [зачем это даст деньги / маржу / стабильность]**
 
-2) СТРУКТУРА РАСХОДОВ:
-- Всего расходов по категориям: ${totalExpenseForPeriod.toLocaleString('ru-RU')} ₸
-- Крупнейшая категория: ${topCategoryName} — ${topCategoryAmount.toLocaleString('ru-RU')} ₸ (${topCategoryShare.toFixed(1)}% от всех затрат)
-Детализация по категориям:
-${expensesText || '- Нет данных по категориям расходов'}
-
-3) АНОМАЛИИ (выбросы по дням):
-${anomaliesText}
-
-ЗАДАЧА:
-Проведи полноценный управленческий разбор: насколько бизнес сейчас жизнеспособен,
-где он теряет деньги, и какие управленческие решения надо принимать.
-
-ФОРМАТ ОТВЕТА (строго по структуре, Markdown):
-
-1️⃣ **Краткий диагноз (1–3 жёстких предложения)**  
-Опиши состояние бизнеса так, как сказал бы акционерам: без смягчений и красивых формулировок.
-
-2️⃣ **Финансовый анализ (по пунктам)**  
-Разбери по подпунктам:
-- **Прибыльность и маржа.** Сравни текущую маржу и структуру расходов с бенчмарками, дай вывод: норма / погранично / плохо.
-- **Структура затрат.** Отдельно прокомментируй крупнейшую категорию расходов (${topCategoryName}) — это нормально для такого бизнеса или раздуто.
-- **Динамика (тренд).** Что означает текущий тренд выручки и прибыли — ускорение, торможение, стагнация.
-- **Устойчивость.** Насколько бизнес устойчив к просадке выручки на 20–30% (ответ качественный, но с опорой на цифры).
-
-3️⃣ **Конкретные управленческие решения на 30 дней**  
-Дай список из 4–7 конкретных действий:
-- минимум 2 пункта по **сокращению или переформатированию расходов** (но без банального "сократить все расходы");
-- минимум 2 пункта по **росту выручки** (цены, акции, сегменты клиентов, работа с чек-моделями, загрузка ночи/дня);
-- отделяй то, что даёт быстрый эффект (до 30 дней), от того, что работает как среднесрочная стратегия (2–3 месяца).
-
-Каждый пункт должен быть в формате:  
-**[Суть действия] — [механика] — [ожидаемый эффект в деньгах / марже]**.
-
-4️⃣ **Риски и аномалии**  
-Кратко оцени:
-- какие из аномалий выглядят разовыми (объяснимыми),
-- какие похожи на системную проблему (например, перекос в определённые дни или категории),
-- к чему это приведёт, если ничего не делать.
-
-5️⃣ **Что контролировать еженедельно (доска метрик)**  
-Дай список 5–7 ключевых метрик, которые владелец должен смотреть каждую неделю
-(прям по названиям метрик: "Маржа по клубу, %", "Выручка по сменам день/ночь", и т.д.).
-
-ТРЕБОВАНИЯ К СТИЛЮ:
-- Пиши как опытный финансовый директор, а не как блогер и не как студент.
-- Минимум эмоций, максимум сути. Допускаются жёсткие формулировки.
-- Никаких длинных вступлений, сразу к делу.
-- Не пересказывай входные данные — работай с выводами и управленческими решениями.
-`;
+6. **Контроль владельца**
+Дай 5 ключевых метрик, которые владелец должен смотреть каждую неделю.
+`
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.4, // логика > креатив
-            maxOutputTokens: 700,
-          }
-        }),
-      }
-    );
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        reasoning: { effort: 'medium' },
+        max_output_tokens: 1400,
+        input: [
+          {
+            role: 'system',
+            content: [{ type: 'input_text', text: systemPrompt.trim() }],
+          },
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: userPrompt.trim() }],
+          },
+        ],
+      }),
+    })
 
-    const json = await response.json();
-    
-    if (!response.ok || json.error) {
-      console.error("AI Error:", JSON.stringify(json, null, 2));
-      if (json.error?.code === 429) return "Ошибка: Превышен лимит запросов к ИИ.";
-      return `Ошибка API: ${json.error?.message || 'Неизвестная ошибка'}`;
+    const json = await response.json().catch(() => null)
+
+    if (!response.ok || json?.error) {
+      console.error('OpenAI AI analysis error:', JSON.stringify(json, null, 2))
+      if (json?.error?.code === 'rate_limit_exceeded' || response.status === 429) {
+        return 'Ошибка: Лимит OpenAI API временно исчерпан. Подождите немного или увеличьте billing limit.'
+      }
+      return `Ошибка OpenAI API: ${json?.error?.message || `HTTP ${response.status}`}`
     }
 
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-    return text || "ИИ не смог сформировать осмысленный ответ. Попробуйте позже.";
-    
+    const text = json?.output_text
+    if (typeof text === 'string' && text.trim()) return text.trim()
+
+    return 'ИИ не смог сформировать осмысленный разбор. Попробуйте обновить страницу позже.'
   } catch (error) {
-    console.error("Network Error in getGeminiAdvice:", error);
-    return "Ошибка соединения с сервером.";
+    console.error('Network error in getOpenAIAdvice:', error)
+    return 'Ошибка соединения с OpenAI API.'
   }
 }
+
+export const getGeminiAdvice = getOpenAIAdvice
