@@ -133,7 +133,11 @@ function buildSystemPrompt(request: AssistantRequest, currentSnapshot: PageSnaps
 function buildInput(request: AssistantRequest, currentSnapshot: PageSnapshot | null | undefined, serverSnapshots: PageSnapshot[]) {
   const history = (request.history ?? []).slice(-8).map((message) => ({
     role: message.role,
-    content: [{ type: 'input_text', text: message.content }],
+    content: [
+      message.role === 'assistant'
+        ? { type: 'output_text', text: message.content }
+        : { type: 'input_text', text: message.content },
+    ],
   }))
 
   return [
