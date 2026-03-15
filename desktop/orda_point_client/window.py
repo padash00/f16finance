@@ -20,6 +20,7 @@ from api import PointApiClient
 from config import load_config, save_config
 from debt_tab import DebtTab
 from products_tab import ProductsTab
+from reports_tab import ReportsTab
 from scanner_tab import ScannerTab
 from shift_tab import ShiftReportTab
 from storage import OfflineQueue
@@ -55,6 +56,7 @@ class PointMainWindow(QMainWindow):
         self.admin_tab: AdminTerminalTab | None = None
         self.scanner_tab: ScannerTab | None = None
         self.products_tab: ProductsTab | None = None
+        self.reports_tab: ReportsTab | None = None
 
         api_url = (self.config.get("api_base_url") or "").strip()
         self.api = PointApiClient(api_url or "https://ordaops.kz", str(self.config.get("device_token") or ""))
@@ -238,6 +240,7 @@ class PointMainWindow(QMainWindow):
         self.admin_tab = None
         self.scanner_tab = None
         self.products_tab = None
+        self.reports_tab = None
 
         if self.current_admin:
             self.admin_tab = AdminTerminalTab(self)
@@ -259,6 +262,10 @@ class PointMainWindow(QMainWindow):
             if self.current_admin:
                 self.products_tab = ProductsTab(self)
                 self.tabs.addTab(self.products_tab, "Товары")
+
+        if self.bootstrap_data and self.current_admin:
+            self.reports_tab = ReportsTab(self)
+            self.tabs.addTab(self.reports_tab, "Отчёты")
 
         if self.tabs.count() == 0:
             self.tabs.addTab(EmptyTab("Терминал ещё не настроен. Войдите как super-admin и привяжите точку.", self), "Инфо")

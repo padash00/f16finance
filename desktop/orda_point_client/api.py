@@ -86,6 +86,15 @@ class PointApiClient:
         self._raise_for_status(response)
         return response.json()
 
+    def get_reports(self) -> dict[str, Any]:
+        response = self.session.get(
+            f"{self.api_base_url}/api/point/reports",
+            headers=self._headers(),
+            timeout=20,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
     def create_product(self, email: str, password: str, payload: dict[str, Any]) -> dict[str, Any]:
         response = self.session.post(
             f"{self.api_base_url}/api/point/products",
