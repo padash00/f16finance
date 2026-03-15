@@ -7,12 +7,21 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+function normalizeFlags(input: Record<string, unknown> | null | undefined) {
+  return {
+    shift_report: input?.shift_report !== false,
+    income_report: input?.income_report !== false,
+    debt_report: input?.debt_report === true,
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const point = await requirePointDevice(request)
     if ('response' in point) return point.response
 
     const { supabase, device } = point
+    const featureFlags = normalizeFlags(device.feature_flags || {})
 
     const { data: assignments, error: assignmentsError } = await supabase
       .from('operator_company_assignments')
@@ -62,7 +71,7 @@ export async function GET(request: Request) {
         id: device.id,
         name: device.name,
         point_mode: device.point_mode,
-        feature_flags: device.feature_flags || {},
+        feature_flags: featureFlags,
       },
       company: {
         id: device.company_id,
@@ -72,9 +81,9 @@ export async function GET(request: Request) {
       operators,
       sync: {
         mode: 'server-api',
-        supports_shift_report: true,
-        supports_income_report: true,
-        supports_debt_report: false,
+        supports_shift_report: featureFlags.shift_report,
+        supports_income_report: featureFlags.income_report,
+        supports_debt_report: featureFlags.debt_report,
       },
     })
   } catch (error: any) {

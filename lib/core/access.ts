@@ -35,6 +35,7 @@ export const ADMIN_PATHS = [
   '/',
   '/welcome',
   '/logs',
+  '/point-devices',
   '/income',
   '/income/add',
   '/income/analytics',
@@ -87,6 +88,7 @@ const MARKETER_PATHS = ['/welcome', '/tasks'] as const
 const OWNER_PATHS = [
   '/',
   '/welcome',
+  '/point-devices',
   '/income',
   '/income/add',
   '/income/analytics',
@@ -149,6 +151,7 @@ export const STAFF_ROLE_MATRIX: Record<StaffRole, RoleMatrixEntry> = {
     actions: [
       'Управляет доходами и расходами',
       'Создаёт, редактирует и удаляет операторов',
+      'Управляет устройствами точек и токенами кассовых программ',
       'Видит и меняет оргструктуру по точкам',
       'Работает со staff и зарплатой',
       'Работает с задачами',
@@ -176,6 +179,7 @@ export const SUPER_ADMIN_MATRIX_ENTRY = {
     'Видит все разделы',
     'Создаёт staff-аккаунты и отправляет инвайты',
     'Повышает операторов',
+    'Управляет устройствами точек и API-токенами',
     'Управляет системными настройками, логами и диагностикой',
     'Имеет полный доступ к финансам, задачам, сменам и зарплатам',
   ],

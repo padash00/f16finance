@@ -153,6 +153,7 @@ const navSections: NavSection[] = [
     icon: Shield,
     items: [
       { href: '/settings', label: 'Настройки системы', icon: Settings2, note: 'Компании и справочники' },
+      { href: '/point-devices', label: 'Точки и устройства', icon: Building2, note: 'Токены и программы точек' },
       { href: '/logs', label: 'Логирование', icon: Logs, note: 'Аудит, уведомления и события' },
       { href: '/debug', label: 'Диагностика', icon: Wrench, note: 'Проверки и отладка' },
     ],

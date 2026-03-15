@@ -24,12 +24,20 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+function canShiftReport(input: Record<string, unknown> | null | undefined) {
+  return input?.shift_report !== false
+}
+
 export async function POST(request: Request) {
   try {
     const point = await requirePointDevice(request)
     if ('response' in point) return point.response
 
     const { supabase, device } = point
+    if (!canShiftReport(device.feature_flags || {})) {
+      return json({ error: 'shift-report-disabled-for-device' }, 403)
+    }
+
     const body = (await request.json().catch(() => null)) as ShiftReportBody | null
 
     if (body?.action !== 'createShiftReport') {
