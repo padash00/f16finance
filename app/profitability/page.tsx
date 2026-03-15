@@ -177,6 +177,47 @@ export default function ProfitabilityPage() {
   const selected = useMemo(() => rows.find((row) => row.month === selectedMonth) || rows[rows.length - 1] || null, [rows, selectedMonth])
   const totals = useMemo(() => rows.reduce((acc, row) => ({ revenue: acc.revenue + row.revenue, ebitda: acc.ebitda + row.ebitda, operatingProfit: acc.operatingProfit + row.operatingProfit, netProfit: acc.netProfit + row.netProfit }), { revenue: 0, ebitda: 0, operatingProfit: 0, netProfit: 0 }), [rows])
   const periodLabel = `${monthStart(monthFrom)} - ${monthEnd(monthTo)}`
+  const draftPreview = useMemo(() => {
+    if (!selected) return null
+
+    const kaspiQrTurnover = toNumber(draft.kaspi_qr_turnover || '')
+    const kaspiQrRate = toNumber(draft.kaspi_qr_rate || '')
+    const kaspiGoldTurnover = toNumber(draft.kaspi_gold_turnover || '')
+    const kaspiGoldRate = toNumber(draft.kaspi_gold_rate || '')
+    const otherCardsTurnover = toNumber(draft.other_cards_turnover || '')
+    const otherCardsRate = toNumber(draft.other_cards_rate || '')
+    const kaspiRedTurnover = toNumber(draft.kaspi_red_turnover || '')
+    const kaspiRedRate = toNumber(draft.kaspi_red_rate || '')
+    const kaspiKreditTurnover = toNumber(draft.kaspi_kredit_turnover || '')
+    const kaspiKreditRate = toNumber(draft.kaspi_kredit_rate || '')
+    const payroll = toNumber(draft.payroll_amount || '')
+    const payrollTaxes = toNumber(draft.payroll_taxes_amount || '')
+    const incomeTax = toNumber(draft.income_tax_amount || '')
+    const depreciation = toNumber(draft.depreciation_amount || '')
+    const amortization = toNumber(draft.amortization_amount || '')
+    const otherOperating = toNumber(draft.other_operating_amount || '')
+
+    const posCommission =
+      kaspiQrTurnover * kaspiQrRate / 100 +
+      kaspiGoldTurnover * kaspiGoldRate / 100 +
+      otherCardsTurnover * otherCardsRate / 100 +
+      kaspiRedTurnover * kaspiRedRate / 100 +
+      kaspiKreditTurnover * kaspiKreditRate / 100
+
+    const ebitda = selected.revenue - selected.journalExpenses - posCommission - payroll - payrollTaxes - otherOperating
+    const operatingProfit = ebitda - depreciation - amortization
+    const netProfit = operatingProfit - incomeTax
+
+    return {
+      posCommission,
+      payroll,
+      payrollTaxes,
+      otherOperating,
+      ebitda,
+      operatingProfit,
+      netProfit,
+    }
+  }, [draft, selected])
 
   const save = async () => {
     setSaving(true); setError(null); setSuccess(null)
@@ -361,6 +402,37 @@ export default function ProfitabilityPage() {
                   <label className="text-sm font-medium text-white">Комментарий по месяцу</label>
                   <Textarea value={draft.notes} onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))} placeholder="Например: изменился договор с Kaspi или была разовая корректировка прибыли." className="min-h-28 border-white/10 bg-slate-950/70 text-white" />
                 </div>
+                {selected && draftPreview ? (
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+                      <Calculator className="h-4 w-4 text-emerald-300" />
+                      Предварительный расчёт для {monthLabel(selectedMonth)}
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                        <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">Сейчас сохранено</div>
+                        <div className="space-y-2 text-sm text-slate-300">
+                          <div className="flex justify-between"><span>Комиссия POS</span><span>{money(selected.posCommission)}</span></div>
+                          <div className="flex justify-between"><span>EBITDA</span><span>{money(selected.ebitda)}</span></div>
+                          <div className="flex justify-between"><span>Опер. прибыль</span><span>{money(selected.operatingProfit)}</span></div>
+                          <div className="flex justify-between font-medium text-white"><span>Чистая прибыль</span><span>{money(selected.netProfit)}</span></div>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-emerald-500/20 bg-slate-950/60 p-4">
+                        <div className="mb-2 text-xs uppercase tracking-wide text-emerald-300">Будет после сохранения</div>
+                        <div className="space-y-2 text-sm text-slate-200">
+                          <div className="flex justify-between"><span>Комиссия POS</span><span>{money(draftPreview.posCommission)}</span></div>
+                          <div className="flex justify-between"><span>EBITDA</span><span>{money(draftPreview.ebitda)}</span></div>
+                          <div className="flex justify-between"><span>Опер. прибыль</span><span>{money(draftPreview.operatingProfit)}</span></div>
+                          <div className="flex justify-between font-medium text-white"><span>Чистая прибыль</span><span>{money(draftPreview.netProfit)}</span></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 text-xs text-emerald-100/80">
+                      Калькулятор работает сразу по введённым полям. Пока вы не нажмёте сохранить, это только предварительный расчёт.
+                    </div>
+                  </div>
+                ) : null}
                 <Button onClick={save} disabled={saving || !selectedMonth} className="w-full bg-emerald-600 text-white hover:bg-emerald-500"><Save className="mr-2 h-4 w-4" />{saving ? 'Сохраняем...' : `Сохранить ${monthLabel(selectedMonth)}`}</Button>
               </div>
             </Card>
