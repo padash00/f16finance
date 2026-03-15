@@ -17,6 +17,16 @@ type ShiftReportBody = {
     comment?: string | null
     source?: string | null
     local_ref?: string | null
+    meta?: {
+      coins?: number | null
+      debts?: number | null
+      start_cash?: number | null
+      wipon?: number | null
+      diff?: number | null
+      split_mode?: boolean | null
+      split_part?: 'before-midnight' | 'after-midnight' | null
+      original_date?: string | null
+    } | null
   }
 }
 
@@ -75,6 +85,8 @@ export async function POST(request: Request) {
       is_virtual: false,
     }
 
+    const meta = payload.meta || null
+
     const totalAmount =
       Number(normalized.cash_amount || 0) +
       Number(normalized.kaspi_amount || 0) +
@@ -109,6 +121,18 @@ export async function POST(request: Request) {
         total_amount: totalAmount,
         source: payload.source || 'point-client',
         local_ref: payload.local_ref || null,
+        meta: meta
+          ? {
+              coins: meta.coins ?? null,
+              debts: meta.debts ?? null,
+              start_cash: meta.start_cash ?? null,
+              wipon: meta.wipon ?? null,
+              diff: meta.diff ?? null,
+              split_mode: meta.split_mode === true,
+              split_part: meta.split_part || null,
+              original_date: meta.original_date || null,
+            }
+          : null,
       },
     })
 

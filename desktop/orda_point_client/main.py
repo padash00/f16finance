@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 
 from PyQt6.QtCore import QDate, Qt, QTimer
+from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -12,6 +13,7 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -32,6 +34,14 @@ def parse_money(raw: str) -> int:
         return max(0, int((raw or "").replace(" ", "").replace(",", "")))
     except ValueError:
         return 0
+
+
+def format_money(value: int) -> str:
+    return f"{int(value):,}".replace(",", " ")
+
+
+def is_last_day_of_month(qdate: QDate) -> bool:
+    return qdate.day() == qdate.daysInMonth()
 
 
 class ActivationDialog(QDialog):
@@ -76,12 +86,13 @@ class PointMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Orda Control Point • Калькулятор смены")
-        self.resize(760, 560)
+        self.resize(880, 660)
 
         self.config = load_config()
         self.queue = OfflineQueue()
         self.api: PointApiClient | None = None
         self.bootstrap_data: dict | None = None
+        self.inputs: dict[str, QLineEdit] = {}
 
         container = QWidget()
         self.setCentralWidget(container)
@@ -116,66 +127,92 @@ class PointMainWindow(QMainWindow):
         toolbar.addWidget(self.queue_label)
         root.addLayout(toolbar)
 
-        self.total_label = QLabel("0 ₸")
-        self.total_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.total_label.setStyleSheet(
-            "font-size: 28px; font-weight: 700; color: #f8fafc; "
-            "background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; "
+        metrics = QHBoxLayout()
+        self.result_label = QLabel("ИТОГ: 0 ₸")
+        self.result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.result_label.setStyleSheet(
+            "font-size: 28px; font-weight: 700; color: #60a5fa; "
+            "background: #0f172a; border: 2px solid #60a5fa; border-radius: 16px; "
             "padding: 16px 20px;"
         )
-        root.addWidget(self.total_label)
+        self.summary_label = QLabel("Факт: 0 ₸ • Kaspi: 0 ₸")
+        self.summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.summary_label.setStyleSheet(
+            "font-size: 15px; color: #cbd5e1; "
+            "background: #111827; border: 1px solid #1f2937; border-radius: 16px; "
+            "padding: 18px 20px;"
+        )
+        metrics.addWidget(self.result_label, 2)
+        metrics.addWidget(self.summary_label, 1)
+        root.addLayout(metrics)
 
-        group = QGroupBox("Сменный отчёт")
-        group_layout = QGridLayout(group)
+        forms = QHBoxLayout()
+        forms.setSpacing(16)
 
+        fact_group = QGroupBox("Фактические средства")
+        fact_grid = QGridLayout(fact_group)
+        self.inputs["cash"] = self.make_input("Наличные", fact_grid, 0)
+        self.inputs["coins"] = self.make_input("Мелочь", fact_grid, 1)
+        self.inputs["kaspi_pos"] = self.make_input("Kaspi POS", fact_grid, 2)
+        self.inputs["kaspi_online"] = self.make_input("Kaspi Online", fact_grid, 3)
+        self.inputs["debts"] = self.make_input("Компенсация / тех", fact_grid, 4)
+
+        sys_group = QGroupBox("Данные системы")
+        sys_grid = QGridLayout(sys_group)
+        self.inputs["start_cash"] = self.make_input("Касса утро", sys_grid, 0)
+        self.inputs["wipon"] = self.make_input("Senet", sys_grid, 1)
+
+        forms.addWidget(fact_group, 2)
+        forms.addWidget(sys_group, 1)
+        root.addLayout(forms)
+
+        meta_group = QGroupBox("Смена")
+        meta_grid = QGridLayout(meta_group)
         self.operator_box = QComboBox()
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
         self.shift_box = QComboBox()
+        self.shift_box.addItem("— Выберите смену —", None)
         self.shift_box.addItem("День", "day")
         self.shift_box.addItem("Ночь", "night")
-
-        self.cash_edit = QLineEdit("0")
-        self.kaspi_edit = QLineEdit("0")
-        self.online_edit = QLineEdit("0")
-        self.card_edit = QLineEdit("0")
         self.comment_edit = QPlainTextEdit()
         self.comment_edit.setPlaceholderText("Комментарий к смене")
-        self.comment_edit.setFixedHeight(96)
+        self.comment_edit.setFixedHeight(88)
 
-        for money_input in [self.cash_edit, self.kaspi_edit, self.online_edit, self.card_edit]:
-            money_input.textChanged.connect(self.update_total)
-
-        group_layout.addWidget(QLabel("Оператор"), 0, 0)
-        group_layout.addWidget(self.operator_box, 0, 1)
-        group_layout.addWidget(QLabel("Дата"), 0, 2)
-        group_layout.addWidget(self.date_edit, 0, 3)
-        group_layout.addWidget(QLabel("Смена"), 1, 0)
-        group_layout.addWidget(self.shift_box, 1, 1)
-        group_layout.addWidget(QLabel("Наличные"), 2, 0)
-        group_layout.addWidget(self.cash_edit, 2, 1)
-        group_layout.addWidget(QLabel("Kaspi"), 2, 2)
-        group_layout.addWidget(self.kaspi_edit, 2, 3)
-        group_layout.addWidget(QLabel("Онлайн"), 3, 0)
-        group_layout.addWidget(self.online_edit, 3, 1)
-        group_layout.addWidget(QLabel("Карта"), 3, 2)
-        group_layout.addWidget(self.card_edit, 3, 3)
-        group_layout.addWidget(QLabel("Комментарий"), 4, 0, Qt.AlignmentFlag.AlignTop)
-        group_layout.addWidget(self.comment_edit, 4, 1, 1, 3)
-
-        root.addWidget(group)
+        meta_grid.addWidget(QLabel("Оператор"), 0, 0)
+        meta_grid.addWidget(self.operator_box, 0, 1)
+        meta_grid.addWidget(QLabel("Дата"), 0, 2)
+        meta_grid.addWidget(self.date_edit, 0, 3)
+        meta_grid.addWidget(QLabel("Смена"), 1, 0)
+        meta_grid.addWidget(self.shift_box, 1, 1)
+        meta_grid.addWidget(QLabel("Комментарий"), 2, 0, Qt.AlignmentFlag.AlignTop)
+        meta_grid.addWidget(self.comment_edit, 2, 1, 1, 3)
+        root.addWidget(meta_group)
 
         action_row = QHBoxLayout()
-        self.send_btn = QPushButton("Сохранить смену")
+        self.clear_btn = QPushButton("Сброс")
+        self.clear_btn.clicked.connect(self.clear_form)
+        self.send_btn = QPushButton("Закрыть смену")
         self.send_btn.clicked.connect(self.submit_shift_report)
+        action_row.addWidget(self.clear_btn)
         action_row.addStretch(1)
         action_row.addWidget(self.send_btn)
         root.addLayout(action_row)
 
         self.refresh_queue_label()
-        self.update_total()
+        self.update_calculation()
+        self.setup_autosave()
         QTimer.singleShot(0, self.ensure_connected)
+
+    def make_input(self, label_text: str, grid: QGridLayout, row: int) -> QLineEdit:
+        grid.addWidget(QLabel(label_text), row, 0)
+        line = QLineEdit("0")
+        line.setAlignment(Qt.AlignmentFlag.AlignRight)
+        line.setValidator(QIntValidator(0, 9_999_999))
+        line.textChanged.connect(self.update_calculation)
+        grid.addWidget(line, row, 1)
+        return line
 
     def ensure_connected(self):
         if self.bootstrap_if_possible(show_error=False):
@@ -240,76 +277,274 @@ class PointMainWindow(QMainWindow):
         self.setWindowTitle(f"Orda Control Point • {company.get('name', 'Точка')}")
 
         self.operator_box.clear()
+        self.operator_box.addItem("— Выберите оператора —", None)
         for operator in operators:
             label = operator.get("full_name") or operator.get("name") or "Оператор"
             role = operator.get("role_in_company") or "operator"
             self.operator_box.addItem(f"{label} · {role}", operator)
 
-        if self.operator_box.count() > 0:
-            self.operator_box.setCurrentIndex(0)
-        self.cash_edit.setFocus()
+        self.load_draft()
+        self.inputs["cash"].setFocus()
 
-    def current_payload(self) -> dict | None:
-        operator = self.operator_box.currentData()
-        if not operator:
+    def get_value(self, key: str) -> int:
+        return parse_money(self.inputs[key].text())
+
+    def calculation(self) -> dict[str, int]:
+        wipon = self.get_value("wipon")
+        kaspi_pos = self.get_value("kaspi_pos")
+        kaspi_online = self.get_value("kaspi_online")
+        debts = self.get_value("debts")
+        cash = self.get_value("cash")
+        coins = self.get_value("coins")
+        start_cash = self.get_value("start_cash")
+
+        actual = (cash + coins + kaspi_pos + debts) - start_cash
+        diff = actual - wipon
+        return {
+            "wipon": wipon,
+            "kaspi_pos": kaspi_pos,
+            "kaspi_online": kaspi_online,
+            "debts": debts,
+            "cash": cash,
+            "coins": coins,
+            "start_cash": start_cash,
+            "actual": actual,
+            "diff": diff,
+        }
+
+    def update_calculation(self):
+        calc = self.calculation()
+        diff = calc["diff"]
+
+        if diff > 0:
+            color = "#22c55e"
+            prefix = "+"
+        elif diff < 0:
+            color = "#ef4444"
+            prefix = ""
+        else:
+            color = "#60a5fa"
+            prefix = ""
+
+        self.result_label.setText(f"ИТОГ: {prefix}{format_money(diff)} ₸")
+        self.result_label.setStyleSheet(
+            "font-size: 28px; font-weight: 700; "
+            f"color: {color}; background: #0f172a; border: 2px solid {color}; "
+            "border-radius: 16px; padding: 16px 20px;"
+        )
+        kaspi_total = calc["kaspi_pos"] + calc["kaspi_online"]
+        self.summary_label.setText(
+            f"Факт: {format_money(calc['actual'])} ₸ • "
+            f"Kaspi: {format_money(kaspi_total)} ₸ • "
+            f"Senet: {format_money(calc['wipon'])} ₸"
+        )
+
+    def validate_form(self) -> bool:
+        if self.operator_box.currentData() is None:
             QMessageBox.warning(self, "Сменный отчёт", "Выберите оператора.")
+            self.operator_box.setFocus()
+            return False
+
+        if self.shift_box.currentData() is None:
+            QMessageBox.warning(self, "Сменный отчёт", "Выберите смену.")
+            self.shift_box.setFocus()
+            return False
+
+        cash = self.get_value("cash")
+        if cash > 500_000:
+            reply = QMessageBox.question(
+                self,
+                "Проверка суммы",
+                f"Наличные {format_money(cash)} ₸ выглядят подозрительно. Продолжить?",
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return False
+
+        total = (
+            self.get_value("wipon")
+            + self.get_value("kaspi_pos")
+            + self.get_value("cash")
+            + self.get_value("start_cash")
+        )
+        if total == 0:
+            QMessageBox.warning(self, "Сменный отчёт", "Заполните данные по смене.")
+            return False
+
+        return True
+
+    def ask_split(self, payload: dict, calc: dict[str, int]) -> list[dict] | None:
+        reply = QMessageBox.question(
+            self,
+            "Разбивка по месяцу",
+            "Это последний день месяца и ночная смена.\nРазбить выручку на две даты?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
             return None
 
+        kaspi_after, ok1 = QInputDialog.getInt(
+            self,
+            "Kaspi POS после 00:00",
+            f"Kaspi POS за 00:00–08:00 (макс {calc['kaspi_pos']}):",
+            0,
+            0,
+            calc["kaspi_pos"],
+        )
+        if not ok1:
+            return None
+
+        online_after, ok2 = QInputDialog.getInt(
+            self,
+            "Kaspi Online после 00:00",
+            f"Online за 00:00–08:00 (макс {calc['kaspi_online']}):",
+            0,
+            0,
+            calc["kaspi_online"],
+        )
+        if not ok2:
+            return None
+
+        cash_after, ok3 = QInputDialog.getInt(
+            self,
+            "Наличные после 00:00",
+            f"Наличные за 00:00–08:00 (макс {calc['cash']}):",
+            0,
+            0,
+            calc["cash"],
+        )
+        if not ok3:
+            return None
+
+        next_date = self.date_edit.date().addDays(1).toString("yyyy-MM-dd")
+        common_meta = payload["meta"]
+
+        return [
+            {
+                **payload,
+                "cash_amount": calc["cash"] - cash_after,
+                "kaspi_amount": calc["kaspi_pos"] - kaspi_after,
+                "online_amount": calc["kaspi_online"] - online_after,
+                "meta": {
+                    **common_meta,
+                    "split_mode": True,
+                    "split_part": "before-midnight",
+                    "original_date": payload["date"],
+                },
+            },
+            {
+                **payload,
+                "date": next_date,
+                "cash_amount": cash_after,
+                "kaspi_amount": kaspi_after,
+                "online_amount": online_after,
+                "comment": (payload.get("comment") or "") or "Часть ночной смены после 00:00",
+                "local_ref": f"{payload['operator_id']}:{next_date}:{payload['shift']}:split",
+                "meta": {
+                    **common_meta,
+                    "split_mode": True,
+                    "split_part": "after-midnight",
+                    "original_date": payload["date"],
+                },
+            },
+        ]
+
+    def current_payload(self) -> tuple[dict, dict[str, int]] | tuple[None, None]:
+        operator = self.operator_box.currentData()
+        if not operator:
+            return None, None
+
+        calc = self.calculation()
         payload = {
             "date": self.date_edit.date().toString("yyyy-MM-dd"),
             "operator_id": operator["id"],
             "shift": self.shift_box.currentData(),
-            "cash_amount": parse_money(self.cash_edit.text()),
-            "kaspi_amount": parse_money(self.kaspi_edit.text()),
-            "online_amount": parse_money(self.online_edit.text()),
-            "card_amount": parse_money(self.card_edit.text()),
+            "cash_amount": calc["cash"],
+            "kaspi_amount": calc["kaspi_pos"],
+            "online_amount": calc["kaspi_online"],
+            "card_amount": 0,
             "comment": self.comment_edit.toPlainText().strip() or None,
-            "source": "orda-point-client",
+            "source": "orda-point-client-arena",
             "local_ref": (
                 f"{operator['id']}:"
                 f"{self.date_edit.date().toString('yyyy-MM-dd')}:"
                 f"{self.shift_box.currentData()}"
             ),
+            "meta": {
+                "coins": calc["coins"],
+                "debts": calc["debts"],
+                "start_cash": calc["start_cash"],
+                "wipon": calc["wipon"],
+                "diff": calc["diff"],
+                "split_mode": False,
+                "split_part": None,
+                "original_date": self.date_edit.date().toString("yyyy-MM-dd"),
+            },
         }
-
-        total_amount = (
-            payload["cash_amount"]
-            + payload["kaspi_amount"]
-            + payload["online_amount"]
-            + payload["card_amount"]
-        )
-        if total_amount <= 0:
-            QMessageBox.warning(self, "Сменный отчёт", "Укажите сумму по смене.")
-            return None
-
-        return payload
+        return payload, calc
 
     def submit_shift_report(self):
-        payload = self.current_payload()
-        if not payload:
+        if not self.validate_form():
             return
+
+        payload, calc = self.current_payload()
+        if not payload or calc is None:
+            return
+
+        diff = calc["diff"]
+        if diff < 0:
+            reply = QMessageBox.question(
+                self,
+                "Недостача",
+                f"Недостача: {format_money(diff)} ₸\nЗакрыть смену?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
 
         if not self.api:
             QMessageBox.warning(self, "Сменный отчёт", "Сначала подключите точку.")
             return
 
-        try:
-            self.api.send_shift_report(payload)
-            QMessageBox.information(self, "Сменный отчёт", "Смена отправлена в Orda Control.")
-            self.cash_edit.setText("0")
-            self.kaspi_edit.setText("0")
-            self.online_edit.setText("0")
-            self.card_edit.setText("0")
-            self.comment_edit.clear()
-            self.update_total()
-        except Exception as error:
-            self.queue.enqueue(payload)
-            self.refresh_queue_label()
+        batches = [payload]
+        if payload["shift"] == "night" and is_last_day_of_month(self.date_edit.date()):
+          split_entries = self.ask_split(payload, calc)
+          if split_entries is None and payload["shift"] == "night" and is_last_day_of_month(self.date_edit.date()):
+              return
+          if split_entries:
+              batches = split_entries
+
+        saved_offline = False
+        errors: list[str] = []
+        for item in batches:
+            try:
+                self.api.send_shift_report(item)
+            except Exception as error:
+                self.queue.enqueue(item)
+                saved_offline = True
+                errors.append(str(error))
+
+        self.refresh_queue_label()
+        self.save_draft()
+
+        if errors and len(errors) == len(batches):
             QMessageBox.warning(
                 self,
                 "Оффлайн-очередь",
-                f"Нет связи с сервером или ошибка API.\nОтчёт сохранён локально.\n\n{error}",
+                "Нет связи с сервером. Смена сохранена локально и будет отправлена позже.\n\n"
+                + "\n".join(errors[:2]),
             )
+            return
+
+        if saved_offline:
+            QMessageBox.warning(
+                self,
+                "Частичная отправка",
+                "Часть данных ушла на сайт, часть сохранена в оффлайн-очередь.",
+            )
+        else:
+            QMessageBox.information(self, "Сменный отчёт", "Смена отправлена в Orda Control.")
+
+        self.clear_form()
 
     def flush_queue(self):
         if not self.api:
@@ -337,14 +572,46 @@ class PointMainWindow(QMainWindow):
     def refresh_queue_label(self):
         self.queue_label.setText(f"Очередь: {self.queue.count()}")
 
-    def update_total(self):
-        total_amount = (
-            parse_money(self.cash_edit.text())
-            + parse_money(self.kaspi_edit.text())
-            + parse_money(self.online_edit.text())
-            + parse_money(self.card_edit.text())
-        )
-        self.total_label.setText(f"{total_amount:,}".replace(",", " ") + " ₸")
+    def save_draft(self):
+        self.config["draft"] = {
+            "date": self.date_edit.date().toString("yyyy-MM-dd"),
+            "shift_index": self.shift_box.currentIndex(),
+            "comment": self.comment_edit.toPlainText(),
+            "inputs": {key: field.text() for key, field in self.inputs.items()},
+        }
+        save_config(self.config)
+
+    def load_draft(self):
+        draft = self.config.get("draft") or {}
+        if draft.get("date"):
+            parsed = QDate.fromString(str(draft["date"]), "yyyy-MM-dd")
+            if parsed.isValid():
+                self.date_edit.setDate(parsed)
+
+        shift_index = int(draft.get("shift_index") or 0)
+        if 0 <= shift_index < self.shift_box.count():
+            self.shift_box.setCurrentIndex(shift_index)
+
+        inputs = draft.get("inputs") or {}
+        for key, field in self.inputs.items():
+            field.setText(str(inputs.get(key) or "0"))
+
+        self.comment_edit.setPlainText(str(draft.get("comment") or ""))
+        self.update_calculation()
+
+    def setup_autosave(self):
+        self.autosave_timer = QTimer(self)
+        self.autosave_timer.timeout.connect(self.save_draft)
+        self.autosave_timer.start(30000)
+
+    def clear_form(self):
+        for field in self.inputs.values():
+            field.setText("0")
+        self.comment_edit.clear()
+        self.shift_box.setCurrentIndex(0)
+        self.date_edit.setDate(QDate.currentDate())
+        self.update_calculation()
+        self.save_draft()
 
 
 def main():
