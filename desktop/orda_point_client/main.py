@@ -6,7 +6,6 @@ from PyQt6.QtCore import QDate, Qt, QTimer
 from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
     QApplication,
-    QComboBox,
     QDateEdit,
     QDialog,
     QFormLayout,
@@ -55,7 +54,7 @@ class ActivationDialog(QDialog):
 
         intro = QLabel(
             "Укажите адрес Orda Control и device token этой точки.\n"
-            "После подключения программа сразу откроет калькулятор смены."
+            "После подключения программа запросит вход оператора."
         )
         intro.setWordWrap(True)
         intro.setStyleSheet("color: #94a3b8; font-size: 13px;")
@@ -82,16 +81,56 @@ class ActivationDialog(QDialog):
         }
 
 
+class OperatorLoginDialog(QDialog):
+    def __init__(self, remembered_username: str | None = None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Вход оператора")
+        self.setModal(True)
+        self.resize(420, 220)
+
+        layout = QVBoxLayout(self)
+
+        intro = QLabel(
+            "Войдите под логином и паролем оператора.\n"
+            "Используются те же данные, что и для операторского кабинета на сайте."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet("color: #94a3b8; font-size: 13px;")
+        layout.addWidget(intro)
+
+        form = QFormLayout()
+        self.username = QLineEdit(remembered_username or "")
+        self.password = QLineEdit()
+        self.password.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow("Логин", self.username)
+        form.addRow("Пароль", self.password)
+        layout.addLayout(form)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        login_btn = QPushButton("Войти")
+        login_btn.clicked.connect(self.accept)
+        buttons.addWidget(login_btn)
+        layout.addLayout(buttons)
+
+    def payload(self) -> dict:
+        return {
+            "username": self.username.text().strip(),
+            "password": self.password.text(),
+        }
+
+
 class PointMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Orda Control Point • Калькулятор смены")
-        self.resize(880, 660)
+        self.resize(900, 660)
 
         self.config = load_config()
         self.queue = OfflineQueue()
         self.api: PointApiClient | None = None
         self.bootstrap_data: dict | None = None
+        self.current_operator: dict | None = None
         self.inputs: dict[str, QLineEdit] = {}
 
         container = QWidget()
@@ -119,13 +158,25 @@ class PointMainWindow(QMainWindow):
         self.connect_btn.clicked.connect(lambda: self.configure_connection(required=False))
         self.retry_btn = QPushButton("Отправить очередь")
         self.retry_btn.clicked.connect(self.flush_queue)
+        self.login_btn = QPushButton("Войти как оператор")
+        self.login_btn.clicked.connect(lambda: self.login_operator(required=False))
+        self.logout_btn = QPushButton("Сменить оператора")
+        self.logout_btn.clicked.connect(self.logout_operator)
         toolbar.addWidget(self.connect_btn)
         toolbar.addWidget(self.retry_btn)
+        toolbar.addWidget(self.login_btn)
+        toolbar.addWidget(self.logout_btn)
         toolbar.addStretch(1)
         self.queue_label = QLabel("Очередь: 0")
         self.queue_label.setStyleSheet("color: #cbd5e1; font-size: 13px;")
         toolbar.addWidget(self.queue_label)
         root.addLayout(toolbar)
+
+        self.operator_label = QLabel("Оператор не вошёл")
+        self.operator_label.setStyleSheet(
+            "font-size: 14px; color: #e2e8f0; background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 10px 14px;"
+        )
+        root.addWidget(self.operator_label)
 
         metrics = QHBoxLayout()
         self.result_label = QLabel("ИТОГ: 0 ₸")
@@ -146,49 +197,56 @@ class PointMainWindow(QMainWindow):
         metrics.addWidget(self.summary_label, 1)
         root.addLayout(metrics)
 
-        forms = QHBoxLayout()
-        forms.setSpacing(16)
-
-        fact_group = QGroupBox("Фактические средства")
-        fact_grid = QGridLayout(fact_group)
+        self.fact_group = QGroupBox("Фактические средства")
+        fact_grid = QGridLayout(self.fact_group)
         self.inputs["cash"] = self.make_input("Наличные", fact_grid, 0)
         self.inputs["coins"] = self.make_input("Мелочь", fact_grid, 1)
         self.inputs["kaspi_pos"] = self.make_input("Kaspi POS", fact_grid, 2)
         self.inputs["kaspi_online"] = self.make_input("Kaspi Online", fact_grid, 3)
         self.inputs["debts"] = self.make_input("Компенсация / тех", fact_grid, 4)
 
-        sys_group = QGroupBox("Данные системы")
-        sys_grid = QGridLayout(sys_group)
+        self.sys_group = QGroupBox("Данные системы")
+        sys_grid = QGridLayout(self.sys_group)
         self.inputs["start_cash"] = self.make_input("Касса утро", sys_grid, 0)
         self.inputs["wipon"] = self.make_input("Senet", sys_grid, 1)
 
-        forms.addWidget(fact_group, 2)
-        forms.addWidget(sys_group, 1)
+        forms = QHBoxLayout()
+        forms.setSpacing(16)
+        forms.addWidget(self.fact_group, 2)
+        forms.addWidget(self.sys_group, 1)
         root.addLayout(forms)
 
-        meta_group = QGroupBox("Смена")
-        meta_grid = QGridLayout(meta_group)
-        self.operator_box = QComboBox()
+        self.meta_group = QGroupBox("Смена")
+        meta_grid = QGridLayout(self.meta_group)
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
-        self.shift_box = QComboBox()
-        self.shift_box.addItem("— Выберите смену —", None)
-        self.shift_box.addItem("День", "day")
-        self.shift_box.addItem("Ночь", "night")
+        self.shift_label = QLabel("Смена")
+        self.shift_label.setStyleSheet("font-size: 14px; color: #e2e8f0;")
+        self.shift_value = QLineEdit()
+        self.shift_value.setReadOnly(True)
+        self.shift_value.setText("Выберите: день или ночь")
         self.comment_edit = QPlainTextEdit()
         self.comment_edit.setPlaceholderText("Комментарий к смене")
         self.comment_edit.setFixedHeight(88)
+        self.day_btn = QPushButton("День")
+        self.night_btn = QPushButton("Ночь")
+        self.day_btn.clicked.connect(lambda: self.set_shift("day"))
+        self.night_btn.clicked.connect(lambda: self.set_shift("night"))
+        self.selected_shift: str | None = None
 
-        meta_grid.addWidget(QLabel("Оператор"), 0, 0)
-        meta_grid.addWidget(self.operator_box, 0, 1)
-        meta_grid.addWidget(QLabel("Дата"), 0, 2)
-        meta_grid.addWidget(self.date_edit, 0, 3)
+        shift_row = QHBoxLayout()
+        shift_row.addWidget(self.day_btn)
+        shift_row.addWidget(self.night_btn)
+        shift_row.addWidget(self.shift_value, 1)
+
+        meta_grid.addWidget(QLabel("Дата"), 0, 0)
+        meta_grid.addWidget(self.date_edit, 0, 1)
         meta_grid.addWidget(QLabel("Смена"), 1, 0)
-        meta_grid.addWidget(self.shift_box, 1, 1)
+        meta_grid.addLayout(shift_row, 1, 1)
         meta_grid.addWidget(QLabel("Комментарий"), 2, 0, Qt.AlignmentFlag.AlignTop)
-        meta_grid.addWidget(self.comment_edit, 2, 1, 1, 3)
-        root.addWidget(meta_group)
+        meta_grid.addWidget(self.comment_edit, 2, 1)
+        root.addWidget(self.meta_group)
 
         action_row = QHBoxLayout()
         self.clear_btn = QPushButton("Сброс")
@@ -203,7 +261,8 @@ class PointMainWindow(QMainWindow):
         self.refresh_queue_label()
         self.update_calculation()
         self.setup_autosave()
-        QTimer.singleShot(0, self.ensure_connected)
+        self.set_workflow_enabled(False)
+        QTimer.singleShot(0, self.start_flow)
 
     def make_input(self, label_text: str, grid: QGridLayout, row: int) -> QLineEdit:
         grid.addWidget(QLabel(label_text), row, 0)
@@ -214,10 +273,18 @@ class PointMainWindow(QMainWindow):
         grid.addWidget(line, row, 1)
         return line
 
-    def ensure_connected(self):
-        if self.bootstrap_if_possible(show_error=False):
-            return
-        self.configure_connection(required=True)
+    def start_flow(self):
+        if not self.bootstrap_if_possible(show_error=False):
+            self.configure_connection(required=True)
+        if self.bootstrap_data:
+            self.login_operator(required=True)
+
+    def set_workflow_enabled(self, enabled: bool):
+        for group in [self.fact_group, self.sys_group, self.meta_group]:
+            group.setEnabled(enabled)
+        self.send_btn.setEnabled(enabled)
+        self.clear_btn.setEnabled(enabled)
+        self.logout_btn.setEnabled(enabled)
 
     def configure_connection(self, required: bool):
         while True:
@@ -238,6 +305,7 @@ class PointMainWindow(QMainWindow):
             save_config(self.config)
 
             if self.bootstrap_if_possible(show_success=True):
+                self.login_operator(required=True)
                 return
 
             if not required:
@@ -267,24 +335,66 @@ class PointMainWindow(QMainWindow):
 
     def hydrate_bootstrap(self):
         company = (self.bootstrap_data or {}).get("company") or {}
-        operators = (self.bootstrap_data or {}).get("operators") or []
         device = (self.bootstrap_data or {}).get("device") or {}
-
         self.company_label.setText(
             f"Точка: {company.get('name', '—')}  |  Режим: {device.get('point_mode', '—')}"
         )
         self.status_label.setText(f"Подключено • {device.get('name', 'device')}")
         self.setWindowTitle(f"Orda Control Point • {company.get('name', 'Точка')}")
-
-        self.operator_box.clear()
-        self.operator_box.addItem("— Выберите оператора —", None)
-        for operator in operators:
-            label = operator.get("full_name") or operator.get("name") or "Оператор"
-            role = operator.get("role_in_company") or "operator"
-            self.operator_box.addItem(f"{label} · {role}", operator)
-
         self.load_draft()
+
+    def login_operator(self, required: bool):
+        if not self.api:
+            QMessageBox.warning(self, "Вход оператора", "Сначала подключите точку.")
+            return
+
+        remembered = self.config.get("last_operator_username") or ""
+        while True:
+            dialog = OperatorLoginDialog(remembered_username=str(remembered), parent=self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                if required and not self.current_operator:
+                    self.close()
+                return
+
+            payload = dialog.payload()
+            if not payload["username"] or not payload["password"]:
+                QMessageBox.warning(self, "Вход оператора", "Нужны логин и пароль.")
+                if required:
+                    continue
+                return
+
+            try:
+                result = self.api.login_operator(payload["username"], payload["password"])
+                self.current_operator = result.get("operator") or None
+                self.config["last_operator_username"] = payload["username"]
+                save_config(self.config)
+                self.hydrate_operator()
+                QMessageBox.information(self, "Вход оператора", "Оператор успешно вошёл в программу.")
+                return
+            except Exception as error:
+                QMessageBox.critical(self, "Вход оператора", str(error))
+                if not required:
+                    return
+
+    def hydrate_operator(self):
+        if not self.current_operator:
+            self.operator_label.setText("Оператор не вошёл")
+            self.status_label.setText("Нужен вход оператора")
+            self.set_workflow_enabled(False)
+            return
+
+        name = self.current_operator.get("full_name") or self.current_operator.get("name") or "Оператор"
+        role = self.current_operator.get("role_in_company") or "operator"
+        username = self.current_operator.get("username") or "—"
+        self.operator_label.setText(f"Оператор: {name} • {role} • @{username}")
+        self.status_label.setText(f"Вошёл оператор • {name}")
+        self.set_workflow_enabled(True)
         self.inputs["cash"].setFocus()
+
+    def logout_operator(self):
+        self.current_operator = None
+        self.hydrate_operator()
+        self.login_operator(required=True)
 
     def get_value(self, key: str) -> int:
         return parse_money(self.inputs[key].text())
@@ -339,15 +449,20 @@ class PointMainWindow(QMainWindow):
             f"Senet: {format_money(calc['wipon'])} ₸"
         )
 
+    def set_shift(self, shift: str):
+        self.selected_shift = shift
+        if shift == "day":
+          self.shift_value.setText("Дневная смена")
+        else:
+          self.shift_value.setText("Ночная смена")
+
     def validate_form(self) -> bool:
-        if self.operator_box.currentData() is None:
-            QMessageBox.warning(self, "Сменный отчёт", "Выберите оператора.")
-            self.operator_box.setFocus()
+        if not self.current_operator:
+            QMessageBox.warning(self, "Сменный отчёт", "Сначала войдите как оператор.")
             return False
 
-        if self.shift_box.currentData() is None:
+        if self.selected_shift not in ("day", "night"):
             QMessageBox.warning(self, "Сменный отчёт", "Выберите смену.")
-            self.shift_box.setFocus()
             return False
 
         cash = self.get_value("cash")
@@ -449,15 +564,14 @@ class PointMainWindow(QMainWindow):
         ]
 
     def current_payload(self) -> tuple[dict, dict[str, int]] | tuple[None, None]:
-        operator = self.operator_box.currentData()
-        if not operator:
+        if not self.current_operator:
             return None, None
 
         calc = self.calculation()
         payload = {
             "date": self.date_edit.date().toString("yyyy-MM-dd"),
-            "operator_id": operator["id"],
-            "shift": self.shift_box.currentData(),
+            "operator_id": self.current_operator["operator_id"],
+            "shift": self.selected_shift,
             "cash_amount": calc["cash"],
             "kaspi_amount": calc["kaspi_pos"],
             "online_amount": calc["kaspi_online"],
@@ -465,9 +579,9 @@ class PointMainWindow(QMainWindow):
             "comment": self.comment_edit.toPlainText().strip() or None,
             "source": "orda-point-client-arena",
             "local_ref": (
-                f"{operator['id']}:"
+                f"{self.current_operator['operator_id']}:"
                 f"{self.date_edit.date().toString('yyyy-MM-dd')}:"
-                f"{self.shift_box.currentData()}"
+                f"{self.selected_shift}"
             ),
             "meta": {
                 "coins": calc["coins"],
@@ -507,11 +621,11 @@ class PointMainWindow(QMainWindow):
 
         batches = [payload]
         if payload["shift"] == "night" and is_last_day_of_month(self.date_edit.date()):
-          split_entries = self.ask_split(payload, calc)
-          if split_entries is None and payload["shift"] == "night" and is_last_day_of_month(self.date_edit.date()):
-              return
-          if split_entries:
-              batches = split_entries
+            split_entries = self.ask_split(payload, calc)
+            if split_entries is None and payload["shift"] == "night" and is_last_day_of_month(self.date_edit.date()):
+                return
+            if split_entries:
+                batches = split_entries
 
         saved_offline = False
         errors: list[str] = []
@@ -575,7 +689,7 @@ class PointMainWindow(QMainWindow):
     def save_draft(self):
         self.config["draft"] = {
             "date": self.date_edit.date().toString("yyyy-MM-dd"),
-            "shift_index": self.shift_box.currentIndex(),
+            "selected_shift": self.selected_shift,
             "comment": self.comment_edit.toPlainText(),
             "inputs": {key: field.text() for key, field in self.inputs.items()},
         }
@@ -588,9 +702,13 @@ class PointMainWindow(QMainWindow):
             if parsed.isValid():
                 self.date_edit.setDate(parsed)
 
-        shift_index = int(draft.get("shift_index") or 0)
-        if 0 <= shift_index < self.shift_box.count():
-            self.shift_box.setCurrentIndex(shift_index)
+        self.selected_shift = draft.get("selected_shift")
+        if self.selected_shift == "day":
+            self.shift_value.setText("Дневная смена")
+        elif self.selected_shift == "night":
+            self.shift_value.setText("Ночная смена")
+        else:
+            self.shift_value.setText("Выберите: день или ночь")
 
         inputs = draft.get("inputs") or {}
         for key, field in self.inputs.items():
@@ -608,7 +726,8 @@ class PointMainWindow(QMainWindow):
         for field in self.inputs.values():
             field.setText("0")
         self.comment_edit.clear()
-        self.shift_box.setCurrentIndex(0)
+        self.selected_shift = None
+        self.shift_value.setText("Выберите: день или ночь")
         self.date_edit.setDate(QDate.currentDate())
         self.update_calculation()
         self.save_draft()

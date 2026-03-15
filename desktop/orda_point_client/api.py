@@ -40,6 +40,19 @@ class PointApiClient:
         self._raise_for_status(response)
         return response.json()
 
+    def login_operator(self, username: str, password: str) -> dict[str, Any]:
+        response = self.session.post(
+            f"{self.api_base_url}/api/point/login",
+            headers=self._headers(),
+            json={
+                "username": username,
+                "password": password,
+            },
+            timeout=20,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
     def _raise_for_status(self, response: requests.Response):
         if response.ok:
             return
