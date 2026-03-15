@@ -24,7 +24,11 @@ export async function GET(req: Request) {
         .in('role', ['owner', 'manager', 'marketer'])
         .order('role', { ascending: true })
         .order('full_name', { ascending: true }),
-      supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
+      supabase
+        .from('companies')
+        .select('id, name, code, show_in_structure')
+        .eq('show_in_structure', true)
+        .order('name', { ascending: true }),
       supabase
         .from('operators')
         .select('id, name, short_name, is_active, telegram_chat_id, operator_profiles(full_name, phone, email, position, photo_url, hire_date)')

@@ -26,6 +26,7 @@ type Company = {
   id: string
   name: string
   code: string | null
+  show_in_structure: boolean
   created_at?: string
 }
 
@@ -49,12 +50,12 @@ export default function SettingsPage() {
   const [searchStaff, setSearchStaff] = useState('')
 
   // Формы создания
-  const [newComp, setNewComp] = useState({ name: '', code: '' })
+  const [newComp, setNewComp] = useState({ name: '', code: '', show_in_structure: true })
   const [newStaff, setNewStaff] = useState({ name: '', phone: '', email: '', role: 'other' })
 
   // Редактирование
   const [editCompId, setEditCompId] = useState<string | null>(null)
-  const [editCompData, setEditCompData] = useState({ name: '', code: '' })
+  const [editCompData, setEditCompData] = useState({ name: '', code: '', show_in_structure: true })
 
   const [editStaffId, setEditStaffId] = useState<string | null>(null)
   const [editStaffData, setEditStaffData] = useState({ name: '', phone: '', email: '', role: 'other' })
@@ -123,9 +124,13 @@ export default function SettingsPage() {
       await mutateSettings({
         entity: 'company',
         action: 'create',
-        payload: { name: newComp.name, code: newComp.code || null },
+        payload: {
+          name: newComp.name,
+          code: newComp.code || null,
+          show_in_structure: newComp.show_in_structure,
+        },
       })
-      setNewComp({ name: '', code: '' })
+      setNewComp({ name: '', code: '', show_in_structure: true })
       fetchData()
     } catch (err: any) {
       alert(err.message)
@@ -141,7 +146,11 @@ export default function SettingsPage() {
         entity: 'company',
         action: 'update',
         id: editCompId,
-        payload: { name: editCompData.name, code: editCompData.code || null },
+        payload: {
+          name: editCompData.name,
+          code: editCompData.code || null,
+          show_in_structure: editCompData.show_in_structure,
+        },
       })
       setEditCompId(null)
       fetchData()
@@ -282,6 +291,15 @@ export default function SettingsPage() {
                                             className="bg-input border border-border rounded px-2 py-1 text-sm w-20 uppercase"
                                             placeholder="CODE"
                                         />
+                                        <label className="flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
+                                            <input
+                                                type="checkbox"
+                                                checked={editCompData.show_in_structure}
+                                                onChange={e => setEditCompData({ ...editCompData, show_in_structure: e.target.checked })}
+                                                className="rounded border-white/10 bg-input"
+                                            />
+                                            В структуре
+                                        </label>
                                         <Button size="icon" className="h-7 w-7 bg-green-600 hover:bg-green-700" onClick={handleSaveCompany}>
                                             <Save className="w-3 h-3" />
                                         </Button>
@@ -297,11 +315,16 @@ export default function SettingsPage() {
                                             </div>
                                             <div>
                                                 <p className="text-sm font-medium text-foreground">{c.name}</p>
-                                                {c.code && <span className="text-[10px] text-muted-foreground bg-white/5 px-1.5 rounded uppercase tracking-wider">{c.code}</span>}
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    {c.code && <span className="text-[10px] text-muted-foreground bg-white/5 px-1.5 rounded uppercase tracking-wider">{c.code}</span>}
+                                                    <span className={`text-[10px] px-1.5 rounded border ${c.show_in_structure ? 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10' : 'text-gray-400 border-white/10 bg-white/5'}`}>
+                                                        {c.show_in_structure ? 'В структуре' : 'Скрыта'}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-blue-400" onClick={() => { setEditCompId(c.id); setEditCompData({ name: c.name, code: c.code || '' }) }}>
+                                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-blue-400" onClick={() => { setEditCompId(c.id); setEditCompData({ name: c.name, code: c.code || '', show_in_structure: c.show_in_structure }) }}>
                                                 <Pencil className="w-3 h-3" />
                                             </Button>
                                             <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDeleteCompany(c.id)}>
@@ -329,6 +352,15 @@ export default function SettingsPage() {
                                 placeholder="CODE"
                                 className="w-24 bg-input border border-border rounded-lg px-3 py-2 text-sm uppercase focus:border-blue-500"
                             />
+                            <label className="flex items-center gap-2 rounded-lg border border-border bg-input px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                                <input
+                                    type="checkbox"
+                                    checked={newComp.show_in_structure}
+                                    onChange={e => setNewComp({ ...newComp, show_in_structure: e.target.checked })}
+                                    className="rounded border-white/10 bg-input"
+                                />
+                                В структуре
+                            </label>
                             <Button type="submit" disabled={!newComp.name.trim() || saving} className="bg-blue-600 hover:bg-blue-700">
                                 <Plus className="w-4 h-4" />
                             </Button>

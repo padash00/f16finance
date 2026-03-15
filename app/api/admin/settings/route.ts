@@ -8,13 +8,13 @@ type MutationBody =
   | {
       entity: 'company'
       action: 'create'
-      payload: { name: string; code?: string | null }
+      payload: { name: string; code?: string | null; show_in_structure?: boolean | null }
     }
   | {
       entity: 'company'
       action: 'update'
       id: string
-      payload: { name: string; code?: string | null }
+      payload: { name: string; code?: string | null; show_in_structure?: boolean | null }
     }
   | {
       entity: 'company'
@@ -63,15 +63,16 @@ export async function POST(req: Request) {
           {
             name: body.payload.name.trim(),
             code: body.payload.code?.trim() || null,
+            show_in_structure: body.payload.show_in_structure !== false,
           },
-        ]).select('id,name,code').single()
+        ]).select('id,name,code,show_in_structure').single()
         if (error) throw error
         await writeAuditLog(supabase, {
           actorUserId,
           entityType: 'company',
           entityId: String(data.id),
           action: 'create',
-          payload: { name: data.name, code: data.code },
+          payload: { name: data.name, code: data.code, show_in_structure: data.show_in_structure },
         })
         return NextResponse.json({ ok: true })
       }
@@ -85,9 +86,10 @@ export async function POST(req: Request) {
           .update({
             name: body.payload.name.trim(),
             code: body.payload.code?.trim() || null,
+            show_in_structure: body.payload.show_in_structure !== false,
           })
           .eq('id', body.id)
-          .select('id,name,code')
+          .select('id,name,code,show_in_structure')
           .single()
         if (error) throw error
         await writeAuditLog(supabase, {
@@ -95,7 +97,7 @@ export async function POST(req: Request) {
           entityType: 'company',
           entityId: String(data.id),
           action: 'update',
-          payload: { name: data.name, code: data.code },
+          payload: { name: data.name, code: data.code, show_in_structure: data.show_in_structure },
         })
         return NextResponse.json({ ok: true })
       }

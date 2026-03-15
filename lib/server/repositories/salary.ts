@@ -6,6 +6,7 @@ import type {
   SalaryCompany,
   SalaryDebtRow,
   SalaryIncomeRow,
+  SalaryOperatorCompanyAssignment,
   SalaryOperatorMeta,
   SalaryRule,
 } from '@/lib/domain/salary'
@@ -38,22 +39,32 @@ export async function findOperatorByKey(
 export async function listSalaryReferenceData(
   supabase: AdminSupabaseClient,
 ) {
-  const [{ data: companies, error: companiesError }, { data: rules, error: rulesError }] = await Promise.all([
+  const [
+    { data: companies, error: companiesError },
+    { data: rules, error: rulesError },
+    { data: assignments, error: assignmentsError },
+  ] = await Promise.all([
     supabase.from('companies').select('id,code,name'),
     supabase
       .from('operator_salary_rules')
       .select(
-        'company_code,shift_type,base_per_shift,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus',
+        'company_code,shift_type,base_per_shift,senior_operator_bonus,senior_cashier_bonus,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus',
       )
+      .eq('is_active', true),
+    supabase
+      .from('operator_company_assignments')
+      .select('operator_id,company_id,role_in_company,is_active')
       .eq('is_active', true),
   ])
 
   if (companiesError) throw companiesError
   if (rulesError) throw rulesError
+  if (assignmentsError) throw assignmentsError
 
   return {
     companies: (companies || []) as SalaryCompany[],
     rules: (rules || []) as SalaryRule[],
+    assignments: (assignments || []) as SalaryOperatorCompanyAssignment[],
   }
 }
 

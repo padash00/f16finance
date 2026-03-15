@@ -32,6 +32,7 @@ export async function getOperatorSalarySnapshot(
     operatorId: params.operatorId,
     companies: reference.companies,
     rules: reference.rules,
+    assignments: reference.assignments,
     incomes: payload.incomes,
     adjustments: payload.adjustments,
     debts: payload.debts,
@@ -67,6 +68,7 @@ export function buildSalaryTelegramMessage(params: {
   text += `📌 Смен: <b>${summary.shifts}</b>\n`
   text += `💼 База: <b>${formatMoney(summary.baseSalary)}</b>\n`
   text += `✅ Авто-бонусы: <b>${formatMoney(summary.autoBonuses)}</b>\n`
+  if (summary.roleBonuses > 0) text += `⭐ Надбавка за роль: <b>${formatMoney(summary.roleBonuses)}</b>\n`
   text += `🧾 Долги недели: <b>${formatMoney(summary.autoDebts)}</b>\n`
   if (summary.manualMinus > 0) text += `➖ Долги/штрафы: <b>${formatMoney(summary.manualMinus)}</b>\n`
   if (summary.advances > 0) text += `💸 Авансы: <b>${formatMoney(summary.advances)}</b>\n`

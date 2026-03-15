@@ -13,10 +13,19 @@ export type SalaryRule = {
   company_code: string
   shift_type: ShiftType
   base_per_shift: number | null
+  senior_operator_bonus?: number | null
+  senior_cashier_bonus?: number | null
   threshold1_turnover: number | null
   threshold1_bonus: number | null
   threshold2_turnover: number | null
   threshold2_bonus: number | null
+}
+
+export type SalaryOperatorCompanyAssignment = {
+  operator_id: string
+  company_id: string
+  role_in_company: 'operator' | 'senior_operator' | 'senior_cashier'
+  is_active?: boolean | null
 }
 
 export type SalaryIncomeRow = {
@@ -61,6 +70,7 @@ export type SalarySummary = {
   shifts: number
   baseSalary: number
   autoBonuses: number
+  roleBonuses: number
   manualBonuses: number
   totalAccrued: number
   autoDebts: number
@@ -92,6 +102,7 @@ export type SalaryBoardOperatorStat = SalarySummary & {
 type AggregatedShift = {
   operatorId: string
   operatorName: string
+  companyId: string
   companyCode: string
   date: string
   shift: ShiftType
@@ -121,6 +132,23 @@ function createRuleMap(rules: SalaryRule[]): Map<string, SalaryRule> {
   for (const rule of rules) {
     map.set(`${String(rule.company_code).toLowerCase()}_${rule.shift_type}`, rule)
   }
+  return map
+}
+
+function createOperatorCompanyRoleMap(params: {
+  assignments: SalaryOperatorCompanyAssignment[]
+  companies: SalaryCompany[]
+}): Map<string, SalaryOperatorCompanyAssignment['role_in_company']> {
+  const companyCodeMap = createCompanyCodeMap(params.companies)
+  const map = new Map<string, SalaryOperatorCompanyAssignment['role_in_company']>()
+
+  for (const assignment of params.assignments) {
+    if (assignment.is_active === false) continue
+    const companyCode = companyCodeMap.get(assignment.company_id)
+    if (!companyCode) continue
+    map.set(`${assignment.operator_id}_${companyCode}`, assignment.role_in_company)
+  }
+
   return map
 }
 
@@ -157,6 +185,7 @@ function aggregateShifts(params: {
     aggregated.set(key, {
       operatorId: row.operator_id,
       operatorName,
+      companyId: row.company_id,
       companyCode,
       date: row.date,
       shift,
@@ -171,6 +200,7 @@ export function calculateOperatorSalarySummary(params: {
   operatorId: string
   companies: SalaryCompany[]
   rules: SalaryRule[]
+  assignments?: SalaryOperatorCompanyAssignment[]
   incomes: SalaryIncomeRow[]
   adjustments: SalaryAdjustmentRow[]
   debts: SalaryDebtRow[]
@@ -182,14 +212,26 @@ export function calculateOperatorSalarySummary(params: {
     options: params.options,
   })
   const ruleMap = createRuleMap(params.rules)
+  const operatorCompanyRoleMap = createOperatorCompanyRoleMap({
+    assignments: params.assignments || [],
+    companies: params.companies,
+  })
 
   let shifts = 0
   let baseSalary = 0
   let autoBonuses = 0
+  let roleBonuses = 0
 
   for (const shift of aggregated.values()) {
     const rule = ruleMap.get(`${shift.companyCode}_${shift.shift}`)
     const basePerShift = toAmount(rule?.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
+    const assignmentRole = operatorCompanyRoleMap.get(`${shift.operatorId}_${shift.companyCode}`)
+    const roleBonus =
+      assignmentRole === 'senior_operator'
+        ? toAmount(rule?.senior_operator_bonus)
+        : assignmentRole === 'senior_cashier'
+          ? toAmount(rule?.senior_cashier_bonus)
+          : 0
 
     let bonus = 0
     if (toAmount(rule?.threshold1_turnover) > 0 && shift.turnover >= toAmount(rule?.threshold1_turnover)) {
@@ -202,6 +244,7 @@ export function calculateOperatorSalarySummary(params: {
     shifts += 1
     baseSalary += basePerShift
     autoBonuses += bonus
+    roleBonuses += roleBonus
   }
 
   let manualBonuses = 0
@@ -225,13 +268,14 @@ export function calculateOperatorSalarySummary(params: {
     if (amount > 0) autoDebts += amount
   }
 
-  const totalAccrued = baseSalary + autoBonuses + manualBonuses
+  const totalAccrued = baseSalary + autoBonuses + roleBonuses + manualBonuses
   const totalDeductions = autoDebts + totalFines + totalAdvances
 
   return {
     shifts,
     baseSalary,
     autoBonuses,
+    roleBonuses,
     manualBonuses,
     totalAccrued,
     autoDebts,
@@ -249,6 +293,7 @@ export function calculateSalaryBoard(params: {
   operators: SalaryOperatorMeta[]
   companies: SalaryCompany[]
   rules: SalaryRule[]
+  assignments?: SalaryOperatorCompanyAssignment[]
   incomes: SalaryIncomeRow[]
   adjustments: SalaryAdjustmentRow[]
   debts: SalaryDebtRow[]
@@ -262,6 +307,10 @@ export function calculateSalaryBoard(params: {
     options: params.options,
   })
   const ruleMap = createRuleMap(params.rules)
+  const operatorCompanyRoleMap = createOperatorCompanyRoleMap({
+    assignments: params.assignments || [],
+    companies: params.companies,
+  })
   const board = new Map<string, SalaryBoardOperatorStat>()
 
   const ensureOperator = (operatorId: string): SalaryBoardOperatorStat => {
@@ -276,6 +325,7 @@ export function calculateSalaryBoard(params: {
       basePerShift: DEFAULT_SHIFT_BASE_PAY,
       baseSalary: 0,
       autoBonuses: 0,
+      roleBonuses: 0,
       manualBonuses: 0,
       totalAccrued: 0,
       autoDebts: 0,
@@ -310,6 +360,13 @@ export function calculateSalaryBoard(params: {
   for (const shift of aggregated.values()) {
     const rule = ruleMap.get(`${shift.companyCode}_${shift.shift}`)
     const basePerShift = toAmount(rule?.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
+    const assignmentRole = operatorCompanyRoleMap.get(`${shift.operatorId}_${shift.companyCode}`)
+    const roleBonus =
+      assignmentRole === 'senior_operator'
+        ? toAmount(rule?.senior_operator_bonus)
+        : assignmentRole === 'senior_cashier'
+          ? toAmount(rule?.senior_cashier_bonus)
+          : 0
 
     let bonus = 0
     if (toAmount(rule?.threshold1_turnover) > 0 && shift.turnover >= toAmount(rule?.threshold1_turnover)) {
@@ -324,7 +381,8 @@ export function calculateSalaryBoard(params: {
     stat.shifts += 1
     stat.baseSalary += basePerShift
     stat.autoBonuses += bonus
-    stat.totalSalary += basePerShift + bonus
+    stat.roleBonuses += roleBonus
+    stat.totalSalary += basePerShift + bonus + roleBonus
   }
 
   for (const adjustment of params.adjustments) {
@@ -355,7 +413,7 @@ export function calculateSalaryBoard(params: {
   let totalSalary = 0
   const operators = Array.from(board.values())
     .map((stat) => {
-      stat.totalAccrued = stat.baseSalary + stat.autoBonuses + stat.manualBonuses
+      stat.totalAccrued = stat.baseSalary + stat.autoBonuses + stat.roleBonuses + stat.manualBonuses
       stat.totalDeductions = stat.autoDebts + stat.totalFines + stat.totalAdvances
       stat.remainingAmount = stat.totalAccrued - stat.totalDeductions
       stat.finalSalary = stat.totalSalary + stat.manualPlus - stat.manualMinus - stat.autoDebts - stat.advances

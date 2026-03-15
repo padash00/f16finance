@@ -64,6 +64,8 @@ type SalaryRule = {
   company_code: string
   shift_type: 'day' | 'night'
   base_per_shift: number
+  senior_operator_bonus: number | null
+  senior_cashier_bonus: number | null
   threshold1_turnover: number | null
   threshold1_bonus: number | null
   threshold2_turnover: number | null
@@ -110,6 +112,13 @@ type DebtRow = {
   status: string | null
 }
 
+type OperatorCompanyAssignment = {
+  operator_id: string
+  company_id: string
+  role_in_company: 'operator' | 'senior_operator' | 'senior_cashier'
+  is_active: boolean
+}
+
 type PayoutRow = {
   id: number
   operator_id: string
@@ -128,6 +137,7 @@ type OperatorWeekStat = {
   basePerShift: number
   baseSalary: number
   bonusSalary: number
+  roleBonusSalary: number
   totalSalary: number
   autoDebts: number
   manualPlus: number
@@ -220,6 +230,7 @@ export default function SalaryPage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [rules, setRules] = useState<SalaryRule[]>([])
   const [operators, setOperators] = useState<OperatorExtended[]>([])
+  const [assignments, setAssignments] = useState<OperatorCompanyAssignment[]>([])
   const [staticLoading, setStaticLoading] = useState(true)
 
   // Динамика
@@ -313,23 +324,22 @@ export default function SalaryPage() {
       setStaticLoading(true)
       setError(null)
 
-      const [compRes, rulesRes, opsRes, profilesRes, docsRes] = await Promise.all([
+      const [compRes, rulesRes, opsRes, profilesRes, docsRes, assignmentsRes] = await Promise.all([
         supabase.from('companies').select('id,name,code'),
         supabase
           .from('operator_salary_rules')
-          .select(
-            'id,company_code,shift_type,base_per_shift,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus',
-          )
+          .select('id,company_code,shift_type,base_per_shift,senior_operator_bonus,senior_cashier_bonus,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus')
           .eq('is_active', true),
         supabase.from('operators').select('id,name,short_name,is_active,telegram_chat_id'),
         supabase.from('operator_profiles').select('*'),
         supabase.from('operator_documents').select('operator_id,expiry_date'),
+        supabase.from('operator_company_assignments').select('operator_id,company_id,role_in_company,is_active').eq('is_active', true),
       ])
 
       if (!alive) return
 
-      if (compRes.error || rulesRes.error || opsRes.error || profilesRes.error || docsRes.error) {
-        console.error('Salary static load error', compRes.error, rulesRes.error, opsRes.error, profilesRes.error, docsRes.error)
+      if (compRes.error || rulesRes.error || opsRes.error || profilesRes.error || docsRes.error || assignmentsRes.error) {
+        console.error('Salary static load error', compRes.error, rulesRes.error, opsRes.error, profilesRes.error, docsRes.error, assignmentsRes.error)
         setError('Ошибка загрузки справочников')
         setStaticLoading(false)
         return
@@ -378,6 +388,7 @@ export default function SalaryPage() {
 
       setCompanies((compRes.data || []) as Company[])
       setRules((rulesRes.data || []) as SalaryRule[])
+      setAssignments((assignmentsRes.data || []) as OperatorCompanyAssignment[])
       setOperators(extendedOperators)
       setStaticLoading(false)
     }
@@ -471,6 +482,7 @@ export default function SalaryPage() {
       operators,
       companies,
       rules,
+      assignments,
       incomes,
       adjustments,
       debts,
@@ -483,6 +495,7 @@ export default function SalaryPage() {
       basePerShift: operator.basePerShift || DEFAULT_SHIFT_BASE_PAY,
       baseSalary: operator.baseSalary,
       bonusSalary: operator.autoBonuses,
+      roleBonusSalary: operator.roleBonuses,
       totalSalary: operator.totalSalary,
       autoDebts: operator.autoDebts,
       manualPlus: operator.manualPlus,
@@ -500,11 +513,12 @@ export default function SalaryPage() {
     }))
 
     return { operators: mappedOperators, totalSalary: calculated.totalSalary }
-  }, [adjustments, companies, debts, incomes, operators, rules])
+  }, [adjustments, assignments, companies, debts, incomes, operators, rules])
 
   const totalShifts = stats.operators.reduce((s, o) => s + o.shifts, 0)
   const totalBase = stats.operators.reduce((s, o) => s + o.baseSalary, 0)
   const totalBonus = stats.operators.reduce((s, o) => s + o.bonusSalary, 0)
+  const totalRoleBonus = stats.operators.reduce((s, o) => s + o.roleBonusSalary, 0)
   const totalAutoDebts = stats.operators.reduce((s, o) => s + o.autoDebts, 0)
   const totalMinus = stats.operators.reduce((s, o) => s + o.manualMinus, 0)
   const totalPlus = stats.operators.reduce((s, o) => s + o.manualPlus, 0)
@@ -950,6 +964,7 @@ export default function SalaryPage() {
                     <th className="py-4 px-4 text-right font-medium">Оклад</th>
                     <th className="py-4 px-4 text-right font-medium">База</th>
                     <th className="py-4 px-4 text-right font-medium text-emerald-400">Бонус</th>
+                    <th className="py-4 px-4 text-right font-medium text-cyan-400">Старший</th>
                     <th className="py-4 px-4 text-right font-medium text-red-400">Долги</th>
                     <th className="py-4 px-4 text-right font-medium text-red-400">Штрафы</th>
                     <th className="py-4 px-4 text-right font-medium text-amber-400">Аванс</th>
@@ -962,7 +977,7 @@ export default function SalaryPage() {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={13} className="py-12 text-center text-gray-400">
+                      <td colSpan={14} className="py-12 text-center text-gray-400">
                         <div className="flex items-center justify-center gap-2">
                           <Loader2 className="w-5 h-5 animate-spin" />
                           Загрузка данных...
@@ -973,7 +988,7 @@ export default function SalaryPage() {
 
                   {!loading && stats.operators.length === 0 && (
                     <tr>
-                      <td colSpan={13} className="py-12 text-center text-gray-400">
+                      <td colSpan={14} className="py-12 text-center text-gray-400">
                         Нет данных в выбранном периоде
                       </td>
                     </tr>
@@ -1079,6 +1094,7 @@ export default function SalaryPage() {
                           <td className="py-4 px-4 text-right text-gray-300 font-mono">{Formatters.money(op.basePerShift)}</td>
                           <td className="py-4 px-4 text-right text-white font-mono">{Formatters.money(op.baseSalary)}</td>
                           <td className="py-4 px-4 text-right text-emerald-400 font-mono">{Formatters.money(op.bonusSalary)}</td>
+                          <td className="py-4 px-4 text-right text-cyan-300 font-mono">{Formatters.money(op.roleBonusSalary)}</td>
                           <td className="py-4 px-4 text-right text-red-400 font-mono">{Formatters.money(op.autoDebts)}</td>
                           <td className="py-4 px-4 text-right text-red-400 font-mono">{Formatters.money(op.manualMinus)}</td>
                           <td className="py-4 px-4 text-right text-amber-400 font-mono">{Formatters.money(op.advances)}</td>
@@ -1136,6 +1152,7 @@ export default function SalaryPage() {
                       <td className="py-4 px-4 text-right font-bold text-gray-400 font-mono">—</td>
                       <td className="py-4 px-4 text-right font-bold text-white font-mono">{Formatters.money(totalBase)}</td>
                       <td className="py-4 px-4 text-right font-bold text-emerald-400 font-mono">{Formatters.money(totalBonus)}</td>
+                      <td className="py-4 px-4 text-right font-bold text-cyan-300 font-mono">{Formatters.money(totalRoleBonus)}</td>
                       <td className="py-4 px-4 text-right font-bold text-red-400 font-mono">{Formatters.money(totalAutoDebts)}</td>
                       <td className="py-4 px-4 text-right font-bold text-red-400 font-mono">{Formatters.money(totalMinus)}</td>
                       <td className="py-4 px-4 text-right font-bold text-amber-400 font-mono">{Formatters.money(totalAdvances)}</td>

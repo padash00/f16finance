@@ -46,6 +46,8 @@ type RuleRow = {
   company_code: string
   shift_type: ShiftType
   base_per_shift: number | null
+  senior_operator_bonus: number | null
+  senior_cashier_bonus: number | null
   threshold1_turnover: number | null
   threshold1_bonus: number | null
   threshold2_turnover: number | null
@@ -334,7 +336,14 @@ function SalaryRulesContent() {
 
   const handleNumberChange = (
     id: number,
-    field: 'base_per_shift' | 'threshold1_turnover' | 'threshold1_bonus' | 'threshold2_turnover' | 'threshold2_bonus',
+    field:
+      | 'base_per_shift'
+      | 'senior_operator_bonus'
+      | 'senior_cashier_bonus'
+      | 'threshold1_turnover'
+      | 'threshold1_bonus'
+      | 'threshold2_turnover'
+      | 'threshold2_bonus',
     value: string,
   ) => {
     const num = parseIntSafe(value)
@@ -345,6 +354,8 @@ function SalaryRulesContent() {
     company_code: row.company_code.trim(),
     shift_type: row.shift_type,
     base_per_shift: parseIntSafe(row.base_per_shift ?? 0),
+    senior_operator_bonus: parseIntSafe(row.senior_operator_bonus ?? 0),
+    senior_cashier_bonus: parseIntSafe(row.senior_cashier_bonus ?? 0),
     threshold1_turnover: parseIntSafe(row.threshold1_turnover),
     threshold1_bonus: parseIntSafe(row.threshold1_bonus),
     threshold2_turnover: parseIntSafe(row.threshold2_turnover),
@@ -466,6 +477,8 @@ function SalaryRulesContent() {
             company_code: defaultCompany,
             shift_type,
             base_per_shift: 8000,
+            senior_operator_bonus: 1500,
+            senior_cashier_bonus: 1500,
             threshold1_turnover: 130000,
             threshold1_bonus: 2000,
             threshold2_turnover: 160000,
@@ -730,6 +743,8 @@ function SalaryRulesContent() {
                     <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Компания</th>
                     <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Смена</th>
                     <th className="py-3 px-4 text-right text-xs font-medium text-gray-400">Оклад</th>
+                    <th className="py-3 px-4 text-right text-xs font-medium text-cyan-400">Старший оператор</th>
+                    <th className="py-3 px-4 text-right text-xs font-medium text-pink-400">Старший кассир</th>
                     <th className="py-3 px-4 text-right text-xs font-medium text-gray-400">Порог 1</th>
                     <th className="py-3 px-4 text-right text-xs font-medium text-gray-400">Бонус 1</th>
                     <th className="py-3 px-4 text-right text-xs font-medium text-gray-400">Порог 2</th>
@@ -742,7 +757,7 @@ function SalaryRulesContent() {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-gray-500">
+                      <td colSpan={11} className="py-8 text-center text-gray-500">
                         Загрузка правил...
                       </td>
                     </tr>
@@ -750,7 +765,7 @@ function SalaryRulesContent() {
 
                   {!loading && filteredRules.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-gray-500">
+                      <td colSpan={11} className="py-8 text-center text-gray-500">
                         {rules.length === 0
                           ? 'Правил ещё нет. Нажмите "Добавить правило"'
                           : 'Нет правил, соответствующих фильтрам'}
@@ -831,6 +846,26 @@ function SalaryRulesContent() {
                                 {formatMoneyCompact(r.base_per_shift)}
                               </span>
                             </div>
+                          </td>
+
+                          <td className="py-3 px-4 text-right">
+                            <input
+                              type="number"
+                              value={r.senior_operator_bonus ?? ''}
+                              onChange={(e) => handleNumberChange(r.id, 'senior_operator_bonus', e.target.value)}
+                              className="w-24 px-2 py-1 bg-gray-800/50 border border-white/10 rounded-lg text-xs text-right"
+                              placeholder="1500"
+                            />
+                          </td>
+
+                          <td className="py-3 px-4 text-right">
+                            <input
+                              type="number"
+                              value={r.senior_cashier_bonus ?? ''}
+                              onChange={(e) => handleNumberChange(r.id, 'senior_cashier_bonus', e.target.value)}
+                              className="w-24 px-2 py-1 bg-gray-800/50 border border-white/10 rounded-lg text-xs text-right"
+                              placeholder="1500"
+                            />
                           </td>
 
                           {/* Threshold 1 */}
