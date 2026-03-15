@@ -17,12 +17,10 @@ import {
   ChevronRight,
   ClipboardCheck,
   Command,
-  Compass,
   FolderKanban,
   Gauge,
   KeyRound,
   Landmark,
-  Layers,
   LayoutDashboard,
   LifeBuoy,
   ListChecks,
@@ -161,16 +159,7 @@ const navSections: NavSection[] = [
   },
 ]
 
-const sectionTone: Record<NavSection['accentColor'], string> = {
-  amber: 'bg-amber-500/10 text-amber-400',
-  emerald: 'bg-emerald-500/10 text-emerald-400',
-  yellow: 'bg-yellow-500/10 text-yellow-400',
-  blue: 'bg-blue-500/10 text-blue-400',
-  fuchsia: 'bg-fuchsia-500/10 text-fuchsia-400',
-  slate: 'bg-slate-500/10 text-slate-400',
-}
-
-const badgeTone: Record<NonNullable<NavItem['badgeColor']>, string> = {
+const badgeColors: Record<NonNullable<NavItem['badgeColor']>, string> = {
   purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
   blue: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   green: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -179,62 +168,67 @@ const badgeTone: Record<NonNullable<NavItem['badgeColor']>, string> = {
   default: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
 }
 
+const sectionStyles: Record<
+  NavSection['accentColor'],
+  {
+    bg: string
+    text: string
+    border: string
+    gradient: string
+    activeRing: string
+  }
+> = {
+  amber: {
+    bg: 'bg-amber-500/10',
+    text: 'text-amber-400',
+    border: 'border-amber-500/20',
+    gradient: 'from-amber-500/20 to-orange-500/20',
+    activeRing: 'ring-amber-500/50',
+  },
+  emerald: {
+    bg: 'bg-emerald-500/10',
+    text: 'text-emerald-400',
+    border: 'border-emerald-500/20',
+    gradient: 'from-emerald-500/20 to-cyan-500/20',
+    activeRing: 'ring-emerald-500/50',
+  },
+  yellow: {
+    bg: 'bg-yellow-500/10',
+    text: 'text-yellow-400',
+    border: 'border-yellow-500/20',
+    gradient: 'from-yellow-500/20 to-amber-500/20',
+    activeRing: 'ring-yellow-500/50',
+  },
+  blue: {
+    bg: 'bg-blue-500/10',
+    text: 'text-blue-400',
+    border: 'border-blue-500/20',
+    gradient: 'from-blue-500/20 to-indigo-500/20',
+    activeRing: 'ring-blue-500/50',
+  },
+  fuchsia: {
+    bg: 'bg-fuchsia-500/10',
+    text: 'text-fuchsia-400',
+    border: 'border-fuchsia-500/20',
+    gradient: 'from-fuchsia-500/20 to-pink-500/20',
+    activeRing: 'ring-fuchsia-500/50',
+  },
+  slate: {
+    bg: 'bg-slate-500/10',
+    text: 'text-slate-400',
+    border: 'border-slate-500/20',
+    gradient: 'from-slate-500/20 to-slate-600/20',
+    activeRing: 'ring-slate-500/40',
+  },
+}
+
 function LogoMark() {
   return (
     <div className="relative group">
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 blur-lg opacity-45 transition-opacity duration-500 group-hover:opacity-75" />
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 blur-lg opacity-50 transition-opacity duration-500 group-hover:opacity-80" />
       <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl">
         <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/10 to-transparent" />
         <Sparkles className="relative z-10 h-5 w-5 text-amber-300" />
-      </div>
-    </div>
-  )
-}
-
-function BrandHeader({
-  roleLabel,
-  moduleCount,
-  sectionCount,
-}: {
-  roleLabel: string | null
-  moduleCount: number
-  sectionCount: number
-}) {
-  return (
-    <div className="relative rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/95 to-slate-800/90 p-5 shadow-2xl">
-      <div className="flex items-center gap-4">
-        <LogoMark />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400">Control room</p>
-            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          </div>
-          <h1 className="mt-1 text-xl font-bold tracking-[-0.04em] text-white">F16 Finance</h1>
-          <p className="mt-1 text-xs text-slate-400">Спокойная навигация по ролям и рабочим зонам.</p>
-        </div>
-      </div>
-
-      <div className="mt-4 rounded-2xl border border-white/6 bg-slate-800/55 px-4 py-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Активный контур</p>
-            <p className="mt-1 truncate text-sm font-semibold text-white">{roleLabel || 'Панель управления'}</p>
-          </div>
-          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1">
-            <span className="text-[10px] font-medium text-emerald-400">● live</span>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center gap-3 text-[11px] text-slate-500">
-          <span className="flex items-center gap-1">
-            <Layers className="h-3 w-3" />
-            {moduleCount} экранов
-          </span>
-          <span className="h-1 w-1 rounded-full bg-slate-700" />
-          <span className="flex items-center gap-1">
-            <Compass className="h-3 w-3" />
-            {sectionCount} секций
-          </span>
-        </div>
       </div>
     </div>
   )
@@ -283,7 +277,7 @@ function SidebarItem({
             {item.label}
           </span>
           {item.badge ? (
-            <span className={cn('rounded-md border px-1.5 py-0.5 text-xs font-medium', badgeTone[item.badgeColor || 'default'])}>
+            <span className={cn('rounded-md border px-1.5 py-0.5 text-xs font-medium', badgeColors[item.badgeColor || 'default'])}>
               {item.badge}
             </span>
           ) : null}
@@ -320,37 +314,52 @@ function SidebarSection({
     item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/'),
   )
   const SectionIcon = section.icon
+  const style = sectionStyles[section.accentColor]
 
   return (
-    <section className="space-y-2">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="group flex w-full items-center gap-3 rounded-xl px-3 py-2 transition-all duration-300 hover:bg-white/5"
-      >
-        <div className={cn('flex h-8 w-8 items-center justify-center rounded-xl', sectionTone[section.accentColor])}>
-          <SectionIcon className="h-4 w-4" />
-        </div>
+    <div className="relative group">
+      <div className={cn('absolute -inset-1 rounded-2xl blur-md opacity-0 transition-opacity duration-500 group-hover:opacity-100 bg-gradient-to-r', style.gradient)} />
 
-        <div className="min-w-0 flex-1 text-left">
-          <p className="text-sm font-semibold text-white">{section.title}</p>
-          <p className="text-xs text-slate-500">{section.subtitle}</p>
-        </div>
+      <div className="relative rounded-xl border border-white/5 bg-slate-900/50 p-3 backdrop-blur-sm transition-all duration-300 hover:border-white/10">
+        <button type="button" onClick={onToggle} className="flex w-full items-center gap-3">
+          <div
+            className={cn(
+              'flex h-10 w-10 items-center justify-center rounded-xl border transition-all duration-300',
+              style.bg,
+              style.border,
+              hasActiveItem && 'ring-2 ring-offset-2 ring-offset-slate-900',
+              hasActiveItem && style.activeRing,
+            )}
+          >
+            <SectionIcon className={cn('h-5 w-5', style.text)} />
+          </div>
 
-        <div className="flex items-center gap-2">
-          {hasActiveItem ? <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> : null}
-          <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform duration-300', open && 'rotate-180 text-slate-300')} />
-        </div>
-      </button>
+          <div className="min-w-0 flex-1 text-left">
+            <div className="flex items-center gap-2">
+              <p className="text-base font-semibold text-white">{section.title}</p>
+              {hasActiveItem ? (
+                <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', style.bg, style.border, style.text)}>
+                  active
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-0.5 text-xs text-slate-500">{section.subtitle}</p>
+          </div>
 
-      <div className={cn('space-y-1 overflow-hidden transition-all duration-300', open ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0')}>
-        {section.items.map((item) => {
-          const active =
-            item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/')
-          return <SidebarItem key={item.href} item={item} active={active} onClick={onNavigate} />
-        })}
+          <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300', open ? style.bg : 'bg-slate-800/50')}>
+            <ChevronDown className={cn('h-4 w-4 transition-transform duration-300', open ? cn('rotate-180', style.text) : 'text-slate-500')} />
+          </div>
+        </button>
+
+        <div className={cn('mt-3 space-y-1 overflow-hidden transition-all duration-300', open ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0')}>
+          {section.items.map((item) => {
+            const active =
+              item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/')
+            return <SidebarItem key={item.href} item={item} active={active} onClick={onNavigate} />
+          })}
+        </div>
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -366,42 +375,45 @@ function UserCard({
   roleLabel: string | null
 }) {
   return (
-    <div className="relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-800/90 p-4 backdrop-blur-xl">
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 blur opacity-50" />
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-slate-800 to-slate-700">
-            <User className="h-5 w-5 text-amber-300" />
+    <div className="relative group">
+      <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 blur opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+      <div className="relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-800/90 p-4 backdrop-blur-xl">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 blur opacity-50" />
+            <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-slate-800 to-slate-700">
+              <User className="h-5 w-5 text-amber-300" />
+            </div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-white">{displayName || 'Панель управления'}</p>
+            <p className="truncate text-xs text-slate-500">{email || 'admin@system.local'}</p>
           </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-white">{displayName || 'Панель управления'}</p>
-          <p className="truncate text-xs text-slate-500">{email || 'admin@system.local'}</p>
-        </div>
-      </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1">
-          <LifeBuoy className="h-3 w-3 text-emerald-400" />
-          <span className="text-xs font-medium text-emerald-400">online</span>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1">
+            <LifeBuoy className="h-3 w-3 text-emerald-400" />
+            <span className="text-xs font-medium text-emerald-400">online</span>
+          </div>
+          <div className="flex items-center gap-1 rounded-lg border border-white/5 bg-slate-800 px-2 py-1">
+            <Shield className="h-3 w-3 text-slate-400" />
+            <span className="text-xs font-medium text-slate-300">{roleLabel || 'control'}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-white/5 bg-slate-800 px-2 py-1">
-          <Shield className="h-3 w-3 text-slate-400" />
-          <span className="text-xs font-medium text-slate-300">{roleLabel || 'control'}</span>
-        </div>
-      </div>
 
-      <Button
-        variant="ghost"
-        onClick={onLogout}
-        className="mt-3 w-full justify-between rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-slate-300 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-400"
-      >
-        <span className="flex items-center gap-2 text-sm">
-          <LogOut className="h-4 w-4" />
-          Выйти
-        </span>
-        <ChevronRight className="h-4 w-4" />
-      </Button>
+        <Button
+          variant="ghost"
+          onClick={onLogout}
+          className="mt-3 w-full justify-between rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-slate-300 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-400"
+        >
+          <span className="flex items-center gap-2 text-sm">
+            <LogOut className="h-4 w-4" />
+            Выйти
+          </span>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   )
 }
@@ -515,11 +527,6 @@ export function Sidebar() {
       .filter((section) => section.items.length > 0)
   }, [isLeadOperator, isOperator, isStaff, isSuperAdmin, staffRole])
 
-  const moduleCount = useMemo(
-    () => visibleSections.reduce((sum, section) => sum + section.items.length, 0),
-    [visibleSections],
-  )
-
   useEffect(() => {
     const activeSection = visibleSections.find((section) =>
       section.items.some((item) =>
@@ -548,10 +555,13 @@ export function Sidebar() {
   const navContent = (
     <div className="flex h-full flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
       <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <LogoMark />
-          <div className="ml-1">
-            <p className="text-xs font-medium text-slate-500">v2.0.1</p>
+          <div>
+            <h1 className="bg-gradient-to-r from-white to-slate-300 bg-clip-text text-lg font-bold text-transparent">
+              F16 Finance
+            </h1>
+            <p className="text-xs text-slate-500">v2.0.1</p>
           </div>
         </div>
         <button
@@ -571,13 +581,10 @@ export function Sidebar() {
         className="flex-1 overflow-y-auto px-4 py-4"
       >
         <div className="sticky top-0 z-10 -mx-1 bg-gradient-to-b from-slate-950 via-slate-950/95 to-transparent px-1 pb-4 pt-1 backdrop-blur-xl">
-          <BrandHeader roleLabel={roleLabel} moduleCount={moduleCount} sectionCount={visibleSections.length} />
-          <div className="mt-4">
-            <SearchBar />
-          </div>
+          <SearchBar />
         </div>
 
-        <div className="mt-6 space-y-4">
+        <div className="mt-4 space-y-3">
           {visibleSections.map((section) => (
             <SidebarSection
               key={section.id}
