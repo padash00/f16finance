@@ -15,6 +15,7 @@
   - `Аналитика операторов`
 - Can manage:
   - incomes and expenses
+- ОПиУ / EBITDA and monthly POS commission inputs
   - operators
   - structure
   - salary and salary rules

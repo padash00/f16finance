@@ -14,6 +14,7 @@ import {
   CalendarClock,
   CalendarDays,
   CalendarRange,
+  Calculator,
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
@@ -100,6 +101,7 @@ const navSections: NavSection[] = [
       { href: '/expenses', label: 'Расходы', icon: TrendingDown, note: 'Списания и статьи' },
       { href: '/categories', label: 'Категории', icon: Tags, note: 'Структура расходов' },
       { href: '/tax', label: 'Налоги', icon: Landmark, note: '3% и контроль базы' },
+      { href: '/profitability', label: 'ОПиУ и EBITDA', icon: Calculator, note: 'Полная прибыль и комиссии POS' },
     ],
   },
   {
