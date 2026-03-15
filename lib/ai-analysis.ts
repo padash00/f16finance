@@ -118,12 +118,81 @@ function anomaliesText(anomalies: AnalysisData['anomalies']) {
     .join('\n')
 }
 
+function riskLabel(riskLevel: AnalysisData['riskLevel']) {
+  if (riskLevel === 'high') return 'высокий'
+  if (riskLevel === 'medium') return 'средний'
+  return 'низкий'
+}
+
+function buildFallbackAdvice(data: AnalysisData) {
+  const expenses = summarizeExpenses(data.expensesByCategory)
+  const planGap = data.planIncomeAchievementPct - 100
+  const currentMonthProjectedIncomeGap = data.currentMonth.projectedIncome - data.totalPlanIncome
+  const marginSignal =
+    data.avgMargin < 12 ? 'Маржа критически низкая.' : data.avgMargin < 20 ? 'Маржа ниже комфортной зоны.' : 'Маржа пока держится в рабочем диапазоне.'
+  const trendSignal =
+    data.trend < 0
+      ? `Доход идёт вниз на ${formatMoney(Math.abs(data.trend))} в день.`
+      : `Доход идёт вверх на ${formatMoney(data.trend)} в день.`
+  const expenseSignal =
+    data.trendExpense > 0
+      ? `Расходы растут на ${formatMoney(data.trendExpense)} в день.`
+      : `Расходы снижаются на ${formatMoney(Math.abs(data.trendExpense))} в день.`
+
+  const actions = [
+    `Срезать или заморозить категорию "${expenses.topCategoryName}" на 10-15% — пройти все траты вручную и убрать слабые позиции — это быстрее всего защищает маржу.`,
+    data.planIncomeAchievementPct < 100
+      ? `Закрыть разрыв к плану ${formatPercent(Math.abs(planGap))} — поставить недельный план по выручке и разложить его по дням/каналам — это даёт управляемость вместо надежды на общий рост.`
+      : `Зафиксировать перевыполнение плана и удержать темп — разложить текущий рост по каналам и не дать расходам съесть эффект.`
+    ,
+    data.cashlessShare < 55
+      ? 'Поднять долю безнала и online — стимулировать предоплату/удобные способы оплаты — это повышает предсказуемость денежного потока.'
+      : 'Проверить комиссионную нагрузку по безналу — держать баланс между удобством клиента и чистой маржей.',
+    data.anomalies.length > 0
+      ? 'Разобрать аномальные дни вручную — отделить разовый выброс от системной проблемы — это помогает не принимать ложные решения.'
+      : 'Ввести недельный контроль по отклонениям дохода и расхода — чтобы ловить проблему до конца месяца.',
+    'Собрать 5 недельных KPI владельца: выручка, расходы, прибыль, маржа, выполнение плана — смотреть их в одном ритме каждую неделю.',
+  ]
+
+  return [
+    '1. Диагноз',
+    `${marginSignal} ${trendSignal} ${expenseSignal} Общий риск сейчас ${riskLabel(data.riskLevel)}.`,
+    '',
+    '2. Что происходит сейчас',
+    `Деньги: доход ${formatMoney(data.totalIncome)}, расход ${formatMoney(data.totalExpense)}, прибыль ${formatMoney(data.totalIncome - data.totalExpense)}.`,
+    `Маржа: ${formatPercent(data.avgMargin)}. Выполнение плана: ${formatPercent(data.planIncomeAchievementPct)}.`,
+    `Структура оплат: наличные ${formatMoney(data.totalCash)}, Kaspi ${formatMoney(data.totalKaspi)}, card ${formatMoney(data.totalCard)}, online ${formatMoney(data.totalOnline)}.`,
+    '',
+    '3. Прогноз',
+    `Текущий месяц, скорее всего, закроется на доходе ${formatMoney(data.currentMonth.projectedIncome)} и прибыли ${formatMoney(data.currentMonth.projectedProfit)}.`,
+    `Следующий месяц сейчас выглядит как ${formatMoney(data.nextMonthForecast.income)} дохода и ${formatMoney(data.nextMonthForecast.profit)} прибыли.`,
+    currentMonthProjectedIncomeGap < 0
+      ? `Главный риск: недобор к плану примерно ${formatMoney(Math.abs(currentMonthProjectedIncomeGap))}.`
+      : `Главный потенциал: текущий прогноз выше плана примерно на ${formatMoney(currentMonthProjectedIncomeGap)}.`,
+    '',
+    '4. Аномалии и закономерности',
+    data.anomalies.length > 0 ? anomaliesText(data.anomalies) : 'Сильных аномалий в выборке не найдено.',
+    `Самая тяжёлая категория расходов: ${expenses.topCategoryName} — ${formatMoney(expenses.topCategoryAmount)} (${formatPercent(expenses.topCategoryShare)}).`,
+    `Лучший день: ${data.bestDayName}. Худший день: ${data.worstDayName}.`,
+    '',
+    '5. Решения на 30 дней',
+    ...actions.map((item, index) => `${index + 1}. ${item}`),
+    '',
+    '6. Контроль владельца',
+    '- Выручка за неделю',
+    '- Расходы за неделю',
+    '- Прибыль и маржа',
+    '- Выполнение недельного плана',
+    '- Доля топ-3 категорий расходов в общих тратах',
+  ].join('\n')
+}
+
 export async function getOpenAIAdvice(data: AnalysisData) {
   const apiKey = process.env.OPENAI_API_KEY
 
   if (!apiKey) {
     console.error('OPENAI_API_KEY is missing')
-    return 'Ошибка: Не настроен OPENAI_API_KEY.'
+    return buildFallbackAdvice(data)
   }
 
   const expenses = summarizeExpenses(data.expensesByCategory)
@@ -242,18 +311,18 @@ ${anomaliesText(data.anomalies)}
     if (!response.ok || json?.error) {
       console.error('OpenAI AI analysis error:', JSON.stringify(json, null, 2))
       if (json?.error?.code === 'rate_limit_exceeded' || response.status === 429) {
-        return 'Ошибка: Лимит OpenAI API временно исчерпан. Подождите немного или увеличьте billing limit.'
+        return buildFallbackAdvice(data)
       }
-      return `Ошибка OpenAI API: ${json?.error?.message || `HTTP ${response.status}`}`
+      return buildFallbackAdvice(data)
     }
 
     const outputText = extractOpenAIText(json)
     if (outputText) return outputText
 
     console.error('OpenAI AI analysis returned no text:', JSON.stringify(json, null, 2))
-    return EMPTY_AI_RESPONSE
+    return buildFallbackAdvice(data)
   } catch (error) {
     console.error('Network error in getOpenAIAdvice:', error)
-    return 'Ошибка соединения с OpenAI API.'
+    return buildFallbackAdvice(data)
   }
 }

@@ -9,9 +9,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ text })
   } catch (error) {
     console.error("AI analysis route error:", error)
-    return NextResponse.json(
-      { error: "Не удалось получить AI-разбор. Проверьте подключение к OpenAI." },
-      { status: 500 },
-    )
+    return NextResponse.json({
+      text: "AI-разбор временно недоступен. Попробуйте обновить страницу позже.",
+    })
   }
 }
