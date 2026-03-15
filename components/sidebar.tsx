@@ -421,19 +421,33 @@ function UserCard({
   )
 }
 
-function SearchBar() {
+function SearchBar({
+  value,
+  onChange,
+  inputRef,
+}: {
+  value: string
+  onChange: (value: string) => void
+  inputRef: React.RefObject<HTMLInputElement | null>
+}) {
   return (
-    <button className="group relative w-full">
+    <div className="group relative w-full">
       <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 blur opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-      <div className="relative flex items-center gap-2 rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2.5 text-left text-sm text-slate-400 transition-all duration-300 group-hover:bg-slate-800/70">
+      <div className="relative flex items-center gap-2 rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2.5 text-left text-sm text-slate-400 transition-all duration-300 group-hover:bg-slate-800/70 focus-within:border-amber-500/30 focus-within:bg-slate-800/80">
         <Search className="h-4 w-4 text-slate-500" />
-        <span className="flex-1">Поиск...</span>
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Поиск по меню..."
+          className="flex-1 bg-transparent text-sm text-slate-200 placeholder:text-slate-500 outline-none"
+        />
         <div className="flex items-center gap-1 rounded-md border border-white/5 bg-slate-700 px-1.5 py-0.5">
           <Command className="h-3 w-3 text-slate-400" />
           <span className="text-xs text-slate-400">K</span>
         </div>
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -441,6 +455,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const hasRestoredScrollRef = useRef(false)
   const [isOpen, setIsOpen] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -451,6 +466,7 @@ export function Sidebar() {
   const [isStaff, setIsStaff] = useState(false)
   const [isOperator, setIsOperator] = useState(false)
   const [isLeadOperator, setIsLeadOperator] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     if (typeof window !== 'undefined') {
       const raw = window.localStorage.getItem(SIDEBAR_SECTIONS_KEY)
@@ -510,7 +526,22 @@ export function Sidebar() {
     hasRestoredScrollRef.current = true
   }, [])
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   const visibleSections = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+
     return navSections
       .map((section) => ({
         ...section,
@@ -525,10 +556,30 @@ export function Sidebar() {
             staffRole,
             isSuperAdmin,
           })
+        }).filter((item) => {
+          if (!query) return true
+          const haystack = `${item.label} ${item.note || ''} ${section.title} ${section.subtitle}`.toLowerCase()
+          return haystack.includes(query)
         }),
       }))
-      .filter((section) => section.items.length > 0)
-  }, [isLeadOperator, isOperator, isStaff, isSuperAdmin, staffRole])
+      .filter((section) => {
+        if (section.items.length > 0) return true
+        if (!query) return false
+        const sectionText = `${section.title} ${section.subtitle}`.toLowerCase()
+        return sectionText.includes(query)
+      })
+  }, [isLeadOperator, isOperator, isStaff, isSuperAdmin, searchQuery, staffRole])
+
+  useEffect(() => {
+    if (!searchQuery.trim()) return
+    setOpenSections((prev) => {
+      const next = { ...prev }
+      for (const section of visibleSections) {
+        next[section.id] = true
+      }
+      return next
+    })
+  }, [searchQuery, visibleSections])
 
   useEffect(() => {
     const activeSection = visibleSections.find((section) =>
@@ -584,20 +635,26 @@ export function Sidebar() {
         className="flex-1 overflow-y-auto px-4 py-4"
       >
         <div className="sticky top-0 z-10 -mx-1 bg-gradient-to-b from-slate-950 via-slate-950/95 to-transparent px-1 pb-4 pt-1 backdrop-blur-xl">
-          <SearchBar />
+          <SearchBar value={searchQuery} onChange={setSearchQuery} inputRef={searchInputRef} />
         </div>
 
         <div className="mt-4 space-y-3">
-          {visibleSections.map((section) => (
-            <SidebarSection
-              key={section.id}
-              section={section}
-              pathname={pathname}
-              open={!!openSections[section.id]}
-              onToggle={() => toggleSection(section.id)}
-              onNavigate={() => setIsOpen(false)}
-            />
-          ))}
+          {visibleSections.length > 0 ? (
+            visibleSections.map((section) => (
+              <SidebarSection
+                key={section.id}
+                section={section}
+                pathname={pathname}
+                open={!!openSections[section.id]}
+                onToggle={() => toggleSection(section.id)}
+                onNavigate={() => setIsOpen(false)}
+              />
+            ))
+          ) : (
+            <div className="rounded-2xl border border-white/10 bg-slate-900/50 px-4 py-5 text-sm text-slate-400">
+              По запросу ничего не найдено.
+            </div>
+          )}
         </div>
       </div>
 
