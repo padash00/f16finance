@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     })
 
     if (result.error) {
-      return NextResponse.json(result, { status: 500 })
+      return NextResponse.json({ text: result.error })
     }
 
     return NextResponse.json(result)
