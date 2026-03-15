@@ -114,7 +114,7 @@ const COMPANY_ROLE_LABEL: Record<CompanyOperatorRole, string> = {
 }
 
 const STRUCTURE_ACTION_LABEL: Record<string, string> = {
-  'save-assignments': 'Обновлена привязка к точкам',
+  save: 'Обновлена привязка к точкам',
   'promote-create': 'Оператор повышен',
   'promote-update': 'Повышение обновлено',
 }
@@ -130,14 +130,6 @@ function getPersonName(person: { full_name?: string | null; short_name?: string 
 
 function getCompanyLeadTitle(company: Company) {
   return (company.code || '').toLowerCase() === 'ramen' ? 'Старший кассир' : 'Старший оператор'
-}
-
-function formatHistoryValue(value: unknown) {
-  if (value == null || value === '') return 'Не указано'
-  if (typeof value === 'boolean') return value ? 'Да' : 'Нет'
-  if (typeof value === 'number') return String(value)
-  if (Array.isArray(value)) return `${value.length} элементов`
-  return String(value)
 }
 
 function StaffNode({ member, tone }: { member: StaffMember; tone: 'owner' | 'manager' | 'marketer' }) {
@@ -419,48 +411,57 @@ export default function StructurePage() {
       const operatorName =
         getOperatorNameById((payload.operator_id as string | undefined) || null) ||
         getOperatorNameById(entry.entity_type === 'operator-career' ? entry.entity_id : null)
-      const staffId = typeof payload.staff_id === 'string' ? payload.staff_id : null
+      let subtitle = operatorName || 'Изменение структуры'
 
       if (entry.action === 'promote-create' || entry.action === 'promote-update') {
         const roleLabel = getRoleLabel(payload.role)
-        if (roleLabel) details.push({ label: 'Новая роль', value: roleLabel })
+        if (roleLabel) {
+          subtitle = operatorName ? `${operatorName} теперь ${roleLabel.toLowerCase()}` : `Новая роль: ${roleLabel}`
+          details.push({ label: 'Роль', value: roleLabel })
+        }
         if (payload.monthly_salary != null) {
           details.push({ label: 'Оклад', value: formatMoney(Number(payload.monthly_salary)) })
         }
-        if (staffId) details.push({ label: 'Staff-профиль', value: staffId })
       }
 
-      if (entry.action === 'save-assignments') {
-        const nextAssignments = Array.isArray(payload.next_assignments) ? payload.next_assignments : []
-        const previousAssignments = Array.isArray(payload.previous_assignments) ? payload.previous_assignments : []
-        details.push({ label: 'Было назначений', value: String(previousAssignments.length) })
-        details.push({ label: 'Стало назначений', value: String(nextAssignments.length) })
+      if (entry.action === 'save') {
+        const nextAssignments = Array.isArray(payload.assignments) ? payload.assignments : []
+        const previousCount = typeof payload.previous_count === 'number' ? payload.previous_count : 0
+        const nextCount = typeof payload.next_count === 'number' ? payload.next_count : nextAssignments.length
 
-        for (const assignment of nextAssignments.slice(0, 2) as Array<Record<string, unknown>>) {
-          const companyName = getCompanyNameById(typeof assignment.company_id === 'string' ? assignment.company_id : null)
-          const roleLabel = getRoleLabel(assignment.role_in_company)
-          const primaryLabel = assignment.is_primary ? ' • основная' : ''
-          if (companyName || roleLabel) {
-            details.push({
-              label: companyName || 'Точка',
-              value: `${roleLabel || 'Роль не указана'}${primaryLabel}`,
-            })
+        if (nextCount === 0) {
+          subtitle = operatorName ? `${operatorName} снят со всех точек` : 'Оператор снят со всех точек'
+          details.push({ label: 'Итог', value: 'Все привязки к точкам удалены' })
+        } else {
+          subtitle = operatorName ? `${operatorName} обновлён по точкам` : 'Привязка к точкам обновлена'
+          details.push({ label: 'Было назначений', value: String(previousCount) })
+          details.push({ label: 'Стало назначений', value: String(nextCount) })
+
+          for (const assignment of nextAssignments.slice(0, 3) as Array<Record<string, unknown>>) {
+            const companyName =
+              typeof assignment.company_name === 'string'
+                ? assignment.company_name
+                : getCompanyNameById(typeof assignment.company_id === 'string' ? assignment.company_id : null)
+            const roleLabel = getRoleLabel(assignment.role_in_company)
+            const suffix = assignment.is_primary ? ' • основная точка' : ''
+            if (companyName || roleLabel) {
+              details.push({
+                label: companyName || 'Точка',
+                value: `${roleLabel || 'Роль не указана'}${suffix}`,
+              })
+            }
           }
         }
       }
 
       if (details.length === 0) {
-        Object.entries(payload)
-          .slice(0, 4)
-          .forEach(([key, value]) => {
-            details.push({ label: key.replaceAll('_', ' '), value: formatHistoryValue(value) })
-          })
+        details.push({ label: 'Событие', value: 'Изменение структуры сохранено' })
       }
 
       return {
         ...entry,
         title,
-        subtitle: operatorName || entry.entity_type,
+        subtitle,
         details,
       }
     })
