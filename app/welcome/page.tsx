@@ -8,6 +8,7 @@ import {
   CalendarClock,
   CalendarRange,
   FolderKanban,
+  Network,
   Loader2,
   ShieldCheck,
   TrendingDown,
@@ -44,6 +45,7 @@ const MANAGER_ACTIONS: WelcomeAction[] = [
   { href: '/expenses', label: 'Расходы', note: 'Списание средств и контроль статей', icon: TrendingDown },
   { href: '/weekly-report', label: 'Недельный отчёт', note: 'Итоги недели и план-факт', icon: CalendarRange },
   { href: '/tasks', label: 'Задачи', note: 'Контроль поручений, сроков и текущей работы', icon: FolderKanban },
+  { href: '/structure', label: 'Структура', note: 'Распределение ролей по команде и точкам', icon: Network },
 ]
 
 const MARKETER_ACTIONS: WelcomeAction[] = [
@@ -105,6 +107,7 @@ export default function WelcomePage() {
         description: 'У вас открыт доступ только к ключевым операционным и финансовым разделам.',
         checklist: [
           'Проверьте график смен и расставьте операторов на текущую неделю.',
+          'Сверьте структуру команды по точкам и назначьте старших операторов там, где это нужно.',
           'Откройте зарплату и убедитесь, что расчёты по сменам актуальны.',
           'Сверьте доходы, расходы, задачи и недельный отчёт перед началом работы.',
         ],

@@ -1,0 +1,484 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import {
+  BriefcaseBusiness,
+  Building2,
+  Crown,
+  Loader2,
+  Mail,
+  Network,
+  Phone,
+  ShieldCheck,
+  Sparkles,
+  Users2,
+} from 'lucide-react'
+
+import { Sidebar } from '@/components/sidebar'
+import { Card } from '@/components/ui/card'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
+
+type StaffRole = 'owner' | 'manager' | 'marketer'
+type CompanyOperatorRole = 'operator' | 'senior_operator' | 'senior_cashier'
+
+type StaffMember = {
+  id: string
+  full_name: string | null
+  short_name: string | null
+  role: StaffRole
+  monthly_salary: number | null
+  phone: string | null
+  email: string | null
+  is_active: boolean
+}
+
+type Company = {
+  id: string
+  name: string
+  code: string | null
+}
+
+type Operator = {
+  id: string
+  name: string
+  short_name: string | null
+  is_active: boolean
+  telegram_chat_id: string | null
+  operator_profiles?: Array<{
+    full_name?: string | null
+    phone?: string | null
+    email?: string | null
+    position?: string | null
+    photo_url?: string | null
+    hire_date?: string | null
+  }> | null
+}
+
+type Assignment = {
+  id: string
+  operator_id: string
+  company_id: string
+  role_in_company: CompanyOperatorRole
+  is_primary: boolean
+  is_active: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+type StructureResponse = {
+  ok: boolean
+  data?: {
+    staff: StaffMember[]
+    companies: Company[]
+    operators: Operator[]
+    assignments: Assignment[]
+  }
+  error?: string
+}
+
+const STAFF_ROLE_LABEL: Record<StaffRole, string> = {
+  owner: 'Владелец',
+  manager: 'Руководитель',
+  marketer: 'Маркетолог',
+}
+
+const COMPANY_ROLE_LABEL: Record<CompanyOperatorRole, string> = {
+  operator: 'Оператор',
+  senior_operator: 'Старший оператор',
+  senior_cashier: 'Старший кассир',
+}
+
+function formatMoney(value: number | null | undefined) {
+  if (value == null) return 'Не задан'
+  return `${Number(value).toLocaleString('ru-RU')} ₸`
+}
+
+function getPersonName(person: { full_name?: string | null; short_name?: string | null; name?: string | null }) {
+  return person.full_name?.trim() || person.name?.trim() || person.short_name?.trim() || 'Без имени'
+}
+
+function getCompanyLeadTitle(company: Company) {
+  return (company.code || '').toLowerCase() === 'ramen' ? 'Старший кассир' : 'Старший оператор'
+}
+
+function StaffNode({ member, tone }: { member: StaffMember; tone: 'owner' | 'manager' | 'marketer' }) {
+  const toneClass =
+    tone === 'owner'
+      ? 'from-amber-500/20 to-orange-500/15 border-amber-500/20'
+      : tone === 'manager'
+        ? 'from-cyan-500/15 to-blue-500/10 border-cyan-500/20'
+        : 'from-pink-500/15 to-fuchsia-500/10 border-pink-500/20'
+
+  return (
+    <Card className={`border bg-gradient-to-br ${toneClass} p-5 text-white shadow-[0_18px_44px_rgba(0,0,0,0.18)]`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">{STAFF_ROLE_LABEL[member.role]}</p>
+          <h3 className="mt-2 text-lg font-semibold tracking-[-0.02em]">{getPersonName(member)}</h3>
+          <p className="mt-1 text-sm text-slate-400">{member.short_name || 'Сотрудник админ-команды'}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+          {member.role === 'owner' ? <Crown className="h-5 w-5 text-amber-300" /> : <ShieldCheck className="h-5 w-5 text-cyan-300" />}
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2 text-sm text-slate-300">
+        {member.phone ? (
+          <div className="flex items-center gap-2">
+            <Phone className="h-3.5 w-3.5 text-slate-500" />
+            <span>{member.phone}</span>
+          </div>
+        ) : null}
+        {member.email ? (
+          <div className="flex items-center gap-2">
+            <Mail className="h-3.5 w-3.5 text-slate-500" />
+            <span className="truncate">{member.email}</span>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-white/8 bg-black/15 px-3 py-2 text-xs text-slate-400">
+        Оклад: <span className="font-medium text-white">{formatMoney(member.monthly_salary)}</span>
+      </div>
+    </Card>
+  )
+}
+
+function OperatorChip({
+  operator,
+  role,
+  isPrimary,
+}: {
+  operator: Operator
+  role: CompanyOperatorRole
+  isPrimary: boolean
+}) {
+  const profile = operator.operator_profiles?.[0]
+  return (
+    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-white">
+            {getOperatorDisplayName({
+              ...operator,
+              full_name: profile?.full_name || null,
+            })}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">{COMPANY_ROLE_LABEL[role]}</p>
+        </div>
+        {isPrimary ? (
+          <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-300">
+            main
+          </span>
+        ) : null}
+      </div>
+
+      {(profile?.phone || profile?.email) ? (
+        <div className="mt-3 space-y-1 text-xs text-slate-400">
+          {profile?.phone ? <div>{profile.phone}</div> : null}
+          {profile?.email ? <div className="truncate">{profile.email}</div> : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function CompanyBranch({
+  company,
+  assignments,
+  operatorsById,
+}: {
+  company: Company
+  assignments: Assignment[]
+  operatorsById: Map<string, Operator>
+}) {
+  const leadAssignments = assignments.filter((item) => item.role_in_company !== 'operator')
+  const operatorAssignments = assignments.filter((item) => item.role_in_company === 'operator')
+
+  return (
+    <Card className="border-white/10 bg-slate-950/65 p-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.22)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+            <Building2 className="h-3.5 w-3.5" />
+            {company.code || 'точка'}
+          </div>
+          <h3 className="mt-3 text-xl font-semibold tracking-[-0.03em] text-white">{company.name}</h3>
+          <p className="mt-1 text-sm text-slate-400">{getCompanyLeadTitle(company)}</p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-right">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Операторов</div>
+          <div className="mt-1 text-xl font-semibold text-white">{assignments.length}</div>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <p className="mb-3 text-xs uppercase tracking-[0.18em] text-slate-500">{getCompanyLeadTitle(company)}</p>
+        {leadAssignments.length > 0 ? (
+          <div className="space-y-3">
+            {leadAssignments.map((assignment) => {
+              const operator = operatorsById.get(assignment.operator_id)
+              if (!operator) return null
+              return (
+                <OperatorChip
+                  key={assignment.id}
+                  operator={operator}
+                  role={assignment.role_in_company}
+                  isPrimary={assignment.is_primary}
+                />
+              )
+            })}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            Старшая роль пока не назначена.
+          </div>
+        )}
+      </div>
+
+      <div className="mt-5">
+        <p className="mb-3 text-xs uppercase tracking-[0.18em] text-slate-500">Операторы точки</p>
+        {operatorAssignments.length > 0 ? (
+          <div className="space-y-3">
+            {operatorAssignments.map((assignment) => {
+              const operator = operatorsById.get(assignment.operator_id)
+              if (!operator) return null
+              return (
+                <OperatorChip
+                  key={assignment.id}
+                  operator={operator}
+                  role={assignment.role_in_company}
+                  isPrimary={assignment.is_primary}
+                />
+              )
+            })}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-500">
+            Операторы по этой точке ещё не назначены.
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+export default function StructurePage() {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [staff, setStaff] = useState<StaffMember[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [operators, setOperators] = useState<Operator[]>([])
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+
+  useEffect(() => {
+    let ignore = false
+
+    const loadStructure = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        const response = await fetch('/api/admin/structure', { cache: 'no-store' }).catch(() => null)
+        const json = (await response?.json().catch(() => null)) as StructureResponse | null
+        if (ignore) return
+
+        if (!response?.ok || !json?.ok || !json.data) {
+          setError(json?.error || 'Не удалось загрузить структуру')
+          return
+        }
+
+        setStaff(json.data.staff || [])
+        setCompanies(json.data.companies || [])
+        setOperators(json.data.operators || [])
+        setAssignments(json.data.assignments || [])
+      } catch (loadError: any) {
+        if (!ignore) setError(loadError?.message || 'Не удалось загрузить структуру')
+      } finally {
+        if (!ignore) setLoading(false)
+      }
+    }
+
+    loadStructure()
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  const owners = useMemo(() => staff.filter((member) => member.role === 'owner'), [staff])
+  const managers = useMemo(() => staff.filter((member) => member.role === 'manager'), [staff])
+  const marketers = useMemo(() => staff.filter((member) => member.role === 'marketer'), [staff])
+  const operatorsById = useMemo(() => new Map(operators.map((operator) => [operator.id, operator])), [operators])
+  const assignmentsByCompany = useMemo(() => {
+    const map = new Map<string, Assignment[]>()
+    for (const assignment of assignments) {
+      const bucket = map.get(assignment.company_id) || []
+      bucket.push(assignment)
+      map.set(assignment.company_id, bucket)
+    }
+    return map
+  }, [assignments])
+  const assignedOperatorIds = useMemo(() => new Set(assignments.map((assignment) => assignment.operator_id)), [assignments])
+  const unassignedOperators = useMemo(
+    () => operators.filter((operator) => !assignedOperatorIds.has(operator.id)),
+    [operators, assignedOperatorIds],
+  )
+
+  return (
+    <div className="app-shell-layout">
+      <Sidebar />
+      <main className="app-main">
+        <div className="app-page space-y-6">
+          <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_32%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.3)] sm:p-8">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <div className="mb-4 inline-flex rounded-2xl bg-cyan-400/10 p-4">
+                  <Network className="h-7 w-7 text-cyan-300" />
+                </div>
+                <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Структура команды</h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+                  Здесь видно управленческую и операционную иерархию: кто отвечает за клуб в целом, кто ведёт маркетинг и кто является старшим по каждой точке.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 rounded-3xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Компаний</div>
+                  <div className="mt-1 text-2xl font-semibold text-white">{companies.length}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Операторов</div>
+                  <div className="mt-1 text-2xl font-semibold text-white">{operators.length}</div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {loading ? (
+            <Card className="border-white/10 bg-slate-950/65 p-8 text-white">
+              <div className="flex items-center gap-3 text-slate-300">
+                <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+                Загружаем оргструктуру...
+              </div>
+            </Card>
+          ) : error ? (
+            <Card className="border-rose-500/20 bg-rose-500/10 p-6 text-rose-100">
+              {error}
+            </Card>
+          ) : (
+            <>
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Crown className="h-5 w-5 text-amber-300" />
+                  <h2 className="text-xl font-semibold text-white">Управленческий контур</h2>
+                </div>
+
+                {owners.length > 0 ? (
+                  <div className="grid gap-4 lg:grid-cols-1">
+                    {owners.map((member) => (
+                      <StaffNode key={member.id} member={member} tone="owner" />
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-white">
+                      <BriefcaseBusiness className="h-4 w-4 text-cyan-300" />
+                      <h3 className="font-semibold">Руководители</h3>
+                    </div>
+                    {managers.length > 0 ? (
+                      <div className="space-y-4">
+                        {managers.map((member) => (
+                          <StaffNode key={member.id} member={member} tone="manager" />
+                        ))}
+                      </div>
+                    ) : (
+                      <Card className="border-dashed border-white/10 bg-slate-950/40 p-5 text-sm text-slate-500">
+                        Руководитель пока не назначен.
+                      </Card>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-white">
+                      <Sparkles className="h-4 w-4 text-pink-300" />
+                      <h3 className="font-semibold">Маркетинг</h3>
+                    </div>
+                    {marketers.length > 0 ? (
+                      <div className="space-y-4">
+                        {marketers.map((member) => (
+                          <StaffNode key={member.id} member={member} tone="marketer" />
+                        ))}
+                      </div>
+                    ) : (
+                      <Card className="border-dashed border-white/10 bg-slate-950/40 p-5 text-sm text-slate-500">
+                        Маркетолог пока не назначен.
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-cyan-300" />
+                  <h2 className="text-xl font-semibold text-white">Операционная структура по точкам</h2>
+                </div>
+
+                <div className="grid gap-5 xl:grid-cols-3">
+                  {companies.map((company) => (
+                    <CompanyBranch
+                      key={company.id}
+                      company={company}
+                      assignments={assignmentsByCompany.get(company.id) || []}
+                      operatorsById={operatorsById}
+                    />
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Users2 className="h-5 w-5 text-slate-300" />
+                  <h2 className="text-xl font-semibold text-white">Операторы без точки</h2>
+                </div>
+
+                {unassignedOperators.length > 0 ? (
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {unassignedOperators.map((operator) => (
+                      <Card key={operator.id} className="border-white/10 bg-slate-950/60 p-4 text-white">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium">
+                              {getOperatorDisplayName({
+                                ...operator,
+                                full_name: operator.operator_profiles?.[0]?.full_name || null,
+                              })}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {operator.operator_profiles?.[0]?.position || 'Оператор без привязки к точке'}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-300">
+                            free
+                          </span>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <Card className="border-white/10 bg-slate-950/60 p-5 text-sm text-slate-400">
+                    Все активные операторы уже распределены по компаниям.
+                  </Card>
+                )}
+              </section>
+            </>
+          )}
+        </div>
+      </main>
+    </div>
+  )
+}
