@@ -273,7 +273,7 @@ export default function LogsPage() {
               <Button variant="outline" onClick={() => applyPreset('finance')}>Финансы</Button>
               <Button variant="outline" onClick={() => applyPreset('staff')}>Кадры</Button>
               <Button variant="outline" onClick={() => applyPreset('operations')}>Операции</Button>
-              <Button variant="outline" onClick={() => applyPreset('structure')}>Структура</Button>
+              <Button variant="outline" onClick={() => applyPreset('structure')}>История структуры</Button>
               <Button variant="outline" onClick={() => applyPreset('errors')}>Только ошибки</Button>
             </div>
 

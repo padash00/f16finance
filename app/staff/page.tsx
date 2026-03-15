@@ -13,6 +13,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { STAFF_ROLE_MATRIX, SUPER_ADMIN_MATRIX_ENTRY } from '@/lib/core/access'
 import { supabase } from '@/lib/supabaseClient'
 import {
   Users2,
@@ -893,6 +894,50 @@ export default function StaffPageSmart() {
                   })}
                 </tbody>
               </table>
+            </div>
+          </Card>
+
+          <Card className="bg-gray-900/40 backdrop-blur-xl border-white/5 p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="p-2 rounded-xl bg-violet-500/15">
+                <KeyRound className="w-5 h-5 text-violet-300" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Матрица ролей</h3>
+                <p className="text-sm text-gray-400">Явное разделение прав по staff-ролям и супер-админу.</p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              {[SUPER_ADMIN_MATRIX_ENTRY, STAFF_ROLE_MATRIX.owner, STAFF_ROLE_MATRIX.manager, STAFF_ROLE_MATRIX.marketer].map((entry) => (
+                <div key={entry.label} className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h4 className="text-sm font-semibold text-white">{entry.label}</h4>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-gray-400">
+                      {entry.paths.length} экранов
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-gray-400">{entry.summary}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {entry.capabilities.map((capability) => (
+                      <span
+                        key={capability}
+                        className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-300"
+                      >
+                        {capability}
+                      </span>
+                    ))}
+                  </div>
+                  <ul className="mt-4 space-y-2 text-xs leading-5 text-gray-400">
+                    {entry.actions.map((action) => (
+                      <li key={action} className="flex gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-violet-300/70" />
+                        <span>{action}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
           </Card>
 

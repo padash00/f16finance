@@ -13,7 +13,6 @@ import {
   Plus,
   ShieldCheck,
   Sparkles,
-  Users2,
   X,
 } from 'lucide-react'
 
@@ -70,16 +69,6 @@ type Assignment = {
   updated_at: string
 }
 
-type StructureHistoryItem = {
-  id: string
-  actor_user_id: string | null
-  entity_type: string
-  entity_id: string
-  action: string
-  payload: Record<string, unknown> | null
-  created_at: string
-}
-
 type CareerLink = {
   id: string
   operator_id: string
@@ -123,7 +112,6 @@ type StructureResponse = {
     companies: Company[]
     operators: Operator[]
     assignments: Assignment[]
-    history: StructureHistoryItem[]
     careerLinks: CareerLink[]
   }
   error?: string
@@ -139,12 +127,6 @@ const COMPANY_ROLE_LABEL: Record<CompanyOperatorRole, string> = {
   operator: 'Оператор',
   senior_operator: 'Старший оператор',
   senior_cashier: 'Старший кассир',
-}
-
-const STRUCTURE_ACTION_LABEL: Record<string, string> = {
-  save: 'Обновлена привязка к точкам',
-  'promote-create': 'Оператор повышен',
-  'promote-update': 'Повышение обновлено',
 }
 
 function formatMoney(value: number | null | undefined) {
@@ -361,7 +343,6 @@ export default function StructurePage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
-  const [history, setHistory] = useState<StructureHistoryItem[]>([])
   const [careerLinks, setCareerLinks] = useState<CareerLink[]>([])
   const [editingOperator, setEditingOperator] = useState<Operator | null>(null)
   const [editorRows, setEditorRows] = useState<AssignmentEditorRow[]>([])
@@ -391,7 +372,6 @@ export default function StructurePage() {
         setCompanies(json.data.companies || [])
         setOperators(json.data.operators || [])
         setAssignments(json.data.assignments || [])
-        setHistory((json.data.history || []) as StructureHistoryItem[])
         setCareerLinks((json.data.careerLinks || []) as CareerLink[])
       } catch (loadError: any) {
         if (!ignore) setError(loadError?.message || 'Не удалось загрузить структуру')
@@ -422,11 +402,6 @@ export default function StructurePage() {
     }
     return map
   }, [assignments, companyFilter, roleFilter])
-  const assignedOperatorIds = useMemo(() => new Set(assignments.map((assignment) => assignment.operator_id)), [assignments])
-  const unassignedOperators = useMemo(
-    () => operators.filter((operator) => !assignedOperatorIds.has(operator.id)),
-    [operators, assignedOperatorIds],
-  )
   const visibleCompanies = useMemo(
     () => companies.filter((company) => companyFilter === 'all' || company.id === companyFilter),
     [companies, companyFilter],
@@ -450,91 +425,6 @@ export default function StructurePage() {
         return String(a.operator?.name || '').localeCompare(String(b.operator?.name || ''), 'ru')
       })
   }, [assignments, operatorsById, companiesById])
-  const formattedHistory = useMemo(() => {
-    const getOperatorNameById = (operatorId: string | null | undefined) => {
-      if (!operatorId) return null
-      const operator = operatorsById.get(operatorId)
-      if (!operator) return operatorId
-      return getOperatorDisplayName({
-        ...operator,
-        full_name: operator.operator_profiles?.[0]?.full_name || null,
-      })
-    }
-
-    const getCompanyNameById = (companyId: string | null | undefined) => {
-      if (!companyId) return null
-      return companiesById.get(companyId)?.name || companyId
-    }
-
-    const getRoleLabel = (role: unknown) => {
-      if (typeof role !== 'string') return null
-      return COMPANY_ROLE_LABEL[role as CompanyOperatorRole] || STAFF_ROLE_LABEL[role as StaffRole] || role
-    }
-
-    return history.map((entry) => {
-      const payload = entry.payload || {}
-      const title = STRUCTURE_ACTION_LABEL[entry.action] || entry.action
-      const details: Array<{ label: string; value: string }> = []
-
-      const operatorName =
-        getOperatorNameById((payload.operator_id as string | undefined) || null) ||
-        getOperatorNameById(entry.entity_type === 'operator-career' ? entry.entity_id : null)
-      let subtitle = operatorName || 'Изменение структуры'
-
-      if (entry.action === 'promote-create' || entry.action === 'promote-update') {
-        const roleLabel = getRoleLabel(payload.role)
-        if (roleLabel) {
-          subtitle = operatorName ? `${operatorName} теперь ${roleLabel.toLowerCase()}` : `Новая роль: ${roleLabel}`
-          details.push({ label: 'Роль', value: roleLabel })
-        }
-        if (payload.monthly_salary != null) {
-          details.push({ label: 'Оклад', value: formatMoney(Number(payload.monthly_salary)) })
-        }
-      }
-
-      if (entry.action === 'save') {
-        const nextAssignments = Array.isArray(payload.assignments) ? payload.assignments : []
-        const previousCount = typeof payload.previous_count === 'number' ? payload.previous_count : 0
-        const nextCount = typeof payload.next_count === 'number' ? payload.next_count : nextAssignments.length
-
-        if (nextCount === 0) {
-          subtitle = operatorName ? `${operatorName} снят со всех точек` : 'Оператор снят со всех точек'
-          details.push({ label: 'Итог', value: 'Все привязки к точкам удалены' })
-        } else {
-          subtitle = operatorName ? `${operatorName} обновлён по точкам` : 'Привязка к точкам обновлена'
-          details.push({ label: 'Было назначений', value: String(previousCount) })
-          details.push({ label: 'Стало назначений', value: String(nextCount) })
-
-          for (const assignment of nextAssignments.slice(0, 3) as Array<Record<string, unknown>>) {
-            const companyName =
-              typeof assignment.company_name === 'string'
-                ? assignment.company_name
-                : getCompanyNameById(typeof assignment.company_id === 'string' ? assignment.company_id : null)
-            const roleLabel = getRoleLabel(assignment.role_in_company)
-            const suffix = assignment.is_primary ? ' • основная точка' : ''
-            if (companyName || roleLabel) {
-              details.push({
-                label: companyName || 'Точка',
-                value: `${roleLabel || 'Роль не указана'}${suffix}`,
-              })
-            }
-          }
-        }
-      }
-
-      if (details.length === 0) {
-        details.push({ label: 'Событие', value: 'Изменение структуры сохранено' })
-      }
-
-      return {
-        ...entry,
-        title,
-        subtitle,
-        details,
-      }
-    })
-  }, [history, operatorsById, companiesById])
-
   const openOperatorEditor = (operator: Operator) => {
     const rows = assignments
       .filter((assignment) => assignment.operator_id === operator.id)
@@ -593,10 +483,6 @@ export default function StructurePage() {
           updated_at: row.updated_at,
         })),
       ])
-      const reload = await fetch('/api/admin/structure', { cache: 'no-store' }).then((res) => res.json()).catch(() => null)
-      if (reload?.ok) {
-        setHistory((reload.data?.history || []) as StructureHistoryItem[])
-      }
       closeOperatorEditor()
     } catch (saveError: any) {
       setError(saveError?.message || 'Не удалось сохранить структуру оператора')
@@ -778,84 +664,6 @@ export default function StructurePage() {
                 </div>
               </section>
 
-              <section className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Users2 className="h-5 w-5 text-slate-300" />
-                  <h2 className="text-xl font-semibold text-white">Операторы без точки</h2>
-                </div>
-
-                {unassignedOperators.length > 0 ? (
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {unassignedOperators.map((operator) => (
-                      <Card key={operator.id} className="border-white/10 bg-slate-950/60 p-4 text-white">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium">
-                              {getOperatorDisplayName({
-                                ...operator,
-                                full_name: operator.operator_profiles?.[0]?.full_name || null,
-                              })}
-                            </p>
-                            <p className="mt-1 text-sm text-slate-500">
-                              {operator.operator_profiles?.[0]?.position || 'Оператор без привязки к точке'}
-                            </p>
-                          </div>
-                          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-300">
-                            free
-                          </span>
-                        </div>
-                        <Button variant="ghost" size="sm" className="mt-3 w-full justify-center" onClick={() => openOperatorEditor(operator)}>
-                          <PencilLine className="mr-2 h-3.5 w-3.5" />
-                          Назначить точку
-                        </Button>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <Card className="border-white/10 bg-slate-950/60 p-5 text-sm text-slate-400">
-                    Все активные операторы уже распределены по компаниям.
-                  </Card>
-                )}
-              </section>
-
-              <section className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Network className="h-5 w-5 text-slate-300" />
-                  <h2 className="text-xl font-semibold text-white">История структуры</h2>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-2">
-                  {formattedHistory.length > 0 ? formattedHistory.map((entry) => (
-                    <Card key={entry.id} className="border-white/10 bg-slate-950/60 p-4 text-white">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-medium">{entry.title}</div>
-                          <div className="mt-1 text-sm text-slate-300">{entry.subtitle}</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {new Date(entry.created_at).toLocaleString('ru-RU')}
-                          </div>
-                        </div>
-                        <span className="rounded-full border border-white/8 bg-white/[0.04] px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">
-                          tree
-                        </span>
-                      </div>
-
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {entry.details.map((detail, index) => (
-                          <div key={`${entry.id}-${index}`} className="rounded-xl border border-white/8 bg-black/20 px-3 py-2">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{detail.label}</div>
-                            <div className="mt-1 text-sm text-slate-200">{detail.value}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  )) : (
-                    <Card className="border-white/10 bg-slate-950/60 p-5 text-sm text-slate-500">
-                      История по структуре появится после первых назначений и повышений.
-                    </Card>
-                  )}
-                </div>
-              </section>
                 </>
               ) : (
                 <section className="space-y-5">
@@ -950,31 +758,6 @@ export default function StructurePage() {
                     </Card>
                   </div>
 
-                  <Card className="border-white/10 bg-slate-950/60 p-5 text-white">
-                    <div className="flex items-center gap-2">
-                      <Network className="h-5 w-5 text-slate-300" />
-                      <h2 className="text-xl font-semibold">Последние изменения в росте</h2>
-                    </div>
-                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                      {formattedHistory.length > 0 ? formattedHistory.map((entry) => (
-                        <Card key={`career-${entry.id}`} className="border-white/10 bg-black/20 p-4 text-white">
-                          <div className="text-sm font-medium">{entry.title}</div>
-                          <div className="mt-1 text-sm text-slate-300">{entry.subtitle}</div>
-                          <div className="mt-1 text-xs text-slate-500">{new Date(entry.created_at).toLocaleString('ru-RU')}</div>
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                            {entry.details.map((detail, index) => (
-                              <div key={`${entry.id}-career-${index}`} className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{detail.label}</div>
-                                <div className="mt-1 text-sm text-slate-200">{detail.value}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </Card>
-                      )) : (
-                        <div className="text-sm text-slate-500">История назначений появится после первых изменений.</div>
-                      )}
-                    </div>
-                  </Card>
                 </section>
               )}
             </>
