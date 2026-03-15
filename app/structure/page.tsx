@@ -113,6 +113,12 @@ const COMPANY_ROLE_LABEL: Record<CompanyOperatorRole, string> = {
   senior_cashier: 'Старший кассир',
 }
 
+const STRUCTURE_ACTION_LABEL: Record<string, string> = {
+  'save-assignments': 'Обновлена привязка к точкам',
+  'promote-create': 'Оператор повышен',
+  'promote-update': 'Повышение обновлено',
+}
+
 function formatMoney(value: number | null | undefined) {
   if (value == null) return 'Не задан'
   return `${Number(value).toLocaleString('ru-RU')} ₸`
@@ -124,6 +130,14 @@ function getPersonName(person: { full_name?: string | null; short_name?: string 
 
 function getCompanyLeadTitle(company: Company) {
   return (company.code || '').toLowerCase() === 'ramen' ? 'Старший кассир' : 'Старший оператор'
+}
+
+function formatHistoryValue(value: unknown) {
+  if (value == null || value === '') return 'Не указано'
+  if (typeof value === 'boolean') return value ? 'Да' : 'Нет'
+  if (typeof value === 'number') return String(value)
+  if (Array.isArray(value)) return `${value.length} элементов`
+  return String(value)
 }
 
 function StaffNode({ member, tone }: { member: StaffMember; tone: 'owner' | 'manager' | 'marketer' }) {
@@ -355,6 +369,7 @@ export default function StructurePage() {
   const managers = useMemo(() => staff.filter((member) => member.role === 'manager'), [staff])
   const marketers = useMemo(() => staff.filter((member) => member.role === 'marketer'), [staff])
   const operatorsById = useMemo(() => new Map(operators.map((operator) => [operator.id, operator])), [operators])
+  const companiesById = useMemo(() => new Map(companies.map((company) => [company.id, company])), [companies])
   const assignmentsByCompany = useMemo(() => {
     const map = new Map<string, Assignment[]>()
     for (const assignment of assignments) {
@@ -375,6 +390,81 @@ export default function StructurePage() {
     () => companies.filter((company) => companyFilter === 'all' || company.id === companyFilter),
     [companies, companyFilter],
   )
+  const formattedHistory = useMemo(() => {
+    const getOperatorNameById = (operatorId: string | null | undefined) => {
+      if (!operatorId) return null
+      const operator = operatorsById.get(operatorId)
+      if (!operator) return operatorId
+      return getOperatorDisplayName({
+        ...operator,
+        full_name: operator.operator_profiles?.[0]?.full_name || null,
+      })
+    }
+
+    const getCompanyNameById = (companyId: string | null | undefined) => {
+      if (!companyId) return null
+      return companiesById.get(companyId)?.name || companyId
+    }
+
+    const getRoleLabel = (role: unknown) => {
+      if (typeof role !== 'string') return null
+      return COMPANY_ROLE_LABEL[role as CompanyOperatorRole] || STAFF_ROLE_LABEL[role as StaffRole] || role
+    }
+
+    return history.map((entry) => {
+      const payload = entry.payload || {}
+      const title = STRUCTURE_ACTION_LABEL[entry.action] || entry.action
+      const details: Array<{ label: string; value: string }> = []
+
+      const operatorName =
+        getOperatorNameById((payload.operator_id as string | undefined) || null) ||
+        getOperatorNameById(entry.entity_type === 'operator-career' ? entry.entity_id : null)
+      const staffId = typeof payload.staff_id === 'string' ? payload.staff_id : null
+
+      if (entry.action === 'promote-create' || entry.action === 'promote-update') {
+        const roleLabel = getRoleLabel(payload.role)
+        if (roleLabel) details.push({ label: 'Новая роль', value: roleLabel })
+        if (payload.monthly_salary != null) {
+          details.push({ label: 'Оклад', value: formatMoney(Number(payload.monthly_salary)) })
+        }
+        if (staffId) details.push({ label: 'Staff-профиль', value: staffId })
+      }
+
+      if (entry.action === 'save-assignments') {
+        const nextAssignments = Array.isArray(payload.next_assignments) ? payload.next_assignments : []
+        const previousAssignments = Array.isArray(payload.previous_assignments) ? payload.previous_assignments : []
+        details.push({ label: 'Было назначений', value: String(previousAssignments.length) })
+        details.push({ label: 'Стало назначений', value: String(nextAssignments.length) })
+
+        for (const assignment of nextAssignments.slice(0, 2) as Array<Record<string, unknown>>) {
+          const companyName = getCompanyNameById(typeof assignment.company_id === 'string' ? assignment.company_id : null)
+          const roleLabel = getRoleLabel(assignment.role_in_company)
+          const primaryLabel = assignment.is_primary ? ' • основная' : ''
+          if (companyName || roleLabel) {
+            details.push({
+              label: companyName || 'Точка',
+              value: `${roleLabel || 'Роль не указана'}${primaryLabel}`,
+            })
+          }
+        }
+      }
+
+      if (details.length === 0) {
+        Object.entries(payload)
+          .slice(0, 4)
+          .forEach(([key, value]) => {
+            details.push({ label: key.replaceAll('_', ' '), value: formatHistoryValue(value) })
+          })
+      }
+
+      return {
+        ...entry,
+        title,
+        subtitle: operatorName || entry.entity_type,
+        details,
+      }
+    })
+  }, [history, operatorsById, companiesById])
 
   const openOperatorEditor = (operator: Operator) => {
     const rows = assignments
@@ -653,11 +743,12 @@ export default function StructurePage() {
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-2">
-                  {history.length > 0 ? history.map((entry) => (
+                  {formattedHistory.length > 0 ? formattedHistory.map((entry) => (
                     <Card key={entry.id} className="border-white/10 bg-slate-950/60 p-4 text-white">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="text-sm font-medium">{entry.entity_type} • {entry.action}</div>
+                          <div className="text-sm font-medium">{entry.title}</div>
+                          <div className="mt-1 text-sm text-slate-300">{entry.subtitle}</div>
                           <div className="mt-1 text-xs text-slate-500">
                             {new Date(entry.created_at).toLocaleString('ru-RU')}
                           </div>
@@ -667,11 +758,14 @@ export default function StructurePage() {
                         </span>
                       </div>
 
-                      {entry.payload ? (
-                        <pre className="mt-3 overflow-x-auto rounded-xl border border-white/8 bg-black/20 p-3 text-xs leading-5 text-slate-300">
-                          {JSON.stringify(entry.payload, null, 2)}
-                        </pre>
-                      ) : null}
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {entry.details.map((detail, index) => (
+                          <div key={`${entry.id}-${index}`} className="rounded-xl border border-white/8 bg-black/20 px-3 py-2">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{detail.label}</div>
+                            <div className="mt-1 text-sm text-slate-200">{detail.value}</div>
+                          </div>
+                        ))}
+                      </div>
                     </Card>
                   )) : (
                     <Card className="border-white/10 bg-slate-950/60 p-5 text-sm text-slate-500">
