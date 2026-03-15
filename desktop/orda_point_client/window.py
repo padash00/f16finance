@@ -2,21 +2,23 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
-    QDialog,
+    QFrame,
+    QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QStackedWidget,
     QTabWidget,
     QVBoxLayout,
-    QHBoxLayout,
     QWidget,
 )
 
+from admin_tab import AdminTerminalTab
 from api import PointApiClient
 from config import load_config, save_config
 from debt_tab import DebtTab
-from dialogs import ActivationDialog, OperatorLoginDialog
 from shift_tab import ShiftReportTab
 from storage import OfflineQueue
 
@@ -44,8 +46,14 @@ class PointMainWindow(QMainWindow):
         self.api: PointApiClient | None = None
         self.bootstrap_data: dict | None = None
         self.current_operator: dict | None = None
+        self.current_admin: dict | None = None
+        self.admin_credentials: dict | None = None
         self.shift_tab: ShiftReportTab | None = None
         self.debt_tab: DebtTab | None = None
+        self.admin_tab: AdminTerminalTab | None = None
+
+        api_url = (self.config.get("api_base_url") or "").strip()
+        self.api = PointApiClient(api_url or "https://ordaops.kz", str(self.config.get("device_token") or ""))
 
         container = QWidget()
         self.setCentralWidget(container)
@@ -56,29 +64,101 @@ class PointMainWindow(QMainWindow):
         header = QHBoxLayout()
         self.title_label = QLabel("Orda Control Point")
         self.title_label.setStyleSheet("font-size: 24px; font-weight: 700;")
-        self.status_label = QLabel("Подключение...")
+        self.status_label = QLabel("Ожидание входа...")
         self.status_label.setStyleSheet("color: #94a3b8; font-size: 13px;")
         header.addWidget(self.title_label)
         header.addStretch(1)
         header.addWidget(self.status_label)
         root.addLayout(header)
 
+        self.stack = QStackedWidget()
+        root.addWidget(self.stack, 1)
+
+        self.login_view = self.build_login_view()
+        self.workspace_view = self.build_workspace_view()
+        self.stack.addWidget(self.login_view)
+        self.stack.addWidget(self.workspace_view)
+        self.stack.setCurrentWidget(self.login_view)
+
+        self.refresh_queue_label()
+        self.show_login_mode()
+        QTimer.singleShot(0, self.bootstrap_if_possible)
+        self.setup_autosave()
+
+    def build_login_view(self):
+        wrapper = QWidget()
+        layout = QVBoxLayout(wrapper)
+        layout.addStretch(1)
+
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background: #0f172a; border: 1px solid #1f2937; border-radius: 24px; }"
+        )
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(28, 28, 28, 28)
+        card_layout.setSpacing(16)
+
+        title = QLabel("Вход в программу точки")
+        title.setStyleSheet("font-size: 28px; font-weight: 700; color: #f8fafc;")
+        subtitle = QLabel(
+            "Оператор входит своим логином и паролем с сайта. Настройка терминала доступна только super-admin."
+        )
+        subtitle.setWordWrap(True)
+        subtitle.setStyleSheet("font-size: 14px; color: #94a3b8;")
+        card_layout.addWidget(title)
+        card_layout.addWidget(subtitle)
+
+        self.login_point_label = QLabel("Точка: терминал ещё не привязан")
+        self.login_point_label.setStyleSheet(
+            "font-size: 14px; color: #e2e8f0; background: #111827; border: 1px solid #1f2937; "
+            "border-radius: 12px; padding: 10px 14px;"
+        )
+        card_layout.addWidget(self.login_point_label)
+
+        self.login_error = QLabel("")
+        self.login_error.setWordWrap(True)
+        self.login_error.setStyleSheet("font-size: 13px; color: #fca5a5;")
+        self.login_error.hide()
+        card_layout.addWidget(self.login_error)
+
+        self.login_input = QLineEdit()
+        self.login_input.setPlaceholderText("Логин оператора или email super-admin")
+        self.login_input.setText(str(self.config.get("last_operator_username") or ""))
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setPlaceholderText("Пароль")
+        card_layout.addWidget(self.login_input)
+        card_layout.addWidget(self.password_input)
+
+        buttons = QHBoxLayout()
+        self.operator_login_btn = QPushButton("Войти как оператор")
+        self.operator_login_btn.clicked.connect(self.handle_operator_login)
+        self.admin_login_btn = QPushButton("Super Admin")
+        self.admin_login_btn.clicked.connect(self.handle_admin_login)
+        buttons.addWidget(self.operator_login_btn)
+        buttons.addWidget(self.admin_login_btn)
+        card_layout.addLayout(buttons)
+
+        layout.addWidget(card, 0)
+        layout.addStretch(1)
+        return wrapper
+
+    def build_workspace_view(self):
+        wrapper = QWidget()
+        root = QVBoxLayout(wrapper)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(16)
+
         self.company_label = QLabel("Точка: —")
         self.company_label.setStyleSheet("font-size: 14px; color: #cbd5e1;")
         root.addWidget(self.company_label)
 
         toolbar = QHBoxLayout()
-        self.connect_btn = QPushButton("Настройки точки")
-        self.connect_btn.clicked.connect(lambda: self.configure_connection(required=False))
         self.retry_btn = QPushButton("Синхронизировать очереди")
         self.retry_btn.clicked.connect(self.flush_queues)
-        self.login_btn = QPushButton("Войти как оператор")
-        self.login_btn.clicked.connect(lambda: self.login_operator(required=False))
-        self.logout_btn = QPushButton("Сменить оператора")
-        self.logout_btn.clicked.connect(self.logout_operator)
-        toolbar.addWidget(self.connect_btn)
+        self.logout_btn = QPushButton("Выйти")
+        self.logout_btn.clicked.connect(self.logout)
         toolbar.addWidget(self.retry_btn)
-        toolbar.addWidget(self.login_btn)
         toolbar.addWidget(self.logout_btn)
         toolbar.addStretch(1)
         self.queue_label = QLabel("Смена: 0 • Долги: 0")
@@ -86,174 +166,173 @@ class PointMainWindow(QMainWindow):
         toolbar.addWidget(self.queue_label)
         root.addLayout(toolbar)
 
-        self.operator_label = QLabel("Оператор не вошёл")
-        self.operator_label.setStyleSheet(
+        self.session_label = QLabel("Сессия не активна")
+        self.session_label.setStyleSheet(
             "font-size: 14px; color: #e2e8f0; background: #111827; border: 1px solid #1f2937; "
             "border-radius: 12px; padding: 10px 14px;"
         )
-        root.addWidget(self.operator_label)
+        root.addWidget(self.session_label)
 
         self.tabs = QTabWidget()
         root.addWidget(self.tabs, 1)
-
-        self.refresh_queue_label()
-        QTimer.singleShot(0, self.start_flow)
-        self.setup_autosave()
+        return wrapper
 
     def save_config(self):
         save_config(self.config)
 
-    def start_flow(self):
-        if not self.bootstrap_if_possible(show_error=False):
-            self.configure_connection(required=True)
-        if self.bootstrap_data:
-            self.login_operator(required=True)
+    def update_login_point_label(self):
+        company = (self.bootstrap_data or {}).get("company") or {}
+        device = (self.bootstrap_data or {}).get("device") or {}
+        token = str(self.config.get("device_token") or "").strip()
+        if company:
+            self.login_point_label.setText(
+                f"Точка: {company.get('name', '—')} • {device.get('name', 'device')} • терминал привязан"
+            )
+        elif token:
+            self.login_point_label.setText("Точка: token сохранён, пробую подключиться к серверу")
+        else:
+            self.login_point_label.setText("Точка: терминал ещё не привязан")
 
-    def configure_connection(self, required: bool):
-        while True:
-            dialog = ActivationDialog(self.config, self)
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                if required and not self.bootstrap_data:
-                    self.close()
-                return
+    def set_login_error(self, message: str | None):
+        text = (message or "").strip()
+        self.login_error.setText(text)
+        self.login_error.setVisible(bool(text))
 
-            payload = dialog.payload()
-            if not payload["api_base_url"] or not payload["device_token"]:
-                QMessageBox.warning(self, "Подключение", "Нужны API URL и device token.")
-                if required:
-                    continue
-                return
+    def show_login_mode(self):
+        self.stack.setCurrentWidget(self.login_view)
+        self.status_label.setText("Ожидание входа...")
+        self.title_label.setText("Orda Control Point")
+        self.update_login_point_label()
 
-            self.config.update(payload)
-            self.save_config()
+    def show_workspace_mode(self):
+        self.stack.setCurrentWidget(self.workspace_view)
 
-            if self.bootstrap_if_possible(show_success=True):
-                self.current_operator = None
-                self.apply_operator_state()
-                self.login_operator(required=True)
-                return
-
-            if not required:
-                return
-
-    def bootstrap_if_possible(self, show_success: bool = False, show_error: bool = True) -> bool:
-        api_url = (self.config.get("api_base_url") or "").strip()
+    def bootstrap_if_possible(self, show_error: bool = False) -> bool:
+        api_url = (self.config.get("api_base_url") or "").strip() or "https://ordaops.kz"
         device_token = (self.config.get("device_token") or "").strip()
-        if not api_url or not device_token:
-            self.status_label.setText("Нужен API URL и device token")
+        self.api = PointApiClient(api_url, device_token)
+        if not device_token:
+            self.bootstrap_data = None
+            self.update_login_point_label()
             return False
 
         try:
-            self.api = PointApiClient(api_url, device_token)
             self.bootstrap_data = self.api.bootstrap()
-            self.hydrate_bootstrap()
-            if show_success:
-                QMessageBox.information(self, "Подключение", "Точка успешно подключена.")
+            self.update_login_point_label()
             return True
         except Exception as error:
-            self.api = None
             self.bootstrap_data = None
-            self.status_label.setText("Ошибка bootstrap")
+            self.update_login_point_label()
             if show_error:
-                QMessageBox.critical(self, "Point bootstrap", str(error))
+                self.set_login_error(str(error))
             return False
 
-    def hydrate_bootstrap(self):
-        company = (self.bootstrap_data or {}).get("company") or {}
-        device = (self.bootstrap_data or {}).get("device") or {}
-        self.company_label.setText(
-            f"Точка: {company.get('name', '—')}  |  Режим: {device.get('point_mode', '—')}"
-        )
-        self.status_label.setText(f"Подключено • {device.get('name', 'device')}")
-        self.setWindowTitle(f"Orda Control Point • {company.get('name', 'Точка')}")
-        self.build_modules()
-
-    def build_modules(self):
+    def build_workspace_for_role(self):
         self.tabs.clear()
         self.shift_tab = None
         self.debt_tab = None
+        self.admin_tab = None
+
+        if self.current_admin:
+            self.admin_tab = AdminTerminalTab(self)
+            self.tabs.addTab(self.admin_tab, "Терминал")
 
         device = (self.bootstrap_data or {}).get("device") or {}
+        company = (self.bootstrap_data or {}).get("company") or {}
         flags = (device.get("feature_flags") or {}) if isinstance(device, dict) else {}
-        if flags.get("shift_report") is not False:
+
+        if self.bootstrap_data and flags.get("shift_report") is not False:
             self.shift_tab = ShiftReportTab(self)
             self.tabs.addTab(self.shift_tab, "Смена")
 
-        if flags.get("debt_report") is True:
+        if self.bootstrap_data and flags.get("debt_report") is True:
             self.debt_tab = DebtTab(self)
             self.tabs.addTab(self.debt_tab, "Долги")
 
         if self.tabs.count() == 0:
-            self.tabs.addTab(EmptyTab("Для этой точки пока не включены рабочие модули.", self), "Инфо")
+            self.tabs.addTab(EmptyTab("Терминал ещё не настроен. Войдите как super-admin и привяжите точку.", self), "Инфо")
 
-        self.apply_operator_state()
-
-    def login_operator(self, required: bool):
-        if not self.api:
-            QMessageBox.warning(self, "Вход оператора", "Сначала подключите точку.")
-            return
-
-        remembered = self.config.get("last_operator_username") or ""
-        while True:
-            dialog = OperatorLoginDialog(remembered_username=str(remembered), parent=self)
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                if required and not self.current_operator:
-                    self.close()
-                return
-
-            payload = dialog.payload()
-            if not payload["username"] or not payload["password"]:
-                QMessageBox.warning(self, "Вход оператора", "Нужны логин и пароль.")
-                if required:
-                    continue
-                return
-
-            try:
-                result = self.api.login_operator(payload["username"], payload["password"])
-                self.current_operator = result.get("operator") or None
-                self.config["last_operator_username"] = payload["username"]
-                self.save_config()
-                self.apply_operator_state()
-                QMessageBox.information(self, "Вход оператора", "Оператор успешно вошёл в программу.")
-                return
-            except Exception as error:
-                QMessageBox.critical(self, "Вход оператора", str(error))
-                if not required:
-                    return
-
-    def apply_operator_state(self):
-        if not self.current_operator:
-            self.operator_label.setText("Оператор не вошёл")
-            self.status_label.setText("Нужен вход оператора")
+        if self.current_admin:
+            self.company_label.setText(
+                f"Super Admin • текущая точка: {company.get('name', 'не выбрана')}"
+            )
+            self.session_label.setText(f"Super Admin: {self.current_admin.get('email', '—')}")
+            if self.admin_tab:
+                self.admin_tab.load_devices()
+                self.tabs.setCurrentWidget(self.admin_tab)
+        elif self.current_operator:
+            name = self.current_operator.get("full_name") or self.current_operator.get("name") or "Оператор"
+            role = self.current_operator.get("role_in_company") or "operator"
+            username = self.current_operator.get("username") or "—"
+            self.company_label.setText(
+                f"Точка: {company.get('name', '—')}  |  Режим: {device.get('point_mode', '—')}"
+            )
+            self.session_label.setText(f"Оператор: {name} • {role} • @{username}")
             if self.shift_tab:
-                self.shift_tab.set_operator_enabled(False)
-            if self.debt_tab:
-                self.debt_tab.set_operator_enabled(False)
-            return
-
-        name = self.current_operator.get("full_name") or self.current_operator.get("name") or "Оператор"
-        role = self.current_operator.get("role_in_company") or "operator"
-        username = self.current_operator.get("username") or "—"
-        self.operator_label.setText(f"Оператор: {name} • {role} • @{username}")
-        self.status_label.setText(f"Вошёл оператор • {name}")
-        if self.shift_tab:
-            self.shift_tab.set_operator_enabled(True)
-            self.tabs.setCurrentWidget(self.shift_tab)
-        if self.debt_tab:
-            self.debt_tab.update_operator_choices()
-            self.debt_tab.set_current_operator(self.current_operator)
-            self.debt_tab.set_operator_enabled(True)
-            if self.shift_tab is None:
+                self.tabs.setCurrentWidget(self.shift_tab)
+            elif self.debt_tab:
                 self.tabs.setCurrentWidget(self.debt_tab)
 
-    def logout_operator(self):
+        self.show_workspace_mode()
+        self.refresh_queue_label()
+
+    def handle_operator_login(self):
+        self.set_login_error(None)
+        username = self.login_input.text().strip()
+        password = self.password_input.text()
+        if not username or not password:
+            self.set_login_error("Введите логин и пароль оператора.")
+            return
+
+        if not self.bootstrap_if_possible(show_error=False):
+            self.set_login_error("Терминал ещё не настроен. Войти может только super-admin.")
+            return
+
+        try:
+            result = self.api.login_operator(username, password)
+            self.current_operator = result.get("operator") or None
+            self.current_admin = None
+            self.admin_credentials = None
+            self.config["last_operator_username"] = username
+            self.save_config()
+            self.status_label.setText("Оператор вошёл")
+            self.password_input.clear()
+            self.build_workspace_for_role()
+        except Exception as error:
+            self.set_login_error(str(error))
+
+    def handle_admin_login(self):
+        self.set_login_error(None)
+        email = self.login_input.text().strip()
+        password = self.password_input.text()
+        if not email or not password:
+            self.set_login_error("Введите email и пароль super-admin.")
+            return
+
+        api_url = (self.config.get("api_base_url") or "").strip() or "https://ordaops.kz"
+        self.api = PointApiClient(api_url, str(self.config.get("device_token") or ""))
+
+        try:
+            result = self.api.login_super_admin(email, password)
+            self.current_admin = result.get("admin") or {"email": email}
+            self.current_operator = None
+            self.admin_credentials = {"email": email, "password": password}
+            self.bootstrap_if_possible(show_error=False)
+            self.status_label.setText("Super Admin вошёл")
+            self.build_workspace_for_role()
+        except Exception as error:
+            self.set_login_error(str(error))
+
+    def logout(self):
         self.current_operator = None
-        self.apply_operator_state()
-        self.login_operator(required=True)
+        self.current_admin = None
+        self.admin_credentials = None
+        self.password_input.clear()
+        self.show_login_mode()
 
     def flush_queues(self):
         if not self.api:
-            QMessageBox.warning(self, "Очередь", "Сначала подключите точку.")
+            QMessageBox.warning(self, "Очередь", "Сначала войдите в программу.")
             return
 
         shift_sent = 0
@@ -294,10 +373,7 @@ class PointMainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "Очереди",
-            (
-                f"Смены: отправлено {shift_sent}, ошибок {shift_failed}\n"
-                f"Долги: отправлено {debt_sent}, ошибок {debt_failed}"
-            ),
+            f"Смены: отправлено {shift_sent}, ошибок {shift_failed}\nДолги: отправлено {debt_sent}, ошибок {debt_failed}",
         )
 
     def refresh_queue_label(self):

@@ -13,10 +13,12 @@ class PointApiClient:
         self.session = requests.Session()
 
     def _headers(self) -> dict[str, str]:
-        return {
+        headers = {
             "Content-Type": "application/json",
-            "x-point-device-token": self.device_token,
         }
+        if self.device_token:
+            headers["x-point-device-token"] = self.device_token
+        return headers
 
     def bootstrap(self) -> dict[str, Any]:
         response = self.session.get(
@@ -82,6 +84,32 @@ class PointApiClient:
             json={
                 "action": "deleteDebt",
                 "itemId": item_id,
+            },
+            timeout=20,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
+    def login_super_admin(self, email: str, password: str) -> dict[str, Any]:
+        response = self.session.post(
+            f"{self.api_base_url}/api/point/admin-login",
+            headers={"Content-Type": "application/json"},
+            json={
+                "email": email.strip(),
+                "password": password,
+            },
+            timeout=20,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
+    def list_admin_devices(self, email: str, password: str) -> dict[str, Any]:
+        response = self.session.post(
+            f"{self.api_base_url}/api/point/admin-devices",
+            headers={"Content-Type": "application/json"},
+            json={
+                "email": email.strip(),
+                "password": password,
             },
             timeout=20,
         )
