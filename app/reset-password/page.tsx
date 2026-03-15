@@ -23,6 +23,10 @@ function parseHashParams() {
   return new URLSearchParams(hash)
 }
 
+type OtpFlowType = 'signup' | 'magiclink' | 'recovery' | 'invite' | 'email_change' | 'email'
+
+const OTP_TYPES = new Set<OtpFlowType>(['signup', 'magiclink', 'recovery', 'invite', 'email_change', 'email'])
+
 function ResetPasswordContent() {
   const router = useRouter()
   const pathname = usePathname()
@@ -59,16 +63,36 @@ function ResetPasswordContent() {
 
     const prepareSession = async () => {
       try {
+        const queryParams = new URLSearchParams(window.location.search)
         const hashParams = parseHashParams()
+        const code = queryParams.get('code')
+        const tokenHash = queryParams.get('token_hash')
+        const queryType = queryParams.get('type')
         const accessToken = hashParams.get('access_token')
         const refreshToken = hashParams.get('refresh_token')
+        const hashType = hashParams.get('type')
 
-        if (accessToken && refreshToken) {
+        if (tokenHash && queryType && OTP_TYPES.has(queryType as OtpFlowType)) {
+          const { error: otpError } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: queryType as OtpFlowType,
+          })
+          if (otpError) throw otpError
+        } else if (code) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+          if (exchangeError) throw exchangeError
+        } else if (accessToken && refreshToken) {
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           })
           if (sessionError) throw sessionError
+        } else if (tokenHash && hashType && OTP_TYPES.has(hashType as OtpFlowType)) {
+          const { error: otpError } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: hashType as OtpFlowType,
+          })
+          if (otpError) throw otpError
         }
 
         const {
@@ -121,7 +145,12 @@ function ResetPasswordContent() {
 
       setSuccess(copy.success)
     } catch (err: any) {
-      setError(err?.message || 'Не удалось обновить пароль.')
+      const message = String(err?.message || '')
+      setError(
+        message.toLowerCase().includes('auth session missing')
+          ? 'Сессия для смены пароля потерялась. Откройте ссылку из письма заново и не закрывайте страницу до сохранения.'
+          : err?.message || 'Не удалось обновить пароль.',
+      )
     } finally {
       setLoading(false)
     }
