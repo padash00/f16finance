@@ -6,7 +6,6 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabaseClient'
 import {
   ArrowLeft,
   Plus,
@@ -16,24 +15,15 @@ import {
   RefreshCw,
   Filter,
   X,
-  TrendingUp,
-  DollarSign,
-  Clock,
-  Award,
   Eye,
   EyeOff,
-  ChevronDown,
-  ChevronUp,
   Info,
   Settings,
   Moon,
   Sun,
   Building2,
-  Calendar,
-  Edit2,
-  Copy,
   Trash2,
-  Search, // ✅ Импортируем Search из lucide-react
+  Search,
 } from 'lucide-react'
 
 // =====================
@@ -59,6 +49,27 @@ type CompanyRow = {
   id: string
   name: string
   code: string | null
+}
+
+type RuleHistoryRow = {
+  id: string
+  actor_user_id: string | null
+  actor_email: string | null
+  entity_type: string
+  entity_id: string
+  action: 'create' | 'update' | 'delete'
+  payload: Record<string, unknown> | null
+  created_at: string
+}
+
+type SalaryRulesResponse = {
+  ok: boolean
+  data?: {
+    rules: RuleRow[]
+    companies: CompanyRow[]
+    history: RuleHistoryRow[]
+  }
+  error?: string
 }
 
 // =====================
@@ -111,6 +122,14 @@ const formatMoneyCompact = (v: number | null) => {
   return v + ' ₸'
 }
 
+const formatDateTime = (value: string) =>
+  new Date(value).toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
 const parseIntSafe = (v: string | number | null): number | null => {
   if (v === null || v === undefined) return null
   const s = typeof v === 'number' ? String(v) : v
@@ -131,6 +150,75 @@ const getCompanyStyle = (code: string) => {
     border: 'border-gray-500/20', 
     text: 'text-gray-400' 
   }
+}
+
+const getActionLabel = (action: RuleHistoryRow['action']) => {
+  if (action === 'create') return 'Создано правило'
+  if (action === 'delete') return 'Удалено правило'
+  return 'Обновлено правило'
+}
+
+const getActionStyle = (action: RuleHistoryRow['action']) => {
+  if (action === 'create') return 'border-emerald-500/20 bg-emerald-500/5 text-emerald-300'
+  if (action === 'delete') return 'border-red-500/20 bg-red-500/5 text-red-300'
+  return 'border-violet-500/20 bg-violet-500/5 text-violet-300'
+}
+
+const formatShiftText = (value: unknown) => {
+  return String(value || '').toLowerCase() === 'night' ? 'Ночная смена' : 'Дневная смена'
+}
+
+const toRuleSummary = (payload: Record<string, unknown> | null | undefined) => {
+  if (!payload) return []
+
+  const items = [
+    ['Оклад', formatMoney(parseIntSafe(payload.base_per_shift as string | number | null))],
+    ['Старший оператор', formatMoney(parseIntSafe(payload.senior_operator_bonus as string | number | null))],
+    ['Старший кассир', formatMoney(parseIntSafe(payload.senior_cashier_bonus as string | number | null))],
+    ['Порог 1', formatMoney(parseIntSafe(payload.threshold1_turnover as string | number | null))],
+    ['Бонус 1', formatMoney(parseIntSafe(payload.threshold1_bonus as string | number | null))],
+    ['Порог 2', formatMoney(parseIntSafe(payload.threshold2_turnover as string | number | null))],
+    ['Бонус 2', formatMoney(parseIntSafe(payload.threshold2_bonus as string | number | null))],
+  ] as Array<[string, string]>
+
+  return items
+}
+
+const buildHistoryHighlights = (entry: RuleHistoryRow) => {
+  const payload = entry.payload || {}
+  if (entry.action === 'update') {
+    const previous = (payload.previous as Record<string, unknown> | undefined) || {}
+    const next = (payload.next as Record<string, unknown> | undefined) || {}
+    const fields: Array<[string, keyof RuleRow]> = [
+      ['Оклад', 'base_per_shift'],
+      ['Старший оператор', 'senior_operator_bonus'],
+      ['Старший кассир', 'senior_cashier_bonus'],
+      ['Порог 1', 'threshold1_turnover'],
+      ['Бонус 1', 'threshold1_bonus'],
+      ['Порог 2', 'threshold2_turnover'],
+      ['Бонус 2', 'threshold2_bonus'],
+    ]
+
+    return fields
+      .filter(([, field]) => previous[field] !== next[field])
+      .slice(0, 4)
+      .map(([label, field]) => ({
+        label,
+        before: formatMoney(parseIntSafe(previous[field] as string | number | null)),
+        after: formatMoney(parseIntSafe(next[field] as string | number | null)),
+      }))
+  }
+
+  const source =
+    entry.action === 'delete'
+      ? ((payload.previous as Record<string, unknown> | undefined) || payload)
+      : ((payload.next as Record<string, unknown> | undefined) || payload)
+
+  return toRuleSummary(source).slice(0, 4).map(([label, value]) => ({
+    label,
+    before: entry.action === 'delete' ? value : '—',
+    after: entry.action === 'delete' ? 'Удалено' : value,
+  }))
 }
 
 // =====================
@@ -167,6 +255,7 @@ function SalaryRulesContent() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [history, setHistory] = useState<RuleHistoryRow[]>([])
 
   // UI states
   const [savingId, setSavingId] = useState<number | null>(null)
@@ -189,23 +278,16 @@ function SalaryRulesContent() {
     setError(null)
 
     try {
-      const [rulesRes, compRes] = await Promise.all([
-        supabase
-          .from('operator_salary_rules')
-          .select('*')
-          .order('company_code', { ascending: true })
-          .order('shift_type', { ascending: true }),
-        supabase.from('companies').select('id,name,code').order('name'),
-      ])
-
-      if (rulesRes.error || compRes.error) {
-        console.error('loadAll error', rulesRes.error, compRes.error)
-        setError('Ошибка загрузки данных')
+      const response = await fetch('/api/admin/salary-rules', { cache: 'no-store' })
+      const json = (await response.json().catch(() => null)) as SalaryRulesResponse | null
+      if (!response.ok || !json?.ok || !json.data) {
+        setError(json?.error || 'Ошибка загрузки данных')
         return
       }
 
-      setRules((rulesRes.data || []) as RuleRow[])
-      setCompanies((compRes.data || []) as CompanyRow[])
+      setRules((json.data.rules || []) as RuleRow[])
+      setCompanies((json.data.companies || []) as CompanyRow[])
+      setHistory((json.data.history || []) as RuleHistoryRow[])
       setDirtyIds(new Set())
     } catch (err) {
       setError('Не удалось загрузить данные')
@@ -297,6 +379,10 @@ function SalaryRulesContent() {
     })
   }, [rules, showInactive, filterCompany, filterShift, searchTerm, companyOptions])
 
+  const quickTabs = useMemo(() => {
+    return companyOptions.filter((company) => company.code)
+  }, [companyOptions])
+
   const stats = useMemo(() => {
     const active = rules.filter(r => r.is_active).length
     const dayShifts = rules.filter(r => r.shift_type === 'day').length
@@ -312,6 +398,19 @@ function SalaryRulesContent() {
       avgBase,
     }
   }, [rules])
+
+  const filteredHistory = useMemo(() => {
+    return history.filter((entry) => {
+      const payload = entry.payload || {}
+      if (filterCompany !== 'all' && String(payload.company_code || '').toLowerCase() !== filterCompany.toLowerCase()) {
+        return false
+      }
+      if (filterShift !== 'all' && String(payload.shift_type || '').toLowerCase() !== filterShift) {
+        return false
+      }
+      return true
+    })
+  }, [history, filterCompany, filterShift])
 
   // Handlers
   const markDirty = (id: number) => {
@@ -382,12 +481,19 @@ function SalaryRulesContent() {
         )
       }
 
-      const { error } = await supabase
-        .from('operator_salary_rules')
-        .update(payload)
-        .eq('id', row.id)
-
-      if (error) throw error
+      const response = await fetch('/api/admin/salary-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateRule',
+          ruleId: row.id,
+          payload,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || 'Ошибка сохранения правила')
+      }
 
       setDirtyIds((prev) => {
         const next = new Set(prev)
@@ -429,12 +535,19 @@ function SalaryRulesContent() {
           )
         }
 
-        const { error } = await supabase
-          .from('operator_salary_rules')
-          .update(payload)
-          .eq('id', row.id)
-
-        if (error) throw error
+        const response = await fetch('/api/admin/salary-rules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'updateRule',
+            ruleId: row.id,
+            payload,
+          }),
+        })
+        const json = await response.json().catch(() => null)
+        if (!response.ok || !json?.ok) {
+          throw new Error(json?.error || 'Ошибка сохранения')
+        }
       }
 
       setSuccessMsg('Все изменения сохранены')
@@ -470,10 +583,12 @@ function SalaryRulesContent() {
         )
       }
 
-      const { data, error } = await supabase
-        .from('operator_salary_rules')
-        .insert([
-          {
+      const response = await fetch('/api/admin/salary-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createRule',
+          payload: {
             company_code: defaultCompany,
             shift_type,
             base_per_shift: 8000,
@@ -485,13 +600,12 @@ function SalaryRulesContent() {
             threshold2_bonus: 2000,
             is_active: true,
           },
-        ])
-        .select()
-        .single()
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка при создании правила')
 
-      if (error) throw error
-
-      setRules((prev) => [...prev, data as RuleRow])
+      setRules((prev) => [...prev, json.data as RuleRow])
       setSuccessMsg('Новое правило добавлено')
       await loadAll(true)
     } catch (e: any) {
@@ -510,12 +624,18 @@ function SalaryRulesContent() {
     setDeletingId(id)
 
     try {
-      const { error } = await supabase
-        .from('operator_salary_rules')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
+      const response = await fetch('/api/admin/salary-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'deleteRule',
+          ruleId: id,
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || 'Ошибка при удалении')
+      }
 
       setSuccessMsg('Правило удалено')
       await loadAll(true)
@@ -626,26 +746,54 @@ function SalaryRulesContent() {
           </div>
 
           {/* Info Card */}
-          <Card className="p-4 bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-pink-500/10 border-white/5">
-            <div className="flex items-start gap-3">
-              <Info className="w-5 h-5 text-violet-400 flex-shrink-0 mt-0.5" />
-              <div className="space-y-1 text-sm">
-                <p>
-                  <span className="text-white font-medium">Базовый оклад</span>{' '}
-                  <span className="text-gray-400">— фиксированная сумма за смену.</span>
-                </p>
-                <p>
-                  <span className="text-white font-medium">Пороговые бонусы</span>{' '}
-                  <span className="text-gray-400">
-                    — если выручка ≥ порога, добавляется бонус.
-                  </span>
-                </p>
-                <p className="text-xs text-gray-500 mt-2">
-                  Итог за смену = оклад + бонус1 + бонус2
-                </p>
+          <div className="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
+            <Card className="p-4 bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-pink-500/10 border-white/5">
+              <div className="flex items-start gap-3">
+                <Info className="w-5 h-5 text-violet-400 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1 text-sm">
+                  <p>
+                    <span className="text-white font-medium">Базовый оклад</span>{' '}
+                    <span className="text-gray-400">— фиксированная сумма за смену.</span>
+                  </p>
+                  <p>
+                    <span className="text-white font-medium">Пороговые бонусы</span>{' '}
+                    <span className="text-gray-400">
+                      — если выручка ≥ порога, добавляется бонус.
+                    </span>
+                  </p>
+                  <p>
+                    <span className="text-white font-medium">Старшие роли</span>{' '}
+                    <span className="text-gray-400">
+                      — отдельная надбавка за старшего оператора и старшего кассира.
+                    </span>
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Итог за смену = оклад + бонусы по выручке + надбавка по роли
+                  </p>
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+
+            <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <p className="text-xs uppercase tracking-[0.24em] text-gray-500">Быстрый обзор</p>
+              <div className="mt-3 space-y-3">
+                <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2">
+                  <span className="text-sm text-gray-400">Средний оклад</span>
+                  <span className="text-base font-semibold text-white">{formatMoney(stats.avgBase)}</span>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2">
+                  <span className="text-sm text-gray-400">Последнее изменение</span>
+                  <span className="text-sm text-white">
+                    {filteredHistory[0] ? formatDateTime(filteredHistory[0].created_at) : 'Пока нет'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2">
+                  <span className="text-sm text-gray-400">История по фильтру</span>
+                  <span className="text-base font-semibold text-white">{filteredHistory.length}</span>
+                </div>
+              </div>
+            </Card>
+          </div>
 
           {/* Messages */}
           {error && (
@@ -668,6 +816,37 @@ function SalaryRulesContent() {
 
           {/* Filters */}
           <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                onClick={() => setFilterCompany('all')}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  filterCompany === 'all'
+                    ? 'bg-white text-gray-950'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                Все точки
+              </button>
+              {quickTabs.map((company) => {
+                const code = company.code || ''
+                const style = getCompanyStyle(code)
+                const active = filterCompany === code
+                return (
+                  <button
+                    key={company.id}
+                    onClick={() => setFilterCompany(code)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                      active
+                        ? `${style.bg} ${style.border} ${style.text}`
+                        : 'border-white/10 bg-white/[0.03] text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {company.name}
+                  </button>
+                )
+              })}
+            </div>
+
             <div className="flex flex-wrap items-center gap-3">
               <Filter className="w-4 h-4 text-gray-500" />
 
@@ -965,6 +1144,116 @@ function SalaryRulesContent() {
               </table>
             </div>
           </Card>
+
+          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">История изменений</h2>
+                  <p className="text-sm text-gray-400">
+                    Красивый журнал по изменениям правил без технических полей базы.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-gray-300">
+                  {filteredHistory.length} событий
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {filteredHistory.length === 0 && (
+                  <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-10 text-center text-sm text-gray-500">
+                    По текущим фильтрам пока нет истории изменений.
+                  </div>
+                )}
+
+                {filteredHistory.slice(0, 10).map((entry) => {
+                  const payload = entry.payload || {}
+                  const subject =
+                    entry.action === 'update'
+                      ? ((payload.next as Record<string, unknown> | undefined) || {})
+                      : entry.action === 'delete'
+                        ? ((payload.previous as Record<string, unknown> | undefined) || {})
+                        : ((payload.next as Record<string, unknown> | undefined) || payload)
+                  const companyCode = String(subject.company_code || '')
+                  const companyName =
+                    companyOptions.find((company) => company.code === companyCode)?.name || companyCode || 'Точка'
+                  const highlights = buildHistoryHighlights(entry)
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`rounded-3xl border p-4 ${getActionStyle(entry.action)}`}
+                    >
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-white">{getActionLabel(entry.action)}</p>
+                          <p className="mt-1 text-sm text-gray-300">
+                            {companyName} · {formatShiftText(subject.shift_type)}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-400">
+                            {entry.actor_email || 'Система'} · {formatDateTime(entry.created_at)}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {highlights.slice(0, 2).map((item) => (
+                            <div
+                              key={`${entry.id}-${item.label}`}
+                              className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-xs text-gray-200"
+                            >
+                              <span className="text-gray-400">{item.label}:</span>{' '}
+                              <span className="font-medium">{item.before}</span>
+                              <span className="mx-1 text-gray-500">→</span>
+                              <span className="font-medium text-white">{item.after}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {highlights.length > 2 && (
+                        <div className="mt-3 grid gap-2 md:grid-cols-2">
+                          {highlights.slice(2).map((item) => (
+                            <div
+                              key={`${entry.id}-${item.label}-extra`}
+                              className="rounded-2xl border border-white/10 bg-black/10 px-3 py-2 text-xs text-gray-200"
+                            >
+                              <span className="text-gray-400">{item.label}:</span>{' '}
+                              <span className="font-medium">{item.before}</span>
+                              <span className="mx-1 text-gray-500">→</span>
+                              <span className="font-medium text-white">{item.after}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+
+            <Card className="p-5 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <h2 className="text-lg font-semibold text-white">Как использовать раздел</h2>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="rounded-3xl border border-white/5 bg-white/[0.03] p-4">
+                  <p className="font-medium text-white">1. Сначала выбери точку</p>
+                  <p className="mt-1 text-gray-400">
+                    Через быстрые вкладки сверху можно быстро перейти на F16 Arena, Ramen или Extra.
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-white/5 bg-white/[0.03] p-4">
+                  <p className="font-medium text-white">2. Настрой базу и бонусы</p>
+                  <p className="mt-1 text-gray-400">
+                    Для каждой смены отдельно задаются оклад, пороги выручки и надбавки для старших ролей.
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-white/5 bg-white/[0.03] p-4">
+                  <p className="font-medium text-white">3. Смотри историю</p>
+                  <p className="mt-1 text-gray-400">
+                    Ниже хранится понятный журнал: кто менял правило, на какой точке и что именно изменилось.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </div>
 
           {/* Bottom info */}
           <div className="flex justify-between items-center text-xs text-gray-500">
