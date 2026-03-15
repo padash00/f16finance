@@ -58,6 +58,25 @@ function getUpcomingTone(daysUntil: number) {
   return 'border-white/10 bg-white/[0.04] text-slate-200'
 }
 
+function getZodiacSign(value: string) {
+  const date = new Date(`${value}T12:00:00`)
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+
+  if ((month === 3 && day >= 21) || (month === 4 && day <= 19)) return { name: 'Овен', emoji: '♈', joke: 'Если сегодня спорить с ним, лучше спорить осторожно.' }
+  if ((month === 4 && day >= 20) || (month === 5 && day <= 20)) return { name: 'Телец', emoji: '♉', joke: 'Праздник любит красиво, вкусно и без суеты.' }
+  if ((month === 5 && day >= 21) || (month === 6 && day <= 20)) return { name: 'Близнецы', emoji: '♊', joke: 'Скорее всего уже рассказал всем, когда у него день рождения.' }
+  if ((month === 6 && day >= 21) || (month === 7 && day <= 22)) return { name: 'Рак', emoji: '♋', joke: 'Поздравление лучше тёплое, а не формальное.' }
+  if ((month === 7 && day >= 23) || (month === 8 && day <= 22)) return { name: 'Лев', emoji: '♌', joke: 'Можно поздравлять ярко, он это точно оценит.' }
+  if ((month === 8 && day >= 23) || (month === 9 && day <= 22)) return { name: 'Дева', emoji: '♍', joke: 'С высокой вероятностью заметит, если забыть про торт.' }
+  if ((month === 9 && day >= 23) || (month === 10 && day <= 22)) return { name: 'Весы', emoji: '♎', joke: 'Главное, чтобы подарок был со вкусом и без хаоса.' }
+  if ((month === 10 && day >= 23) || (month === 11 && day <= 21)) return { name: 'Скорпион', emoji: '♏', joke: 'Лучше поздравить вовремя. Очень вовремя.' }
+  if ((month === 11 && day >= 22) || (month === 12 && day <= 21)) return { name: 'Стрелец', emoji: '♐', joke: 'Есть шанс, что праздник быстро превратится в приключение.' }
+  if ((month === 12 && day >= 22) || (month === 1 && day <= 19)) return { name: 'Козерог', emoji: '♑', joke: 'Даже день рождения может отметить по плану.' }
+  if ((month === 1 && day >= 20) || (month === 2 && day <= 18)) return { name: 'Водолей', emoji: '♒', joke: 'Может внезапно придумать свой формат поздравления.' }
+  return { name: 'Рыбы', emoji: '♓', joke: 'Поздравление лучше с душой, иначе магия не засчитается.' }
+}
+
 export default function BirthdaysPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -180,11 +199,19 @@ export default function BirthdaysPage() {
                     <div className="mt-4 space-y-3">
                       {todayItems.length > 0 ? todayItems.map((item) => (
                         <div key={item.id} className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
+                          {(() => {
+                            const zodiac = getZodiacSign(item.birth_date)
+                            return (
+                              <>
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="text-base font-semibold text-white">{item.name}</div>
                               <div className="mt-1 text-sm text-amber-100/80">
                                 {item.company_name || 'Точка не назначена'}{item.position ? ` • ${item.position}` : ''}
+                              </div>
+                              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-black/20 px-2.5 py-1 text-xs text-amber-100">
+                                <span>{zodiac.emoji}</span>
+                                <span>{zodiac.name}</span>
                               </div>
                             </div>
                             <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-amber-200">
@@ -194,6 +221,10 @@ export default function BirthdaysPage() {
                           <div className="mt-3 text-sm text-slate-200">
                             {formatBirthdayDate(item.birth_date)}{item.age ? ` • ${item.age} лет` : ''}
                           </div>
+                          <div className="mt-2 text-xs text-amber-100/75">{zodiac.joke}</div>
+                              </>
+                            )
+                          })()}
                         </div>
                       )) : (
                         <div className="text-sm text-slate-500">Сегодня дней рождения нет.</div>
@@ -209,11 +240,19 @@ export default function BirthdaysPage() {
                     <div className="mt-4 space-y-3">
                       {weekItems.length > 0 ? weekItems.map((item) => (
                         <div key={item.id} className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                          {(() => {
+                            const zodiac = getZodiacSign(item.birth_date)
+                            return (
+                              <>
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="text-base font-semibold text-white">{item.name}</div>
                               <div className="mt-1 text-sm text-slate-400">
                                 {item.company_name || 'Точка не назначена'}{item.position ? ` • ${item.position}` : ''}
+                              </div>
+                              <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-200">
+                                <span>{zodiac.emoji}</span>
+                                <span>{zodiac.name}</span>
                               </div>
                             </div>
                             <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-emerald-200">
@@ -223,6 +262,10 @@ export default function BirthdaysPage() {
                           <div className="mt-3 text-sm text-slate-200">
                             {formatBirthdayDate(item.birth_date)}{item.age ? ` • исполнится ${item.age}` : ''}
                           </div>
+                          <div className="mt-2 text-xs text-slate-400">{zodiac.joke}</div>
+                              </>
+                            )
+                          })()}
                         </div>
                       )) : (
                         <div className="text-sm text-slate-500">На ближайшую неделю дней рождения нет.</div>
@@ -241,11 +284,19 @@ export default function BirthdaysPage() {
                 <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                   {monthItems.length > 0 ? monthItems.map((item) => (
                     <Card key={`month-${item.id}`} className="border-white/10 bg-slate-950/60 p-4 text-white">
+                      {(() => {
+                        const zodiac = getZodiacSign(item.birth_date)
+                        return (
+                          <>
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-base font-semibold text-white">{item.name}</div>
                           <div className="mt-1 text-sm text-slate-400">
                             {item.company_name || 'Точка не назначена'}{item.assignment_count > 1 ? ` • ${item.assignment_count} точки` : ''}
+                          </div>
+                          <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-200">
+                            <span>{zodiac.emoji}</span>
+                            <span>{zodiac.name}</span>
                           </div>
                         </div>
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] ${getUpcomingTone(item.daysUntil)}`}>
@@ -262,6 +313,10 @@ export default function BirthdaysPage() {
                           <div className="mt-1 text-sm text-slate-200">{item.age ? `${item.age} лет` : 'Не указан'}</div>
                         </div>
                       </div>
+                      <div className="mt-3 text-xs text-slate-400">{zodiac.joke}</div>
+                          </>
+                        )
+                      })()}
                     </Card>
                   )) : (
                     <Card className="border-white/10 bg-slate-950/60 p-5 text-sm text-slate-500">
@@ -285,6 +340,10 @@ export default function BirthdaysPage() {
                           key={`sorted-${item.id}`}
                           className="flex flex-col gap-4 px-5 py-4 transition-colors hover:bg-white/[0.03] lg:flex-row lg:items-center lg:justify-between"
                         >
+                          {(() => {
+                            const zodiac = getZodiacSign(item.birth_date)
+                            return (
+                              <>
                           <div className="flex items-start gap-4">
                             <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-slate-200">
                               {index + 1}
@@ -296,6 +355,13 @@ export default function BirthdaysPage() {
                                 {item.company_name || 'Точка не назначена'}
                                 {item.position ? ` • ${item.position}` : ''}
                                 {item.assignment_count > 1 ? ` • ${item.assignment_count} точки` : ''}
+                              </div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-200">
+                                  <span>{zodiac.emoji}</span>
+                                  <span>{zodiac.name}</span>
+                                </span>
+                                <span className="text-xs text-slate-500">{zodiac.joke}</span>
                               </div>
                             </div>
                           </div>
@@ -314,6 +380,9 @@ export default function BirthdaysPage() {
                               <div className="mt-1 text-sm text-slate-200">{item.age ? `${item.age} лет` : 'Не указан'}</div>
                             </div>
                           </div>
+                              </>
+                            )
+                          })()}
                         </div>
                       ))}
                     </div>
