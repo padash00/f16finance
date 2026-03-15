@@ -40,7 +40,7 @@ function normalizeDateArgs(currentSnapshot?: PageSnapshot | null): NormalizedDat
 }
 
 function snapshotToText(snapshot: PageSnapshot | null | undefined) {
-  if (!snapshot) return 'Snapshot не передан.'
+  if (!snapshot) return 'Срез данных не передан.'
 
   const lines = [
     `Страница: ${snapshot.title}`,
@@ -102,18 +102,18 @@ function buildSystemPrompt(request: AssistantRequest, currentSnapshot: PageSnaps
     }
 
   const currentSnapshotBlock = currentSnapshot
-    ? `Текущий клиентский snapshot:\n${snapshotToText(currentSnapshot)}`
-    : 'Текущий клиентский snapshot не передан.'
+    ? `Текущий клиентский срез данных:\n${snapshotToText(currentSnapshot)}`
+    : 'Текущий клиентский срез данных не передан.'
 
   const serverSnapshotBlocks =
     serverSnapshots.length > 0
-      ? serverSnapshots.map((snapshot, index) => `Серверный snapshot ${index + 1}:\n${snapshotToText(snapshot)}`).join('\n\n')
-      : 'Дополнительные серверные snapshots не были собраны.'
+      ? serverSnapshots.map((snapshot, index) => `Серверный срез данных ${index + 1}:\n${snapshotToText(snapshot)}`).join('\n\n')
+      : 'Дополнительные серверные срезы данных не были собраны.'
 
   return [
     'Ты финансовый консультант и операционный аналитик для Orda Control.',
     'Отвечай на русском языке, кратко, по делу и без воды.',
-    'Не придумывай цифры. Опирайся только на snapshots ниже.',
+    'Не придумывай цифры. Опирайся только на срезы данных ниже.',
     'Если данных не хватает, прямо скажи это и укажи, какой именно кусок информации нужен.',
     'Не упоминай service role key, секреты или внутренние ключи.',
     'Думай как сильный CFO/операционный директор: диагноз, риски, решения, контрольные метрики.',

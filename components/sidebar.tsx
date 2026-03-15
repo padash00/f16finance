@@ -105,7 +105,7 @@ const navSections: NavSection[] = [
   {
     id: 'team',
     title: 'Команда и зарплаты',
-    subtitle: 'Люди, доступы и начисления',
+    subtitle: 'Люди, структура и начисления',
     accentColor: 'yellow',
     icon: Users,
     items: [
@@ -161,6 +161,60 @@ const navSections: NavSection[] = [
     ],
   },
 ]
+
+function getSectionById(sectionId: string) {
+  return navSections.find((section) => section.id === sectionId)
+}
+
+function getSectionItem(sectionId: string, href: string) {
+  return getSectionById(sectionId)?.items.find((item) => item.href === href)
+}
+
+function buildOwnerNavSections(): NavSection[] {
+  const commandSection = getSectionById('command')
+  const financeSection = getSectionById('finance')
+  const teamSection = getSectionById('team')
+  const opsSection = getSectionById('ops')
+  const pointDevicesItem = getSectionItem('system', '/point-devices')
+  const operatorAnalyticsItem = getSectionItem('operator-space', '/operator-analytics')
+
+  const sections: NavSection[] = []
+
+  if (commandSection) {
+    sections.push(commandSection)
+  }
+
+  if (financeSection) {
+    sections.push(financeSection)
+  }
+
+  if (teamSection) {
+    sections.push({
+      ...teamSection,
+      items: teamSection.items.filter((item) => item.href !== '/pass'),
+    })
+  }
+
+  if (opsSection) {
+    sections.push({
+      ...opsSection,
+      items: pointDevicesItem ? [...opsSection.items, pointDevicesItem] : opsSection.items,
+    })
+  }
+
+  if (operatorAnalyticsItem) {
+    sections.push({
+      id: 'owner-operator-analytics',
+      title: 'Аналитика операторов',
+      subtitle: 'Эффективность, качество и динамика по людям',
+      accentColor: 'fuchsia',
+      icon: Zap,
+      items: [operatorAnalyticsItem],
+    })
+  }
+
+  return sections
+}
 
 const badgeColors: Record<NonNullable<NavItem['badgeColor']>, string> = {
   purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
@@ -480,6 +534,14 @@ export function Sidebar() {
     return Object.fromEntries(navSections.map((section, index) => [section.id, index < 3]))
   })
 
+  const baseSections = useMemo(() => {
+    if (!isSuperAdmin && staffRole === 'owner') {
+      return buildOwnerNavSections()
+    }
+
+    return navSections
+  }, [isSuperAdmin, staffRole])
+
   useEffect(() => {
     let ignore = false
 
@@ -542,7 +604,7 @@ export function Sidebar() {
   const visibleSections = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
 
-    return navSections
+    return baseSections
       .map((section) => ({
         ...section,
         items: section.items.filter((item) => {
@@ -568,7 +630,7 @@ export function Sidebar() {
         const sectionText = `${section.title} ${section.subtitle}`.toLowerCase()
         return sectionText.includes(query)
       })
-  }, [isLeadOperator, isOperator, isStaff, isSuperAdmin, searchQuery, staffRole])
+  }, [baseSections, isLeadOperator, isOperator, isStaff, isSuperAdmin, searchQuery, staffRole])
 
   useEffect(() => {
     if (!searchQuery.trim()) return

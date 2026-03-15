@@ -17,22 +17,16 @@ import {
   HelpCircle,
   Search,
   History,
-  Bot,
   Loader2,
   RefreshCw,
   Download,
   SlidersHorizontal,
   PieChart,
   Target,
-  Globe,
   Wallet,
-  CreditCard,
-  Banknote,
   AlertTriangle,
   CheckCircle2,
   Zap,
-  TrendingUp as TrendUpIcon,
-  TrendingDown as TrendDownIcon,
   MinusIcon,
 } from "lucide-react"
 import {
@@ -207,11 +201,6 @@ const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(ma
 
 const formatMoney = (v: number) =>
   (Number.isFinite(v) ? v : 0).toLocaleString("ru-RU", { maximumFractionDigits: 0 }) + " ₸"
-
-const formatMoneyDetailed = (v: number) =>
-  (Number.isFinite(v) ? v : 0).toLocaleString("ru-RU", { maximumFractionDigits: 0 })
-
-const formatPct = (v: number) => `${(Number.isFinite(v) ? v : 0).toFixed(1)}%`
 
 const formatDateRu = (dateStr: string) =>
   parseISODateSafe(dateStr).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })
@@ -1189,7 +1178,7 @@ export default function AIAnalysisPage() {
 
     return {
       page: "analysis",
-      title: "Snapshot AI-разбора",
+      title: "Срез данных для AI-разбора",
       generatedAt: new Date().toISOString(),
       route: "/analysis",
       period: {
@@ -1584,7 +1573,7 @@ export default function AIAnalysisPage() {
             <AssistantPanel
               page="analysis"
               title="AI-консультант по анализу"
-              subtitle="Видит готовый snapshot текущего разбора и может расширить его безопасными server-side tools."
+              subtitle="Видит готовый срез данных текущего разбора и может дополнить его безопасными серверными данными."
               snapshot={assistantSnapshot}
               suggestedPrompts={[
                 "Где здесь главная зона риска?",

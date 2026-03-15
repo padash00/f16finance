@@ -246,7 +246,7 @@ export async function getAnalysisServerSnapshot(
 
   return {
     page: 'analysis',
-    title: 'Серверный snapshot финансового разбора',
+    title: 'Серверный срез данных для финансового разбора',
     generatedAt: new Date().toISOString(),
     route: '/analysis',
     period: data.period,
@@ -271,8 +271,8 @@ export async function getAnalysisServerSnapshot(
         metrics: [
           { label: 'Наличные', value: formatMoney(data.totals.incomeCash) },
           { label: 'Kaspi', value: formatMoney(data.totals.incomeKaspi) },
-          { label: 'Online', value: formatMoney(data.totals.incomeOnline) },
-          { label: 'Card', value: formatMoney(data.totals.incomeCard) },
+          { label: 'Онлайн', value: formatMoney(data.totals.incomeOnline) },
+          { label: 'Банковские карты', value: formatMoney(data.totals.incomeCard) },
           { label: 'Доля безнала', value: formatPercent(data.totals.cashlessShare) },
         ],
       },
@@ -295,7 +295,7 @@ export async function getReportsServerSnapshot(
 
   return {
     page: 'reports',
-    title: 'Серверный snapshot сводных отчётов',
+    title: 'Серверный срез сводных отчётов',
     generatedAt: new Date().toISOString(),
     route: '/reports',
     period: data.period,
@@ -338,7 +338,7 @@ export async function getExpensesServerSnapshot(
 
   return {
     page: 'expenses',
-    title: 'Серверный snapshot расходов',
+    title: 'Серверный срез данных по расходам',
     generatedAt: new Date().toISOString(),
     route: '/expenses',
     period: data.period,
@@ -362,7 +362,7 @@ export async function getExpensesServerSnapshot(
       },
       {
         title: 'Аномалии',
-        bullets: data.anomalies.length ? data.anomalies : ['Явных аномалий в серверном snapshot не найдено.'],
+        bullets: data.anomalies.length ? data.anomalies : ['Явных аномалий в серверном срезе данных не найдено.'],
       },
     ],
   }

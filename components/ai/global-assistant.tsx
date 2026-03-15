@@ -62,7 +62,7 @@ export function GlobalAssistant() {
         <SheetHeader className="border-b border-white/8 pb-4">
           <SheetTitle className="text-white">Глобальный AI-консультант</SheetTitle>
           <SheetDescription className="text-slate-400">
-            Понимает структуру сайта, тянет безопасные snapshots по страницам и помогает как финансовый советник.
+            Понимает структуру сайта, использует безопасные срезы данных по страницам и помогает как финансовый советник.
           </SheetDescription>
         </SheetHeader>
 

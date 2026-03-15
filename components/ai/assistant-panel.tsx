@@ -144,14 +144,14 @@ export function AssistantPanel({
                     <Sparkles className="h-4 w-4 text-amber-300" />
                     {emptyStateTitle}
                   </div>
-                  <p>Работает только с безопасными snapshots и server-side tools. Числа не придумывает, а объясняет картину и действия.</p>
+                  <p>Работает только с безопасными срезами данных и серверными функциями. Числа не придумывает, а объясняет картину и действия.</p>
                 </div>
               )}
 
               {loading ? (
                 <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
                   <Loader2 className="h-4 w-4 animate-spin text-amber-300" />
-                  Консультант анализирует snapshot и при необходимости подтягивает данные через tools...
+                  Консультант анализирует срез данных и при необходимости дополняет ответ серверными данными...
                 </div>
               ) : null}
             </div>

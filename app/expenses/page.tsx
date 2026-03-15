@@ -43,7 +43,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   Area,
   ComposedChart,
   Bar,
@@ -296,7 +295,6 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
 
   // Filters
@@ -313,6 +311,7 @@ export default function ExpensesPage() {
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
   const [sortMode, setSortMode] = useState<SortMode>('date_desc')
   const [showFilters, setShowFilters] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const [page, setPage] = useState(0)
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'list'>('overview')
@@ -434,12 +433,11 @@ export default function ExpensesPage() {
   const loadPage = useCallback(
     async (targetPage: number, mode: 'replace' | 'append') => {
       const myReqId = ++reqIdRef.current
-      if (mode === 'replace') {
-        setLoading(true)
-        setError(null)
-      } else {
-        setLoadingMore(true)
-      }
+        if (mode === 'replace') {
+          setLoading(true)
+        } else {
+          setLoadingMore(true)
+        }
 
       try {
         if (targetPage * PAGE_SIZE >= MAX_ROWS_HARD_LIMIT) {
@@ -464,9 +462,8 @@ export default function ExpensesPage() {
           setRows((prev) => [...prev, ...pageRows])
           setPage(targetPage)
         }
-      } catch (e: any) {
+      } catch {
         if (myReqId !== reqIdRef.current) return
-        setError('Ошибка загрузки данных')
         setHasMore(false)
       } finally {
         if (myReqId !== reqIdRef.current) return
@@ -624,7 +621,7 @@ export default function ExpensesPage() {
 
     return {
       page: 'expenses',
-      title: 'Snapshot расходов',
+      title: 'Срез данных по расходам',
       generatedAt: new Date().toISOString(),
       route: '/expenses',
       period: {
@@ -966,6 +963,12 @@ export default function ExpensesPage() {
                 </div>
               )}
 
+              {error ? (
+                <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                  {error}
+                </div>
+              ) : null}
+
               {/* Filters Panel */}
               {showFilters && (
                 <div className="mt-4 p-4 bg-gray-900/95 backdrop-blur-xl border border-red-500/20 rounded-2xl">
@@ -1131,7 +1134,7 @@ export default function ExpensesPage() {
           <AssistantPanel
             page="expenses"
             title="AI-консультант по расходам"
-            subtitle="Работает с безопасным snapshot по расходам и помогает найти системный перерасход и план действий."
+            subtitle="Работает с безопасным срезом данных по расходам и помогает найти системный перерасход и план действий."
             snapshot={assistantSnapshot}
             suggestedPrompts={[
               'Какие расходы режем первыми?',
@@ -1537,7 +1540,7 @@ function AnalyticsTab({ analytics }: any) {
         <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
           <h3 className="text-sm font-semibold text-white mb-4">Топ категории расходов</h3>
           <div className="space-y-4">
-            {analytics.categoryData.map((cat: any, idx: number) => (
+            {analytics.categoryData.map((cat: any) => (
               <div key={cat.name}>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-400">{cat.name}</span>

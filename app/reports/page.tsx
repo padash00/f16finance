@@ -8,8 +8,7 @@ import {
   useMemo, 
   useRef, 
   useState,
-  memo,
-  useTransition
+  memo
 } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -64,7 +63,6 @@ import {
   ComposedChart,
   Line,
   Area,
-  ReferenceLine,
 } from 'recharts'
 
 // =====================
@@ -613,7 +611,7 @@ const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blu
 })
 StatCard.displayName = 'StatCard'
 
-const InsightCard = memo(({ insight, index }: { insight: AIInsight; index: number }) => {
+const InsightCard = memo(({ insight }: { insight: AIInsight }) => {
   const styles = INSIGHT_STYLES[insight.type]
   const Icon = styles.icon
   
@@ -638,7 +636,7 @@ const InsightCard = memo(({ insight, index }: { insight: AIInsight; index: numbe
 })
 InsightCard.displayName = 'InsightCard'
 
-const AnomalyCard = memo(({ anomaly, index }: { anomaly: Anomaly; index: number }) => {
+const AnomalyCard = memo(({ anomaly }: { anomaly: Anomaly }) => {
   const styles = SEVERITY_STYLES[anomaly.severity]
   
   return (
@@ -1647,7 +1645,7 @@ function ReportsContent() {
 
     return {
       page: 'reports',
-      title: 'Snapshot отчётов',
+      title: 'Срез данных по отчётам',
       generatedAt: new Date().toISOString(),
       route: '/reports',
       period: {
@@ -1976,7 +1974,7 @@ function ReportsContent() {
           {aiInsights.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {aiInsights.map((insight, idx) => (
-                <InsightCard key={idx} insight={insight} index={idx} />
+                <InsightCard key={idx} insight={insight} />
               ))}
             </div>
           )}
@@ -1984,10 +1982,10 @@ function ReportsContent() {
           <AssistantPanel
             page="reports"
             title="AI-консультант по отчётам"
-            subtitle="Видит агрегированный отчётный snapshot и может углубляться в другие страницы через безопасные tools."
+            subtitle="Видит агрегированный срез данных по отчётам и может при необходимости опираться на безопасные данные из других разделов."
             snapshot={assistantSnapshot}
             suggestedPrompts={[
-              'Собери executive summary по этому отчёту',
+              'Собери краткую сводку для руководителя по этому отчёту',
               'Где здесь самый слабый участок?',
               'С чем сравнить этот период в первую очередь?',
             ]}
@@ -2290,7 +2288,7 @@ function ReportsContent() {
                           return severityOrder[a.severity] - severityOrder[b.severity]
                         })
                         .map((a, i) => (
-                          <AnomalyCard key={i} anomaly={a} index={i} />
+                          <AnomalyCard key={i} anomaly={a} />
                         ))}
                     </div>
                   ) : (
