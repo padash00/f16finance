@@ -617,21 +617,6 @@ export default function SmartDashboardPage() {
     setRangeType(type)
   }, [])
 
-  if (!authResolved) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#070b12_0%,#0a0f18_100%)] text-white">
-        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-5 py-4 backdrop-blur-xl">
-          <Sparkles className="h-5 w-5 text-amber-300" />
-          <span className="text-sm text-slate-300">Загрузка Orda Control...</span>
-        </div>
-      </div>
-    )
-  }
-
-  if (!isAuthenticated) {
-    return <ProductLanding />
-  }
-
   const onDateFromChange = useCallback((v: string) => {
     setDateFrom(v)
     setRangeType('custom')
@@ -889,6 +874,21 @@ export default function SmartDashboardPage() {
   }, [incomes, expenses, dateFrom, dateTo, includeExtra, isExtraCompany, analytics.insight.anomalies])
 
   // ---------- UI states ----------
+  if (!authResolved) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#070b12_0%,#0a0f18_100%)] text-white">
+        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-5 py-4 backdrop-blur-xl">
+          <Sparkles className="h-5 w-5 text-amber-300" />
+          <span className="text-sm text-slate-300">Загрузка Orda Control...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <ProductLanding />
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-foreground">
