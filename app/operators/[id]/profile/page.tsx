@@ -178,6 +178,29 @@ type OperatorAccount = {
 }
 
 type CareerRole = 'manager' | 'marketer' | 'owner' | 'other'
+type CompanyOperatorRole = 'operator' | 'senior_operator' | 'senior_cashier'
+
+type SessionRoleInfo = {
+  isSuperAdmin?: boolean
+  staffRole?: CareerRole
+}
+
+type OperatorCompanyAssignment = {
+  id: string
+  operator_id: string
+  company_id: string
+  role_in_company: CompanyOperatorRole
+  is_primary: boolean
+  is_active: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string
+  company: {
+    id: string
+    name: string
+    code: string | null
+  } | null
+}
 
 type OperatorCareerLink = {
   id: string
@@ -202,6 +225,12 @@ const CAREER_ROLE_LABEL: Record<CareerRole, string> = {
   marketer: 'Маркетолог',
   owner: 'Владелец',
   other: 'Без роли',
+}
+
+const COMPANY_ROLE_LABEL: Record<CompanyOperatorRole, string> = {
+  operator: 'Оператор',
+  senior_operator: 'Старший оператор',
+  senior_cashier: 'Старший кассир',
 }
 
 // Компонент загрузки
@@ -906,6 +935,7 @@ export default function OperatorProfilePage() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [notes, setNotes] = useState<Note[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
   const [operatorAccount, setOperatorAccount] = useState<OperatorAccount | null>(null)
   const [careerLink, setCareerLink] = useState<OperatorCareerLink | null>(null)
   const [careerLoading, setCareerLoading] = useState(true)
@@ -914,6 +944,9 @@ export default function OperatorProfilePage() {
     role: 'manager',
     monthly_salary: '',
   })
+  const [companyAssignments, setCompanyAssignments] = useState<OperatorCompanyAssignment[]>([])
+  const [assignmentLoading, setAssignmentLoading] = useState(true)
+  const [assignmentSaving, setAssignmentSaving] = useState(false)
   const [showAccountModal, setShowAccountModal] = useState(false)
   const [newAccount, setNewAccount] = useState<{ username: string; password: string } | null>(null)
   
@@ -943,6 +976,10 @@ export default function OperatorProfilePage() {
     responsibilities: '',
     achievements: ''
   })
+
+  const canManageOperatorStructure =
+    !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner' || sessionRole?.staffRole === 'manager'
+  const canManageCareerGrowth = !!sessionRole?.isSuperAdmin
 
   // Загрузка данных
   useEffect(() => {
@@ -1155,6 +1192,17 @@ export default function OperatorProfilePage() {
   useEffect(() => {
     let ignore = false
 
+    const loadSessionRole = async () => {
+      const response = await fetch('/api/auth/session-role', { cache: 'no-store' }).catch(() => null)
+      const json = await response?.json().catch(() => null)
+      if (!response?.ok || ignore) return
+
+      setSessionRole({
+        isSuperAdmin: json?.isSuperAdmin,
+        staffRole: json?.staffRole,
+      })
+    }
+
     const loadCareerLink = async () => {
       try {
         setCareerLoading(true)
@@ -1180,7 +1228,40 @@ export default function OperatorProfilePage() {
       }
     }
 
+    loadSessionRole()
     loadCareerLink()
+    return () => {
+      ignore = true
+    }
+  }, [operatorId])
+
+  useEffect(() => {
+    let ignore = false
+
+    const loadAssignments = async () => {
+      try {
+        setAssignmentLoading(true)
+        const response = await fetch(
+          `/api/admin/operator-company-assignments?operatorId=${encodeURIComponent(operatorId)}`,
+          { cache: 'no-store' },
+        ).catch(() => null)
+        const json = await response?.json().catch(() => null)
+
+        if (ignore) return
+
+        if (response?.ok) {
+          setCompanyAssignments((json?.data || []) as OperatorCompanyAssignment[])
+        } else {
+          setCompanyAssignments([])
+        }
+      } catch (assignmentError) {
+        console.error('Error loading operator company assignments:', assignmentError)
+      } finally {
+        if (!ignore) setAssignmentLoading(false)
+      }
+    }
+
+    loadAssignments()
     return () => {
       ignore = true
     }
@@ -1373,6 +1454,149 @@ export default function OperatorProfilePage() {
       setError(err.message || 'Ошибка сохранения карьерной роли')
     } finally {
       setCareerSaving(false)
+    }
+  }
+
+  const handleAddCompanyAssignment = () => {
+    if (companyAssignments.length >= 2) return
+
+    const availableCompany = companies.find(
+      (company) => !companyAssignments.some((assignment) => assignment.company_id === company.id),
+    )
+
+    setCompanyAssignments((prev) => [
+      ...prev,
+      {
+        id: `draft-${Date.now()}`,
+        operator_id: operatorId,
+        company_id: availableCompany?.id || '',
+        role_in_company: 'operator',
+        is_primary: prev.filter((item) => item.is_active).length === 0,
+        is_active: true,
+        notes: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        company: availableCompany
+          ? {
+              id: availableCompany.id,
+              name: availableCompany.name,
+              code: availableCompany.code || null,
+            }
+          : null,
+      },
+    ])
+  }
+
+  const handleAssignmentChange = (
+    assignmentId: string,
+    field: 'company_id' | 'role_in_company' | 'is_primary' | 'is_active' | 'notes',
+    value: string | boolean | null,
+  ) => {
+    setCompanyAssignments((prev) =>
+      prev.map((assignment) => {
+        if (assignment.id !== assignmentId) return assignment
+
+        if (field === 'company_id') {
+          const company = companies.find((item) => item.id === value)
+          return {
+            ...assignment,
+            company_id: String(value || ''),
+            company: company
+              ? {
+                  id: company.id,
+                  name: company.name,
+                  code: company.code || null,
+                }
+              : null,
+          }
+        }
+
+        if (field === 'is_primary' && value) {
+          return {
+            ...assignment,
+            is_primary: true,
+          }
+        }
+
+        return {
+          ...assignment,
+          [field]: value,
+        }
+      }).map((assignment) => {
+        if (field !== 'is_primary' || !value) return assignment
+        if (assignment.id === assignmentId) return assignment
+        return { ...assignment, is_primary: false }
+      }),
+    )
+  }
+
+  const handleRemoveCompanyAssignment = (assignmentId: string) => {
+    setCompanyAssignments((prev) => {
+      const next = prev.filter((assignment) => assignment.id !== assignmentId)
+      const activeAssignments = next.filter((assignment) => assignment.is_active)
+      if (activeAssignments.length > 0 && !activeAssignments.some((assignment) => assignment.is_primary)) {
+        const firstActiveId = activeAssignments[0].id
+        return next.map((assignment) =>
+          assignment.id === firstActiveId ? { ...assignment, is_primary: true } : assignment,
+        )
+      }
+      return next
+    })
+  }
+
+  const handleSaveCompanyAssignments = async () => {
+    if (!operator) return
+
+    try {
+      setAssignmentSaving(true)
+      setError(null)
+
+      const activeAssignments = companyAssignments.filter((assignment) => assignment.is_active)
+      if (activeAssignments.length > 2) {
+        throw new Error('Оператор может быть назначен максимум на 2 активные компании')
+      }
+
+      const usedCompanyIds = new Set<string>()
+      for (const assignment of companyAssignments) {
+        if (!assignment.company_id.trim()) {
+          throw new Error('Выберите компанию для каждого назначения')
+        }
+        if (usedCompanyIds.has(assignment.company_id)) {
+          throw new Error('Одна и та же компания указана дважды')
+        }
+        usedCompanyIds.add(assignment.company_id)
+      }
+
+      const response = await fetch('/api/admin/operator-company-assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'saveAssignments',
+          operatorId: operator.id,
+          assignments: companyAssignments.map((assignment) => ({
+            id: assignment.id.startsWith('draft-') ? undefined : assignment.id,
+            company_id: assignment.company_id,
+            role_in_company: assignment.role_in_company,
+            is_primary: assignment.is_primary,
+            is_active: assignment.is_active,
+            notes: assignment.notes,
+          })),
+        }),
+      })
+
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || 'Не удалось сохранить роли по компаниям')
+      }
+
+      setCompanyAssignments((json?.data || []) as OperatorCompanyAssignment[])
+      setUploadSuccess('Привязка к компаниям сохранена')
+      setTimeout(() => setUploadSuccess(null), 3500)
+    } catch (assignmentError: any) {
+      console.error('Error saving operator company assignments:', assignmentError)
+      setError(assignmentError?.message || 'Ошибка сохранения ролей по компаниям')
+    } finally {
+      setAssignmentSaving(false)
     }
   }
 
@@ -1923,81 +2147,246 @@ export default function OperatorProfilePage() {
           {/* Основная информация */}
           {activeTab === 'info' && (
             <div className="space-y-6">
-              <Card className="p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-emerald-400" />
-                      <h3 className="text-lg font-semibold text-white">Карьерный рост</h3>
-                    </div>
-                    <p className="text-sm text-gray-400">
-                      Повышение создаёт или обновляет staff-профиль, но операторский аккаунт и история сохраняются.
-                    </p>
-                    {careerLoading ? (
-                      <p className="text-sm text-gray-500">Загружаем статус повышения...</p>
-                    ) : careerLink?.staff ? (
-                      <>
-                        <p className="text-sm text-emerald-300">
-                          Текущая staff-роль: <span className="font-semibold">{CAREER_ROLE_LABEL[(careerLink.staff.role as CareerRole) || careerLink.assigned_role]}</span>
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          После входа оператор сможет открыть и staff-разделы, и операторский кабинет.
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-sm text-amber-300">
-                        Роль ещё не назначена. Здесь можно перевести оператора в руководителя, маркетолога или владельца.
+              {canManageCareerGrowth ? (
+                <Card className="p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-emerald-400" />
+                        <h3 className="text-lg font-semibold text-white">Карьерный рост</h3>
+                      </div>
+                      <p className="text-sm text-gray-400">
+                        Повышение создаёт или обновляет staff-профиль, но операторский аккаунт и история сохраняются.
                       </p>
-                    )}
+                      {careerLoading ? (
+                        <p className="text-sm text-gray-500">Загружаем статус повышения...</p>
+                      ) : careerLink?.staff ? (
+                        <>
+                          <p className="text-sm text-emerald-300">
+                            Текущая staff-роль: <span className="font-semibold">{CAREER_ROLE_LABEL[(careerLink.staff.role as CareerRole) || careerLink.assigned_role]}</span>
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            После входа оператор сможет открыть и staff-разделы, и операторский кабинет.
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-amber-300">
+                          Роль ещё не назначена. Здесь можно перевести оператора в руководителя, маркетолога или владельца.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid w-full gap-3 lg:max-w-xl lg:grid-cols-[1fr_180px_auto]">
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Роль роста</label>
+                        <select
+                          value={careerForm.role}
+                          onChange={(e) => setCareerForm((prev) => ({ ...prev, role: e.target.value as CareerRole }))}
+                          className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                        >
+                          <option value="manager">Руководитель</option>
+                          <option value="marketer">Маркетолог</option>
+                          <option value="owner">Владелец</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Оклад staff</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={careerForm.monthly_salary}
+                          onChange={(e) => setCareerForm((prev) => ({ ...prev, monthly_salary: e.target.value }))}
+                          placeholder="Например 250000"
+                          className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                        />
+                      </div>
+
+                      <div className="flex items-end">
+                        <Button
+                          onClick={handlePromoteOperator}
+                          disabled={careerSaving || careerLoading}
+                          className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white border-0"
+                        >
+                          {careerSaving ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Сохраняем
+                            </>
+                          ) : careerLink?.staff ? (
+                            'Обновить роль'
+                          ) : (
+                            'Повысить'
+                          )}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
+                </Card>
+              ) : null}
 
-                  <div className="grid w-full gap-3 lg:max-w-xl lg:grid-cols-[1fr_180px_auto]">
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Роль роста</label>
-                      <select
-                        value={careerForm.role}
-                        onChange={(e) => setCareerForm((prev) => ({ ...prev, role: e.target.value as CareerRole }))}
-                        className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
-                      >
-                        <option value="manager">Руководитель</option>
-                        <option value="marketer">Маркетолог</option>
-                        <option value="owner">Владелец</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Оклад staff</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={careerForm.monthly_salary}
-                        onChange={(e) => setCareerForm((prev) => ({ ...prev, monthly_salary: e.target.value }))}
-                        placeholder="Например 250000"
-                        className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
-                      />
-                    </div>
-
-                    <div className="flex items-end">
-                      <Button
-                        onClick={handlePromoteOperator}
-                        disabled={careerSaving || careerLoading}
-                        className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white border-0"
-                      >
-                        {careerSaving ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Сохраняем
-                          </>
-                        ) : careerLink?.staff ? (
-                          'Обновить роль'
+              {canManageOperatorStructure ? (
+                <Card className="p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-2 lg:max-w-lg">
+                      <div className="flex items-center gap-2">
+                        <Network className="w-5 h-5 text-cyan-400" />
+                        <h3 className="text-lg font-semibold text-white">Роль по компаниям</h3>
+                      </div>
+                      <p className="text-sm text-gray-400">
+                        Здесь задаётся принадлежность оператора к точкам и его роль внутри компании. Максимум — 2 активные компании.
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {companyAssignments.length === 0 ? (
+                          <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs text-amber-300">
+                            Ещё нет назначений по компаниям
+                          </span>
                         ) : (
-                          'Повысить'
+                          companyAssignments.map((assignment) => (
+                            <span
+                              key={assignment.id}
+                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${
+                                assignment.is_primary
+                                  ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+                                  : 'border-white/10 bg-white/5 text-gray-300'
+                              }`}
+                            >
+                              {assignment.company?.name || 'Компания не выбрана'}
+                              <span className="text-[11px] text-gray-400">{COMPANY_ROLE_LABEL[assignment.role_in_company]}</span>
+                              {assignment.is_primary ? <span className="text-[11px] text-cyan-200">Основная</span> : null}
+                            </span>
+                          ))
                         )}
-                      </Button>
+                      </div>
+                    </div>
+
+                    <div className="w-full lg:max-w-3xl space-y-3">
+                      {assignmentLoading ? (
+                        <p className="text-sm text-gray-500">Загружаем привязки к компаниям...</p>
+                      ) : (
+                        <>
+                          {companyAssignments.map((assignment, index) => (
+                            <div
+                              key={assignment.id}
+                              className="grid gap-3 rounded-2xl border border-white/5 bg-gray-950/40 p-4 lg:grid-cols-[1.2fr_1fr_auto_auto]"
+                            >
+                              <div>
+                                <label className="mb-1 block text-xs text-gray-500">Компания</label>
+                                <select
+                                  value={assignment.company_id}
+                                  onChange={(e) => handleAssignmentChange(assignment.id, 'company_id', e.target.value)}
+                                  className="w-full rounded-lg border border-white/10 bg-gray-800/50 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500/50"
+                                >
+                                  <option value="">Выберите компанию</option>
+                                  {companies.map((company) => (
+                                    <option
+                                      key={company.id}
+                                      value={company.id}
+                                      disabled={
+                                        companyAssignments.some(
+                                          (item) => item.id !== assignment.id && item.company_id === company.id,
+                                        )
+                                      }
+                                    >
+                                      {company.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="mb-1 block text-xs text-gray-500">Роль в компании</label>
+                                <select
+                                  value={assignment.role_in_company}
+                                  onChange={(e) =>
+                                    handleAssignmentChange(
+                                      assignment.id,
+                                      'role_in_company',
+                                      e.target.value as CompanyOperatorRole,
+                                    )
+                                  }
+                                  className="w-full rounded-lg border border-white/10 bg-gray-800/50 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500/50"
+                                >
+                                  <option value="operator">Оператор</option>
+                                  <option value="senior_operator">Старший оператор</option>
+                                  <option value="senior_cashier">Старший кассир</option>
+                                </select>
+                              </div>
+
+                              <div className="flex flex-col justify-end gap-2">
+                                <label className="inline-flex items-center gap-2 text-sm text-gray-300">
+                                  <input
+                                    type="checkbox"
+                                    checked={assignment.is_primary}
+                                    onChange={(e) => handleAssignmentChange(assignment.id, 'is_primary', e.target.checked)}
+                                    disabled={!assignment.is_active}
+                                    className="rounded border-white/10 bg-gray-800/50 text-cyan-500 focus:ring-cyan-500/20"
+                                  />
+                                  Основная
+                                </label>
+                                <label className="inline-flex items-center gap-2 text-sm text-gray-300">
+                                  <input
+                                    type="checkbox"
+                                    checked={assignment.is_active}
+                                    onChange={(e) => handleAssignmentChange(assignment.id, 'is_active', e.target.checked)}
+                                    className="rounded border-white/10 bg-gray-800/50 text-cyan-500 focus:ring-cyan-500/20"
+                                  />
+                                  Активна
+                                </label>
+                              </div>
+
+                              <div className="flex items-end justify-end">
+                                <Button
+                                  variant="outline"
+                                  size="icon-sm"
+                                  onClick={() => handleRemoveCompanyAssignment(assignment.id)}
+                                  className="border-rose-500/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20"
+                                  title={index === 0 && companyAssignments.length === 1 ? 'Убрать назначение' : 'Удалить назначение'}
+                                >
+                                  <Unlink className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-gray-500">
+                              Один оператор может работать максимум на двух активных точках. Если основная точка не выбрана, система поставит её автоматически.
+                            </p>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                onClick={handleAddCompanyAssignment}
+                                disabled={assignmentSaving || assignmentLoading || companyAssignments.length >= 2 || companies.length === 0}
+                              >
+                                <LinkIcon className="w-4 h-4 mr-2" />
+                                Добавить точку
+                              </Button>
+                              <Button
+                                onClick={handleSaveCompanyAssignments}
+                                disabled={assignmentSaving || assignmentLoading}
+                                className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white border-0"
+                              >
+                                {assignmentSaving ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Сохраняем
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="w-4 h-4 mr-2" />
+                                    Сохранить назначение
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
+              ) : null}
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Card className="lg:col-span-2 p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">

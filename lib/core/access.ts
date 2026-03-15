@@ -18,6 +18,7 @@ export type StaffCapability =
   | 'staff'
   | 'staff_accounts'
   | 'operators'
+  | 'operator_structure'
   | 'finance_create'
   | 'finance_manage'
 export type RoleMatrixEntry = {
@@ -70,6 +71,8 @@ const MANAGER_PATHS = [
   '/expenses/add',
   '/expenses/analysis',
   '/weekly-report',
+  '/operators',
+  '/operators/*',
   '/shifts',
   '/shifts/*',
   '/salary',
@@ -104,16 +107,18 @@ export const STAFF_ROLE_MATRIX: Record<StaffRole, RoleMatrixEntry> = {
     label: 'Руководитель',
     home: '/welcome',
     paths: MANAGER_PATHS,
-    capabilities: ['tasks', 'shifts', 'salary', 'finance_create'],
-    summary: 'Контролирует задачи, смены, зарплату и может вносить новые доходы и расходы без критичных правок.',
+    capabilities: ['tasks', 'shifts', 'salary', 'finance_create', 'operator_structure'],
+    summary: 'Контролирует задачи, смены, зарплату, назначает операторов по точкам и может вносить новые доходы и расходы без критичных правок.',
     actions: [
       'Смотрит доходы и расходы',
       'Добавляет новые доходы и расходы',
       'Работает с задачами',
       'Назначает и меняет смены',
+      'Назначает операторам компании и роли по точкам',
       'Работает с зарплатой',
       'Не может удалять/править критичные финансы',
-      'Не управляет staff-аккаунтами и операторами',
+      'Не создаёт и не удаляет операторов',
+      'Не управляет staff-аккаунтами',
     ],
   },
   marketer: {
@@ -134,7 +139,7 @@ export const STAFF_ROLE_MATRIX: Record<StaffRole, RoleMatrixEntry> = {
     label: 'Владелец',
     home: '/',
     paths: OWNER_PATHS,
-    capabilities: ['tasks', 'salary', 'staff', 'operators', 'finance_create', 'finance_manage'],
+    capabilities: ['tasks', 'salary', 'staff', 'operators', 'operator_structure', 'finance_create', 'finance_manage'],
     summary: 'Имеет управленческий доступ к команде, операторам и критичным финансам без системного администрирования.',
     actions: [
       'Управляет доходами и расходами',
@@ -159,7 +164,7 @@ export const SUPER_ADMIN_MATRIX_ENTRY = {
   label: 'Супер-администратор',
   home: '/',
   paths: ADMIN_PATHS,
-  capabilities: ['tasks', 'shifts', 'salary', 'staff', 'staff_accounts', 'operators', 'finance_create', 'finance_manage'] as const,
+  capabilities: ['tasks', 'shifts', 'salary', 'staff', 'staff_accounts', 'operators', 'operator_structure', 'finance_create', 'finance_manage'] as const,
   summary: 'Имеет полный доступ ко всем разделам, аккаунтам, настройкам, логам и системным операциям.',
   actions: [
     'Видит все разделы',

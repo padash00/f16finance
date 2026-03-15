@@ -73,10 +73,16 @@ type OperatorStats = {
   totalBonuses: number
 }
 
+type SessionRoleInfo = {
+  isSuperAdmin?: boolean
+  staffRole?: 'manager' | 'marketer' | 'owner' | 'other'
+}
+
 export default function OperatorsPage() {
   const [operators, setOperators] = useState<Operator[]>([])
   const [profiles, setProfiles] = useState<Map<string, OperatorProfile>>(new Map())
   const [stats, setStats] = useState<Map<string, OperatorStats>>(new Map())
+  const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -106,6 +112,7 @@ export default function OperatorsPage() {
   const [editPhone, setEditPhone] = useState('')
   const [editEmail, setEditEmail] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
+  const canManageOperators = !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner'
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -202,6 +209,21 @@ export default function OperatorsPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    const loadSessionRole = async () => {
+      const response = await fetch('/api/auth/session-role', { cache: 'no-store' }).catch(() => null)
+      const json = await response?.json().catch(() => null)
+      if (!response?.ok) return
+
+      setSessionRole({
+        isSuperAdmin: json?.isSuperAdmin,
+        staffRole: json?.staffRole,
+      })
+    }
+
+    loadSessionRole()
+  }, [])
 
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault()
@@ -496,111 +518,118 @@ export default function OperatorsPage() {
             </div>
           )}
 
-          {/* Форма добавления */}
-          <Card className="p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-emerald-400" />
-              Добавить нового оператора
-            </h2>
+          {canManageOperators ? (
+            <Card className="p-6 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-emerald-400" />
+                Добавить нового оператора
+              </h2>
 
-            <form onSubmit={handleAdd} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">
-                    Имя оператора <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                    placeholder="Например: Маржан"
-                    required
-                  />
-                </div>
+              <form onSubmit={handleAdd} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">
+                      Имя оператора <span className="text-rose-400">*</span>
+                    </label>
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      placeholder="Например: Маржан"
+                      required
+                    />
+                  </div>
 
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">
-                    Полное ФИО
-                  </label>
-                  <input
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                    placeholder="Например: Жумабекова Маржан Нурлановна"
-                  />
-                </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">
+                      Полное ФИО
+                    </label>
+                    <input
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      placeholder="Например: Жумабекова Маржан Нурлановна"
+                    />
+                  </div>
 
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">
-                    Краткое имя
-                  </label>
-                  <input
-                    value={shortName}
-                    onChange={(e) => setShortName(e.target.value)}
-                    className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                    placeholder="Напр.: Маржан (день)"
-                  />
-                </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">
+                      Краткое имя
+                    </label>
+                    <input
+                      value={shortName}
+                      onChange={(e) => setShortName(e.target.value)}
+                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      placeholder="Напр.: Маржан (день)"
+                    />
+                  </div>
 
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">
-                    Должность
-                  </label>
-                  <input
-                    value={position}
-                    onChange={(e) => setPosition(e.target.value)}
-                    className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                    placeholder="Напр.: Старший оператор"
-                  />
-                </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">
+                      Должность
+                    </label>
+                    <input
+                      value={position}
+                      onChange={(e) => setPosition(e.target.value)}
+                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      placeholder="Напр.: Старший оператор"
+                    />
+                  </div>
 
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">
-                    Телефон
-                  </label>
-                  <input
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                    placeholder="+7 (777) 777-77-77"
-                  />
-                </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">
+                      Телефон
+                    </label>
+                    <input
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      placeholder="+7 (777) 777-77-77"
+                    />
+                  </div>
 
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">
-                    Email
-                  </label>
-                  <input
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    type="email"
-                    className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
-                    placeholder="operator@example.com"
-                  />
-                </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">
+                      Email
+                    </label>
+                    <input
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      type="email"
+                      className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      placeholder="operator@example.com"
+                    />
+                  </div>
 
-                <div className="flex items-end">
-                  <Button
-                    type="submit"
-                    disabled={saving || !name.trim()}
-                    className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
-                  >
-                    {saving ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        Добавление...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Добавить оператора
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex items-end">
+                    <Button
+                      type="submit"
+                      disabled={saving || !name.trim()}
+                      className="w-full bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+                    >
+                      {saving ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          Добавление...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Добавить оператора
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </form>
-          </Card>
+              </form>
+            </Card>
+          ) : (
+            <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
+              <p className="text-sm text-gray-400">
+                Руководитель может просматривать операторов, открывать профиль и назначать компании/роли по точкам. Создание и удаление операторов доступно только владельцу и супер-админу.
+              </p>
+            </Card>
+          )}
 
           {/* Поиск и фильтры */}
           <div className="rounded-xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
@@ -642,7 +671,7 @@ export default function OperatorsPage() {
                 <span className="text-sm text-gray-400">Показывать неактивных</span>
               </label>
 
-              {selectedOperators.size > 0 && (
+              {canManageOperators && selectedOperators.size > 0 && (
                 <Button
                   onClick={handleBulkDelete}
                   variant="outline"
@@ -662,12 +691,14 @@ export default function OperatorsPage() {
                 <thead>
                   <tr className="border-b border-white/5 bg-white/5">
                     <th className="py-3 px-4 w-8">
-                      <input
-                        type="checkbox"
-                        checked={selectAll}
-                        onChange={(e) => setSelectAll(e.target.checked)}
-                        className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
-                      />
+                      {canManageOperators ? (
+                        <input
+                          type="checkbox"
+                          checked={selectAll}
+                          onChange={(e) => setSelectAll(e.target.checked)}
+                          className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
+                        />
+                      ) : null}
                     </th>
                     <th className="py-3 px-4 text-left">Оператор</th>
                     <th className="py-3 px-4 text-left">Контактная информация</th>
@@ -712,21 +743,23 @@ export default function OperatorsPage() {
                         className="border-t border-white/5 hover:bg-white/5 transition-colors"
                       >
                         <td className="py-3 px-4">
-                          <input
-                            type="checkbox"
-                            checked={selectedOperators.has(op.id)}
-                            onChange={(e) => {
-                              const newSelected = new Set(selectedOperators)
-                              if (e.target.checked) {
-                                newSelected.add(op.id)
-                              } else {
-                                newSelected.delete(op.id)
-                              }
-                              setSelectedOperators(newSelected)
-                              setSelectAll(false)
-                            }}
-                            className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
-                          />
+                          {canManageOperators ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedOperators.has(op.id)}
+                              onChange={(e) => {
+                                const newSelected = new Set(selectedOperators)
+                                if (e.target.checked) {
+                                  newSelected.add(op.id)
+                                } else {
+                                  newSelected.delete(op.id)
+                                }
+                                setSelectedOperators(newSelected)
+                                setSelectAll(false)
+                              }}
+                              className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
+                            />
+                          ) : null}
                         </td>
                         <td className="py-3 px-4">
                           <Link
@@ -835,33 +868,37 @@ export default function OperatorsPage() {
                             >
                               <Eye className="w-4 h-4" />
                             </Link>
-                            <button
-                              onClick={() => handleEdit(op)}
-                              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                              title="Редактировать"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => toggleActive(op)}
-                              className={`p-2 hover:bg-white/10 rounded-lg transition-colors ${
-                                op.is_active ? 'text-emerald-400' : 'text-gray-500'
-                              }`}
-                              title={op.is_active ? 'Деактивировать' : 'Активировать'}
-                            >
-                              {op.is_active ? (
-                                <ToggleRight className="w-4 h-4" />
-                              ) : (
-                                <ToggleLeft className="w-4 h-4" />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => handleDelete(op.id)}
-                              className="p-2 hover:bg-white/10 rounded-lg transition-colors text-rose-400"
-                              title="Удалить"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canManageOperators ? (
+                              <>
+                                <button
+                                  onClick={() => handleEdit(op)}
+                                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                                  title="Редактировать"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => toggleActive(op)}
+                                  className={`p-2 hover:bg-white/10 rounded-lg transition-colors ${
+                                    op.is_active ? 'text-emerald-400' : 'text-gray-500'
+                                  }`}
+                                  title={op.is_active ? 'Деактивировать' : 'Активировать'}
+                                >
+                                  {op.is_active ? (
+                                    <ToggleRight className="w-4 h-4" />
+                                  ) : (
+                                    <ToggleLeft className="w-4 h-4" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(op.id)}
+                                  className="p-2 hover:bg-white/10 rounded-lg transition-colors text-rose-400"
+                                  title="Удалить"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
