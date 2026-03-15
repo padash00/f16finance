@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     const requestClient = createRequestSupabaseClient(req)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient
 
-    const [staffRes, companiesRes, operatorsRes, assignmentsRes] = await Promise.all([
+    const [staffRes, companiesRes, operatorsRes, assignmentsRes, historyRes] = await Promise.all([
       supabase
         .from('staff')
         .select('id, full_name, short_name, role, monthly_salary, phone, email, is_active')
@@ -40,12 +40,19 @@ export async function GET(req: Request) {
         .eq('is_active', true)
         .order('is_primary', { ascending: false })
         .order('created_at', { ascending: true }),
+      supabase
+        .from('audit_log')
+        .select('id, actor_user_id, entity_type, entity_id, action, payload, created_at')
+        .in('entity_type', ['operator-company-assignment', 'operator-career'])
+        .order('created_at', { ascending: false })
+        .limit(40),
     ])
 
     if (staffRes.error) throw staffRes.error
     if (companiesRes.error) throw companiesRes.error
     if (operatorsRes.error) throw operatorsRes.error
     if (assignmentsRes.error) throw assignmentsRes.error
+    if (historyRes.error) throw historyRes.error
 
     return json({
       ok: true,
@@ -54,6 +61,7 @@ export async function GET(req: Request) {
         companies: companiesRes.data || [],
         operators: operatorsRes.data || [],
         assignments: assignmentsRes.data || [],
+        history: historyRes.data || [],
       },
     })
   } catch (error: any) {

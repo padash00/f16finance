@@ -70,6 +70,16 @@ type Assignment = {
   updated_at: string
 }
 
+type StructureHistoryItem = {
+  id: string
+  actor_user_id: string | null
+  entity_type: string
+  entity_id: string
+  action: string
+  payload: Record<string, unknown> | null
+  created_at: string
+}
+
 type AssignmentEditorRow = {
   id?: string
   company_id: string
@@ -86,6 +96,7 @@ type StructureResponse = {
     companies: Company[]
     operators: Operator[]
     assignments: Assignment[]
+    history: StructureHistoryItem[]
   }
   error?: string
 }
@@ -298,9 +309,12 @@ export default function StructurePage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [history, setHistory] = useState<StructureHistoryItem[]>([])
   const [editingOperator, setEditingOperator] = useState<Operator | null>(null)
   const [editorRows, setEditorRows] = useState<AssignmentEditorRow[]>([])
   const [savingAssignments, setSavingAssignments] = useState(false)
+  const [companyFilter, setCompanyFilter] = useState('all')
+  const [roleFilter, setRoleFilter] = useState<'all' | CompanyOperatorRole>('all')
 
   useEffect(() => {
     let ignore = false
@@ -323,6 +337,7 @@ export default function StructurePage() {
         setCompanies(json.data.companies || [])
         setOperators(json.data.operators || [])
         setAssignments(json.data.assignments || [])
+        setHistory((json.data.history || []) as StructureHistoryItem[])
       } catch (loadError: any) {
         if (!ignore) setError(loadError?.message || 'Не удалось загрузить структуру')
       } finally {
@@ -343,16 +358,22 @@ export default function StructurePage() {
   const assignmentsByCompany = useMemo(() => {
     const map = new Map<string, Assignment[]>()
     for (const assignment of assignments) {
+      if (companyFilter !== 'all' && assignment.company_id !== companyFilter) continue
+      if (roleFilter !== 'all' && assignment.role_in_company !== roleFilter) continue
       const bucket = map.get(assignment.company_id) || []
       bucket.push(assignment)
       map.set(assignment.company_id, bucket)
     }
     return map
-  }, [assignments])
+  }, [assignments, companyFilter, roleFilter])
   const assignedOperatorIds = useMemo(() => new Set(assignments.map((assignment) => assignment.operator_id)), [assignments])
   const unassignedOperators = useMemo(
     () => operators.filter((operator) => !assignedOperatorIds.has(operator.id)),
     [operators, assignedOperatorIds],
+  )
+  const visibleCompanies = useMemo(
+    () => companies.filter((company) => companyFilter === 'all' || company.id === companyFilter),
+    [companies, companyFilter],
   )
 
   const openOperatorEditor = (operator: Operator) => {
@@ -413,6 +434,10 @@ export default function StructurePage() {
           updated_at: row.updated_at,
         })),
       ])
+      const reload = await fetch('/api/admin/structure', { cache: 'no-store' }).then((res) => res.json()).catch(() => null)
+      if (reload?.ok) {
+        setHistory((reload.data?.history || []) as StructureHistoryItem[])
+      }
       closeOperatorEditor()
     } catch (saveError: any) {
       setError(saveError?.message || 'Не удалось сохранить структуру оператора')
@@ -464,6 +489,51 @@ export default function StructurePage() {
             </Card>
           ) : (
             <>
+              <Card className="border-white/10 bg-slate-950/60 p-4 text-white">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div>
+                    <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-slate-500">Точка</label>
+                    <select
+                      value={companyFilter}
+                      onChange={(event) => setCompanyFilter(event.target.value)}
+                      className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-cyan-400/50"
+                    >
+                      <option value="all">Все точки</option>
+                      {companies.map((company) => (
+                        <option key={company.id} value={company.id}>
+                          {company.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-slate-500">Роль в точке</label>
+                    <select
+                      value={roleFilter}
+                      onChange={(event) => setRoleFilter(event.target.value as 'all' | CompanyOperatorRole)}
+                      className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-cyan-400/50"
+                    >
+                      <option value="all">Все роли</option>
+                      <option value="operator">Оператор</option>
+                      <option value="senior_operator">Старший оператор</option>
+                      <option value="senior_cashier">Старший кассир</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        setCompanyFilter('all')
+                        setRoleFilter('all')
+                      }}
+                    >
+                      Сбросить фильтры
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+
               <section className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Crown className="h-5 w-5 text-amber-300" />
@@ -524,7 +594,7 @@ export default function StructurePage() {
                 </div>
 
                 <div className="grid gap-5 xl:grid-cols-3">
-                  {companies.map((company) => (
+                  {visibleCompanies.map((company) => (
                     <CompanyBranch
                       key={company.id}
                       company={company}
@@ -574,6 +644,41 @@ export default function StructurePage() {
                     Все активные операторы уже распределены по компаниям.
                   </Card>
                 )}
+              </section>
+
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Network className="h-5 w-5 text-slate-300" />
+                  <h2 className="text-xl font-semibold text-white">История структуры</h2>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  {history.length > 0 ? history.map((entry) => (
+                    <Card key={entry.id} className="border-white/10 bg-slate-950/60 p-4 text-white">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium">{entry.entity_type} • {entry.action}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {new Date(entry.created_at).toLocaleString('ru-RU')}
+                          </div>
+                        </div>
+                        <span className="rounded-full border border-white/8 bg-white/[0.04] px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">
+                          tree
+                        </span>
+                      </div>
+
+                      {entry.payload ? (
+                        <pre className="mt-3 overflow-x-auto rounded-xl border border-white/8 bg-black/20 p-3 text-xs leading-5 text-slate-300">
+                          {JSON.stringify(entry.payload, null, 2)}
+                        </pre>
+                      ) : null}
+                    </Card>
+                  )) : (
+                    <Card className="border-white/10 bg-slate-950/60 p-5 text-sm text-slate-500">
+                      История по структуре появится после первых назначений и повышений.
+                    </Card>
+                  )}
+                </div>
               </section>
             </>
           )}

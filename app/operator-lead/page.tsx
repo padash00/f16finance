@@ -30,6 +30,15 @@ type CompanyRow = {
     status: string
     published_at: string
   } | null
+  weeklyStatus: {
+    state: 'draft' | 'published' | 'partial' | 'confirmed' | 'issues'
+    total: number
+    confirmed: number
+    pending: number
+    issues: number
+    proposals: number
+    resolved: number
+  }
 }
 
 type TeamAssignment = {
@@ -114,6 +123,36 @@ function formatTaskStatus(status: string) {
     archived: 'Архив',
   }
   return map[status] || status
+}
+
+function getWeeklyStateLabel(state: CompanyRow['weeklyStatus']['state']) {
+  switch (state) {
+    case 'confirmed':
+      return 'Подтверждено'
+    case 'partial':
+      return 'Частично'
+    case 'issues':
+      return 'Есть споры'
+    case 'published':
+      return 'Ждём ответ'
+    default:
+      return 'Черновик'
+  }
+}
+
+function getWeeklyStateClass(state: CompanyRow['weeklyStatus']['state']) {
+  switch (state) {
+    case 'confirmed':
+      return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+    case 'partial':
+      return 'border-sky-400/20 bg-sky-400/10 text-sky-300'
+    case 'issues':
+      return 'border-amber-400/20 bg-amber-400/10 text-amber-300'
+    case 'published':
+      return 'border-violet-400/20 bg-violet-400/10 text-violet-300'
+    default:
+      return 'border-white/10 bg-white/[0.04] text-slate-300'
+  }
 }
 
 export default function OperatorLeadPage() {
@@ -295,6 +334,14 @@ export default function OperatorLeadPage() {
                   const team = teamByCompany.get(company.id) || []
                   const tasks = tasksByCompany.get(company.id) || []
                   const requests = requestsByCompany.get(company.id) || []
+                  const activeTasks = tasks.filter((task) => !['done', 'archived'].includes(task.status))
+                  const overdueTasks = activeTasks.filter((task) => {
+                    if (!task.due_date) return false
+                    return new Date(`${task.due_date}T23:59:59`).getTime() < Date.now()
+                  })
+                  const reviewTasks = tasks.filter((task) => task.status === 'review')
+                  const openRequests = requests.filter((request) => ['open', 'awaiting_reason'].includes(request.status))
+                  const resolvedRequests = requests.filter((request) => ['resolved', 'dismissed'].includes(request.status))
                   const replaceCandidates = team.filter((item) => item.role_in_company === 'operator' || item.role_in_company === 'senior_operator' || item.role_in_company === 'senior_cashier')
 
                   return (
@@ -307,25 +354,67 @@ export default function OperatorLeadPage() {
                           </div>
                           <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em]">{company.name}</h2>
                           <p className="mt-1 text-sm text-slate-400">{formatRole(company.leadRole)}</p>
+                          <div className={`mt-3 inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${getWeeklyStateClass(company.weeklyStatus.state)}`}>
+                            {getWeeklyStateLabel(company.weeklyStatus.state)}
+                          </div>
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="grid gap-3 sm:grid-cols-4">
                           <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
                             <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Команда</div>
                             <div className="mt-2 text-xl font-semibold">{team.length}</div>
                           </div>
                           <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
                             <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Задачи</div>
-                            <div className="mt-2 text-xl font-semibold">{tasks.filter((task) => !['done', 'archived'].includes(task.status)).length}</div>
+                            <div className="mt-2 text-xl font-semibold">{activeTasks.length}</div>
                           </div>
                           <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
                             <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Проблемы</div>
-                            <div className="mt-2 text-xl font-semibold">{requests.filter((request) => ['open', 'awaiting_reason'].includes(request.status)).length}</div>
+                            <div className="mt-2 text-xl font-semibold">{openRequests.length}</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Подтвердили</div>
+                            <div className="mt-2 text-xl font-semibold">
+                              {company.weeklyStatus.confirmed}/{company.weeklyStatus.total}
+                            </div>
                           </div>
                         </div>
                       </div>
 
                       <div className="mt-5 grid gap-5 xl:grid-cols-[1.1fr,1fr,1.2fr]">
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 xl:col-span-3">
+                          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+                            <ShieldCheck className="h-4 w-4 text-emerald-300" />
+                            Статус недели по точке
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+                            <div className="rounded-xl border border-white/6 bg-black/15 px-3 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Смен у команды</div>
+                              <div className="mt-2 text-lg font-semibold">{company.weeklyStatus.total}</div>
+                            </div>
+                            <div className="rounded-xl border border-emerald-400/10 bg-emerald-400/5 px-3 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-emerald-300/70">Подтверждено</div>
+                              <div className="mt-2 text-lg font-semibold text-emerald-200">{company.weeklyStatus.confirmed}</div>
+                            </div>
+                            <div className="rounded-xl border border-violet-400/10 bg-violet-400/5 px-3 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-violet-300/70">Ждут ответа</div>
+                              <div className="mt-2 text-lg font-semibold text-violet-200">{company.weeklyStatus.pending}</div>
+                            </div>
+                            <div className="rounded-xl border border-amber-400/10 bg-amber-400/5 px-3 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-amber-300/70">Спорные</div>
+                              <div className="mt-2 text-lg font-semibold text-amber-200">{company.weeklyStatus.issues}</div>
+                            </div>
+                            <div className="rounded-xl border border-sky-400/10 bg-sky-400/5 px-3 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300/70">Ваши предложения</div>
+                              <div className="mt-2 text-lg font-semibold text-sky-200">{company.weeklyStatus.proposals}</div>
+                            </div>
+                            <div className="rounded-xl border border-white/6 bg-black/15 px-3 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Решено</div>
+                              <div className="mt-2 text-lg font-semibold">{company.weeklyStatus.resolved}</div>
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
                           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
                             <Users2 className="h-4 w-4 text-sky-300" />
@@ -349,6 +438,20 @@ export default function OperatorLeadPage() {
                           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
                             <ClipboardList className="h-4 w-4 text-violet-300" />
                             Задачи точки
+                          </div>
+                          <div className="mb-3 grid gap-2 sm:grid-cols-3">
+                            <div className="rounded-xl border border-white/6 bg-black/15 px-3 py-2">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Активные</div>
+                              <div className="mt-1 text-lg font-semibold">{activeTasks.length}</div>
+                            </div>
+                            <div className="rounded-xl border border-amber-400/10 bg-amber-400/5 px-3 py-2">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-amber-300/70">Просрочено</div>
+                              <div className="mt-1 text-lg font-semibold text-amber-200">{overdueTasks.length}</div>
+                            </div>
+                            <div className="rounded-xl border border-sky-400/10 bg-sky-400/5 px-3 py-2">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300/70">На проверке</div>
+                              <div className="mt-1 text-lg font-semibold text-sky-200">{reviewTasks.length}</div>
+                            </div>
                           </div>
                           <div className="space-y-2">
                             {tasks.length > 0 ? tasks.slice(0, 8).map((task) => (
@@ -375,6 +478,22 @@ export default function OperatorLeadPage() {
                           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
                             <AlertTriangle className="h-4 w-4 text-amber-300" />
                             Спорные смены
+                          </div>
+                          <div className="mb-3 grid gap-2 sm:grid-cols-3">
+                            <div className="rounded-xl border border-amber-400/10 bg-amber-400/5 px-3 py-2">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-amber-300/70">Открыто</div>
+                              <div className="mt-1 text-lg font-semibold text-amber-200">{openRequests.length}</div>
+                            </div>
+                            <div className="rounded-xl border border-sky-400/10 bg-sky-400/5 px-3 py-2">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300/70">С предложением</div>
+                              <div className="mt-1 text-lg font-semibold text-sky-200">
+                                {requests.filter((request) => request.lead_status === 'proposed' && ['open', 'awaiting_reason'].includes(request.status)).length}
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-emerald-400/10 bg-emerald-400/5 px-3 py-2">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-emerald-300/70">Закрыто</div>
+                              <div className="mt-1 text-lg font-semibold text-emerald-200">{resolvedRequests.length}</div>
+                            </div>
                           </div>
                           <div className="space-y-3">
                             {requests.length > 0 ? requests.map((request) => (

@@ -19,6 +19,45 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+function getWeeklyStatusSummary(params: {
+  publicationId: string | null
+  teamAssignments: any[]
+  requests: any[]
+  responses: any[]
+}) {
+  if (!params.publicationId) {
+    return {
+      state: 'draft',
+      total: params.teamAssignments.length,
+      confirmed: 0,
+      pending: params.teamAssignments.length,
+      issues: 0,
+      proposals: 0,
+      resolved: 0,
+    }
+  }
+
+  const responses = params.responses.filter((item) => item.publication_id === params.publicationId)
+  const requests = params.requests.filter((item) => item.publication_id === params.publicationId)
+  const confirmed = responses.filter((item) => item.status === 'confirmed').length
+  const issues = requests.filter((item) => ['open', 'awaiting_reason'].includes(item.status)).length
+  const proposals = requests.filter((item) => item.lead_status === 'proposed' && item.status === 'open').length
+  const resolved = requests.filter((item) => ['resolved', 'dismissed'].includes(item.status)).length
+  const total = responses.length || params.teamAssignments.length
+  const pending = Math.max(0, total - confirmed)
+
+  const state =
+    issues > 0
+      ? 'issues'
+      : total > 0 && confirmed === total
+        ? 'confirmed'
+        : confirmed > 0
+          ? 'partial'
+          : 'published'
+
+  return { state, total, confirmed, pending, issues, proposals, resolved }
+}
+
 export async function GET(req: Request) {
   try {
     const context = await getRequestOperatorLeadContext(req)
@@ -99,6 +138,17 @@ export async function GET(req: Request) {
       }
     }
 
+    const latestPublicationIds = [...latestPublicationByCompany.values()].map((publication) => String(publication.id))
+    const { data: responses, error: responsesError } =
+      latestPublicationIds.length > 0
+        ? await supabase
+            .from('shift_operator_week_responses')
+            .select('id, publication_id, company_id, operator_id, status, response_source, responded_at')
+            .in('publication_id', latestPublicationIds)
+        : { data: [], error: null }
+
+    if (responsesError) throw responsesError
+
     return json({
       ok: true,
       lead: {
@@ -118,6 +168,12 @@ export async function GET(req: Request) {
         leadRole:
           context.leadAssignments.find((assignment) => assignment.company_id === company.id)?.role_in_company || 'senior_operator',
         publication: latestPublicationByCompany.get(String(company.id)) || null,
+        weeklyStatus: getWeeklyStatusSummary({
+          publicationId: latestPublicationByCompany.get(String(company.id))?.id || null,
+          teamAssignments: (assignmentsRes.data || []).filter((assignment: any) => assignment.company_id === company.id),
+          requests: (requestsRes.data || []).filter((request: any) => request.company_id === company.id),
+          responses: (responses || []).filter((response: any) => response.company_id === company.id),
+        }),
       })),
       teamAssignments: (assignmentsRes.data || []).map((assignment: any) => ({
         ...assignment,
