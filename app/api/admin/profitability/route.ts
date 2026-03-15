@@ -5,6 +5,10 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 type ProfitabilityPayload = {
+  kaspi_qr_turnover?: number | null
+  kaspi_qr_rate?: number | null
+  kaspi_gold_turnover?: number | null
+  kaspi_gold_rate?: number | null
   qr_gold_turnover?: number | null
   qr_gold_rate?: number | null
   other_cards_turnover?: number | null
@@ -49,6 +53,10 @@ function normalizeAmount(value: number | null | undefined) {
 
 function normalizePayload(payload: ProfitabilityPayload) {
   return {
+    kaspi_qr_turnover: normalizeAmount(payload.kaspi_qr_turnover),
+    kaspi_qr_rate: normalizeAmount(payload.kaspi_qr_rate),
+    kaspi_gold_turnover: normalizeAmount(payload.kaspi_gold_turnover),
+    kaspi_gold_rate: normalizeAmount(payload.kaspi_gold_rate),
     qr_gold_turnover: normalizeAmount(payload.qr_gold_turnover),
     qr_gold_rate: normalizeAmount(payload.qr_gold_rate),
     other_cards_turnover: normalizeAmount(payload.other_cards_turnover),

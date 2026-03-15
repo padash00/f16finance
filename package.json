@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "next typegen && tsc --noEmit",
+    "typecheck": "next typegen && npx tsc --noEmit",
     "verify:release": "npm run typecheck && npm run lint && npm run build",
     "smoke:live": "node scripts/smoke-live.mjs"
   },

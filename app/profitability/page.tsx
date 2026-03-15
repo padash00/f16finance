@@ -13,6 +13,7 @@ type IncomeRow = { date: string; cash_amount: number | null; kaspi_amount: numbe
 type ExpenseRow = { date: string; cash_amount: number | null; kaspi_amount: number | null }
 type ProfitabilityInputRow = {
   month: string
+  kaspi_qr_turnover: number; kaspi_qr_rate: number; kaspi_gold_turnover: number; kaspi_gold_rate: number
   qr_gold_turnover: number; qr_gold_rate: number; other_cards_turnover: number; other_cards_rate: number
   kaspi_red_turnover: number; kaspi_red_rate: number; kaspi_kredit_turnover: number; kaspi_kredit_rate: number
   payroll_amount: number; payroll_taxes_amount: number; income_tax_amount: number
@@ -27,8 +28,11 @@ const shiftMonth = (month: string, offset: number) => { const [y, m] = month.spl
 const monthLabel = (month: string) => new Date(`${month}-01T12:00:00`).toLocaleString('ru-RU', { month: 'long', year: 'numeric' })
 const monthStart = (month: string) => `${month}-01`
 const monthEnd = (month: string) => { const d = new Date(`${month}-01T12:00:00`); d.setMonth(d.getMonth() + 1, 0); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+const closedMonthDefaults = () => { const lastClosed = shiftMonth(currentMonth(), -1); return { from: shiftMonth(lastClosed, -3), to: lastClosed } }
 const toNumber = (value: string) => { const n = Number(value.replace(',', '.').trim() || 0); return Number.isFinite(n) ? Math.max(0, n) : 0 }
 const draftFromRow = (row?: ProfitabilityInputRow | null): Draft => ({
+  kaspi_qr_turnover: String(row?.kaspi_qr_turnover || ''), kaspi_qr_rate: String(row?.kaspi_qr_rate || ''),
+  kaspi_gold_turnover: String(row?.kaspi_gold_turnover || ''), kaspi_gold_rate: String(row?.kaspi_gold_rate || ''),
   qr_gold_turnover: String(row?.qr_gold_turnover || ''), qr_gold_rate: String(row?.qr_gold_rate || ''),
   other_cards_turnover: String(row?.other_cards_turnover || ''), other_cards_rate: String(row?.other_cards_rate || ''),
   kaspi_red_turnover: String(row?.kaspi_red_turnover || ''), kaspi_red_rate: String(row?.kaspi_red_rate || ''),
@@ -51,7 +55,7 @@ function buildMonths(from: string, to: string) {
 }
 
 export default function ProfitabilityPage() {
-  const defaults = useMemo(() => { const now = currentMonth(); return { from: shiftMonth(now, -5), to: now } }, [])
+  const defaults = useMemo(closedMonthDefaults, [])
   const [monthFrom, setMonthFrom] = useState(defaults.from)
   const [monthTo, setMonthTo] = useState(defaults.to)
   const [selectedMonth, setSelectedMonth] = useState(defaults.to)
@@ -104,22 +108,75 @@ export default function ProfitabilityPage() {
     }, { revenue: 0, cash: 0, cashless: 0 })
     const journalExpenses = expenses.filter((row) => row.date.startsWith(month)).reduce((acc, row) => acc + Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0), 0)
     const manual = inputs[month]
-    const posTurnover = Number(manual?.qr_gold_turnover || 0) + Number(manual?.other_cards_turnover || 0) + Number(manual?.kaspi_red_turnover || 0) + Number(manual?.kaspi_kredit_turnover || 0)
-    const posCommission =
-      Number(manual?.qr_gold_turnover || 0) * Number(manual?.qr_gold_rate || 0) / 100 +
-      Number(manual?.other_cards_turnover || 0) * Number(manual?.other_cards_rate || 0) / 100 +
-      Number(manual?.kaspi_red_turnover || 0) * Number(manual?.kaspi_red_rate || 0) / 100 +
-      Number(manual?.kaspi_kredit_turnover || 0) * Number(manual?.kaspi_kredit_rate || 0) / 100
+    const kaspiQrTurnover = Number(manual?.kaspi_qr_turnover || 0)
+    const kaspiQrRate = Number(manual?.kaspi_qr_rate || 0)
+    const kaspiGoldTurnover = Number(manual?.kaspi_gold_turnover || 0)
+    const kaspiGoldRate = Number(manual?.kaspi_gold_rate || 0)
+    const legacyQrGoldTurnover = Number(manual?.qr_gold_turnover || 0)
+    const legacyQrGoldRate = Number(manual?.qr_gold_rate || 0)
+    const otherCardsTurnover = Number(manual?.other_cards_turnover || 0)
+    const otherCardsRate = Number(manual?.other_cards_rate || 0)
+    const kaspiRedTurnover = Number(manual?.kaspi_red_turnover || 0)
+    const kaspiRedRate = Number(manual?.kaspi_red_rate || 0)
+    const kaspiKreditTurnover = Number(manual?.kaspi_kredit_turnover || 0)
+    const kaspiKreditRate = Number(manual?.kaspi_kredit_rate || 0)
+    const hasSplitQrAndGold = kaspiQrTurnover > 0 || kaspiGoldTurnover > 0
+    const legacyQrGoldCommission = hasSplitQrAndGold ? 0 : legacyQrGoldTurnover * legacyQrGoldRate / 100
+    const kaspiQrCommission = kaspiQrTurnover * kaspiQrRate / 100
+    const kaspiGoldCommission = kaspiGoldTurnover * kaspiGoldRate / 100
+    const otherCardsCommission = otherCardsTurnover * otherCardsRate / 100
+    const kaspiRedCommission = kaspiRedTurnover * kaspiRedRate / 100
+    const kaspiKreditCommission = kaspiKreditTurnover * kaspiKreditRate / 100
+    const posTurnover = kaspiQrTurnover + kaspiGoldTurnover + otherCardsTurnover + kaspiRedTurnover + kaspiKreditTurnover + (hasSplitQrAndGold ? 0 : legacyQrGoldTurnover)
+    const posCommission = kaspiQrCommission + kaspiGoldCommission + otherCardsCommission + kaspiRedCommission + kaspiKreditCommission + legacyQrGoldCommission
     const payroll = Number(manual?.payroll_amount || 0), payrollTaxes = Number(manual?.payroll_taxes_amount || 0), otherOperating = Number(manual?.other_operating_amount || 0)
     const depreciation = Number(manual?.depreciation_amount || 0), amortization = Number(manual?.amortization_amount || 0), incomeTax = Number(manual?.income_tax_amount || 0)
     const ebitda = income.revenue - journalExpenses - posCommission - payroll - payrollTaxes - otherOperating
     const operatingProfit = ebitda - depreciation - amortization
     const netProfit = operatingProfit - incomeTax
-    return { month, label: monthLabel(month), revenue: income.revenue, cashRevenue: income.cash, cashlessRevenue: income.cashless, journalExpenses, posTurnover, posCommission, payroll, payrollTaxes, otherOperating, ebitda, depreciation, amortization, operatingProfit, incomeTax, netProfit, notes: manual?.notes || null }
+    return {
+      month,
+      label: monthLabel(month),
+      revenue: income.revenue,
+      cashRevenue: income.cash,
+      cashlessRevenue: income.cashless,
+      journalExpenses,
+      posTurnover,
+      posCommission,
+      kaspiQrTurnover,
+      kaspiQrRate,
+      kaspiQrCommission,
+      kaspiGoldTurnover,
+      kaspiGoldRate,
+      kaspiGoldCommission,
+      otherCardsTurnover,
+      otherCardsRate,
+      otherCardsCommission,
+      kaspiRedTurnover,
+      kaspiRedRate,
+      kaspiRedCommission,
+      kaspiKreditTurnover,
+      kaspiKreditRate,
+      kaspiKreditCommission,
+      legacyQrGoldTurnover,
+      legacyQrGoldRate,
+      legacyQrGoldCommission,
+      payroll,
+      payrollTaxes,
+      otherOperating,
+      ebitda,
+      depreciation,
+      amortization,
+      operatingProfit,
+      incomeTax,
+      netProfit,
+      notes: manual?.notes || null,
+    }
   }), [expenses, incomes, inputs, months])
 
   const selected = useMemo(() => rows.find((row) => row.month === selectedMonth) || rows[rows.length - 1] || null, [rows, selectedMonth])
   const totals = useMemo(() => rows.reduce((acc, row) => ({ revenue: acc.revenue + row.revenue, ebitda: acc.ebitda + row.ebitda, operatingProfit: acc.operatingProfit + row.operatingProfit, netProfit: acc.netProfit + row.netProfit }), { revenue: 0, ebitda: 0, operatingProfit: 0, netProfit: 0 }), [rows])
+  const periodLabel = `${monthStart(monthFrom)} - ${monthEnd(monthTo)}`
 
   const save = async () => {
     setSaving(true); setError(null); setSuccess(null)
@@ -152,7 +209,11 @@ export default function ProfitabilityPage() {
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3"><Landmark className="h-7 w-7 text-emerald-300" /></div>
-                <div><h1 className="text-3xl font-semibold text-white">ОПиУ и EBITDA</h1><p className="text-sm text-slate-300">Факт из доходов и расходов плюс ручные месячные комиссии POS, зарплата и корректировки.</p></div>
+                <div>
+                  <h1 className="text-3xl font-semibold text-white">ОПиУ и EBITDA</h1>
+                  <p className="text-sm text-slate-300">Выручка берётся только из журнала доходов. Ручные поля ниже нужны для комиссий Kaspi POS, зарплат, налогов и прочих корректировок прибыли.</p>
+                  <p className="mt-1 text-xs text-slate-400">По умолчанию показываем 4 закрытых полных месяца без текущего незакрытого месяца.</p>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-300">
@@ -161,19 +222,59 @@ export default function ProfitabilityPage() {
                   <span className="text-slate-500">—</span>
                   <input type="month" value={monthTo} onChange={(e) => setMonthTo(e.target.value)} className="bg-transparent outline-none" />
                 </div>
-                <Button variant="outline" size="sm" onClick={() => { const now = currentMonth(); setMonthFrom(shiftMonth(now, -5)); setMonthTo(now) }} className="border-white/10 bg-white/[0.04] text-slate-200 hover:bg-white/[0.08]">6 месяцев</Button>
+                <Button variant="outline" size="sm" onClick={() => { const closed = closedMonthDefaults(); setMonthFrom(closed.from); setMonthTo(closed.to) }} className="border-white/10 bg-white/[0.04] text-slate-200 hover:bg-white/[0.08]">4 закрытых месяца</Button>
               </div>
+            </div>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
+              Период расчёта: <span className="font-medium text-white">{periodLabel}</span>
             </div>
             {error ? <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
             {success ? <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div> : null}
           </Card>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">Выручка за период</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.revenue)}</p></div><TrendingUp className="h-5 w-5 text-emerald-300" /></div></Card>
+            <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">Фактическая выручка</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.revenue)}</p><p className="mt-1 text-xs text-slate-500">Только по журналу доходов за {periodLabel}</p></div><TrendingUp className="h-5 w-5 text-emerald-300" /></div></Card>
             <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">EBITDA за период</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.ebitda)}</p></div><Calculator className="h-5 w-5 text-cyan-300" /></div></Card>
             <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">Опер. прибыль</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.operatingProfit)}</p></div><Wallet className="h-5 w-5 text-amber-300" /></div></Card>
             <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">Чистая прибыль</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.netProfit)}</p></div><TrendingDown className="h-5 w-5 text-rose-300" /></div></Card>
           </div>
+
+          <Card className="border border-white/10 bg-white/[0.03] p-6">
+            <div className="mb-4">
+              <h2 className="text-xl font-semibold text-white">Справка по терминам</h2>
+              <p className="text-sm text-slate-400">Короткие объяснения, что именно считается в этой странице и как читать итоговые показатели.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                <div className="text-sm font-medium text-white">Что такое выручка</div>
+                <p className="mt-2 text-sm text-slate-300">Это только доходы из журнала: наличные, Kaspi POS, online и карта. Ручные комиссии Kaspi не добавляют выручку, а уменьшают прибыль.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                <div className="text-sm font-medium text-white">Оборот POS</div>
+                <p className="mt-2 text-sm text-slate-300">Это объём оплат, прошедших через терминал или сервис Kaspi по конкретному типу оплаты. Он нужен только для расчёта комиссии банка.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                <div className="text-sm font-medium text-white">Комиссия POS</div>
+                <p className="mt-2 text-sm text-slate-300">Это удержание банка за эквайринг. Она не увеличивает выручку и не заменяет расходы из журнала, а отдельно уменьшает прибыль месяца.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                <div className="text-sm font-medium text-white">Что такое EBITDA</div>
+                <p className="mt-2 text-sm text-slate-300">EBITDA = выручка минус расходы из журнала, комиссия POS, фонд оплаты труда, налоги на зарплату и прочие операционные расходы. Без износа, амортизации и налога на прибыль.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                <div className="text-sm font-medium text-white">Операционная прибыль</div>
+                <p className="mt-2 text-sm text-slate-300">Это EBITDA после вычета износа и амортизации. Показывает, сколько бизнес зарабатывает после основных операционных затрат и учёта износа активов.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                <div className="text-sm font-medium text-white">Чистая прибыль</div>
+                <p className="mt-2 text-sm text-slate-300">Это итог после всех расходов, комиссий, зарплат, амортизации и налога на прибыль или условного 3%. Именно этот показатель ближе всего к реальному результату месяца.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                <div className="text-sm font-medium text-white">ФОТ, налоги и амортизация</div>
+                <p className="mt-2 text-sm text-slate-300">ФОТ — зарплаты за месяц. Налоги на зарплату — обязательные начисления на ФОТ. Износ и амортизация — постепенное списание стоимости оборудования и других активов.</p>
+              </div>
+            </div>
+          </Card>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_1fr]">
             <Card className="border border-white/10 bg-white/[0.03] p-6">
@@ -199,18 +300,35 @@ export default function ProfitabilityPage() {
                     </tbody></table>
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <Card className="border border-white/10 bg-slate-950/60 p-4"><div className="mb-2 flex items-center gap-2 text-sm font-medium text-white"><CreditCard className="h-4 w-4 text-emerald-300" />POS и безнал</div><div className="space-y-2 text-sm text-slate-300"><div className="flex justify-between"><span>Безналичная выручка</span><span>{money(selected.cashlessRevenue)}</span></div><div className="flex justify-between"><span>Ручной оборот POS</span><span>{money(selected.posTurnover)}</span></div><div className="flex justify-between"><span>Комиссия POS</span><span>{money(selected.posCommission)}</span></div></div></Card>
+                    <Card className="border border-white/10 bg-slate-950/60 p-4">
+                      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-white"><CreditCard className="h-4 w-4 text-emerald-300" />POS и безнал</div>
+                      <div className="space-y-2 text-sm text-slate-300">
+                        <div className="flex justify-between"><span>Безналичная выручка</span><span>{money(selected.cashlessRevenue)}</span></div>
+                        <div className="flex justify-between"><span>Kaspi QR</span><span>{money(selected.kaspiQrTurnover)} / {money(selected.kaspiQrCommission)}</span></div>
+                        <div className="flex justify-between"><span>Kaspi Gold</span><span>{money(selected.kaspiGoldTurnover)} / {money(selected.kaspiGoldCommission)}</span></div>
+                        <div className="flex justify-between"><span>Другие карты</span><span>{money(selected.otherCardsTurnover)} / {money(selected.otherCardsCommission)}</span></div>
+                        <div className="flex justify-between"><span>Kaspi Red</span><span>{money(selected.kaspiRedTurnover)} / {money(selected.kaspiRedCommission)}</span></div>
+                        <div className="flex justify-between"><span>Kaspi Kredit</span><span>{money(selected.kaspiKreditTurnover)} / {money(selected.kaspiKreditCommission)}</span></div>
+                        {selected.legacyQrGoldTurnover > 0 ? <div className="flex justify-between text-amber-300"><span>Старый общий QR/Gold</span><span>{money(selected.legacyQrGoldTurnover)} / {money(selected.legacyQrGoldCommission)}</span></div> : null}
+                        <div className="flex justify-between border-t border-white/10 pt-2 font-medium text-white"><span>Итого комиссия POS</span><span>{money(selected.posCommission)}</span></div>
+                      </div>
+                    </Card>
                     <Card className="border border-white/10 bg-slate-950/60 p-4"><div className="mb-2 text-sm font-medium text-white">Комментарий месяца</div><p className="text-sm text-slate-300">{selected.notes || 'Комментарий не заполнен. Здесь можно фиксировать изменения по ставкам Kaspi и ручные допущения месяца.'}</p></Card>
                   </div>
+                  {selected.legacyQrGoldTurnover > 0 ? <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Для этого месяца найдены старые объединённые данные QR/Gold. Лучше переписать их отдельно в полях Kaspi QR и Kaspi Gold, чтобы комиссия считалась точнее.</div> : null}
                 </div>
               ) : null}
             </Card>
 
             <Card className="border border-white/10 bg-white/[0.03] p-6">
-              <div className="space-y-1"><h2 className="text-xl font-semibold text-white">Ручные месячные вводы</h2><p className="text-sm text-slate-400">Разбивка по Kaspi POS и корректировки прибыли, которых нет в основном журнале.</p></div>
+              <div className="space-y-1">
+                <h2 className="text-xl font-semibold text-white">Ручные месячные вводы</h2>
+                <p className="text-sm text-slate-400">Здесь вы вносите комиссии и расходы, которых нет в основном журнале. Выручка сверху от этого не растёт, меняется только прибыль.</p>
+              </div>
               <div className="mt-6 space-y-4">
                 {[
-                  ['qr_gold_turnover', 'qr_gold_rate', 'Kaspi QR / Gold'],
+                  ['kaspi_qr_turnover', 'kaspi_qr_rate', 'Kaspi QR'],
+                  ['kaspi_gold_turnover', 'kaspi_gold_rate', 'Kaspi Gold'],
                   ['other_cards_turnover', 'other_cards_rate', 'Другие карты'],
                   ['kaspi_red_turnover', 'kaspi_red_rate', 'Kaspi Red'],
                   ['kaspi_kredit_turnover', 'kaspi_kredit_rate', 'Kaspi Kredit'],
@@ -221,6 +339,15 @@ export default function ProfitabilityPage() {
                     <Input type="number" min="0" step="0.01" value={draft[rateKey]} onChange={(e) => setDraft((prev) => ({ ...prev, [rateKey]: e.target.value }))} placeholder="%" className="border-white/10 bg-black/20 text-white" />
                   </div>
                 ))}
+                <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-300">
+                  <div className="font-medium text-white">Как заполнять комиссии POS</div>
+                  <ul className="mt-2 space-y-1">
+                    <li>Kaspi QR: оборот оплат по QR и ставка комиссии именно для QR.</li>
+                    <li>Kaspi Gold: оборот оплат картой Gold и ставка комиссии именно для Gold.</li>
+                    <li>Другие карты: все остальные банковские карты.</li>
+                    <li>Kaspi Red и Kaspi Kredit: указывайте отдельно, если по ним другая ставка банка.</li>
+                  </ul>
+                </div>
                 {[
                   ['payroll_amount', 'ФОТ за месяц'], ['payroll_taxes_amount', 'Налоги на зарплату'], ['income_tax_amount', 'Налог на прибыль / 3%'],
                   ['depreciation_amount', 'Износ'], ['amortization_amount', 'Амортизация'], ['other_operating_amount', 'Прочие операционные'],
