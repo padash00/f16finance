@@ -13,6 +13,7 @@ type IncomeRow = { date: string; cash_amount: number | null; kaspi_amount: numbe
 type ExpenseRow = { date: string; cash_amount: number | null; kaspi_amount: number | null }
 type ProfitabilityInputRow = {
   month: string
+  cash_revenue_override: number; pos_revenue_override: number
   kaspi_qr_turnover: number; kaspi_qr_rate: number; kaspi_gold_turnover: number; kaspi_gold_rate: number
   qr_gold_turnover: number; qr_gold_rate: number; other_cards_turnover: number; other_cards_rate: number
   kaspi_red_turnover: number; kaspi_red_rate: number; kaspi_kredit_turnover: number; kaspi_kredit_rate: number
@@ -31,6 +32,7 @@ const monthEnd = (month: string) => { const d = new Date(`${month}-01T12:00:00`)
 const closedMonthDefaults = () => { const lastClosed = shiftMonth(currentMonth(), -1); return { from: shiftMonth(lastClosed, -3), to: lastClosed } }
 const toNumber = (value: string) => { const n = Number(value.replace(',', '.').trim() || 0); return Number.isFinite(n) ? Math.max(0, n) : 0 }
 const draftFromRow = (row?: ProfitabilityInputRow | null): Draft => ({
+  cash_revenue_override: String(row?.cash_revenue_override || ''), pos_revenue_override: String(row?.pos_revenue_override || ''),
   kaspi_qr_turnover: String(row?.kaspi_qr_turnover || ''), kaspi_qr_rate: String(row?.kaspi_qr_rate || ''),
   kaspi_gold_turnover: String(row?.kaspi_gold_turnover || ''), kaspi_gold_rate: String(row?.kaspi_gold_rate || ''),
   qr_gold_turnover: String(row?.qr_gold_turnover || ''), qr_gold_rate: String(row?.qr_gold_rate || ''),
@@ -108,6 +110,12 @@ export default function ProfitabilityPage() {
     }, { revenue: 0, cash: 0, cashless: 0 })
     const journalExpenses = expenses.filter((row) => row.date.startsWith(month)).reduce((acc, row) => acc + Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0), 0)
     const manual = inputs[month]
+    const cashRevenueOverride = Number(manual?.cash_revenue_override || 0)
+    const posRevenueOverride = Number(manual?.pos_revenue_override || 0)
+    const hasRevenueOverride = cashRevenueOverride > 0 || posRevenueOverride > 0
+    const revenue = hasRevenueOverride ? cashRevenueOverride + posRevenueOverride : income.revenue
+    const cashRevenue = hasRevenueOverride ? cashRevenueOverride : income.cash
+    const cashlessRevenue = hasRevenueOverride ? posRevenueOverride : income.cashless
     const kaspiQrTurnover = Number(manual?.kaspi_qr_turnover || 0)
     const kaspiQrRate = Number(manual?.kaspi_qr_rate || 0)
     const kaspiGoldTurnover = Number(manual?.kaspi_gold_turnover || 0)
@@ -131,15 +139,21 @@ export default function ProfitabilityPage() {
     const posCommission = kaspiQrCommission + kaspiGoldCommission + otherCardsCommission + kaspiRedCommission + kaspiKreditCommission + legacyQrGoldCommission
     const payroll = Number(manual?.payroll_amount || 0), payrollTaxes = Number(manual?.payroll_taxes_amount || 0), otherOperating = Number(manual?.other_operating_amount || 0)
     const depreciation = Number(manual?.depreciation_amount || 0), amortization = Number(manual?.amortization_amount || 0), incomeTax = Number(manual?.income_tax_amount || 0)
-    const ebitda = income.revenue - journalExpenses - posCommission - payroll - payrollTaxes - otherOperating
+    const ebitda = revenue - journalExpenses - posCommission - payroll - payrollTaxes - otherOperating
     const operatingProfit = ebitda - depreciation - amortization
     const netProfit = operatingProfit - incomeTax
     return {
       month,
       label: monthLabel(month),
-      revenue: income.revenue,
-      cashRevenue: income.cash,
-      cashlessRevenue: income.cashless,
+      revenue,
+      cashRevenue,
+      cashlessRevenue,
+      journalRevenue: income.revenue,
+      journalCashRevenue: income.cash,
+      journalCashlessRevenue: income.cashless,
+      cashRevenueOverride,
+      posRevenueOverride,
+      hasRevenueOverride,
       journalExpenses,
       posTurnover,
       posCommission,
@@ -180,6 +194,10 @@ export default function ProfitabilityPage() {
   const draftPreview = useMemo(() => {
     if (!selected) return null
 
+    const cashRevenueOverride = toNumber(draft.cash_revenue_override || '')
+    const posRevenueOverride = toNumber(draft.pos_revenue_override || '')
+    const hasRevenueOverride = cashRevenueOverride > 0 || posRevenueOverride > 0
+    const revenue = hasRevenueOverride ? cashRevenueOverride + posRevenueOverride : selected.journalRevenue
     const kaspiQrTurnover = toNumber(draft.kaspi_qr_turnover || '')
     const kaspiQrRate = toNumber(draft.kaspi_qr_rate || '')
     const kaspiGoldTurnover = toNumber(draft.kaspi_gold_turnover || '')
@@ -204,11 +222,15 @@ export default function ProfitabilityPage() {
       kaspiRedTurnover * kaspiRedRate / 100 +
       kaspiKreditTurnover * kaspiKreditRate / 100
 
-    const ebitda = selected.revenue - selected.journalExpenses - posCommission - payroll - payrollTaxes - otherOperating
+    const ebitda = revenue - selected.journalExpenses - posCommission - payroll - payrollTaxes - otherOperating
     const operatingProfit = ebitda - depreciation - amortization
     const netProfit = operatingProfit - incomeTax
 
     return {
+      revenue,
+      cashRevenue: hasRevenueOverride ? cashRevenueOverride : selected.journalCashRevenue,
+      posRevenue: hasRevenueOverride ? posRevenueOverride : selected.journalCashlessRevenue,
+      hasRevenueOverride,
       posCommission,
       payroll,
       payrollTaxes,
@@ -252,7 +274,7 @@ export default function ProfitabilityPage() {
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3"><Landmark className="h-7 w-7 text-emerald-300" /></div>
                 <div>
                   <h1 className="text-3xl font-semibold text-white">ОПиУ и EBITDA</h1>
-                  <p className="text-sm text-slate-300">Выручка берётся только из журнала доходов. Ручные поля ниже нужны для комиссий Kaspi POS, зарплат, налогов и прочих корректировок прибыли.</p>
+                  <p className="text-sm text-slate-300">По умолчанию выручка берётся из журнала доходов. При необходимости вы можете вручную задать общую выручку по POS и общую наличку за месяц, а ниже внести комиссии и корректировки прибыли.</p>
                   <p className="mt-1 text-xs text-slate-400">По умолчанию показываем 4 закрытых полных месяца без текущего незакрытого месяца.</p>
                 </div>
               </div>
@@ -274,7 +296,7 @@ export default function ProfitabilityPage() {
           </Card>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">Фактическая выручка</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.revenue)}</p><p className="mt-1 text-xs text-slate-500">Только по журналу доходов за {periodLabel}</p></div><TrendingUp className="h-5 w-5 text-emerald-300" /></div></Card>
+            <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">Выручка за период</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.revenue)}</p><p className="mt-1 text-xs text-slate-500">С учётом ручных верхних вводов, если они заполнены</p></div><TrendingUp className="h-5 w-5 text-emerald-300" /></div></Card>
             <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">EBITDA за период</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.ebitda)}</p></div><Calculator className="h-5 w-5 text-cyan-300" /></div></Card>
             <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">Опер. прибыль</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.operatingProfit)}</p></div><Wallet className="h-5 w-5 text-amber-300" /></div></Card>
             <Card className="border border-white/10 bg-white/[0.03] p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-slate-400">Чистая прибыль</p><p className="mt-2 text-2xl font-semibold text-white">{money(totals.netProfit)}</p></div><TrendingDown className="h-5 w-5 text-rose-300" /></div></Card>
@@ -288,7 +310,7 @@ export default function ProfitabilityPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                 <div className="text-sm font-medium text-white">Что такое выручка</div>
-                <p className="mt-2 text-sm text-slate-300">Это только доходы из журнала: наличные, Kaspi POS, online и карта. Ручные комиссии Kaspi не добавляют выручку, а уменьшают прибыль.</p>
+                <p className="mt-2 text-sm text-slate-300">По умолчанию это доходы из журнала: наличные, Kaspi POS, online и карта. Если вы сверху заполнили общую выручку по POS и общую наличку, страница возьмёт именно их как базу месяца.</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                 <div className="text-sm font-medium text-white">Оборот POS</div>
@@ -344,6 +366,7 @@ export default function ProfitabilityPage() {
                     <Card className="border border-white/10 bg-slate-950/60 p-4">
                       <div className="mb-2 flex items-center gap-2 text-sm font-medium text-white"><CreditCard className="h-4 w-4 text-emerald-300" />POS и безнал</div>
                       <div className="space-y-2 text-sm text-slate-300">
+                        <div className="flex justify-between"><span>Общая наличка</span><span>{money(selected.cashRevenue)}</span></div>
                         <div className="flex justify-between"><span>Безналичная выручка</span><span>{money(selected.cashlessRevenue)}</span></div>
                         <div className="flex justify-between"><span>Kaspi QR</span><span>{money(selected.kaspiQrTurnover)} / {money(selected.kaspiQrCommission)}</span></div>
                         <div className="flex justify-between"><span>Kaspi Gold</span><span>{money(selected.kaspiGoldTurnover)} / {money(selected.kaspiGoldCommission)}</span></div>
@@ -356,6 +379,7 @@ export default function ProfitabilityPage() {
                     </Card>
                     <Card className="border border-white/10 bg-slate-950/60 p-4"><div className="mb-2 text-sm font-medium text-white">Комментарий месяца</div><p className="text-sm text-slate-300">{selected.notes || 'Комментарий не заполнен. Здесь можно фиксировать изменения по ставкам Kaspi и ручные допущения месяца.'}</p></Card>
                   </div>
+                  {selected.hasRevenueOverride ? <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">Для этого месяца выручка считается от ручных верхних вводов: наличка {money(selected.cashRevenueOverride)} и POS {money(selected.posRevenueOverride)}. Если очистить эти поля и сохранить, страница снова возьмёт выручку из журнала доходов.</div> : null}
                   {selected.legacyQrGoldTurnover > 0 ? <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Для этого месяца найдены старые объединённые данные QR/Gold. Лучше переписать их отдельно в полях Kaspi QR и Kaspi Gold, чтобы комиссия считалась точнее.</div> : null}
                 </div>
               ) : null}
@@ -364,9 +388,24 @@ export default function ProfitabilityPage() {
             <Card className="border border-white/10 bg-white/[0.03] p-6">
               <div className="space-y-1">
                 <h2 className="text-xl font-semibold text-white">Ручные месячные вводы</h2>
-                <p className="text-sm text-slate-400">Здесь вы вносите комиссии и расходы, которых нет в основном журнале. Выручка сверху от этого не растёт, меняется только прибыль.</p>
+                <p className="text-sm text-slate-400">Сначала при необходимости задайте общую выручку по POS и общую наличку за месяц. Ниже внесите комиссии и расходы, которые будут уменьшать прибыль от этой базы.</p>
               </div>
               <div className="mt-6 space-y-4">
+                <div className="grid grid-cols-1 gap-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-white">Общая наличная выручка за месяц</label>
+                    <Input type="number" min="0" step="100" value={draft.cash_revenue_override} onChange={(e) => setDraft((prev) => ({ ...prev, cash_revenue_override: e.target.value }))} placeholder="Если пусто, возьмём из журнала доходов" className="border-white/10 bg-slate-950/70 text-white" />
+                    <div className="text-xs text-cyan-100/80">Это вся наличка месяца. Поле необязательно.</div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-white">Общая выручка по POS за месяц</label>
+                    <Input type="number" min="0" step="100" value={draft.pos_revenue_override} onChange={(e) => setDraft((prev) => ({ ...prev, pos_revenue_override: e.target.value }))} placeholder="Если пусто, возьмём безнал из журнала доходов" className="border-white/10 bg-slate-950/70 text-white" />
+                    <div className="text-xs text-cyan-100/80">Это общая сумма по терминалу и Kaspi-сервисам за месяц. Поле необязательно.</div>
+                  </div>
+                  <div className="text-xs text-cyan-100/80 md:col-span-2">
+                    Если заполнили хотя бы одно из этих двух полей, страница возьмёт выручку месяца из них: <span className="font-medium text-white">наличка + POS</span>. Если оба поля пустые, база останется из журнала доходов.
+                  </div>
+                </div>
                 {[
                   ['kaspi_qr_turnover', 'kaspi_qr_rate', 'Kaspi QR'],
                   ['kaspi_gold_turnover', 'kaspi_gold_rate', 'Kaspi Gold'],
@@ -412,6 +451,9 @@ export default function ProfitabilityPage() {
                       <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
                         <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">Сейчас сохранено</div>
                         <div className="space-y-2 text-sm text-slate-300">
+                          <div className="flex justify-between"><span>Выручка</span><span>{money(selected.revenue)}</span></div>
+                          <div className="flex justify-between"><span>Наличка</span><span>{money(selected.cashRevenue)}</span></div>
+                          <div className="flex justify-between"><span>POS / безнал</span><span>{money(selected.cashlessRevenue)}</span></div>
                           <div className="flex justify-between"><span>Комиссия POS</span><span>{money(selected.posCommission)}</span></div>
                           <div className="flex justify-between"><span>EBITDA</span><span>{money(selected.ebitda)}</span></div>
                           <div className="flex justify-between"><span>Опер. прибыль</span><span>{money(selected.operatingProfit)}</span></div>
@@ -421,6 +463,9 @@ export default function ProfitabilityPage() {
                       <div className="rounded-2xl border border-emerald-500/20 bg-slate-950/60 p-4">
                         <div className="mb-2 text-xs uppercase tracking-wide text-emerald-300">Будет после сохранения</div>
                         <div className="space-y-2 text-sm text-slate-200">
+                          <div className="flex justify-between"><span>Выручка</span><span>{money(draftPreview.revenue)}</span></div>
+                          <div className="flex justify-between"><span>Наличка</span><span>{money(draftPreview.cashRevenue)}</span></div>
+                          <div className="flex justify-between"><span>POS / безнал</span><span>{money(draftPreview.posRevenue)}</span></div>
                           <div className="flex justify-between"><span>Комиссия POS</span><span>{money(draftPreview.posCommission)}</span></div>
                           <div className="flex justify-between"><span>EBITDA</span><span>{money(draftPreview.ebitda)}</span></div>
                           <div className="flex justify-between"><span>Опер. прибыль</span><span>{money(draftPreview.operatingProfit)}</span></div>
