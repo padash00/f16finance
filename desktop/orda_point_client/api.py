@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import requests
@@ -23,7 +24,7 @@ class PointApiClient:
             headers=self._headers(),
             timeout=15,
         )
-        response.raise_for_status()
+        self._raise_for_status(response)
         return response.json()
 
     def send_shift_report(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -36,5 +37,23 @@ class PointApiClient:
             },
             timeout=20,
         )
-        response.raise_for_status()
+        self._raise_for_status(response)
         return response.json()
+
+    def _raise_for_status(self, response: requests.Response):
+        if response.ok:
+            return
+
+        detail = None
+        try:
+            payload = response.json()
+            if isinstance(payload, dict):
+                detail = payload.get("error") or payload.get("message")
+            elif isinstance(payload, list):
+                detail = json.dumps(payload, ensure_ascii=False)
+        except Exception:
+            detail = response.text.strip() or None
+
+        if detail:
+            raise RuntimeError(f"{response.status_code}: {detail}")
+        response.raise_for_status()
