@@ -1,9 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { AssistantPanel } from "@/components/ai/assistant-panel"
 import { Sidebar } from "@/components/sidebar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import type { PageSnapshot } from "@/lib/ai/types"
 import { supabase } from "@/lib/supabaseClient"
 import {
   BrainCircuit,
@@ -1182,6 +1184,70 @@ export default function AIAnalysisPage() {
     }
   }, [analysis, expenseCategories, history])
 
+  const assistantSnapshot = useMemo<PageSnapshot | null>(() => {
+    if (!analysis || !dataForAi) return null
+
+    return {
+      page: "analysis",
+      title: "Snapshot AI-разбора",
+      generatedAt: new Date().toISOString(),
+      route: "/analysis",
+      period: {
+        from: dataForAi.dataRangeStart,
+        to: dataForAi.dataRangeEnd,
+        label: `${dataForAi.dataRangeStart} -> ${dataForAi.dataRangeEnd}`,
+      },
+      summary: [
+        `Доход ${formatMoney(dataForAi.totalIncome)}`,
+        `Расход ${formatMoney(dataForAi.totalExpense)}`,
+        `Прибыль ${formatMoney(dataForAi.totalIncome - dataForAi.totalExpense)}`,
+        `Риск ${dataForAi.riskLevel}`,
+      ],
+      sections: [
+        {
+          title: "Ключевые метрики",
+          metrics: [
+            { label: "Общий доход", value: formatMoney(dataForAi.totalIncome) },
+            { label: "Общий расход", value: formatMoney(dataForAi.totalExpense) },
+            { label: "Средняя маржа", value: `${dataForAi.avgMargin}%` },
+            { label: "Риск", value: dataForAi.riskLevel },
+            { label: "Выполнение плана", value: `${dataForAi.planIncomeAchievementPct}%` },
+          ],
+        },
+        {
+          title: "Месяцы и прогноз",
+          metrics: [
+            { label: "Текущий месяц доход", value: formatMoney(dataForAi.currentMonth.income) },
+            { label: "Текущий месяц прибыль", value: formatMoney(dataForAi.currentMonth.profit) },
+            { label: "Прогноз дохода", value: formatMoney(dataForAi.predictedIncome) },
+            { label: "Прогноз прибыли", value: formatMoney(dataForAi.predictedProfit) },
+            { label: "Следующий месяц доход", value: formatMoney(dataForAi.nextMonthForecast.income) },
+          ],
+        },
+        {
+          title: "Структура денег и рисков",
+          metrics: [
+            { label: "Наличные", value: formatMoney(dataForAi.totalCash) },
+            { label: "Kaspi", value: formatMoney(dataForAi.totalKaspi) },
+            { label: "Card", value: formatMoney(dataForAi.totalCard) },
+            { label: "Online", value: formatMoney(dataForAi.totalOnline) },
+            {
+              label: "Топ-расходы",
+              value: topExpenseCats.slice(0, 3).map((item) => `${item.name} ${formatMoney(item.value)}`).join(' | ') || "Нет данных",
+            },
+            {
+              label: "Сигналы",
+              value:
+                smartInsights?.warnings.slice(0, 2).join(' | ') ||
+                analysis.anomalies.slice(0, 2).map((item) => `${item.date}: ${item.type}`).join(' | ') ||
+                "Сигналы в норме",
+            },
+          ],
+        },
+      ],
+    }
+  }, [analysis, dataForAi, smartInsights, topExpenseCats])
+
   useEffect(() => {
     if (!dataForAi) {
       setAiAdvice(null)
@@ -1512,6 +1578,20 @@ export default function AIAnalysisPage() {
                 </div>
               </div>
             </Card>
+          )}
+
+          {assistantSnapshot && (
+            <AssistantPanel
+              page="analysis"
+              title="AI-консультант по анализу"
+              subtitle="Видит готовый snapshot текущего разбора и может расширить его безопасными server-side tools."
+              snapshot={assistantSnapshot}
+              suggestedPrompts={[
+                "Где здесь главная зона риска?",
+                "Какие 3 управленческих действия самые сильные?",
+                "Что в этой картине похоже на системную проблему?",
+              ]}
+            />
           )}
 
           {loading && (

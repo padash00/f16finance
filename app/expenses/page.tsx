@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
+import { AssistantPanel } from '@/components/ai/assistant-panel'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import type { PageSnapshot } from '@/lib/ai/types'
 import {
   Plus,
   Filter,
@@ -616,6 +618,67 @@ export default function ExpensesPage() {
                    analytics.trend === 'down' ? <TrendingDown className="w-4 h-4 text-green-400" /> : 
                    <MinusIcon className="w-4 h-4 text-gray-400" />
 
+  const assistantSnapshot = useMemo<PageSnapshot>(() => {
+    const money = (value: number) => `${Math.round(value || 0).toLocaleString('ru-RU')} ₸`
+    const topCategoryName = Array.isArray(analytics.topCategory) ? analytics.topCategory[0] : '—'
+
+    return {
+      page: 'expenses',
+      title: 'Snapshot расходов',
+      generatedAt: new Date().toISOString(),
+      route: '/expenses',
+      period: {
+        from: dateFrom,
+        to: dateTo,
+        label: periodLabel,
+      },
+      summary: [
+        `Расходы за период ${money(analytics.total)}`,
+        `Тренд ${analytics.trend}`,
+        `Топ-категория ${topCategoryName}`,
+      ],
+      sections: [
+        {
+          title: 'Сводка периода',
+          metrics: [
+            { label: 'Общий расход', value: money(analytics.total) },
+            { label: 'Наличные', value: money(analytics.cash) },
+            { label: 'Kaspi', value: money(analytics.kaspi) },
+            { label: 'Средний расход', value: money(analytics.avgExpense) },
+            { label: 'Период', value: periodLabel },
+          ],
+        },
+        {
+          title: 'Категории и аномалии',
+          metrics: [
+            {
+              label: 'Топ-категории',
+              value: analytics.categoryData.slice(0, 3).map((item) => `${item.name} ${money(item.value)}`).join(' | ') || 'Нет данных',
+            },
+            {
+              label: 'Аномалии',
+              value:
+                analytics.anomalies
+                  .slice(0, 3)
+                  .map((item) => `${item.date}: ${money(item.amount)}`)
+                  .join(' | ') || 'Сильных аномалий нет',
+            },
+            { label: 'Главная категория', value: `${topCategoryName} ${money(Number(analytics.topAmount || 0))}` },
+          ],
+        },
+        {
+          title: 'Тренд и прогноз',
+          metrics: [
+            { label: 'Тренд', value: analytics.trend },
+            { label: 'Прогноз на 30 дней', value: money(analytics.prediction.value) },
+            { label: 'Доверие прогноза', value: `${Math.round(analytics.prediction.confidence)}%` },
+            { label: 'Компания', value: companyFilter === 'all' ? 'Все компании' : companyName(companyFilter) },
+          ],
+        },
+      ],
+    }
+  }, [analytics, companyFilter, companyName, dateFrom, dateTo, periodLabel])
+
   // Export
   const downloadCSV = () => {
     const SEP = ';'
@@ -1064,6 +1127,18 @@ export default function ExpensesPage() {
             <TabButton active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} icon={<BarChart3 className="w-4 h-4" />} label="Аналитика" />
             <TabButton active={activeTab === 'list'} onClick={() => setActiveTab('list')} icon={<Clock className="w-4 h-4" />} label="Список" />
           </div>
+
+          <AssistantPanel
+            page="expenses"
+            title="AI-консультант по расходам"
+            subtitle="Работает с безопасным snapshot по расходам и помогает найти системный перерасход и план действий."
+            snapshot={assistantSnapshot}
+            suggestedPrompts={[
+              'Какие расходы режем первыми?',
+              'Где перерасход выглядит системным?',
+              'Какой план контроля расходов на 30 дней?',
+            ]}
+          />
 
           {/* Content */}
           {activeTab === 'overview' && (

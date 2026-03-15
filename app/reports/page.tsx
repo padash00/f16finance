@@ -14,9 +14,11 @@ import {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
+import { AssistantPanel } from '@/components/ai/assistant-panel'
 import { Sidebar } from '@/components/sidebar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import type { PageSnapshot } from '@/lib/ai/types'
 import { supabase } from '@/lib/supabaseClient'
 
 import {
@@ -1640,6 +1642,71 @@ function ReportsContent() {
     }
   }, [datePreset, dateFrom, dateTo, totals])
 
+  const assistantSnapshot = useMemo<PageSnapshot>(() => {
+    const profitMargin = totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0
+
+    return {
+      page: 'reports',
+      title: 'Snapshot отчётов',
+      generatedAt: new Date().toISOString(),
+      route: '/reports',
+      period: {
+        from: dateFrom,
+        to: dateTo,
+        label: `${dateFrom} -> ${dateTo}`,
+      },
+      summary: [
+        `Выручка ${formatMoneyFull(totals.totalIncome)}`,
+        `Расходы ${formatMoneyFull(totals.totalExpense)}`,
+        `Прибыль ${formatMoneyFull(totals.profit)}`,
+        `Маржа ${profitMargin.toFixed(1)}%`,
+      ],
+      sections: [
+        {
+          title: 'Сводка периода',
+          metrics: [
+            { label: 'Выручка', value: formatMoneyFull(totals.totalIncome) },
+            { label: 'Расходы', value: formatMoneyFull(totals.totalExpense) },
+            { label: 'Прибыль', value: formatMoneyFull(totals.profit) },
+            { label: 'Маржа', value: `${profitMargin.toFixed(1)}%` },
+            { label: 'Средний чек', value: formatMoneyFull(totals.avgTransaction) },
+          ],
+        },
+        {
+          title: 'Сравнение и прогноз',
+          metrics: [
+            { label: 'Выручка прошлого периода', value: formatMoneyFull(totalsPrev.totalIncome) },
+            { label: 'Прибыль прошлого периода', value: formatMoneyFull(totalsPrev.profit) },
+            { label: 'Прогноз дохода', value: forecast ? formatMoneyFull(forecast.forecastIncome) : 'Нет активного прогноза' },
+            { label: 'Прогноз прибыли', value: forecast ? formatMoneyFull(forecast.forecastProfit) : 'Нет активного прогноза' },
+            { label: 'Доверие прогноза', value: forecast ? `${forecast.confidence.toFixed(0)}%` : '—' },
+          ],
+        },
+        {
+          title: 'Концентрация и сигналы',
+          metrics: [
+            {
+              label: 'Топ-расходы',
+              value: expenseByCategoryData.slice(0, 3).map((item) => `${item.name} ${formatMoneyFull(item.amount)}`).join(' | ') || 'Нет данных',
+            },
+            {
+              label: 'Топ-компании',
+              value: incomeByCompanyData.slice(0, 3).map((item) => `${item.name} ${formatMoneyFull(item.value)}`).join(' | ') || 'Нет данных',
+            },
+            {
+              label: 'Аномалии',
+              value:
+                processed.anomalies
+                  .slice(0, 3)
+                  .map((item) => item.description)
+                  .join(' | ') || 'Сильных аномалий не найдено',
+            },
+          ],
+        },
+      ],
+    }
+  }, [dateFrom, dateTo, expenseByCategoryData, forecast, incomeByCompanyData, processed.anomalies, totals, totalsPrev])
+
   // =====================
   // HANDLERS
   // =====================
@@ -1913,6 +1980,18 @@ function ReportsContent() {
               ))}
             </div>
           )}
+
+          <AssistantPanel
+            page="reports"
+            title="AI-консультант по отчётам"
+            subtitle="Видит агрегированный отчётный snapshot и может углубляться в другие страницы через безопасные tools."
+            snapshot={assistantSnapshot}
+            suggestedPrompts={[
+              'Собери executive summary по этому отчёту',
+              'Где здесь самый слабый участок?',
+              'С чем сравнить этот период в первую очередь?',
+            ]}
+          />
 
           {/* Filters Bar */}
           <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4 space-y-4">

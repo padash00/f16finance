@@ -1,0 +1,369 @@
+import 'server-only'
+
+import type { PageSnapshot } from '@/lib/ai/types'
+
+type RequestSupabase = ReturnType<typeof import('@/lib/server/request-auth').createRequestSupabaseClient>
+
+type IncomeRow = {
+  date: string
+  company_id: string
+  cash_amount: number | null
+  kaspi_amount: number | null
+  online_amount: number | null
+  card_amount: number | null
+}
+
+type ExpenseRow = {
+  date: string
+  company_id: string
+  category: string | null
+  cash_amount: number | null
+  kaspi_amount: number | null
+}
+
+type CompanyRow = {
+  id: string
+  name: string
+  code: string | null
+}
+
+type FinanceDataBundle = {
+  dateFrom: string
+  dateTo: string
+  incomes: IncomeRow[]
+  expenses: ExpenseRow[]
+  companies: CompanyRow[]
+}
+
+function safeNumber(value: number | null | undefined) {
+  return Number(value || 0)
+}
+
+function formatMoney(value: number) {
+  return `${Math.round(value).toLocaleString('ru-RU')} ₸`
+}
+
+function formatPercent(value: number) {
+  return `${value.toFixed(1)}%`
+}
+
+function clampDate(date: string | undefined, fallback: string) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return fallback
+  return date
+}
+
+function todayISO() {
+  const now = new Date()
+  const t = now.getTime() - now.getTimezoneOffset() * 60_000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+function addDaysISO(iso: string, diff: number) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const value = new Date(y, (m || 1) - 1, d || 1)
+  value.setDate(value.getDate() + diff)
+  const t = value.getTime() - value.getTimezoneOffset() * 60_000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+async function fetchFinanceBundle(
+  supabase: RequestSupabase,
+  params?: { dateFrom?: string; dateTo?: string },
+): Promise<FinanceDataBundle> {
+  const dateTo = clampDate(params?.dateTo, todayISO())
+  const dateFrom = clampDate(params?.dateFrom, addDaysISO(dateTo, -29))
+
+  const [incomesRes, expensesRes, companiesRes] = await Promise.all([
+    supabase
+      .from('incomes')
+      .select('date, company_id, cash_amount, kaspi_amount, online_amount, card_amount')
+      .gte('date', dateFrom)
+      .lte('date', dateTo)
+      .order('date', { ascending: true })
+      .range(0, 4999),
+    supabase
+      .from('expenses')
+      .select('date, company_id, category, cash_amount, kaspi_amount')
+      .gte('date', dateFrom)
+      .lte('date', dateTo)
+      .order('date', { ascending: true })
+      .range(0, 4999),
+    supabase.from('companies').select('id, name, code'),
+  ])
+
+  if (incomesRes.error) throw incomesRes.error
+  if (expensesRes.error) throw expensesRes.error
+  if (companiesRes.error) throw companiesRes.error
+
+  return {
+    dateFrom,
+    dateTo,
+    incomes: (incomesRes.data || []) as IncomeRow[],
+    expenses: (expensesRes.data || []) as ExpenseRow[],
+    companies: (companiesRes.data || []) as CompanyRow[],
+  }
+}
+
+function buildSharedAggregates(bundle: FinanceDataBundle) {
+  const companyMap = new Map(bundle.companies.map((item) => [item.id, item.name]))
+
+  let totalIncome = 0
+  let totalExpense = 0
+  let incomeCash = 0
+  let incomeKaspi = 0
+  let incomeOnline = 0
+  let incomeCard = 0
+  let expenseCash = 0
+  let expenseKaspi = 0
+
+  const categoryMap = new Map<string, number>()
+  const companyIncomeMap = new Map<string, number>()
+  const companyExpenseMap = new Map<string, number>()
+  const dailyIncomeMap = new Map<string, number>()
+  const dailyExpenseMap = new Map<string, number>()
+
+  for (const row of bundle.incomes) {
+    const cash = safeNumber(row.cash_amount)
+    const kaspi = safeNumber(row.kaspi_amount)
+    const online = safeNumber(row.online_amount)
+    const card = safeNumber(row.card_amount)
+    const total = cash + kaspi + online + card
+    if (!total) continue
+
+    totalIncome += total
+    incomeCash += cash
+    incomeKaspi += kaspi
+    incomeOnline += online
+    incomeCard += card
+
+    companyIncomeMap.set(row.company_id, (companyIncomeMap.get(row.company_id) || 0) + total)
+    dailyIncomeMap.set(row.date, (dailyIncomeMap.get(row.date) || 0) + total)
+  }
+
+  for (const row of bundle.expenses) {
+    const cash = safeNumber(row.cash_amount)
+    const kaspi = safeNumber(row.kaspi_amount)
+    const total = cash + kaspi
+    if (!total) continue
+
+    totalExpense += total
+    expenseCash += cash
+    expenseKaspi += kaspi
+
+    const category = row.category || 'Без категории'
+    categoryMap.set(category, (categoryMap.get(category) || 0) + total)
+    companyExpenseMap.set(row.company_id, (companyExpenseMap.get(row.company_id) || 0) + total)
+    dailyExpenseMap.set(row.date, (dailyExpenseMap.get(row.date) || 0) + total)
+  }
+
+  const uniqueDays = Math.max(
+    1,
+    new Set([...bundle.incomes.map((row) => row.date), ...bundle.expenses.map((row) => row.date)]).size,
+  )
+  const profit = totalIncome - totalExpense
+  const avgIncome = totalIncome / uniqueDays
+  const avgExpense = totalExpense / uniqueDays
+  const avgProfit = profit / uniqueDays
+  const margin = totalIncome > 0 ? (profit / totalIncome) * 100 : 0
+  const cashlessShare = totalIncome > 0 ? ((incomeKaspi + incomeOnline + incomeCard) / totalIncome) * 100 : 0
+
+  const topCategories = Array.from(categoryMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)
+
+  const companyLeaderboard = Array.from(companyIncomeMap.entries())
+    .map(([companyId, income]) => {
+      const expense = companyExpenseMap.get(companyId) || 0
+      return {
+        companyId,
+        name: companyMap.get(companyId) || companyId,
+        income,
+        expense,
+        profit: income - expense,
+      }
+    })
+    .sort((a, b) => b.income - a.income)
+    .slice(0, 5)
+
+  const incomeDays = Array.from(dailyIncomeMap.entries()).map(([, value]) => value)
+  const expenseDays = Array.from(dailyExpenseMap.entries()).map(([, value]) => value)
+  const avgDayIncome = incomeDays.length ? incomeDays.reduce((sum, value) => sum + value, 0) / incomeDays.length : 0
+  const avgDayExpense = expenseDays.length ? expenseDays.reduce((sum, value) => sum + value, 0) / expenseDays.length : 0
+
+  const anomalies = [
+    ...Array.from(dailyIncomeMap.entries())
+      .filter(([, value]) => avgDayIncome > 0 && value >= avgDayIncome * 1.8)
+      .slice(0, 3)
+      .map(([date, value]) => `Пик выручки ${date}: ${formatMoney(value)}`),
+    ...Array.from(dailyExpenseMap.entries())
+      .filter(([, value]) => avgDayExpense > 0 && value >= avgDayExpense * 1.8)
+      .slice(0, 3)
+      .map(([date, value]) => `Пик расходов ${date}: ${formatMoney(value)}`),
+  ].slice(0, 5)
+
+  const groupSize = Math.max(1, Math.ceil(expenseDays.length / 3))
+  const expenseTrend =
+    expenseDays.length >= 6
+      ? expenseDays.slice(-groupSize).reduce((sum, value) => sum + value, 0) / groupSize -
+        expenseDays.slice(0, groupSize).reduce((sum, value) => sum + value, 0) / groupSize
+      : 0
+
+  return {
+    period: {
+      from: bundle.dateFrom,
+      to: bundle.dateTo,
+      label: `${bundle.dateFrom} — ${bundle.dateTo}`,
+    },
+    totals: {
+      totalIncome,
+      totalExpense,
+      profit,
+      margin,
+      avgIncome,
+      avgExpense,
+      avgProfit,
+      incomeCash,
+      incomeKaspi,
+      incomeOnline,
+      incomeCard,
+      expenseCash,
+      expenseKaspi,
+      cashlessShare,
+      uniqueDays,
+    },
+    topCategories,
+    companyLeaderboard,
+    anomalies,
+    expenseTrend,
+  }
+}
+
+export async function getAnalysisServerSnapshot(
+  supabase: RequestSupabase,
+  params?: { dateFrom?: string; dateTo?: string },
+): Promise<PageSnapshot> {
+  const data = buildSharedAggregates(await fetchFinanceBundle(supabase, params))
+  const riskLevel =
+    data.totals.margin < 10 ? 'Высокий' : data.totals.margin < 20 || data.expenseTrend > 0 ? 'Средний' : 'Низкий'
+
+  return {
+    page: 'analysis',
+    title: 'Серверный snapshot финансового разбора',
+    generatedAt: new Date().toISOString(),
+    route: '/analysis',
+    period: data.period,
+    summary: [
+      `Выручка ${formatMoney(data.totals.totalIncome)}, расходы ${formatMoney(data.totals.totalExpense)}, прибыль ${formatMoney(data.totals.profit)}.`,
+      `Маржа ${formatPercent(data.totals.margin)}, средняя прибыль в день ${formatMoney(data.totals.avgProfit)}.`,
+      `Риск по серверному срезу: ${riskLevel}.`,
+    ],
+    sections: [
+      {
+        title: 'Ключевые метрики',
+        metrics: [
+          { label: 'Выручка', value: formatMoney(data.totals.totalIncome) },
+          { label: 'Расходы', value: formatMoney(data.totals.totalExpense) },
+          { label: 'Прибыль', value: formatMoney(data.totals.profit) },
+          { label: 'Маржа', value: formatPercent(data.totals.margin) },
+          { label: 'Риск', value: riskLevel },
+        ],
+      },
+      {
+        title: 'Структура оплат',
+        metrics: [
+          { label: 'Наличные', value: formatMoney(data.totals.incomeCash) },
+          { label: 'Kaspi', value: formatMoney(data.totals.incomeKaspi) },
+          { label: 'Online', value: formatMoney(data.totals.incomeOnline) },
+          { label: 'Card', value: formatMoney(data.totals.incomeCard) },
+          { label: 'Доля безнала', value: formatPercent(data.totals.cashlessShare) },
+        ],
+      },
+      {
+        title: 'Сигналы',
+        bullets: [
+          ...data.topCategories.slice(0, 3).map(([name, value]) => `Топ расход: ${name} — ${formatMoney(value)}`),
+          ...data.anomalies,
+        ],
+      },
+    ],
+  }
+}
+
+export async function getReportsServerSnapshot(
+  supabase: RequestSupabase,
+  params?: { dateFrom?: string; dateTo?: string },
+): Promise<PageSnapshot> {
+  const data = buildSharedAggregates(await fetchFinanceBundle(supabase, params))
+
+  return {
+    page: 'reports',
+    title: 'Серверный snapshot сводных отчётов',
+    generatedAt: new Date().toISOString(),
+    route: '/reports',
+    period: data.period,
+    summary: [
+      `Отчётный период: ${data.period.label}.`,
+      `Всего дней с данными: ${data.totals.uniqueDays}.`,
+      `Баланс периода: ${formatMoney(data.totals.profit)} при марже ${formatPercent(data.totals.margin)}.`,
+    ],
+    sections: [
+      {
+        title: 'Сводка',
+        metrics: [
+          { label: 'Выручка', value: formatMoney(data.totals.totalIncome) },
+          { label: 'Расходы', value: formatMoney(data.totals.totalExpense) },
+          { label: 'Прибыль', value: formatMoney(data.totals.profit) },
+          { label: 'Средняя выручка/день', value: formatMoney(data.totals.avgIncome) },
+          { label: 'Средний расход/день', value: formatMoney(data.totals.avgExpense) },
+        ],
+      },
+      {
+        title: 'Компании-лидеры',
+        bullets: data.companyLeaderboard.map(
+          (company) => `${company.name}: выручка ${formatMoney(company.income)}, прибыль ${formatMoney(company.profit)}`,
+        ),
+      },
+      {
+        title: 'Категории расходов',
+        bullets: data.topCategories.map(([name, value]) => `${name}: ${formatMoney(value)}`),
+      },
+    ],
+  }
+}
+
+export async function getExpensesServerSnapshot(
+  supabase: RequestSupabase,
+  params?: { dateFrom?: string; dateTo?: string },
+): Promise<PageSnapshot> {
+  const data = buildSharedAggregates(await fetchFinanceBundle(supabase, params))
+  const trendLabel = data.expenseTrend > 0 ? 'Рост расходов' : data.expenseTrend < 0 ? 'Снижение расходов' : 'Стабильно'
+
+  return {
+    page: 'expenses',
+    title: 'Серверный snapshot расходов',
+    generatedAt: new Date().toISOString(),
+    route: '/expenses',
+    period: data.period,
+    summary: [
+      `Расходы за период: ${formatMoney(data.totals.totalExpense)}.`,
+      `Средний расход в день: ${formatMoney(data.totals.avgExpense)}.`,
+      `Тренд по расходам: ${trendLabel}.`,
+    ],
+    sections: [
+      {
+        title: 'Платёжная структура расходов',
+        metrics: [
+          { label: 'Наличные', value: formatMoney(data.totals.expenseCash) },
+          { label: 'Kaspi', value: formatMoney(data.totals.expenseKaspi) },
+          { label: 'Всего расходов', value: formatMoney(data.totals.totalExpense) },
+        ],
+      },
+      {
+        title: 'Категории',
+        bullets: data.topCategories.map(([name, value]) => `${name}: ${formatMoney(value)}`),
+      },
+      {
+        title: 'Аномалии',
+        bullets: data.anomalies.length ? data.anomalies : ['Явных аномалий в серверном snapshot не найдено.'],
+      },
+    ],
+  }
+}
