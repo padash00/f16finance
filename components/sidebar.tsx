@@ -147,9 +147,9 @@ const navSections: NavSection[] = [
 
 function LogoMark() {
   return (
-    <div className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-[1.1rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,179,107,0.18),rgba(95,140,255,0.12))] shadow-[0_10px_30px_rgba(0,0,0,0.22)]">
-      <div className="absolute inset-[1px] rounded-[1rem] bg-[linear-gradient(180deg,rgba(12,20,32,0.98),rgba(8,13,22,0.98))]" />
-      <Sparkles className="relative z-10 h-4 w-4 text-[#ffd27b]" />
+    <div className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-[1rem] border border-[#d7ccb7]/12 bg-[linear-gradient(135deg,rgba(181,161,120,0.16),rgba(70,116,98,0.14))] shadow-[0_12px_28px_rgba(0,0,0,0.24)]">
+      <div className="absolute inset-[1px] rounded-[0.9rem] bg-[linear-gradient(180deg,rgba(20,24,23,0.98),rgba(12,16,15,0.98))]" />
+      <Sparkles className="relative z-10 h-4 w-4 text-[#d6b98b]" />
     </div>
   )
 }
@@ -164,34 +164,36 @@ function BrandHeader({
   sectionCount: number
 }) {
   return (
-    <div className="rounded-[1.5rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015))] p-4">
-      <div className="flex items-start gap-3">
+    <div className="rounded-[1.55rem] border border-[#d7ccb7]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.008))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+      <div className="flex items-center gap-3">
         <LogoMark />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="truncate text-[15px] font-semibold tracking-[-0.04em] text-white">F16 Finance</h1>
-            <span className="rounded-full border border-white/8 bg-white/[0.04] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-              nav
-            </span>
-          </div>
-          <p className="mt-1 text-[12px] leading-5 text-slate-400">
-            Быстрый контур для модулей и ролей.
+          <p className="text-[10px] uppercase tracking-[0.24em] text-[#7f8f88]">Control room</p>
+          <h1 className="mt-1 truncate text-[16px] font-semibold tracking-[-0.04em] text-[#f4efe5]">
+            F16 Finance
+          </h1>
+          <p className="mt-1 text-[12px] leading-5 text-[#92a19a]">
+            Спокойная навигация по ролям и рабочим зонам.
           </p>
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2 rounded-[1.2rem] border border-white/8 bg-black/10 p-2.5">
-        <div className="rounded-[0.95rem] bg-white/[0.04] px-3 py-2">
-          <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500">Роль</p>
-          <p className="mt-1 truncate text-[12px] font-medium text-white">{roleLabel || 'Control'}</p>
+      <div className="mt-4 rounded-[1.2rem] border border-[#d7ccb7]/10 bg-[#0c1311]/70 px-3.5 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-[#6f7d76]">Активный контур</p>
+            <p className="mt-1 truncate text-[14px] font-medium text-[#f4efe5]">
+              {roleLabel || 'Панель управления'}
+            </p>
+          </div>
+          <div className="rounded-full border border-[#8fb3a1]/18 bg-[#8fb3a1]/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#b8d8ca]">
+            live
+          </div>
         </div>
-        <div className="rounded-[0.95rem] bg-white/[0.04] px-3 py-2">
-          <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500">Экраны</p>
-          <p className="mt-1 text-[12px] font-medium text-white">{moduleCount}</p>
-        </div>
-        <div className="rounded-[0.95rem] bg-white/[0.04] px-3 py-2">
-          <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500">Секции</p>
-          <p className="mt-1 text-[12px] font-medium text-white">{sectionCount}</p>
+        <div className="mt-3 flex items-center gap-2 text-[11px] text-[#8a9992]">
+          <span>{moduleCount} экранов</span>
+          <span className="text-[#57635e]">•</span>
+          <span>{sectionCount} секций</span>
         </div>
       </div>
     </div>
@@ -216,16 +218,16 @@ function SidebarItem({
       className={cn(
         'group relative flex items-start gap-3 rounded-[1rem] px-3 py-2.5 transition-all duration-200',
         active
-          ? 'bg-[linear-gradient(135deg,rgba(95,140,255,0.18),rgba(255,255,255,0.03))] text-white shadow-[0_8px_18px_rgba(0,0,0,0.18)]'
-          : 'text-slate-300 hover:bg-white/[0.035] hover:text-white',
+          ? 'bg-[linear-gradient(135deg,rgba(95,121,108,0.26),rgba(181,161,120,0.08))] text-[#f6f0e6] shadow-[0_8px_18px_rgba(0,0,0,0.18)]'
+          : 'text-[#a9b3af] hover:bg-white/[0.035] hover:text-[#f6f0e6]',
       )}
     >
       <div
         className={cn(
           'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] transition-all',
           active
-            ? 'bg-[#86b8ff]/12 text-[#d8b66c]'
-            : 'bg-black/20 text-slate-400 group-hover:bg-white/[0.05] group-hover:text-[#d8b66c]',
+            ? 'bg-[#d6b98b]/12 text-[#d6b98b]'
+            : 'bg-black/20 text-[#7f8b86] group-hover:bg-white/[0.05] group-hover:text-[#d6b98b]',
         )}
       >
         <Icon className="h-4 w-4" />
@@ -235,15 +237,15 @@ function SidebarItem({
         <div className="flex items-center gap-2">
           <span className="truncate text-[13px] font-medium tracking-[-0.02em]">{item.label}</span>
           {item.badge ? (
-            <span className="rounded-full border border-[#7ef0cf]/20 bg-[#7ef0cf]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#7ef0cf]">
+            <span className="rounded-full border border-[#8fb3a1]/20 bg-[#8fb3a1]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#b8d8ca]">
               {item.badge}
             </span>
           ) : null}
         </div>
-        {item.note ? <p className="mt-0.5 text-[10px] leading-4 text-slate-500 group-hover:text-slate-400">{item.note}</p> : null}
+        {item.note ? <p className="mt-0.5 text-[10px] leading-4 text-[#6f7d76] group-hover:text-[#94a29b]">{item.note}</p> : null}
       </div>
 
-      {active ? <div className="absolute inset-y-2.5 left-0 w-[2px] rounded-r-full bg-[#d8b66c]" /> : null}
+      {active ? <div className="absolute inset-y-2.5 left-0 w-[2px] rounded-r-full bg-[#d6b98b]" /> : null}
     </Link>
   )
 }
@@ -266,7 +268,7 @@ function SidebarSection({
   )
 
   return (
-    <section className="border-b border-white/6 pb-3">
+    <section className="border-b border-[#d7ccb7]/8 pb-3">
       <button
         type="button"
         onClick={onToggle}
@@ -274,16 +276,16 @@ function SidebarSection({
       >
         <div className={cn('h-6 w-1 rounded-full bg-gradient-to-b', section.accent)} />
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-300">{section.title}</p>
-          <p className="mt-0.5 text-[10px] text-slate-500">{section.subtitle}</p>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#c8d0cb]">{section.title}</p>
+          <p className="mt-0.5 text-[10px] text-[#68756f]">{section.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           {hasActiveItem ? (
-            <span className="rounded-full border border-[#d8b66c]/18 bg-[#d8b66c]/10 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.16em] text-[#d8b66c]">
+            <span className="rounded-full border border-[#d6b98b]/18 bg-[#d6b98b]/10 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.16em] text-[#d6b98b]">
               live
             </span>
           ) : null}
-          <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', open && 'rotate-180 text-slate-200')} />
+          <ChevronDown className={cn('h-4 w-4 text-[#62706a] transition-transform', open && 'rotate-180 text-[#d5ddd8]')} />
         </div>
       </button>
 
@@ -311,23 +313,23 @@ function UserCard({
   roleLabel: string | null
 }) {
   return (
-    <div className="rounded-[1.35rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] p-3.5">
+    <div className="rounded-[1.35rem] border border-[#d7ccb7]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.01))] p-3.5">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-[0.95rem] border border-white/8 bg-[linear-gradient(145deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] text-white">
-          <ShieldCheck className="h-4 w-4 text-[#d8b66c]" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-[0.95rem] border border-[#d7ccb7]/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] text-white">
+          <ShieldCheck className="h-4 w-4 text-[#d6b98b]" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-semibold text-white">{displayName || 'Панель управления'}</p>
-          <p className="truncate text-[11px] text-slate-500">{email || 'admin@system.local'}</p>
+          <p className="truncate text-[13px] font-semibold text-[#f4efe5]">{displayName || 'Панель управления'}</p>
+          <p className="truncate text-[11px] text-[#6f7d76]">{email || 'admin@system.local'}</p>
         </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1 rounded-full border border-[#7ef0cf]/20 bg-[#7ef0cf]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7ef0cf]">
+        <div className="flex items-center gap-1 rounded-full border border-[#8fb3a1]/20 bg-[#8fb3a1]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#b8d8ca]">
           <LifeBuoy className="h-3 w-3" />
           online
         </div>
-        <div className="flex items-center gap-1 rounded-full border border-white/8 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+        <div className="flex items-center gap-1 rounded-full border border-[#d7ccb7]/10 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8a9992]">
           <Building2 className="h-3 w-3" />
           {roleLabel || 'control'}
         </div>
@@ -336,7 +338,7 @@ function UserCard({
       <Button
         variant="ghost"
         onClick={onLogout}
-        className="mt-3.5 h-10 w-full justify-between rounded-[0.95rem] border border-white/8 bg-white/[0.035] px-3 text-slate-300 hover:border-[#ff8f70]/20 hover:bg-[#ff8f70]/10 hover:text-white"
+        className="mt-3.5 h-10 w-full justify-between rounded-[0.95rem] border border-[#d7ccb7]/10 bg-white/[0.03] px-3 text-[#a7b2ad] hover:border-[#d6b98b]/18 hover:bg-[#d6b98b]/10 hover:text-[#f4efe5]"
       >
         <span className="flex items-center gap-2">
           <LogOut className="h-4 w-4" />
@@ -470,11 +472,11 @@ export function Sidebar() {
   }
 
   const navContent = (
-    <div className="flex h-full flex-col bg-[linear-gradient(180deg,#06101a_0%,#08111d_35%,#09131f_100%)] text-white">
-      <div className="flex items-center justify-between border-b border-white/6 px-4 py-3 md:px-4">
+    <div className="flex h-full flex-col bg-[linear-gradient(180deg,#0b0f10_0%,#101515_34%,#131918_100%)] text-white">
+      <div className="flex items-center justify-between border-b border-[#d7ccb7]/8 px-4 py-3 md:px-4">
         <LogoMark />
         <button
-          className="rounded-2xl border border-white/8 bg-white/[0.04] p-2 text-slate-400 transition-colors hover:text-white md:hidden"
+          className="rounded-2xl border border-[#d7ccb7]/10 bg-white/[0.04] p-2 text-[#8a9992] transition-colors hover:text-white md:hidden"
           onClick={() => setIsOpen(false)}
         >
           <X className="h-4 w-4" />
@@ -489,7 +491,7 @@ export function Sidebar() {
         }}
         className="flex-1 overflow-y-auto px-4 py-4"
       >
-        <div className="sticky top-0 z-10 -mx-1 bg-[linear-gradient(180deg,rgba(6,16,26,0.98),rgba(6,16,26,0.8),transparent)] px-1 pb-3 pt-1 backdrop-blur-xl">
+        <div className="sticky top-0 z-10 -mx-1 bg-[linear-gradient(180deg,rgba(11,15,16,0.98),rgba(11,15,16,0.82),transparent)] px-1 pb-3 pt-1 backdrop-blur-xl">
           <BrandHeader roleLabel={roleLabel} moduleCount={moduleCount} sectionCount={visibleSections.length} />
         </div>
 
@@ -515,12 +517,12 @@ export function Sidebar() {
 
   return (
     <>
-      <div className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-between border-b border-white/8 bg-[rgba(7,12,20,0.82)] px-4 backdrop-blur-xl md:hidden">
+      <div className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-between border-b border-[#d7ccb7]/8 bg-[rgba(11,15,16,0.86)] px-4 backdrop-blur-xl md:hidden">
         <div className="flex items-center gap-3">
           <LogoMark />
           <div>
-            <p className="text-sm font-semibold tracking-[-0.02em] text-white">F16 Finance OS</p>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">navigation</p>
+            <p className="text-sm font-semibold tracking-[-0.02em] text-[#f4efe5]">F16 Finance</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[#76837d]">workspace</p>
           </div>
         </div>
 
@@ -528,7 +530,7 @@ export function Sidebar() {
           variant="ghost"
           size="icon"
           onClick={() => setIsOpen(true)}
-          className="rounded-2xl border border-white/8 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] hover:text-white"
+          className="rounded-2xl border border-[#d7ccb7]/10 bg-white/[0.04] text-[#a8b3ae] hover:bg-white/[0.08] hover:text-white"
         >
           <Menu className="h-5 w-5" />
         </Button>
@@ -537,13 +539,13 @@ export function Sidebar() {
       {isOpen ? (
         <div className="fixed inset-0 z-50 md:hidden">
           <button className="absolute inset-0 bg-[rgba(3,6,12,0.75)] backdrop-blur-sm" onClick={() => setIsOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-[84%] max-w-[19rem] border-r border-white/8 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+          <div className="absolute inset-y-0 left-0 w-[84%] max-w-[19rem] border-r border-[#d7ccb7]/8 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
             {navContent}
           </div>
         </div>
       ) : null}
 
-      <aside className="sticky top-0 hidden h-screen w-[284px] shrink-0 border-r border-white/6 bg-[linear-gradient(180deg,#06101a_0%,#08111d_40%,#09131f_100%)] md:block xl:w-[296px]">
+      <aside className="sticky top-0 hidden h-screen w-[284px] shrink-0 border-r border-[#d7ccb7]/8 bg-[linear-gradient(180deg,#0b0f10_0%,#101515_36%,#131918_100%)] md:block xl:w-[296px]">
         {navContent}
       </aside>
     </>
