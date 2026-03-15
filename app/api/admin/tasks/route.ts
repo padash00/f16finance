@@ -248,8 +248,8 @@ function buildTaskTelegramMessage(params: {
   const { type, task, company } = params
   const header =
     type === 'assigned'
-      ? 'Новая задача в F16 Finance'
-      : 'Обновление по задаче в F16 Finance'
+      ? 'Новая задача в Orda Control'
+      : 'Обновление по задаче в Orda Control'
 
   const lines = [
     `<b>${escapeHtml(header)}</b>`,

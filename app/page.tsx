@@ -315,79 +315,206 @@ function buildSummary(status: AIInsight['status'], profitTrend: 'up' | 'down' | 
 }
 
 function ProductLanding() {
-  const roleCards = [
-    { title: 'Владелец', text: 'Видит контроль бизнеса, структуру команды, деньги и ключевые сигналы.', icon: Globe },
-    { title: 'Руководитель', text: 'Управляет сменами, задачами, командами по точкам и рабочим ритмом.', icon: Calendar },
-    { title: 'Оператор', text: 'Получает задачи, график, подтверждает смены и работает через кабинет и Telegram.', icon: Activity },
+  const audienceCards = [
+    {
+      title: 'Владелец',
+      text: 'Смотрит общую картину по деньгам, рискам, структуре команды и статусу смен.',
+      icon: Globe,
+    },
+    {
+      title: 'Руководитель',
+      text: 'Управляет задачами, публикует неделю, разбирает проблемы по точкам и держит ритм команды.',
+      icon: Calendar,
+    },
+    {
+      title: 'Старший по точке',
+      text: 'Видит только свою точку, свою команду, спорные смены и задачи, которые горят сегодня.',
+      icon: Target,
+    },
+    {
+      title: 'Оператор',
+      text: 'Получает смены и задачи, подтверждает график через Telegram и работает в мобильном кабинете.',
+      icon: Activity,
+    },
   ]
 
   const productCards = [
-    { title: 'Смены и подтверждение', text: 'Недельный график, ответы через Telegram и согласование спорных смен.', icon: Calendar },
-    { title: 'Задачи и контроль', text: 'Постановка задач, статусы, комментарии и точечная ответственность.', icon: Target },
-    { title: 'Финансы и метрики', text: 'Доходы, расходы, зарплата, правила начислений и прозрачный аудит.', icon: Wallet },
+    {
+      title: 'График смен',
+      text: 'Неделя собирается один раз, публикуется по точке и дальше живёт через подтверждение, споры и замены.',
+      icon: Calendar,
+    },
+    {
+      title: 'Задачи',
+      text: 'Работа идёт по ролям: кто поставил, кто принял, где зависло и что уже ушло на проверку.',
+      icon: CheckCircle2,
+    },
+    {
+      title: 'Финансы',
+      text: 'Доходы, расходы, правила зарплаты и критичные изменения в одном финансовом контуре.',
+      icon: Wallet,
+    },
+    {
+      title: 'Структура',
+      text: 'Видно, кто за какую точку отвечает, кто старший, кто в росте и как устроена команда.',
+      icon: BarChart2,
+    },
   ]
 
   const flow = [
-    'Назначили роли и собрали структуру команды',
-    'Заполнили смены и поставили задачи по точкам',
-    'Сотрудники подтвердили график и взяли задачи в работу',
-    'Руководство увидело деньги, статусы и проблемные места в одном окне',
+    'Распределили роли, назначили точки и собрали структуру команды',
+    'Опубликовали неделю, сотрудники подтвердили смены или отправили спорные даты',
+    'Поставили задачи по точкам, получили ответы в кабинете и в Telegram',
+    'Руководство увидело деньги, проблемные места и фактический статус работы в одном окне',
+  ]
+
+  const highlights = [
+    'Смены, задачи, структура, зарплата и логирование не разбросаны по разным таблицам.',
+    'Telegram не заменяет систему, а усиливает её: подтверждения и ответы сразу попадают в рабочий контур.',
+    'Каждое критичное действие по финансам и персоналу можно отследить в аудит-логе.',
+    'Роли разделены так, чтобы владелец, руководитель, старший и оператор видели только своё.',
   ]
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(245,158,11,0.12),_transparent_28%),radial-gradient(circle_at_bottom_left,_rgba(14,165,233,0.12),_transparent_26%),linear-gradient(180deg,#070b12_0%,#0a0f18_52%,#070b12_100%)] text-white">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(245,158,11,0.18),_transparent_30%),radial-gradient(circle_at_80%_20%,_rgba(14,165,233,0.12),_transparent_22%),linear-gradient(180deg,#070b12_0%,#0a0f18_45%,#070b12_100%)] text-white">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-6 rounded-[2rem] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between lg:p-8">
-          <div className="max-w-2xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-amber-300">
-              <Sparkles className="h-3.5 w-3.5" />
-              Orda Control
-            </div>
-            <h1 className="text-4xl font-semibold leading-tight tracking-[-0.05em] text-white lg:text-6xl">
-              Операционная система для клуба, команды и контроля точки.
-            </h1>
-            <p className="mt-4 max-w-xl text-base leading-7 text-slate-300">
-              Orda Control объединяет график смен, задачи, финансы, структуру команды и рабочие сигналы в одной системе.
-              Подходит для владельца, руководителя, старшего по точке и оператора.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/login">
-                <Button className="rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 text-slate-950 hover:from-amber-400 hover:to-orange-400">
-                  Войти
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              <a href="https://t.me/" target="_blank" rel="noreferrer">
-                <Button variant="outline" className="rounded-2xl border-white/10 bg-white/[0.03] px-6 text-white hover:bg-white/[0.06]">
-                  Связаться
-                </Button>
-              </a>
-            </div>
-          </div>
+        <header className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 backdrop-blur-xl lg:p-8">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(251,191,36,0.16),_transparent_28%),radial-gradient(circle_at_bottom_left,_rgba(59,130,246,0.10),_transparent_24%)]" />
+          <div className="relative grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-amber-300">
+                <Sparkles className="h-3.5 w-3.5" />
+                Orda Control
+              </div>
 
-          <div className="grid gap-3 rounded-[1.75rem] border border-white/10 bg-black/20 p-4 lg:min-w-[22rem]">
-            <div className="rounded-[1.4rem] border border-white/8 bg-gradient-to-br from-slate-900 to-slate-800 p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Что внутри</p>
-              <div className="mt-4 grid gap-3">
-                <div className="rounded-2xl bg-white/[0.04] p-3">
-                  <p className="text-sm font-medium text-white">Смены</p>
-                  <p className="mt-1 text-xs text-slate-400">Подтверждение недели, проблемы, замены и живой статус.</p>
+              <h1 className="mt-5 text-4xl font-semibold leading-[0.96] tracking-[-0.06em] text-white sm:text-5xl lg:text-7xl">
+                Контроль клуба,
+                <br />
+                команды и рабочих
+                <br />
+                решений в одной системе.
+              </h1>
+
+              <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+                Orda Control собирает в одном месте график смен, задачи, структуру команды, зарплату,
+                финансы и событийный контроль. Это не просто учёт, а рабочий контур для владельца,
+                руководителя, старшего по точке и оператора.
+              </p>
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link href="/login">
+                  <Button className="rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 text-slate-950 hover:from-amber-400 hover:to-orange-400">
+                    Войти в систему
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+                <a href="#capabilities">
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl border-white/10 bg-white/[0.03] px-6 text-white hover:bg-white/[0.06]"
+                  >
+                    Посмотреть возможности
+                  </Button>
+                </a>
+              </div>
+
+              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Роли</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">4+</p>
+                  <p className="mt-1 text-sm text-slate-400">Владелец, руководитель, старший, оператор.</p>
                 </div>
-                <div className="rounded-2xl bg-white/[0.04] p-3">
-                  <p className="text-sm font-medium text-white">Задачи</p>
-                  <p className="mt-1 text-xs text-slate-400">Работа по ролям, комментарии и быстрые ответы из Telegram.</p>
+                <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Контуры</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">6</p>
+                  <p className="mt-1 text-sm text-slate-400">Задачи, смены, структура, деньги, зарплата, аудит.</p>
                 </div>
-                <div className="rounded-2xl bg-white/[0.04] p-3">
-                  <p className="text-sm font-medium text-white">Финансы</p>
-                  <p className="mt-1 text-xs text-slate-400">Доходы, расходы, зарплата и лог всех критичных действий.</p>
+                <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Каналы</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">2</p>
+                  <p className="mt-1 text-sm text-slate-400">Веб-кабинет и Telegram работают вместе.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4">
+              <div className="rounded-[1.8rem] border border-white/10 bg-black/20 p-4 shadow-2xl shadow-black/20">
+                <div className="rounded-[1.4rem] border border-white/8 bg-gradient-to-br from-slate-900 to-slate-800 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Control Center</p>
+                      <p className="mt-1 text-lg font-semibold text-white">Единый обзор</p>
+                    </div>
+                    <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
+                      live
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-white/[0.04] p-3">
+                      <div className="flex items-center gap-2 text-amber-300">
+                        <Calendar className="h-4 w-4" />
+                        <p className="text-sm font-medium text-white">Смены</p>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-slate-400">
+                        Кто подтвердил неделю, где споры и кого уже заменили.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.04] p-3">
+                      <div className="flex items-center gap-2 text-emerald-300">
+                        <DollarSign className="h-4 w-4" />
+                        <p className="text-sm font-medium text-white">Финансы</p>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-slate-400">
+                        Доходы, расходы, зарплата и изменение правил под аудитом.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.04] p-3">
+                      <div className="flex items-center gap-2 text-sky-300">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <p className="text-sm font-medium text-white">Задачи</p>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-slate-400">
+                        Кто принял задачу, кто попросил уточнение и что ждёт проверки.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.04] p-3">
+                      <div className="flex items-center gap-2 text-purple-300">
+                        <Brain className="h-4 w-4" />
+                        <p className="text-sm font-medium text-white">Сигналы</p>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-slate-400">
+                        Аномалии, просадки, просроченные задачи и проблемные точки.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Руководитель</p>
+                  <div className="mt-3 space-y-2">
+                    <div className="rounded-xl bg-white/[0.04] p-3 text-sm text-slate-300">Публикация недели</div>
+                    <div className="rounded-xl bg-amber-500/10 p-3 text-sm text-amber-200">2 спорные смены ждут решения</div>
+                    <div className="rounded-xl bg-white/[0.04] p-3 text-sm text-slate-300">5 задач на точках в работе</div>
+                  </div>
+                </div>
+                <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Оператор</p>
+                  <div className="mt-3 space-y-2">
+                    <div className="rounded-xl bg-white/[0.04] p-3 text-sm text-slate-300">Смена на 19 марта подтверждена</div>
+                    <div className="rounded-xl bg-white/[0.04] p-3 text-sm text-slate-300">Задача “Проверить точку” принята</div>
+                    <div className="rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-200">Ответ из Telegram уже в системе</div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </header>
 
-        <section className="mt-8 grid gap-4 lg:grid-cols-3">
-          {roleCards.map((card) => {
+        <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {audienceCards.map((card) => {
             const Icon = card.icon
             return (
               <Card key={card.title} className="border-white/10 bg-slate-950/55 p-6 text-white backdrop-blur-xl">
@@ -401,34 +528,37 @@ function ProductLanding() {
           })}
         </section>
 
-        <section className="mt-8 rounded-[2rem] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl lg:p-8">
-          <div className="max-w-2xl">
-            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Что умеет система</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">Для кого, что делает и как помогает каждый день</h2>
+        <section id="capabilities" className="mt-8 rounded-[2rem] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl lg:p-8">
+          <div className="max-w-3xl">
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Что умеет Orda Control</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white lg:text-4xl">
+              Информационная страница, которая показывает не просто модуль, а реальный рабочий цикл.
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
+              Система помогает не только считать деньги, но и управлять точками, людьми, сменами и ежедневной дисциплиной.
+            </p>
           </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
             {productCards.map((card) => {
               const Icon = card.icon
               return (
                 <div key={card.title} className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.06] text-amber-300">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-white">{card.title}</h3>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.06] text-amber-300">
+                    <Icon className="h-5 w-5" />
                   </div>
-                  <p className="mt-4 text-sm leading-6 text-slate-400">{card.text}</p>
+                  <h3 className="mt-4 text-lg font-semibold text-white">{card.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">{card.text}</p>
                 </div>
               )
             })}
           </div>
         </section>
 
-        <section className="mt-8 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <section className="mt-8 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <Card className="border-white/10 bg-slate-950/55 p-6 text-white backdrop-blur-xl lg:p-8">
             <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Как это работает</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Один рабочий цикл от роли до результата</h2>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] lg:text-4xl">Один рабочий цикл от роли до результата</h2>
             <div className="mt-6 space-y-4">
               {flow.map((step, index) => (
                 <div key={step} className="flex gap-4 rounded-[1.4rem] border border-white/8 bg-white/[0.03] p-4">
@@ -442,19 +572,103 @@ function ProductLanding() {
           </Card>
 
           <Card className="border-white/10 bg-gradient-to-br from-amber-500/10 via-slate-950/60 to-slate-950/60 p-6 text-white backdrop-blur-xl lg:p-8">
-            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Почему удобно</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Почему это выгодно</p>
             <div className="mt-5 space-y-3">
-              {[
-                'Задачи, смены, финансы и структура живут в одной системе',
-                'Telegram и кабинет дополняют друг друга, а не дублируют хаос',
-                'Каждое важное действие можно отследить по логам',
-                'Роли разделены: владелец, руководитель, старший, оператор',
-              ].map((item) => (
+              {highlights.map((item) => (
                 <div key={item} className="flex items-start gap-3 rounded-2xl bg-black/20 p-3">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-400" />
                   <p className="text-sm leading-6 text-slate-300">{item}</p>
                 </div>
               ))}
+            </div>
+
+            <div className="mt-6 rounded-[1.5rem] border border-white/8 bg-black/20 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Внутри дня</p>
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2">
+                  <span className="text-sm text-slate-300">Смена опубликована</span>
+                  <span className="text-xs text-emerald-300">09:00</span>
+                </div>
+                <div className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2">
+                  <span className="text-sm text-slate-300">Задача принята</span>
+                  <span className="text-xs text-sky-300">10:18</span>
+                </div>
+                <div className="flex items-center justify-between rounded-xl bg-amber-500/10 px-3 py-2">
+                  <span className="text-sm text-amber-200">Есть проблема по смене</span>
+                  <span className="text-xs text-amber-300">12:42</span>
+                </div>
+                <div className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2">
+                  <span className="text-sm text-slate-300">Решение зафиксировано</span>
+                  <span className="text-xs text-purple-300">13:05</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </section>
+
+        <section className="mt-8 grid gap-4 lg:grid-cols-2">
+          <Card className="border-white/10 bg-slate-950/55 p-6 text-white backdrop-blur-xl lg:p-8">
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Что видит руководитель</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Панель решений, а не хаос из чатов</h2>
+            <div className="mt-6 space-y-4 rounded-[1.6rem] border border-white/8 bg-black/20 p-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl bg-emerald-500/10 p-3">
+                  <p className="text-xs text-emerald-300">Подтверждено</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">18</p>
+                </div>
+                <div className="rounded-xl bg-amber-500/10 p-3">
+                  <p className="text-xs text-amber-300">Спорные</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">2</p>
+                </div>
+                <div className="rounded-xl bg-sky-500/10 p-3">
+                  <p className="text-xs text-sky-300">В работе</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">7</p>
+                </div>
+              </div>
+              <div className="rounded-2xl bg-white/[0.04] p-4">
+                <p className="text-sm font-medium text-white">Лента проблемных смен</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-300">
+                  <div className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2">
+                    <span>Extra · 18 марта · день</span>
+                    <span className="text-amber-300">ждёт решения</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2">
+                    <span>Arena · 21 марта · ночь</span>
+                    <span className="text-emerald-300">замена предложена</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="border-white/10 bg-slate-950/55 p-6 text-white backdrop-blur-xl lg:p-8">
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Что видит оператор</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Понятный кабинет без лишнего шума</h2>
+            <div className="mt-6 space-y-4 rounded-[1.6rem] border border-white/8 bg-black/20 p-4">
+              <div className="rounded-2xl bg-white/[0.04] p-4">
+                <p className="text-sm font-medium text-white">Моя неделя</p>
+                <div className="mt-3 grid gap-2">
+                  <div className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2 text-sm">
+                    <span>19 марта · день</span>
+                    <span className="text-emerald-300">подтверждено</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2 text-sm">
+                    <span>20 марта · день</span>
+                    <span className="text-white">в работе</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2 text-sm">
+                    <span>21 марта · день</span>
+                    <span className="text-amber-300">отправлена проблема</span>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl bg-white/[0.04] p-4">
+                <p className="text-sm font-medium text-white">Мои задачи</p>
+                <div className="mt-3 space-y-2">
+                  <div className="rounded-xl bg-black/20 px-3 py-2 text-sm text-slate-300">Проверить точку перед сменой</div>
+                  <div className="rounded-xl bg-black/20 px-3 py-2 text-sm text-slate-300">Отправить фотоотчёт после закрытия</div>
+                </div>
+              </div>
             </div>
           </Card>
         </section>
@@ -463,18 +677,28 @@ function ProductLanding() {
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl">
               <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Вход в систему</p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Открыть рабочий кабинет Orda Control</h2>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] lg:text-4xl">Открыть рабочий кабинет Orda Control</h2>
               <p className="mt-3 text-sm leading-6 text-slate-400">
-                Если у вас уже есть доступ, входите в рабочий контур по email или по операторскому логину.
-                Если доступ ещё не выдан, администратор может отправить приглашение и ссылку для входа.
+                Если доступ уже выдан, можно войти по email или по операторскому логину. Если доступ ещё не настроен,
+                администратор отправит приглашение и ссылку на создание пароля.
               </p>
             </div>
-            <Link href="/login">
-              <Button className="rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 text-slate-950 hover:from-amber-400 hover:to-orange-400">
-                Перейти ко входу
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/login">
+                <Button className="rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 text-slate-950 hover:from-amber-400 hover:to-orange-400">
+                  Перейти ко входу
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+              <a href="#capabilities">
+                <Button
+                  variant="outline"
+                  className="rounded-2xl border-white/10 bg-white/[0.03] px-6 text-white hover:bg-white/[0.06]"
+                >
+                  Что внутри системы
+                </Button>
+              </a>
+            </div>
           </div>
         </section>
       </div>

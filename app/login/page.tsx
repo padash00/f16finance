@@ -169,25 +169,25 @@ export default function UnifiedLoginPage() {
                 </div>
 
                 <h1 className="max-w-md text-4xl font-semibold leading-tight text-white">
-                  Один вход для команды и отдельный вход для операторов.
+                  Orda Control для команды, точек и ежедневного ритма работы.
                 </h1>
                 <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300">
-                  Если сотрудник получил письмо, ему нужно открыть ссылку, задать пароль и после этого войти по email.
-                  Операторы продолжают входить по своему логину.
+                  Сотрудники входят по email после приглашения, операторы продолжают работать через свой логин.
+                  Внутри одной системы живут смены, задачи, структура, финансы и рабочий контроль.
                 </p>
               </div>
 
               <div className="grid gap-3">
                 <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-sm font-medium text-white">Сотрудники админ-команды</p>
-                  <p className="mt-1 text-sm text-slate-400">Email из письма, новый пароль, затем доступ по своей роли.</p>
+                  <p className="text-sm font-medium text-white">Управленческая команда</p>
+                  <p className="mt-1 text-sm text-slate-400">Email из приглашения, новый пароль и доступ по своей роли.</p>
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
                   <p className="text-sm font-medium text-white">Операторы</p>
-                  <p className="mt-1 text-sm text-slate-400">Логин оператора и пароль от операторского аккаунта.</p>
+                  <p className="mt-1 text-sm text-slate-400">Логин оператора и пароль от операторского кабинета.</p>
                 </div>
                 <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-                  Если письмо просрочилось, администратор может отправить его заново или сделать сброс пароля.
+                  Если приглашение просрочилось, администратор может отправить его заново или сделать сброс пароля.
                 </div>
               </div>
             </div>
