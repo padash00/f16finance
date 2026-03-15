@@ -14,10 +14,15 @@ import {
   CalendarClock,
   CalendarRange,
   ChevronDown,
-  CreditCard,
+  ChevronRight,
+  ClipboardCheck,
+  Command,
+  Compass,
   FolderKanban,
+  Gauge,
   KeyRound,
   Landmark,
+  Layers,
   LayoutDashboard,
   LifeBuoy,
   ListChecks,
@@ -26,9 +31,11 @@ import {
   Menu,
   MessageSquareText,
   Network,
+  PieChart,
   Radar,
+  Search,
   Settings2,
-  ShieldCheck,
+  Shield,
   Sparkles,
   Target,
   Tags,
@@ -39,10 +46,10 @@ import {
   Users,
   Users2,
   Wallet,
+  Workflow,
   Wrench,
   X,
   Zap,
-  ClipboardCheck,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -53,13 +60,16 @@ type NavItem = {
   icon: any
   note?: string
   badge?: string
+  badgeColor?: 'purple' | 'blue' | 'green' | 'red' | 'orange' | 'default'
+  isNew?: boolean
 }
 
 type NavSection = {
   id: string
   title: string
   subtitle: string
-  accent: string
+  accentColor: 'amber' | 'emerald' | 'yellow' | 'blue' | 'fuchsia' | 'slate'
+  icon: any
   items: NavItem[]
 }
 
@@ -71,10 +81,11 @@ const navSections: NavSection[] = [
     id: 'command',
     title: 'Центр управления',
     subtitle: 'Главные экраны и сводка',
-    accent: 'from-[#ffb36b] to-[#ff7b54]',
+    accentColor: 'amber',
+    icon: Gauge,
     items: [
       { href: '/', label: 'Главная панель', icon: LayoutDashboard, note: 'Общий статус бизнеса' },
-      { href: '/analysis', label: 'AI Разбор', icon: BrainCircuit, note: 'Диагностика и выводы', badge: 'AI' },
+      { href: '/analysis', label: 'AI Разбор', icon: BrainCircuit, note: 'Диагностика и выводы', badge: 'AI', badgeColor: 'purple', isNew: true },
       { href: '/reports', label: 'Отчёты', icon: BarChart3, note: 'Сводные метрики' },
       { href: '/weekly-report', label: 'Недельный отчёт', icon: CalendarRange, note: 'Ритм недели' },
     ],
@@ -83,9 +94,10 @@ const navSections: NavSection[] = [
     id: 'finance',
     title: 'Деньги',
     subtitle: 'Потоки, расходы и налоги',
-    accent: 'from-[#70e1c8] to-[#2db7f5]',
+    accentColor: 'emerald',
+    icon: PieChart,
     items: [
-      { href: '/income', label: 'Доходы', icon: TrendingUp, note: 'Оборот и выручка' },
+      { href: '/income', label: 'Доходы', icon: TrendingUp, note: 'Оборот и выручка', badge: '↑23%', badgeColor: 'green' },
       { href: '/expenses', label: 'Расходы', icon: TrendingDown, note: 'Списания и статьи' },
       { href: '/categories', label: 'Категории', icon: Tags, note: 'Структура расходов' },
       { href: '/tax', label: 'Налоги', icon: Landmark, note: '3% и контроль базы' },
@@ -95,11 +107,12 @@ const navSections: NavSection[] = [
     id: 'team',
     title: 'Команда и зарплаты',
     subtitle: 'Люди, доступы и начисления',
-    accent: 'from-[#f8d66d] to-[#f39f4f]',
+    accentColor: 'yellow',
+    icon: Users,
     items: [
       { href: '/salary', label: 'Зарплата', icon: Wallet, note: 'Расчёты и выплаты' },
       { href: '/salary/rules', label: 'Правила зарплаты', icon: ListChecks, note: 'Ставки и бонусы' },
-      { href: '/operators', label: 'Операторы', icon: Users2, note: 'Профили и состояние' },
+      { href: '/operators', label: 'Операторы', icon: Users2, note: 'Профили и состояние', badge: '8', badgeColor: 'blue' },
       { href: '/structure', label: 'Структура', icon: Network, note: 'Иерархия команды и точек' },
       { href: '/staff', label: 'Сотрудники', icon: Users, note: 'Админкоманда' },
       { href: '/pass', label: 'Доступы', icon: KeyRound, note: 'Учётные записи' },
@@ -109,11 +122,12 @@ const navSections: NavSection[] = [
     id: 'ops',
     title: 'Операционная работа',
     subtitle: 'Планы, задачи и ритм',
-    accent: 'from-[#8fc4ff] to-[#5b87ff]',
+    accentColor: 'blue',
+    icon: Workflow,
     items: [
       { href: '/kpi', label: 'KPI', icon: Target, note: 'Контроль выполнения' },
-      { href: '/kpi/plans', label: 'Планы KPI', icon: Radar, note: 'План-факт' },
-      { href: '/tasks', label: 'Задачи', icon: FolderKanban, note: 'Текущая работа' },
+      { href: '/kpi/plans', label: 'Планы KPI', icon: Radar, note: 'План-факт', badge: 'new', badgeColor: 'green' },
+      { href: '/tasks', label: 'Задачи', icon: FolderKanban, note: 'Текущая работа', badge: '12', badgeColor: 'red' },
       { href: '/shifts', label: 'Смены', icon: CalendarClock, note: 'График и сменность' },
     ],
   },
@@ -121,14 +135,15 @@ const navSections: NavSection[] = [
     id: 'operator-space',
     title: 'Операторское пространство',
     subtitle: 'Коммуникация и мотивация',
-    accent: 'from-[#ee9ae5] to-[#5961f9]',
+    accentColor: 'fuchsia',
+    icon: Zap,
     items: [
       { href: '/operator-dashboard', label: 'Мой кабинет', icon: User, note: 'Сводка оператора' },
-      { href: '/operator-lead', label: 'Моя точка', icon: Building2, note: 'Команда и спорные смены точки', badge: 'lead' },
-      { href: '/operator-tasks', label: 'Мои задачи', icon: ClipboardCheck, note: 'Личный контур задач', badge: 'new' },
+      { href: '/operator-lead', label: 'Моя точка', icon: Building2, note: 'Команда и спорные смены точки', badge: 'lead', badgeColor: 'orange' },
+      { href: '/operator-tasks', label: 'Мои задачи', icon: ClipboardCheck, note: 'Личный контур задач', badge: '3', badgeColor: 'orange' },
       { href: '/operator-analytics', label: 'Аналитика операторов', icon: Zap, note: 'Эффективность по людям' },
-      { href: '/operator-chat', label: 'Чат операторов', icon: MessageSquareText, note: 'Коммуникация', badge: 'live' },
-      { href: '/operator-achievements', label: 'Достижения', icon: Trophy, note: 'Мотивация и XP' },
+      { href: '/operator-chat', label: 'Чат операторов', icon: MessageSquareText, note: 'Коммуникация', badge: 'live', badgeColor: 'green' },
+      { href: '/operator-achievements', label: 'Достижения', icon: Trophy, note: 'Мотивация и XP', badge: 'XP', badgeColor: 'purple' },
       { href: '/operator-settings', label: 'Настройки операторов', icon: Briefcase, note: 'Профильный контур' },
     ],
   },
@@ -136,7 +151,8 @@ const navSections: NavSection[] = [
     id: 'system',
     title: 'Система',
     subtitle: 'Настройка и обслуживание',
-    accent: 'from-[#8f9bb3] to-[#596780]',
+    accentColor: 'slate',
+    icon: Shield,
     items: [
       { href: '/settings', label: 'Настройки системы', icon: Settings2, note: 'Компании и справочники' },
       { href: '/logs', label: 'Логирование', icon: Logs, note: 'Аудит, уведомления и события' },
@@ -145,11 +161,32 @@ const navSections: NavSection[] = [
   },
 ]
 
+const sectionTone: Record<NavSection['accentColor'], string> = {
+  amber: 'bg-amber-500/10 text-amber-400',
+  emerald: 'bg-emerald-500/10 text-emerald-400',
+  yellow: 'bg-yellow-500/10 text-yellow-400',
+  blue: 'bg-blue-500/10 text-blue-400',
+  fuchsia: 'bg-fuchsia-500/10 text-fuchsia-400',
+  slate: 'bg-slate-500/10 text-slate-400',
+}
+
+const badgeTone: Record<NonNullable<NavItem['badgeColor']>, string> = {
+  purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  blue: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  green: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  red: 'bg-red-500/10 text-red-400 border-red-500/20',
+  orange: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+  default: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+}
+
 function LogoMark() {
   return (
-    <div className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-[1rem] border border-[#d7ccb7]/12 bg-[linear-gradient(135deg,rgba(181,161,120,0.16),rgba(70,116,98,0.14))] shadow-[0_12px_28px_rgba(0,0,0,0.24)]">
-      <div className="absolute inset-[1px] rounded-[0.9rem] bg-[linear-gradient(180deg,rgba(20,24,23,0.98),rgba(12,16,15,0.98))]" />
-      <Sparkles className="relative z-10 h-4 w-4 text-[#d6b98b]" />
+    <div className="relative group">
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 blur-lg opacity-45 transition-opacity duration-500 group-hover:opacity-75" />
+      <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl">
+        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/10 to-transparent" />
+        <Sparkles className="relative z-10 h-5 w-5 text-amber-300" />
+      </div>
     </div>
   )
 }
@@ -164,36 +201,39 @@ function BrandHeader({
   sectionCount: number
 }) {
   return (
-    <div className="rounded-[1.55rem] border border-[#d7ccb7]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.008))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-      <div className="flex items-center gap-3">
+    <div className="relative rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/95 to-slate-800/90 p-5 shadow-2xl">
+      <div className="flex items-center gap-4">
         <LogoMark />
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-[0.24em] text-[#7f8f88]">Control room</p>
-          <h1 className="mt-1 truncate text-[16px] font-semibold tracking-[-0.04em] text-[#f4efe5]">
-            F16 Finance
-          </h1>
-          <p className="mt-1 text-[12px] leading-5 text-[#92a19a]">
-            Спокойная навигация по ролям и рабочим зонам.
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400">Control room</p>
+            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          </div>
+          <h1 className="mt-1 text-xl font-bold tracking-[-0.04em] text-white">F16 Finance</h1>
+          <p className="mt-1 text-xs text-slate-400">Спокойная навигация по ролям и рабочим зонам.</p>
         </div>
       </div>
 
-      <div className="mt-4 rounded-[1.2rem] border border-[#d7ccb7]/10 bg-[#0c1311]/70 px-3.5 py-3">
-        <div className="flex items-center justify-between gap-3">
+      <div className="mt-4 rounded-2xl border border-white/6 bg-slate-800/55 px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.22em] text-[#6f7d76]">Активный контур</p>
-            <p className="mt-1 truncate text-[14px] font-medium text-[#f4efe5]">
-              {roleLabel || 'Панель управления'}
-            </p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Активный контур</p>
+            <p className="mt-1 truncate text-sm font-semibold text-white">{roleLabel || 'Панель управления'}</p>
           </div>
-          <div className="rounded-full border border-[#8fb3a1]/18 bg-[#8fb3a1]/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#b8d8ca]">
-            live
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1">
+            <span className="text-[10px] font-medium text-emerald-400">● live</span>
           </div>
         </div>
-        <div className="mt-3 flex items-center gap-2 text-[11px] text-[#8a9992]">
-          <span>{moduleCount} экранов</span>
-          <span className="text-[#57635e]">•</span>
-          <span>{sectionCount} секций</span>
+        <div className="mt-3 flex items-center gap-3 text-[11px] text-slate-500">
+          <span className="flex items-center gap-1">
+            <Layers className="h-3 w-3" />
+            {moduleCount} экранов
+          </span>
+          <span className="h-1 w-1 rounded-full bg-slate-700" />
+          <span className="flex items-center gap-1">
+            <Compass className="h-3 w-3" />
+            {sectionCount} секций
+          </span>
         </div>
       </div>
     </div>
@@ -216,18 +256,22 @@ function SidebarItem({
       href={item.href}
       onClick={onClick}
       className={cn(
-        'group relative flex items-start gap-3 rounded-[1rem] px-3 py-2.5 transition-all duration-200',
+        'group relative flex items-start gap-3 rounded-xl px-3 py-2.5 transition-all duration-300',
         active
-          ? 'bg-[linear-gradient(135deg,rgba(95,121,108,0.26),rgba(181,161,120,0.08))] text-[#f6f0e6] shadow-[0_8px_18px_rgba(0,0,0,0.18)]'
-          : 'text-[#a9b3af] hover:bg-white/[0.035] hover:text-[#f6f0e6]',
+          ? 'bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-white shadow-lg shadow-amber-500/5'
+          : 'text-slate-400 hover:bg-white/5 hover:text-white',
       )}
     >
+      {active ? (
+        <div className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-amber-400 to-orange-500" />
+      ) : null}
+
       <div
         className={cn(
-          'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] transition-all',
+          'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-300',
           active
-            ? 'bg-[#d6b98b]/12 text-[#d6b98b]'
-            : 'bg-black/20 text-[#7f8b86] group-hover:bg-white/[0.05] group-hover:text-[#d6b98b]',
+            ? 'bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-amber-400'
+            : 'bg-slate-800/50 text-slate-500 group-hover:bg-slate-800 group-hover:text-slate-300',
         )}
       >
         <Icon className="h-4 w-4" />
@@ -235,17 +279,26 @@ function SidebarItem({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-[13px] font-medium tracking-[-0.02em]">{item.label}</span>
+          <span className={cn('truncate text-sm font-medium', active ? 'text-white' : 'text-slate-300 group-hover:text-white')}>
+            {item.label}
+          </span>
           {item.badge ? (
-            <span className="rounded-full border border-[#8fb3a1]/20 bg-[#8fb3a1]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#b8d8ca]">
+            <span className={cn('rounded-md border px-1.5 py-0.5 text-xs font-medium', badgeTone[item.badgeColor || 'default'])}>
               {item.badge}
             </span>
           ) : null}
+          {item.isNew ? (
+            <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-xs font-medium text-amber-400 animate-pulse">
+              new
+            </span>
+          ) : null}
         </div>
-        {item.note ? <p className="mt-0.5 text-[10px] leading-4 text-[#6f7d76] group-hover:text-[#94a29b]">{item.note}</p> : null}
+        {item.note ? (
+          <p className={cn('mt-0.5 text-xs', active ? 'text-slate-400' : 'text-slate-500 group-hover:text-slate-400')}>
+            {item.note}
+          </p>
+        ) : null}
       </div>
-
-      {active ? <div className="absolute inset-y-2.5 left-0 w-[2px] rounded-r-full bg-[#d6b98b]" /> : null}
     </Link>
   )
 }
@@ -266,37 +319,37 @@ function SidebarSection({
   const hasActiveItem = section.items.some((item) =>
     item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/'),
   )
+  const SectionIcon = section.icon
 
   return (
-    <section className="border-b border-[#d7ccb7]/8 pb-3">
+    <section className="space-y-2">
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-3 rounded-[0.9rem] px-2 py-2 text-left transition-colors hover:bg-white/[0.03]"
+        className="group flex w-full items-center gap-3 rounded-xl px-3 py-2 transition-all duration-300 hover:bg-white/5"
       >
-        <div className={cn('h-6 w-1 rounded-full bg-gradient-to-b', section.accent)} />
-        <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#c8d0cb]">{section.title}</p>
-          <p className="mt-0.5 text-[10px] text-[#68756f]">{section.subtitle}</p>
+        <div className={cn('flex h-8 w-8 items-center justify-center rounded-xl', sectionTone[section.accentColor])}>
+          <SectionIcon className="h-4 w-4" />
         </div>
+
+        <div className="min-w-0 flex-1 text-left">
+          <p className="text-sm font-semibold text-white">{section.title}</p>
+          <p className="text-xs text-slate-500">{section.subtitle}</p>
+        </div>
+
         <div className="flex items-center gap-2">
-          {hasActiveItem ? (
-            <span className="rounded-full border border-[#d6b98b]/18 bg-[#d6b98b]/10 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.16em] text-[#d6b98b]">
-              live
-            </span>
-          ) : null}
-          <ChevronDown className={cn('h-4 w-4 text-[#62706a] transition-transform', open && 'rotate-180 text-[#d5ddd8]')} />
+          {hasActiveItem ? <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> : null}
+          <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform duration-300', open && 'rotate-180 text-slate-300')} />
         </div>
       </button>
 
-      {open ? (
-        <div className="space-y-1.5 pt-2">
-          {section.items.map((item) => {
-            const active = item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/')
-            return <SidebarItem key={item.href} item={item} active={active} onClick={onNavigate} />
-          })}
-        </div>
-      ) : null}
+      <div className={cn('space-y-1 overflow-hidden transition-all duration-300', open ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0')}>
+        {section.items.map((item) => {
+          const active =
+            item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/')
+          return <SidebarItem key={item.href} item={item} active={active} onClick={onNavigate} />
+        })}
+      </div>
     </section>
   )
 }
@@ -313,40 +366,59 @@ function UserCard({
   roleLabel: string | null
 }) {
   return (
-    <div className="rounded-[1.35rem] border border-[#d7ccb7]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.01))] p-3.5">
+    <div className="relative rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-800/90 p-4 backdrop-blur-xl">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-[0.95rem] border border-[#d7ccb7]/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] text-white">
-          <ShieldCheck className="h-4 w-4 text-[#d6b98b]" />
+        <div className="relative">
+          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 blur opacity-50" />
+          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-slate-800 to-slate-700">
+            <User className="h-5 w-5 text-amber-300" />
+          </div>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-semibold text-[#f4efe5]">{displayName || 'Панель управления'}</p>
-          <p className="truncate text-[11px] text-[#6f7d76]">{email || 'admin@system.local'}</p>
+          <p className="truncate text-sm font-semibold text-white">{displayName || 'Панель управления'}</p>
+          <p className="truncate text-xs text-slate-500">{email || 'admin@system.local'}</p>
         </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1 rounded-full border border-[#8fb3a1]/20 bg-[#8fb3a1]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#b8d8ca]">
-          <LifeBuoy className="h-3 w-3" />
-          online
+        <div className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1">
+          <LifeBuoy className="h-3 w-3 text-emerald-400" />
+          <span className="text-xs font-medium text-emerald-400">online</span>
         </div>
-        <div className="flex items-center gap-1 rounded-full border border-[#d7ccb7]/10 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8a9992]">
-          <Building2 className="h-3 w-3" />
-          {roleLabel || 'control'}
+        <div className="flex items-center gap-1 rounded-lg border border-white/5 bg-slate-800 px-2 py-1">
+          <Shield className="h-3 w-3 text-slate-400" />
+          <span className="text-xs font-medium text-slate-300">{roleLabel || 'control'}</span>
         </div>
       </div>
 
       <Button
         variant="ghost"
         onClick={onLogout}
-        className="mt-3.5 h-10 w-full justify-between rounded-[0.95rem] border border-[#d7ccb7]/10 bg-white/[0.03] px-3 text-[#a7b2ad] hover:border-[#d6b98b]/18 hover:bg-[#d6b98b]/10 hover:text-[#f4efe5]"
+        className="mt-3 w-full justify-between rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2 text-slate-300 transition-all duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-400"
       >
-        <span className="flex items-center gap-2">
+        <span className="flex items-center gap-2 text-sm">
           <LogOut className="h-4 w-4" />
           Выйти
         </span>
-        <span className="text-[10px] uppercase tracking-[0.18em] text-slate-500">exit</span>
+        <ChevronRight className="h-4 w-4" />
       </Button>
     </div>
+  )
+}
+
+function SearchBar() {
+  return (
+    <button className="group relative w-full">
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 blur opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+      <div className="relative flex items-center gap-2 rounded-xl border border-white/5 bg-slate-800/50 px-3 py-2.5 text-left text-sm text-slate-400 transition-all duration-300 group-hover:bg-slate-800/70">
+        <Search className="h-4 w-4 text-slate-500" />
+        <span className="flex-1">Поиск...</span>
+        <div className="flex items-center gap-1 rounded-md border border-white/5 bg-slate-700 px-1.5 py-0.5">
+          <Command className="h-3 w-3 text-slate-400" />
+          <span className="text-xs text-slate-400">K</span>
+        </div>
+      </div>
+    </button>
   )
 }
 
@@ -450,7 +522,9 @@ export function Sidebar() {
 
   useEffect(() => {
     const activeSection = visibleSections.find((section) =>
-      section.items.some((item) => (item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/'))),
+      section.items.some((item) =>
+        item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/'),
+      ),
     )
 
     if (!activeSection) return
@@ -472,11 +546,16 @@ export function Sidebar() {
   }
 
   const navContent = (
-    <div className="flex h-full flex-col bg-[linear-gradient(180deg,#0b0f10_0%,#101515_34%,#131918_100%)] text-white">
-      <div className="flex items-center justify-between border-b border-[#d7ccb7]/8 px-4 py-3 md:px-4">
-        <LogoMark />
+    <div className="flex h-full flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
+      <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <LogoMark />
+          <div className="ml-1">
+            <p className="text-xs font-medium text-slate-500">v2.0.1</p>
+          </div>
+        </div>
         <button
-          className="rounded-2xl border border-[#d7ccb7]/10 bg-white/[0.04] p-2 text-[#8a9992] transition-colors hover:text-white md:hidden"
+          className="rounded-xl border border-white/5 bg-white/5 p-2 text-slate-400 transition-all duration-300 hover:bg-white/10 hover:text-white md:hidden"
           onClick={() => setIsOpen(false)}
         >
           <X className="h-4 w-4" />
@@ -491,11 +570,14 @@ export function Sidebar() {
         }}
         className="flex-1 overflow-y-auto px-4 py-4"
       >
-        <div className="sticky top-0 z-10 -mx-1 bg-[linear-gradient(180deg,rgba(11,15,16,0.98),rgba(11,15,16,0.82),transparent)] px-1 pb-3 pt-1 backdrop-blur-xl">
+        <div className="sticky top-0 z-10 -mx-1 bg-gradient-to-b from-slate-950 via-slate-950/95 to-transparent px-1 pb-4 pt-1 backdrop-blur-xl">
           <BrandHeader roleLabel={roleLabel} moduleCount={moduleCount} sectionCount={visibleSections.length} />
+          <div className="mt-4">
+            <SearchBar />
+          </div>
         </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="mt-6 space-y-4">
           {visibleSections.map((section) => (
             <SidebarSection
               key={section.id}
@@ -509,7 +591,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <div className="border-t border-white/6 px-4 py-3.5 md:px-5">
+      <div className="border-t border-white/5 bg-gradient-to-t from-slate-950 to-transparent px-4 py-4">
         <UserCard onLogout={handleLogout} email={userEmail} displayName={displayName} roleLabel={roleLabel} />
       </div>
     </div>
@@ -517,12 +599,12 @@ export function Sidebar() {
 
   return (
     <>
-      <div className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-between border-b border-[#d7ccb7]/8 bg-[rgba(11,15,16,0.86)] px-4 backdrop-blur-xl md:hidden">
+      <div className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-between border-b border-white/5 bg-slate-950/80 px-4 backdrop-blur-xl md:hidden">
         <div className="flex items-center gap-3">
           <LogoMark />
           <div>
-            <p className="text-sm font-semibold tracking-[-0.02em] text-[#f4efe5]">F16 Finance</p>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[#76837d]">workspace</p>
+            <p className="text-sm font-semibold text-white">F16 Finance</p>
+            <p className="text-xs text-slate-500">workspace</p>
           </div>
         </div>
 
@@ -530,7 +612,7 @@ export function Sidebar() {
           variant="ghost"
           size="icon"
           onClick={() => setIsOpen(true)}
-          className="rounded-2xl border border-[#d7ccb7]/10 bg-white/[0.04] text-[#a8b3ae] hover:bg-white/[0.08] hover:text-white"
+          className="rounded-xl border border-white/5 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
         >
           <Menu className="h-5 w-5" />
         </Button>
@@ -538,14 +620,14 @@ export function Sidebar() {
 
       {isOpen ? (
         <div className="fixed inset-0 z-50 md:hidden">
-          <button className="absolute inset-0 bg-[rgba(3,6,12,0.75)] backdrop-blur-sm" onClick={() => setIsOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-[84%] max-w-[19rem] border-r border-[#d7ccb7]/8 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
+          <div className="absolute inset-y-0 left-0 w-[84%] max-w-[20rem] border-r border-white/5 shadow-2xl">
             {navContent}
           </div>
         </div>
       ) : null}
 
-      <aside className="sticky top-0 hidden h-screen w-[284px] shrink-0 border-r border-[#d7ccb7]/8 bg-[linear-gradient(180deg,#0b0f10_0%,#101515_36%,#131918_100%)] md:block xl:w-[296px]">
+      <aside className="sticky top-0 hidden h-screen w-[300px] shrink-0 border-r border-white/5 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 md:block xl:w-[320px]">
         {navContent}
       </aside>
     </>
