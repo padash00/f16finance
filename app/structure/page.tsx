@@ -80,6 +80,33 @@ type StructureHistoryItem = {
   created_at: string
 }
 
+type CareerLink = {
+  id: string
+  operator_id: string
+  staff_id: string
+  assigned_role: StaffRole | 'other'
+  assigned_at: string
+  updated_at: string
+  operator?: {
+    id: string
+    name: string
+    short_name: string | null
+    operator_profiles?: Array<{
+      full_name?: string | null
+      hire_date?: string | null
+      position?: string | null
+    }> | null
+  } | null
+  staff?: {
+    id: string
+    full_name: string | null
+    short_name: string | null
+    role: StaffRole | 'other'
+    monthly_salary: number | null
+    is_active: boolean
+  } | null
+}
+
 type AssignmentEditorRow = {
   id?: string
   company_id: string
@@ -97,6 +124,7 @@ type StructureResponse = {
     operators: Operator[]
     assignments: Assignment[]
     history: StructureHistoryItem[]
+    careerLinks: CareerLink[]
   }
   error?: string
 }
@@ -130,6 +158,24 @@ function getPersonName(person: { full_name?: string | null; short_name?: string 
 
 function getCompanyLeadTitle(company: Company) {
   return (company.code || '').toLowerCase() === 'ramen' ? 'Старший кассир' : 'Старший оператор'
+}
+
+function getStaffRoleLabel(role: StaffRole | 'other') {
+  if (role === 'other') return 'Сотрудник'
+  return STAFF_ROLE_LABEL[role]
+}
+
+function formatTenure(hireDate?: string | null) {
+  if (!hireDate) return 'Стаж не указан'
+  const start = new Date(`${hireDate}T00:00:00`)
+  const now = new Date()
+  let months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
+  if (months < 0) months = 0
+  const years = Math.floor(months / 12)
+  const restMonths = months % 12
+  if (years > 0 && restMonths > 0) return `${years} г ${restMonths} мес`
+  if (years > 0) return `${years} г`
+  return `${restMonths || 1} мес`
 }
 
 function StaffNode({ member, tone }: { member: StaffMember; tone: 'owner' | 'manager' | 'marketer' }) {
@@ -316,11 +362,13 @@ export default function StructurePage() {
   const [operators, setOperators] = useState<Operator[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [history, setHistory] = useState<StructureHistoryItem[]>([])
+  const [careerLinks, setCareerLinks] = useState<CareerLink[]>([])
   const [editingOperator, setEditingOperator] = useState<Operator | null>(null)
   const [editorRows, setEditorRows] = useState<AssignmentEditorRow[]>([])
   const [savingAssignments, setSavingAssignments] = useState(false)
   const [companyFilter, setCompanyFilter] = useState('all')
   const [roleFilter, setRoleFilter] = useState<'all' | CompanyOperatorRole>('all')
+  const [viewMode, setViewMode] = useState<'tree' | 'career'>('tree')
 
   useEffect(() => {
     let ignore = false
@@ -344,6 +392,7 @@ export default function StructurePage() {
         setOperators(json.data.operators || [])
         setAssignments(json.data.assignments || [])
         setHistory((json.data.history || []) as StructureHistoryItem[])
+        setCareerLinks((json.data.careerLinks || []) as CareerLink[])
       } catch (loadError: any) {
         if (!ignore) setError(loadError?.message || 'Не удалось загрузить структуру')
       } finally {
@@ -382,6 +431,25 @@ export default function StructurePage() {
     () => companies.filter((company) => companyFilter === 'all' || company.id === companyFilter),
     [companies, companyFilter],
   )
+  const leadRoster = useMemo(() => {
+    return assignments
+      .filter((assignment) => assignment.role_in_company !== 'operator')
+      .map((assignment) => {
+        const operator = operatorsById.get(assignment.operator_id)
+        const company = companiesById.get(assignment.company_id)
+        return {
+          assignment,
+          operator,
+          company,
+        }
+      })
+      .filter((item) => item.operator && item.company)
+      .sort((a, b) => {
+        const companyCompare = String(a.company?.name || '').localeCompare(String(b.company?.name || ''), 'ru')
+        if (companyCompare !== 0) return companyCompare
+        return String(a.operator?.name || '').localeCompare(String(b.operator?.name || ''), 'ru')
+      })
+  }, [assignments, operatorsById, companiesById])
   const formattedHistory = useMemo(() => {
     const getOperatorNameById = (operatorId: string | null | undefined) => {
       if (!operatorId) return null
@@ -581,6 +649,19 @@ export default function StructurePage() {
           ) : (
             <>
               <Card className="border-white/10 bg-slate-950/60 p-4 text-white">
+                <div className="flex flex-wrap gap-2">
+                  <Button variant={viewMode === 'tree' ? 'default' : 'outline'} onClick={() => setViewMode('tree')}>
+                    Древо точек
+                  </Button>
+                  <Button variant={viewMode === 'career' ? 'default' : 'outline'} onClick={() => setViewMode('career')}>
+                    Карьерный рост
+                  </Button>
+                </div>
+              </Card>
+
+              {viewMode === 'tree' ? (
+                <>
+              <Card className="border-white/10 bg-slate-950/60 p-4 text-white">
                 <div className="grid gap-3 md:grid-cols-3">
                   <div>
                     <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-slate-500">Точка</label>
@@ -775,6 +856,127 @@ export default function StructurePage() {
                   )}
                 </div>
               </section>
+                </>
+              ) : (
+                <section className="space-y-5">
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <Card className="border-white/10 bg-slate-950/60 p-5 text-white">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-5 w-5 text-cyan-300" />
+                        <h2 className="text-xl font-semibold">Старшие по точкам</h2>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {leadRoster.length > 0 ? (
+                          leadRoster.map(({ assignment, operator, company }) => (
+                            <div key={assignment.id} className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-base font-semibold text-white">
+                                    {getOperatorDisplayName({
+                                      ...(operator as Operator),
+                                      full_name: operator?.operator_profiles?.[0]?.full_name || null,
+                                    })}
+                                  </div>
+                                  <div className="mt-1 text-sm text-slate-400">
+                                    {company?.name} • {COMPANY_ROLE_LABEL[assignment.role_in_company]}
+                                  </div>
+                                </div>
+                                {assignment.is_primary ? (
+                                  <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-cyan-300">
+                                    main
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Должность</div>
+                                  <div className="mt-1 text-sm text-slate-200">
+                                    {operator?.operator_profiles?.[0]?.position || 'Оператор точки'}
+                                  </div>
+                                </div>
+                                <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Стаж</div>
+                                  <div className="mt-1 text-sm text-slate-200">
+                                    {formatTenure(operator?.operator_profiles?.[0]?.hire_date || null)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-sm text-slate-500">Старшие роли по точкам ещё не назначены.</div>
+                        )}
+                      </div>
+                    </Card>
+
+                    <Card className="border-white/10 bg-slate-950/60 p-5 text-white">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-pink-300" />
+                        <h2 className="text-xl font-semibold">Рост в staff</h2>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {careerLinks.length > 0 ? (
+                          careerLinks.map((link) => (
+                            <div key={link.id} className="rounded-2xl border border-white/8 bg-black/20 p-4">
+                              <div className="text-base font-semibold text-white">
+                                {getOperatorDisplayName({
+                                  id: link.operator?.id || '',
+                                  name: link.operator?.name || 'Оператор',
+                                  short_name: link.operator?.short_name || null,
+                                  full_name: link.operator?.operator_profiles?.[0]?.full_name || null,
+                                } as any)}
+                              </div>
+                              <div className="mt-1 text-sm text-slate-400">
+                                Переведён в staff как {getStaffRoleLabel(link.assigned_role)}
+                              </div>
+                              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Дата повышения</div>
+                                  <div className="mt-1 text-sm text-slate-200">
+                                    {new Date(link.updated_at || link.assigned_at).toLocaleDateString('ru-RU')}
+                                  </div>
+                                </div>
+                                <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Оклад staff</div>
+                                  <div className="mt-1 text-sm text-slate-200">{formatMoney(link.staff?.monthly_salary)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-sm text-slate-500">Переходов из оператора в staff пока нет.</div>
+                        )}
+                      </div>
+                    </Card>
+                  </div>
+
+                  <Card className="border-white/10 bg-slate-950/60 p-5 text-white">
+                    <div className="flex items-center gap-2">
+                      <Network className="h-5 w-5 text-slate-300" />
+                      <h2 className="text-xl font-semibold">Последние изменения в росте</h2>
+                    </div>
+                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                      {formattedHistory.length > 0 ? formattedHistory.map((entry) => (
+                        <Card key={`career-${entry.id}`} className="border-white/10 bg-black/20 p-4 text-white">
+                          <div className="text-sm font-medium">{entry.title}</div>
+                          <div className="mt-1 text-sm text-slate-300">{entry.subtitle}</div>
+                          <div className="mt-1 text-xs text-slate-500">{new Date(entry.created_at).toLocaleString('ru-RU')}</div>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            {entry.details.map((detail, index) => (
+                              <div key={`${entry.id}-career-${index}`} className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">{detail.label}</div>
+                                <div className="mt-1 text-sm text-slate-200">{detail.value}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </Card>
+                      )) : (
+                        <div className="text-sm text-slate-500">История назначений появится после первых изменений.</div>
+                      )}
+                    </div>
+                  </Card>
+                </section>
+              )}
             </>
           )}
         </div>

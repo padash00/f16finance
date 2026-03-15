@@ -14,9 +14,57 @@ type Body =
       proposalNote?: string | null
       replacementOperatorId?: string | null
     }
+  | {
+      action: 'updatePointTask'
+      taskId: string
+      status: 'todo' | 'in_progress' | 'review' | 'done'
+      note?: string | null
+    }
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+async function addTaskComment(
+  supabase: any,
+  payload: { taskId: string; operatorId?: string | null; content: string },
+) {
+  const primaryInsert = await supabase
+    .from('task_comments')
+    .insert([
+      {
+        task_id: payload.taskId,
+        operator_id: payload.operatorId || null,
+        content: payload.content,
+      },
+    ])
+    .select('*')
+    .single()
+
+  if (!primaryInsert.error) return primaryInsert.data
+
+  const errorMessage = String(primaryInsert.error?.message || '')
+  const canRetryWithoutOperatorId =
+    payload.operatorId &&
+    (errorMessage.includes("Could not find the 'operator_id' column") || errorMessage.includes('schema cache'))
+
+  if (!canRetryWithoutOperatorId) {
+    throw primaryInsert.error
+  }
+
+  const fallbackInsert = await supabase
+    .from('task_comments')
+    .insert([
+      {
+        task_id: payload.taskId,
+        content: payload.content,
+      },
+    ])
+    .select('*')
+    .single()
+
+  if (fallbackInsert.error) throw fallbackInsert.error
+  return fallbackInsert.data
 }
 
 function getWeeklyStatusSummary(params: {
@@ -299,6 +347,73 @@ export async function POST(req: Request) {
       })
 
       return json({ ok: true, data: result })
+    }
+
+    if (body.action === 'updatePointTask') {
+      if (!body.taskId || !body.status) {
+        return json({ error: 'taskId и status обязательны' }, 400)
+      }
+
+      const allowedCompanyIds = new Set(context.leadAssignments.map((assignment) => assignment.company_id))
+      const { data: taskRow, error: taskError } = await supabase
+        .from('tasks')
+        .select('id, title, status, company_id, task_number')
+        .eq('id', body.taskId)
+        .maybeSingle()
+
+      if (taskError) throw taskError
+      if (!taskRow) return json({ error: 'Задача не найдена' }, 404)
+      if (!taskRow.company_id || !allowedCompanyIds.has(String(taskRow.company_id))) {
+        return json({ error: 'У вас нет доступа к этой задаче' }, 403)
+      }
+
+      const updatePayload = {
+        status: body.status,
+        completed_at: body.status === 'done' ? new Date().toISOString() : null,
+      }
+
+      const { data: updatedTask, error: updateError } = await supabase
+        .from('tasks')
+        .update(updatePayload)
+        .eq('id', body.taskId)
+        .select('id, title, status, company_id, task_number')
+        .single()
+
+      if (updateError) throw updateError
+
+      const statusLabel =
+        body.status === 'todo'
+          ? 'К выполнению'
+          : body.status === 'in_progress'
+            ? 'В работе'
+            : body.status === 'review'
+              ? 'На проверке'
+              : 'Готово'
+      const note = body.note?.trim() || null
+
+      await addTaskComment(supabase as any, {
+        taskId: body.taskId,
+        operatorId: context.operator.id,
+        content: note
+          ? `Старший по точке перевёл задачу в статус "${statusLabel}". Комментарий: ${note}`
+          : `Старший по точке перевёл задачу в статус "${statusLabel}".`,
+      })
+
+      await writeAuditLog(supabase, {
+        actorUserId: context.user?.id || null,
+        entityType: 'task',
+        entityId: body.taskId,
+        action: 'lead-update-status',
+        payload: {
+          task_number: updatedTask.task_number,
+          company_ids: [...allowedCompanyIds],
+          lead_operator_id: context.operator.id,
+          status: body.status,
+          note,
+        },
+      })
+
+      return json({ ok: true, data: updatedTask })
     }
 
     return json({ error: 'Неизвестное действие' }, 400)

@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     const requestClient = createRequestSupabaseClient(req)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient
 
-    const [staffRes, companiesRes, operatorsRes, assignmentsRes, historyRes] = await Promise.all([
+    const [staffRes, companiesRes, operatorsRes, assignmentsRes, historyRes, careerLinksRes] = await Promise.all([
       supabase
         .from('staff')
         .select('id, full_name, short_name, role, monthly_salary, phone, email, is_active')
@@ -46,6 +46,12 @@ export async function GET(req: Request) {
         .in('entity_type', ['operator-company-assignment', 'operator-career'])
         .order('created_at', { ascending: false })
         .limit(40),
+      supabase
+        .from('operator_staff_links')
+        .select(
+          'id, operator_id, staff_id, assigned_role, assigned_at, updated_at, operator:operator_id(id, name, short_name, operator_profiles(full_name, hire_date, position)), staff:staff_id(id, full_name, short_name, role, monthly_salary, is_active)',
+        )
+        .order('updated_at', { ascending: false }),
     ])
 
     if (staffRes.error) throw staffRes.error
@@ -53,6 +59,7 @@ export async function GET(req: Request) {
     if (operatorsRes.error) throw operatorsRes.error
     if (assignmentsRes.error) throw assignmentsRes.error
     if (historyRes.error) throw historyRes.error
+    if (careerLinksRes.error) throw careerLinksRes.error
 
     return json({
       ok: true,
@@ -62,6 +69,11 @@ export async function GET(req: Request) {
         operators: operatorsRes.data || [],
         assignments: assignmentsRes.data || [],
         history: historyRes.data || [],
+        careerLinks: (careerLinksRes.data || []).map((item: any) => ({
+          ...item,
+          operator: Array.isArray(item.operator) ? item.operator[0] || null : item.operator || null,
+          staff: Array.isArray(item.staff) ? item.staff[0] || null : item.staff || null,
+        })),
       },
     })
   } catch (error: any) {

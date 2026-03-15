@@ -164,6 +164,9 @@ export default function OperatorLeadPage() {
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [replacementIds, setReplacementIds] = useState<Record<string, string>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [taskNotes, setTaskNotes] = useState<Record<string, string>>({})
+  const [taskSavingId, setTaskSavingId] = useState<string | null>(null)
+  const [companyFilter, setCompanyFilter] = useState<string>('all')
 
   const loadData = async (silent = false) => {
     try {
@@ -270,6 +273,40 @@ export default function OperatorLeadPage() {
     }
   }
 
+  const handleTaskStatus = async (taskId: string, status: 'todo' | 'in_progress' | 'review' | 'done') => {
+    try {
+      setTaskSavingId(taskId)
+      setError(null)
+
+      const response = await fetch('/api/operator/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updatePointTask',
+          taskId,
+          status,
+          note: taskNotes[taskId] || '',
+        }),
+      })
+
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || 'Не удалось обновить задачу точки')
+      }
+
+      await loadData(true)
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось обновить задачу точки')
+    } finally {
+      setTaskSavingId(null)
+    }
+  }
+
+  const visibleCompanies = useMemo(() => {
+    const source = payload?.companies || []
+    return companyFilter === 'all' ? source : source.filter((company) => company.id === companyFilter)
+  }, [payload, companyFilter])
+
   return (
     <div className="app-shell-layout">
       <Sidebar />
@@ -330,7 +367,35 @@ export default function OperatorLeadPage() {
               </div>
 
               <div className="space-y-5">
-                {payload.companies.map((company) => {
+                <Card className="border-white/10 bg-slate-950/60 p-4 text-white">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Режим точки</div>
+                      <div className="mt-1 text-sm text-slate-300">Выбери одну точку, чтобы быстрее разбирать задачи и спорные смены.</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant={companyFilter === 'all' ? 'default' : 'outline'}
+                        onClick={() => setCompanyFilter('all')}
+                      >
+                        Все точки
+                      </Button>
+                      {payload.companies.map((company) => (
+                        <Button
+                          key={`company-filter-${company.id}`}
+                          size="sm"
+                          variant={companyFilter === company.id ? 'default' : 'outline'}
+                          onClick={() => setCompanyFilter(company.id)}
+                        >
+                          {company.name}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </Card>
+
+                {visibleCompanies.map((company) => {
                   const team = teamByCompany.get(company.id) || []
                   const tasks = tasksByCompany.get(company.id) || []
                   const requests = requestsByCompany.get(company.id) || []
@@ -466,6 +531,39 @@ export default function OperatorLeadPage() {
                                   {task.due_date ? (
                                     <div className="text-[11px] text-slate-400">{formatShiftDate(task.due_date)}</div>
                                   ) : null}
+                                </div>
+                                <textarea
+                                  value={taskNotes[task.id] || ''}
+                                  onChange={(event) => setTaskNotes((prev) => ({ ...prev, [task.id]: event.target.value }))}
+                                  rows={2}
+                                  placeholder="Комментарий для команды по этой задаче"
+                                  className="mt-3 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-violet-400/50"
+                                />
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={taskSavingId === task.id}
+                                    onClick={() => handleTaskStatus(task.id, 'in_progress')}
+                                  >
+                                    {taskSavingId === task.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                    В работу
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={taskSavingId === task.id}
+                                    onClick={() => handleTaskStatus(task.id, 'review')}
+                                  >
+                                    На проверку
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    disabled={taskSavingId === task.id}
+                                    onClick={() => handleTaskStatus(task.id, 'done')}
+                                  >
+                                    Готово
+                                  </Button>
                                 </div>
                               </div>
                             )) : (
