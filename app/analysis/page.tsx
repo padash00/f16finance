@@ -869,6 +869,7 @@ export default function AIAnalysisPage() {
 
   const aliveRef = useRef(true)
   const lastAiCacheKeyRef = useRef<string | null>(null)
+  const aiRequestKeyRef = useRef<string | null>(null)
 
   const computeRange = () => {
     const today = new Date()
@@ -1188,11 +1189,12 @@ export default function AIAnalysisPage() {
       setAiError(null)
       setAiUpdatedAt(null)
       lastAiCacheKeyRef.current = null
+      aiRequestKeyRef.current = null
       return
     }
 
     const cacheKey = JSON.stringify(dataForAi)
-    if (lastAiCacheKeyRef.current === cacheKey && (aiAdvice || aiLoading)) return
+    if (lastAiCacheKeyRef.current === cacheKey || aiRequestKeyRef.current === cacheKey) return
 
     const storageKey = 'orda.ai-analysis.cache.v3'
     const cacheTtlMs = 3 * 60 * 60 * 1000
@@ -1215,6 +1217,7 @@ export default function AIAnalysisPage() {
     } catch {}
 
     let cancelled = false
+    aiRequestKeyRef.current = cacheKey
 
     const run = async () => {
       setAiLoading(true)
@@ -1224,15 +1227,16 @@ export default function AIAnalysisPage() {
         if (cancelled) return
 
         const now = new Date().toISOString()
-        lastAiCacheKeyRef.current = cacheKey
         setAiAdvice(text)
         setAiUpdatedAt(now)
 
         const isFailedText = text.toLowerCase().startsWith('ошибка') || text === EMPTY_AI_RESPONSE
 
         if (isFailedText) {
+          lastAiCacheKeyRef.current = null
           setAiError(text)
         } else {
+          lastAiCacheKeyRef.current = cacheKey
           window.sessionStorage.setItem(
             storageKey,
             JSON.stringify({
@@ -1245,9 +1249,13 @@ export default function AIAnalysisPage() {
       } catch (error) {
         if (cancelled) return
         console.error('getOpenAIAdvice error:', error)
+        lastAiCacheKeyRef.current = null
         setAiAdvice(null)
         setAiError('Не удалось получить AI-разбор. Проверьте подключение к OpenAI.')
       } finally {
+        if (aiRequestKeyRef.current === cacheKey) {
+          aiRequestKeyRef.current = null
+        }
         if (!cancelled) setAiLoading(false)
       }
     }
@@ -1256,7 +1264,7 @@ export default function AIAnalysisPage() {
     return () => {
       cancelled = true
     }
-  }, [aiAdvice, aiLoading, dataForAi])
+  }, [dataForAi])
 
   const handleExport = () => {
     if (!analysis) return
