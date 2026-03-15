@@ -14,12 +14,20 @@ type OperatorRow = {
   short_name: string | null
   is_active: boolean
   telegram_chat_id: string | null
-  operator_profiles?: Array<{
-    full_name?: string | null
-    birth_date?: string | null
-    position?: string | null
-    photo_url?: string | null
-  }> | null
+  operator_profiles?:
+    | {
+        full_name?: string | null
+        birth_date?: string | null
+        position?: string | null
+        photo_url?: string | null
+      }
+    | Array<{
+        full_name?: string | null
+        birth_date?: string | null
+        position?: string | null
+        photo_url?: string | null
+      }>
+    | null
 }
 
 type AssignmentRow = {
@@ -51,6 +59,15 @@ function getNextBirthdayParts(birthDate: string, now: Date) {
     nextBirthday: nextBirthday.toISOString(),
     daysUntil,
   }
+}
+
+function getPrimaryProfile(
+  profile:
+    | OperatorRow['operator_profiles']
+    | undefined,
+) {
+  if (!profile) return null
+  return Array.isArray(profile) ? profile[0] || null : profile
 }
 
 export async function GET(req: Request) {
@@ -90,7 +107,7 @@ export async function GET(req: Request) {
     const now = new Date()
     const birthdayItems = ((operatorsRes.data || []) as OperatorRow[])
       .map((operator) => {
-        const profile = operator.operator_profiles?.[0]
+        const profile = getPrimaryProfile(operator.operator_profiles)
         const birthDate = profile?.birth_date
         if (!birthDate) return null
 
@@ -123,9 +140,10 @@ export async function GET(req: Request) {
         return left.name.localeCompare(right.name, 'ru')
       })
 
-    const operatorsWithoutBirthday = ((operatorsRes.data || []) as OperatorRow[]).filter(
-      (operator) => !operator.operator_profiles?.[0]?.birth_date,
-    ).length
+    const operatorsWithoutBirthday = ((operatorsRes.data || []) as OperatorRow[]).filter((operator) => {
+      const profile = getPrimaryProfile(operator.operator_profiles)
+      return !profile?.birth_date
+    }).length
 
     return json({
       ok: true,
