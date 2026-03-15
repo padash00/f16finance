@@ -14,6 +14,7 @@ DEFAULT_CONFIG = {
     "last_operator_username": "",
     "draft": {},
     "debt_draft": {},
+    "scanner_draft": {},
 }
 
 
@@ -38,6 +39,7 @@ def load_config() -> dict:
         "last_operator_username": str(data.get("last_operator_username") or ""),
         "draft": data.get("draft") if isinstance(data.get("draft"), dict) else {},
         "debt_draft": data.get("debt_draft") if isinstance(data.get("debt_draft"), dict) else {},
+        "scanner_draft": data.get("scanner_draft") if isinstance(data.get("scanner_draft"), dict) else {},
     }
 
 
@@ -49,5 +51,6 @@ def save_config(config: dict) -> None:
         "last_operator_username": str(config.get("last_operator_username") or ""),
         "draft": config.get("draft") if isinstance(config.get("draft"), dict) else {},
         "debt_draft": config.get("debt_draft") if isinstance(config.get("debt_draft"), dict) else {},
+        "scanner_draft": config.get("scanner_draft") if isinstance(config.get("scanner_draft"), dict) else {},
     }
     CONFIG_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

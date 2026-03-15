@@ -19,6 +19,8 @@ from admin_tab import AdminTerminalTab
 from api import PointApiClient
 from config import load_config, save_config
 from debt_tab import DebtTab
+from products_tab import ProductsTab
+from scanner_tab import ScannerTab
 from shift_tab import ShiftReportTab
 from storage import OfflineQueue
 
@@ -51,6 +53,8 @@ class PointMainWindow(QMainWindow):
         self.shift_tab: ShiftReportTab | None = None
         self.debt_tab: DebtTab | None = None
         self.admin_tab: AdminTerminalTab | None = None
+        self.scanner_tab: ScannerTab | None = None
+        self.products_tab: ProductsTab | None = None
 
         api_url = (self.config.get("api_base_url") or "").strip()
         self.api = PointApiClient(api_url or "https://ordaops.kz", str(self.config.get("device_token") or ""))
@@ -232,6 +236,8 @@ class PointMainWindow(QMainWindow):
         self.shift_tab = None
         self.debt_tab = None
         self.admin_tab = None
+        self.scanner_tab = None
+        self.products_tab = None
 
         if self.current_admin:
             self.admin_tab = AdminTerminalTab(self)
@@ -246,8 +252,13 @@ class PointMainWindow(QMainWindow):
             self.tabs.addTab(self.shift_tab, "Смена")
 
         if self.bootstrap_data and flags.get("debt_report") is True:
+            self.scanner_tab = ScannerTab(self)
+            self.tabs.addTab(self.scanner_tab, "Сканер")
             self.debt_tab = DebtTab(self)
             self.tabs.addTab(self.debt_tab, "Долги")
+            if self.current_admin:
+                self.products_tab = ProductsTab(self)
+                self.tabs.addTab(self.products_tab, "Товары")
 
         if self.tabs.count() == 0:
             self.tabs.addTab(EmptyTab("Терминал ещё не настроен. Войдите как super-admin и привяжите точку.", self), "Инфо")
@@ -268,7 +279,9 @@ class PointMainWindow(QMainWindow):
                 f"Точка: {company.get('name', '—')}  |  Режим: {device.get('point_mode', '—')}"
             )
             self.session_label.setText(f"Оператор: {name} • {role} • @{username}")
-            if self.shift_tab:
+            if self.scanner_tab:
+                self.tabs.setCurrentWidget(self.scanner_tab)
+            elif self.shift_tab:
                 self.tabs.setCurrentWidget(self.shift_tab)
             elif self.debt_tab:
                 self.tabs.setCurrentWidget(self.debt_tab)
@@ -370,6 +383,8 @@ class PointMainWindow(QMainWindow):
         self.refresh_queue_label()
         if self.debt_tab:
             self.debt_tab.load_debts()
+        if self.scanner_tab:
+            self.scanner_tab.load_debts()
         QMessageBox.information(
             self,
             "Очереди",
@@ -386,6 +401,8 @@ class PointMainWindow(QMainWindow):
             self.shift_tab.save_draft()
         if self.debt_tab:
             self.debt_tab.save_draft()
+        if self.scanner_tab:
+            self.scanner_tab.save_draft()
 
     def setup_autosave(self):
         self.autosave_timer = QTimer(self)

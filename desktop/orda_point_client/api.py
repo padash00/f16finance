@@ -77,6 +77,67 @@ class PointApiClient:
         self._raise_for_status(response)
         return response.json()
 
+    def list_products(self) -> dict[str, Any]:
+        response = self.session.get(
+            f"{self.api_base_url}/api/point/products",
+            headers=self._headers(),
+            timeout=20,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
+    def create_product(self, email: str, password: str, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self.session.post(
+            f"{self.api_base_url}/api/point/products",
+            headers=self._headers(),
+            json={
+                "action": "createProduct",
+                "email": email.strip(),
+                "password": password,
+                "payload": payload,
+            },
+            timeout=20,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
+    def update_product(
+        self,
+        email: str,
+        password: str,
+        product_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = self.session.post(
+            f"{self.api_base_url}/api/point/products",
+            headers=self._headers(),
+            json={
+                "action": "updateProduct",
+                "email": email.strip(),
+                "password": password,
+                "productId": product_id,
+                "payload": payload,
+            },
+            timeout=20,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
+    def delete_product(self, email: str, password: str, product_id: str) -> dict[str, Any]:
+        response = self.session.post(
+            f"{self.api_base_url}/api/point/products",
+            headers=self._headers(),
+            json={
+                "action": "deleteProduct",
+                "email": email.strip(),
+                "password": password,
+                "productId": product_id,
+            },
+            timeout=20,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
     def delete_debt(self, item_id: str) -> dict[str, Any]:
         response = self.session.post(
             f"{self.api_base_url}/api/point/debts",
