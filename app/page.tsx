@@ -340,6 +340,16 @@ function ProductLanding() {
 
   const productCards = [
     {
+      title: 'Финансовый контур',
+      text: 'Доходы, расходы, правила зарплаты, налоговый контроль и аудит правок в одном месте.',
+      icon: Wallet,
+    },
+    {
+      title: 'Метрики и отчёты',
+      text: 'Оборот, прибыль, маржа, просадки, аномалии и недельный ритм по точкам без ручной сводки.',
+      icon: TrendingUp,
+    },
+    {
       title: 'График смен',
       text: 'Неделя собирается один раз, публикуется по точке и дальше живёт через подтверждение, споры и замены.',
       icon: Calendar,
@@ -348,16 +358,6 @@ function ProductLanding() {
       title: 'Задачи',
       text: 'Работа идёт по ролям: кто поставил, кто принял, где зависло и что уже ушло на проверку.',
       icon: CheckCircle2,
-    },
-    {
-      title: 'Финансы',
-      text: 'Доходы, расходы, правила зарплаты и критичные изменения в одном финансовом контуре.',
-      icon: Wallet,
-    },
-    {
-      title: 'Структура',
-      text: 'Видно, кто за какую точку отвечает, кто старший, кто в росте и как устроена команда.',
-      icon: BarChart2,
     },
   ]
 
@@ -369,7 +369,8 @@ function ProductLanding() {
   ]
 
   const highlights = [
-    'Смены, задачи, структура, зарплата и логирование не разбросаны по разным таблицам.',
+    'Главный фокус системы — финансовая дисциплина: деньги, прибыль, правила зарплаты и контроль правок.',
+    'Смены, задачи, структура и зарплата не разбросаны по разным таблицам, а завязаны на один рабочий контур.',
     'Telegram не заменяет систему, а усиливает её: подтверждения и ответы сразу попадают в рабочий контур.',
     'Каждое критичное действие по финансам и персоналу можно отследить в аудит-логе.',
     'Роли разделены так, чтобы владелец, руководитель, старший и оператор видели только своё.',
@@ -388,17 +389,19 @@ function ProductLanding() {
               </div>
 
               <h1 className="mt-5 text-4xl font-semibold leading-[0.96] tracking-[-0.06em] text-white sm:text-5xl lg:text-7xl">
-                Контроль клуба,
+                Сначала деньги
                 <br />
-                команды и рабочих
+                и метрики,
                 <br />
-                решений в одной системе.
+                потом команда и
+                <br />
+                операционный ритм.
               </h1>
 
               <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-                Orda Control собирает в одном месте график смен, задачи, структуру команды, зарплату,
-                финансы и событийный контроль. Это не просто учёт, а рабочий контур для владельца,
-                руководителя, старшего по точке и оператора.
+                Orda Control строится вокруг финансового контура: доходы, расходы, прибыль, правила зарплаты,
+                недельные отчёты и критичные изменения. Поверх этого система связывает смены, задачи,
+                структуру команды и ежедневный контроль точек.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
@@ -425,14 +428,14 @@ function ProductLanding() {
                   <p className="mt-1 text-sm text-slate-400">Владелец, руководитель, старший, оператор.</p>
                 </div>
                 <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-4">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Контуры</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">6</p>
-                  <p className="mt-1 text-sm text-slate-400">Задачи, смены, структура, деньги, зарплата, аудит.</p>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Фокус</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">Finance</p>
+                  <p className="mt-1 text-sm text-slate-400">Доходы, расходы, прибыль, зарплата и контроль правок.</p>
                 </div>
                 <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.03] p-4">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Каналы</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">2</p>
-                  <p className="mt-1 text-sm text-slate-400">Веб-кабинет и Telegram работают вместе.</p>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Контуры</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">6</p>
+                  <p className="mt-1 text-sm text-slate-400">Деньги, отчёты, смены, задачи, структура и аудит.</p>
                 </div>
               </div>
             </div>
@@ -453,6 +456,24 @@ function ProductLanding() {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-2xl bg-white/[0.04] p-3">
                       <div className="flex items-center gap-2 text-amber-300">
+                        <DollarSign className="h-4 w-4" />
+                        <p className="text-sm font-medium text-white">Деньги</p>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-slate-400">
+                        Доходы, расходы, прибыль, налоги и изменения по важным суммам.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.04] p-3">
+                      <div className="flex items-center gap-2 text-emerald-300">
+                        <TrendingUp className="h-4 w-4" />
+                        <p className="text-sm font-medium text-white">Метрики</p>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-slate-400">
+                        Недельный ритм, маржа, просадки, аномалии и управленческие сигналы.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.04] p-3">
+                      <div className="flex items-center gap-2 text-sky-300">
                         <Calendar className="h-4 w-4" />
                         <p className="text-sm font-medium text-white">Смены</p>
                       </div>
@@ -461,30 +482,12 @@ function ProductLanding() {
                       </p>
                     </div>
                     <div className="rounded-2xl bg-white/[0.04] p-3">
-                      <div className="flex items-center gap-2 text-emerald-300">
-                        <DollarSign className="h-4 w-4" />
-                        <p className="text-sm font-medium text-white">Финансы</p>
-                      </div>
-                      <p className="mt-2 text-xs leading-5 text-slate-400">
-                        Доходы, расходы, зарплата и изменение правил под аудитом.
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-white/[0.04] p-3">
-                      <div className="flex items-center gap-2 text-sky-300">
+                      <div className="flex items-center gap-2 text-purple-300">
                         <CheckCircle2 className="h-4 w-4" />
                         <p className="text-sm font-medium text-white">Задачи</p>
                       </div>
                       <p className="mt-2 text-xs leading-5 text-slate-400">
-                        Кто принял задачу, кто попросил уточнение и что ждёт проверки.
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-white/[0.04] p-3">
-                      <div className="flex items-center gap-2 text-purple-300">
-                        <Brain className="h-4 w-4" />
-                        <p className="text-sm font-medium text-white">Сигналы</p>
-                      </div>
-                      <p className="mt-2 text-xs leading-5 text-slate-400">
-                        Аномалии, просадки, просроченные задачи и проблемные точки.
+                        Кто принял задачу, где зависло исполнение и что уже ушло на проверку.
                       </p>
                     </div>
                   </div>
@@ -493,15 +496,15 @@ function ProductLanding() {
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Руководитель</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Финансовый срез</p>
                   <div className="mt-3 space-y-2">
-                    <div className="rounded-xl bg-white/[0.04] p-3 text-sm text-slate-300">Публикация недели</div>
-                    <div className="rounded-xl bg-amber-500/10 p-3 text-sm text-amber-200">2 спорные смены ждут решения</div>
-                    <div className="rounded-xl bg-white/[0.04] p-3 text-sm text-slate-300">5 задач на точках в работе</div>
+                    <div className="rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-200">Прибыль недели: +418 000 ₸</div>
+                    <div className="rounded-xl bg-white/[0.04] p-3 text-sm text-slate-300">Расходы под контролем: 9 категорий</div>
+                    <div className="rounded-xl bg-amber-500/10 p-3 text-sm text-amber-200">2 правки по деньгам ждут подтверждения</div>
                   </div>
                 </div>
                 <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Оператор</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Операционный слой</p>
                   <div className="mt-3 space-y-2">
                     <div className="rounded-xl bg-white/[0.04] p-3 text-sm text-slate-300">Смена на 19 марта подтверждена</div>
                     <div className="rounded-xl bg-white/[0.04] p-3 text-sm text-slate-300">Задача “Проверить точку” принята</div>
@@ -532,10 +535,11 @@ function ProductLanding() {
           <div className="max-w-3xl">
             <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Что умеет Orda Control</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white lg:text-4xl">
-              Информационная страница, которая показывает не просто модуль, а реальный рабочий цикл.
+              Система начинается с финансов и управленческих метрик, а затем связывает всё остальное.
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-              Система помогает не только считать деньги, но и управлять точками, людьми, сменами и ежедневной дисциплиной.
+              В основе — прозрачный денежный контур и отчётность. На него уже надстраиваются смены, задачи,
+              структура команды и ежедневная дисциплина по точкам.
             </p>
           </div>
 
@@ -608,33 +612,37 @@ function ProductLanding() {
 
         <section className="mt-8 grid gap-4 lg:grid-cols-2">
           <Card className="border-white/10 bg-slate-950/55 p-6 text-white backdrop-blur-xl lg:p-8">
-            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Что видит руководитель</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Панель решений, а не хаос из чатов</h2>
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Что видит владелец и руководитель</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em]">Сначала финансовая картина, потом действия по точкам</h2>
             <div className="mt-6 space-y-4 rounded-[1.6rem] border border-white/8 bg-black/20 p-4">
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl bg-emerald-500/10 p-3">
-                  <p className="text-xs text-emerald-300">Подтверждено</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">18</p>
+                  <p className="text-xs text-emerald-300">Оборот</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">2.84M</p>
                 </div>
                 <div className="rounded-xl bg-amber-500/10 p-3">
-                  <p className="text-xs text-amber-300">Спорные</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">2</p>
+                  <p className="text-xs text-amber-300">Маржа</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">28%</p>
                 </div>
                 <div className="rounded-xl bg-sky-500/10 p-3">
-                  <p className="text-xs text-sky-300">В работе</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">7</p>
+                  <p className="text-xs text-sky-300">Риск</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">3</p>
                 </div>
               </div>
               <div className="rounded-2xl bg-white/[0.04] p-4">
-                <p className="text-sm font-medium text-white">Лента проблемных смен</p>
+                <p className="text-sm font-medium text-white">Сигналы, которые требуют решения</p>
                 <div className="mt-3 space-y-2 text-sm text-slate-300">
                   <div className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2">
-                    <span>Extra · 18 марта · день</span>
-                    <span className="text-amber-300">ждёт решения</span>
+                    <span>Расходы по Extra вышли выше среднего</span>
+                    <span className="text-amber-300">нужна проверка</span>
                   </div>
                   <div className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2">
-                    <span>Arena · 21 марта · ночь</span>
+                    <span>Arena · 21 марта · ночная смена</span>
                     <span className="text-emerald-300">замена предложена</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2">
+                    <span>2 задачи по точкам просрочены</span>
+                    <span className="text-sky-300">контроль</span>
                   </div>
                 </div>
               </div>
