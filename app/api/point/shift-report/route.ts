@@ -38,6 +38,27 @@ function canShiftReport(input: Record<string, unknown> | null | undefined) {
   return input?.shift_report !== false
 }
 
+function resolveIncomeZone(params: {
+  requestedZone?: string | null
+  companyCode?: string | null
+  pointMode?: string | null
+}) {
+  const requested = params.requestedZone?.trim().toLowerCase()
+  if (requested) return requested
+
+  const companyCode = (params.companyCode || '').trim().toLowerCase()
+  if (companyCode === 'arena') return 'pc'
+  if (companyCode === 'ramen') return 'ramen'
+  if (companyCode === 'extra') return 'extra'
+
+  const pointMode = (params.pointMode || '').trim().toLowerCase()
+  if (pointMode === 'cash-desk' || pointMode === 'shift-report') return 'pc'
+  if (pointMode === 'debts') return 'ramen'
+  if (pointMode === 'universal') return 'pc'
+
+  return 'pc'
+}
+
 export async function POST(request: Request) {
   try {
     const point = await requirePointDevice(request)
@@ -76,7 +97,11 @@ export async function POST(request: Request) {
       company_id: device.company_id,
       operator_id: payload.operator_id,
       shift: payload.shift,
-      zone: payload.zone?.trim() || device.company?.code || device.point_mode,
+      zone: resolveIncomeZone({
+        requestedZone: payload.zone,
+        companyCode: device.company?.code || null,
+        pointMode: device.point_mode,
+      }),
       cash_amount: payload.cash_amount ?? 0,
       kaspi_amount: payload.kaspi_amount ?? 0,
       online_amount: payload.online_amount ?? 0,
