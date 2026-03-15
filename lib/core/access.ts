@@ -183,6 +183,8 @@ export const SUPER_ADMIN_MATRIX_ENTRY = {
 export const OPERATOR_PATHS = [
   '/operator-dashboard',
   '/operator-dashboard/*',
+  '/operator-lead',
+  '/operator-lead/*',
   '/operator-schedule',
   '/operator-schedule/*',
   '/operator-tasks',

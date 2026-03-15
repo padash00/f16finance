@@ -201,3 +201,63 @@ export async function getRequestOperatorContext(request: Request): Promise<
     operator,
   }
 }
+
+export type OperatorLeadAssignment = {
+  id: string
+  operator_id: string
+  company_id: string
+  role_in_company: 'senior_operator' | 'senior_cashier'
+  is_primary: boolean
+  is_active: boolean
+  notes: string | null
+  company?: {
+    id: string
+    name: string
+    code: string | null
+  } | null
+}
+
+export async function listActiveOperatorLeadAssignments(supabase: ReturnType<typeof createRequestSupabaseClient>, operatorId: string) {
+  const { data, error } = await supabase
+    .from('operator_company_assignments')
+    .select('id, operator_id, company_id, role_in_company, is_primary, is_active, notes, company:company_id(id, name, code)')
+    .eq('operator_id', operatorId)
+    .eq('is_active', true)
+    .in('role_in_company', ['senior_operator', 'senior_cashier'])
+    .order('is_primary', { ascending: false })
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return ((data || []) as unknown[]).map((item: any) => ({
+    ...item,
+    company: Array.isArray(item.company) ? item.company[0] || null : item.company || null,
+  })) as OperatorLeadAssignment[]
+}
+
+export async function getRequestOperatorLeadContext(request: Request): Promise<
+  | {
+      response: NextResponse
+    }
+  | (Awaited<ReturnType<typeof getRequestOperatorContext>> extends infer T
+      ? T extends { response: NextResponse }
+        ? never
+        : T & { leadAssignments: OperatorLeadAssignment[] }
+      : never)
+> {
+  const context = await getRequestOperatorContext(request)
+  if ('response' in context) {
+    return context
+  }
+
+  const leadAssignments = await listActiveOperatorLeadAssignments(context.supabase, context.operator.id)
+  if (leadAssignments.length === 0) {
+    return {
+      response: NextResponse.json({ error: 'forbidden' }, { status: 403 }),
+    }
+  }
+
+  return {
+    ...context,
+    leadAssignments,
+  }
+}

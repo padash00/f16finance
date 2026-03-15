@@ -124,6 +124,7 @@ const navSections: NavSection[] = [
     accent: 'from-[#ee9ae5] to-[#5961f9]',
     items: [
       { href: '/operator-dashboard', label: 'Мой кабинет', icon: User, note: 'Сводка оператора' },
+      { href: '/operator-lead', label: 'Моя точка', icon: Building2, note: 'Команда и спорные смены точки', badge: 'lead' },
       { href: '/operator-tasks', label: 'Мои задачи', icon: ClipboardCheck, note: 'Личный контур задач', badge: 'new' },
       { href: '/operator-analytics', label: 'Аналитика операторов', icon: Zap, note: 'Эффективность по людям' },
       { href: '/operator-chat', label: 'Чат операторов', icon: MessageSquareText, note: 'Коммуникация', badge: 'live' },
@@ -363,6 +364,7 @@ export function Sidebar() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [isStaff, setIsStaff] = useState(false)
   const [isOperator, setIsOperator] = useState(false)
+  const [isLeadOperator, setIsLeadOperator] = useState(false)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     if (typeof window !== 'undefined') {
       const raw = window.localStorage.getItem(SIDEBAR_SECTIONS_KEY)
@@ -395,6 +397,7 @@ export function Sidebar() {
         setIsSuperAdmin(!!json?.isSuperAdmin)
         setIsStaff(!!json?.isStaff)
         setIsOperator(!!json?.isOperator)
+        setIsLeadOperator(!!json?.isLeadOperator)
         setStaffRole((json?.staffRole as StaffRole | null) || null)
         setDisplayName((json?.displayName as string | null) || null)
         setRoleLabel((json?.roleLabel as string | null) || null)
@@ -426,6 +429,9 @@ export function Sidebar() {
       .map((section) => ({
         ...section,
         items: section.items.filter((item) => {
+          if (item.href === '/operator-lead' && !isLeadOperator) {
+            return false
+          }
           return canAccessPath({
             pathname: item.href,
             isStaff,
@@ -436,7 +442,7 @@ export function Sidebar() {
         }),
       }))
       .filter((section) => section.items.length > 0)
-  }, [isOperator, isStaff, isSuperAdmin, staffRole])
+  }, [isLeadOperator, isOperator, isStaff, isSuperAdmin, staffRole])
 
   const moduleCount = useMemo(
     () => visibleSections.reduce((sum, section) => sum + section.items.length, 0),

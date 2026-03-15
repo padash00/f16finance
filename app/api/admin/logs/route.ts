@@ -147,6 +147,11 @@ export async function GET(req: Request) {
           if (!operationsEntityTypes.includes((item.entityType || '').toLowerCase())) return false
         }
 
+        if (domain === 'structure') {
+          const structureEntityTypes = ['operator-company-assignment', 'operator-career', 'shift-change-request']
+          if (!structureEntityTypes.includes((item.entityType || '').toLowerCase())) return false
+        }
+
         if (kind && item.kind.toLowerCase() !== kind) return false
         if (entityType && (item.entityType || '').toLowerCase() !== entityType) return false
         if (action && (item.action || '').toLowerCase() !== action) return false

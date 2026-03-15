@@ -8,13 +8,17 @@ import {
   Loader2,
   Mail,
   Network,
+  PencilLine,
   Phone,
+  Plus,
   ShieldCheck,
   Sparkles,
   Users2,
+  X,
 } from 'lucide-react'
 
 import { Sidebar } from '@/components/sidebar'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 
@@ -64,6 +68,15 @@ type Assignment = {
   notes: string | null
   created_at: string
   updated_at: string
+}
+
+type AssignmentEditorRow = {
+  id?: string
+  company_id: string
+  role_in_company: CompanyOperatorRole
+  is_primary: boolean
+  is_active: boolean
+  notes: string
 }
 
 type StructureResponse = {
@@ -149,10 +162,12 @@ function OperatorChip({
   operator,
   role,
   isPrimary,
+  onEdit,
 }: {
   operator: Operator
   role: CompanyOperatorRole
   isPrimary: boolean
+  onEdit?: () => void
 }) {
   const profile = operator.operator_profiles?.[0]
   return (
@@ -180,6 +195,13 @@ function OperatorChip({
           {profile?.email ? <div className="truncate">{profile.email}</div> : null}
         </div>
       ) : null}
+
+      {onEdit ? (
+        <Button variant="ghost" size="sm" className="mt-3 h-8 w-full justify-center" onClick={onEdit}>
+          <PencilLine className="mr-2 h-3.5 w-3.5" />
+          Изменить точку
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -188,10 +210,12 @@ function CompanyBranch({
   company,
   assignments,
   operatorsById,
+  onEditOperator,
 }: {
   company: Company
   assignments: Assignment[]
   operatorsById: Map<string, Operator>
+  onEditOperator: (operator: Operator) => void
 }) {
   const leadAssignments = assignments.filter((item) => item.role_in_company !== 'operator')
   const operatorAssignments = assignments.filter((item) => item.role_in_company === 'operator')
@@ -227,6 +251,7 @@ function CompanyBranch({
                   operator={operator}
                   role={assignment.role_in_company}
                   isPrimary={assignment.is_primary}
+                  onEdit={() => onEditOperator(operator)}
                 />
               )
             })}
@@ -251,6 +276,7 @@ function CompanyBranch({
                   operator={operator}
                   role={assignment.role_in_company}
                   isPrimary={assignment.is_primary}
+                  onEdit={() => onEditOperator(operator)}
                 />
               )
             })}
@@ -272,6 +298,9 @@ export default function StructurePage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [editingOperator, setEditingOperator] = useState<Operator | null>(null)
+  const [editorRows, setEditorRows] = useState<AssignmentEditorRow[]>([])
+  const [savingAssignments, setSavingAssignments] = useState(false)
 
   useEffect(() => {
     let ignore = false
@@ -325,6 +354,72 @@ export default function StructurePage() {
     () => operators.filter((operator) => !assignedOperatorIds.has(operator.id)),
     [operators, assignedOperatorIds],
   )
+
+  const openOperatorEditor = (operator: Operator) => {
+    const rows = assignments
+      .filter((assignment) => assignment.operator_id === operator.id)
+      .slice(0, 2)
+      .map((assignment) => ({
+        id: assignment.id,
+        company_id: assignment.company_id,
+        role_in_company: assignment.role_in_company,
+        is_primary: assignment.is_primary,
+        is_active: assignment.is_active,
+        notes: assignment.notes || '',
+      }))
+
+    setEditingOperator(operator)
+    setEditorRows(rows.length > 0 ? rows : [{ company_id: '', role_in_company: 'operator', is_primary: true, is_active: true, notes: '' }])
+  }
+
+  const closeOperatorEditor = () => {
+    if (savingAssignments) return
+    setEditingOperator(null)
+    setEditorRows([])
+  }
+
+  const saveOperatorAssignments = async () => {
+    if (!editingOperator) return
+
+    try {
+      setSavingAssignments(true)
+      const response = await fetch('/api/admin/operator-company-assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'saveAssignments',
+          operatorId: editingOperator.id,
+          assignments: editorRows,
+        }),
+      })
+
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || 'Не удалось сохранить структуру оператора')
+      }
+
+      const nextRows = (json.data || []) as Assignment[]
+      setAssignments((prev) => [
+        ...prev.filter((item) => item.operator_id !== editingOperator.id),
+        ...nextRows.map((row: any) => ({
+          id: row.id,
+          operator_id: row.operator_id,
+          company_id: row.company_id,
+          role_in_company: row.role_in_company,
+          is_primary: row.is_primary,
+          is_active: row.is_active,
+          notes: row.notes,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+        })),
+      ])
+      closeOperatorEditor()
+    } catch (saveError: any) {
+      setError(saveError?.message || 'Не удалось сохранить структуру оператора')
+    } finally {
+      setSavingAssignments(false)
+    }
+  }
 
   return (
     <div className="app-shell-layout">
@@ -435,6 +530,7 @@ export default function StructurePage() {
                       company={company}
                       assignments={assignmentsByCompany.get(company.id) || []}
                       operatorsById={operatorsById}
+                      onEditOperator={openOperatorEditor}
                     />
                   ))}
                 </div>
@@ -466,6 +562,10 @@ export default function StructurePage() {
                             free
                           </span>
                         </div>
+                        <Button variant="ghost" size="sm" className="mt-3 w-full justify-center" onClick={() => openOperatorEditor(operator)}>
+                          <PencilLine className="mr-2 h-3.5 w-3.5" />
+                          Назначить точку
+                        </Button>
                       </Card>
                     ))}
                   </div>
@@ -479,6 +579,145 @@ export default function StructurePage() {
           )}
         </div>
       </main>
+
+      {editingOperator ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+          <Card className="w-full max-w-3xl border-white/10 bg-slate-950/96 p-6 text-white shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Редактор дерева</div>
+                <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
+                  {getOperatorDisplayName({
+                    ...editingOperator,
+                    full_name: editingOperator.operator_profiles?.[0]?.full_name || null,
+                  })}
+                </h3>
+                <p className="mt-2 text-sm text-slate-400">
+                  Назначьте оператору до двух точек и укажите роль внутри каждой точки прямо из структуры.
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={closeOperatorEditor} disabled={savingAssignments}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              {editorRows.map((row, index) => (
+                <div key={`${row.id || 'new'}-${index}`} className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                      <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-slate-500">Точка</label>
+                      <select
+                        value={row.company_id}
+                        onChange={(event) =>
+                          setEditorRows((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, company_id: event.target.value } : item,
+                            ),
+                          )
+                        }
+                        className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-cyan-400/50"
+                      >
+                        <option value="">Выберите точку</option>
+                        {companies.map((company) => (
+                          <option key={company.id} value={company.id}>
+                            {company.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-slate-500">Роль</label>
+                      <select
+                        value={row.role_in_company}
+                        onChange={(event) =>
+                          setEditorRows((prev) =>
+                            prev.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, role_in_company: event.target.value as CompanyOperatorRole } : item,
+                            ),
+                          )
+                        }
+                        className="h-10 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-white outline-none focus:border-cyan-400/50"
+                      >
+                        <option value="operator">Оператор</option>
+                        <option value="senior_operator">Старший оператор</option>
+                        <option value="senior_cashier">Старший кассир</option>
+                      </select>
+                    </div>
+
+                    <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-slate-900/70 px-3 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={row.is_primary}
+                        onChange={(event) =>
+                          setEditorRows((prev) =>
+                            prev.map((item, itemIndex) => ({
+                              ...item,
+                              is_primary: itemIndex === index ? event.target.checked : event.target.checked ? false : item.is_primary,
+                            })),
+                          )
+                        }
+                      />
+                      Основная точка
+                    </label>
+
+                    <div className="flex items-center justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditorRows((prev) => prev.filter((_, itemIndex) => itemIndex !== index))}
+                        disabled={editorRows.length === 1}
+                      >
+                        Удалить
+                      </Button>
+                    </div>
+                  </div>
+
+                  <textarea
+                    value={row.notes}
+                    onChange={(event) =>
+                      setEditorRows((prev) =>
+                        prev.map((item, itemIndex) => (itemIndex === index ? { ...item, notes: event.target.value } : item)),
+                      )
+                    }
+                    rows={2}
+                    placeholder="Комментарий по роли или точке"
+                    className="mt-3 w-full rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-400/50"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setEditorRows((prev) =>
+                    prev.length >= 2
+                      ? prev
+                      : [...prev, { company_id: '', role_in_company: 'operator', is_primary: prev.length === 0, is_active: true, notes: '' }],
+                  )
+                }
+                disabled={editorRows.length >= 2 || savingAssignments}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Добавить точку
+              </Button>
+
+              <div className="ml-auto flex flex-wrap gap-3">
+                <Button variant="ghost" onClick={closeOperatorEditor} disabled={savingAssignments}>
+                  Отмена
+                </Button>
+                <Button onClick={saveOperatorAssignments} disabled={savingAssignments}>
+                  {savingAssignments ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Сохранить дерево
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      ) : null}
     </div>
   )
 }

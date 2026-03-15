@@ -148,6 +148,14 @@ type ChangeRequest = {
   status: string
   source: string | null
   reason: string | null
+  lead_status: string | null
+  lead_action: string | null
+  lead_note: string | null
+  lead_operator_id: string | null
+  lead_operator_name: string | null
+  lead_replacement_operator_id: string | null
+  lead_replacement_operator_name: string | null
+  lead_updated_at: string | null
   resolution_note: string | null
   responded_at: string | null
   resolved_at: string | null
@@ -530,7 +538,9 @@ export default function ShiftsPage() {
 
       const label =
         request.status === 'open'
-          ? 'Есть проблема'
+          ? request.lead_status === 'proposed'
+            ? 'Есть предложение'
+            : 'Есть проблема'
           : request.status === 'awaiting_reason'
             ? 'Ждём причину'
             : request.status === 'resolved'
@@ -1376,6 +1386,21 @@ export default function ShiftsPage() {
                             <div className="mt-3 rounded-lg bg-black/10 px-3 py-2 text-sm text-foreground">
                               {request.reason || 'Оператор ещё не прислал причину, бот ждёт ответ.'}
                             </div>
+
+                            {request.lead_status === 'proposed' && (
+                              <div className="mt-3 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-sm text-sky-100">
+                                <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300/80">Предложение старшего</div>
+                                <div className="mt-1">
+                                  {request.lead_operator_name || 'Старший'} предлагает:{' '}
+                                  {request.lead_action === 'replace'
+                                    ? `поставить ${request.lead_replacement_operator_name || 'другого оператора'}`
+                                    : request.lead_action === 'remove'
+                                      ? 'снять со смены'
+                                      : 'оставить как есть'}
+                                </div>
+                                {request.lead_note ? <div className="mt-1 text-sky-100/90">{request.lead_note}</div> : null}
+                              </div>
+                            )}
 
                             {request.resolution_note && request.status !== 'open' && (
                               <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-100">

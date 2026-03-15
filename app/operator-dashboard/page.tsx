@@ -186,6 +186,7 @@ export default function OperatorDashboardPage() {
 
   useEffect(() => {
     ;[
+      '/operator-lead',
       '/operator-tasks',
       '/operator-chat',
       '/operator-achievements',

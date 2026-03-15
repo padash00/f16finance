@@ -68,6 +68,14 @@ export type WorkflowRequest = {
   status: string
   source: string | null
   reason: string | null
+  lead_status: string | null
+  lead_action: string | null
+  lead_note: string | null
+  lead_operator_id: string | null
+  lead_operator_name: string | null
+  lead_replacement_operator_id: string | null
+  lead_replacement_operator_name: string | null
+  lead_updated_at: string | null
   resolution_note: string | null
   responded_at: string | null
   resolved_at: string | null
@@ -691,6 +699,12 @@ export async function createShiftIssueDraft(params: {
         reason: null,
         source: params.source,
         responded_at: null,
+        lead_status: null,
+        lead_action: null,
+        lead_note: null,
+        lead_operator_id: null,
+        lead_replacement_operator_id: null,
+        lead_updated_at: null,
         resolution_note: null,
         resolved_at: null,
         resolved_by: null,
@@ -706,6 +720,12 @@ export async function createShiftIssueDraft(params: {
         shift_type: params.shiftType,
         status: 'awaiting_reason',
         source: params.source,
+        lead_status: null,
+        lead_action: null,
+        lead_note: null,
+        lead_operator_id: null,
+        lead_replacement_operator_id: null,
+        lead_updated_at: null,
       },
     ])
 
@@ -759,6 +779,12 @@ export async function createShiftIssueByOperator(params: {
         source: params.source,
         reason: normalizedReason,
         responded_at: new Date().toISOString(),
+        lead_status: null,
+        lead_action: null,
+        lead_note: null,
+        lead_operator_id: null,
+        lead_replacement_operator_id: null,
+        lead_updated_at: null,
       })
       .eq('id', existing.id)
 
@@ -775,6 +801,12 @@ export async function createShiftIssueByOperator(params: {
         source: params.source,
         reason: normalizedReason,
         responded_at: new Date().toISOString(),
+        lead_status: null,
+        lead_action: null,
+        lead_note: null,
+        lead_operator_id: null,
+        lead_replacement_operator_id: null,
+        lead_updated_at: null,
       },
     ])
 
@@ -841,6 +873,12 @@ export async function submitPendingShiftIssueReason(params: {
       source: params.source,
       reason: params.reason.trim(),
       responded_at: new Date().toISOString(),
+      lead_status: null,
+      lead_action: null,
+      lead_note: null,
+      lead_operator_id: null,
+      lead_replacement_operator_id: null,
+      lead_updated_at: null,
     })
     .eq('id', draft.id)
 
@@ -865,9 +903,36 @@ export async function resolveShiftChangeRequest(params: {
     .from('shift_change_requests')
     .update({
       status: params.status,
+      lead_status: params.status === 'resolved' || params.status === 'dismissed' ? 'reviewed' : null,
       resolution_note: params.resolutionNote?.trim() || null,
       resolved_at: new Date().toISOString(),
       resolved_by: params.actorUserId || null,
+    })
+    .eq('id', params.requestId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function submitShiftLeadReview(params: {
+  supabase: DbClient
+  requestId: string
+  leadOperatorId: string
+  proposalAction: 'keep' | 'remove' | 'replace'
+  proposalNote?: string | null
+  replacementOperatorId?: string | null
+}) {
+  const { data, error } = await params.supabase
+    .from('shift_change_requests')
+    .update({
+      lead_status: 'proposed',
+      lead_action: params.proposalAction,
+      lead_note: params.proposalNote?.trim() || null,
+      lead_operator_id: params.leadOperatorId,
+      lead_replacement_operator_id: params.proposalAction === 'replace' ? params.replacementOperatorId || null : null,
+      lead_updated_at: new Date().toISOString(),
     })
     .eq('id', params.requestId)
     .select('*')
@@ -904,7 +969,7 @@ export async function loadShiftWeekWorkflow(supabase: DbClient, weekStart: strin
       ? supabase
           .from('shift_change_requests')
           .select(
-            'id, publication_id, company_id, operator_id, shift_date, shift_type, status, source, reason, resolution_note, responded_at, resolved_at, created_at',
+            'id, publication_id, company_id, operator_id, shift_date, shift_type, status, source, reason, lead_status, lead_action, lead_note, lead_operator_id, lead_replacement_operator_id, lead_updated_at, resolution_note, responded_at, resolved_at, created_at',
           )
           .in('publication_id', publicationIds)
           .order('created_at', { ascending: false })
@@ -936,13 +1001,28 @@ export async function loadShiftWeekWorkflow(supabase: DbClient, weekStart: strin
     status: string
     source: string | null
     reason: string | null
+    lead_status: string | null
+    lead_action: string | null
+    lead_note: string | null
+    lead_operator_id: string | null
+    lead_replacement_operator_id: string | null
+    lead_updated_at: string | null
     resolution_note: string | null
     responded_at: string | null
     resolved_at: string | null
     created_at: string
   }>
 
-  const operatorIds = [...new Set([...responses.map((item) => item.operator_id), ...requests.map((item) => item.operator_id)])]
+  const operatorIds = [
+    ...new Set(
+      [
+        ...responses.map((item) => item.operator_id),
+        ...requests.map((item) => item.operator_id),
+        ...requests.map((item) => item.lead_operator_id).filter(Boolean),
+        ...requests.map((item) => item.lead_replacement_operator_id).filter(Boolean),
+      ].filter(Boolean),
+    ),
+  ]
   const { data: operatorsRes, error: operatorsError } =
     operatorIds.length > 0
       ? await supabase.from('operators').select('id, name, short_name, operator_profiles(*)').in('id', operatorIds)
@@ -973,6 +1053,10 @@ export async function loadShiftWeekWorkflow(supabase: DbClient, weekStart: strin
   const enrichedRequests: WorkflowRequest[] = requests.map((item) => ({
     ...item,
     operator_name: operatorMap.get(item.operator_id) || 'Оператор',
+    lead_operator_name: item.lead_operator_id ? operatorMap.get(item.lead_operator_id) || 'Старший' : null,
+    lead_replacement_operator_name: item.lead_replacement_operator_id
+      ? operatorMap.get(item.lead_replacement_operator_id) || 'Оператор'
+      : null,
   }))
 
   return {
