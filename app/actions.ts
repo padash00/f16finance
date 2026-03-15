@@ -49,6 +49,39 @@ type AnalysisData = {
 }
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5-mini'
+const EMPTY_AI_RESPONSE = 'ИИ не смог сформировать осмысленный разбор. Попробуйте обновить страницу позже.'
+
+function extractOpenAIText(payload: any): string {
+  if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
+    return payload.output_text.trim()
+  }
+
+  if (!Array.isArray(payload?.output)) return ''
+
+  const parts = payload.output
+    .flatMap((item: any) => {
+      if (!Array.isArray(item?.content)) return []
+
+      return item.content.flatMap((content: any) => {
+        if (typeof content?.text === 'string' && content.text.trim()) {
+          return [content.text.trim()]
+        }
+
+        if (typeof content?.output_text === 'string' && content.output_text.trim()) {
+          return [content.output_text.trim()]
+        }
+
+        if (Array.isArray(content?.text?.annotations) && typeof content?.text?.value === 'string' && content.text.value.trim()) {
+          return [content.text.value.trim()]
+        }
+
+        return []
+      })
+    })
+    .filter(Boolean)
+
+  return parts.join('\n\n').trim()
+}
 
 function formatMoney(value: number) {
   return Number(value || 0).toLocaleString('ru-RU') + ' ₸'
@@ -216,10 +249,11 @@ ${anomaliesText(data.anomalies)}
       return `Ошибка OpenAI API: ${json?.error?.message || `HTTP ${response.status}`}`
     }
 
-    const text = json?.output_text
-    if (typeof text === 'string' && text.trim()) return text.trim()
+    const outputText = extractOpenAIText(json)
+    if (outputText) return outputText
 
-    return 'ИИ не смог сформировать осмысленный разбор. Попробуйте обновить страницу позже.'
+    console.error('OpenAI AI analysis returned no text:', JSON.stringify(json, null, 2))
+    return EMPTY_AI_RESPONSE
   } catch (error) {
     console.error('Network error in getOpenAIAdvice:', error)
     return 'Ошибка соединения с OpenAI API.'
@@ -227,3 +261,4 @@ ${anomaliesText(data.anomalies)}
 }
 
 export const getGeminiAdvice = getOpenAIAdvice
+export { EMPTY_AI_RESPONSE }

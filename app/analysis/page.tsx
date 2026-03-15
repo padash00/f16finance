@@ -194,6 +194,8 @@ const PAYMENT_COLORS = {
   online: '#ec4899',
 }
 
+const EMPTY_AI_RESPONSE = 'ИИ не смог сформировать осмысленный разбор. Попробуйте обновить страницу позже.'
+
 // ================== УТИЛИТЫ ==================
 const toISODateLocal = (d: Date) => {
   const t = d.getTime() - d.getTimezoneOffset() * 60_000
@@ -1192,7 +1194,7 @@ export default function AIAnalysisPage() {
     const cacheKey = JSON.stringify(dataForAi)
     if (lastAiCacheKeyRef.current === cacheKey && (aiAdvice || aiLoading)) return
 
-    const storageKey = 'orda.ai-analysis.cache.v2'
+    const storageKey = 'orda.ai-analysis.cache.v3'
     const cacheTtlMs = 3 * 60 * 60 * 1000
 
     try {
@@ -1201,7 +1203,7 @@ export default function AIAnalysisPage() {
         const parsed = JSON.parse(raw) as { key: string; text: string; timestamp: string } | null
         if (parsed?.key === cacheKey) {
           const age = Date.now() - new Date(parsed.timestamp).getTime()
-          if (age < cacheTtlMs && parsed.text) {
+          if (age < cacheTtlMs && parsed.text && parsed.text !== EMPTY_AI_RESPONSE) {
             lastAiCacheKeyRef.current = cacheKey
             setAiAdvice(parsed.text)
             setAiError(null)
@@ -1226,18 +1228,20 @@ export default function AIAnalysisPage() {
         setAiAdvice(text)
         setAiUpdatedAt(now)
 
-        if (text.toLowerCase().startsWith('ошибка')) {
-          setAiError(text)
-        }
+        const isFailedText = text.toLowerCase().startsWith('ошибка') || text === EMPTY_AI_RESPONSE
 
-        window.sessionStorage.setItem(
-          storageKey,
-          JSON.stringify({
-            key: cacheKey,
-            text,
-            timestamp: now,
-          }),
-        )
+        if (isFailedText) {
+          setAiError(text)
+        } else {
+          window.sessionStorage.setItem(
+            storageKey,
+            JSON.stringify({
+              key: cacheKey,
+              text,
+              timestamp: now,
+            }),
+          )
+        }
       } catch (error) {
         if (cancelled) return
         console.error('getOpenAIAdvice error:', error)
