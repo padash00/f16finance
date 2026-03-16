@@ -28,6 +28,7 @@ from debt_tab import DebtTab
 from products_tab import ProductsTab
 from reports_tab import ReportsTab
 from scanner_tab import ScannerTab
+from settings_tab import SettingsTab
 from shift_tab import ShiftReportTab
 from storage import OfflineQueue
 
@@ -100,6 +101,7 @@ class PointMainWindow(QMainWindow):
         self.scanner_tab: ScannerTab | None = None
         self.products_tab: ProductsTab | None = None
         self.reports_tab: ReportsTab | None = None
+        self.settings_tab: SettingsTab | None = None
 
         # ── Init API ──
         api_url = (self.config.get("api_base_url") or SERVER_URL).rstrip("/")
@@ -614,6 +616,7 @@ class PointMainWindow(QMainWindow):
         self.scanner_tab = None
         self.products_tab = None
         self.reports_tab = None
+        self.settings_tab = None
 
         device = (self.bootstrap_data or {}).get("device") or {}
         company = (self.bootstrap_data or {}).get("company") or {}
@@ -643,6 +646,11 @@ class PointMainWindow(QMainWindow):
         if self.bootstrap_data and self.current_admin:
             self.reports_tab = ReportsTab(self)
             self.tabs.addTab(self.reports_tab, "📊  Отчёты")
+
+        # ── Settings (admin only) ──
+        if self.current_admin:
+            self.settings_tab = SettingsTab(self)
+            self.tabs.addTab(self.settings_tab, "⚙️  Настройки")
 
         # ── Nothing available ──
         if self.tabs.count() == 0:
@@ -800,6 +808,10 @@ class PointMainWindow(QMainWindow):
     # ────────────────────────────────────────
     # STATE PERSISTENCE
     # ────────────────────────────────────────
+    def build_workspace_for_role(self):
+        """Rebuild workspace tabs after device binding change."""
+        self._build_workspace_tabs()
+
     def save_config(self):
         save_config(self.config)
 

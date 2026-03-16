@@ -736,6 +736,8 @@ export default function SmartDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [todayStats, setTodayStats] = useState<{ income: number; expense: number; txCount: number } | null>(null)
+  const [overdueCount, setOverdueCount] = useState<number | null>(null)
+  const [overdueDismissed, setOverdueDismissed] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -834,6 +836,22 @@ export default function SmartDashboardPage() {
       )
       const txCount = (iRes.data?.length || 0) + (eRes.data?.length || 0)
       setTodayStats({ income, expense, txCount })
+    })()
+    return () => { mounted = false }
+  }, [isAuthenticated])
+
+  // Overdue tasks count
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let mounted = true
+    ;(async () => {
+      const today = DateUtils.todayISO()
+      const { count } = await supabase
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .lt('due_date', today)
+        .not('status', 'in', '("done","archived")')
+      if (mounted && count != null && count > 0) setOverdueCount(count)
     })()
     return () => { mounted = false }
   }, [isAuthenticated])
@@ -1214,6 +1232,26 @@ export default function SmartDashboardPage() {
             onDateToChange={onDateToChange}
             onToggleExtra={() => setIncludeExtra(v => !v)}
           />
+
+          {/* Overdue tasks banner */}
+          {overdueCount !== null && !overdueDismissed && (
+            <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+              <p className="text-sm text-amber-200 flex-1">
+                <span className="font-semibold">{overdueCount} просроченных задач</span> — дедлайн прошёл, но статус не закрыт.
+              </p>
+              <Link href="/tasks" className="text-xs font-semibold text-amber-300 hover:text-amber-200 underline underline-offset-2 shrink-0">
+                Открыть задачи →
+              </Link>
+              <button
+                onClick={() => setOverdueDismissed(true)}
+                className="text-amber-500 hover:text-amber-300 transition-colors shrink-0 ml-1"
+                aria-label="Скрыть"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Пульс бизнеса сегодня */}
           {todayStats !== null && (

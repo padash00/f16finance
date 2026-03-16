@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QDate, Qt
+from datetime import datetime
+
+import requests
+from PyQt6.QtCore import QDate, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
     QDateEdit,
@@ -16,6 +19,29 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+# ──────────────────────────────────────────────
+# TELEGRAM WORKER
+# ──────────────────────────────────────────────
+class _TelegramWorker(QThread):
+    """Sends a Telegram message in the background (fire-and-forget)."""
+
+    def __init__(self, bot_token: str, chat_id: str, text: str):
+        super().__init__()
+        self.bot_token = bot_token
+        self.chat_id = chat_id
+        self.text = text
+
+    def run(self):
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+                json={"chat_id": self.chat_id, "text": self.text, "parse_mode": "HTML"},
+                timeout=10,
+            )
+        except Exception:
+            pass  # fire-and-forget — ошибки Telegram не критичны
 
 
 def parse_money(raw: str) -> int:
@@ -389,7 +415,72 @@ class ShiftReportTab(QWidget):
         else:
             QMessageBox.information(self, "Сменный отчёт", "Смена отправлена в Orda Control.")
 
+        date_str = self.date_edit.date().toString("yyyy-MM-dd")
+        self._send_telegram(calc, date_str)
         self.clear_form()
+
+    def _send_telegram(self, calc: dict[str, int], date_str: str):
+        """Send shift summary to Telegram if bot token is configured."""
+        cfg = self.main_window.config
+        bot_token = str(cfg.get("telegram_bot_token") or "").strip()
+        if not bot_token:
+            return
+
+        # Try operator's personal chat first, then group chat
+        operator = self.main_window.current_operator or {}
+        personal_chat = str(operator.get("telegram_chat_id") or "").strip()
+        group_chat = str(cfg.get("telegram_chat_id") or "").strip()
+
+        company = (self.main_window.bootstrap_data or {}).get("company") or {}
+        company_name = company.get("name", "—")
+        operator_name = (
+            operator.get("full_name")
+            or operator.get("name")
+            or "Оператор"
+        )
+        shift_label = "🌞 Дневная" if self.selected_shift == "day" else "🌙 Ночная"
+        now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
+
+        diff = calc["diff"]
+        if diff > 0:
+            diff_line = f"📊 ИТОГ: <b>+{format_money(diff)} ₸</b> ✅"
+        elif diff < 0:
+            diff_line = f"📊 ИТОГ: <b>{format_money(diff)} ₸</b> ⚠️ недостача"
+        else:
+            diff_line = f"📊 ИТОГ: <b>0 ₸</b> ✓"
+
+        kaspi_total = calc["kaspi_pos"] + calc["kaspi_online"]
+        lines = [
+            f"🧾 <b>Смена закрыта</b>  {now_str}",
+            f"🏢 {company_name}",
+            f"👤 {operator_name}  •  {shift_label}  ({date_str})",
+            "─────────────────────",
+            f"💵 Нал: <b>{format_money(calc['cash'])} ₸</b>",
+            f"🪙 Мелочь: {format_money(calc['coins'])} ₸",
+            f"💳 Kaspi POS: {format_money(calc['kaspi_pos'])} ₸",
+            f"🛒 Kaspi Online: {format_money(calc['kaspi_online'])} ₸",
+            f"💳 Kaspi итого: {format_money(kaspi_total)} ₸",
+            "─────────────────────",
+            f"🖥 Senet: {format_money(calc['wipon'])} ₸",
+            f"🚀 Касса утро: {format_money(calc['start_cash'])} ₸",
+            f"🔧 Компенсация: {format_money(calc['debts'])} ₸",
+            "─────────────────────",
+            diff_line,
+        ]
+        comment = self.comment_edit.toPlainText().strip()
+        if comment:
+            lines.append(f"💬 {comment}")
+
+        message = "\n".join(lines)
+
+        # Keep refs so threads aren't GC'd
+        self._tg_workers: list = getattr(self, "_tg_workers", [])
+
+        for chat_id in filter(None, {personal_chat, group_chat}):
+            w = _TelegramWorker(bot_token, chat_id, message)
+            self._tg_workers.append(w)
+            w.finished.connect(lambda worker=w: self._tg_workers.remove(worker) if worker in self._tg_workers else None)
+            w.start()
 
     def save_draft(self):
         self.main_window.config["draft"] = {

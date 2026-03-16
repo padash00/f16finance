@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+try:
+    import openpyxl
+    _OPENPYXL_AVAILABLE = True
+except ImportError:
+    _OPENPYXL_AVAILABLE = False
+
 from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -55,6 +62,8 @@ class ProductsTab(QWidget):
         actions = QHBoxLayout()
         self.reload_btn = QPushButton("Обновить")
         self.reload_btn.clicked.connect(self.load_products)
+        self.import_btn = QPushButton("Импорт Excel")
+        self.import_btn.clicked.connect(self.import_from_excel)
         self.save_btn = QPushButton("Сохранить")
         self.save_btn.clicked.connect(self.save_product)
         self.clear_btn = QPushButton("Очистить")
@@ -62,6 +71,7 @@ class ProductsTab(QWidget):
         self.delete_btn = QPushButton("Удалить выбранный")
         self.delete_btn.clicked.connect(self.delete_selected)
         actions.addWidget(self.reload_btn)
+        actions.addWidget(self.import_btn)
         actions.addStretch(1)
         actions.addWidget(self.clear_btn)
         actions.addWidget(self.save_btn)
@@ -178,6 +188,75 @@ class ProductsTab(QWidget):
             QMessageBox.information(self, "Товары", "Каталог обновлён.")
         except Exception as error:
             QMessageBox.critical(self, "Товары", str(error))
+
+    def import_from_excel(self):
+        """Import products from an .xlsx file (columns: Название, Штрихкод, Цена)."""
+        if not _OPENPYXL_AVAILABLE:
+            QMessageBox.critical(
+                self, "Excel импорт",
+                "Библиотека openpyxl не установлена.\n\nУстановите: pip install openpyxl",
+            )
+            return
+
+        creds = self.require_admin()
+        if not creds or not self.main_window.api:
+            return
+
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите Excel файл", "", "Excel файлы (*.xlsx *.xls)"
+        )
+        if not path:
+            return
+
+        try:
+            wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+            ws = wb.active
+        except Exception as error:
+            QMessageBox.critical(self, "Excel импорт", f"Не удалось открыть файл:\n{error}")
+            return
+
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        if not rows:
+            QMessageBox.warning(self, "Excel импорт", "Файл пустой или содержит только заголовки.")
+            return
+
+        added = 0
+        skipped = 0
+        errors: list[str] = []
+
+        for row_num, row in enumerate(rows, start=2):
+            if not row or all(cell is None for cell in row):
+                continue
+
+            name = str(row[0] or "").strip() if len(row) > 0 else ""
+            barcode = str(row[1] or "").strip() if len(row) > 1 else ""
+            try:
+                price = max(0, int(float(str(row[2] or 0).replace(" ", "").replace(",", ".")))) if len(row) > 2 else 0
+            except (ValueError, TypeError):
+                price = 0
+
+            if not name or not barcode or price <= 0:
+                skipped += 1
+                continue
+
+            try:
+                self.main_window.api.create_product(
+                    creds["email"],
+                    creds["password"],
+                    {"name": name, "barcode": barcode, "price": price, "is_active": True},
+                )
+                added += 1
+            except Exception as error:
+                errors.append(f"Стр.{row_num} «{name}»: {error}")
+
+        self.load_products()
+        if self.main_window.scanner_tab:
+            self.main_window.scanner_tab.load_products()
+
+        summary = f"Добавлено: {added}\nПропущено (нет данных): {skipped}"
+        if errors:
+            summary += f"\nОшибок: {len(errors)}\n" + "\n".join(errors[:5])
+        QMessageBox.information(self, "Excel импорт завершён", summary)
 
     def delete_selected(self):
         creds = self.require_admin()
