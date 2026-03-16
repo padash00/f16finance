@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useCompanies } from '@/hooks/use-companies'
 import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
 import { useOperators, type OperatorWithProfile } from '@/hooks/use-operators'
-import { AssistantPanel } from '@/components/ai/assistant-panel'
+import { FloatingAssistant } from '@/components/ai/floating-assistant'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -1183,15 +1183,14 @@ export default function ExpensesPage() {
             <TabButton active={activeTab === 'list'} onClick={() => setActiveTab('list')} icon={<Clock className="w-4 h-4" />} label="Список" />
           </div>
 
-          <AssistantPanel
+          <FloatingAssistant
             page="expenses"
-            title="AI-консультант по расходам"
-            subtitle="Работает с безопасным срезом данных по расходам и помогает найти системный перерасход и план действий."
+            title="Расходы"
             snapshot={assistantSnapshot}
             suggestedPrompts={[
               'Какие расходы режем первыми?',
-              'Где перерасход выглядит системным?',
-              'Какой план контроля расходов на 30 дней?',
+              'Где перерасход системный?',
+              'План контроля на 30 дней',
             ]}
           />
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { AssistantPanel } from "@/components/ai/assistant-panel"
+import { FloatingAssistant } from "@/components/ai/floating-assistant"
 import { Sidebar } from "@/components/sidebar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -1569,19 +1569,16 @@ export default function AIAnalysisPage() {
             </Card>
           )}
 
-          {assistantSnapshot && (
-            <AssistantPanel
-              page="analysis"
-              title="AI-консультант по анализу"
-              subtitle="Видит готовый срез данных текущего разбора и может дополнить его безопасными серверными данными."
-              snapshot={assistantSnapshot}
-              suggestedPrompts={[
-                "Где здесь главная зона риска?",
-                "Какие 3 управленческих действия самые сильные?",
-                "Что в этой картине похоже на системную проблему?",
-              ]}
-            />
-          )}
+          <FloatingAssistant
+            page="analysis"
+            title="Анализ финансов"
+            snapshot={assistantSnapshot}
+            suggestedPrompts={[
+              "Где главная зона риска?",
+              "3 управленческих действия прямо сейчас",
+              "Что похоже на системную проблему?",
+            ]}
+          />
 
           {loading && (
             <div className="p-12 text-center">

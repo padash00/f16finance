@@ -13,7 +13,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
-import { AssistantPanel } from '@/components/ai/assistant-panel'
+import { FloatingAssistant } from '@/components/ai/floating-assistant'
 import { Sidebar } from '@/components/sidebar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -2038,15 +2038,14 @@ function ReportsContent() {
             </div>
           )}
 
-          <AssistantPanel
+          <FloatingAssistant
             page="reports"
-            title="AI-консультант по отчётам"
-            subtitle="Видит агрегированный срез данных по отчётам и может при необходимости опираться на безопасные данные из других разделов."
+            title="Отчёты и аналитика"
             snapshot={assistantSnapshot}
             suggestedPrompts={[
-              'Собери краткую сводку для руководителя по этому отчёту',
-              'Где здесь самый слабый участок?',
-              'С чем сравнить этот период в первую очередь?',
+              'Сводка для руководителя',
+              'Где самый слабый участок?',
+              'С чем сравнить этот период?',
             ]}
           />
 
