@@ -3,7 +3,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 
 // NOTE: Before using this route, run this SQL in Supabase:
 // ALTER TABLE expenses ADD COLUMN attachment_url text;
-// Also create the storage bucket "expence-attachments" with public access in Supabase Storage.
+// Also create the storage bucket "expense-attachments" with public access in Supabase Storage.
 
 export const runtime = 'nodejs'
 
@@ -36,13 +36,13 @@ export async function POST(request: Request) {
     const buffer = new Uint8Array(arrayBuffer)
 
     const { error: uploadError } = await access.supabase.storage
-      .from('expence-attachments')
+      .from('expense-attachments')
       .upload(fileName, buffer, { contentType: file.type, upsert: true })
 
     if (uploadError) throw uploadError
 
     const { data: urlData } = access.supabase.storage
-      .from('expence-attachments')
+      .from('expense-attachments')
       .getPublicUrl(fileName)
 
     const publicUrl = urlData.publicUrl
