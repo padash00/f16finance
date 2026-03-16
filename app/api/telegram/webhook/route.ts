@@ -120,8 +120,25 @@ const FINANCE_HELP_TEXT = `<b>📊 Финансовые команды Orda Cont
 /month — Сводка за 30 дней
 /cashflow — Баланс и движение денег`
 
-async function handleFinanceCommand(text: string, chatId: number): Promise<boolean> {
+function isAuthorizedForFinance(telegramUserId: string): boolean {
+  const adminIds = process.env.TELEGRAM_ADMIN_IDS
+  if (!adminIds) return false
+  return adminIds.split(',').map((id) => id.trim()).includes(telegramUserId)
+}
+
+async function handleFinanceCommand(text: string, chatId: number, telegramUserId: string): Promise<boolean> {
   const cmd = text.split(' ')[0]?.toLowerCase()
+
+  // Only handle finance commands — ignore everything else
+  const financeCommands = ['/finance', '/stats', '/today', '/yesterday', '/week', '/month', '/cashflow']
+  if (!financeCommands.includes(cmd ?? '')) return false
+
+  // Authorization check
+  if (!isAuthorizedForFinance(telegramUserId)) {
+    await sendTelegramMessage(chatId, '⛔ Нет доступа к финансовым данным.')
+    return true
+  }
+
   const today = todayISO()
 
   if (cmd === '/finance' || cmd === '/stats') {
@@ -689,7 +706,7 @@ export async function POST(req: Request) {
       }
 
       // Finance commands — handle if matched, then return early
-      const isFinanceCmd = await handleFinanceCommand(text, Number(chatId)).catch(() => false)
+      const isFinanceCmd = await handleFinanceCommand(text, Number(chatId), telegramUserId).catch(() => false)
       if (isFinanceCmd) {
         return json({ ok: true })
       }
