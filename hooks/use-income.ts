@@ -20,16 +20,25 @@ export type UseIncomeOptions = {
   from?: string
   to?: string
   companyId?: string
+  /** 'day' | 'night' — filter by shift type */
+  shift?: 'day' | 'night'
+  /** Filter by specific operator ID */
+  operatorId?: string
+  /** If true, returns only rows with operator_id = null */
+  operatorNull?: boolean
+  /** Filter by payment type > 0 */
+  payFilter?: 'cash' | 'kaspi' | 'online' | 'card'
   /** Set to false to skip the initial fetch */
   enabled?: boolean
 }
 
 /**
  * Fetches income rows from GET /api/admin/incomes.
- * Pages can use this hook instead of querying Supabase directly.
+ * Supports all the same filters as the income page:
+ * date range, company, shift, operator, payment type.
  */
 export function useIncome(options: UseIncomeOptions = {}) {
-  const { from, to, companyId, enabled = true } = options
+  const { from, to, companyId, shift, operatorId, operatorNull, payFilter, enabled = true } = options
 
   const [rows, setRows] = useState<IncomeRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -43,6 +52,10 @@ export function useIncome(options: UseIncomeOptions = {}) {
       if (from) params.set('from', from)
       if (to) params.set('to', to)
       if (companyId) params.set('company_id', companyId)
+      if (shift) params.set('shift', shift)
+      if (operatorNull) params.set('operator_null', 'true')
+      else if (operatorId) params.set('operator_id', operatorId)
+      if (payFilter) params.set('pay_filter', payFilter)
 
       const res = await fetch(`/api/admin/incomes?${params}`)
       if (!res.ok) {
@@ -56,7 +69,7 @@ export function useIncome(options: UseIncomeOptions = {}) {
     } finally {
       setLoading(false)
     }
-  }, [from, to, companyId])
+  }, [from, to, companyId, shift, operatorId, operatorNull, payFilter])
 
   useEffect(() => {
     if (enabled) load()

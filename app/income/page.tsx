@@ -43,7 +43,9 @@ import {
   CreditCard as CardIcon,
 } from 'lucide-react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabaseClient'
+import { useIncome } from '@/hooks/use-income'
+import { useCompanies } from '@/hooks/use-companies'
+import { useOperators } from '@/hooks/use-operators'
 import {
   ResponsiveContainer,
   Line,
@@ -71,7 +73,7 @@ type IncomeRow = {
   date: string
   company_id: string
   operator_id: string | null
-  shift: Shift
+  shift: Shift | null
   zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
@@ -284,22 +286,11 @@ async function logIncomeEvent(event: {
 
 // --- Главный компонент ---
 export default function IncomePage() {
-  const LIMIT = 2000
-
-  // Данные
-  const [rows, setRows] = useState<IncomeRow[]>([])
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [operators, setOperators] = useState<Operator[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  // Фильтры
+  // Фильтры (объявляем до хуков — они передаются в useIncome)
   const [dateFrom, setDateFrom] = useState(DateUtils.addDaysISO(DateUtils.todayISO(), -29))
   const [dateTo, setDateTo] = useState(DateUtils.todayISO())
   const [activePreset, setActivePreset] = useState<DateRangePreset>('month')
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
-  
-  // Основные фильтры
   const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
   const [operatorFilter, setOperatorFilter] = useState<OperatorFilter>('all')
   const [shiftFilter, setShiftFilter] = useState<ShiftFilter>('all')
@@ -332,18 +323,29 @@ export default function IncomePage() {
   const [savingIncomeEdit, setSavingIncomeEdit] = useState(false)
   const [deletingIncomeId, setDeletingIncomeId] = useState<string | null>(null)
 
-  // Загрузка справочников
+  // Справочники и данные — через хуки, без прямых Supabase-запросов
+  const { companies } = useCompanies()
+  const { operators } = useOperators({ activeOnly: true })
+  const {
+    rows: serverRows,
+    loading,
+  } = useIncome({
+    from: dateFrom,
+    to: dateTo,
+    companyId: companyFilter !== 'all' ? companyFilter : undefined,
+    shift: shiftFilter !== 'all' ? shiftFilter : undefined,
+    operatorId: operatorFilter !== 'all' && operatorFilter !== 'none' ? operatorFilter : undefined,
+    operatorNull: operatorFilter === 'none',
+    payFilter: payFilter !== 'all' ? payFilter : undefined,
+  })
+
+  // Локальная копия для оптимистичных обновлений (inline edit, delete)
+  const [rows, setRows] = useState<IncomeRow[]>([])
+  const [error, setError] = useState<string | null>(null)
+
   useEffect(() => {
-    const fetchRefs = async () => {
-      const [compRes, opRes] = await Promise.all([
-        supabase.from('companies').select('id, name, code').order('name'),
-        supabase.from('operators').select('id, name, short_name, is_active').eq('is_active', true).order('name'),
-      ])
-      if (!compRes.error && compRes.data) setCompanies(compRes.data)
-      if (!opRes.error && opRes.data) setOperators(opRes.data)
-    }
-    fetchRefs()
-  }, [])
+    setRows(serverRows)
+  }, [serverRows])
 
   useEffect(() => {
     const loadSessionRole = async () => {
@@ -389,42 +391,6 @@ export default function IncomePage() {
     !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner' || sessionRole?.staffRole === 'manager'
   const canManageIncome = !!sessionRole?.isSuperAdmin || sessionRole?.staffRole === 'owner'
 
-  // Загрузка данных с учетом фильтров
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true)
-      setError(null)
-
-      let query = supabase
-        .from('incomes')
-        .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment')
-        .order('date', { ascending: false })
-
-      if (dateFrom) query = query.gte('date', dateFrom)
-      if (dateTo) query = query.lte('date', dateTo)
-      if (companyFilter !== 'all') query = query.eq('company_id', companyFilter)
-      if (shiftFilter !== 'all') query = query.eq('shift', shiftFilter)
-      if (operatorFilter === 'none') query = query.is('operator_id', null)
-      else if (operatorFilter !== 'all') query = query.eq('operator_id', operatorFilter)
-      if (payFilter === 'cash') query = query.gt('cash_amount', 0)
-      if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
-      if (payFilter === 'online') query = query.gt('online_amount', 0)
-      if (payFilter === 'card') query = query.gt('card_amount', 0)
-
-      query = query.limit(LIMIT)
-
-      const { data, error } = await query
-
-      if (error) {
-        setError('Ошибка при загрузке данных')
-        setRows([])
-      } else {
-        setRows(data || [])
-      }
-      setLoading(false)
-    }
-    loadData()
-  }, [dateFrom, dateTo, companyFilter, shiftFilter, payFilter, operatorFilter])
 
   // Фильтрация и агрегация
   const filteredRows = useMemo(() => {

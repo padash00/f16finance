@@ -101,6 +101,10 @@ export async function GET(req: Request) {
     const from = url.searchParams.get('from')
     const to = url.searchParams.get('to')
     const companyId = url.searchParams.get('company_id')
+    const shift = url.searchParams.get('shift') as 'day' | 'night' | null
+    const operatorId = url.searchParams.get('operator_id')
+    const operatorNull = url.searchParams.get('operator_null') === 'true'
+    const payFilter = url.searchParams.get('pay_filter') as 'cash' | 'kaspi' | 'online' | 'card' | null
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
@@ -115,6 +119,13 @@ export async function GET(req: Request) {
     if (from) query = query.gte('date', from)
     if (to) query = query.lte('date', to)
     if (companyId) query = query.eq('company_id', companyId)
+    if (shift) query = query.eq('shift', shift)
+    if (operatorNull) query = query.is('operator_id', null)
+    else if (operatorId) query = query.eq('operator_id', operatorId)
+    if (payFilter === 'cash') query = query.gt('cash_amount', 0)
+    else if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
+    else if (payFilter === 'online') query = query.gt('online_amount', 0)
+    else if (payFilter === 'card') query = query.gt('card_amount', 0)
 
     const { data, error } = await query
     if (error) throw error
