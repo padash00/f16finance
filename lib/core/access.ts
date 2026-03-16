@@ -70,6 +70,20 @@ export const ADMIN_PATHS = [
   '/telegram',
   '/access',
   '/pass',
+  '/categories',
+  '/operator-dashboard',
+  '/operator-dashboard/*',
+  '/operator-lead',
+  '/operator-lead/*',
+  '/operator-tasks',
+  '/operator-tasks/*',
+  '/operator-chat',
+  '/operator-chat/*',
+  '/operator-achievements',
+  '/operator-achievements/*',
+  '/operator-achievements-all',
+  '/operator-settings',
+  '/operator-settings/*',
 ] as const
 
 const MANAGER_PATHS = [
@@ -270,7 +284,8 @@ export function canAccessPath(params: {
   const { pathname, isStaff, isOperator, staffRole, isSuperAdmin } = params
 
   if (isSuperAdmin) {
-    return ADMIN_PATHS.some((rule) => matchesPath(pathname, rule))
+    // Super admin has access to everything except public/auth-only paths
+    return true
   }
 
   const staffAllowed = isStaff && canStaffRoleAccessPath(normalizeStaffRole(staffRole), pathname)
