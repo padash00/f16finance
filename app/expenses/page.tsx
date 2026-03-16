@@ -299,6 +299,7 @@ export default function ExpensesPage() {
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   // Expense templates
   const [templates, setTemplates] = useState<{id:string,name:string,category:string,amount:number,payment_type:string,company_id:string|null,comment:string|null}[]>([])
@@ -1204,11 +1205,11 @@ export default function ExpensesPage() {
           )}
 
           {activeTab === 'list' && (
-            <ListTab 
-              rows={rows} 
-              loading={loading} 
-              loadingMore={loadingMore} 
-              hasMore={hasMore} 
+            <ListTab
+              rows={rows}
+              loading={loading}
+              loadingMore={loadingMore}
+              hasMore={hasMore}
               loadMore={loadMore}
               companyName={companyName}
               companyMap={companyMap}
@@ -1217,6 +1218,7 @@ export default function ExpensesPage() {
               openExpenseEditor={openExpenseEditor}
               deleteExpense={deleteExpense}
               deletingExpenseId={deletingExpenseId}
+              onPreview={setPreviewUrl}
             />
           )}
         </div>
@@ -1324,11 +1326,11 @@ export default function ExpensesPage() {
               <p className="text-xs text-gray-500 mb-2">Вложение (фото чека, накладной)</p>
               {editingExpense?.attachment_url ? (
                 <div className="flex items-center gap-2">
-                  <a href={editingExpense.attachment_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300">
+                  <button onClick={() => setPreviewUrl(editingExpense.attachment_url!)}
+                    className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors">
                     <Paperclip className="w-3.5 h-3.5" />
                     Посмотреть вложение
-                  </a>
+                  </button>
                   <button onClick={handleRemoveAttachment} className="text-xs text-red-400 hover:text-red-300">Удалить</button>
                 </div>
               ) : (
@@ -1349,6 +1351,67 @@ export default function ExpensesPage() {
               <Button onClick={saveExpenseEdit} disabled={savingExpenseEdit}>
                 {savingExpenseEdit ? 'Сохраняю...' : 'Сохранить изменения'}
               </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Attachment preview modal */}
+      {previewUrl ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <div
+            className="relative w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col rounded-2xl border border-white/10 bg-gray-900 shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+              <div className="flex items-center gap-2 text-sm text-gray-300">
+                <Paperclip className="w-4 h-4 text-blue-400" />
+                Вложение
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded-lg hover:bg-white/5"
+                >
+                  Открыть оригинал ↗
+                </a>
+                <button
+                  onClick={() => setPreviewUrl(null)}
+                  className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto flex items-center justify-center p-4 min-h-[300px] bg-black/30">
+              {previewUrl.toLowerCase().includes('.pdf') || previewUrl.toLowerCase().includes('pdf') ? (
+                <iframe
+                  src={previewUrl}
+                  className="w-full h-[60vh] rounded-lg border border-white/10"
+                  title="PDF вложение"
+                />
+              ) : (
+                <img
+                  src={previewUrl}
+                  alt="Вложение"
+                  className="max-w-full max-h-[60vh] object-contain rounded-lg"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none'
+                    const p = document.createElement('p')
+                    p.className = 'text-gray-400 text-sm'
+                    p.textContent = 'Не удалось загрузить изображение'
+                    ;(e.target as HTMLImageElement).parentNode?.appendChild(p)
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -1705,6 +1768,7 @@ function ListTab({
   openExpenseEditor,
   deleteExpense,
   deletingExpenseId,
+  onPreview,
 }: any) {
   return (
     <Card className="border-0 bg-gray-800/50 backdrop-blur-sm overflow-hidden">
@@ -1767,9 +1831,9 @@ function ListTab({
                   </td>
                   <td className="px-4 py-3 text-center">
                     {row.attachment_url ? (
-                      <a href={row.attachment_url} target="_blank" rel="noopener noreferrer" title="Посмотреть вложение" className="inline-flex text-blue-400 hover:text-blue-300">
+                      <button onClick={() => onPreview(row.attachment_url)} title="Посмотреть вложение" className="inline-flex text-blue-400 hover:text-blue-300 transition-colors">
                         <Paperclip className="h-3.5 w-3.5" />
-                      </a>
+                      </button>
                     ) : null}
                   </td>
                   {canManageExpense ? (
