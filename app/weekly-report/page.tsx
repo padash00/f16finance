@@ -86,7 +86,8 @@ type WeekTotals = {
   incomeKaspi: number
   incomeOnline: number
   incomeCard: number
-  incomeNonCash: number      // kaspi + online + card
+  incomeKaspiOnline: number  // kaspi + online (без карты)
+  incomeNonCash: number      // kaspi + online (без карты, псевдоним)
   incomeTotal: number
 
   // Расходы по типам
@@ -96,8 +97,9 @@ type WeekTotals = {
 
   // САЛЬДО (ключевые показатели)
   netCash: number            // incomeCash - expenseCash
-  netNonCash: number         // incomeNonCash - expenseKaspi
-  netTotal: number           // profit = incomeTotal - expenseTotal
+  netNonCash: number         // (kaspi+online) - expenseKaspi
+  netCard: number            // incomeCard (нет расходов по карте)
+  netTotal: number           // netCash + netNonCash + netCard
 
   // Прибыль (для совместимости)
   profit: number
@@ -155,6 +157,7 @@ type WeekTotals = {
     // Сальдо
     netCash: number
     netNonCash: number
+    netCard: number
     netTotal: number
     
     // Маржинальность
@@ -904,8 +907,9 @@ function WeeklyReportContent() {
       const online = safeNumber(r.online_amount)  // ✅ учитываем online_amount
       const card = safeNumber(r.card_amount)
       
-      const nonCash = kaspi + online + card
-      const total = cash + nonCash
+      // nonCash = kaspi + online ONLY (card tracked separately)
+      const nonCash = kaspi + online
+      const total = cash + nonCash + card
 
       if (total <= 0) continue
 
@@ -958,11 +962,11 @@ function WeeklyReportContent() {
         day.incomeNonCash += nonCash
       }
 
-      // Для сальдо (накопленное)
+      // Для сальдо (накопленное) — включаем card в nonCash для корректного итога на графике
       const bal = balanceMap.get(r.date)
       if (bal) {
         bal.cash += cash
-        bal.nonCash += nonCash
+        bal.nonCash += nonCash + card
       }
     }
 
@@ -1013,13 +1017,15 @@ function WeeklyReportContent() {
     }
 
     // Итоговые показатели
-    const incomeTotal = iCash + iNonCash
+    // iNonCash = kaspi + online; iCard tracked separately
+    const incomeTotal = iCash + iNonCash + iCard
     const expenseTotal = eCash + eKaspi
     const profit = incomeTotal - expenseTotal
-    
+
     const netCash = iCash - eCash
-    const netNonCash = iNonCash - eKaspi
-    const netTotal = netCash + netNonCash
+    const netNonCash = iNonCash - eKaspi   // (kaspi+online) - kaspi_expenses
+    const netCard = iCard                   // card income, no card expenses bucket
+    const netTotal = netCash + netNonCash + netCard
 
     // Данные по дням с расчётом сальдо
     const dailyData: DailyDataPoint[] = []
@@ -1098,7 +1104,8 @@ function WeeklyReportContent() {
       incomeKaspi: iKaspi,
       incomeOnline: iOnline,
       incomeCard: iCard,
-      incomeNonCash: iNonCash,
+      incomeKaspiOnline: iNonCash,  // kaspi + online (без карты)
+      incomeNonCash: iNonCash,       // то же самое, для обратной совместимости
       incomeTotal,
 
       // Расходы
@@ -1109,6 +1116,7 @@ function WeeklyReportContent() {
       // Сальдо
       netCash,
       netNonCash,
+      netCard,
       netTotal,
       profit,
 
@@ -1147,6 +1155,7 @@ function WeeklyReportContent() {
         cardShare,
         netCash,
         netNonCash,
+        netCard,
         netTotal,
         profitMargin,
         topExpenseName: topExpense?.name ?? null,
@@ -1635,7 +1644,7 @@ function WeeklyReportContent() {
               {/* ===== КАРТОЧКИ САЛЬДО (ГЛАВНЫЙ ФОКУС) ===== */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
-                  title="САЛЬДО НАЛИЧНЫХ"
+                  title="САЛЬДО НАЛ"
                   value={formatMoneyFull(totals.netCash)}
                   subValue={`Доход: ${formatMoneyCompact(totals.incomeCash)} | Расход: ${formatMoneyCompact(totals.expenseCash)}`}
                   icon={Coins}
@@ -1645,9 +1654,9 @@ function WeeklyReportContent() {
                 />
 
                 <StatCard
-                  title="САЛЬДО БЕЗНАЛА"
+                  title="САЛЬДО KASPI+ONLINE"
                   value={formatMoneyFull(totals.netNonCash)}
-                  subValue={`Доход: ${formatMoneyCompact(totals.incomeNonCash)} | Расход: ${formatMoneyCompact(totals.expenseKaspi)}`}
+                  subValue={`Доход: ${formatMoneyCompact(totals.incomeKaspiOnline)} | Расход: ${formatMoneyCompact(totals.expenseKaspi)}`}
                   icon={CreditCard}
                   trend={comparisonMode && totals.prev.netNonCash !== 0 ? Number(totals.change.netNonCash.replace('%', '')) : undefined}
                   color="blue"
@@ -1655,22 +1664,80 @@ function WeeklyReportContent() {
                 />
 
                 <StatCard
+                  title="САЛЬДО КАРТА"
+                  value={formatMoneyFull(totals.netCard)}
+                  subValue={`Доход: ${formatMoneyCompact(totals.incomeCard)} | Расход: —`}
+                  icon={CreditCard}
+                  color="amber"
+                  highlight={totals.netCard > 0}
+                />
+
+                <StatCard
                   title="ОБЩЕЕ САЛЬДО"
                   value={formatMoneyFull(totals.netTotal)}
-                  subValue={`Прибыль: ${formatMoneyCompact(totals.profit)}`}
+                  subValue={`Нал + Kaspi/Online + Карта`}
                   icon={Scale}
                   trend={comparisonMode ? Number(totals.change.profit.replace('%', '')) : undefined}
                   color="violet"
                   highlight={totals.netTotal > 0}
                 />
+              </div>
 
-                <StatCard
-                  title="ПРОГНОЗ НА КОНЕЦ ПЕРИОДА"
-                  value={formatMoneyFull(totals.metrics.projectedNetTotal)}
-                  subValue={`+10% при сохранении темпов`}
-                  icon={Sparkles}
-                  color="amber"
-                />
+              {/* ===== ТАБЛИЦА РАЗБИВКИ ПО ТИПАМ ОПЛАТЫ ===== */}
+              <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-5">
+                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2 text-white">
+                  <Scale className="w-4 h-4 text-violet-400" />
+                  Разбивка по типам оплаты
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        <th className="text-left py-2 pr-4 text-xs text-gray-500 font-medium">Тип</th>
+                        <th className="text-right py-2 px-3 text-xs text-gray-500 font-medium">Доходы</th>
+                        <th className="text-right py-2 px-3 text-xs text-gray-500 font-medium">Расходы</th>
+                        <th className="text-right py-2 pl-3 text-xs text-gray-500 font-medium">Сальдо</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      <tr>
+                        <td className="py-2.5 pr-4 text-xs font-medium text-emerald-400 flex items-center gap-2">
+                          <Coins className="w-3.5 h-3.5" /> Нал
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-xs text-white">{formatMoneyCompact(totals.incomeCash)}</td>
+                        <td className="py-2.5 px-3 text-right text-xs text-rose-400">{formatMoneyCompact(totals.expenseCash)}</td>
+                        <td className={`py-2.5 pl-3 text-right text-xs font-semibold ${totals.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatMoneyCompact(totals.netCash)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2.5 pr-4 text-xs font-medium text-blue-400 flex items-center gap-2">
+                          <CreditCard className="w-3.5 h-3.5" /> Kaspi + Online
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-xs text-white">
+                          <span className="text-white">{formatMoneyCompact(totals.incomeKaspiOnline)}</span>
+                          <span className="text-gray-500 ml-1.5">({formatMoneyCompact(totals.incomeKaspi)}+{formatMoneyCompact(totals.incomeOnline)})</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-xs text-rose-400">{formatMoneyCompact(totals.expenseKaspi)}</td>
+                        <td className={`py-2.5 pl-3 text-right text-xs font-semibold ${totals.netNonCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatMoneyCompact(totals.netNonCash)}</td>
+                      </tr>
+                      {totals.incomeCard > 0 && (
+                        <tr>
+                          <td className="py-2.5 pr-4 text-xs font-medium text-amber-400 flex items-center gap-2">
+                            <CreditCard className="w-3.5 h-3.5" /> Карта
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-xs text-white">{formatMoneyCompact(totals.incomeCard)}</td>
+                          <td className="py-2.5 px-3 text-right text-xs text-gray-500">—</td>
+                          <td className="py-2.5 pl-3 text-right text-xs font-semibold text-emerald-400">{formatMoneyCompact(totals.netCard)}</td>
+                        </tr>
+                      )}
+                      <tr className="border-t border-white/10">
+                        <td className="py-2.5 pr-4 text-xs font-bold text-white">Итого</td>
+                        <td className="py-2.5 px-3 text-right text-xs font-bold text-white">{formatMoneyCompact(totals.incomeTotal)}</td>
+                        <td className="py-2.5 px-3 text-right text-xs font-bold text-rose-400">{formatMoneyCompact(totals.expenseTotal)}</td>
+                        <td className={`py-2.5 pl-3 text-right text-xs font-bold ${totals.netTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatMoneyCompact(totals.netTotal)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* Доходы и расходы по типам */}
