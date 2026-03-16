@@ -46,6 +46,35 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+export async function GET(req: Request) {
+  try {
+    const guard = await requireStaffCapabilityRequest(req, 'operators')
+    if (guard) return guard
+
+    const url = new URL(req.url)
+    const activeOnly = url.searchParams.get('active_only') === 'true'
+
+    const supabase = hasAdminSupabaseCredentials()
+      ? createAdminSupabaseClient()
+      : createRequestSupabaseClient(req)
+
+    let query = supabase
+      .from('operators')
+      .select('id, name, short_name, is_active, role, telegram_chat_id, created_at, operator_profiles(full_name, phone, email, hire_date, position, photo_url)')
+      .order('name', { ascending: true })
+
+    if (activeOnly) query = query.eq('is_active', true)
+
+    const { data, error } = await query
+    if (error) throw error
+
+    return json({ data: data ?? [] })
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/operators GET', message: error?.message || 'error' })
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'operators')

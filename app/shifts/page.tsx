@@ -29,11 +29,7 @@ import {
 } from 'date-fns'
 import { ru } from 'date-fns/locale/ru'
 
-type Company = {
-  id: string
-  name: string
-  code?: string
-}
+import type { Company } from '@/lib/core/types'
 
 type Shift = {
   id: string

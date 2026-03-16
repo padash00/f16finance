@@ -42,6 +42,8 @@ import {
   MoreHorizontal,
 } from 'lucide-react'
 
+import type { SessionRoleInfo } from '@/lib/core/types'
+
 type Operator = {
   id: string
   name: string
@@ -71,11 +73,6 @@ type OperatorStats = {
   avgPerShift: number
   totalDebts: number
   totalBonuses: number
-}
-
-type SessionRoleInfo = {
-  isSuperAdmin?: boolean
-  staffRole?: 'manager' | 'marketer' | 'owner' | 'other'
 }
 
 export default function OperatorsPage() {

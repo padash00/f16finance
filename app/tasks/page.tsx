@@ -42,8 +42,10 @@ import {
 import { cn } from '@/lib/utils'
 import { getOperatorDisplayName, getOperatorShortLabel } from '@/lib/core/operator-name'
 
+import type { Company, TaskPriority, TaskResponse, TaskStatus } from '@/lib/core/types'
+
 // =====================
-// TYPES (исправлено под твою структуру)
+// TYPES
 // =====================
 type Operator = {
   id: string
@@ -61,16 +63,6 @@ type Staff = {
   full_name: string
   short_name: string | null
 }
-
-type Company = {
-  id: string
-  name: string
-  code: string | null
-}
-
-type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
-type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
-type TaskResponse = 'accept' | 'need_info' | 'blocked' | 'already_done' | 'complete'
 
 type TaskFormState = {
   title: string

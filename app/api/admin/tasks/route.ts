@@ -7,9 +7,7 @@ import { requiredEnv } from '@/lib/server/env'
 import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
-type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
-type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
-type TaskResponse = 'accept' | 'need_info' | 'blocked' | 'already_done' | 'complete'
+import type { TaskStatus, TaskPriority, TaskResponse } from '@/lib/core/types'
 
 type TaskPayload = {
   title: string
@@ -422,6 +420,40 @@ async function logTaskNotificationFailure(
       error: params.error instanceof Error ? params.error.message : 'send-failed',
     },
   })
+}
+
+export async function GET(req: Request) {
+  try {
+    const guard = await requireStaffCapabilityRequest(req, 'tasks')
+    if (guard) return guard
+
+    const url = new URL(req.url)
+    const status = url.searchParams.get('status') as TaskStatus | null
+    const operatorId = url.searchParams.get('operator_id')
+    const companyId = url.searchParams.get('company_id')
+
+    const supabase = hasAdminSupabaseCredentials()
+      ? createAdminSupabaseClient()
+      : createRequestSupabaseClient(req)
+
+    let query = supabase
+      .from('tasks')
+      .select('id, task_number, title, description, status, priority, due_date, operator_id, company_id, created_at')
+      .order('created_at', { ascending: false })
+      .limit(500)
+
+    if (status) query = query.eq('status', status)
+    if (operatorId) query = query.eq('operator_id', operatorId)
+    if (companyId) query = query.eq('company_id', companyId)
+
+    const { data, error } = await query
+    if (error) throw error
+
+    return json({ data: data ?? [] })
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/tasks GET', message: error?.message || 'error' })
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
 }
 
 export async function POST(req: Request) {

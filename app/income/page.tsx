@@ -61,6 +61,8 @@ import {
   Pie,
 } from 'recharts'
 
+import type { Company, DateRangePreset, SessionRoleInfo } from '@/lib/core/types'
+
 // --- Типы ---
 type Shift = 'day' | 'night'
 
@@ -78,17 +80,6 @@ type IncomeRow = {
   comment: string | null
 }
 
-type SessionRoleInfo = {
-  isSuperAdmin?: boolean
-  staffRole?: 'manager' | 'marketer' | 'owner' | 'other'
-}
-
-type Company = {
-  id: string
-  name: string
-  code?: string | null
-}
-
 type Operator = {
   id: string
   name: string
@@ -98,7 +89,6 @@ type Operator = {
 
 type ShiftFilter = 'all' | Shift
 type PayFilter = 'all' | 'cash' | 'kaspi' | 'online' | 'card'
-type DateRangePreset = 'today' | 'week' | 'month' | 'all'
 type OperatorFilter = 'all' | 'none' | string
 
 type ChartPoint = {

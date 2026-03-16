@@ -92,6 +92,40 @@ function normalizeIncomePayload(payload: {
   }
 }
 
+export async function GET(req: Request) {
+  try {
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
+
+    const url = new URL(req.url)
+    const from = url.searchParams.get('from')
+    const to = url.searchParams.get('to')
+    const companyId = url.searchParams.get('company_id')
+
+    const supabase = hasAdminSupabaseCredentials()
+      ? createAdminSupabaseClient()
+      : createRequestSupabaseClient(req)
+
+    let query = supabase
+      .from('incomes')
+      .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment')
+      .order('date', { ascending: false })
+      .limit(2000)
+
+    if (from) query = query.gte('date', from)
+    if (to) query = query.lte('date', to)
+    if (companyId) query = query.eq('company_id', companyId)
+
+    const { data, error } = await query
+    if (error) throw error
+
+    return json({ data: data ?? [] })
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/incomes GET', message: error?.message || 'error' })
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)

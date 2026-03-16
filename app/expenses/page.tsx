@@ -52,6 +52,8 @@ import {
   Pie,
 } from 'recharts'
 
+import type { Company, DateRangePreset, SessionRoleInfo } from '@/lib/core/types'
+
 // ================== TYPES ==================
 type ExpenseRow = {
   id: string
@@ -64,12 +66,6 @@ type ExpenseRow = {
   comment: string | null
 }
 
-type Company = {
-  id: string
-  name: string
-  code?: string | null
-}
-
 type Operator = {
   id: string
   name: string
@@ -77,13 +73,7 @@ type Operator = {
   is_active: boolean
 }
 
-type SessionRoleInfo = {
-  isSuperAdmin?: boolean
-  staffRole?: 'manager' | 'marketer' | 'owner' | 'other'
-}
-
 type PayFilter = 'all' | 'cash' | 'kaspi'
-type DateRangePreset = 'today' | 'week' | 'month' | 'all'
 type SortMode = 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'
 
 type ChartPoint = {

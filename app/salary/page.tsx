@@ -44,8 +44,9 @@ import {
   Calendar,
 } from 'lucide-react'
 
-// Типы данных (добавляем новые)
-type Company = { id: string; name: string; code: string | null }
+import type { Company } from '@/lib/core/types'
+
+// Типы данных
 
 type IncomeRow = {
   id: string
