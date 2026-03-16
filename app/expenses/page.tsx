@@ -37,6 +37,9 @@ import {
   Zap,
   Pencil,
   X,
+  Paperclip,
+  Upload,
+  Loader2,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -292,6 +295,8 @@ export default function ExpensesPage() {
   const [editExpenseCommentDraft, setEditExpenseCommentDraft] = useState('')
   const [savingExpenseEdit, setSavingExpenseEdit] = useState(false)
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null)
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   useEffect(() => {
     const loadSessionRole = async () => {
@@ -617,6 +622,58 @@ export default function ExpensesPage() {
     setEditExpenseCashDraft('')
     setEditExpenseKaspiDraft('')
     setEditExpenseCommentDraft('')
+    setUploadError(null)
+  }
+
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !editingExpense) return
+    setUploadingAttachment(true)
+    setUploadError(null)
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('expenseId', editingExpense.id)
+    try {
+      const res = await fetch('/api/admin/expenses/upload', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (data.ok) {
+        setRows((prev) =>
+          prev.map((row) =>
+            row.id === editingExpense.id ? { ...row, attachment_url: data.url } : row,
+          ),
+        )
+        setEditingExpense((prev) => (prev ? { ...prev, attachment_url: data.url } : prev))
+      } else {
+        setUploadError(data.error || 'Ошибка загрузки')
+      }
+    } catch {
+      setUploadError('Ошибка загрузки')
+    }
+    setUploadingAttachment(false)
+    // Reset input so same file can be re-selected
+    e.target.value = ''
+  }
+
+  const handleRemoveAttachment = async () => {
+    if (!editingExpense) return
+    try {
+      const res = await fetch('/api/admin/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'removeAttachment',
+          expenseId: editingExpense.id,
+        }),
+      })
+      if (res.ok) {
+        setRows((prev) =>
+          prev.map((row) => (row.id === editingExpense.id ? { ...row, attachment_url: null } : row)),
+        )
+        setEditingExpense((prev) => (prev ? { ...prev, attachment_url: null } : prev))
+      }
+    } catch {
+      // ignore
+    }
   }
 
   const saveExpenseEdit = async () => {
@@ -1147,6 +1204,29 @@ export default function ExpensesPage() {
               />
             </div>
 
+            {/* Attachment section */}
+            <div className="mt-3 border-t border-gray-800 pt-3">
+              <p className="text-xs text-gray-500 mb-2">Вложение (фото чека, накладной)</p>
+              {editingExpense?.attachment_url ? (
+                <div className="flex items-center gap-2">
+                  <a href={editingExpense.attachment_url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300">
+                    <Paperclip className="w-3.5 h-3.5" />
+                    Посмотреть вложение
+                  </a>
+                  <button onClick={handleRemoveAttachment} className="text-xs text-red-400 hover:text-red-300">Удалить</button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-200 w-fit">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Прикрепить файл</span>
+                  <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleAttachmentUpload} />
+                </label>
+              )}
+              {uploadingAttachment && <p className="text-xs text-blue-400 mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Загрузка...</p>}
+              {uploadError && <p className="text-xs text-red-400 mt-1">{uploadError}</p>}
+            </div>
+
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <Button variant="outline" onClick={closeExpenseEditor} disabled={savingExpenseEdit}>
                 Отмена
@@ -1485,6 +1565,7 @@ function ListTab({
               <th className="px-4 py-3 text-right text-red-400">Kaspi</th>
               <th className="px-4 py-3 text-right text-white">Итого</th>
               <th className="px-4 py-3 text-left">Комментарий</th>
+              <th className="px-4 py-3 text-center w-8"></th>
               {canManageExpense ? <th className="px-4 py-3 text-right">Действия</th> : null}
             </tr>
           </thead>
@@ -1529,6 +1610,13 @@ function ListTab({
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate">
                     {row.comment || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {row.attachment_url ? (
+                      <a href={row.attachment_url} target="_blank" rel="noopener noreferrer" title="Посмотреть вложение" className="inline-flex text-blue-400 hover:text-blue-300">
+                        <Paperclip className="h-3.5 w-3.5" />
+                      </a>
+                    ) : null}
                   </td>
                   {canManageExpense ? (
                     <td className="px-4 py-3">

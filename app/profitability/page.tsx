@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { supabase } from '@/lib/supabaseClient'
 import { resolveFinancialGroup, type FinancialGroup } from '@/lib/core/financial-groups'
-import { Calculator, CalendarDays, CreditCard, Landmark, Save, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { ArrowDown, ArrowUp, Calculator, CalendarDays, CreditCard, Landmark, Save, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 
 type IncomeRow = { date: string; cash_amount: number | null; kaspi_amount: number | null; card_amount: number | null; online_amount: number | null }
 type ExpenseRow = { date: string; category: string | null; cash_amount: number | null; kaspi_amount: number | null }
@@ -23,6 +23,13 @@ type ProfitabilityInputRow = {
   depreciation_amount: number; amortization_amount: number; other_operating_amount: number; notes: string | null
 }
 type Draft = Record<string, string>
+
+const INPUT_TABS = [
+  { id: 'revenue', label: 'Выручка и платежи' },
+  { id: 'payroll', label: 'ФОТ и налоги' },
+  { id: 'other', label: 'Прочее' },
+] as const
+type InputTab = typeof INPUT_TABS[number]['id']
 
 const money = (v: number) => `${(Number.isFinite(v) ? v : 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₸`
 const pct = (v: number) => `${(Number.isFinite(v) ? v : 0).toFixed(2)}%`
@@ -72,6 +79,9 @@ export default function ProfitabilityPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [inputTab, setInputTab] = useState<InputTab>('revenue')
+  const [whatIf, setWhatIf] = useState({ revenueAdj: 0, expenseAdj: 0 })
+  const [showWhatIf, setShowWhatIf] = useState(false)
 
   const months = useMemo(() => buildMonths(monthFrom, monthTo), [monthFrom, monthTo])
 
@@ -469,63 +479,104 @@ export default function ProfitabilityPage() {
                 <p className="text-sm text-slate-400">Сначала при необходимости задайте общую выручку по POS и общую наличку за месяц. Ниже внесите комиссии и только те суммы, которые должны переопределить или дополнить автоматическую раскладку журнала.</p>
               </div>
               <div className="mt-6 space-y-4">
-                <div className="grid grid-cols-1 gap-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-white">Общая наличная выручка за месяц</label>
-                    <Input type="number" min="0" step="100" value={draft.cash_revenue_override} onChange={(e) => setDraft((prev) => ({ ...prev, cash_revenue_override: e.target.value }))} placeholder="Если пусто, возьмём из журнала доходов" className="border-white/10 bg-slate-950/70 text-white" />
-                    <div className="text-xs text-cyan-100/80">Это вся наличка месяца. Поле необязательно.</div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-white">Общая выручка по POS за месяц</label>
-                    <Input type="number" min="0" step="100" value={draft.pos_revenue_override} onChange={(e) => setDraft((prev) => ({ ...prev, pos_revenue_override: e.target.value }))} placeholder="Если пусто, возьмём безнал из журнала доходов" className="border-white/10 bg-slate-950/70 text-white" />
-                    <div className="text-xs text-cyan-100/80">Это общая сумма по терминалу и Kaspi-сервисам за месяц. Поле необязательно.</div>
-                  </div>
-                  <div className="text-xs text-cyan-100/80 md:col-span-2">
-                    Если заполнили хотя бы одно из этих двух полей, страница возьмёт выручку месяца из них: <span className="font-medium text-white">наличка + POS</span>. Если оба поля пустые, база останется из журнала доходов.
-                  </div>
+                {/* Input Tabs */}
+                <div className="flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+                  {INPUT_TABS.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setInputTab(tab.id)}
+                      className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${inputTab === tab.id ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
-                {[
-                  ['kaspi_qr_turnover', 'kaspi_qr_rate', 'Kaspi QR'],
-                  ['kaspi_gold_turnover', 'kaspi_gold_rate', 'Kaspi Gold'],
-                  ['other_cards_turnover', 'other_cards_rate', 'Другие карты'],
-                  ['kaspi_red_turnover', 'kaspi_red_rate', 'Kaspi Red'],
-                  ['kaspi_kredit_turnover', 'kaspi_kredit_rate', 'Kaspi Kredit'],
-                ].map(([turnoverKey, rateKey, label]) => (
-                  <div key={String(label)} className="grid grid-cols-1 gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4 md:grid-cols-[1fr_180px_120px] md:items-center">
-                    <div className="text-sm font-medium text-white">{label}</div>
-                    <Input type="number" min="0" step="100" value={draft[turnoverKey]} onChange={(e) => setDraft((prev) => ({ ...prev, [turnoverKey]: e.target.value }))} placeholder="Оборот, ₸" className="border-white/10 bg-black/20 text-white" />
-                    <Input type="number" min="0" step="0.01" value={draft[rateKey]} onChange={(e) => setDraft((prev) => ({ ...prev, [rateKey]: e.target.value }))} placeholder="%" className="border-white/10 bg-black/20 text-white" />
-                  </div>
-                ))}
-                <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-300">
-                  <div className="font-medium text-white">Как заполнять комиссии POS</div>
-                  <ul className="mt-2 space-y-1">
-                    <li>Kaspi QR: оборот оплат по QR и ставка комиссии именно для QR.</li>
-                    <li>Kaspi Gold: оборот оплат картой Gold и ставка комиссии именно для Gold.</li>
-                    <li>Другие карты: все остальные банковские карты.</li>
-                    <li>Kaspi Red и Kaspi Kredit: указывайте отдельно, если по ним другая ставка банка.</li>
-                  </ul>
-                </div>
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
-                  <div className="font-medium text-white">Как теперь работают ФОТ и налоги</div>
-                  <div className="mt-2 space-y-1">
-                    <div>Если категория расхода привязана к финансовой группе, страница сама подтянет ФОТ и налоги из журнала.</div>
-                    <div>Ручные поля ниже нужны только если вы хотите переопределить сумму из журнала для конкретного месяца.</div>
-                  </div>
-                </div>
-                {[
-                  ['payroll_amount', 'ФОТ вручную (если нужно переопределить журнал)'], ['payroll_taxes_amount', 'Налоги на зарплату вручную'], ['income_tax_amount', 'Налог на прибыль / 3% вручную'],
-                  ['depreciation_amount', 'Износ'], ['amortization_amount', 'Амортизация'], ['other_operating_amount', 'Прочие операционные'],
-                ].map(([key, label]) => (
-                  <div key={String(key)} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px] md:items-center">
-                    <label className="text-sm text-white">{label}</label>
-                    <Input type="number" min="0" step="100" value={draft[key]} onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))} placeholder="0" className="border-white/10 bg-slate-950/70 text-white" />
-                  </div>
-                ))}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-white">Комментарий по месяцу</label>
-                  <Textarea value={draft.notes} onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))} placeholder="Например: изменился договор с Kaspi или была разовая корректировка прибыли." className="min-h-28 border-white/10 bg-slate-950/70 text-white" />
-                </div>
+
+                {/* Tab: Выручка и платежи */}
+                {inputTab === 'revenue' && (
+                  <>
+                    <div className="grid grid-cols-1 gap-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-white">Общая наличная выручка за месяц</label>
+                        <Input type="number" min="0" step="100" value={draft.cash_revenue_override} onChange={(e) => setDraft((prev) => ({ ...prev, cash_revenue_override: e.target.value }))} placeholder="Если пусто, возьмём из журнала доходов" className="border-white/10 bg-slate-950/70 text-white" />
+                        <div className="text-xs text-cyan-100/80">Это вся наличка месяца. Поле необязательно.</div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-white">Общая выручка по POS за месяц</label>
+                        <Input type="number" min="0" step="100" value={draft.pos_revenue_override} onChange={(e) => setDraft((prev) => ({ ...prev, pos_revenue_override: e.target.value }))} placeholder="Если пусто, возьмём безнал из журнала доходов" className="border-white/10 bg-slate-950/70 text-white" />
+                        <div className="text-xs text-cyan-100/80">Это общая сумма по терминалу и Kaspi-сервисам за месяц. Поле необязательно.</div>
+                      </div>
+                      <div className="text-xs text-cyan-100/80 md:col-span-2">
+                        Если заполнили хотя бы одно из этих двух полей, страница возьмёт выручку месяца из них: <span className="font-medium text-white">наличка + POS</span>. Если оба поля пустые, база останется из журнала доходов.
+                      </div>
+                    </div>
+                    {[
+                      ['kaspi_qr_turnover', 'kaspi_qr_rate', 'Kaspi QR'],
+                      ['kaspi_gold_turnover', 'kaspi_gold_rate', 'Kaspi Gold'],
+                      ['other_cards_turnover', 'other_cards_rate', 'Другие карты'],
+                      ['kaspi_red_turnover', 'kaspi_red_rate', 'Kaspi Red'],
+                      ['kaspi_kredit_turnover', 'kaspi_kredit_rate', 'Kaspi Kredit'],
+                    ].map(([turnoverKey, rateKey, label]) => (
+                      <div key={String(label)} className="grid grid-cols-1 gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4 md:grid-cols-[1fr_180px_120px] md:items-center">
+                        <div className="text-sm font-medium text-white">{label}</div>
+                        <Input type="number" min="0" step="100" value={draft[turnoverKey]} onChange={(e) => setDraft((prev) => ({ ...prev, [turnoverKey]: e.target.value }))} placeholder="Оборот, ₸" className="border-white/10 bg-black/20 text-white" />
+                        <Input type="number" min="0" step="0.01" value={draft[rateKey]} onChange={(e) => setDraft((prev) => ({ ...prev, [rateKey]: e.target.value }))} placeholder="%" className="border-white/10 bg-black/20 text-white" />
+                      </div>
+                    ))}
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-300">
+                      <div className="font-medium text-white">Как заполнять комиссии POS</div>
+                      <ul className="mt-2 space-y-1">
+                        <li>Kaspi QR: оборот оплат по QR и ставка комиссии именно для QR.</li>
+                        <li>Kaspi Gold: оборот оплат картой Gold и ставка комиссии именно для Gold.</li>
+                        <li>Другие карты: все остальные банковские карты.</li>
+                        <li>Kaspi Red и Kaspi Kredit: указывайте отдельно, если по ним другая ставка банка.</li>
+                      </ul>
+                    </div>
+                  </>
+                )}
+
+                {/* Tab: ФОТ и налоги */}
+                {inputTab === 'payroll' && (
+                  <>
+                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+                      <div className="font-medium text-white">Как теперь работают ФОТ и налоги</div>
+                      <div className="mt-2 space-y-1">
+                        <div>Если категория расхода привязана к финансовой группе, страница сама подтянет ФОТ и налоги из журнала.</div>
+                        <div>Ручные поля ниже нужны только если вы хотите переопределить сумму из журнала для конкретного месяца.</div>
+                      </div>
+                    </div>
+                    {[
+                      ['payroll_amount', 'ФОТ вручную (если нужно переопределить журнал)'],
+                      ['payroll_taxes_amount', 'Налоги на зарплату вручную'],
+                      ['income_tax_amount', 'Налог на прибыль / 3% вручную'],
+                    ].map(([key, label]) => (
+                      <div key={String(key)} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px] md:items-center">
+                        <label className="text-sm text-white">{label}</label>
+                        <Input type="number" min="0" step="100" value={draft[key]} onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))} placeholder="0" className="border-white/10 bg-slate-950/70 text-white" />
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* Tab: Прочее */}
+                {inputTab === 'other' && (
+                  <>
+                    {[
+                      ['depreciation_amount', 'Износ'],
+                      ['amortization_amount', 'Амортизация'],
+                      ['other_operating_amount', 'Прочие операционные'],
+                    ].map(([key, label]) => (
+                      <div key={String(key)} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px] md:items-center">
+                        <label className="text-sm text-white">{label}</label>
+                        <Input type="number" min="0" step="100" value={draft[key]} onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))} placeholder="0" className="border-white/10 bg-slate-950/70 text-white" />
+                      </div>
+                    ))}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-white">Комментарий по месяцу</label>
+                      <Textarea value={draft.notes} onChange={(e) => setDraft((prev) => ({ ...prev, notes: e.target.value }))} placeholder="Например: изменился договор с Kaspi или была разовая корректировка прибыли." className="min-h-28 border-white/10 bg-slate-950/70 text-white" />
+                    </div>
+                  </>
+                )}
                 {selected && draftPreview ? (
                   <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
                     <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
@@ -568,6 +619,59 @@ export default function ProfitabilityPage() {
                   </div>
                 ) : null}
                 <Button onClick={save} disabled={saving || !selectedMonth} className="w-full bg-emerald-600 text-white hover:bg-emerald-500"><Save className="mr-2 h-4 w-4" />{saving ? 'Сохраняем...' : `Сохранить ${monthLabel(selectedMonth)}`}</Button>
+
+                {/* What-if section */}
+                <div className="rounded-2xl border border-white/10 bg-slate-950/60">
+                  <button
+                    onClick={() => setShowWhatIf((v) => !v)}
+                    className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-white"
+                  >
+                    <span>📊 What-if моделирование</span>
+                    <span className="text-slate-400">{showWhatIf ? '▲' : '▼'}</span>
+                  </button>
+                  {showWhatIf && selected && (
+                    <div className="border-t border-white/10 px-4 pb-4 pt-3 space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <label className="text-slate-300">Изменение выручки ±%</label>
+                          <span className={`font-medium tabular-nums ${whatIf.revenueAdj > 0 ? 'text-emerald-300' : whatIf.revenueAdj < 0 ? 'text-rose-300' : 'text-slate-400'}`}>{whatIf.revenueAdj > 0 ? '+' : ''}{whatIf.revenueAdj}%</span>
+                        </div>
+                        <input type="range" min={-50} max={50} step={1} value={whatIf.revenueAdj} onChange={(e) => setWhatIf((prev) => ({ ...prev, revenueAdj: Number(e.target.value) }))} className="w-full accent-emerald-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <label className="text-slate-300">Изменение расходов ±%</label>
+                          <span className={`font-medium tabular-nums ${whatIf.expenseAdj > 0 ? 'text-rose-300' : whatIf.expenseAdj < 0 ? 'text-emerald-300' : 'text-slate-400'}`}>{whatIf.expenseAdj > 0 ? '+' : ''}{whatIf.expenseAdj}%</span>
+                        </div>
+                        <input type="range" min={-50} max={50} step={1} value={whatIf.expenseAdj} onChange={(e) => setWhatIf((prev) => ({ ...prev, expenseAdj: Number(e.target.value) }))} className="w-full accent-rose-500" />
+                      </div>
+                      {(() => {
+                        const base = selected
+                        const adjRevenue = base.revenue * (1 + whatIf.revenueAdj / 100)
+                        const expMultiplier = 1 + whatIf.expenseAdj / 100
+                        const adjOperating = base.journalOperatingExpenses * expMultiplier
+                        const adjPayroll = base.payroll * expMultiplier
+                        const adjPayrollTaxes = base.payrollTaxes * expMultiplier
+                        const adjOtherOp = base.otherOperating * expMultiplier
+                        const adjEbitda = adjRevenue - adjOperating - base.posCommission - adjPayroll - adjPayrollTaxes - adjOtherOp
+                        const adjOperatingProfit = adjEbitda - base.depreciation - base.amortization
+                        const adjNetProfit = adjOperatingProfit - base.nonOperatingJournalExpenses - base.incomeTax
+                        return (
+                          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 space-y-2 text-sm">
+                            <div className="text-xs uppercase tracking-wide text-emerald-300 font-medium">Прогнозные результаты</div>
+                            <div className="flex justify-between"><span className="text-slate-300">Выручка</span><span className="font-medium text-white">{money(adjRevenue)}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-300">EBITDA</span><span className={`font-medium ${adjEbitda >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(adjEbitda)}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-300">Чистая прибыль</span><span className={`font-semibold ${adjNetProfit >= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>{money(adjNetProfit)}</span></div>
+                            <div className="border-t border-white/10 pt-2 text-xs text-slate-400">
+                              vs факт: EBITDA {adjEbitda - base.ebitda >= 0 ? '+' : ''}{money(adjEbitda - base.ebitda)}, чистая {adjNetProfit - base.netProfit >= 0 ? '+' : ''}{money(adjNetProfit - base.netProfit)}
+                            </div>
+                          </div>
+                        )
+                      })()}
+                      <button onClick={() => setWhatIf({ revenueAdj: 0, expenseAdj: 0 })} className="text-xs text-slate-400 hover:text-white">Сбросить</button>
+                    </div>
+                  )}
+                </div>
               </div>
             </Card>
           </div>
@@ -575,9 +679,35 @@ export default function ProfitabilityPage() {
           <Card className="border border-white/10 bg-white/[0.03] p-6">
             <div className="mb-4"><h2 className="text-xl font-semibold text-white">Помесячная таблица прибыли</h2><p className="text-sm text-slate-400">Факт из системы объединён с ручными месячными вводами по комиссиям и корректировкам.</p></div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm">
-                <thead><tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-slate-400"><th className="px-3 py-3">Месяц</th><th className="px-3 py-3 text-right">Выручка</th><th className="px-3 py-3 text-right">Опер. журнал</th><th className="px-3 py-3 text-right">POS</th><th className="px-3 py-3 text-right">EBITDA</th><th className="px-3 py-3 text-right">Опер. прибыль</th><th className="px-3 py-3 text-right">Чистая прибыль</th></tr></thead>
-                <tbody>{rows.map((row) => <tr key={row.month} className="border-b border-white/5 text-slate-200 hover:bg-white/[0.03]"><td className="px-3 py-3 font-medium">{row.label}</td><td className="px-3 py-3 text-right">{money(row.revenue)}</td><td className="px-3 py-3 text-right">{money(row.journalOperatingExpenses)}</td><td className="px-3 py-3 text-right">{money(row.posCommission)}</td><td className={`px-3 py-3 text-right font-medium ${row.ebitda >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.ebitda)}</td><td className={`px-3 py-3 text-right font-medium ${row.operatingProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.operatingProfit)}</td><td className={`px-3 py-3 text-right font-semibold ${row.netProfit >= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>{money(row.netProfit)}</td></tr>)}</tbody>
+              <table className="w-full min-w-[1050px] text-sm">
+                <thead><tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-slate-400"><th className="px-3 py-3">Месяц</th><th className="px-3 py-3 text-right">Выручка</th><th className="px-3 py-3 text-right">Опер. журнал</th><th className="px-3 py-3 text-right">POS</th><th className="px-3 py-3 text-right">EBITDA</th><th className="px-3 py-3 text-right">Опер. прибыль</th><th className="px-3 py-3 text-right">Чистая прибыль</th><th className="px-3 py-3 text-right text-slate-500">vs пред. месяц</th></tr></thead>
+                <tbody>{rows.map((row) => {
+                  const prevMonth = shiftMonth(row.month, -1)
+                  const prevRow = rows.find((r) => r.month === prevMonth)
+                  const deltaNetProfit = prevRow ? row.netProfit - prevRow.netProfit : null
+                  const deltaEbitda = prevRow ? row.ebitda - prevRow.ebitda : null
+                  const deltaPct = (prevRow && prevRow.netProfit !== 0) ? ((row.netProfit - prevRow.netProfit) / Math.abs(prevRow.netProfit)) * 100 : null
+                  return (
+                    <tr key={row.month} className="border-b border-white/5 text-slate-200 hover:bg-white/[0.03]">
+                      <td className="px-3 py-3 font-medium">{row.label}</td>
+                      <td className="px-3 py-3 text-right">{money(row.revenue)}</td>
+                      <td className="px-3 py-3 text-right">{money(row.journalOperatingExpenses)}</td>
+                      <td className="px-3 py-3 text-right">{money(row.posCommission)}</td>
+                      <td className={`px-3 py-3 text-right font-medium ${row.ebitda >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.ebitda)}</td>
+                      <td className={`px-3 py-3 text-right font-medium ${row.operatingProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.operatingProfit)}</td>
+                      <td className={`px-3 py-3 text-right font-semibold ${row.netProfit >= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>{money(row.netProfit)}</td>
+                      <td className="px-3 py-3 text-right">
+                        {deltaNetProfit !== null ? (
+                          <div className={`flex items-center justify-end gap-0.5 text-xs font-medium ${deltaNetProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                            {deltaNetProfit >= 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                            {deltaNetProfit >= 0 ? '+' : ''}{money(deltaNetProfit)}
+                            {deltaPct !== null ? <span className="ml-1 text-slate-400">({deltaPct >= 0 ? '↑' : '↓'}{Math.abs(deltaPct).toFixed(1)}%)</span> : null}
+                          </div>
+                        ) : <span className="text-slate-600 text-xs">—</span>}
+                      </td>
+                    </tr>
+                  )
+                })}</tbody>
               </table>
             </div>
           </Card>

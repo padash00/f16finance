@@ -28,6 +28,10 @@ type Body =
       action: 'deleteExpense'
       expenseId: string
     }
+  | {
+      action: 'removeAttachment'
+      expenseId: string
+    }
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -80,7 +84,7 @@ export async function GET(req: Request) {
 
     let query = supabase
       .from('expenses')
-      .select('id, date, company_id, operator_id, category, cash_amount, kaspi_amount, comment')
+      .select('id, date, company_id, operator_id, category, cash_amount, kaspi_amount, comment, attachment_url')
       .range(page * pageSize, page * pageSize + pageSize - 1)
 
     if (from) query = query.gte('date', from)
@@ -179,6 +183,14 @@ export async function POST(req: Request) {
       })
 
       return json({ ok: true, data })
+    }
+
+    if (body.action === 'removeAttachment') {
+      if (!canManageFinance) return json({ error: 'forbidden' }, 403)
+      if (!body.expenseId?.trim()) return json({ error: 'expenseId обязателен' }, 400)
+      const { error } = await supabase.from('expenses').update({ attachment_url: null }).eq('id', body.expenseId)
+      if (error) throw error
+      return json({ ok: true })
     }
 
     if (!canManageFinance) return json({ error: 'forbidden' }, 403)

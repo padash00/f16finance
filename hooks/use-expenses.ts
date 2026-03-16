@@ -11,6 +11,7 @@ export type ExpenseRow = {
   cash_amount: number | null
   kaspi_amount: number | null
   comment: string | null
+  attachment_url: string | null
 }
 
 export type UseExpensesOptions = {
