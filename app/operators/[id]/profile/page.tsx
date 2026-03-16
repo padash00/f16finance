@@ -73,6 +73,7 @@ import {
   UserPlus,
   Key,
   Copy,
+  Send,
 } from 'lucide-react'
 
 // Типы данных
@@ -960,6 +961,7 @@ export default function OperatorProfilePage() {
   const [creatingAccount, setCreatingAccount] = useState(false)
 
   const [editedProfile, setEditedProfile] = useState<Partial<OperatorProfile>>({})
+  const [editedTelegramChatId, setEditedTelegramChatId] = useState<string>('')
   const [newNote, setNewNote] = useState('')
   const [newNoteType, setNewNoteType] = useState('general')
 
@@ -1037,6 +1039,7 @@ export default function OperatorProfilePage() {
           if (!operatorData) throw new Error('Оператор не найден')
 
           setOperator(operatorData)
+          setEditedTelegramChatId(operatorData.telegram_chat_id || '')
           console.log('Operator loaded:', operatorData.name)
         } catch (err) {
           console.error('Error loading operator:', err)
@@ -1274,6 +1277,14 @@ export default function OperatorProfilePage() {
     try {
       setSaving(true)
       setError(null)
+
+      // Save telegram_chat_id to operators table
+      const { error: opError } = await supabase
+        .from('operators')
+        .update({ telegram_chat_id: editedTelegramChatId || null })
+        .eq('id', operatorId)
+      if (opError) throw opError
+      setOperator(prev => prev ? { ...prev, telegram_chat_id: editedTelegramChatId || null } : prev)
 
       if (profile) {
         const { error } = await supabase
@@ -2032,6 +2043,7 @@ export default function OperatorProfilePage() {
                       onClick={() => {
                         setIsEditing(false)
                         setEditedProfile(profile || {})
+                        setEditedTelegramChatId(operator?.telegram_chat_id || '')
                       }}
                       variant="outline"
                       className="border-white/10"
@@ -2467,6 +2479,25 @@ export default function OperatorProfilePage() {
                       />
                     ) : (
                       <p className="text-sm">{profile?.email || 'Не указано'}</p>
+                    )}
+                  </div>
+
+                  {/* Telegram Chat ID */}
+                  <div>
+                    <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+                      <Send className="w-3 h-3" />
+                      Telegram Chat ID
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editedTelegramChatId}
+                        onChange={(e) => setEditedTelegramChatId(e.target.value)}
+                        placeholder="-1001234567890"
+                        className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500/50"
+                      />
+                    ) : (
+                      <p className="text-sm font-mono">{operator?.telegram_chat_id || 'Не указано'}</p>
                     )}
                   </div>
 
