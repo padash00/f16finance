@@ -1,4 +1,4 @@
-export type AssistantPage = 'global' | 'analysis' | 'reports' | 'expenses' | 'cashflow' | 'weekly-report'
+export type AssistantPage = 'global' | 'analysis' | 'reports' | 'expenses' | 'cashflow' | 'weekly-report' | 'forecast' | 'ratings'
 
 export type SnapshotMetric = {
   label: string

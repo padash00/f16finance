@@ -23,6 +23,18 @@ export const SITE_CONTEXT = {
       description: 'Контроль расходов по категориям, компаниям, трендам, аномалиям и структуре оплат.',
     },
     {
+      page: 'forecast' as AssistantPage,
+      route: '/forecast',
+      title: 'AI Прогноз',
+      description: 'Прогноз доходов, расходов и прибыли на 30/60/90 дней на основе исторических трендов.',
+    },
+    {
+      page: 'ratings' as AssistantPage,
+      route: '/ratings',
+      title: 'Рейтинг операторов',
+      description: 'Лидерборд операторов по выручке, количеству смен и среднему чеку за выбранный период.',
+    },
+    {
       page: 'cashflow' as AssistantPage,
       route: '/cashflow',
       title: 'Cash Flow — движение денег',
