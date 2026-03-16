@@ -120,10 +120,25 @@ const FINANCE_HELP_TEXT = `<b>📊 Финансовые команды Orda Cont
 /month — Сводка за 30 дней
 /cashflow — Баланс и движение денег`
 
-function isAuthorizedForFinance(telegramUserId: string): boolean {
+async function isAuthorizedForFinance(telegramUserId: string): Promise<boolean> {
+  // Check DB table first
+  try {
+    const supabase = createAdminSupabaseClient()
+    const { data } = await supabase
+      .from('telegram_allowed_users')
+      .select('can_finance')
+      .eq('telegram_user_id', telegramUserId)
+      .maybeSingle()
+    if (data) return data.can_finance === true
+  } catch {}
+
+  // Fallback: TELEGRAM_ADMIN_IDS env var
   const adminIds = process.env.TELEGRAM_ADMIN_IDS
   if (!adminIds) return false
-  return adminIds.split(',').map((id) => id.trim()).includes(telegramUserId)
+  return adminIds
+    .split(',')
+    .map((id) => id.trim())
+    .includes(telegramUserId)
 }
 
 async function handleFinanceCommand(text: string, chatId: number, telegramUserId: string): Promise<boolean> {
@@ -134,8 +149,9 @@ async function handleFinanceCommand(text: string, chatId: number, telegramUserId
   if (!financeCommands.includes(cmd ?? '')) return false
 
   // Authorization check
-  if (!isAuthorizedForFinance(telegramUserId)) {
-    await sendTelegramMessage(chatId, '⛔ Нет доступа к финансовым данным.')
+  const authorized = await isAuthorizedForFinance(telegramUserId)
+  if (!authorized) {
+    await sendTelegramMessage(chatId, '⛔ У вас нет доступа к финансовым командам.\n\nЕсли считаете, что это ошибка — обратитесь к администратору системы.')
     return true
   }
 
