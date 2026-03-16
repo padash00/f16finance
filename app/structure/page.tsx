@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   BriefcaseBusiness,
   Building2,
@@ -336,6 +336,277 @@ function CompanyBranch({
   )
 }
 
+// ===================== ORG CHART =====================
+
+function OrgNode({
+  label,
+  name,
+  sub,
+  color,
+  icon,
+  size = 'md',
+}: {
+  label: string
+  name: string
+  sub?: string
+  color: 'amber' | 'violet' | 'cyan' | 'emerald' | 'slate'
+  icon?: React.ReactNode
+  size?: 'lg' | 'md' | 'sm'
+}) {
+  const colorMap = {
+    amber:   'border-amber-400/40 bg-gradient-to-br from-amber-500/20 to-orange-500/10 shadow-amber-500/10',
+    violet:  'border-violet-400/40 bg-gradient-to-br from-violet-500/20 to-purple-500/10 shadow-violet-500/10',
+    cyan:    'border-cyan-400/40 bg-gradient-to-br from-cyan-500/20 to-blue-500/10 shadow-cyan-500/10',
+    emerald: 'border-emerald-400/40 bg-gradient-to-br from-emerald-500/20 to-teal-500/10 shadow-emerald-500/10',
+    slate:   'border-white/10 bg-white/[0.04] shadow-black/20',
+  }
+  const labelColor = {
+    amber: 'text-amber-400', violet: 'text-violet-400', cyan: 'text-cyan-400',
+    emerald: 'text-emerald-400', slate: 'text-slate-500',
+  }
+  const sizeMap = {
+    lg: 'min-w-[160px] px-5 py-4',
+    md: 'min-w-[140px] px-4 py-3',
+    sm: 'min-w-[128px] px-3 py-2.5',
+  }
+  return (
+    <div className={`rounded-2xl border shadow-lg text-center ${colorMap[color]} ${sizeMap[size]}`}>
+      {icon && <div className="flex justify-center mb-1.5">{icon}</div>}
+      <div className={`text-[9px] uppercase tracking-[0.18em] font-semibold mb-1 ${labelColor[color]}`}>{label}</div>
+      <div className={`font-bold text-white leading-tight ${size === 'lg' ? 'text-base' : size === 'md' ? 'text-sm' : 'text-xs'}`}>{name}</div>
+      {sub && <div className="text-[10px] text-slate-500 mt-0.5">{sub}</div>}
+    </div>
+  )
+}
+
+function VLine({ height = 8 }: { height?: number }) {
+  return <div className="w-px bg-white/15 self-center" style={{ height: height * 4 }} />
+}
+
+function HBranch({ count }: { count: number }) {
+  if (count === 1) return <div className="w-px h-6 bg-white/15 self-center" />
+  return (
+    <div className="relative flex justify-center" style={{ width: '100%' }}>
+      <div className="absolute top-0 left-1/2 w-px bg-white/15" style={{ height: 12 }} />
+      <div className="absolute border-t border-white/15" style={{ top: 12, left: '12.5%', right: '12.5%' }} />
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="flex-1 flex justify-center">
+          <div className="w-px bg-white/15" style={{ height: 12, marginTop: 12 }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function OrgChart({
+  owners,
+  managers,
+  marketers,
+  companies,
+  assignments,
+  operatorsById,
+}: {
+  owners: StaffMember[]
+  managers: StaffMember[]
+  marketers: StaffMember[]
+  companies: Company[]
+  assignments: Assignment[]
+  operatorsById: Map<string, Operator>
+}) {
+  const activeCompanies = companies.filter(c =>
+    assignments.some(a => a.company_id === c.id && a.is_active)
+  )
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+        <Network className="h-5 w-5 text-cyan-300" />
+        Организационная схема
+      </h2>
+
+      <div className="overflow-x-auto pb-6">
+        <div className="flex flex-col items-center min-w-max mx-auto px-4">
+
+          {/* ── Level 1: Owners ── */}
+          {owners.length > 0 && (
+            <div className="flex gap-4">
+              {owners.map(o => (
+                <OrgNode
+                  key={o.id}
+                  label="Владелец"
+                  name={getPersonName(o)}
+                  color="amber"
+                  size="lg"
+                  icon={<Crown className="h-4 w-4 text-amber-400" />}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* connector owner → managers */}
+          {owners.length > 0 && (managers.length > 0 || marketers.length > 0) && (
+            <VLine height={7} />
+          )}
+
+          {/* ── Level 2: Managers + Marketers ── */}
+          {(managers.length > 0 || marketers.length > 0) && (
+            <div className="flex items-start gap-4">
+
+              {/* Managers column */}
+              {managers.length > 0 && (
+                <div className="flex flex-col items-center gap-0">
+                  <div className="flex gap-3">
+                    {managers.map(m => (
+                      <OrgNode
+                        key={m.id}
+                        label="Руководитель"
+                        name={getPersonName(m)}
+                        color="violet"
+                        size="md"
+                        icon={<ShieldCheck className="h-3.5 w-3.5 text-violet-400" />}
+                      />
+                    ))}
+                  </div>
+
+                  {/* connector manager → companies */}
+                  {activeCompanies.length > 0 && (
+                    <>
+                      <VLine height={7} />
+                      {/* horizontal bridge */}
+                      <div className="relative flex" style={{ width: activeCompanies.length * 188 }}>
+                        <div
+                          className="absolute border-t-2 border-white/15 rounded-sm"
+                          style={{
+                            top: 0,
+                            left: activeCompanies.length === 1 ? '50%' : '8%',
+                            right: activeCompanies.length === 1 ? '50%' : '8%',
+                          }}
+                        />
+                        {activeCompanies.map((_, i) => (
+                          <div key={i} className="flex-1 flex justify-center">
+                            <div className="w-px bg-white/15" style={{ height: 28, marginTop: 1 }} />
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* ── Level 3: Companies ── */}
+                  {activeCompanies.length > 0 && (
+                    <div className="flex items-start gap-5">
+                      {activeCompanies.map(company => {
+                        const compAssignments = assignments.filter(
+                          a => a.company_id === company.id && a.is_active,
+                        )
+                        const leads = compAssignments.filter(a => a.role_in_company !== 'operator')
+                        const ops = compAssignments.filter(a => a.role_in_company === 'operator')
+                        const totalPeople = compAssignments.length
+
+                        return (
+                          <div key={company.id} className="flex flex-col items-center gap-0">
+                            {/* Company box */}
+                            <OrgNode
+                              label={company.code || 'точка'}
+                              name={company.name}
+                              sub={`${totalPeople} чел.`}
+                              color="cyan"
+                              size="md"
+                            />
+
+                            {/* connector company → people */}
+                            {compAssignments.length > 0 && (
+                              <>
+                                <VLine height={6} />
+                                {/* Leads */}
+                                {leads.length > 0 && (
+                                  <div className="flex flex-col items-center gap-1.5">
+                                    {leads.map(a => {
+                                      const op = operatorsById.get(a.operator_id)
+                                      if (!op) return null
+                                      return (
+                                        <OrgNode
+                                          key={a.id}
+                                          label={COMPANY_ROLE_LABEL[a.role_in_company]}
+                                          name={getOperatorDisplayName(op)}
+                                          color="emerald"
+                                          size="sm"
+                                        />
+                                      )
+                                    })}
+                                    {ops.length > 0 && <VLine height={4} />}
+                                  </div>
+                                )}
+                                {/* Operators */}
+                                {ops.length > 0 && (
+                                  <div className="flex flex-col items-center gap-1.5">
+                                    {ops.map(a => {
+                                      const op = operatorsById.get(a.operator_id)
+                                      if (!op) return null
+                                      return (
+                                        <OrgNode
+                                          key={a.id}
+                                          label="Оператор"
+                                          name={getOperatorDisplayName(op)}
+                                          color="slate"
+                                          size="sm"
+                                        />
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Divider between managers and marketers */}
+              {managers.length > 0 && marketers.length > 0 && (
+                <div className="flex flex-col items-center justify-center pt-3 px-2">
+                  <div className="h-px w-8 bg-white/10" />
+                </div>
+              )}
+
+              {/* Marketers column */}
+              {marketers.length > 0 && (
+                <div className="flex flex-col items-center pt-0">
+                  <div className="flex flex-col gap-2">
+                    {marketers.map(m => (
+                      <OrgNode
+                        key={m.id}
+                        label="Маркетолог"
+                        name={getPersonName(m)}
+                        color="violet"
+                        size="md"
+                        icon={<Sparkles className="h-3.5 w-3.5 text-violet-400" />}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-3 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-center max-w-[140px]">
+                    <div className="text-[9px] text-slate-600 uppercase tracking-widest mb-1">Зона ответственности</div>
+                    <div className="text-[10px] text-slate-400 leading-relaxed">Задачи и маркетинг</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {owners.length === 0 && managers.length === 0 && marketers.length === 0 && (
+            <div className="text-slate-500 text-sm py-12 text-center">
+              Нет данных о сотрудниках для отображения схемы
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function StructurePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -549,76 +820,14 @@ export default function StructurePage() {
               </Card>
 
               {viewMode === 'schema' ? (
-                <section className="space-y-6">
-                  <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-                    <Network className="h-5 w-5 text-cyan-300" />
-                    Организационная схема
-                  </h2>
-                  <div className="flex flex-col items-center gap-0">
-                    {/* Staff row */}
-                    {staff.filter(s => s.is_active).length > 0 && (
-                      <div className="flex flex-wrap justify-center gap-3 mb-0">
-                        {staff.filter(s => s.is_active).map(member => (
-                          <div key={member.id} className="rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-500/10 px-4 py-3 text-center min-w-[120px]">
-                            <div className="text-[10px] uppercase tracking-[0.16em] text-amber-400 mb-1">{STAFF_ROLE_LABEL[member.role]}</div>
-                            <div className="text-sm font-semibold text-white">{getPersonName(member)}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {/* vertical line */}
-                    {staff.filter(s => s.is_active).length > 0 && companies.length > 0 && (
-                      <div className="w-px h-8 bg-white/20" />
-                    )}
-                    {/* horizontal bar */}
-                    {companies.length > 0 && (
-                      <div className="flex items-start gap-6 overflow-x-auto pb-4">
-                        {companies.map((company, idx) => {
-                          const compAssignments = assignments.filter(a => a.company_id === company.id && a.is_active)
-                          const leads = compAssignments.filter(a => a.role_in_company !== 'operator')
-                          const ops = compAssignments.filter(a => a.role_in_company === 'operator')
-                          return (
-                            <div key={company.id} className="flex flex-col items-center">
-                              {/* Company box */}
-                              <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/20 to-blue-500/10 px-5 py-3 text-center min-w-[160px]">
-                                <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-400 mb-1">{company.code || 'точка'}</div>
-                                <div className="text-base font-bold text-white">{company.name}</div>
-                                <div className="text-xs text-slate-400 mt-0.5">{compAssignments.length} чел.</div>
-                              </div>
-                              {/* vertical connector */}
-                              {compAssignments.length > 0 && <div className="w-px h-5 bg-white/20" />}
-                              {/* People */}
-                              {compAssignments.length > 0 && (
-                                <div className="flex flex-col gap-1.5 items-center">
-                                  {leads.map(a => {
-                                    const op = operatorsById.get(a.operator_id)
-                                    if (!op) return null
-                                    return (
-                                      <div key={a.id} className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-center min-w-[140px]">
-                                        <div className="text-[10px] text-emerald-400">{COMPANY_ROLE_LABEL[a.role_in_company]}</div>
-                                        <div className="text-xs font-semibold text-white">{getOperatorDisplayName(op)}</div>
-                                      </div>
-                                    )
-                                  })}
-                                  {ops.map(a => {
-                                    const op = operatorsById.get(a.operator_id)
-                                    if (!op) return null
-                                    return (
-                                      <div key={a.id} className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-center min-w-[140px]">
-                                        <div className="text-[10px] text-slate-500">{COMPANY_ROLE_LABEL[a.role_in_company]}</div>
-                                        <div className="text-xs text-slate-200">{getOperatorDisplayName(op)}</div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </section>
+                <OrgChart
+                  owners={owners}
+                  managers={managers}
+                  marketers={marketers}
+                  companies={companies}
+                  assignments={assignments}
+                  operatorsById={operatorsById}
+                />
               ) : viewMode === 'tree' ? (
                 <>
               <Card className="border-white/10 bg-slate-950/60 p-4 text-white">
