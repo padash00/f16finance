@@ -161,6 +161,7 @@ const navSections: NavSection[] = [
     icon: Shield,
     items: [
       { href: '/settings', label: 'Настройки системы', icon: Settings2, note: 'Компании и справочники' },
+      { href: '/access', label: 'Права и пароли', icon: Shield, note: 'Доступ ролей и аккаунты' },
       { href: '/telegram', label: 'Telegram Bot', icon: MessageSquareText, note: 'Уведомления и команды', badge: 'new', badgeColor: 'blue' },
       { href: '/point-devices', label: 'Точки и устройства', icon: Building2, note: 'Токены и программы точек' },
       { href: '/logs', label: 'Логирование', icon: Logs, note: 'Аудит, уведомления и события' },

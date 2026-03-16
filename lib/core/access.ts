@@ -68,6 +68,7 @@ export const ADMIN_PATHS = [
   '/debug',
   '/settings',
   '/telegram',
+  '/access',
   '/pass',
 ] as const
 
