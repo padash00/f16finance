@@ -34,6 +34,7 @@ import {
   DollarSign,
   Download,
   FileSpreadsheet,
+  FileText,
   Filter,
   Lightbulb,
   PieChart as PieChartIcon,
@@ -673,6 +674,23 @@ function ReportsContent() {
   // Mount state for charts
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
+
+  // Inject print styles
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.id = 'print-styles'
+    style.innerHTML = `
+      @media print {
+        body { background: white !important; color: black !important; }
+        .no-print { display: none !important; }
+        .print-card { background: white !important; border: 1px solid #ddd !important; color: black !important; }
+        .print-summary { display: block !important; }
+      }
+      .print-summary { display: none; }
+    `
+    document.head.appendChild(style)
+    return () => { document.getElementById('print-styles')?.remove() }
+  }, [])
 
   // Data states
   const [incomes, setIncomes] = useState<IncomeRow[]>([])
@@ -1792,6 +1810,10 @@ function ReportsContent() {
     showToast('Excel файл скачан', 'success')
   }, [dateFrom, dateTo, totals, totalsPrev, showToast])
 
+  const handlePrintPDF = useCallback(() => {
+    window.print()
+  }, [])
+
   const handleSort = useCallback((field: SortField) => {
     setSortDirection(current => sortField === field ? (current === 'asc' ? 'desc' : 'asc') : 'desc')
     setSortField(field)
@@ -1957,17 +1979,54 @@ function ReportsContent() {
                   </div>
                 </div>
 
-                <Button 
-                  variant="outline" 
-                  size="icon" 
+                <Button
+                  variant="outline"
+                  size="icon"
                   className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
                   onClick={handleShare}
                   title="Поделиться"
                 >
                   <Share2 className="w-4 h-4" />
                 </Button>
+
+                <Button
+                  variant="outline"
+                  className="no-print rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 gap-2"
+                  onClick={handlePrintPDF}
+                  title="PDF / Печать"
+                >
+                  <FileText className="w-4 h-4" />
+                  PDF / Печать
+                </Button>
               </div>
             </div>
+          </div>
+
+          {/* Print-only summary */}
+          <div className="print-summary rounded-2xl border border-gray-200 bg-white p-6 print-card">
+            <h2 className="text-lg font-bold text-black mb-4">Финансовая сводка: {formatDateRange(dateFrom, dateTo)}</h2>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-gray-300">
+                  <th className="text-left py-2 pr-4 text-black font-semibold">Показатель</th>
+                  <th className="text-right py-2 text-black font-semibold">Значение</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1.5 text-gray-700">Выручка</td>
+                  <td className="py-1.5 text-right text-green-700 font-medium">{formatMoneyFull(totals.totalIncome)}</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1.5 text-gray-700">Расходы</td>
+                  <td className="py-1.5 text-right text-red-700 font-medium">{formatMoneyFull(totals.totalExpense)}</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 text-gray-700 font-semibold">Прибыль</td>
+                  <td className={`py-1.5 text-right font-bold ${totals.profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatMoneyFull(totals.profit)}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           {/* AI Insights */}

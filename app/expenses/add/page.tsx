@@ -31,7 +31,7 @@ import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
 import { getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
 
-type ExpenseCategory = { id: string; name: string; accounting_group: FinancialGroup | null }
+type ExpenseCategory = { id: string; name: string; accounting_group: FinancialGroup | null; monthly_budget: number | null }
 type Company = { id: string; name: string; code?: string | null }
 type Operator = { id: string; name: string; short_name: string | null; is_active: boolean }
 
@@ -117,6 +117,8 @@ export default function AddExpensePage() {
   const [error, setError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  const [monthSpent, setMonthSpent] = useState<number>(0)
+  const [loadingBudget, setLoadingBudget] = useState(false)
 
   const savingRef = useRef(false)
 
@@ -127,7 +129,7 @@ export default function AddExpensePage() {
       setError(null)
 
       const [catRes, compRes, opRes] = await Promise.all([
-        supabase.from('expense_categories').select('id, name, accounting_group').order('name'),
+        supabase.from('expense_categories').select('id, name, accounting_group, monthly_budget').order('name'),
         supabase.from('companies').select('id, name, code').order('name'),
         supabase.from('operators').select('id, name, short_name, is_active').eq('is_active', true).order('name'),
       ])
@@ -159,6 +161,45 @@ export default function AddExpensePage() {
 
     load()
   }, [])
+
+  // Budget tracking effect
+  useEffect(() => {
+    if (!categoryName) {
+      setMonthSpent(0)
+      return
+    }
+    const cat = categories.find(c => c.name === categoryName)
+    if (!cat?.monthly_budget || cat.monthly_budget <= 0) {
+      setMonthSpent(0)
+      return
+    }
+
+    const fetchMonthSpent = async () => {
+      setLoadingBudget(true)
+      const now = new Date()
+      const y = now.getFullYear()
+      const m = String(now.getMonth() + 1).padStart(2, '0')
+      const monthStart = `${y}-${m}-01`
+      const lastDay = new Date(y, now.getMonth() + 1, 0).getDate()
+      const monthEnd = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
+
+      const { data } = await supabase
+        .from('expenses')
+        .select('cash_amount, kaspi_amount')
+        .eq('category', categoryName)
+        .gte('date', monthStart)
+        .lte('date', monthEnd)
+
+      const spent = (data || []).reduce(
+        (sum: number, row: { cash_amount: number | null; kaspi_amount: number | null }) => sum + Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0),
+        0,
+      )
+      setMonthSpent(spent)
+      setLoadingBudget(false)
+    }
+
+    fetchMonthSpent()
+  }, [categoryName, categories])
 
   const cashVal = useMemo(() => parseAmount(cash), [cash])
   const kaspiVal = useMemo(() => parseAmount(kaspi), [kaspi])
@@ -635,6 +676,56 @@ export default function AddExpensePage() {
                   </div>
                 </div>
               </Card>
+            )}
+
+            {/* Budget Warning */}
+            {selectedCategory?.monthly_budget != null && selectedCategory.monthly_budget > 0 && (
+              (() => {
+                const budget = selectedCategory.monthly_budget || 0
+                const projectedSpend = monthSpent + total
+                const budgetUsedPct = budget > 0 ? Math.round((projectedSpend / budget) * 100) : 0
+
+                if (projectedSpend > budget) {
+                  return (
+                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-red-400">Превышение бюджета</p>
+                        <p className="text-xs text-red-300 mt-1">
+                          Потрачено {Formatters.money(monthSpent)} из {Formatters.money(budget)} ({budgetUsedPct}%).
+                          Этот расход превысит лимит на {Formatters.money(projectedSpend - budget)}.
+                        </p>
+                      </div>
+                    </div>
+                  )
+                }
+
+                if (budgetUsedPct >= 80) {
+                  return (
+                    <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-amber-400">Почти исчерпан бюджет категории</p>
+                        <p className="text-xs text-amber-300 mt-1">
+                          {Formatters.money(projectedSpend)} из {Formatters.money(budget)} ({budgetUsedPct}%)
+                        </p>
+                      </div>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs text-emerald-300">
+                        Бюджет категории: {Formatters.money(projectedSpend)} использовано из {Formatters.money(budget)}
+                        {loadingBudget ? ' (загрузка...)' : ''}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })()
             )}
 
             {/* Actions */}

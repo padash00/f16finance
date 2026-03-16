@@ -503,6 +503,9 @@ function TasksContent() {
       }
 
       // Фильтр по статусу
+      if (filterStatus === 'overdue') {
+        return isOverdue(task.due_date, task.status)
+      }
       if (filterStatus !== 'all' && task.status !== filterStatus) return false
 
       // Фильтр по приоритету
@@ -815,8 +818,27 @@ function TasksContent() {
                 ))}
               </select>
 
+              {/* Фильтр "Просроченные" */}
+              <button
+                onClick={() => setFilterStatus(filterStatus === 'overdue' ? 'all' : 'overdue')}
+                className={cn(
+                  "px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5",
+                  filterStatus === 'overdue'
+                    ? 'bg-red-500/20 border-red-500/40 text-red-300'
+                    : 'bg-gray-800/50 border-white/10 text-gray-400 hover:text-red-300 hover:border-red-500/30'
+                )}
+              >
+                <AlertCircle className="w-3.5 h-3.5" />
+                Просроченные
+                {stats.overdue > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-red-500/30 text-red-300">
+                    {stats.overdue}
+                  </span>
+                )}
+              </button>
+
               {/* Сброс фильтров */}
-              {(searchTerm || filterStatus !== 'all' || filterPriority !== 'all' || 
+              {(searchTerm || filterStatus !== 'all' || filterPriority !== 'all' ||
                 filterOperator !== 'all' || filterCompany !== 'all') && (
                 <button
                   onClick={resetFilters}
@@ -827,6 +849,52 @@ function TasksContent() {
               )}
             </div>
           </Card>
+
+          {/* Overdue Banner */}
+          {(() => {
+            const overdueTasks = filteredTasks.filter(t => isOverdue(t.due_date, t.status))
+            if (overdueTasks.length === 0) return null
+            return (
+              <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertCircle className="w-5 h-5 text-red-400" />
+                  <h3 className="text-sm font-semibold text-red-400">
+                    Просроченные задачи: {overdueTasks.length}
+                  </h3>
+                </div>
+                <div className="space-y-2">
+                  {overdueTasks.slice(0, 5).map(task => {
+                    const days = getDaysUntilDue(task.due_date)
+                    return (
+                      <button
+                        key={task.id}
+                        onClick={() => { setSelectedTask(task); setIsTaskModalOpen(true) }}
+                        className="w-full text-left flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs text-red-400 font-mono shrink-0">#{task.task_number}</span>
+                          <span className="text-sm text-white truncate">{task.title}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs text-gray-400">{formatDate(task.due_date)}</span>
+                          {days !== null && days < 0 && (
+                            <span className="text-xs text-red-400 font-medium">
+                              просрочено на {Math.abs(days)} дн.
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                  {overdueTasks.length > 5 && (
+                    <p className="text-xs text-gray-500 pl-1">
+                      … и ещё {overdueTasks.length - 5} просроченных задач
+                    </p>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Content */}
           {viewMode === 'kanban' ? (

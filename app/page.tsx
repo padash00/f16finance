@@ -735,6 +735,7 @@ export default function SmartDashboardPage() {
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [todayStats, setTodayStats] = useState<{ income: number; expense: number; txCount: number } | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -803,6 +804,39 @@ export default function SmartDashboardPage() {
       mounted = false
     }
   }, [authResolved, isAuthenticated, dateFrom, dateTo])
+
+  // Today stats fetch
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let mounted = true
+    ;(async () => {
+      const today = DateUtils.todayISO()
+      const [iRes, eRes] = await Promise.all([
+        supabase
+          .from('incomes')
+          .select('cash_amount, kaspi_amount, card_amount, online_amount')
+          .eq('date', today),
+        supabase
+          .from('expenses')
+          .select('cash_amount, kaspi_amount')
+          .eq('date', today),
+      ])
+      if (!mounted) return
+      const income = (iRes.data || []).reduce(
+        (s: number, r: { cash_amount: number | null; kaspi_amount: number | null; card_amount: number | null; online_amount: number | null }) =>
+          s + Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0),
+        0,
+      )
+      const expense = (eRes.data || []).reduce(
+        (s: number, r: { cash_amount: number | null; kaspi_amount: number | null }) =>
+          s + Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0),
+        0,
+      )
+      const txCount = (iRes.data?.length || 0) + (eRes.data?.length || 0)
+      setTodayStats({ income, expense, txCount })
+    })()
+    return () => { mounted = false }
+  }, [isAuthenticated])
 
   const companyById = useMemo(() => {
     const map: Record<string, Company> = {}
@@ -1180,6 +1214,53 @@ export default function SmartDashboardPage() {
             onDateToChange={onDateToChange}
             onToggleExtra={() => setIncludeExtra(v => !v)}
           />
+
+          {/* Пульс бизнеса сегодня */}
+          {todayStats !== null && (
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-5">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-4">
+                  <Activity className="w-5 h-5 text-purple-400" />
+                  <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Пульс бизнеса сегодня</h2>
+                  {todayStats.txCount === 0 ? (
+                    <span className="ml-auto text-xs text-gray-500">📊 Данных за сегодня нет</span>
+                  ) : (todayStats.income - todayStats.expense) > 0 ? (
+                    <span className="ml-auto text-xs text-emerald-400">✅ Прибыльный день</span>
+                  ) : (
+                    <span className="ml-auto text-xs text-red-400">⚠️ Убыточный день</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3">
+                    <p className="text-[11px] text-emerald-400 uppercase tracking-wider">Выручка</p>
+                    <p className="text-lg font-bold text-white mt-1">{Formatters.moneyDetailed(todayStats.income)}</p>
+                  </div>
+                  <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3">
+                    <p className="text-[11px] text-red-400 uppercase tracking-wider">Расходы</p>
+                    <p className="text-lg font-bold text-white mt-1">{Formatters.moneyDetailed(todayStats.expense)}</p>
+                  </div>
+                  <div className={`rounded-xl p-3 border ${(todayStats.income - todayStats.expense) >= 0 ? 'bg-purple-500/10 border-purple-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
+                    <p className="text-[11px] text-purple-400 uppercase tracking-wider">Прибыль</p>
+                    <p className={`text-lg font-bold mt-1 ${(todayStats.income - todayStats.expense) >= 0 ? 'text-white' : 'text-red-400'}`}>
+                      {Formatters.moneyDetailed(todayStats.income - todayStats.expense)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 p-3">
+                    <p className="text-[11px] text-blue-400 uppercase tracking-wider">Транзакций</p>
+                    <p className="text-lg font-bold text-white mt-1">{todayStats.txCount}</p>
+                  </div>
+                </div>
+                {analytics.insight.anomalies.length > 0 && (
+                  <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                    <p className="text-xs text-amber-400">
+                      ⚡ Аномалия: {analytics.insight.anomalies[0].description}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <Tabs
             active={activeTab}
