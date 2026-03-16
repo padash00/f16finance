@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 // NOTE: Before using this route, run this SQL in Supabase:
 // ALTER TABLE expenses ADD COLUMN attachment_url text;
@@ -35,20 +36,25 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = new Uint8Array(arrayBuffer)
 
-    const { error: uploadError } = await access.supabase.storage
+    // Use admin client for storage + DB update to bypass RLS silently blocking the write
+    const adminClient = hasAdminSupabaseCredentials()
+      ? createAdminSupabaseClient()
+      : access.supabase
+
+    const { error: uploadError } = await adminClient.storage
       .from('expense-attachments')
       .upload(fileName, buffer, { contentType: file.type, upsert: true })
 
     if (uploadError) throw uploadError
 
-    const { data: urlData } = access.supabase.storage
+    const { data: urlData } = adminClient.storage
       .from('expense-attachments')
       .getPublicUrl(fileName)
 
     const publicUrl = urlData.publicUrl
 
-    // Update expense record
-    const { error: updateError } = await access.supabase
+    // Update expense record using admin client so RLS does not silently drop the UPDATE
+    const { error: updateError } = await adminClient
       .from('expenses')
       .update({ attachment_url: publicUrl })
       .eq('id', expenseId)
