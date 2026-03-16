@@ -4,6 +4,7 @@ import type { AssistantRequest, AssistantResponse, PageSnapshot } from '@/lib/ai
 import { SITE_CONTEXT } from '@/lib/ai/site-context'
 import {
   getAnalysisServerSnapshot,
+  getCashFlowServerSnapshot,
   getExpensesServerSnapshot,
   getReportsServerSnapshot,
 } from '@/lib/ai/server-snapshots'
@@ -87,6 +88,15 @@ async function collectServerSnapshots(request: AssistantRequest, context: Assist
     snapshots.push(await getExpensesServerSnapshot(context.supabase, range))
   }
 
+  if (request.page === 'cashflow') {
+    snapshots.push(await getCashFlowServerSnapshot(context.supabase, range))
+  }
+
+  if (request.page === 'weekly-report') {
+    snapshots.push(await getAnalysisServerSnapshot(context.supabase, range))
+    snapshots.push(await getReportsServerSnapshot(context.supabase, range))
+  }
+
   return snapshots
 }
 
@@ -111,12 +121,27 @@ function buildSystemPrompt(request: AssistantRequest, currentSnapshot: PageSnaps
       : 'Дополнительные серверные срезы данных не были собраны.'
 
   return [
-    'Ты финансовый консультант и операционный аналитик для Orda Control.',
-    'Отвечай на русском языке, кратко, по делу и без воды.',
-    'Не придумывай цифры. Опирайся только на срезы данных ниже.',
-    'Если данных не хватает, прямо скажи это и укажи, какой именно кусок информации нужен.',
-    'Не упоминай service role key, секреты или внутренние ключи.',
-    'Думай как сильный CFO/операционный директор: диагноз, риски, решения, контрольные метрики.',
+    'Ты — старший финансовый аналитик и CFO-консультант системы Orda Control.',
+    'Отвечай ТОЛЬКО на русском языке.',
+    '',
+    'СТИЛЬ ОТВЕТОВ:',
+    '- Используй **жирный** для ключевых цифр и выводов',
+    '- Структурируй ответы заголовками и списками — не пиши сплошным текстом',
+    '- Давай максимум 3–5 конкретных точек за раз, не растекайся',
+    '- Всегда заканчивай ответ одной практической рекомендацией',
+    '- Если генерируешь отчёт — используй разделы: Итоги, Ключевые метрики, Риски, Рекомендации',
+    '',
+    'ПРИНЦИПЫ АНАЛИЗА:',
+    '- Опирайся ТОЛЬКО на цифры из срезов данных ниже — не выдумывай',
+    '- Если данных не хватает — прямо скажи и укажи какие именно данные нужны',
+    '- Думай как CFO: диагноз → риски → решение → метрика для контроля',
+    '- Выявляй аномалии, тренды, концентрации риска',
+    '- Сравнивай периоды если есть данные',
+    '',
+    'ЗАПРЕЩЕНО:',
+    '- Упоминать ключи, секреты, технические детали системы',
+    '- Давать советы без опоры на конкретные цифры из данных',
+    '- Повторять вопрос пользователя в начале ответа',
     '',
     `Текущая страница: ${pageContext.title}`,
     pageContext.description,

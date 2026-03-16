@@ -704,6 +704,11 @@ function WeeklyReportContent() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // AI Report state
+  const [aiReport, setAiReport] = useState<string | null>(null)
+  const [aiReportLoading, setAiReportLoading] = useState(false)
+  const [aiReportError, setAiReportError] = useState<string | null>(null)
+
   // Date states
   const todayISO = useMemo(() => getTodayISO(), [])
   const currentWeek = useMemo(() => getWeekBounds(todayISO), [todayISO])
@@ -1516,6 +1521,26 @@ function WeeklyReportContent() {
     showToast('CSV отчёт скачан', 'success')
   }, [totals, startDate, endDate, activeCompanies, showToast])
 
+  const handleGenerateAiReport = useCallback(async () => {
+    setAiReportLoading(true)
+    setAiReportError(null)
+    setAiReport(null)
+    try {
+      const res = await fetch('/api/ai/weekly-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dateFrom: startDate, dateTo: endDate }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || json?.error) throw new Error(json?.error || 'Ошибка генерации отчёта')
+      setAiReport(json.text || null)
+    } catch (err: any) {
+      setAiReportError(err?.message || 'Не удалось сгенерировать отчёт')
+    } finally {
+      setAiReportLoading(false)
+    }
+  }, [startDate, endDate])
+
   // =====================
   // LOADING & ERROR
   // =====================
@@ -2053,6 +2078,65 @@ function WeeklyReportContent() {
               </div>
             </>
           )}
+
+          {/* AI Weekly Report */}
+          <div className="rounded-2xl bg-gradient-to-br from-violet-900/20 via-gray-900/60 to-fuchsia-900/20 border border-violet-500/20 p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-violet-500/20 rounded-xl">
+                  <Sparkles className="w-5 h-5 text-violet-400" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-white">AI Еженедельный отчёт</h2>
+                  <p className="text-xs text-gray-400">GPT анализирует данные недели и пишет полный финансовый отчёт</p>
+                </div>
+              </div>
+              <button
+                onClick={handleGenerateAiReport}
+                disabled={aiReportLoading || loading}
+                className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors"
+              >
+                {aiReportLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Генерирую...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Сгенерировать отчёт
+                  </>
+                )}
+              </button>
+            </div>
+
+            {aiReportLoading && (
+              <div className="space-y-3">
+                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-full" />
+                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-5/6" />
+                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-4/5" />
+                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-full" />
+                <div className="h-3 bg-gray-800 rounded-full animate-pulse w-3/4" />
+              </div>
+            )}
+
+            {aiReportError && !aiReportLoading && (
+              <p className="text-sm text-red-400">{aiReportError}</p>
+            )}
+
+            {aiReport && !aiReportLoading && (
+              <div className="prose prose-invert prose-sm max-w-none">
+                <pre className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed font-sans bg-transparent p-0 border-0">{aiReport}</pre>
+              </div>
+            )}
+
+            {!aiReport && !aiReportLoading && !aiReportError && (
+              <p className="text-sm text-gray-500">
+                Нажмите кнопку — GPT проанализирует данные недели ({formatDateRange(startDate, endDate)}) и составит подробный финансовый отчёт.
+              </p>
+            )}
+          </div>
+
         </div>
       </main>
     </div>

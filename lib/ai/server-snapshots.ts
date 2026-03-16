@@ -329,6 +329,82 @@ export async function getReportsServerSnapshot(
   }
 }
 
+export async function getCashFlowServerSnapshot(
+  supabase: RequestSupabase,
+  params?: { dateFrom?: string; dateTo?: string },
+): Promise<PageSnapshot> {
+  const bundle = await fetchFinanceBundle(supabase, params)
+  const data = buildSharedAggregates(bundle)
+
+  // Build daily cash flow
+  const dailyIncomeMap = new Map<string, number>()
+  const dailyExpenseMap = new Map<string, number>()
+  for (const row of bundle.incomes) {
+    const total = safeNumber(row.cash_amount) + safeNumber(row.kaspi_amount) + safeNumber(row.online_amount) + safeNumber(row.card_amount)
+    dailyIncomeMap.set(row.date, (dailyIncomeMap.get(row.date) || 0) + total)
+  }
+  for (const row of bundle.expenses) {
+    const total = safeNumber(row.cash_amount) + safeNumber(row.kaspi_amount)
+    dailyExpenseMap.set(row.date, (dailyExpenseMap.get(row.date) || 0) + total)
+  }
+
+  const allDates = Array.from(new Set([...dailyIncomeMap.keys(), ...dailyExpenseMap.keys()])).sort()
+  let cumBalance = 0
+  const dailyCashFlow = allDates.map((date) => {
+    const income = dailyIncomeMap.get(date) || 0
+    const expense = dailyExpenseMap.get(date) || 0
+    const profit = income - expense
+    cumBalance += profit
+    return { date, income, expense, profit, cumBalance }
+  })
+
+  const negativeDays = dailyCashFlow.filter((d) => d.profit < 0)
+  const topNegativeDays = [...negativeDays].sort((a, b) => a.profit - b.profit).slice(0, 3)
+  const topPositiveDays = [...dailyCashFlow].sort((a, b) => b.profit - a.profit).slice(0, 3)
+
+  return {
+    page: 'cashflow',
+    title: 'Серверный срез Cash Flow',
+    generatedAt: new Date().toISOString(),
+    route: '/cashflow',
+    period: data.period,
+    summary: [
+      `Доходы: ${formatMoney(data.totals.totalIncome)}, расходы: ${formatMoney(data.totals.totalExpense)}.`,
+      `Прибыль за период: ${formatMoney(data.totals.profit)}, маржа ${formatPercent(data.totals.margin)}.`,
+      `Убыточных дней: ${negativeDays.length} из ${allDates.length}.`,
+      `Баланс нарастающим итогом: ${formatMoney(cumBalance)}.`,
+    ],
+    sections: [
+      {
+        title: 'Сводка периода',
+        metrics: [
+          { label: 'Доходы', value: formatMoney(data.totals.totalIncome) },
+          { label: 'Расходы', value: formatMoney(data.totals.totalExpense) },
+          { label: 'Прибыль', value: formatMoney(data.totals.profit) },
+          { label: 'Маржа', value: formatPercent(data.totals.margin) },
+          { label: 'Дней с данными', value: String(allDates.length) },
+          { label: 'Убыточных дней', value: String(negativeDays.length) },
+          { label: 'Итоговый баланс', value: formatMoney(cumBalance) },
+        ],
+      },
+      {
+        title: 'Топ убыточных дней',
+        bullets: topNegativeDays.length
+          ? topNegativeDays.map((d) => `${d.date}: доход ${formatMoney(d.income)}, расход ${formatMoney(d.expense)}, убыток ${formatMoney(d.profit)}`)
+          : ['Убыточных дней нет — отличный результат.'],
+      },
+      {
+        title: 'Топ прибыльных дней',
+        bullets: topPositiveDays.map((d) => `${d.date}: доход ${formatMoney(d.income)}, расход ${formatMoney(d.expense)}, прибыль ${formatMoney(d.profit)}`),
+      },
+      {
+        title: 'Структура расходов',
+        bullets: data.topCategories.map(([name, value]) => `${name}: ${formatMoney(value)}`),
+      },
+    ],
+  }
+}
+
 export async function getExpensesServerSnapshot(
   supabase: RequestSupabase,
   params?: { dateFrom?: string; dateTo?: string },

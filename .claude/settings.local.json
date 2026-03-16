@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"C:\\\\Users\\\\padas\\\\Desktop\\\\f16finance-main\\\\docs\" -type f -name \"*.md\" | xargs wc -l | sort -rn | head -15)",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
+    ]
+  }
+}

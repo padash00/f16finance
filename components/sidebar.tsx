@@ -99,6 +99,7 @@ const navSections: NavSection[] = [
     items: [
       { href: '/income', label: 'Доходы', icon: TrendingUp, note: 'Оборот и выручка', badge: '↑23%', badgeColor: 'green' },
       { href: '/expenses', label: 'Расходы', icon: TrendingDown, note: 'Списания и статьи' },
+      { href: '/cashflow', label: 'Cash Flow', icon: Wallet, note: 'Движение денег и баланс', badge: 'AI', badgeColor: 'blue', isNew: true },
       { href: '/categories', label: 'Категории', icon: Tags, note: 'Структура расходов' },
       { href: '/tax', label: 'Налоги', icon: Landmark, note: '3% и контроль базы' },
       { href: '/profitability', label: 'ОПиУ и EBITDA', icon: Calculator, note: 'Полная прибыль и комиссии POS' },
