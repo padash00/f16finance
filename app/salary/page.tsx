@@ -42,6 +42,7 @@ import {
   AlertCircle,
   Eye,
   Calendar,
+  Download,
 } from 'lucide-react'
 
 import type { Company } from '@/lib/core/types'
@@ -705,6 +706,34 @@ export default function SalaryPage() {
     }
   }
 
+  const handleExportSalary = useCallback(() => {
+    const rows = stats.operators
+    if (!rows.length) return
+
+    const header = ['Оператор', 'Смен', 'Оклад (база)', 'Авто-бонусы', 'Роль-бонусы', 'Ручные +', 'Ручные -', 'Долги', 'Авансы', 'Итого к выплате']
+    const csvRows = rows.map((op) => [
+      op.operatorName || '',
+      op.shifts || 0,
+      Math.round(op.baseSalary || 0),
+      Math.round(op.bonusSalary || 0),
+      Math.round(op.roleBonusSalary || 0),
+      Math.round(op.manualPlus || 0),
+      Math.round(op.manualMinus || 0),
+      Math.round(op.autoDebts || 0),
+      Math.round(op.advances || 0),
+      Math.round(op.finalSalary || 0),
+    ])
+
+    const csv = [header, ...csvRows].map(r => r.join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], {type: 'text/csv;charset=utf-8;'})
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `salary_${weekStartISO || 'export'}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [stats, weekStartISO])
+
   const canBroadcast = useMemo(() => {
     if (loading) return false
     if (broadcastSending) return false
@@ -817,6 +846,16 @@ export default function SalaryPage() {
                     <CalendarDays className="w-4 h-4 mr-1" /> Эта неделя
                   </Button>
                 </div>
+
+                {/* CSV Export */}
+                <button
+                  onClick={handleExportSalary}
+                  disabled={loading || stats.operators.length === 0}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 rounded-xl text-sm text-gray-200 transition-colors disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4 text-blue-400" />
+                  CSV
+                </button>
 
                 {/* Date Picker */}
                 <div className="relative" ref={datePickerRef}>

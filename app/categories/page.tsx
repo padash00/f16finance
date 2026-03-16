@@ -23,8 +23,11 @@ type Category = {
   name: string
   type: string | null
   accounting_group: FinancialGroup | null
+  monthly_budget: number | null
   created_at: string
 }
+
+// SQL: ALTER TABLE expense_categories ADD COLUMN monthly_budget numeric DEFAULT 0;
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([])
@@ -37,11 +40,15 @@ export default function CategoriesPage() {
   const [newType, setNewType] = useState('')
   const [newAccountingGroup, setNewAccountingGroup] = useState<FinancialGroup>('operating')
 
+  // Форма добавления - бюджет
+  const [newBudget, setNewBudget] = useState('')
+
   // Редактирование
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editType, setEditType] = useState('')
   const [editAccountingGroup, setEditAccountingGroup] = useState<FinancialGroup>('operating')
+  const [editBudget, setEditBudget] = useState('')
 
   const [saving, setSaving] = useState(false)
 
@@ -49,7 +56,7 @@ export default function CategoriesPage() {
     setLoading(true)
     const { data, error } = await supabase
       .from('expense_categories')
-      .select('*')
+      .select('id, name, type, accounting_group, monthly_budget, created_at')
       .order('name', { ascending: true })
 
     if (error) {
@@ -79,6 +86,7 @@ export default function CategoriesPage() {
         name: newName.trim(),
         type: newType.trim() || 'Общее',
         accounting_group: newAccountingGroup,
+        monthly_budget: Number(newBudget) || 0,
     }])
 
     if (error) {
@@ -87,6 +95,7 @@ export default function CategoriesPage() {
         setNewName('')
         setNewType('')
         setNewAccountingGroup('operating')
+        setNewBudget('')
         loadCategories()
     }
     setSaving(false)
@@ -98,6 +107,7 @@ export default function CategoriesPage() {
     setEditName(cat.name)
     setEditType(cat.type || '')
     setEditAccountingGroup((cat.accounting_group as FinancialGroup) || 'operating')
+    setEditBudget(String(cat.monthly_budget || ''))
   }
 
   const handleSaveEdit = async () => {
@@ -105,7 +115,7 @@ export default function CategoriesPage() {
     setSaving(true)
 
     const { error } = await supabase.from('expense_categories')
-      .update({ name: editName.trim(), type: editType.trim() || null, accounting_group: editAccountingGroup })
+      .update({ name: editName.trim(), type: editType.trim() || null, accounting_group: editAccountingGroup, monthly_budget: Number(editBudget) || 0 })
       .eq('id', editingId)
 
     if (error) {
@@ -212,6 +222,16 @@ export default function CategoriesPage() {
                                             ))}
                                         </select>
                                     </div>
+                                    <div>
+                                        <label className="text-[10px] text-muted-foreground">Месячный бюджет (₸)</label>
+                                        <input
+                                            type="number"
+                                            value={editBudget}
+                                            onChange={e => setEditBudget(e.target.value)}
+                                            placeholder="0 — без лимита"
+                                            className="w-full bg-input border border-border rounded px-2 py-1 text-xs"
+                                        />
+                                    </div>
                                     <div className="flex gap-2 pt-1">
                                         <Button size="sm" onClick={handleSaveEdit} disabled={saving} className="h-7 text-xs bg-green-600 hover:bg-green-700">
                                             <Save className="w-3 h-3 mr-1"/> Сохранить
@@ -235,6 +255,9 @@ export default function CategoriesPage() {
                                         <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-accent/10 text-accent border border-accent/20">
                                             {getFinancialGroupLabel(cat.accounting_group)}
                                         </span>
+                                        {cat.monthly_budget && cat.monthly_budget > 0 ? (
+                                          <p className="text-xs text-amber-400 mt-1">💰 Бюджет: {cat.monthly_budget.toLocaleString('ru-RU')} ₸/мес</p>
+                                        ) : null}
                                     </div>
                                     
                                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -304,8 +327,18 @@ export default function CategoriesPage() {
                                 {FINANCIAL_GROUP_OPTIONS.find((option) => option.value === newAccountingGroup)?.description}
                             </p>
                         </div>
-                        
-                        <Button 
+                        <div>
+                            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Месячный бюджет (₸)</label>
+                            <input
+                                type="number"
+                                value={newBudget}
+                                onChange={e => setNewBudget(e.target.value)}
+                                placeholder="0 — без лимита"
+                                className="w-full bg-input border border-border rounded-lg px-3 py-2.5 text-sm focus:border-accent transition-colors"
+                            />
+                        </div>
+
+                        <Button
                             type="submit" 
                             disabled={!newName.trim() || saving} 
                             className="w-full bg-accent text-accent-foreground hover:bg-accent/90 mt-2"

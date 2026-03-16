@@ -45,6 +45,94 @@ const SQL_SCRIPT = `create table if not exists goals (
   updated_at timestamptz default now()
 );`
 
+function VarianceTable({ goals }: { goals: Goal[] }) {
+  const [actuals, setActuals] = useState<Record<string, {income: number, expense: number}>>({})
+
+  useEffect(() => {
+    const sorted = [...goals].sort((a,b) => b.period.localeCompare(a.period)).slice(0, 6)
+    Promise.all(sorted.map(async g => {
+      const start = `${g.period}-01`
+      const d = new Date(`${g.period}-01T12:00:00`)
+      d.setMonth(d.getMonth()+1, 0)
+      const end = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+      const [incRes, expRes] = await Promise.all([
+        fetch(`/api/admin/incomes?from=${start}&to=${end}&page_size=5000`).then(r=>r.json()),
+        fetch(`/api/admin/expenses?from=${start}&to=${end}&page_size=5000`).then(r=>r.json()),
+      ])
+      const income = (incRes.data ?? []).reduce((s:number,r:any) => s+(r.cash_amount||0)+(r.kaspi_amount||0)+(r.online_amount||0)+(r.card_amount||0), 0)
+      const expense = (expRes.data ?? []).reduce((s:number,r:any) => s+(r.cash_amount||0)+(r.kaspi_amount||0), 0)
+      return [g.period, {income, expense}] as const
+    })).then(results => {
+      setActuals(Object.fromEntries(results))
+    })
+  }, [goals])
+
+  const fmt = (v: number) => {
+    const abs = Math.abs(v)
+    const sign = v < 0 ? '-' : ''
+    if (abs >= 1_000_000) return sign + (abs/1_000_000).toFixed(1) + ' млн'
+    if (abs >= 1_000) return sign + Math.round(abs/1_000) + ' тыс'
+    return Math.round(v).toLocaleString('ru-RU')
+  }
+
+  const delta = (actual: number, plan: number) => {
+    if (!plan) return null
+    const d = actual - plan
+    const pct = Math.round((d/plan)*100)
+    return { d, pct, positive: d >= 0 }
+  }
+
+  const sorted = [...goals].sort((a,b) => b.period.localeCompare(a.period)).slice(0,6)
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-gray-500 border-b border-gray-800">
+            <th className="text-left py-2 pr-3 font-medium">Месяц</th>
+            <th className="text-right py-2 pr-2 font-medium">П. выручка</th>
+            <th className="text-right py-2 pr-3 font-medium">Ф. выручка</th>
+            <th className="text-right py-2 pr-3 font-medium text-gray-600">Δ</th>
+            <th className="text-right py-2 pr-2 font-medium">П. расходы</th>
+            <th className="text-right py-2 pr-3 font-medium">Ф. расходы</th>
+            <th className="text-right py-2 pr-3 font-medium text-gray-600">Δ</th>
+            <th className="text-right py-2 pr-2 font-medium">П. прибыль</th>
+            <th className="text-right py-2 font-medium">Ф. прибыль</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(g => {
+            const act = actuals[g.period]
+            const incDelta = act ? delta(act.income, g.target_income) : null
+            const expDelta = act ? delta(act.expense, g.target_expense) : null
+            const planProfit = g.target_income - g.target_expense
+            const actProfit = act ? act.income - act.expense : null
+            return (
+              <tr key={g.period} className="border-b border-gray-800/50 hover:bg-gray-800/20">
+                <td className="py-2 pr-3 text-gray-300 whitespace-nowrap font-medium">{new Date(`${g.period}-01T12:00:00`).toLocaleString('ru-RU',{month:'short',year:'numeric'})}</td>
+                <td className="py-2 pr-2 text-right text-gray-400">{fmt(g.target_income)}</td>
+                <td className="py-2 pr-3 text-right text-emerald-400 font-medium">{act ? fmt(act.income) : '...'}</td>
+                <td className={`py-2 pr-3 text-right font-medium ${incDelta ? (incDelta.positive ? 'text-emerald-400' : 'text-red-400') : 'text-gray-600'}`}>
+                  {incDelta ? `${incDelta.positive?'+':''}${incDelta.pct}%` : '—'}
+                </td>
+                <td className="py-2 pr-2 text-right text-gray-400">{fmt(g.target_expense)}</td>
+                <td className="py-2 pr-3 text-right text-red-400 font-medium">{act ? fmt(act.expense) : '...'}</td>
+                <td className={`py-2 pr-3 text-right font-medium ${expDelta ? (!expDelta.positive ? 'text-emerald-400' : 'text-red-400') : 'text-gray-600'}`}>
+                  {expDelta ? `${!expDelta.positive?'':'+'}${expDelta.pct}%` : '—'}
+                </td>
+                <td className="py-2 pr-2 text-right text-gray-400">{fmt(planProfit)}</td>
+                <td className={`py-2 text-right font-bold ${actProfit !== null ? (actProfit >= 0 ? 'text-blue-400' : 'text-red-400') : 'text-gray-600'}`}>
+                  {actProfit !== null ? fmt(actProfit) : '...'}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function ProgressBar({ value, target, color }: { value: number; target: number; color: string }) {
   const pct = target > 0 ? Math.min(100, (value / target) * 100) : 0
   return (
@@ -309,6 +397,14 @@ export default function GoalsPage() {
                       </div>
                     ))}
                   </div>
+                </Card>
+              )}
+
+              {/* Multi-month variance table */}
+              {goals.filter(g => g.target_income > 0 || g.target_expense > 0).length > 0 && (
+                <Card className="p-5 bg-gray-900/80 border-gray-800">
+                  <h2 className="text-sm font-semibold text-white mb-4">План vs Факт — история</h2>
+                  <VarianceTable goals={goals.filter(g => g.target_income > 0 || g.target_expense > 0)} />
                 </Card>
               )}
             </>

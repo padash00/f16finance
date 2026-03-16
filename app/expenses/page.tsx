@@ -40,7 +40,9 @@ import {
   Paperclip,
   Upload,
   Loader2,
+  Bookmark,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
 import {
   ResponsiveContainer,
   Line,
@@ -298,6 +300,12 @@ export default function ExpensesPage() {
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
+  // Expense templates
+  const [templates, setTemplates] = useState<{id:string,name:string,category:string,amount:number,payment_type:string,company_id:string|null,comment:string|null}[]>([])
+  const [templatesTableExists, setTemplatesTableExists] = useState(true)
+  const [showAddTemplate, setShowAddTemplate] = useState(false)
+  const [newTemplate, setNewTemplate] = useState({name:'',category:'',amount:'',payment_type:'cash'})
+
   useEffect(() => {
     const loadSessionRole = async () => {
       const response = await fetch('/api/auth/session-role', { cache: 'no-store' }).catch(() => null)
@@ -311,6 +319,19 @@ export default function ExpensesPage() {
     }
 
     loadSessionRole()
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/admin/expense-templates')
+      .then(r => r.json())
+      .then(d => { setTemplates(d.data ?? []); setTemplatesTableExists(d.tableExists !== false) })
+      .catch(() => {})
+  }, [])
+
+  const [categoryBudgets, setCategoryBudgets] = useState<{id:string,name:string,monthly_budget:number}[]>([])
+  useEffect(() => {
+    supabase.from('expense_categories').select('id,name,monthly_budget').gt('monthly_budget', 0)
+      .then(({data}: {data: {id:string,name:string,monthly_budget:number}[] | null}) => setCategoryBudgets(data ?? []))
   }, [])
 
   // Data hooks
@@ -730,6 +751,39 @@ export default function ExpensesPage() {
     }
   }
 
+  const handleSaveTemplate = async () => {
+    if (!newTemplate.name || !newTemplate.category || !newTemplate.amount) return
+    const res = await fetch('/api/admin/expense-templates', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({...newTemplate, amount: Number(newTemplate.amount)})
+    })
+    const data = await res.json()
+    if (data.data) {
+      setTemplates(prev => [...prev, data.data])
+      setNewTemplate({name:'',category:'',amount:'',payment_type:'cash'})
+      setShowAddTemplate(false)
+    }
+  }
+
+  const applyTemplate = (t: {id:string,name:string,category:string,amount:number,payment_type:string,company_id:string|null,comment:string|null}) => {
+    const params = new URLSearchParams()
+    params.set('category', t.category)
+    if (t.payment_type === 'kaspi') {
+      params.set('kaspi_amount', String(t.amount))
+    } else {
+      params.set('cash_amount', String(t.amount))
+    }
+    if (t.comment) params.set('comment', t.comment)
+    if (t.company_id) params.set('company_id', t.company_id)
+    window.location.href = `/expenses/add?${params.toString()}`
+  }
+
+  const handleDeleteTemplate = async (id: string) => {
+    await fetch(`/api/admin/expense-templates?id=${id}`, { method: 'DELETE' })
+    setTemplates(prev => prev.filter(t => t.id !== id))
+  }
+
   const deleteExpense = async (row: ExpenseRow) => {
     if (!confirm(`Удалить расход от ${DateUtils.formatDate(row.date)}?`)) return
 
@@ -1060,6 +1114,67 @@ export default function ExpensesPage() {
             </div>
           </div>
 
+          {/* Templates */}
+          {templatesTableExists && (
+            <Card className="p-4 bg-gray-900/80 border-gray-800">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Bookmark className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-sm font-semibold text-white">Шаблоны расходов</h3>
+                </div>
+                <button onClick={() => setShowAddTemplate(!showAddTemplate)} className="text-xs text-gray-500 hover:text-gray-300">
+                  {showAddTemplate ? 'Скрыть' : '+ Добавить шаблон'}
+                </button>
+              </div>
+
+              {templates.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {templates.map(t => (
+                    <div key={t.id} className="flex items-center gap-1 group">
+                      <button
+                        onClick={() => applyTemplate(t)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-lg text-xs text-amber-300 transition-colors"
+                      >
+                        <Zap className="w-3 h-3" />
+                        {t.name} — {t.amount.toLocaleString('ru-RU')} ₸
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTemplate(t.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-600 hover:text-red-400 transition-all"
+                        title="Удалить шаблон"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {templates.length === 0 && !showAddTemplate && (
+                <p className="text-xs text-gray-600">Нет шаблонов. Добавьте часто используемые расходы.</p>
+              )}
+
+              {showAddTemplate && (
+                <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-800">
+                  <input placeholder="Название (Аренда)" value={newTemplate.name} onChange={e => setNewTemplate(p=>({...p,name:e.target.value}))}
+                    className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 outline-none" />
+                  <input placeholder="Категория" value={newTemplate.category} onChange={e => setNewTemplate(p=>({...p,category:e.target.value}))}
+                    className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 outline-none" />
+                  <input type="number" placeholder="Сумма" value={newTemplate.amount} onChange={e => setNewTemplate(p=>({...p,amount:e.target.value}))}
+                    className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 outline-none" />
+                  <select value={newTemplate.payment_type} onChange={e => setNewTemplate(p=>({...p,payment_type:e.target.value}))}
+                    className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 outline-none">
+                    <option value="cash">Наличные</option>
+                    <option value="kaspi">Kaspi</option>
+                  </select>
+                  <button onClick={handleSaveTemplate} className="col-span-2 py-1.5 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/30 rounded-lg text-xs text-amber-300 transition-colors">
+                    Сохранить шаблон
+                  </button>
+                </div>
+              )}
+            </Card>
+          )}
+
           {/* Tabs */}
           <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
             <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity className="w-4 h-4" />} label="Обзор" />
@@ -1081,7 +1196,7 @@ export default function ExpensesPage() {
 
           {/* Content */}
           {activeTab === 'overview' && (
-            <OverviewTab analytics={analytics} trendIcon={trendIcon} rows={rows} companyName={companyName} extraCompanyId={extraCompanyId} />
+            <OverviewTab analytics={analytics} trendIcon={trendIcon} rows={rows} companyName={companyName} extraCompanyId={extraCompanyId} categoryBudgets={categoryBudgets} dateFrom={dateFrom} dateTo={dateTo} />
           )}
 
           {activeTab === 'analytics' && (
@@ -1260,7 +1375,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
   )
 }
 
-function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId }: any) {
+function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId, categoryBudgets, dateFrom, dateTo }: any) {
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
@@ -1381,6 +1496,45 @@ function OverviewTab({ analytics, trendIcon, rows, companyName, extraCompanyId }
           </div>
         </Card>
       </div>
+
+      {/* Budget Categories */}
+      {categoryBudgets && categoryBudgets.length > 0 && (() => {
+        const thisMonth = new Date().toISOString().slice(0, 7)
+        const isCurrentMonth = (dateFrom && dateFrom.startsWith(thisMonth)) || (dateTo && dateTo.startsWith(thisMonth))
+        if (!isCurrentMonth) return null
+        const catTotals = new Map<string, number>()
+        for (const row of rows) {
+          if (!row.category) continue
+          const t = (row.cash_amount || 0) + (row.kaspi_amount || 0)
+          catTotals.set(row.category, (catTotals.get(row.category) || 0) + t)
+        }
+        const budgetItems = categoryBudgets.map((cb: any) => ({
+          ...cb,
+          spent: catTotals.get(cb.name) || 0,
+          pct: Math.min(100, Math.round(((catTotals.get(cb.name) || 0) / cb.monthly_budget) * 100))
+        })).filter((b: any) => b.monthly_budget > 0).sort((a: any, b: any) => b.pct - a.pct)
+
+        return (
+          <Card className="p-5 bg-gray-900/80 border-gray-800">
+            <h3 className="text-sm font-semibold text-white mb-4">Бюджет категорий</h3>
+            <div className="space-y-3">
+              {budgetItems.map((item: any) => (
+                <div key={item.id}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-300">{item.name}</span>
+                    <span className={item.pct >= 90 ? 'text-red-400' : item.pct >= 70 ? 'text-amber-400' : 'text-emerald-400'}>
+                      {item.spent.toLocaleString('ru-RU')} / {item.monthly_budget.toLocaleString('ru-RU')} ₸ ({item.pct}%)
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-800 rounded-full">
+                    <div className={`h-1.5 rounded-full transition-all ${item.pct >= 90 ? 'bg-red-500' : item.pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{width: `${item.pct}%`}} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )
+      })()}
 
       {/* AI Prediction & Top Category */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
