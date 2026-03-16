@@ -7,12 +7,18 @@ import {
   ArrowRight,
   CalendarClock,
   CalendarRange,
+  Calculator,
+  Crown,
+  DollarSign,
   FolderKanban,
+  LayoutDashboard,
   Network,
   Loader2,
   ShieldCheck,
+  Target,
   TrendingDown,
   TrendingUp,
+  Users,
   Wallet,
 } from 'lucide-react'
 
@@ -52,6 +58,19 @@ const MARKETER_ACTIONS: WelcomeAction[] = [
   { href: '/tasks', label: 'Задачи', note: 'Постановка, контроль и сопровождение задач', icon: FolderKanban },
 ]
 
+const OWNER_ACTIONS: WelcomeAction[] = [
+  { href: '/', label: 'Главная панель', note: 'Общий статус бизнеса и ключевые метрики', icon: LayoutDashboard },
+  { href: '/income', label: 'Доходы', note: 'Оборот, выручка и притоки денег', icon: TrendingUp },
+  { href: '/expenses', label: 'Расходы', note: 'Списания, статьи и контроль затрат', icon: TrendingDown },
+  { href: '/cashflow', label: 'Cash Flow', note: 'Движение денег и баланс нарастающим итогом', icon: Wallet },
+  { href: '/profitability', label: 'ОПиУ и EBITDA', note: 'Полная прибыль, комиссии и рентабельность', icon: Calculator },
+  { href: '/salary', label: 'Зарплата', note: 'Расчёты, начисления и выплаты команде', icon: DollarSign },
+  { href: '/operators', label: 'Операторы', note: 'Управление командой и профили', icon: Users },
+  { href: '/kpi', label: 'KPI', note: 'Контроль плановых показателей', icon: Target },
+  { href: '/forecast', label: 'AI Прогноз', note: 'Прогноз доходов на 30/60/90 дней', icon: TrendingUp },
+  { href: '/goals', label: 'Цели и план', note: 'Плановые показатели по выручке', icon: Target },
+]
+
 export default function WelcomePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -85,7 +104,7 @@ export default function WelcomePage() {
           return
         }
 
-        if (json.staffRole !== 'manager' && json.staffRole !== 'marketer') {
+        if (!['manager', 'marketer', 'owner'].includes(json.staffRole || '')) {
           router.replace(json.defaultPath || '/unauthorized')
           return
         }
@@ -101,6 +120,21 @@ export default function WelcomePage() {
   }, [router])
 
   const welcomeConfig = useMemo(() => {
+    if (staffRole === 'owner') {
+      return {
+        title: displayName ? `Добро пожаловать, ${displayName}` : 'Добро пожаловать, Владелец',
+        description: 'У вас открыт полный управленческий доступ к финансам, команде и аналитике бизнеса.',
+        checklist: [
+          'Откройте главную панель — там собраны ключевые метрики бизнеса за сегодня.',
+          'Проверьте Cash Flow за последние 30 дней: положительный ли баланс?',
+          'Сверьте рентабельность текущего месяца в разделе ОПиУ и EBITDA.',
+          'Просмотрите рейтинг операторов и KPI — кто показывает лучшие результаты.',
+          'Проверьте зарплатный расчёт перед датой выплат.',
+        ],
+        actions: OWNER_ACTIONS,
+      }
+    }
+
     if (staffRole === 'manager') {
       return {
         title: 'Добро пожаловать, руководитель',
@@ -154,11 +188,19 @@ export default function WelcomePage() {
       <Sidebar />
       <main className="app-main">
         <div className="app-page space-y-6">
-          <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.18),transparent_34%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.32)] sm:p-8">
+          <Card className={`overflow-hidden border-white/10 p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.32)] sm:p-8 ${
+            staffRole === 'owner'
+              ? 'bg-[radial-gradient(circle_at_top,rgba(251,146,60,0.18),transparent_34%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))]'
+              : 'bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.18),transparent_34%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))]'
+          }`}>
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-3xl">
                 <div className="mb-4 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-200">
+                  <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                    staffRole === 'owner'
+                      ? 'border border-amber-400/20 bg-amber-400/10 text-amber-200'
+                      : 'border border-violet-400/20 bg-violet-400/10 text-violet-200'
+                  }`}>
                     {roleLabel || 'Рабочий контур'}
                   </span>
                   {displayName ? (
@@ -167,8 +209,11 @@ export default function WelcomePage() {
                     </span>
                   ) : null}
                 </div>
-                <div className="mb-4 inline-flex rounded-2xl bg-violet-500/12 p-4">
-                  <ShieldCheck className="h-7 w-7 text-violet-300" />
+                <div className={`mb-4 inline-flex rounded-2xl p-4 ${staffRole === 'owner' ? 'bg-amber-500/12' : 'bg-violet-500/12'}`}>
+                  {staffRole === 'owner'
+                    ? <Crown className="h-7 w-7 text-amber-300" />
+                    : <ShieldCheck className="h-7 w-7 text-violet-300" />
+                  }
                 </div>
                 <h1 className="text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">{welcomeConfig.title}</h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">{welcomeConfig.description}</p>
@@ -189,7 +234,7 @@ export default function WelcomePage() {
             </ol>
           </Card>
 
-          <div className={`grid gap-4 ${welcomeConfig.actions.length === 1 ? 'md:max-w-xl' : 'xl:grid-cols-2'}`}>
+          <div className={`grid gap-4 ${welcomeConfig.actions.length >= 6 ? 'xl:grid-cols-3' : welcomeConfig.actions.length === 1 ? 'md:max-w-xl' : 'xl:grid-cols-2'}`}>
             {welcomeConfig.actions.map((action) => {
               const Icon = action.icon
 

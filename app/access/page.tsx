@@ -113,6 +113,51 @@ const DEFAULT_PATHS: Record<RoleKey, string[]> = {
   ],
 }
 
+const ROLE_CAPABILITIES: Record<RoleKey, { label: string; allowed: boolean }[]> = {
+  manager: [
+    { label: 'Просмотр финансов', allowed: true },
+    { label: 'Добавление доходов', allowed: true },
+    { label: 'Добавление расходов', allowed: true },
+    { label: 'Удаление/правка финансов', allowed: false },
+    { label: 'Управление зарплатой', allowed: true },
+    { label: 'Управление сменами', allowed: true },
+    { label: 'Управление задачами', allowed: true },
+    { label: 'Создание операторов', allowed: false },
+    { label: 'Управление сотрудниками', allowed: false },
+    { label: 'Системные настройки', allowed: false },
+    { label: 'Telegram Bot', allowed: false },
+    { label: 'Структура и роли', allowed: true },
+  ],
+  marketer: [
+    { label: 'Просмотр финансов', allowed: false },
+    { label: 'Добавление доходов', allowed: false },
+    { label: 'Добавление расходов', allowed: false },
+    { label: 'Удаление/правка финансов', allowed: false },
+    { label: 'Управление зарплатой', allowed: false },
+    { label: 'Управление сменами', allowed: false },
+    { label: 'Управление задачами', allowed: true },
+    { label: 'Создание операторов', allowed: false },
+    { label: 'Управление сотрудниками', allowed: false },
+    { label: 'Системные настройки', allowed: false },
+    { label: 'Telegram Bot', allowed: false },
+    { label: 'Структура и роли', allowed: false },
+  ],
+  owner: [
+    { label: 'Просмотр финансов', allowed: true },
+    { label: 'Добавление доходов', allowed: true },
+    { label: 'Добавление расходов', allowed: true },
+    { label: 'Удаление/правка финансов', allowed: true },
+    { label: 'Управление зарплатой', allowed: true },
+    { label: 'Управление сменами', allowed: true },
+    { label: 'Управление задачами', allowed: true },
+    { label: 'Создание операторов', allowed: true },
+    { label: 'Управление сотрудниками', allowed: true },
+    { label: 'Системные настройки', allowed: false },
+    { label: 'Telegram Bot', allowed: false },
+    { label: 'Структура и роли', allowed: true },
+  ],
+}
+
 const SQL_SCRIPT = `create table if not exists role_permissions (
   role text not null,
   path text not null,
@@ -228,6 +273,41 @@ export default function AccessPage() {
     }
     setSavingKey(null)
   }, [isEnabled])
+
+  // ---- Bulk controls ----
+  const bulkToggle = useCallback(async (role: RoleKey, enabled: boolean) => {
+    const allPaths = PAGE_GROUPS.flatMap(g => g.pages.map(p => p.path))
+    const inDefault = allPaths.filter(p => DEFAULT_PATHS[role].includes(p))
+
+    // Optimistic update
+    setPermissions(prev => {
+      const filtered = prev.filter(p => p.role !== role)
+      const newPerms = inDefault.map(path => ({ role, path, enabled }))
+      return [...filtered, ...newPerms]
+    })
+
+    // Save all to DB
+    await Promise.all(inDefault.map(path =>
+      fetch('/api/admin/role-permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, path, enabled }),
+      })
+    ))
+  }, [])
+
+  const resetToDefault = useCallback(async (role: RoleKey) => {
+    // Remove all overrides for this role from DB
+    const allPaths = PAGE_GROUPS.flatMap(g => g.pages.map(p => p.path))
+    setPermissions(prev => prev.filter(p => p.role !== role))
+    await Promise.all(allPaths.map(path =>
+      fetch('/api/admin/role-permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, path, enabled: DEFAULT_PATHS[role].includes(path) }),
+      })
+    ))
+  }, [])
 
   // ---- Password generation ----
   const generatePassword = useCallback(async (staffId: string) => {
@@ -352,21 +432,29 @@ export default function AccessPage() {
                 <>
                   {/* Role selector */}
                   <div className="flex gap-2">
-                    {(Object.keys(ROLE_LABELS) as RoleKey[]).map(role => (
-                      <button
-                        key={role}
-                        onClick={() => setSelectedRole(role)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
-                          selectedRole === role
-                            ? role === 'manager' ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                              : role === 'marketer' ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
-                              : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                            : 'bg-gray-900/50 border-gray-700 text-gray-500 hover:text-gray-300'
-                        }`}
-                      >
-                        {ROLE_LABELS[role]}
-                      </button>
-                    ))}
+                    {(Object.keys(ROLE_LABELS) as RoleKey[]).map(role => {
+                      const allPaths = PAGE_GROUPS.flatMap(g => g.pages.map(p => p.path))
+                      const count = allPaths.filter(path => isEnabled(role, path)).length
+                      const total = DEFAULT_PATHS[role].length
+                      return (
+                        <button
+                          key={role}
+                          onClick={() => setSelectedRole(role)}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
+                            selectedRole === role
+                              ? role === 'manager' ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+                                : role === 'marketer' ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
+                                : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                              : 'bg-gray-900/50 border-gray-700 text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          {ROLE_LABELS[role]}
+                          <span className={`text-xs px-1.5 py-0.5 rounded-md ${selectedRole === role ? 'bg-white/10' : 'bg-gray-800'}`}>
+                            {count}/{total}
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
 
                   {/* Info bar */}
@@ -375,6 +463,32 @@ export default function AccessPage() {
                     <span>Доступно страниц: <span className="text-white font-semibold">{enabledCount}</span> из <span className="text-white font-semibold">{totalCount}</span></span>
                     <span className="text-gray-600">·</span>
                     <span className="text-xs text-gray-500">Изменения вступают в силу при следующем входе пользователя</span>
+                  </div>
+
+                  {/* Bulk actions */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-gray-500">Быстрые действия:</span>
+                    <button
+                      onClick={() => bulkToggle(selectedRole, true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg text-xs text-emerald-300 transition-colors"
+                    >
+                      <LockOpen className="w-3.5 h-3.5" />
+                      Включить всё
+                    </button>
+                    <button
+                      onClick={() => bulkToggle(selectedRole, false)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-xs text-red-300 transition-colors"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      Выключить всё
+                    </button>
+                    <button
+                      onClick={() => resetToDefault(selectedRole)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Сбросить к стандарту
+                    </button>
                   </div>
 
                   {/* Pages grid */}
@@ -432,6 +546,22 @@ export default function AccessPage() {
                       )
                     })}
                   </div>
+
+                  {/* Role capabilities */}
+                  <Card className="p-4 bg-gray-900/80 border-gray-800">
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Возможности роли</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {ROLE_CAPABILITIES[selectedRole].map(cap => (
+                        <div key={cap.label} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${cap.allowed ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-gray-800/40 border border-gray-800'}`}>
+                          {cap.allowed
+                            ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            : <X className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+                          }
+                          <span className={`text-xs ${cap.allowed ? 'text-gray-200' : 'text-gray-600'}`}>{cap.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
                 </>
               )}
             </>
