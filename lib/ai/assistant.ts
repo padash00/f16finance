@@ -10,8 +10,8 @@ import {
 } from '@/lib/ai/server-snapshots'
 import { createRequestSupabaseClient } from '@/lib/server/request-auth'
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5-mini'
-const OPENAI_API_URL = 'https://api.openai.com/v1/responses'
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
 const DEFAULT_DATE = '2026-03-15'
 
 type RequestSupabaseClient = ReturnType<typeof createRequestSupabaseClient>
@@ -179,6 +179,13 @@ function buildInput(request: AssistantRequest, currentSnapshot: PageSnapshot | n
 }
 
 function extractOpenAIText(payload: any): string {
+  // Chat Completions format: { choices: [{ message: { content: string } }] }
+  const chatText = payload?.choices?.[0]?.message?.content
+  if (typeof chatText === 'string' && chatText.trim()) {
+    return chatText.trim()
+  }
+
+  // Responses API format fallback
   if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
     return payload.output_text.trim()
   }
@@ -186,25 +193,11 @@ function extractOpenAIText(payload: any): string {
   if (!Array.isArray(payload?.output)) return ''
 
   const parts = payload.output.flatMap((item: any) => {
-    if (typeof item?.text === 'string' && item.text.trim()) {
-      return [item.text.trim()]
-    }
-
+    if (typeof item?.text === 'string' && item.text.trim()) return [item.text.trim()]
     if (!Array.isArray(item?.content)) return []
-
     return item.content.flatMap((content: any) => {
-      if (typeof content?.text === 'string' && content.text.trim()) {
-        return [content.text.trim()]
-      }
-
-      if (typeof content?.output_text === 'string' && content.output_text.trim()) {
-        return [content.output_text.trim()]
-      }
-
-      if (typeof content?.text?.value === 'string' && content.text.value.trim()) {
-        return [content.text.value.trim()]
-      }
-
+      if (typeof content?.text === 'string' && content.text.trim()) return [content.text.trim()]
+      if (typeof content?.output_text === 'string' && content.output_text.trim()) return [content.output_text.trim()]
       return []
     })
   })
@@ -252,11 +245,18 @@ export async function runAssistant(request: AssistantRequest, context: Assistant
   try {
     const serverSnapshots = await collectServerSnapshots(request, context)
 
+    const input = buildInput(request, context.currentSnapshot, serverSnapshots)
+    const messages = input.map((msg: any) => ({
+      role: msg.role,
+      content: Array.isArray(msg.content)
+        ? msg.content.map((c: any) => c.text || c.output_text || '').join('')
+        : msg.content,
+    }))
+
     const result = await requestOpenAI({
       model: OPENAI_MODEL,
-      reasoning: { effort: 'medium' },
-      max_output_tokens: 1200,
-      input: buildInput(request, context.currentSnapshot, serverSnapshots),
+      max_tokens: 1200,
+      messages,
     })
 
     if ('error' in result) {
