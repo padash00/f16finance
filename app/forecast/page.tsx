@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { AssistantPanel } from '@/components/ai/assistant-panel'
 import { Sidebar } from '@/components/sidebar'
@@ -60,6 +60,20 @@ type ForecastResult = {
   }
   avgWeeklyIncome: number
   avgWeeklyExpense: number
+  scenarios?: {
+    pessimistic: {
+      week4Income: number; week8Income: number; week13Income: number
+      week4Expense: number; week8Expense: number; week13Expense: number
+    }
+    realistic: {
+      week4Income: number; week8Income: number; week13Income: number
+      week4Expense: number; week8Expense: number; week13Expense: number
+    }
+    optimistic: {
+      week4Income: number; week8Income: number; week13Income: number
+      week4Expense: number; week8Expense: number; week13Expense: number
+    }
+  }
 }
 
 // ================== TOOLTIP ==================
@@ -83,6 +97,12 @@ export default function ForecastPage() {
   const [result, setResult] = useState<ForecastResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [scenario, setScenario] = useState<'pessimistic' | 'realistic' | 'optimistic'>('realistic')
+
+  const activeProjected = useMemo(
+    () => result ? (result.scenarios?.[scenario] ?? result.projected) : null,
+    [result, scenario],
+  )
 
   const handleGenerate = async () => {
     setLoading(true)
@@ -249,31 +269,55 @@ export default function ForecastPage() {
 
           {result && (
             <>
+              {/* Scenario selector */}
+              {result?.scenarios && (
+                <div className="flex items-center gap-2 p-1 bg-gray-900/80 border border-gray-700 rounded-xl w-fit">
+                  {(['pessimistic', 'realistic', 'optimistic'] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setScenario(s)}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                        scenario === s
+                          ? s === 'pessimistic' ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                            : s === 'optimistic' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                          : 'text-gray-500 hover:text-gray-300'
+                      }`}
+                    >
+                      {s === 'pessimistic' ? '📉 Пессимизм' : s === 'realistic' ? '📊 Реализм' : '📈 Оптимизм'}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Forecast cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  {
-                    label: '30 дней',
-                    icon: CalendarDays,
-                    income: result.projected.week4Income,
-                    expense: result.projected.week4Expense,
-                    color: 'blue',
-                  },
-                  {
-                    label: '60 дней',
-                    icon: CalendarDays,
-                    income: result.projected.week8Income,
-                    expense: result.projected.week8Expense,
-                    color: 'purple',
-                  },
-                  {
-                    label: '90 дней',
-                    icon: CalendarDays,
-                    income: result.projected.week13Income,
-                    expense: result.projected.week13Expense,
-                    color: 'indigo',
-                  },
-                ].map(({ label, income, expense }) => {
+                {(() => {
+                  const proj = activeProjected ?? result.projected
+                  return [
+                    {
+                      label: '30 дней',
+                      icon: CalendarDays,
+                      income: proj.week4Income,
+                      expense: proj.week4Expense,
+                      color: 'blue',
+                    },
+                    {
+                      label: '60 дней',
+                      icon: CalendarDays,
+                      income: proj.week8Income,
+                      expense: proj.week8Expense,
+                      color: 'purple',
+                    },
+                    {
+                      label: '90 дней',
+                      icon: CalendarDays,
+                      income: proj.week13Income,
+                      expense: proj.week13Expense,
+                      color: 'indigo',
+                    },
+                  ]
+                })().map(({ label, income, expense }) => {
                   const profit = income - expense
                   return (
                     <Card key={label} className="p-5 bg-gray-900/80 border-gray-700">

@@ -4,9 +4,10 @@ import { useMemo, useState } from 'react'
 
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
+import { useCompanies } from '@/hooks/use-companies'
 import { useIncome } from '@/hooks/use-income'
 import { useOperators } from '@/hooks/use-operators'
-import { CalendarDays, Loader2, Medal, TrendingUp, Trophy, Users2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, CalendarDays, Loader2, Medal, Minus, TrendingUp, Trophy, Users2 } from 'lucide-react'
 
 // ================== HELPERS ==================
 const toISODateLocal = (d: Date) => {
@@ -39,11 +40,25 @@ function RankBadge({ rank }: { rank: number }) {
 export default function RatingsPage() {
   const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -29))
   const [dateTo, setDateTo] = useState(() => todayISO())
+  const [companyId, setCompanyId] = useState('')
 
   const { operators, loading: operatorsLoading } = useOperators({ activeOnly: false })
-  const { rows: incomeRows, loading: incomeLoading } = useIncome({ from: dateFrom, to: dateTo })
+  const { companies } = useCompanies()
+  const { rows: incomeRows, loading: incomeLoading } = useIncome({ from: dateFrom, to: dateTo, companyId: companyId || undefined })
 
-  const loading = operatorsLoading || incomeLoading
+  // Previous period calculation
+  const periodDays = useMemo(() => {
+    const [y1, m1, d1] = dateFrom.split('-').map(Number)
+    const [y2, m2, d2] = dateTo.split('-').map(Number)
+    const from = new Date(y1, (m1 || 1) - 1, d1 || 1)
+    const to = new Date(y2, (m2 || 1) - 1, d2 || 1)
+    return Math.max(1, Math.round((to.getTime() - from.getTime()) / 86400_000) + 1)
+  }, [dateFrom, dateTo])
+  const prevDateTo = useMemo(() => addDaysISO(dateFrom, -1), [dateFrom])
+  const prevDateFrom = useMemo(() => addDaysISO(prevDateTo, -(periodDays - 1)), [prevDateTo, periodDays])
+  const { rows: prevIncomeRows, loading: prevLoading } = useIncome({ from: prevDateFrom, to: prevDateTo, companyId: companyId || undefined })
+
+  const loading = operatorsLoading || incomeLoading || prevLoading
 
   const operatorMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -54,6 +69,17 @@ export default function RatingsPage() {
     }
     return map
   }, [operators])
+
+  const prevLeaderboard = useMemo(() => {
+    const stats = new Map<string, number>()
+    for (const row of prevIncomeRows) {
+      if (!row.operator_id) continue
+      const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.online_amount || 0) + (row.card_amount || 0)
+      if (!total) continue
+      stats.set(row.operator_id, (stats.get(row.operator_id) || 0) + total)
+    }
+    return stats
+  }, [prevIncomeRows])
 
   const leaderboard = useMemo(() => {
     const stats = new Map<string, { revenue: number; shifts: number; days: Set<string> }>()
@@ -74,6 +100,13 @@ export default function RatingsPage() {
       stats.set(row.operator_id, existing)
     }
 
+    // Add operators with zero revenue
+    for (const op of operators) {
+      if (!stats.has(op.id)) {
+        stats.set(op.id, { revenue: 0, shifts: 0, days: new Set<string>() })
+      }
+    }
+
     return Array.from(stats.entries())
       .map(([operatorId, s]) => ({
         operatorId,
@@ -82,9 +115,10 @@ export default function RatingsPage() {
         shifts: s.shifts,
         days: s.days.size,
         avgCheck: s.shifts > 0 ? s.revenue / s.shifts : 0,
+        prevRevenue: prevLeaderboard.get(operatorId) || 0,
       }))
       .sort((a, b) => b.revenue - a.revenue)
-  }, [incomeRows, operatorMap])
+  }, [incomeRows, operatorMap, operators, prevLeaderboard])
 
   const totalRevenue = useMemo(() => leaderboard.reduce((s, r) => s + r.revenue, 0), [leaderboard])
 
@@ -110,21 +144,35 @@ export default function RatingsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
-                <CalendarDays className="w-4 h-4 text-amber-400 shrink-0" />
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="bg-transparent text-sm text-gray-200 outline-none w-[120px]"
-                />
-                <span className="text-gray-500">—</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="bg-transparent text-sm text-gray-200 outline-none w-[120px]"
-                />
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
+                  <CalendarDays className="w-4 h-4 text-amber-400 shrink-0" />
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="bg-transparent text-sm text-gray-200 outline-none w-[120px]"
+                  />
+                  <span className="text-gray-500">—</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="bg-transparent text-sm text-gray-200 outline-none w-[120px]"
+                  />
+                </div>
+                {companies.length > 0 && (
+                  <select
+                    value={companyId}
+                    onChange={(e) => setCompanyId(e.target.value)}
+                    className="px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-xl text-sm text-gray-200 outline-none"
+                  >
+                    <option value="">Все компании</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
           </div>
@@ -181,7 +229,8 @@ export default function RatingsPage() {
                       <th className="text-right py-2 pr-4 font-medium">Выручка</th>
                       <th className="text-right py-2 pr-4 font-medium">Смены</th>
                       <th className="text-right py-2 pr-4 font-medium">Рабочих дней</th>
-                      <th className="text-right py-2 font-medium">Средний чек</th>
+                      <th className="text-right py-2 pr-4 font-medium">Средний чек</th>
+                      <th className="text-right py-2 font-medium">Δ период</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -191,33 +240,51 @@ export default function RatingsPage() {
                       return (
                         <tr
                           key={row.operatorId}
-                          className={`border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors ${rank <= 3 ? 'bg-amber-500/3' : ''}`}
+                          className={`border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors ${rank <= 3 && row.revenue > 0 ? 'bg-amber-500/3' : ''}`}
                         >
                           <td className="py-3 pr-3">
                             <RankBadge rank={rank} />
                           </td>
                           <td className="py-3 pr-4">
                             <div>
-                              <p className={`font-medium ${rank === 1 ? 'text-amber-300' : rank === 2 ? 'text-gray-200' : rank === 3 ? 'text-orange-300' : 'text-gray-300'}`}>
+                              <p className={`font-medium ${rank === 1 && row.revenue > 0 ? 'text-amber-300' : rank === 2 && row.revenue > 0 ? 'text-gray-200' : rank === 3 && row.revenue > 0 ? 'text-orange-300' : 'text-gray-400'}`}>
                                 {row.name}
                               </p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <div className="h-1 rounded-full bg-gray-800 flex-1 max-w-[120px]">
-                                  <div
-                                    className="h-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
-                                    style={{ width: `${sharePercent}%` }}
-                                  />
+                              {row.revenue > 0 && (
+                                <div className="flex items-center gap-2 mt-1">
+                                  <div className="h-1 rounded-full bg-gray-800 flex-1 max-w-[120px]">
+                                    <div
+                                      className="h-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+                                      style={{ width: `${sharePercent}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs text-gray-500">{sharePercent.toFixed(1)}%</span>
                                 </div>
-                                <span className="text-xs text-gray-500">{sharePercent.toFixed(1)}%</span>
-                              </div>
+                              )}
                             </div>
                           </td>
                           <td className="py-3 pr-4 text-right">
-                            <span className="font-bold text-emerald-400">{fmtMoney(row.revenue)}</span>
+                            {row.revenue > 0
+                              ? <span className="font-bold text-emerald-400">{fmtMoney(row.revenue)}</span>
+                              : <span className="text-gray-600 text-xs">нет данных</span>
+                            }
                           </td>
-                          <td className="py-3 pr-4 text-right text-gray-300">{row.shifts}</td>
-                          <td className="py-3 pr-4 text-right text-gray-300">{row.days}</td>
-                          <td className="py-3 text-right text-blue-400 font-medium">{fmtMoney(row.avgCheck)}</td>
+                          <td className="py-3 pr-4 text-right text-gray-300">{row.shifts || '—'}</td>
+                          <td className="py-3 pr-4 text-right text-gray-300">{row.days || '—'}</td>
+                          <td className="py-3 pr-4 text-right text-blue-400 font-medium">
+                            {row.avgCheck > 0 ? fmtMoney(row.avgCheck) : '—'}
+                          </td>
+                          <td className="py-3 text-right">
+                            {row.prevRevenue > 0 ? (
+                              (() => {
+                                const delta = row.revenue - row.prevRevenue
+                                const pct = (delta / row.prevRevenue) * 100
+                                if (delta > 0) return <span className="text-emerald-400 text-xs font-medium flex items-center justify-end gap-0.5"><ArrowUp className="w-3 h-3" />+{pct.toFixed(0)}%</span>
+                                if (delta < 0) return <span className="text-red-400 text-xs font-medium flex items-center justify-end gap-0.5"><ArrowDown className="w-3 h-3" />{pct.toFixed(0)}%</span>
+                                return <span className="text-gray-500 text-xs"><Minus className="w-3 h-3 inline" /></span>
+                              })()
+                            ) : <span className="text-gray-600 text-xs">—</span>}
+                          </td>
                         </tr>
                       )
                     })}
@@ -228,7 +295,7 @@ export default function RatingsPage() {
           </Card>
 
           {/* Top 3 podium */}
-          {leaderboard.length >= 3 && (
+          {leaderboard.filter(r => r.revenue > 0).length >= 3 && (
             <Card className="p-5 bg-gray-900/80 border-amber-500/20">
               <h2 className="text-sm font-semibold text-white mb-4">Подиум</h2>
               <div className="flex items-end justify-center gap-3">
@@ -238,8 +305,8 @@ export default function RatingsPage() {
                     <span className="text-3xl">🥈</span>
                   </div>
                   <div className="w-24 h-16 bg-gray-700/50 rounded-t-xl flex flex-col items-center justify-center gap-1">
-                    <span className="text-xs text-gray-300 font-medium truncate w-full text-center px-1">{leaderboard[1]?.name}</span>
-                    <span className="text-xs text-gray-400">{fmtMoney(leaderboard[1]?.revenue ?? 0)}</span>
+                    <span className="text-xs text-gray-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[1]?.name}</span>
+                    <span className="text-xs text-gray-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[1]?.revenue ?? 0)}</span>
                   </div>
                 </div>
                 {/* 1st */}
@@ -248,9 +315,9 @@ export default function RatingsPage() {
                     <span className="text-4xl">🥇</span>
                   </div>
                   <div className="w-28 h-24 bg-amber-500/10 border border-amber-500/20 rounded-t-xl flex flex-col items-center justify-center gap-1">
-                    <span className="text-xs text-amber-300 font-semibold truncate w-full text-center px-1">{leaderboard[0]?.name}</span>
-                    <span className="text-sm font-bold text-emerald-400">{fmtMoney(leaderboard[0]?.revenue ?? 0)}</span>
-                    <span className="text-xs text-gray-500">{leaderboard[0]?.shifts} смен</span>
+                    <span className="text-xs text-amber-300 font-semibold truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[0]?.name}</span>
+                    <span className="text-sm font-bold text-emerald-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[0]?.revenue ?? 0)}</span>
+                    <span className="text-xs text-gray-500">{leaderboard.filter(r => r.revenue > 0)[0]?.shifts} смен</span>
                   </div>
                 </div>
                 {/* 3rd */}
@@ -259,8 +326,8 @@ export default function RatingsPage() {
                     <span className="text-3xl">🥉</span>
                   </div>
                   <div className="w-24 h-12 bg-orange-500/5 rounded-t-xl flex flex-col items-center justify-center gap-1">
-                    <span className="text-xs text-orange-300 font-medium truncate w-full text-center px-1">{leaderboard[2]?.name}</span>
-                    <span className="text-xs text-gray-400">{fmtMoney(leaderboard[2]?.revenue ?? 0)}</span>
+                    <span className="text-xs text-orange-300 font-medium truncate w-full text-center px-1">{leaderboard.filter(r => r.revenue > 0)[2]?.name}</span>
+                    <span className="text-xs text-gray-400">{fmtMoney(leaderboard.filter(r => r.revenue > 0)[2]?.revenue ?? 0)}</span>
                   </div>
                 </div>
               </div>

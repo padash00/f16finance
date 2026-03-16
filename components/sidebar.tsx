@@ -87,6 +87,7 @@ const navSections: NavSection[] = [
       { href: '/', label: 'Главная панель', icon: LayoutDashboard, note: 'Общий статус бизнеса' },
       { href: '/analysis', label: 'AI Разбор', icon: BrainCircuit, note: 'Диагностика и выводы', badge: 'AI', badgeColor: 'purple', isNew: true },
       { href: '/forecast', label: 'AI Прогноз', icon: Radar, note: 'Прогноз 30/60/90 дней', badge: 'AI', badgeColor: 'purple', isNew: true },
+      { href: '/goals', label: 'Цели и план', icon: Target, note: 'Плановые показатели', badge: 'new', badgeColor: 'blue' },
       { href: '/reports', label: 'Отчёты', icon: BarChart3, note: 'Сводные метрики' },
       { href: '/weekly-report', label: 'Недельный отчёт', icon: CalendarRange, note: 'Ритм недели' },
     ],

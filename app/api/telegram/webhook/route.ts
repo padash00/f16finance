@@ -201,6 +201,7 @@ function buildHelpText(user: BotUser): string {
       '/week — последние 7 дней',
       '/month — последние 30 дней',
       '/cashflow — баланс и движение денег',
+      '/compare — сравнение этой и прошлой недели',
     )
   }
 
@@ -344,6 +345,42 @@ async function handleForecast(chatId: number) {
     `💼 Прогноз прибыли: <b>${sign}${fmtMoney(proj30Profit)}</b>`,
     '',
     `<i>Подробный AI-анализ доступен на странице /forecast в системе</i>`,
+  ]
+
+  await sendTelegramMessage(chatId, lines.join('\n'))
+}
+
+async function handleCompare(chatId: number) {
+  const supabase = createAdminSupabaseClient()
+  const today = todayISO()
+  const thisWeekFrom = addDaysISO(today, -6)
+  const lastWeekFrom = addDaysISO(today, -13)
+  const lastWeekTo = addDaysISO(today, -7)
+
+  const [thisRes, lastRes] = await Promise.all([
+    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount').gte('date', thisWeekFrom).lte('date', today),
+    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount').gte('date', lastWeekFrom).lte('date', lastWeekTo),
+  ])
+
+  const sum = (rows: any[]) => rows.reduce((s: number, r: any) => s + safeNum(r.cash_amount) + safeNum(r.kaspi_amount) + safeNum(r.online_amount) + safeNum(r.card_amount), 0)
+
+  const thisWeek = sum(thisRes.data ?? [])
+  const lastWeek = sum(lastRes.data ?? [])
+  const diff = thisWeek - lastWeek
+  const pct = lastWeek > 0 ? ((diff / lastWeek) * 100) : 0
+  const arrow = diff > 0 ? '📈' : diff < 0 ? '📉' : '➡️'
+  const sign = diff >= 0 ? '+' : ''
+
+  const lines = [
+    `<b>${arrow} Сравнение недель</b>`,
+    '',
+    `<b>Эта неделя</b> (${thisWeekFrom} — ${today})`,
+    `  💰 ${fmtMoney(thisWeek)}`,
+    '',
+    `<b>Прошлая неделя</b> (${lastWeekFrom} — ${lastWeekTo})`,
+    `  💰 ${fmtMoney(lastWeek)}`,
+    '',
+    `Изменение: <b>${sign}${fmtMoney(diff)}</b> (${sign}${pct.toFixed(1)}%)`,
   ]
 
   await sendTelegramMessage(chatId, lines.join('\n'))
@@ -781,6 +818,15 @@ export async function POST(req: Request) {
           return json({ ok: true })
         }
         await handleForecast(Number(chatId))
+        return json({ ok: true })
+      }
+
+      if (cmd === '/compare') {
+        if (!canUseFinance(botUser.role)) {
+          await sendTelegramText(chatId, '⛔ Нет доступа к финансовым командам.')
+          return json({ ok: true })
+        }
+        await handleCompare(Number(chatId))
         return json({ ok: true })
       }
 

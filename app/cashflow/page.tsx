@@ -9,7 +9,7 @@ import { useCompanies } from '@/hooks/use-companies'
 import { useExpenses } from '@/hooks/use-expenses'
 import { useIncome } from '@/hooks/use-income'
 import type { PageSnapshot } from '@/lib/ai/types'
-import { Activity, CalendarDays, Loader2, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { Activity, CalendarDays, Download, Loader2, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import {
   Area,
   Bar,
@@ -138,6 +138,19 @@ export default function CashFlowPage() {
     return { totalIncome, totalExpenses, profit, margin, negativeDays, finalBalance }
   }, [dailyData])
 
+  const downloadCSV = () => {
+    const header = ['Дата', 'Доходы', 'Расходы', 'Прибыль за день', 'Баланс накоп.']
+    const rows = dailyData.map(r => [r.date, r.income, r.expenses, r.profit, r.cumBalance])
+    const csv = [header, ...rows].map(r => r.join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `cashflow_${dateFrom}_${dateTo}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // ---- Page snapshot for AI ----
   const snapshot = useMemo<PageSnapshot>(
     () => ({
@@ -261,6 +274,14 @@ export default function CashFlowPage() {
                     ))}
                   </select>
                 )}
+                <button
+                  onClick={downloadCSV}
+                  disabled={dailyData.length === 0}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-700/50 disabled:opacity-40 border border-gray-700 rounded-xl text-sm text-gray-200 transition-colors"
+                >
+                  <Download className="w-4 h-4 text-emerald-400" />
+                  CSV
+                </button>
               </div>
             </div>
           </div>

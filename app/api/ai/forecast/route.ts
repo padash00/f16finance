@@ -129,6 +129,26 @@ export async function POST(request: Request) {
       week13Expense: Math.max(0, expenseReg.slope * (n + 12) + expenseReg.intercept) * 13,
     }
 
+    const scenarios = {
+      pessimistic: {
+        week4Income: projected.week4Income * 0.75,
+        week8Income: projected.week8Income * 0.75,
+        week13Income: projected.week13Income * 0.75,
+        week4Expense: projected.week4Expense * 1.1,
+        week8Expense: projected.week8Expense * 1.1,
+        week13Expense: projected.week13Expense * 1.1,
+      },
+      realistic: projected,
+      optimistic: {
+        week4Income: projected.week4Income * 1.25,
+        week8Income: projected.week8Income * 1.25,
+        week13Income: projected.week13Income * 1.25,
+        week4Expense: projected.week4Expense * 0.95,
+        week8Expense: projected.week8Expense * 0.95,
+        week13Expense: projected.week13Expense * 0.95,
+      },
+    }
+
     const totalHistoricalIncome = weeklyIncome.reduce((a, b) => a + b, 0)
     const totalHistoricalExpense = weeklyExpense.reduce((a, b) => a + b, 0)
     const avgWeeklyIncome = totalHistoricalIncome / numWeeks
@@ -204,6 +224,7 @@ export async function POST(request: Request) {
       weeklyExpense,
       weekLabels,
       projected,
+      scenarios,
       avgWeeklyIncome,
       avgWeeklyExpense,
     })

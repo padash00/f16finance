@@ -74,6 +74,29 @@ export async function GET(req: Request) {
   const sign = profit >= 0 ? '+' : ''
   const topCats = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3)
 
+  // Fetch 30-day rolling average for anomaly detection
+  const thirtyDaysAgo = (() => {
+    const d = new Date(Date.now() + KZ_OFFSET)
+    const past = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 31))
+    return `${past.getUTCFullYear()}-${String(past.getUTCMonth() + 1).padStart(2, '0')}-${String(past.getUTCDate()).padStart(2, '0')}`
+  })()
+  const avgRes = await supabase
+    .from('incomes')
+    .select('date, cash_amount, kaspi_amount, online_amount, card_amount')
+    .gte('date', thirtyDaysAgo)
+    .lt('date', date)
+
+  const dayTotals = new Map<string, number>()
+  for (const row of avgRes.data ?? []) {
+    const t = safeNum(row.cash_amount) + safeNum(row.kaspi_amount) + safeNum(row.online_amount) + safeNum(row.card_amount)
+    dayTotals.set(row.date, (dayTotals.get(row.date) || 0) + t)
+  }
+  const dayValues = Array.from(dayTotals.values()).filter(v => v > 0)
+  const avgDailyIncome = dayValues.length > 0 ? dayValues.reduce((a, b) => a + b, 0) / dayValues.length : 0
+  const dropPercent = avgDailyIncome > 0 ? ((avgDailyIncome - totalIncome) / avgDailyIncome) * 100 : 0
+  const isAnomaly = avgDailyIncome > 0 && dropPercent > 30 && totalIncome < avgDailyIncome
+  const isSurge = avgDailyIncome > 0 && totalIncome > avgDailyIncome * 1.3
+
   const lines = [
     `<b>☀️ Orda Control — Итоги дня</b>`,
     `<i>${date}</i>`,
@@ -84,6 +107,18 @@ export async function GET(req: Request) {
     `${marginEmoji} Маржа: <b>${margin.toFixed(1)}%</b>`,
     `👥 Операторов работало: <b>${opRevenue.size}</b>`,
   ]
+
+  if (avgDailyIncome > 0) {
+    lines.push(`📊 Средняя выручка (30д): <b>${fmtMoney(avgDailyIncome)}</b>`)
+  }
+  if (isAnomaly) {
+    lines.push('')
+    lines.push(`⚠️ <b>АНОМАЛИЯ:</b> выручка на ${dropPercent.toFixed(0)}% ниже среднего!`)
+  }
+  if (isSurge) {
+    lines.push('')
+    lines.push(`🚀 <b>Рекорд дня:</b> выручка на ${((totalIncome / avgDailyIncome - 1) * 100).toFixed(0)}% выше нормы!`)
+  }
 
   if (topCats.length > 0) {
     lines.push('', '<b>Топ расходов:</b>')
