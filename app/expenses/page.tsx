@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabaseClient'
+import { useCompanies } from '@/hooks/use-companies'
+import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
+import { useOperators, type OperatorWithProfile } from '@/hooks/use-operators'
 import { AssistantPanel } from '@/components/ai/assistant-panel'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
@@ -55,24 +57,6 @@ import {
 import type { Company, DateRangePreset, SessionRoleInfo } from '@/lib/core/types'
 
 // ================== TYPES ==================
-type ExpenseRow = {
-  id: string
-  date: string
-  company_id: string
-  operator_id: string | null
-  category: string | null
-  cash_amount: number | null
-  kaspi_amount: number | null
-  comment: string | null
-}
-
-type Operator = {
-  id: string
-  name: string
-  short_name: string | null
-  is_active: boolean
-}
-
 type PayFilter = 'all' | 'cash' | 'kaspi'
 type SortMode = 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'
 
@@ -279,12 +263,6 @@ async function logExpenseEvent(event: {
 
 // ================== MAIN COMPONENT ==================
 export default function ExpensesPage() {
-  const [rows, setRows] = useState<ExpenseRow[]>([])
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [operators, setOperators] = useState<Operator[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [hasMore, setHasMore] = useState(false)
   const [sessionRole, setSessionRole] = useState<SessionRoleInfo | null>(null)
 
   // Filters
@@ -303,7 +281,6 @@ export default function ExpensesPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [page, setPage] = useState(0)
   const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'list'>('overview')
   const [editingExpense, setEditingExpense] = useState<ExpenseRow | null>(null)
   const [editExpenseDate, setEditExpenseDate] = useState('')
@@ -315,21 +292,6 @@ export default function ExpensesPage() {
   const [editExpenseCommentDraft, setEditExpenseCommentDraft] = useState('')
   const [savingExpenseEdit, setSavingExpenseEdit] = useState(false)
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null)
-  
-  const reqIdRef = useRef(0)
-
-  // Load companies
-  useEffect(() => {
-    const fetchReferences = async () => {
-      const [companyRes, operatorRes] = await Promise.all([
-        supabase.from('companies').select('id, name, code').order('name'),
-        supabase.from('operators').select('id, name, short_name, is_active').eq('is_active', true).order('name'),
-      ])
-      if (!companyRes.error && companyRes.data) setCompanies(companyRes.data as Company[])
-      if (!operatorRes.error && operatorRes.data) setOperators(operatorRes.data as Operator[])
-    }
-    fetchReferences()
-  }, [])
 
   useEffect(() => {
     const loadSessionRole = async () => {
@@ -346,6 +308,19 @@ export default function ExpensesPage() {
     loadSessionRole()
   }, [])
 
+  // Data hooks
+  const { companies } = useCompanies()
+  const { operators } = useOperators({ activeOnly: true })
+  const { rows, setRows, loading, loadingMore, hasMore, loadMore } = useExpenses({
+    from: dateFrom || undefined,
+    to: dateTo || undefined,
+    companyId: companyFilter !== 'all' ? companyFilter : undefined,
+    category: categoryFilter !== 'all' ? categoryFilter : undefined,
+    payFilter: payFilter !== 'all' ? payFilter : undefined,
+    search: searchDebounced.length >= SEARCH_MIN_LEN ? searchDebounced : undefined,
+    sort: sortMode,
+  })
+
   const companyMap = useMemo(() => {
     const map = new Map<string, Company>()
     for (const c of companies) map.set(c.id, c)
@@ -358,7 +333,7 @@ export default function ExpensesPage() {
   )
 
   const operatorMap = useMemo(() => {
-    const map = new Map<string, Operator>()
+    const map = new Map<string, OperatorWithProfile>()
     for (const operator of operators) map.set(operator.id, operator)
     return map
   }, [operators])
@@ -386,92 +361,6 @@ export default function ExpensesPage() {
     for (const r of rows) if (r.category) set.add(r.category)
     return Array.from(set).sort()
   }, [rows])
-
-  // Query builder
-  const buildQuery = useCallback(
-    (forPage: number) => {
-      let q = supabase
-        .from('expenses')
-        .select('id, date, company_id, operator_id, category, cash_amount, kaspi_amount, comment')
-        .range(forPage * PAGE_SIZE, forPage * PAGE_SIZE + PAGE_SIZE - 1)
-
-      if (dateFrom) q = q.gte('date', dateFrom)
-      if (dateTo) q = q.lte('date', dateTo)
-      if (companyFilter !== 'all') q = q.eq('company_id', companyFilter)
-      if (categoryFilter !== 'all') q = q.eq('category', categoryFilter)
-      if (payFilter === 'cash') q = q.gt('cash_amount', 0)
-      if (payFilter === 'kaspi') q = q.gt('kaspi_amount', 0)
-
-      const term = searchDebounced
-      if (term.length >= SEARCH_MIN_LEN) {
-        q = q.or(`comment.ilike.%${term}%,category.ilike.%${term}%`)
-      }
-
-      if (sortMode === 'date_desc') q = q.order('date', { ascending: false })
-      if (sortMode === 'date_asc') q = q.order('date', { ascending: true })
-      if (sortMode === 'amount_desc')
-        q = q.order('cash_amount', { ascending: false }).order('kaspi_amount', { ascending: false })
-      if (sortMode === 'amount_asc')
-        q = q.order('cash_amount', { ascending: true }).order('kaspi_amount', { ascending: true })
-
-      return q
-    },
-    [dateFrom, dateTo, companyFilter, categoryFilter, payFilter, searchDebounced, sortMode]
-  )
-
-  // Load data
-  const loadPage = useCallback(
-    async (targetPage: number, mode: 'replace' | 'append') => {
-      const myReqId = ++reqIdRef.current
-        if (mode === 'replace') {
-          setLoading(true)
-        } else {
-          setLoadingMore(true)
-        }
-
-      try {
-        if (targetPage * PAGE_SIZE >= MAX_ROWS_HARD_LIMIT) {
-          setHasMore(false)
-          return
-        }
-
-        const { data, error } = await buildQuery(targetPage)
-
-        if (myReqId !== reqIdRef.current) return
-        if (error) throw error
-
-        const pageRows = (data || []) as ExpenseRow[]
-        setHasMore(
-          pageRows.length === PAGE_SIZE && (targetPage + 1) * PAGE_SIZE < MAX_ROWS_HARD_LIMIT
-        )
-
-        if (mode === 'replace') {
-          setRows(pageRows)
-          setPage(targetPage)
-        } else {
-          setRows((prev) => [...prev, ...pageRows])
-          setPage(targetPage)
-        }
-      } catch {
-        if (myReqId !== reqIdRef.current) return
-        setHasMore(false)
-      } finally {
-        if (myReqId !== reqIdRef.current) return
-        setLoading(false)
-        setLoadingMore(false)
-      }
-    },
-    [buildQuery]
-  )
-
-  useEffect(() => {
-    loadPage(0, 'replace')
-  }, [loadPage])
-
-  const loadMore = () => {
-    if (loadingMore || loading || !hasMore) return
-    loadPage(page + 1, 'append')
-  }
 
   // Presets
   const setPreset = (preset: DateRangePreset) => {

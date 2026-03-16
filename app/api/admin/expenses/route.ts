@@ -67,6 +67,12 @@ export async function GET(req: Request) {
     const from = url.searchParams.get('from')
     const to = url.searchParams.get('to')
     const companyId = url.searchParams.get('company_id')
+    const category = url.searchParams.get('category')
+    const payFilter = url.searchParams.get('pay_filter') as 'cash' | 'kaspi' | null
+    const search = url.searchParams.get('search')
+    const sort = (url.searchParams.get('sort') || 'date_desc') as 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'
+    const page = Math.max(0, parseInt(url.searchParams.get('page') || '0', 10))
+    const pageSize = Math.min(500, Math.max(1, parseInt(url.searchParams.get('page_size') || '200', 10)))
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
@@ -75,12 +81,20 @@ export async function GET(req: Request) {
     let query = supabase
       .from('expenses')
       .select('id, date, company_id, operator_id, category, cash_amount, kaspi_amount, comment')
-      .order('date', { ascending: false })
-      .limit(2000)
+      .range(page * pageSize, page * pageSize + pageSize - 1)
 
     if (from) query = query.gte('date', from)
     if (to) query = query.lte('date', to)
     if (companyId) query = query.eq('company_id', companyId)
+    if (category) query = query.eq('category', category)
+    if (payFilter === 'cash') query = query.gt('cash_amount', 0)
+    else if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
+    if (search && search.length >= 2) query = query.or(`comment.ilike.%${search}%,category.ilike.%${search}%`)
+
+    if (sort === 'date_asc') query = query.order('date', { ascending: true })
+    else if (sort === 'amount_desc') query = query.order('cash_amount', { ascending: false }).order('kaspi_amount', { ascending: false })
+    else if (sort === 'amount_asc') query = query.order('cash_amount', { ascending: true }).order('kaspi_amount', { ascending: true })
+    else query = query.order('date', { ascending: false })
 
     const { data, error } = await query
     if (error) throw error
