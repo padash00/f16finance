@@ -1,11 +1,11 @@
 'use client'
 
-import { 
-  Suspense, 
-  useCallback, 
-  useEffect, 
-  useMemo, 
-  useRef, 
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
   useState,
   memo
 } from 'react'
@@ -14,7 +14,9 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabaseClient'
+import { useCompanies } from '@/hooks/use-companies'
+import { useIncome, type IncomeRow } from '@/hooks/use-income'
+import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
 
 import {
   TrendingUp,
@@ -76,23 +78,6 @@ import {
 // TYPES (с фокусом на сальдо)
 // =====================
 type Company = { id: string; name: string; code: string | null }
-
-type IncomeRow = {
-  date: string
-  company_id: string
-  cash_amount: number | null
-  kaspi_amount: number | null
-  online_amount: number | null  // ✅ ОБЯЗАТЕЛЬНО учитываем
-  card_amount: number | null
-}
-
-type ExpenseRow = {
-  date: string
-  company_id: string
-  category: string | null
-  cash_amount: number | null
-  kaspi_amount: number | null
-}
 
 // Основные типы для сальдо
 type WeekTotals = {
@@ -694,15 +679,7 @@ function WeeklyReportContent() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  // Data states
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [companiesLoaded, setCompaniesLoaded] = useState(false)
-  const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([])
-  const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([])
-
-  const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   // AI Report state
   const [aiReport, setAiReport] = useState<string | null>(null)
@@ -716,6 +693,23 @@ function WeeklyReportContent() {
   const [startDate, setStartDate] = useState(currentWeek.start)
   const [endDate, setEndDate] = useState(currentWeek.end)
 
+  // Data hooks — load current week + previous week in one range for comparison
+  const prevStart = useMemo(() => addDaysISO(startDate, -7), [startDate])
+
+  const { companies, loading: companiesLoading, error: companiesError } = useCompanies()
+  const { rows: incomeRows, loading: incomeLoading, error: incomeError, reload: reloadIncome } = useIncome({
+    from: prevStart,
+    to: endDate,
+  })
+  const { rows: expenseRows, loading: expenseLoading, error: expenseError, reload: reloadExpenses } = useExpenses({
+    from: prevStart,
+    to: endDate,
+    pageSize: 500,
+  })
+
+  const loading = companiesLoading || incomeLoading || expenseLoading
+  const error = companiesError || incomeError || expenseError || null
+
   // Filter states
   const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
@@ -724,7 +718,6 @@ function WeeklyReportContent() {
   // UI states
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null)
 
-  const reqIdRef = useRef(0)
   const didInitFromUrl = useRef(false)
   const toastTimer = useRef<number | null>(null)
 
@@ -760,43 +753,12 @@ function WeeklyReportContent() {
     setEndDate(end)
   }
 
-  // =====================
-  // LOAD COMPANIES
-  // =====================
-  useEffect(() => {
-    let alive = true
-
-    const loadCompanies = async () => {
-      setError(null)
-
-      const { data, error } = await supabase
-        .from('companies')
-        .select('id,name,code')
-        .order('name', { ascending: true })
-
-      if (!alive) return
-
-      if (error) {
-        console.error('loadCompanies error:', error)
-        setError('Не удалось загрузить список компаний')
-        setCompaniesLoaded(true)
-        setLoading(false)
-        return
-      }
-
-      setCompanies((data || []) as Company[])
-      setCompaniesLoaded(true)
-    }
-
-    loadCompanies()
-    return () => { alive = false }
-  }, [])
 
   // =====================
   // URL SYNC
   // =====================
   useEffect(() => {
-    if (didInitFromUrl.current || !companiesLoaded) return
+    if (didInitFromUrl.current || companies.length === 0) return
 
     const sp = searchParams
     const pStart = sp.get('start')
@@ -810,7 +772,7 @@ function WeeklyReportContent() {
 
     setIncludeExtraInTotals(pExtra)
     didInitFromUrl.current = true
-  }, [companiesLoaded, searchParams])
+  }, [companies.length, searchParams])
 
   useEffect(() => {
     if (!didInitFromUrl.current) return
@@ -827,66 +789,6 @@ function WeeklyReportContent() {
     return () => clearTimeout(timeoutId)
   }, [startDate, endDate, includeExtraInTotals, pathname, router])
 
-  // =====================
-  // LOAD DATA (с online_amount)
-  // =====================
-  useEffect(() => {
-    const load = async () => {
-      if (!companiesLoaded) return
-
-      const myId = ++reqIdRef.current
-      setLoading(true)
-      setError(null)
-
-      const prevStart = addDaysISO(startDate, -7)
-      const rangeFrom = prevStart
-      const rangeTo = endDate
-
-      try {
-        // ✅ ВАЖНО: включаем online_amount в запрос
-        const incomeQ = supabase
-          .from('incomes')
-          .select('date,company_id,cash_amount,kaspi_amount,online_amount,card_amount')
-          .gte('date', rangeFrom)
-          .lte('date', rangeTo)
-
-        const expenseQ = supabase
-          .from('expenses')
-          .select('date,company_id,category,cash_amount,kaspi_amount')
-          .gte('date', rangeFrom)
-          .lte('date', rangeTo)
-
-        const [{ data: inc, error: incErr }, { data: exp, error: expErr }] = await Promise.all([
-          incomeQ,
-          expenseQ,
-        ])
-
-        if (myId !== reqIdRef.current) return
-
-        if (incErr || expErr) {
-          console.error({ incErr, expErr })
-          setError('Не удалось загрузить данные')
-          setLoading(false)
-          return
-        }
-
-        setIncomeRows((inc || []) as IncomeRow[])
-        setExpenseRows((exp || []) as ExpenseRow[])
-      } catch (err) {
-        if (myId === reqIdRef.current) {
-          setError('Ошибка загрузки данных')
-          console.error(err)
-        }
-      } finally {
-        if (myId === reqIdRef.current) {
-          setLoading(false)
-          setRefreshing(false)
-        }
-      }
-    }
-
-    load()
-  }, [companiesLoaded, startDate, endDate])
 
   // =====================
   // PROCESS DATA (с фокусом на сальдо)
@@ -1416,51 +1318,17 @@ function WeeklyReportContent() {
     }
   }, [showToast])
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true)
-    const load = async () => {
-      if (!companiesLoaded) return
-
-      const myId = ++reqIdRef.current
-
-      const prevStart = addDaysISO(startDate, -7)
-      const rangeFrom = prevStart
-      const rangeTo = endDate
-
-      try {
-        const incomeQ = supabase
-          .from('incomes')
-          .select('date,company_id,cash_amount,kaspi_amount,online_amount,card_amount')
-          .gte('date', rangeFrom)
-          .lte('date', rangeTo)
-
-        const expenseQ = supabase
-          .from('expenses')
-          .select('date,company_id,category,cash_amount,kaspi_amount')
-          .gte('date', rangeFrom)
-          .lte('date', rangeTo)
-
-        const [{ data: inc }, { data: exp }] = await Promise.all([
-          incomeQ,
-          expenseQ,
-        ])
-
-        if (myId === reqIdRef.current) {
-          setIncomeRows((inc || []) as IncomeRow[])
-          setExpenseRows((exp || []) as ExpenseRow[])
-          setRefreshing(false)
-          showToast('Данные обновлены', 'success')
-        }
-      } catch (err) {
-        if (myId === reqIdRef.current) {
-          setRefreshing(false)
-          showToast('Ошибка обновления', 'error')
-        }
-      }
+    try {
+      await Promise.all([reloadIncome(), reloadExpenses()])
+      showToast('Данные обновлены', 'success')
+    } catch {
+      showToast('Ошибка обновления', 'error')
+    } finally {
+      setRefreshing(false)
     }
-
-    load()
-  }, [companiesLoaded, startDate, endDate, showToast])
+  }, [reloadIncome, reloadExpenses, showToast])
 
   const handleDownloadCSV = useCallback(() => {
     if (!totals) return
