@@ -11,6 +11,225 @@ import {
   submitPendingShiftIssueReason,
 } from '@/lib/server/shift-workflow'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { sendTelegramMessage } from '@/lib/telegram/send'
+
+// ─── Finance command helpers ────────────────────────────────────────────────
+
+function todayISO() {
+  const now = new Date()
+  const t = now.getTime() - now.getTimezoneOffset() * 60_000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+function addDaysISO(iso: string, diff: number) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, (m || 1) - 1, d || 1)
+  dt.setDate(dt.getDate() + diff)
+  const t = dt.getTime() - dt.getTimezoneOffset() * 60_000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+function safeNum(v: number | null | undefined) {
+  return Number(v || 0)
+}
+
+function fmtMoney(v: number) {
+  const abs = Math.abs(v)
+  const sign = v < 0 ? '-' : ''
+  if (abs >= 1_000_000) return sign + (abs / 1_000_000).toFixed(1) + ' млн ₸'
+  if (abs >= 1_000) return sign + Math.round(abs / 1_000) + ' тыс ₸'
+  return Math.round(v).toLocaleString('ru-RU') + ' ₸'
+}
+
+async function getFinanceSummary(dateFrom: string, dateTo: string) {
+  const supabase = createAdminSupabaseClient()
+
+  const [incomesRes, expensesRes] = await Promise.all([
+    supabase
+      .from('incomes')
+      .select('cash_amount, kaspi_amount, online_amount, card_amount, date')
+      .gte('date', dateFrom)
+      .lte('date', dateTo),
+    supabase
+      .from('expenses')
+      .select('cash_amount, kaspi_amount, category, date')
+      .gte('date', dateFrom)
+      .lte('date', dateTo),
+  ])
+
+  let totalIncome = 0
+  let totalExpense = 0
+  const categoryMap = new Map<string, number>()
+
+  for (const row of incomesRes.data ?? []) {
+    totalIncome +=
+      safeNum(row.cash_amount) +
+      safeNum(row.kaspi_amount) +
+      safeNum(row.online_amount) +
+      safeNum(row.card_amount)
+  }
+  for (const row of expensesRes.data ?? []) {
+    const total = safeNum(row.cash_amount) + safeNum(row.kaspi_amount)
+    totalExpense += total
+    const cat = row.category || 'Прочее'
+    categoryMap.set(cat, (categoryMap.get(cat) || 0) + total)
+  }
+
+  const profit = totalIncome - totalExpense
+  const margin = totalIncome > 0 ? (profit / totalIncome) * 100 : 0
+  const topCategories = Array.from(categoryMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+
+  return { totalIncome, totalExpense, profit, margin, topCategories, dateFrom, dateTo }
+}
+
+function formatSummary(
+  data: Awaited<ReturnType<typeof getFinanceSummary>>,
+  title: string,
+): string {
+  const sign = data.profit >= 0 ? '+' : ''
+  const marginEmoji = data.margin >= 20 ? '🟢' : data.margin >= 10 ? '🟡' : '🔴'
+
+  const lines = [
+    `<b>📊 ${title}</b>`,
+    `<i>${data.dateFrom} — ${data.dateTo}</i>`,
+    '',
+    `💰 Выручка: <b>${fmtMoney(data.totalIncome)}</b>`,
+    `📉 Расходы: <b>${fmtMoney(data.totalExpense)}</b>`,
+    `💼 Прибыль: <b>${sign}${fmtMoney(data.profit)}</b>`,
+    `${marginEmoji} Маржа: <b>${data.margin.toFixed(1)}%</b>`,
+  ]
+
+  if (data.topCategories.length > 0) {
+    lines.push('')
+    lines.push('<b>Топ расходов:</b>')
+    for (const [cat, val] of data.topCategories) {
+      lines.push(`  • ${cat}: ${fmtMoney(val)}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+const FINANCE_HELP_TEXT = `<b>📊 Финансовые команды Orda Control</b>
+
+/today — Сводка за сегодня
+/yesterday — Сводка за вчера
+/week — Сводка за 7 дней
+/month — Сводка за 30 дней
+/cashflow — Баланс и движение денег`
+
+async function handleFinanceCommand(text: string, chatId: number): Promise<boolean> {
+  const cmd = text.split(' ')[0]?.toLowerCase()
+  const today = todayISO()
+
+  if (cmd === '/finance' || cmd === '/stats') {
+    await sendTelegramMessage(chatId, FINANCE_HELP_TEXT)
+    return true
+  }
+
+  if (cmd === '/today') {
+    const data = await getFinanceSummary(today, today)
+    await sendTelegramMessage(chatId, formatSummary(data, 'Сегодня'))
+    return true
+  }
+
+  if (cmd === '/yesterday') {
+    const yesterday = addDaysISO(today, -1)
+    const data = await getFinanceSummary(yesterday, yesterday)
+    await sendTelegramMessage(chatId, formatSummary(data, 'Вчера'))
+    return true
+  }
+
+  if (cmd === '/week') {
+    const data = await getFinanceSummary(addDaysISO(today, -6), today)
+    await sendTelegramMessage(chatId, formatSummary(data, 'Последние 7 дней'))
+    return true
+  }
+
+  if (cmd === '/month') {
+    const data = await getFinanceSummary(addDaysISO(today, -29), today)
+    await sendTelegramMessage(chatId, formatSummary(data, 'Последние 30 дней'))
+    return true
+  }
+
+  if (cmd === '/cashflow') {
+    const supabase = createAdminSupabaseClient()
+    const dateFrom = addDaysISO(today, -29)
+    const [incomesRes, expensesRes] = await Promise.all([
+      supabase
+        .from('incomes')
+        .select('date, cash_amount, kaspi_amount, online_amount, card_amount')
+        .gte('date', dateFrom)
+        .lte('date', today),
+      supabase
+        .from('expenses')
+        .select('date, cash_amount, kaspi_amount')
+        .gte('date', dateFrom)
+        .lte('date', today),
+    ])
+
+    const dailyIncome = new Map<string, number>()
+    const dailyExpense = new Map<string, number>()
+    for (const row of incomesRes.data ?? []) {
+      dailyIncome.set(
+        row.date,
+        (dailyIncome.get(row.date) || 0) +
+          safeNum(row.cash_amount) +
+          safeNum(row.kaspi_amount) +
+          safeNum(row.online_amount) +
+          safeNum(row.card_amount),
+      )
+    }
+    for (const row of expensesRes.data ?? []) {
+      dailyExpense.set(
+        row.date,
+        (dailyExpense.get(row.date) || 0) + safeNum(row.cash_amount) + safeNum(row.kaspi_amount),
+      )
+    }
+
+    const allDates = Array.from(
+      new Set([...dailyIncome.keys(), ...dailyExpense.keys()]),
+    ).sort()
+    let cumBalance = 0
+    const negativeDays: string[] = []
+    for (const date of allDates) {
+      const inc = dailyIncome.get(date) || 0
+      const exp = dailyExpense.get(date) || 0
+      const profit = inc - exp
+      cumBalance += profit
+      if (profit < 0) negativeDays.push(date)
+    }
+
+    const totalIncome = Array.from(dailyIncome.values()).reduce((a, b) => a + b, 0)
+    const totalExpense = Array.from(dailyExpense.values()).reduce((a, b) => a + b, 0)
+
+    const lines = [
+      '<b>💹 Cash Flow — 30 дней</b>',
+      '',
+      `💰 Суммарные доходы: <b>${fmtMoney(totalIncome)}</b>`,
+      `📉 Суммарные расходы: <b>${fmtMoney(totalExpense)}</b>`,
+      `📊 Итоговый баланс: <b>${fmtMoney(cumBalance)}</b>`,
+      `🔴 Убыточных дней: <b>${negativeDays.length}</b> из ${allDates.length}`,
+    ]
+
+    if (negativeDays.length > 0) {
+      lines.push('')
+      lines.push('<b>Убыточные дни:</b>')
+      for (const date of negativeDays.slice(0, 5)) {
+        const inc = dailyIncome.get(date) || 0
+        const exp = dailyExpense.get(date) || 0
+        lines.push(`  • ${date}: ${fmtMoney(inc - exp)}`)
+      }
+    }
+
+    await sendTelegramMessage(chatId, lines.join('\n'))
+    return true
+  }
+
+  return false
+}
 
 type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
 type TaskResponse = 'accept' | 'need_info' | 'blocked' | 'already_done' | 'complete'
@@ -466,6 +685,12 @@ export async function POST(req: Request) {
 
       if (text === '/start' || text === '/help') {
         await sendTelegramText(chatId, getHelpText())
+        return json({ ok: true })
+      }
+
+      // Finance commands — handle if matched, then return early
+      const isFinanceCmd = await handleFinanceCommand(text, Number(chatId)).catch(() => false)
+      if (isFinanceCmd) {
         return json({ ok: true })
       }
 
