@@ -184,7 +184,7 @@ export const STAFF_ROLE_MATRIX: Record<StaffRole, RoleMatrixEntry> = {
   },
   owner: {
     label: 'Владелец',
-    home: '/',
+    home: '/welcome',
     paths: OWNER_PATHS,
     capabilities: ['tasks', 'salary', 'staff', 'operators', 'operator_structure', 'finance_create', 'finance_manage'],
     summary: 'Имеет управленческий доступ к деньгам, команде, операционной работе и аналитике операторов без системного администрирования.',
