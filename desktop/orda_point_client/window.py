@@ -4,7 +4,8 @@ Main window: login screen + workspace with tabs
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtSignal
+from PyQt6.QtGui import QIcon, QFont, QPalette, QColor
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -19,6 +20,7 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
+    QGraphicsDropShadowEffect,
 )
 
 from admin_tab import AdminTerminalTab
@@ -36,41 +38,140 @@ SERVER_URL = "https://ordaops.kz"
 
 
 # ──────────────────────────────────────────────
-# HELPERS
+# MODERN UI COMPONENTS
 # ──────────────────────────────────────────────
-def _pill(text: str, bg: str, fg: str, border: str) -> QLabel:
-    """Small colored badge label."""
-    lbl = QLabel(text)
-    lbl.setStyleSheet(
-        f"background: {bg}; color: {fg}; border: 1px solid {border}; "
-        f"border-radius: 8px; padding: 3px 10px; font-size: 12px; font-weight: 700;"
-    )
-    return lbl
+
+class ModernPill(QLabel):
+    """Современный стилизованный индикатор"""
+    def __init__(self, text: str, variant: str = "default"):
+        super().__init__(text)
+        self.setProperty("class", "pill")
+        
+        styles = {
+            "success": """
+                background: rgba(16, 185, 129, 0.1);
+                color: #10B981;
+                border: 1px solid rgba(16, 185, 129, 0.3);
+            """,
+            "warning": """
+                background: rgba(245, 158, 11, 0.1);
+                color: #F59E0B;
+                border: 1px solid rgba(245, 158, 11, 0.3);
+            """,
+            "error": """
+                background: rgba(239, 68, 68, 0.1);
+                color: #EF4444;
+                border: 1px solid rgba(239, 68, 68, 0.3);
+            """,
+            "info": """
+                background: rgba(59, 130, 246, 0.1);
+                color: #3B82F6;
+                border: 1px solid rgba(59, 130, 246, 0.3);
+            """,
+            "default": """
+                background: #1E2A3A;
+                color: #93A5C1;
+                border: 1px solid #2D3A4F;
+            """
+        }
+        
+        base_style = """
+            border-radius: 20px;
+            padding: 4px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        """
+        
+        self.setStyleSheet(base_style + styles.get(variant, styles["default"]))
 
 
-class _Divider(QFrame):
+class GlassCard(QFrame):
+    """Карточка с эффектом стекла"""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFrameShape(QFrame.Shape.HLine)
-        self.setStyleSheet("border: none; border-top: 1px solid #0f2035; margin: 0;")
-        self.setFixedHeight(1)
+        self.setProperty("class", "glass-card")
+        self.setStyleSheet("""
+            GlassCard {
+                background: rgba(15, 23, 42, 0.7);
+                border: 1px solid rgba(45, 58, 79, 0.5);
+                border-radius: 24px;
+            }
+        """)
+        
+        # Тень
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        shadow.setOffset(0, 4)
+        self.setGraphicsEffect(shadow)
+
+
+class ModernDivider(QFrame):
+    """Стилизованный разделитель"""
+    def __init__(self, orientation=Qt.Orientation.Horizontal):
+        super().__init__()
+        if orientation == Qt.Orientation.Horizontal:
+            self.setFrameShape(QFrame.Shape.HLine)
+            self.setFixedHeight(1)
+        else:
+            self.setFrameShape(QFrame.Shape.VLine)
+            self.setFixedWidth(1)
+        
+        self.setStyleSheet("""
+            border: none;
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 transparent, stop:0.5 #2D3A4F, stop:1 transparent);
+        """)
 
 
 class EmptyTab(QWidget):
+    """Красивый пустой таб с иконкой"""
     def __init__(self, text: str, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon = QLabel("⚙️")
-        icon.setStyleSheet("font-size: 40px; background: transparent;")
+        layout.setSpacing(16)
+        
+        # Контейнер с центровкой
+        container = QFrame()
+        container.setStyleSheet("""
+            QFrame {
+                background: #0F172A;
+                border: 1px solid #1E2A3A;
+                border-radius: 24px;
+                padding: 40px;
+            }
+        """)
+        
+        container_layout = QVBoxLayout(container)
+        container_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Анимированная иконка (статичная пока)
+        icon = QLabel("✨")
+        icon.setStyleSheet("""
+            font-size: 64px;
+            background: transparent;
+            opacity: 0.8;
+        """)
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Текст
         label = QLabel(text)
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setStyleSheet("font-size: 15px; color: #4a6a85; padding: 12px 30px;")
-        layout.addWidget(icon)
-        layout.addSpacing(8)
-        layout.addWidget(label)
+        label.setProperty("class", "muted")
+        label.setStyleSheet("""
+            font-size: 15px;
+            line-height: 1.6;
+            max-width: 300px;
+        """)
+        
+        container_layout.addWidget(icon)
+        container_layout.addSpacing(16)
+        container_layout.addWidget(label)
+        
+        layout.addWidget(container)
 
 
 # ──────────────────────────────────────────────
@@ -81,8 +182,8 @@ class PointMainWindow(QMainWindow):
         super().__init__()
         self.app_version = app_version
         self.setWindowTitle("Orda Control Point")
-        self.setMinimumSize(1100, 720)
-        self.resize(1200, 820)
+        self.setMinimumSize(1200, 800)
+        self.resize(1400, 900)
 
         # ── State ──
         self.config = load_config()
@@ -131,16 +232,18 @@ class PointMainWindow(QMainWindow):
     def _build_central(self):
         container = QWidget()
         self.setCentralWidget(container)
+        
+        # Главный контейнер с отступами
         root = QVBoxLayout(container)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Top header bar
+        # Верхняя панель
         self._header = self._build_header()
         root.addWidget(self._header)
-        root.addWidget(_Divider())
+        root.addWidget(ModernDivider())
 
-        # Main stack: login | workspace
+        # Основной стек: логин | рабочая область
         self._stack = QStackedWidget()
         root.addWidget(self._stack, 1)
 
@@ -151,38 +254,62 @@ class PointMainWindow(QMainWindow):
         self._stack.setCurrentWidget(self._login_view)
 
     def _build_header(self) -> QWidget:
+        """Современная шапка с логотипом и статусами"""
         bar = QWidget()
-        bar.setFixedHeight(56)
-        bar.setStyleSheet("background: #050d17;")
+        bar.setFixedHeight(64)
+        bar.setStyleSheet("""
+            QWidget {
+                background: rgba(11, 18, 30, 0.95);
+                border-bottom: 1px solid #1E2A3A;
+            }
+        """)
+        
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(20, 0, 20, 0)
-        layout.setSpacing(12)
+        layout.setContentsMargins(24, 0, 24, 0)
+        layout.setSpacing(16)
 
-        # Logo
+        # Логотип с градиентом
+        logo_container = QHBoxLayout()
+        logo_container.setSpacing(8)
+        
         logo_mark = QLabel("◈")
-        logo_mark.setStyleSheet("font-size: 20px; color: #2b7ff5; background: transparent;")
+        logo_mark.setStyleSheet("""
+            font-size: 24px;
+            color: #3B82F6;
+            font-weight: 300;
+        """)
+        
         logo_name = QLabel("Orda Control Point")
-        logo_name.setStyleSheet(
-            "font-size: 16px; font-weight: 800; color: #d0e8ff; "
-            "letter-spacing: 0.5px; background: transparent;"
-        )
+        logo_name.setStyleSheet("""
+            font-size: 18px;
+            font-weight: 700;
+            color: #E8F0FE;
+            letter-spacing: 0.3px;
+        """)
+        
+        logo_container.addWidget(logo_mark)
+        logo_container.addWidget(logo_name)
+        layout.addLayout(logo_container)
 
-        layout.addWidget(logo_mark)
-        layout.addWidget(logo_name)
-        layout.addSpacing(16)
+        layout.addSpacing(24)
 
-        self._header_point_pill = _pill("Не подключено", "#0a1e35", "#3a6a90", "#0f2a45")
+        # Статус точки
+        self._header_point_pill = ModernPill("Не подключено", "default")
         layout.addWidget(self._header_point_pill)
 
         layout.addStretch(1)
 
-        self._header_mode_pill = QLabel()
+        # Режим (оператор/admin)
+        self._header_mode_pill = ModernPill("", "info")
         self._header_mode_pill.hide()
         layout.addWidget(self._header_mode_pill)
 
+        layout.addSpacing(12)
+
+        # Кнопка выхода
         self._header_logout_btn = QPushButton("Выйти")
         self._header_logout_btn.setProperty("class", "ghost")
-        self._header_logout_btn.setFixedHeight(32)
+        self._header_logout_btn.setFixedSize(90, 36)
         self._header_logout_btn.clicked.connect(self.logout)
         self._header_logout_btn.hide()
         layout.addWidget(self._header_logout_btn)
@@ -190,226 +317,432 @@ class PointMainWindow(QMainWindow):
         return bar
 
     def _build_login_view(self) -> QWidget:
+        """Красивый экран входа с центровкой"""
         outer = QWidget()
         outer_layout = QVBoxLayout(outer)
         outer_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         outer_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Center card
-        card = QFrame()
-        card.setFixedWidth(460)
-        card.setStyleSheet(
-            "QFrame {"
-            "  background: #071929;"
-            "  border: 1px solid #152d47;"
-            "  border-radius: 20px;"
-            "}"
-        )
+        # Основная карточка
+        card = GlassCard()
+        card.setFixedWidth(480)
+        
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(36, 32, 36, 32)
-        card_layout.setSpacing(16)
+        card_layout.setContentsMargins(40, 36, 40, 36)
+        card_layout.setSpacing(20)
 
-        # Point info banner
-        self._login_point_banner = QFrame()
-        self._login_point_banner.setStyleSheet(
-            "QFrame { background: #091c30; border: 1px solid #13304a; border-radius: 12px; }"
-        )
-        banner_layout = QHBoxLayout(self._login_point_banner)
-        banner_layout.setContentsMargins(14, 10, 14, 10)
-        self._login_point_icon = QLabel("🔴")
-        self._login_point_icon.setStyleSheet("font-size: 14px; background: transparent;")
+        # Заголовок
+        title = QLabel("Вход в систему")
+        title.setStyleSheet("""
+            font-size: 28px;
+            font-weight: 700;
+            color: #E8F0FE;
+            letter-spacing: -0.3px;
+        """)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(title)
+
+        # Статус точки
+        self._login_point_card = QFrame()
+        self._login_point_card.setStyleSheet("""
+            QFrame {
+                background: rgba(26, 35, 50, 0.5);
+                border: 1px solid #2D3A4F;
+                border-radius: 16px;
+            }
+        """)
+        
+        point_layout = QHBoxLayout(self._login_point_card)
+        point_layout.setContentsMargins(16, 12, 16, 12)
+        
+        self._login_point_icon = QLabel("●")
+        self._login_point_icon.setStyleSheet("font-size: 14px; color: #EF4444;")
+        
         self._login_point_text = QLabel("Терминал не привязан")
-        self._login_point_text.setStyleSheet("font-size: 13px; color: #5a8aab; background: transparent;")
-        banner_layout.addWidget(self._login_point_icon)
-        banner_layout.addSpacing(8)
-        banner_layout.addWidget(self._login_point_text, 1)
-        card_layout.addWidget(self._login_point_banner)
+        self._login_point_text.setProperty("class", "muted")
+        self._login_point_text.setStyleSheet("font-size: 14px;")
+        
+        point_layout.addWidget(self._login_point_icon)
+        point_layout.addWidget(self._login_point_text, 1)
+        card_layout.addWidget(self._login_point_card)
 
-        # Mode tabs
-        mode_row = QHBoxLayout()
-        mode_row.setSpacing(0)
-        self._op_tab_btn = self._make_mode_tab("👤  Оператор", active=True)
+        card_layout.addSpacing(8)
+
+        # Переключатель режимов
+        mode_selector = QFrame()
+        mode_selector.setStyleSheet("""
+            QFrame {
+                background: #0F172A;
+                border: 1px solid #1E2A3A;
+                border-radius: 40px;
+                padding: 4px;
+            }
+        """)
+        
+        mode_layout = QHBoxLayout(mode_selector)
+        mode_layout.setContentsMargins(4, 4, 4, 4)
+        mode_layout.setSpacing(4)
+
+        self._op_tab_btn = self._create_mode_button("👤 Оператор", True)
         self._op_tab_btn.clicked.connect(lambda: self.set_auth_mode("operator"))
-        self._admin_tab_btn = self._make_mode_tab("🔑  Super Admin", active=False)
+        
+        self._admin_tab_btn = self._create_mode_button("🔑 Super Admin", False)
         self._admin_tab_btn.clicked.connect(lambda: self.set_auth_mode("admin"))
-        mode_row.addWidget(self._op_tab_btn, 1)
-        mode_row.addWidget(self._admin_tab_btn, 1)
-        card_layout.addLayout(mode_row)
 
-        # Form stack
+        mode_layout.addWidget(self._op_tab_btn)
+        mode_layout.addWidget(self._admin_tab_btn)
+        card_layout.addWidget(mode_selector)
+
+        # Стек форм
         self._auth_form_stack = QStackedWidget()
         self._auth_form_stack.addWidget(self._build_operator_form())
         self._auth_form_stack.addWidget(self._build_admin_form())
         card_layout.addWidget(self._auth_form_stack)
 
-        # Error label
-        self._login_error = QLabel("")
-        self._login_error.setWordWrap(True)
-        self._login_error.setStyleSheet(
-            "font-size: 13px; color: #fca5a5; background: #1f0a0a; "
-            "border: 1px solid #5c1a1a; border-radius: 10px; padding: 10px 14px;"
-        )
+        # Сообщение об ошибке
+        self._login_error = QFrame()
+        self._login_error.setStyleSheet("""
+            QFrame {
+                background: rgba(239, 68, 68, 0.1);
+                border: 1px solid rgba(239, 68, 68, 0.3);
+                border-radius: 12px;
+                padding: 12px;
+            }
+        """)
         self._login_error.hide()
+        
+        error_layout = QHBoxLayout(self._login_error)
+        error_layout.setContentsMargins(12, 8, 12, 8)
+        
+        error_icon = QLabel("⚠️")
+        error_icon.setStyleSheet("font-size: 16px;")
+        
+        self._login_error_label = QLabel("")
+        self._login_error_label.setStyleSheet("color: #EF4444; font-size: 13px;")
+        self._login_error_label.setWordWrap(True)
+        
+        error_layout.addWidget(error_icon)
+        error_layout.addWidget(self._login_error_label, 1)
+        
         card_layout.addWidget(self._login_error)
 
         outer_layout.addWidget(card)
+        
         self._refresh_auth_mode_ui()
         return outer
 
-    def _make_mode_tab(self, text: str, active: bool) -> QPushButton:
+    def _create_mode_button(self, text: str, active: bool) -> QPushButton:
+        """Кнопка переключения режима"""
         btn = QPushButton(text)
-        btn.setCheckable(False)
-        self._apply_mode_tab_style(btn, active)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setFixedHeight(44)
+        
+        if active:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #3B82F6;
+                    color: white;
+                    border: none;
+                    border-radius: 40px;
+                    font-weight: 600;
+                    font-size: 14px;
+                }
+                QPushButton:hover {
+                    background: #2563EB;
+                }
+            """)
+        else:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    color: #93A5C1;
+                    border: none;
+                    border-radius: 40px;
+                    font-size: 14px;
+                }
+                QPushButton:hover {
+                    color: #E8F0FE;
+                    background: rgba(59, 130, 246, 0.1);
+                }
+            """)
+        
         return btn
 
-    def _apply_mode_tab_style(self, btn: QPushButton, active: bool):
-        if active:
-            btn.setStyleSheet(
-                "QPushButton { background: #102540; color: #d0e8ff; border: 1px solid #1e4470; "
-                "border-radius: 10px; padding: 10px; font-weight: 700; font-size: 14px; }"
-            )
-        else:
-            btn.setStyleSheet(
-                "QPushButton { background: #050d17; color: #3a6080; border: 1px solid #0c2035; "
-                "border-radius: 10px; padding: 10px; font-size: 14px; }"
-                "QPushButton:hover { background: #0a1a28; color: #6a9ec0; }"
-            )
-
     def _build_operator_form(self) -> QWidget:
+        """Форма входа оператора"""
         w = QWidget()
         layout = QVBoxLayout(w)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(16)
 
-        login_lbl = QLabel("Логин")
-        login_lbl.setStyleSheet("font-size: 13px; color: #5a8aab; font-weight: 600; background: transparent;")
+        # Поле логина
+        login_container = QVBoxLayout()
+        login_container.setSpacing(6)
+        
+        login_label = QLabel("Логин")
+        login_label.setProperty("class", "accent")
+        login_label.setStyleSheet("font-size: 13px; font-weight: 600;")
+        
         self._op_login_input = QLineEdit()
-        self._op_login_input.setPlaceholderText("Логин оператора")
+        self._op_login_input.setPlaceholderText("Введите логин оператора")
         self._op_login_input.setText(str(self.config.get("last_operator_username") or ""))
+        
+        login_container.addWidget(login_label)
+        login_container.addWidget(self._op_login_input)
+        layout.addLayout(login_container)
 
-        pass_lbl = QLabel("Пароль")
-        pass_lbl.setStyleSheet("font-size: 13px; color: #5a8aab; font-weight: 600; background: transparent;")
+        # Поле пароля
+        pass_container = QVBoxLayout()
+        pass_container.setSpacing(6)
+        
+        pass_label = QLabel("Пароль")
+        pass_label.setProperty("class", "accent")
+        pass_label.setStyleSheet("font-size: 13px; font-weight: 600;")
+        
         self._op_pass_input = QLineEdit()
         self._op_pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self._op_pass_input.setPlaceholderText("Пароль от сайта ordaops.kz")
+        self._op_pass_input.setPlaceholderText("············")
         self._op_pass_input.returnPressed.connect(self._handle_operator_login)
+        
+        pass_container.addWidget(pass_label)
+        pass_container.addWidget(self._op_pass_input)
+        layout.addLayout(pass_container)
 
+        # Статус терминала
+        self._op_state_container = QFrame()
+        self._op_state_container.setStyleSheet("""
+            QFrame {
+                background: rgba(16, 185, 129, 0.05);
+                border: 1px solid rgba(16, 185, 129, 0.2);
+                border-radius: 10px;
+                padding: 10px;
+            }
+        """)
+        
+        state_layout = QHBoxLayout(self._op_state_container)
+        state_layout.setContentsMargins(12, 8, 12, 8)
+        
+        state_icon = QLabel("ℹ️")
+        state_icon.setStyleSheet("font-size: 14px;")
+        
         self._op_state_label = QLabel("")
         self._op_state_label.setWordWrap(True)
-        self._op_state_label.setStyleSheet("font-size: 12px; color: #3a6080; background: transparent;")
+        self._op_state_label.setStyleSheet("color: #10B981; font-size: 12px;")
+        
+        state_layout.addWidget(state_icon)
+        state_layout.addWidget(self._op_state_label, 1)
+        
+        layout.addWidget(self._op_state_container)
 
+        # Кнопка входа
         self._op_login_btn = QPushButton("Войти в смену")
         self._op_login_btn.setProperty("class", "primary")
+        self._op_login_btn.setFixedHeight(48)
         self._op_login_btn.clicked.connect(self._handle_operator_login)
-
-        layout.addWidget(login_lbl)
-        layout.addWidget(self._op_login_input)
-        layout.addWidget(pass_lbl)
-        layout.addWidget(self._op_pass_input)
-        layout.addWidget(self._op_state_label)
         layout.addWidget(self._op_login_btn)
+
         return w
 
     def _build_admin_form(self) -> QWidget:
+        """Форма входа администратора"""
         w = QWidget()
         layout = QVBoxLayout(w)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(16)
 
-        email_lbl = QLabel("Email")
-        email_lbl.setStyleSheet("font-size: 13px; color: #5a8aab; font-weight: 600; background: transparent;")
+        # Поле email
+        email_container = QVBoxLayout()
+        email_container.setSpacing(6)
+        
+        email_label = QLabel("Email")
+        email_label.setProperty("class", "accent")
+        email_label.setStyleSheet("font-size: 13px; font-weight: 600;")
+        
         self._admin_email_input = QLineEdit()
         self._admin_email_input.setPlaceholderText("admin@ordaops.kz")
+        
+        email_container.addWidget(email_label)
+        email_container.addWidget(self._admin_email_input)
+        layout.addLayout(email_container)
 
-        pass_lbl = QLabel("Пароль")
-        pass_lbl.setStyleSheet("font-size: 13px; color: #5a8aab; font-weight: 600; background: transparent;")
+        # Поле пароля
+        pass_container = QVBoxLayout()
+        pass_container.setSpacing(6)
+        
+        pass_label = QLabel("Пароль")
+        pass_label.setProperty("class", "accent")
+        pass_label.setStyleSheet("font-size: 13px; font-weight: 600;")
+        
         self._admin_pass_input = QLineEdit()
         self._admin_pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self._admin_pass_input.setPlaceholderText("Пароль super-admin")
+        self._admin_pass_input.setPlaceholderText("············")
         self._admin_pass_input.returnPressed.connect(self._handle_admin_login)
+        
+        pass_container.addWidget(pass_label)
+        pass_container.addWidget(self._admin_pass_input)
+        layout.addLayout(pass_container)
 
-        hint = QLabel("Этот режим — для привязки терминала, настройки каталога и отчётов. Оператор этот экран не видит.")
-        hint.setWordWrap(True)
-        hint.setStyleSheet("font-size: 12px; color: #2a4f68; background: transparent;")
+        # Подсказка
+        hint = QFrame()
+        hint.setStyleSheet("""
+            QFrame {
+                background: rgba(59, 130, 246, 0.05);
+                border: 1px solid rgba(59, 130, 246, 0.2);
+                border-radius: 10px;
+                padding: 12px;
+            }
+        """)
+        
+        hint_layout = QHBoxLayout(hint)
+        hint_layout.setContentsMargins(12, 8, 12, 8)
+        
+        hint_icon = QLabel("🔐")
+        hint_icon.setStyleSheet("font-size: 16px;")
+        
+        hint_text = QLabel(
+            "Режим для привязки терминала, настройки каталога "
+            "и просмотра отчётов. Оператор этот экран не видит."
+        )
+        hint_text.setWordWrap(True)
+        hint_text.setStyleSheet("color: #93A5C1; font-size: 12px; line-height: 1.5;")
+        
+        hint_layout.addWidget(hint_icon)
+        hint_layout.addWidget(hint_text, 1)
+        
+        layout.addWidget(hint)
 
+        # Кнопка входа
         self._admin_login_btn = QPushButton("Войти как Super Admin")
         self._admin_login_btn.setProperty("class", "primary")
+        self._admin_login_btn.setFixedHeight(48)
         self._admin_login_btn.clicked.connect(self._handle_admin_login)
-
-        layout.addWidget(email_lbl)
-        layout.addWidget(self._admin_email_input)
-        layout.addWidget(pass_lbl)
-        layout.addWidget(self._admin_pass_input)
-        layout.addWidget(hint)
         layout.addWidget(self._admin_login_btn)
+
         return w
 
     def _build_workspace_view(self) -> QWidget:
+        """Рабочая область с табами"""
         wrapper = QWidget()
         root = QVBoxLayout(wrapper)
-        root.setContentsMargins(16, 12, 16, 12)
-        root.setSpacing(10)
+        root.setContentsMargins(20, 16, 20, 16)
+        root.setSpacing(16)
 
-        # Session info bar
-        self._session_bar = QFrame()
-        self._session_bar.setStyleSheet(
-            "QFrame { background: #071525; border: 1px solid #0e2840; border-radius: 12px; }"
-        )
-        session_bar_layout = QHBoxLayout(self._session_bar)
-        session_bar_layout.setContentsMargins(16, 8, 16, 8)
-        session_bar_layout.setSpacing(10)
-
-        self._session_operator_lbl = QLabel("—")
-        self._session_operator_lbl.setStyleSheet(
-            "font-size: 14px; font-weight: 700; color: #c0d8f0; background: transparent;"
-        )
-        self._session_company_lbl = QLabel("")
-        self._session_company_lbl.setStyleSheet(
-            "font-size: 13px; color: #4a7a9a; background: transparent;"
-        )
-        session_bar_layout.addWidget(self._session_operator_lbl)
-        session_bar_layout.addWidget(_Divider())
-        self._v_divider = QFrame()
-        self._v_divider.setFrameShape(QFrame.Shape.VLine)
-        self._v_divider.setStyleSheet("color: #0e2840;")
-        session_bar_layout.addWidget(self._v_divider)
-        session_bar_layout.addWidget(self._session_company_lbl)
-        session_bar_layout.addStretch(1)
-
-        # Queue indicator
-        self._queue_pill = QLabel("Очередь: 0")
-        self._queue_pill.setStyleSheet(
-            "font-size: 12px; color: #3a6080; background: transparent;"
-        )
-        session_bar_layout.addWidget(self._queue_pill)
-
-        self._sync_btn = QPushButton("⟳ Синхронизировать")
-        self._sync_btn.setProperty("class", "ghost")
-        self._sync_btn.setFixedHeight(28)
-        self._sync_btn.clicked.connect(self.flush_queues)
-        session_bar_layout.addWidget(self._sync_btn)
-
+        # Информационная панель сессии
+        self._session_bar = self._build_session_bar()
         root.addWidget(self._session_bar)
 
-        # Tabs
+        # Табы
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
+        self.tabs.setStyleSheet("""
+            QTabWidget::tab-bar {
+                alignment: left;
+            }
+        """)
         root.addWidget(self.tabs, 1)
 
         return wrapper
 
+    def _build_session_bar(self) -> QWidget:
+        """Красивая панель с информацией о сессии"""
+        bar = QFrame()
+        bar.setStyleSheet("""
+            QFrame {
+                background: #0F172A;
+                border: 1px solid #1E2A3A;
+                border-radius: 16px;
+            }
+        """)
+        
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(20, 12, 20, 12)
+        layout.setSpacing(16)
+
+        # Информация об операторе
+        operator_container = QHBoxLayout()
+        operator_container.setSpacing(8)
+        
+        operator_icon = QLabel("👤")
+        operator_icon.setStyleSheet("font-size: 18px;")
+        
+        self._session_operator_lbl = QLabel("—")
+        self._session_operator_lbl.setStyleSheet("""
+            font-size: 15px;
+            font-weight: 600;
+            color: #E8F0FE;
+        """)
+        
+        operator_container.addWidget(operator_icon)
+        operator_container.addWidget(self._session_operator_lbl)
+        layout.addLayout(operator_container)
+
+        # Вертикальный разделитель
+        v_divider = ModernDivider(Qt.Orientation.Vertical)
+        layout.addWidget(v_divider)
+
+        # Информация о компании
+        company_container = QHBoxLayout()
+        company_container.setSpacing(8)
+        
+        company_icon = QLabel("🏢")
+        company_icon.setStyleSheet("font-size: 18px;")
+        
+        self._session_company_lbl = QLabel("")
+        self._session_company_lbl.setProperty("class", "muted")
+        self._session_company_lbl.setStyleSheet("font-size: 14px;")
+        
+        company_container.addWidget(company_icon)
+        company_container.addWidget(self._session_company_lbl, 1)
+        layout.addLayout(company_container)
+
+        layout.addStretch(1)
+
+        # Статус очереди
+        self._queue_container = QHBoxLayout()
+        self._queue_container.setSpacing(12)
+        
+        queue_icon = QLabel("📦")
+        queue_icon.setStyleSheet("font-size: 16px;")
+        
+        self._queue_pill = ModernPill("Синхронизировано", "success")
+        
+        self._queue_container.addWidget(queue_icon)
+        self._queue_container.addWidget(self._queue_pill)
+        layout.addLayout(self._queue_container)
+
+        # Кнопка синхронизации
+        self._sync_btn = QPushButton("⟳ Синхронизировать")
+        self._sync_btn.setProperty("class", "ghost")
+        self._sync_btn.setFixedHeight(36)
+        self._sync_btn.clicked.connect(self.flush_queues)
+        layout.addWidget(self._sync_btn)
+
+        return bar
+
     def _build_status_bar(self):
+        """Нижняя статусная строка"""
         sb = QStatusBar()
         sb.setSizeGripEnabled(False)
         self.setStatusBar(sb)
 
-        self._sb_connection = QLabel("● Нет подключения")
-        self._sb_connection.setStyleSheet("color: #4a3030;")
-        self._sb_queue_count = QLabel("Очередь: 0")
-        self._sb_version = QLabel(f"v{self.app_version}  •  ordaops.kz")
-        self._sb_version.setStyleSheet("color: #1e3a50;")
-
+        # Левый угол - статус подключения
+        self._sb_connection = QLabel()
+        self._sb_connection.setStyleSheet("""
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        """)
         sb.addWidget(self._sb_connection)
+
+        # Правый угол - очередь и версия
+        self._sb_queue_count = QLabel("Очередь: 0")
+        self._sb_queue_count.setProperty("class", "muted")
+        self._sb_queue_count.setStyleSheet("font-size: 12px; margin-right: 16px;")
+        
+        self._sb_version = QLabel(f"v{self.app_version}")
+        self._sb_version.setProperty("class", "muted")
+        self._sb_version.setStyleSheet("font-size: 12px;")
+        
         sb.addPermanentWidget(self._sb_queue_count)
         sb.addPermanentWidget(self._sb_version)
 
@@ -417,15 +750,48 @@ class PointMainWindow(QMainWindow):
     # AUTH MODE
     # ────────────────────────────────────────
     def set_auth_mode(self, mode: str):
+        """Переключение режима авторизации"""
         self.auth_mode = "admin" if mode == "admin" else "operator"
         self._refresh_auth_mode_ui()
 
     def _refresh_auth_mode_ui(self):
+        """Обновление UI режима авторизации"""
         is_admin = self.auth_mode == "admin"
         self._auth_form_stack.setCurrentIndex(1 if is_admin else 0)
-        self._apply_mode_tab_style(self._op_tab_btn, not is_admin)
-        self._apply_mode_tab_style(self._admin_tab_btn, is_admin)
+        
+        # Обновление стилей кнопок
+        for btn, active in [(self._op_tab_btn, not is_admin), 
+                           (self._admin_tab_btn, is_admin)]:
+            if active:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background: #3B82F6;
+                        color: white;
+                        border: none;
+                        border-radius: 40px;
+                        font-weight: 600;
+                        font-size: 14px;
+                    }
+                    QPushButton:hover {
+                        background: #2563EB;
+                    }
+                """)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background: transparent;
+                        color: #93A5C1;
+                        border: none;
+                        border-radius: 40px;
+                        font-size: 14px;
+                    }
+                    QPushButton:hover {
+                        color: #E8F0FE;
+                        background: rgba(59, 130, 246, 0.1);
+                    }
+                """)
 
+        # Обновление состояния формы оператора
         op_ready = self.bootstrap_data is not None
         self._op_login_btn.setEnabled(op_ready)
         self._op_login_input.setEnabled(op_ready)
@@ -437,10 +803,26 @@ class PointMainWindow(QMainWindow):
             self._op_state_label.setText(
                 f"Терминал: {company.get('name', '—')} • {device.get('name', '—')}"
             )
+            self._op_state_container.setStyleSheet("""
+                QFrame {
+                    background: rgba(16, 185, 129, 0.05);
+                    border: 1px solid rgba(16, 185, 129, 0.2);
+                    border-radius: 10px;
+                    padding: 10px;
+                }
+            """)
         else:
             self._op_state_label.setText(
                 "Терминал не настроен. Войдите как Super Admin и привяжите точку."
             )
+            self._op_state_container.setStyleSheet("""
+                QFrame {
+                    background: rgba(245, 158, 11, 0.05);
+                    border: 1px solid rgba(245, 158, 11, 0.2);
+                    border-radius: 10px;
+                    padding: 10px;
+                }
+            """)
 
     # ────────────────────────────────────────
     # BOOTSTRAP
@@ -470,78 +852,113 @@ class PointMainWindow(QMainWindow):
             return False
 
     def _update_login_banner(self):
+        """Обновление баннера на экране входа"""
         company = (self.bootstrap_data or {}).get("company") or {}
         device = (self.bootstrap_data or {}).get("device") or {}
         token = str(self.config.get("device_token") or "").strip()
 
         if company:
-            self._login_point_icon.setText("🟢")
+            self._login_point_icon.setStyleSheet("font-size: 14px; color: #10B981;")
             self._login_point_text.setText(
-                f"{company.get('name', '—')}  •  {device.get('name', '—')}  •  привязан"
+                f"{company.get('name', '—')} • {device.get('name', '—')}"
             )
-            self._login_point_text.setStyleSheet(
-                "font-size: 13px; color: #22c55e; background: transparent;"
-            )
-            self._header_point_pill.setText(company.get("name", "—"))
-            self._header_point_pill.setStyleSheet(
-                "background: #071a0e; color: #22c55e; border: 1px solid #1a4a28; "
-                "border-radius: 8px; padding: 3px 10px; font-size: 12px; font-weight: 700;"
-            )
+            self._login_point_text.setStyleSheet("color: #10B981; font-size: 14px;")
+            
+            self._header_point_pill.setText(company.get('name', '—'))
+            self._header_point_pill.setStyleSheet("""
+                background: rgba(16, 185, 129, 0.1);
+                color: #10B981;
+                border: 1px solid rgba(16, 185, 129, 0.3);
+                border-radius: 20px;
+                padding: 4px 14px;
+                font-size: 12px;
+                font-weight: 600;
+            """)
+            
         elif token:
-            self._login_point_icon.setText("🟡")
+            self._login_point_icon.setStyleSheet("font-size: 14px; color: #F59E0B;")
             self._login_point_text.setText("Токен сохранён, нет связи с сервером")
-            self._login_point_text.setStyleSheet(
-                "font-size: 13px; color: #f59e0b; background: transparent;"
-            )
+            self._login_point_text.setStyleSheet("color: #F59E0B; font-size: 14px;")
+            
             self._header_point_pill.setText("Офлайн")
-            self._header_point_pill.setStyleSheet(
-                "background: #1a1200; color: #f59e0b; border: 1px solid #4a3500; "
-                "border-radius: 8px; padding: 3px 10px; font-size: 12px; font-weight: 700;"
-            )
+            self._header_point_pill.setStyleSheet("""
+                background: rgba(245, 158, 11, 0.1);
+                color: #F59E0B;
+                border: 1px solid rgba(245, 158, 11, 0.3);
+                border-radius: 20px;
+                padding: 4px 14px;
+                font-size: 12px;
+                font-weight: 600;
+            """)
         else:
-            self._login_point_icon.setText("🔴")
+            self._login_point_icon.setStyleSheet("font-size: 14px; color: #EF4444;")
             self._login_point_text.setText("Терминал не привязан")
-            self._login_point_text.setStyleSheet(
-                "font-size: 13px; color: #5a8aab; background: transparent;"
-            )
+            self._login_point_text.setStyleSheet("color: #93A5C1; font-size: 14px;")
+            
             self._header_point_pill.setText("Не подключено")
-            self._header_point_pill.setStyleSheet(
-                "background: #0a1e35; color: #3a6a90; border: 1px solid #0f2a45; "
-                "border-radius: 8px; padding: 3px 10px; font-size: 12px; font-weight: 700;"
-            )
+            self._header_point_pill.setStyleSheet("""
+                background: #1E2A3A;
+                color: #93A5C1;
+                border: 1px solid #2D3A4F;
+                border-radius: 20px;
+                padding: 4px 14px;
+                font-size: 12px;
+                font-weight: 600;
+            """)
 
         self._refresh_auth_mode_ui()
 
     def _update_status_bar(self):
+        """Обновление статусной строки"""
         if self.bootstrap_data:
             self._sb_connection.setText("● Подключено")
-            self._sb_connection.setStyleSheet("color: #22c55e;")
+            self._sb_connection.setStyleSheet("""
+                background: rgba(16, 185, 129, 0.1);
+                color: #10B981;
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-size: 12px;
+            """)
         else:
             token = str(self.config.get("device_token") or "").strip()
             if token:
                 self._sb_connection.setText("● Офлайн")
-                self._sb_connection.setStyleSheet("color: #f59e0b;")
+                self._sb_connection.setStyleSheet("""
+                    background: rgba(245, 158, 11, 0.1);
+                    color: #F59E0B;
+                    padding: 2px 8px;
+                    border-radius: 12px;
+                    font-size: 12px;
+                """)
             else:
                 self._sb_connection.setText("● Нет токена")
-                self._sb_connection.setStyleSheet("color: #4a3030;")
+                self._sb_connection.setStyleSheet("""
+                    background: rgba(239, 68, 68, 0.1);
+                    color: #EF4444;
+                    padding: 2px 8px;
+                    border-radius: 12px;
+                    font-size: 12px;
+                """)
 
         total = self.queue.count_shifts() + self.queue.count_debt_actions()
         if total > 0:
             self._sb_queue_count.setText(f"В очереди: {total}")
-            self._sb_queue_count.setStyleSheet("color: #f59e0b;")
+            self._sb_queue_count.setStyleSheet("color: #F59E0B; font-size: 12px;")
         else:
             self._sb_queue_count.setText("Очередь чиста")
-            self._sb_queue_count.setStyleSheet("color: #1e3a50;")
+            self._sb_queue_count.setStyleSheet("color: #6B7B93; font-size: 12px;")
 
     # ────────────────────────────────────────
     # LOGIN HANDLERS
     # ────────────────────────────────────────
     def set_login_error(self, message: str | None):
+        """Отображение ошибки входа"""
         text = (message or "").strip()
-        self._login_error.setText(text)
+        self._login_error_label.setText(text)
         self._login_error.setVisible(bool(text))
 
     def _handle_operator_login(self):
+        """Обработка входа оператора"""
         self.set_login_error(None)
         username = self._op_login_input.text().strip()
         password = self._op_pass_input.text()
@@ -573,6 +990,7 @@ class PointMainWindow(QMainWindow):
                 self.set_login_error(msg)
 
     def _handle_admin_login(self):
+        """Обработка входа администратора"""
         self.set_login_error(None)
         email = self._admin_email_input.text().strip()
         password = self._admin_pass_input.text()
@@ -604,11 +1022,14 @@ class PointMainWindow(QMainWindow):
     # WORKSPACE
     # ────────────────────────────────────────
     def _open_workspace(self):
+        """Открытие рабочей области"""
         self._build_workspace_tabs()
         self._stack.setCurrentWidget(self._workspace_view)
         self._header_logout_btn.show()
+        self._header_mode_pill.show()
 
     def _build_workspace_tabs(self):
+        """Построение табов рабочей области"""
         self.tabs.clear()
         self.shift_tab = None
         self.debt_tab = None
@@ -625,38 +1046,38 @@ class PointMainWindow(QMainWindow):
         # ── Admin: terminal tab first ──
         if self.current_admin:
             self.admin_tab = AdminTerminalTab(self)
-            self.tabs.addTab(self.admin_tab, "⚙️  Терминал")
+            self.tabs.addTab(self.admin_tab, "⚙️ Терминал")
 
         # ── Shift report ──
         if self.bootstrap_data and flags.get("shift_report") is not False:
             self.shift_tab = ShiftReportTab(self)
-            self.tabs.addTab(self.shift_tab, "📋  Смена")
+            self.tabs.addTab(self.shift_tab, "📋 Смена")
 
         # ── Debts / scanner (debt_report flag) ──
         if self.bootstrap_data and flags.get("debt_report") is True:
             self.scanner_tab = ScannerTab(self)
-            self.tabs.addTab(self.scanner_tab, "🛒  Сканер")
+            self.tabs.addTab(self.scanner_tab, "🛒 Сканер")
             self.debt_tab = DebtTab(self)
-            self.tabs.addTab(self.debt_tab, "📝  Долги")
+            self.tabs.addTab(self.debt_tab, "📝 Долги")
             if self.current_admin:
                 self.products_tab = ProductsTab(self)
-                self.tabs.addTab(self.products_tab, "📦  Товары")
+                self.tabs.addTab(self.products_tab, "📦 Товары")
 
         # ── Reports (admin only) ──
         if self.bootstrap_data and self.current_admin:
             self.reports_tab = ReportsTab(self)
-            self.tabs.addTab(self.reports_tab, "📊  Отчёты")
+            self.tabs.addTab(self.reports_tab, "📊 Отчёты")
 
         # ── Settings (admin only) ──
         if self.current_admin:
             self.settings_tab = SettingsTab(self)
-            self.tabs.addTab(self.settings_tab, "⚙️  Настройки")
+            self.tabs.addTab(self.settings_tab, "⚙️ Настройки")
 
         # ── Nothing available ──
         if self.tabs.count() == 0:
             self.tabs.addTab(
                 EmptyTab("Терминал не настроен. Войдите как super-admin и привяжите точку."),
-                "ℹ️  Инфо",
+                "ℹ️ Инфо",
             )
 
         # ── Update session bar ──
@@ -665,15 +1086,21 @@ class PointMainWindow(QMainWindow):
 
         if self.current_admin:
             self._session_operator_lbl.setText(
-                f"Super Admin  •  {self.current_admin.get('email', '—')}"
+                f"Super Admin • {self.current_admin.get('email', '—')}"
             )
-            self._session_company_lbl.setText(f"Точка: {company_name}")
+            self._session_company_lbl.setText(f"{company_name} • {mode}")
             self._header_mode_pill.setText("SUPER ADMIN")
-            self._header_mode_pill.setStyleSheet(
-                "background: #1a0e35; color: #a78bfa; border: 1px solid #3d2a70; "
-                "border-radius: 8px; padding: 3px 10px; font-size: 11px; font-weight: 700;"
-            )
-            self._header_mode_pill.show()
+            self._header_mode_pill.setStyleSheet("""
+                background: rgba(139, 92, 246, 0.1);
+                color: #8B5CF6;
+                border: 1px solid rgba(139, 92, 246, 0.3);
+                border-radius: 20px;
+                padding: 4px 14px;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+            """)
+            
             if self.admin_tab:
                 self.admin_tab.load_devices()
                 self.tabs.setCurrentWidget(self.admin_tab)
@@ -686,15 +1113,20 @@ class PointMainWindow(QMainWindow):
             )
             role = self.current_operator.get("role_in_company") or "operator"
             username = self.current_operator.get("username") or "—"
-            self._session_operator_lbl.setText(f"{name}  •  @{username}")
-            self._session_company_lbl.setText(f"Точка: {company_name}  •  {mode}")
+            self._session_operator_lbl.setText(f"{name} • @{username}")
+            self._session_company_lbl.setText(f"{company_name} • {mode}")
             self._header_mode_pill.setText(role.upper())
-            self._header_mode_pill.setStyleSheet(
-                "background: #071a0e; color: #4ade80; border: 1px solid #1a4a28; "
-                "border-radius: 8px; padding: 3px 10px; font-size: 11px; font-weight: 700;"
-            )
-            self._header_mode_pill.show()
-            # Default tab: scanner → shift → debt
+            self._header_mode_pill.setStyleSheet("""
+                background: rgba(16, 185, 129, 0.1);
+                color: #10B981;
+                border: 1px solid rgba(16, 185, 129, 0.3);
+                border-radius: 20px;
+                padding: 4px 14px;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+            """)
+            
             if self.scanner_tab:
                 self.tabs.setCurrentWidget(self.scanner_tab)
             elif self.shift_tab:
@@ -709,6 +1141,7 @@ class PointMainWindow(QMainWindow):
     # LOGOUT
     # ────────────────────────────────────────
     def logout(self):
+        """Выход из системы"""
         self.current_operator = None
         self.current_admin = None
         self.admin_credentials = None
@@ -724,23 +1157,38 @@ class PointMainWindow(QMainWindow):
     # QUEUE & SYNC
     # ────────────────────────────────────────
     def refresh_queue_label(self):
+        """Обновление индикатора очереди"""
         shifts = self.queue.count_shifts()
         debts = self.queue.count_debt_actions()
         total = shifts + debts
+        
         if total > 0:
-            text = f"⏳ Очередь: {total}"
-            self._queue_pill.setStyleSheet(
-                "font-size: 12px; color: #f59e0b; background: transparent; font-weight: 700;"
-            )
+            self._queue_pill.setText(f"В очереди: {total}")
+            self._queue_pill.setStyleSheet("""
+                background: rgba(245, 158, 11, 0.1);
+                color: #F59E0B;
+                border: 1px solid rgba(245, 158, 11, 0.3);
+                border-radius: 20px;
+                padding: 4px 14px;
+                font-size: 12px;
+                font-weight: 600;
+            """)
         else:
-            text = "✓ Синхронизировано"
-            self._queue_pill.setStyleSheet(
-                "font-size: 12px; color: #22c55e; background: transparent;"
-            )
-        self._queue_pill.setText(text)
+            self._queue_pill.setText("Синхронизировано")
+            self._queue_pill.setStyleSheet("""
+                background: rgba(16, 185, 129, 0.1);
+                color: #10B981;
+                border: 1px solid rgba(16, 185, 129, 0.3);
+                border-radius: 20px;
+                padding: 4px 14px;
+                font-size: 12px;
+                font-weight: 600;
+            """)
+        
         self._update_status_bar()
 
     def flush_queues(self, silent: bool = False):
+        """Синхронизация очередей"""
         if not self.api:
             if not silent:
                 QMessageBox.warning(self, "Синхронизация", "Сначала войдите в программу.")
@@ -799,7 +1247,7 @@ class PointMainWindow(QMainWindow):
                 )
 
     def _auto_sync_queues(self):
-        """Background auto-sync every 60 seconds."""
+        """Автоматическая синхронизация в фоне"""
         if self.api and (self.current_operator or self.current_admin):
             total = self.queue.count_shifts() + self.queue.count_debt_actions()
             if total > 0:
@@ -809,13 +1257,15 @@ class PointMainWindow(QMainWindow):
     # STATE PERSISTENCE
     # ────────────────────────────────────────
     def build_workspace_for_role(self):
-        """Rebuild workspace tabs after device binding change."""
+        """Перестройка рабочей области после смены роли"""
         self._build_workspace_tabs()
 
     def save_config(self):
+        """Сохранение конфигурации"""
         save_config(self.config)
 
     def save_all_state(self):
+        """Сохранение всех черновиков"""
         if self.shift_tab:
             self.shift_tab.save_draft()
         if self.debt_tab:
