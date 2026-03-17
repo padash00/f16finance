@@ -16,7 +16,7 @@ except ImportError:
     _OPENPYXL_AVAILABLE = False
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSortFilterProxyModel
-from PyQt6.QtGui import QIntValidator, QColor, QPalette, QFont, QIcon, QPixmap
+from PyQt6.QtGui import QIntValidator, QColor
 from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
@@ -38,6 +38,12 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QGraphicsDropShadowEffect,
     QApplication,
+)
+
+from theme import (
+    BG, SURFACE, SURFACE_2, BORDER,
+    TEXT, TEXT_MUTED, TEXT_DIM,
+    ACCENT, SUCCESS, WARNING, DANGER, VIOLET,
 )
 
 
@@ -67,78 +73,78 @@ class ProductStatus(Enum):
     """Статус товара"""
     ACTIVE = "active"
     INACTIVE = "inactive"
-    
+
     def display_name(self) -> str:
         names = {
             "active": "Активен",
             "inactive": "Выключен"
         }
         return names.get(self.value, self.value)
-    
+
     def color(self) -> str:
         colors = {
-            "active": "#10B981",
-            "inactive": "#EF4444"
+            "active": SUCCESS,
+            "inactive": DANGER
         }
-        return colors.get(self.value, "#93A5C1")
+        return colors.get(self.value, TEXT_MUTED)
 
 
 # ==================== Современные UI компоненты ====================
 
 class StatsCard(QFrame):
     """Карточка статистики товаров"""
-    
+
     def __init__(self, title: str, icon: str, parent=None):
         super().__init__(parent)
         self.setProperty("class", "stats-card")
-        
+
         # Тень
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(20)
         shadow.setColor(QColor(0, 0, 0, 40))
         shadow.setOffset(0, 4)
         self.setGraphicsEffect(shadow)
-        
-        self.setStyleSheet("""
-            StatsCard {
+
+        self.setStyleSheet(f"""
+            StatsCard {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #0F172A, stop:1 #0B1422);
-                border: 1px solid #1E2A3A;
+                    stop:0 {BG}, stop:1 {BG});
+                border: 1px solid {BORDER};
                 border-radius: 16px;
                 padding: 16px;
-            }
+            }}
         """)
-        
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(12)
-        
+
         # Иконка
         icon_label = QLabel(icon)
         icon_label.setStyleSheet("font-size: 28px; background: transparent;")
-        
+
         # Текстовый контейнер
         text_container = QVBoxLayout()
         text_container.setSpacing(4)
-        
+
         self.title_label = QLabel(title)
         self.title_label.setProperty("class", "muted")
         self.title_label.setStyleSheet("font-size: 12px; background: transparent;")
-        
+
         self.value_label = QLabel("0")
-        self.value_label.setStyleSheet("""
+        self.value_label.setStyleSheet(f"""
             font-size: 24px;
             font-weight: 700;
-            color: #3B82F6;
+            color: {ACCENT};
             background: transparent;
         """)
-        
+
         text_container.addWidget(self.title_label)
         text_container.addWidget(self.value_label)
-        
+
         layout.addWidget(icon_label)
         layout.addLayout(text_container, 1)
-    
+
     def set_value(self, value: int | str):
         """Установка значения"""
         self.value_label.setText(str(value))
@@ -147,276 +153,276 @@ class StatsCard(QFrame):
 class ProductForm(QGroupBox):
     """
     Улучшенная форма для создания/редактирования товаров
-    
+
     Сигналы:
         product_saved: испускается при сохранении товара
         form_changed: испускается при изменении формы
     """
-    
+
     product_saved = pyqtSignal(dict)
     form_changed = pyqtSignal()
-    
+
     def __init__(self, parent=None):
         super().__init__("➕ Добавить / Редактировать товар", parent)
         self.editing_id: Optional[str] = None
         self.setup_ui()
-        
+
     def setup_ui(self):
         """Настройка интерфейса формы"""
-        self.setStyleSheet("""
-            ProductForm {
-                border: 1px solid #1E2A3A;
+        self.setStyleSheet(f"""
+            ProductForm {{
+                border: 1px solid {BORDER};
                 border-radius: 16px;
                 margin-top: 16px;
                 font-weight: 600;
-                color: #3B82F6;
-                background: #0F172A;
+                color: {ACCENT};
+                background: {BG};
                 padding: 20px;
-            }
-            ProductForm::title {
+            }}
+            ProductForm::title {{
                 subcontrol-origin: margin;
                 left: 16px;
                 padding: 0 12px;
-                background: #0B1120;
+                background: {BG};
                 font-size: 15px;
-            }
+            }}
         """)
-        
+
         layout = QFormLayout(self)
         layout.setVerticalSpacing(16)
         layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        
+
         # Название товара
         name_label = QLabel("📦 Название")
-        name_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #3B82F6;")
-        
+        name_label.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ACCENT};")
+
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("Введите название товара")
         self.name_input.setMinimumHeight(44)
         self.name_input.textChanged.connect(self.on_form_changed)
-        self.name_input.setStyleSheet("""
-            QLineEdit {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.name_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: {SURFACE};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 padding: 0 14px;
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #3B82F6;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {ACCENT};
+            }}
         """)
-        
+
         # Штрихкод
         barcode_label = QLabel("🔳 Штрихкод")
-        barcode_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #3B82F6;")
-        
+        barcode_label.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ACCENT};")
+
         barcode_container = QWidget()
         barcode_layout = QHBoxLayout(barcode_container)
         barcode_layout.setContentsMargins(0, 0, 0, 0)
         barcode_layout.setSpacing(8)
-        
+
         self.barcode_input = QLineEdit()
         self.barcode_input.setPlaceholderText("Введите или сгенерируйте штрихкод")
         self.barcode_input.setMinimumHeight(44)
         self.barcode_input.textChanged.connect(self.on_form_changed)
-        self.barcode_input.setStyleSheet("""
-            QLineEdit {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.barcode_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: {SURFACE};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 padding: 0 14px;
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #3B82F6;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {ACCENT};
+            }}
         """)
-        
+
         self.generate_barcode_btn = QPushButton("🎲")
         self.generate_barcode_btn.setFixedSize(44, 44)
         self.generate_barcode_btn.setToolTip("Сгенерировать случайный штрихкод")
-        self.generate_barcode_btn.setStyleSheet("""
-            QPushButton {
-                background: #1E2A3A;
-                border: 1px solid #2D3A4F;
+        self.generate_barcode_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {BORDER};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 font-size: 18px;
-            }
-            QPushButton:hover {
-                background: #2D3A4F;
-            }
+            }}
+            QPushButton:hover {{
+                background: {SURFACE_2};
+            }}
         """)
         self.generate_barcode_btn.clicked.connect(self.generate_barcode)
-        
+
         barcode_layout.addWidget(self.barcode_input, 1)
         barcode_layout.addWidget(self.generate_barcode_btn)
-        
+
         # Цена
         price_label = QLabel("💰 Цена")
-        price_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #3B82F6;")
-        
+        price_label.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ACCENT};")
+
         price_container = QWidget()
         price_layout = QHBoxLayout(price_container)
         price_layout.setContentsMargins(0, 0, 0, 0)
         price_layout.setSpacing(8)
-        
+
         self.price_input = QLineEdit("0")
         self.price_input.setValidator(QIntValidator(0, 9_999_999))
         self.price_input.setMinimumHeight(44)
         self.price_input.textChanged.connect(self.on_form_changed)
-        self.price_input.setStyleSheet("""
-            QLineEdit {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.price_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: {SURFACE};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 padding: 0 14px;
                 font-size: 16px;
                 font-weight: 600;
-            }
-            QLineEdit:focus {
-                border: 2px solid #3B82F6;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {ACCENT};
+            }}
         """)
-        
+
         currency_label = QLabel("₸")
-        currency_label.setStyleSheet("""
+        currency_label.setStyleSheet(f"""
             font-size: 18px;
             font-weight: 700;
-            color: #F59E0B;
+            color: {WARNING};
             background: transparent;
         """)
-        
+
         price_layout.addWidget(self.price_input, 1)
         price_layout.addWidget(currency_label)
-        
+
         # Статус
         status_label = QLabel("⚡ Статус")
-        status_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #3B82F6;")
-        
+        status_label.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ACCENT};")
+
         status_container = QWidget()
         status_layout = QHBoxLayout(status_container)
         status_layout.setContentsMargins(0, 0, 0, 0)
         status_layout.setSpacing(12)
-        
+
         self.active_check = QCheckBox("Активный товар")
         self.active_check.setChecked(True)
-        self.active_check.setStyleSheet("""
-            QCheckBox {
-                color: #10B981;
+        self.active_check.setStyleSheet(f"""
+            QCheckBox {{
+                color: {SUCCESS};
                 font-size: 14px;
                 spacing: 8px;
-            }
-            QCheckBox::indicator {
+            }}
+            QCheckBox::indicator {{
                 width: 20px;
                 height: 20px;
-                border: 1px solid #2D3A4F;
+                border: 1px solid {BORDER};
                 border-radius: 5px;
-                background: #1A2332;
-            }
-            QCheckBox::indicator:checked {
-                background: #10B981;
-                border-color: #10B981;
-            }
-            QCheckBox::indicator:hover {
-                border-color: #3B82F6;
-            }
+                background: {SURFACE};
+            }}
+            QCheckBox::indicator:checked {{
+                background: {SUCCESS};
+                border-color: {SUCCESS};
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: {ACCENT};
+            }}
         """)
         self.active_check.stateChanged.connect(self.on_form_changed)
-        
+
         self.status_badge = QFrame()
         self.status_badge.setFixedSize(8, 8)
-        self.status_badge.setStyleSheet("background: #10B981; border-radius: 4px;")
-        
+        self.status_badge.setStyleSheet(f"background: {SUCCESS}; border-radius: 4px;")
+
         status_layout.addWidget(self.active_check)
         status_layout.addWidget(self.status_badge)
         status_layout.addStretch()
-        
+
         # Добавление полей в форму
         layout.addRow(name_label, self.name_input)
         layout.addRow(barcode_label, barcode_container)
         layout.addRow(price_label, price_container)
         layout.addRow(status_label, status_container)
-        
+
         # Индикатор изменений
         self.changed_indicator = QLabel("✏️ Есть несохранённые изменения")
-        self.changed_indicator.setStyleSheet("""
+        self.changed_indicator.setStyleSheet(f"""
             font-size: 12px;
-            color: #F59E0B;
+            color: {WARNING};
             background: transparent;
             padding: 4px 8px;
         """)
         self.changed_indicator.hide()
         layout.addRow("", self.changed_indicator)
-        
+
         # Подсказка
         hint_label = QLabel("💡 Для массового добавления используйте импорт из Excel")
         hint_label.setProperty("class", "muted")
-        hint_label.setStyleSheet("""
+        hint_label.setStyleSheet(f"""
             font-size: 12px;
-            color: #93A5C1;
+            color: {TEXT_MUTED};
             background: transparent;
             padding: 8px 0;
         """)
         layout.addRow("", hint_label)
-        
+
     def on_form_changed(self):
         """Обработка изменения формы"""
-        has_content = bool(self.name_input.text().strip() or 
-                          self.barcode_input.text().strip() or 
+        has_content = bool(self.name_input.text().strip() or
+                          self.barcode_input.text().strip() or
                           self.price_input.text() != "0")
         self.changed_indicator.setVisible(has_content)
         self.form_changed.emit()
-        
+
     def generate_barcode(self):
         """Генерация случайного штрихкода"""
         self.barcode_input.setText(generate_barcode())
-        
+
     def load_product(self, product: dict):
         """Загрузка товара в форму"""
         self.editing_id = str(product.get("id") or "")
         self.name_input.setText(str(product.get("name") or ""))
         self.barcode_input.setText(str(product.get("barcode") or ""))
         self.price_input.setText(str(int(product.get("price") or 0)))
-        
+
         is_active = product.get("is_active") is not False
         self.active_check.setChecked(is_active)
         self.update_status_badge(is_active)
-        
+
     def update_status_badge(self, is_active: bool):
         """Обновление бейджа статуса"""
-        color = "#10B981" if is_active else "#EF4444"
+        color = SUCCESS if is_active else DANGER
         self.status_badge.setStyleSheet(f"background: {color}; border-radius: 4px;")
-        
+
     def get_payload(self) -> Optional[Dict]:
         """Получение данных из формы"""
         name = self.name_input.text().strip()
         barcode = self.barcode_input.text().strip()
-        
+
         try:
             price = parse_money(self.price_input.text())
         except ValueError:
             price = 0
-            
+
         if not name:
             QMessageBox.warning(self, "Товары", "Введите название товара.")
             return None
-            
+
         if not barcode:
             QMessageBox.warning(self, "Товары", "Введите штрихкод.")
             return None
-            
+
         if price <= 0:
             QMessageBox.warning(self, "Товары", "Цена должна быть больше нуля.")
             return None
-            
+
         return {
             "name": name,
             "barcode": barcode,
             "price": price,
             "is_active": self.active_check.isChecked(),
         }
-        
+
     def clear(self):
         """Очистка формы"""
         self.editing_id = None
@@ -426,7 +432,7 @@ class ProductForm(QGroupBox):
         self.active_check.setChecked(True)
         self.update_status_badge(True)
         self.changed_indicator.hide()
-        
+
     def is_editing(self) -> bool:
         """Проверка, редактируется ли существующий товар"""
         return self.editing_id is not None
@@ -435,20 +441,20 @@ class ProductForm(QGroupBox):
 class ProductsTable(QTableWidget):
     """
     Улучшенная таблица товаров
-    
+
     Сигналы:
         product_selected: испускается при выборе товара
         product_double_clicked: испускается при двойном клике
     """
-    
+
     product_selected = pyqtSignal(dict)
     product_double_clicked = pyqtSignal(dict)
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.products: List[Dict] = []
         self.setup_style()
-        
+
     def setup_style(self):
         """Настройка стиля таблицы"""
         self.setShowGrid(False)
@@ -456,116 +462,116 @@ class ProductsTable(QTableWidget):
         self.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.setVerticalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
-        
-        self.setStyleSheet("""
-            QTableWidget {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+
+        self.setStyleSheet(f"""
+            QTableWidget {{
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 14px;
                 gridline-color: transparent;
                 selection-background-color: #1E3A5F;
-            }
-            QTableWidget::item {
+            }}
+            QTableWidget::item {{
                 padding: 12px 8px;
-                border-bottom: 1px solid #1E2A3A;
-            }
-            QTableWidget::item:selected {
+                border-bottom: 1px solid {BORDER};
+            }}
+            QTableWidget::item:selected {{
                 background: #1E3A5F;
-            }
-            QTableWidget::item:hover {
+            }}
+            QTableWidget::item:hover {{
                 background: #1A2634;
-            }
-            QTableWidget::item:selected:hover {
+            }}
+            QTableWidget::item:selected:hover {{
                 background: #234973;
-            }
+            }}
         """)
-        
+
         # Настройка заголовков
         header = self.horizontalHeader()
-        header.setStyleSheet("""
-            QHeaderView::section {
-                background: #131B28;
-                color: #93A5C1;
+        header.setStyleSheet(f"""
+            QHeaderView::section {{
+                background: {SURFACE_2};
+                color: {TEXT_MUTED};
                 border: none;
-                border-bottom: 2px solid #1E2A3A;
+                border-bottom: 2px solid {BORDER};
                 padding: 14px 8px;
                 font-weight: 700;
                 font-size: 13px;
-            }
+            }}
         """)
-        
+
         # Подключение сигналов
         self.itemSelectionChanged.connect(self.on_selection_changed)
         self.cellDoubleClicked.connect(self.on_double_click)
-        
+
     def set_products(self, products: List[Dict]):
         """Установка списка товаров"""
         self.products = products
         self.update_table()
-        
+
     def update_table(self):
         """Обновление таблицы"""
         self.setRowCount(len(self.products))
         self.setColumnCount(5)
         self.setHorizontalHeaderLabels(["ID", "Название", "Штрихкод", "Цена", "Статус"])
         self.setColumnHidden(0, True)  # Скрываем ID
-        
+
         for row, product in enumerate(self.products):
             # ID (скрыт)
             self.setItem(row, 0, QTableWidgetItem(str(product.get("id") or "")))
-            
+
             # Название с иконкой
             name_item = QTableWidgetItem(f"📦 {product.get('name', '')}")
             self.setItem(row, 1, name_item)
-            
+
             # Штрихкод
             barcode = product.get('barcode', '')
             barcode_item = QTableWidgetItem(f"🔳 {barcode}")
-            
+
             # Визуальное выделение для штрихкодов
             if barcode and len(barcode) == 13:
-                barcode_item.setForeground(QColor("#3B82F6"))
-                
+                barcode_item.setForeground(QColor(ACCENT))
+
             self.setItem(row, 2, barcode_item)
-            
+
             # Цена
             price = int(product.get('price') or 0)
             price_item = QTableWidgetItem(f"{format_money(price)} ₸")
             price_item.setTextAlignment(Qt.AlignmentFlag.AlignRight)
-            
+
             # Цветовая индикация цен
             if price > 100000:
-                price_item.setForeground(QColor("#F59E0B"))
+                price_item.setForeground(QColor(WARNING))
             elif price > 50000:
-                price_item.setForeground(QColor("#3B82F6"))
-                
+                price_item.setForeground(QColor(ACCENT))
+
             self.setItem(row, 3, price_item)
-            
+
             # Статус с бейджем
             is_active = product.get('is_active') is not False
             status = "Активен" if is_active else "Выключен"
             status_item = QTableWidgetItem(status)
-            status_item.setForeground(QColor("#10B981" if is_active else "#EF4444"))
+            status_item.setForeground(QColor(SUCCESS if is_active else DANGER))
             self.setItem(row, 4, status_item)
-            
+
         # Настройка растяжения колонок
         header = self.horizontalHeader()
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)  # Название
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)  # Штрихкод
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # Цена
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)  # Статус
-        
+
     def on_selection_changed(self):
         """Обработка изменения выбора"""
         row = self.currentRow()
         if 0 <= row < len(self.products):
             self.product_selected.emit(self.products[row])
-            
+
     def on_double_click(self, row: int, column: int):
         """Обработка двойного клика"""
         if 0 <= row < len(self.products):
             self.product_double_clicked.emit(self.products[row])
-            
+
     def selected_product(self) -> Optional[Dict]:
         """Получение выбранного товара"""
         row = self.currentRow()
@@ -576,36 +582,36 @@ class ProductsTable(QTableWidget):
 
 class ImportProgressDialog(QMessageBox):
     """Диалог с прогрессом импорта"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Импорт товаров")
         self.setIcon(QMessageBox.Icon.Information)
-        
+
         # Кастомный контент
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setFixedHeight(8)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                background: #1A2332;
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background: {SURFACE};
                 border: none;
                 border-radius: 4px;
                 text-align: center;
-            }
-            QProgressBar::chunk {
+            }}
+            QProgressBar::chunk {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #3B82F6, stop:1 #10B981);
+                    stop:0 {ACCENT}, stop:1 {SUCCESS});
                 border-radius: 4px;
-            }
+            }}
         """)
-        
+
         # Добавляем в диалог
         layout = self.layout()
         if layout:
             layout.addRow(self.progress_bar)
-            
+
     def set_progress(self, value: int):
         """Установка прогресса"""
         self.progress_bar.setValue(value)
@@ -617,7 +623,7 @@ class ImportProgressDialog(QMessageBox):
 class ProductsTab(QWidget):
     """
     Улучшенная вкладка управления товарами
-    
+
     Особенности:
     - Современный дизайн
     - Статистика товаров
@@ -626,14 +632,14 @@ class ProductsTab(QWidget):
     - Прогресс импорта
     - Экспорт в Excel
     """
-    
+
     def __init__(self, main_window):
         super().__init__(main_window)
         self.main_window = main_window
         self.products: List[Dict] = []
         self.init_ui()
         self.load_products()
-        
+
     def init_ui(self):
         """Инициализация интерфейса"""
         root = QVBoxLayout(self)
@@ -643,73 +649,73 @@ class ProductsTab(QWidget):
         # === Верхняя панель статистики ===
         stats_layout = QHBoxLayout()
         stats_layout.setSpacing(16)
-        
+
         self.total_card = StatsCard("Всего товаров", "📊")
         self.active_card = StatsCard("Активных", "✅")
         self.inactive_card = StatsCard("Неактивных", "⭕")
         self.total_value_card = StatsCard("Общая стоимость", "💰")
-        
+
         stats_layout.addWidget(self.total_card)
         stats_layout.addWidget(self.active_card)
         stats_layout.addWidget(self.inactive_card)
         stats_layout.addWidget(self.total_value_card)
-        
+
         root.addLayout(stats_layout)
 
         # === Панель поиска ===
         search_container = QFrame()
-        search_container.setStyleSheet("""
-            QFrame {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+        search_container.setStyleSheet(f"""
+            QFrame {{
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 12px;
                 padding: 8px 12px;
-            }
+            }}
         """)
-        
+
         search_layout = QHBoxLayout(search_container)
         search_layout.setContentsMargins(12, 8, 12, 8)
-        
+
         search_icon = QLabel("🔍")
         search_icon.setStyleSheet("font-size: 16px; background: transparent;")
-        
+
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Поиск по названию или штрихкоду...")
         self.search_input.setMinimumHeight(36)
         self.search_input.textChanged.connect(self.filter_products)
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.search_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: {SURFACE};
+                border: 1px solid {BORDER};
                 border-radius: 8px;
                 padding: 0 12px;
                 font-size: 13px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #3B82F6;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {ACCENT};
+            }}
         """)
-        
+
         self.filter_combo = QComboBox()
         self.filter_combo.addItems(["Все товары", "Только активные", "Только неактивные"])
         self.filter_combo.setMinimumHeight(36)
         self.filter_combo.setMinimumWidth(150)
         self.filter_combo.currentTextChanged.connect(self.filter_products)
-        self.filter_combo.setStyleSheet("""
-            QComboBox {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.filter_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: {SURFACE};
+                border: 1px solid {BORDER};
                 border-radius: 8px;
                 padding: 0 12px;
                 font-size: 13px;
                 min-width: 150px;
-            }
+            }}
         """)
-        
+
         search_layout.addWidget(search_icon)
         search_layout.addWidget(self.search_input, 1)
         search_layout.addWidget(self.filter_combo)
-        
+
         root.addWidget(search_container)
 
         # === Форма товара ===
@@ -720,65 +726,65 @@ class ProductsTab(QWidget):
         # === Панель действий ===
         actions_layout = QHBoxLayout()
         actions_layout.setSpacing(12)
-        
+
         # Левая группа
         left_actions = QHBoxLayout()
         left_actions.setSpacing(8)
-        
+
         self.save_btn = QPushButton("💾 Сохранить")
         self.save_btn.setProperty("class", "success")
         self.save_btn.setMinimumHeight(44)
         self.save_btn.setMinimumWidth(140)
         self.save_btn.clicked.connect(self.save_product)
-        
+
         self.clear_btn = QPushButton("🔄 Очистить")
         self.clear_btn.setProperty("class", "ghost")
         self.clear_btn.setMinimumHeight(44)
         self.clear_btn.clicked.connect(self.clear_form)
-        
+
         left_actions.addWidget(self.save_btn)
         left_actions.addWidget(self.clear_btn)
-        
+
         # Центр
         center_actions = QHBoxLayout()
         center_actions.setSpacing(8)
-        
+
         self.reload_btn = QPushButton("⟳ Обновить")
         self.reload_btn.setProperty("class", "ghost")
         self.reload_btn.setMinimumHeight(44)
         self.reload_btn.clicked.connect(self.load_products)
-        
+
         center_actions.addWidget(self.reload_btn)
-        
+
         # Правая группа
         right_actions = QHBoxLayout()
         right_actions.setSpacing(8)
-        
+
         self.import_btn = QPushButton("📥 Импорт Excel")
         self.import_btn.setProperty("class", "primary")
         self.import_btn.setMinimumHeight(44)
         self.import_btn.clicked.connect(self.import_from_excel)
-        
+
         self.export_btn = QPushButton("📤 Экспорт Excel")
         self.export_btn.setProperty("class", "ghost")
         self.export_btn.setMinimumHeight(44)
         self.export_btn.clicked.connect(self.export_to_excel)
-        
+
         self.delete_btn = QPushButton("🗑️ Удалить")
         self.delete_btn.setProperty("class", "danger")
         self.delete_btn.setMinimumHeight(44)
         self.delete_btn.clicked.connect(self.delete_selected)
-        
+
         right_actions.addWidget(self.import_btn)
         right_actions.addWidget(self.export_btn)
         right_actions.addWidget(self.delete_btn)
-        
+
         actions_layout.addLayout(left_actions)
         actions_layout.addStretch(1)
         actions_layout.addLayout(center_actions)
         actions_layout.addStretch(1)
         actions_layout.addLayout(right_actions)
-        
+
         root.addLayout(actions_layout)
 
         # === Информационная строка ===
@@ -791,20 +797,20 @@ class ProductsTab(QWidget):
                 padding: 8px 12px;
             }
         """)
-        
+
         info_layout = QHBoxLayout(info_container)
         info_layout.setContentsMargins(12, 8, 12, 8)
-        
+
         info_icon = QLabel("ℹ️")
         info_icon.setStyleSheet("font-size: 14px;")
-        
+
         self.info_label = QLabel("Каталог товаров текущей точки")
         self.info_label.setProperty("class", "muted")
         self.info_label.setStyleSheet("font-size: 13px;")
-        
+
         info_layout.addWidget(info_icon)
         info_layout.addWidget(self.info_label, 1)
-        
+
         root.addWidget(info_container)
 
         # === Таблица товаров ===
@@ -815,30 +821,30 @@ class ProductsTab(QWidget):
 
         # === Статусная строка внизу ===
         status_container = QFrame()
-        status_container.setStyleSheet("""
-            QFrame {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+        status_container.setStyleSheet(f"""
+            QFrame {{
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 8px;
                 padding: 6px 12px;
-            }
+            }}
         """)
-        
+
         status_layout = QHBoxLayout(status_container)
         status_layout.setContentsMargins(12, 6, 12, 6)
-        
+
         self.status_label = QLabel("Готов к работе")
         self.status_label.setProperty("class", "muted")
         self.status_label.setStyleSheet("font-size: 12px;")
-        
+
         self.last_update_label = QLabel("")
         self.last_update_label.setProperty("class", "muted")
         self.last_update_label.setStyleSheet("font-size: 12px;")
-        
+
         status_layout.addWidget(self.status_label)
         status_layout.addStretch(1)
         status_layout.addWidget(self.last_update_label)
-        
+
         root.addWidget(status_container)
 
     # ==================== Методы работы с данными ====================
@@ -861,43 +867,43 @@ class ProductsTab(QWidget):
         try:
             response = self.main_window.api.list_products()
             self.products = ((response.get("data") or {}).get("products") or [])
-            
+
             # Обновление статистики
             self.update_statistics()
-            
+
             self.info_label.setText(f"📦 Товаров в каталоге: {len(self.products)}")
             self.status_label.setText("✓ Данные загружены")
             self.last_update_label.setText(f"Обновлено: {datetime.now().strftime('%H:%M:%S')}")
-            
+
         except Exception as error:
             self.products = []
             self.info_label.setText(f"⚠️ Каталог недоступен: {error}")
             self.status_label.setText("✗ Ошибка загрузки")
 
         self.update_table()
-        
+
     def update_table(self):
         """Обновление таблицы"""
         self.table.set_products(self.products)
         self.apply_filter()  # Применяем текущий фильтр
-        
+
     def update_statistics(self):
         """Обновление статистики"""
         total = len(self.products)
         active = sum(1 for p in self.products if p.get("is_active") is not False)
         inactive = total - active
         total_value = sum(int(p.get("price") or 0) for p in self.products)
-        
+
         self.total_card.set_value(total)
         self.active_card.set_value(active)
         self.inactive_card.set_value(inactive)
         self.total_value_card.set_value(f"{format_money(total_value)} ₸")
-        
+
     def filter_products(self):
         """Фильтрация товаров"""
         search_text = self.search_input.text().lower()
         filter_type = self.filter_combo.currentText()
-        
+
         filtered = []
         for product in self.products:
             # Фильтр по статусу
@@ -905,19 +911,19 @@ class ProductsTab(QWidget):
                 continue
             if filter_type == "Только неактивные" and product.get("is_active") is not False:
                 continue
-                
+
             # Поиск по тексту
             if search_text:
                 name = str(product.get("name", "")).lower()
                 barcode = str(product.get("barcode", "")).lower()
                 if search_text not in name and search_text not in barcode:
                     continue
-                    
+
             filtered.append(product)
-            
+
         self.table.set_products(filtered)
         self.info_label.setText(f"📦 Показано: {len(filtered)} из {len(self.products)}")
-        
+
     def update_save_button(self):
         """Обновление состояния кнопки сохранения"""
         has_content = bool(self.product_form.name_input.text().strip())
@@ -929,7 +935,7 @@ class ProductsTab(QWidget):
         """Обработка выбора товара"""
         self.product_form.load_product(product)
         self.update_save_button()
-        
+
     def on_product_double_clicked(self, product: dict):
         """Обработка двойного клика по товару"""
         self.product_form.load_product(product)
@@ -965,21 +971,21 @@ class ProductsTab(QWidget):
                     payload,
                 )
                 self.status_label.setText("✓ Товар добавлен")
-                
+
             # Обновление данных
             self.load_products()
             if self.main_window.scanner_tab:
                 self.main_window.scanner_tab.load_products()
-                
+
             self.clear_form()
-            
+
             # Показываем успех
             QMessageBox.information(
-                self, 
-                "Товары", 
+                self,
+                "Товары",
                 "Товар успешно сохранён в каталоге."
             )
-            
+
         except Exception as error:
             self.status_label.setText(f"✗ Ошибка: {error}")
             QMessageBox.critical(self, "Товары", str(error))
@@ -994,7 +1000,7 @@ class ProductsTab(QWidget):
         """Удаление выбранного товара"""
         creds = self.require_admin()
         product = self.table.selected_product()
-        
+
         if not creds or not product or not self.main_window.api:
             return
 
@@ -1005,7 +1011,7 @@ class ProductsTab(QWidget):
             f"Удалить товар «{product.get('name')}»?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        
+
         if reply != QMessageBox.StandardButton.Yes:
             return
 
@@ -1015,16 +1021,16 @@ class ProductsTab(QWidget):
                 creds["password"],
                 str(product.get("id") or ""),
             )
-            
+
             self.load_products()
             if self.main_window.scanner_tab:
                 self.main_window.scanner_tab.load_products()
-                
+
             self.clear_form()
             self.status_label.setText("✓ Товар удалён")
-            
+
             QMessageBox.information(self, "Товары", "Товар удалён.")
-            
+
         except Exception as error:
             self.status_label.setText(f"✗ Ошибка: {error}")
             QMessageBox.critical(self, "Товары", str(error))
@@ -1033,7 +1039,7 @@ class ProductsTab(QWidget):
         """Импорт товаров из Excel"""
         if not _OPENPYXL_AVAILABLE:
             QMessageBox.critical(
-                self, 
+                self,
                 "Excel импорт",
                 "Библиотека openpyxl не установлена.\n\nУстановите: pip install openpyxl"
             )
@@ -1045,12 +1051,12 @@ class ProductsTab(QWidget):
 
         # Выбор файла
         path, _ = QFileDialog.getOpenFileName(
-            self, 
-            "Выберите Excel файл", 
-            "", 
+            self,
+            "Выберите Excel файл",
+            "",
             "Excel файлы (*.xlsx *.xls)"
         )
-        
+
         if not path:
             return
 
@@ -1064,11 +1070,11 @@ class ProductsTab(QWidget):
             # Загрузка файла
             wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
             ws = wb.active
-            
+
             # Проверка заголовков
             headers = [cell.value for cell in next(ws.iter_rows(max_row=1, values_only=True))]
             expected = ["Название", "Штрихкод", "Цена"]
-            
+
             if not all(h in headers for h in expected):
                 QMessageBox.warning(
                     self,
@@ -1079,7 +1085,7 @@ class ProductsTab(QWidget):
 
             rows = list(ws.iter_rows(min_row=2, values_only=True))
             total = len(rows)
-            
+
             added = 0
             skipped = 0
             errors = []
@@ -1095,7 +1101,7 @@ class ProductsTab(QWidget):
 
                 name = str(row[0] or "").strip() if len(row) > 0 else ""
                 barcode = str(row[1] or "").strip() if len(row) > 1 else ""
-                
+
                 try:
                     price_str = str(row[2] or "0").replace(" ", "").replace(",", ".")
                     price = max(0, int(float(price_str)))
@@ -1132,9 +1138,9 @@ class ProductsTab(QWidget):
             summary = f"✅ Добавлено: {added}\n⏭️ Пропущено: {skipped}"
             if errors:
                 summary += f"\n\n❌ Ошибок: {len(errors)}\n" + "\n".join(errors[:5])
-                
+
             self.status_label.setText(f"✓ Импорт завершён: +{added} товаров")
-            
+
             QMessageBox.information(self, "Excel импорт завершён", summary)
 
         except Exception as error:
@@ -1163,7 +1169,7 @@ class ProductsTab(QWidget):
             f"products_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
             "Excel файлы (*.xlsx)"
         )
-        
+
         if not path:
             return
 
@@ -1187,7 +1193,7 @@ class ProductsTab(QWidget):
                 ws.cell(row=row, column=2, value=product.get("name", ""))
                 ws.cell(row=row, column=3, value=product.get("barcode", ""))
                 ws.cell(row=row, column=4, value=product.get("price", 0))
-                
+
                 status = "Активен" if product.get("is_active") is not False else "Выключен"
                 ws.cell(row=row, column=5, value=status)
 
@@ -1197,9 +1203,9 @@ class ProductsTab(QWidget):
 
             # Сохранение
             wb.save(path)
-            
+
             self.status_label.setText(f"✓ Экспортировано {len(self.products)} товаров")
-            
+
             QMessageBox.information(
                 self,
                 "Excel экспорт",

@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from enum import Enum
 
 from PyQt6.QtCore import QDate, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QIntValidator, QColor, QPalette, QFont, QIcon
+from PyQt6.QtGui import QIntValidator, QColor
 from PyQt6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -30,7 +30,11 @@ from PyQt6.QtWidgets import (
     QFrame,
     QSplitter,
     QGraphicsDropShadowEffect,
-    QProgressBar,
+)
+from theme import (
+    BG, SURFACE, SURFACE_2, BORDER,
+    TEXT, TEXT_MUTED,
+    ACCENT, SUCCESS, WARNING, DANGER,
 )
 
 
@@ -54,12 +58,12 @@ def format_money(value: int) -> str:
 def get_status_color(status: str) -> str:
     """Получение цвета для статуса"""
     colors = {
-        "active": "#10B981",
-        "pending": "#F59E0B",
-        "deleted": "#EF4444",
-        "paid": "#3B82F6"
+        "active": SUCCESS,
+        "pending": WARNING,
+        "deleted": DANGER,
+        "paid": ACCENT,
     }
-    return colors.get(status.lower(), "#93A5C1")
+    return colors.get(status.lower(), TEXT_MUTED)
 
 
 class DebtStatus(Enum):
@@ -101,8 +105,8 @@ class DebtCard(QFrame):
         self.setStyleSheet(f"""
             DebtCard {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #0F172A, stop:1 #0B1422);
-                border: 1px solid #1E2A3A;
+                    stop:0 {BG}, stop:1 {BG});
+                border: 1px solid {BORDER};
                 border-radius: 16px;
                 border-left: 4px solid {color};
             }}
@@ -150,22 +154,22 @@ class ModernDebtForm(QGroupBox):
         self.setup_ui()
         
     def setup_ui(self):
-        self.setStyleSheet("""
-            ModernDebtForm {
-                border: 1px solid #1E2A3A;
+        self.setStyleSheet(f"""
+            ModernDebtForm {{
+                border: 1px solid {BORDER};
                 border-radius: 16px;
                 margin-top: 16px;
                 font-weight: 600;
-                color: #3B82F6;
-                background: #0F172A;
+                color: {ACCENT};
+                background: {BG};
                 padding: 16px;
-            }
-            ModernDebtForm::title {
+            }}
+            ModernDebtForm::title {{
                 subcontrol-origin: margin;
                 left: 16px;
                 padding: 0 10px;
-                background: #0B1120;
-            }
+                background: {BG};
+            }}
         """)
         
         layout = QGridLayout(self)
@@ -248,13 +252,13 @@ class ModernDebtForm(QGroupBox):
         total_label.setStyleSheet("font-size: 13px; font-weight: 600;")
         
         self.total_display = QFrame()
-        self.total_display.setStyleSheet("""
-            QFrame {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.total_display.setStyleSheet(f"""
+            QFrame {{
+                background: {BORDER};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 padding: 8px 12px;
-            }
+            }}
         """)
         
         total_layout = QHBoxLayout(self.total_display)
@@ -262,10 +266,10 @@ class ModernDebtForm(QGroupBox):
         
         self.total_label = QLabel("0 ₸")
         self.total_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.total_label.setStyleSheet("""
+        self.total_label.setStyleSheet(f"""
             font-size: 18px;
             font-weight: 700;
-            color: #F59E0B;
+            color: {WARNING};
             background: transparent;
         """)
         
@@ -284,14 +288,14 @@ class ModernDebtForm(QGroupBox):
         self.comment_edit = QPlainTextEdit()
         self.comment_edit.setPlaceholderText("Дополнительная информация о долге...")
         self.comment_edit.setMinimumHeight(80)
-        self.comment_edit.setStyleSheet("""
-            QPlainTextEdit {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.comment_edit.setStyleSheet(f"""
+            QPlainTextEdit {{
+                background: {BORDER};
+                border: 1px solid {BORDER};
                 border-radius: 12px;
                 padding: 10px;
                 font-size: 13px;
-            }
+            }}
         """)
         
         layout.addWidget(comment_label, 4, 0, Qt.AlignmentFlag.AlignTop)
@@ -461,41 +465,41 @@ class DebtTableWidget(QTableWidget):
         self.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.setVerticalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
         
-        self.setStyleSheet("""
-            QTableWidget {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+        self.setStyleSheet(f"""
+            QTableWidget {{
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 14px;
                 gridline-color: transparent;
                 selection-background-color: #1E3A5F;
-            }
-            QTableWidget::item {
+            }}
+            QTableWidget::item {{
                 padding: 12px 8px;
-                border-bottom: 1px solid #1E2A3A;
-            }
-            QTableWidget::item:selected {
+                border-bottom: 1px solid {BORDER};
+            }}
+            QTableWidget::item:selected {{
                 background: #1E3A5F;
-            }
-            QTableWidget::item:hover {
+            }}
+            QTableWidget::item:hover {{
                 background: #1A2634;
-            }
-            QTableWidget::item:selected:hover {
+            }}
+            QTableWidget::item:selected:hover {{
                 background: #234973;
-            }
+            }}
         """)
         
         # Настройка заголовков
         header = self.horizontalHeader()
-        header.setStyleSheet("""
-            QHeaderView::section {
-                background: #131B28;
-                color: #93A5C1;
+        header.setStyleSheet(f"""
+            QHeaderView::section {{
+                background: {BG};
+                color: {TEXT_MUTED};
                 border: none;
-                border-bottom: 2px solid #1E2A3A;
+                border-bottom: 2px solid {BORDER};
                 padding: 14px 8px;
                 font-weight: 700;
                 font-size: 13px;
-            }
+            }}
         """)
     
     def add_status_badge(self, row: int, column: int, status: str):

@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any, List, Tuple
 from enum import Enum
 
 import requests
-from PyQt6.QtCore import QDate, Qt, QThread, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import QDate, Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QIntValidator, QColor, QFont, QDoubleValidator
 from PyQt6.QtWidgets import (
     QDateEdit,
@@ -26,9 +26,13 @@ from PyQt6.QtWidgets import (
     QFrame,
     QSplitter,
     QProgressBar,
-    QGraphicsDropShadowEffect,
     QApplication,
     QCheckBox,
+)
+from theme import (
+    BG, SURFACE, SURFACE_2, BORDER, BORDER_2,
+    TEXT, TEXT_MUTED, TEXT_DIM,
+    ACCENT, SUCCESS, SUCCESS_BG, WARNING, DANGER, VIOLET,
 )
 
 
@@ -74,10 +78,10 @@ class ShiftType(Enum):
     
     def color(self) -> str:
         colors = {
-            "day": "#F59E0B",
-            "night": "#3B82F6"
+            "day": WARNING,
+            "night": ACCENT,
         }
-        return colors.get(self.value, "#93A5C1")
+        return colors.get(self.value, TEXT_MUTED)
 
 
 # ==================== Telegram Worker ====================
@@ -125,64 +129,57 @@ class ResultCard(QFrame):
         self.setup_ui()
         
     def setup_ui(self):
-        # Тень
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(30)
-        shadow.setColor(QColor(0, 0, 0, 60))
-        shadow.setOffset(0, 4)
-        self.setGraphicsEffect(shadow)
-        
-        self.setStyleSheet("""
-            ResultCard {
+        self.setStyleSheet(f"""
+            ResultCard {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #0F172A, stop:1 #0B1422);
-                border: 1px solid #1E2A3A;
+                    stop:0 {BG}, stop:1 {BG});
+                border: 1px solid {BORDER};
                 border-radius: 24px;
                 padding: 24px;
-            }
+            }}
         """)
-        
+
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
-        
+
         # Заголовок
         header = QHBoxLayout()
-        
+
         icon_label = QLabel("💰")
         icon_label.setStyleSheet("font-size: 32px; background: transparent;")
-        
+
         title_label = QLabel("Итог смены")
-        title_label.setStyleSheet("""
+        title_label.setStyleSheet(f"""
             font-size: 20px;
             font-weight: 700;
-            color: #E8F0FE;
+            color: {TEXT};
             background: transparent;
         """)
-        
+
         header.addWidget(icon_label)
         header.addWidget(title_label)
         header.addStretch()
-        
+
         # Основной результат
         self.result_label = QLabel("0 ₸")
         self.result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.result_label.setStyleSheet("""
+        self.result_label.setStyleSheet(f"""
             font-size: 48px;
             font-weight: 800;
-            color: #3B82F6;
+            color: {ACCENT};
             background: transparent;
             padding: 16px 0;
         """)
-        
+
         # Детали
         self.details_label = QLabel("Факт: 0 ₸ • Kaspi: 0 ₸ • Senet: 0 ₸")
         self.details_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.details_label.setStyleSheet("""
+        self.details_label.setStyleSheet(f"""
             font-size: 15px;
-            color: #93A5C1;
+            color: {TEXT_MUTED};
             background: transparent;
             padding: 8px;
-            border-top: 1px solid #1E2A3A;
+            border-top: 1px solid {BORDER};
         """)
         
         layout.addLayout(header)
@@ -194,13 +191,13 @@ class ResultCard(QFrame):
         diff = calc["diff"]
         
         if diff > 0:
-            color = "#10B981"
+            color = SUCCESS
             prefix = "+"
         elif diff < 0:
-            color = "#EF4444"
+            color = DANGER
             prefix = ""
         else:
-            color = "#3B82F6"
+            color = ACCENT
             prefix = ""
             
         self.result_label.setText(f"{prefix}{format_money(diff)} ₸")
@@ -225,7 +222,7 @@ class MoneyInput(QFrame):
     
     value_changed = pyqtSignal()
     
-    def __init__(self, label: str, icon: str, color: str = "#3B82F6", parent=None):
+    def __init__(self, label: str, icon: str, color: str = ACCENT, parent=None):
         super().__init__(parent)
         self.label = label
         self.icon = icon
@@ -235,8 +232,8 @@ class MoneyInput(QFrame):
     def setup_ui(self):
         self.setStyleSheet(f"""
             MoneyInput {{
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 12px;
                 padding: 8px;
             }}
@@ -244,50 +241,50 @@ class MoneyInput(QFrame):
                 border: 2px solid {self.color};
             }}
         """)
-        
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(4)
-        
+
         # Заголовок с иконкой
         header = QHBoxLayout()
-        
+
         icon_label = QLabel(self.icon)
         icon_label.setStyleSheet(f"font-size: 16px; background: transparent; color: {self.color};")
-        
+
         label_text = QLabel(self.label)
-        label_text.setStyleSheet("""
+        label_text.setStyleSheet(f"""
             font-size: 12px;
             font-weight: 600;
-            color: #93A5C1;
+            color: {TEXT_MUTED};
             background: transparent;
         """)
-        
+
         header.addWidget(icon_label)
         header.addWidget(label_text)
         header.addStretch()
-        
+
         # Поле ввода
         input_layout = QHBoxLayout()
-        
+
         self.input = QLineEdit("0")
         self.input.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.input.setValidator(QIntValidator(0, 9_999_999))
         self.input.textChanged.connect(self.on_value_changed)
-        self.input.setStyleSheet("""
-            QLineEdit {
+        self.input.setStyleSheet(f"""
+            QLineEdit {{
                 background: transparent;
                 border: none;
                 font-size: 18px;
                 font-weight: 600;
-                color: #E8F0FE;
+                color: {TEXT};
                 padding: 4px 0;
-            }
-            QLineEdit:focus {
+            }}
+            QLineEdit:focus {{
                 outline: none;
-            }
+            }}
         """)
-        
+
         currency_label = QLabel("₸")
         currency_label.setStyleSheet(f"""
             font-size: 16px;
@@ -330,65 +327,65 @@ class ShiftSelector(QFrame):
         self.setup_ui()
         
     def setup_ui(self):
-        self.setStyleSheet("""
-            ShiftSelector {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+        self.setStyleSheet(f"""
+            ShiftSelector {{
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 40px;
                 padding: 4px;
-            }
+            }}
         """)
-        
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(4)
-        
+
         # Кнопка дневной смены
         self.day_btn = QPushButton("🌞 Дневная")
         self.day_btn.setCheckable(True)
         self.day_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.day_btn.clicked.connect(lambda: self.select_shift(ShiftType.DAY))
-        self.day_btn.setStyleSheet("""
-            QPushButton {
+        self.day_btn.setStyleSheet(f"""
+            QPushButton {{
                 background: transparent;
-                color: #93A5C1;
+                color: {TEXT_MUTED};
                 border: none;
                 border-radius: 36px;
                 padding: 10px 20px;
                 font-size: 14px;
                 font-weight: 600;
-            }
-            QPushButton:hover {
-                color: #E8F0FE;
-            }
-            QPushButton:checked {
-                background: #F59E0B;
+            }}
+            QPushButton:hover {{
+                color: {TEXT};
+            }}
+            QPushButton:checked {{
+                background: {WARNING};
                 color: white;
-            }
+            }}
         """)
-        
+
         # Кнопка ночной смены
         self.night_btn = QPushButton("🌙 Ночная")
         self.night_btn.setCheckable(True)
         self.night_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.night_btn.clicked.connect(lambda: self.select_shift(ShiftType.NIGHT))
-        self.night_btn.setStyleSheet("""
-            QPushButton {
+        self.night_btn.setStyleSheet(f"""
+            QPushButton {{
                 background: transparent;
-                color: #93A5C1;
+                color: {TEXT_MUTED};
                 border: none;
                 border-radius: 36px;
                 padding: 10px 20px;
                 font-size: 14px;
                 font-weight: 600;
-            }
-            QPushButton:hover {
-                color: #E8F0FE;
-            }
-            QPushButton:checked {
-                background: #3B82F6;
+            }}
+            QPushButton:hover {{
+                color: {TEXT};
+            }}
+            QPushButton:checked {{
+                background: {ACCENT};
                 color: white;
-            }
+            }}
         """)
         
         layout.addWidget(self.day_btn)
@@ -458,11 +455,11 @@ class ShiftReportTab(QWidget):
 
         # === Основной контент ===
         content = QSplitter(Qt.Orientation.Horizontal)
-        content.setStyleSheet("""
-            QSplitter::handle {
-                background: #1E2A3A;
+        content.setStyleSheet(f"""
+            QSplitter::handle {{
+                background: {BORDER};
                 width: 1px;
-            }
+            }}
         """)
 
         # Левая колонка - фактические средства
@@ -473,33 +470,33 @@ class ShiftReportTab(QWidget):
         
         # Группа фактических средств
         fact_group = QGroupBox("💰 Фактические средства")
-        fact_group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #1E2A3A;
+        fact_group.setStyleSheet(f"""
+            QGroupBox {{
+                border: 1px solid {BORDER};
                 border-radius: 16px;
                 margin-top: 16px;
                 font-weight: 600;
-                color: #10B981;
-                background: #0F172A;
+                color: {SUCCESS};
+                background: {BG};
                 padding: 16px;
-            }
-            QGroupBox::title {
+            }}
+            QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 16px;
                 padding: 0 10px;
-                background: #0B1120;
-            }
+                background: {BG};
+            }}
         """)
         
         fact_layout = QVBoxLayout(fact_group)
         fact_layout.setSpacing(12)
         
         # Поля фактических средств
-        self.inputs["cash"] = MoneyInput("Наличные", "💵", "#10B981")
-        self.inputs["coins"] = MoneyInput("Мелочь", "🪙", "#F59E0B")
-        self.inputs["kaspi_pos"] = MoneyInput("Kaspi POS", "💳", "#3B82F6")
-        self.inputs["kaspi_online"] = MoneyInput("Kaspi Online", "🛒", "#8B5CF6")
-        self.inputs["debts"] = MoneyInput("Компенсация / тех", "🔧", "#EF4444")
+        self.inputs["cash"] = MoneyInput("Наличные", "💵", SUCCESS)
+        self.inputs["coins"] = MoneyInput("Мелочь", "🪙", WARNING)
+        self.inputs["kaspi_pos"] = MoneyInput("Kaspi POS", "💳", ACCENT)
+        self.inputs["kaspi_online"] = MoneyInput("Kaspi Online", "🛒", VIOLET)
+        self.inputs["debts"] = MoneyInput("Компенсация / тех", "🔧", DANGER)
         
         for input_field in self.inputs.values():
             input_field.value_changed.connect(self.update_calculation)
@@ -515,13 +512,29 @@ class ShiftReportTab(QWidget):
         
         # Группа системных данных
         sys_group = QGroupBox("📊 Данные системы")
-        sys_group.setStyleSheet(fact_group.styleSheet().replace("#10B981", "#3B82F6"))
+        sys_group.setStyleSheet(f"""
+            QGroupBox {{
+                border: 1px solid {BORDER};
+                border-radius: 16px;
+                margin-top: 16px;
+                font-weight: 600;
+                color: {ACCENT};
+                background: {BG};
+                padding: 16px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 16px;
+                padding: 0 10px;
+                background: {BG};
+            }}
+        """)
         
         sys_layout = QVBoxLayout(sys_group)
         sys_layout.setSpacing(12)
         
-        self.inputs["start_cash"] = MoneyInput("Касса утро", "🚀", "#3B82F6")
-        self.inputs["wipon"] = MoneyInput("Senet (Wipon)", "🖥", "#8B5CF6")
+        self.inputs["start_cash"] = MoneyInput("Касса утро", "🚀", ACCENT)
+        self.inputs["wipon"] = MoneyInput("Senet (Wipon)", "🖥", VIOLET)
         
         self.inputs["start_cash"].value_changed.connect(self.update_calculation)
         self.inputs["wipon"].value_changed.connect(self.update_calculation)
@@ -533,20 +546,36 @@ class ShiftReportTab(QWidget):
         
         # Группа мета-информации
         meta_group = QGroupBox("📋 Информация о смене")
-        meta_group.setStyleSheet(fact_group.styleSheet().replace("#10B981", "#F59E0B"))
+        meta_group.setStyleSheet(f"""
+            QGroupBox {{
+                border: 1px solid {BORDER};
+                border-radius: 16px;
+                margin-top: 16px;
+                font-weight: 600;
+                color: {WARNING};
+                background: {BG};
+                padding: 16px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 16px;
+                padding: 0 10px;
+                background: {BG};
+            }}
+        """)
         
         meta_layout = QVBoxLayout(meta_group)
         meta_layout.setSpacing(16)
         
         # Дата
         date_container = QFrame()
-        date_container.setStyleSheet("""
-            QFrame {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+        date_container.setStyleSheet(f"""
+            QFrame {{
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 12px;
                 padding: 8px;
-            }
+            }}
         """)
         
         date_layout = QHBoxLayout(date_container)
@@ -556,20 +585,20 @@ class ShiftReportTab(QWidget):
         date_icon.setStyleSheet("font-size: 18px;")
         
         date_label = QLabel("Дата смены:")
-        date_label.setStyleSheet("color: #93A5C1; font-size: 13px;")
+        date_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 13px;")
         
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
-        self.date_edit.setStyleSheet("""
-            QDateEdit {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.date_edit.setStyleSheet(f"""
+            QDateEdit {{
+                background: {SURFACE_2};
+                border: 1px solid {BORDER};
                 border-radius: 8px;
                 padding: 6px 10px;
                 font-size: 13px;
                 min-width: 120px;
-            }
+            }}
         """)
         
         date_layout.addWidget(date_icon)
@@ -586,13 +615,13 @@ class ShiftReportTab(QWidget):
         
         # Комментарий
         comment_container = QFrame()
-        comment_container.setStyleSheet("""
-            QFrame {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+        comment_container.setStyleSheet(f"""
+            QFrame {{
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 12px;
                 padding: 8px;
-            }
+            }}
         """)
         
         comment_layout = QVBoxLayout(comment_container)
@@ -603,7 +632,7 @@ class ShiftReportTab(QWidget):
         comment_icon.setStyleSheet("font-size: 16px;")
         
         comment_label = QLabel("Комментарий")
-        comment_label.setStyleSheet("color: #93A5C1; font-size: 13px; font-weight: 600;")
+        comment_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 13px; font-weight: 600;")
         
         comment_header.addWidget(comment_icon)
         comment_header.addWidget(comment_label)
@@ -612,18 +641,18 @@ class ShiftReportTab(QWidget):
         self.comment_edit = QPlainTextEdit()
         self.comment_edit.setPlaceholderText("Дополнительная информация о смене...")
         self.comment_edit.setMaximumHeight(80)
-        self.comment_edit.setStyleSheet("""
-            QPlainTextEdit {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.comment_edit.setStyleSheet(f"""
+            QPlainTextEdit {{
+                background: {SURFACE_2};
+                border: 1px solid {BORDER};
                 border-radius: 8px;
                 padding: 8px 10px;
                 font-size: 13px;
-                color: #E8F0FE;
-            }
-            QPlainTextEdit:focus {
-                border: 2px solid #3B82F6;
-            }
+                color: {TEXT};
+            }}
+            QPlainTextEdit:focus {{
+                border: 2px solid {ACCENT};
+            }}
         """)
         
         comment_layout.addLayout(comment_header)
@@ -675,23 +704,23 @@ class ShiftReportTab(QWidget):
         
         self.telegram_check = QCheckBox("Отправить в Telegram")
         self.telegram_check.setChecked(True)
-        self.telegram_check.setStyleSheet("""
-            QCheckBox {
-                color: #E8F0FE;
+        self.telegram_check.setStyleSheet(f"""
+            QCheckBox {{
+                color: {TEXT};
                 font-size: 13px;
                 spacing: 8px;
-            }
-            QCheckBox::indicator {
+            }}
+            QCheckBox::indicator {{
                 width: 18px;
                 height: 18px;
-                border: 1px solid #2D3A4F;
+                border: 1px solid {BORDER};
                 border-radius: 4px;
-                background: #1A2332;
-            }
-            QCheckBox::indicator:checked {
-                background: #3B82F6;
-                border-color: #3B82F6;
-            }
+                background: {SURFACE_2};
+            }}
+            QCheckBox::indicator:checked {{
+                background: {ACCENT};
+                border-color: {ACCENT};
+            }}
         """)
         
         right_actions.addWidget(self.quick_fill_btn)
@@ -705,13 +734,13 @@ class ShiftReportTab(QWidget):
 
         # === Информационная строка ===
         info_container = QFrame()
-        info_container.setStyleSheet("""
-            QFrame {
-                background: rgba(59, 130, 246, 0.05);
-                border: 1px solid rgba(59, 130, 246, 0.2);
+        info_container.setStyleSheet(f"""
+            QFrame {{
+                background: rgba(43, 127, 245, 0.05);
+                border: 1px solid rgba(43, 127, 245, 0.2);
                 border-radius: 10px;
                 padding: 8px 12px;
-            }
+            }}
         """)
         
         info_layout = QHBoxLayout(info_container)
@@ -725,7 +754,7 @@ class ShiftReportTab(QWidget):
         self.info_label.setStyleSheet("font-size: 13px;")
         
         self.warning_label = QLabel("")
-        self.warning_label.setStyleSheet("font-size: 12px; color: #F59E0B;")
+        self.warning_label.setStyleSheet(f"font-size: 12px; color: {WARNING};")
         
         info_layout.addWidget(info_icon)
         info_layout.addWidget(self.info_label, 1)

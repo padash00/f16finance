@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtSignal
-from PyQt6.QtGui import QColor, QPalette, QFont, QIcon
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QLabel,
     QHBoxLayout,
@@ -16,6 +16,11 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QGraphicsDropShadowEffect,
 )
+from theme import (
+    BG, SURFACE, SURFACE_2, BORDER,
+    TEXT, TEXT_MUTED, TEXT_DIM,
+    ACCENT, SUCCESS, WARNING, DANGER, VIOLET,
+)
 
 
 class ModernStatusCard(QFrame):
@@ -23,90 +28,90 @@ class ModernStatusCard(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setProperty("class", "status-card")
-        
+
         # Тень для карточки
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(20)
         shadow.setColor(QColor(0, 0, 0, 40))
         shadow.setOffset(0, 4)
         self.setGraphicsEffect(shadow)
-        
-        self.setStyleSheet("""
-            ModernStatusCard {
+
+        self.setStyleSheet(f"""
+            ModernStatusCard {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #0F172A, stop:1 #0B1422);
-                border: 1px solid #1E2A3A;
+                    stop:0 {BG}, stop:1 {BG});
+                border: 1px solid {BORDER};
                 border-radius: 16px;
-            }
+            }}
         """)
-        
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(16)
-        
+
         # Иконка статуса
         self.status_icon = QLabel("●")
-        self.status_icon.setStyleSheet("""
+        self.status_icon.setStyleSheet(f"""
             font-size: 16px;
-            color: #EF4444;
+            color: {DANGER};
             background: transparent;
         """)
-        
+
         # Текст статуса
         self.status_text = QLabel("Текущая точка: не привязана")
-        self.status_text.setStyleSheet("""
+        self.status_text.setStyleSheet(f"""
             font-size: 15px;
             font-weight: 500;
-            color: #E8F0FE;
+            color: {TEXT};
             background: transparent;
         """)
-        
+
         # Индикатор токена
         self.token_indicator = QFrame()
         self.token_indicator.setFixedSize(8, 8)
-        self.token_indicator.setStyleSheet("""
-            background: #EF4444;
+        self.token_indicator.setStyleSheet(f"""
+            background: {DANGER};
             border-radius: 4px;
         """)
-        
+
         self.token_label = QLabel("Нет токена")
-        self.token_label.setStyleSheet("""
+        self.token_label.setStyleSheet(f"""
             font-size: 13px;
-            color: #93A5C1;
+            color: {TEXT_MUTED};
             background: transparent;
         """)
-        
+
         layout.addWidget(self.status_icon)
         layout.addWidget(self.status_text, 1)
         layout.addWidget(self.token_indicator)
         layout.addWidget(self.token_label)
-        
+
     def update_status(self, company_name: str = None, device_name: str = None, has_token: bool = False, is_online: bool = False):
         """Обновление статуса с анимацией"""
         if company_name and device_name:
-            self.status_icon.setStyleSheet("font-size: 16px; color: #10B981; background: transparent;")
+            self.status_icon.setStyleSheet(f"font-size: 16px; color: {SUCCESS}; background: transparent;")
             self.status_text.setText(f"📍 {company_name} • {device_name}")
-            
+
             if has_token and is_online:
-                self.token_indicator.setStyleSheet("background: #10B981; border-radius: 4px;")
+                self.token_indicator.setStyleSheet(f"background: {SUCCESS}; border-radius: 4px;")
                 self.token_label.setText("Токен активен")
-                self.token_label.setStyleSheet("font-size: 13px; color: #10B981; background: transparent;")
+                self.token_label.setStyleSheet(f"font-size: 13px; color: {SUCCESS}; background: transparent;")
             elif has_token:
-                self.token_indicator.setStyleSheet("background: #F59E0B; border-radius: 4px;")
+                self.token_indicator.setStyleSheet(f"background: {WARNING}; border-radius: 4px;")
                 self.token_label.setText("Офлайн режим")
-                self.token_label.setStyleSheet("font-size: 13px; color: #F59E0B; background: transparent;")
+                self.token_label.setStyleSheet(f"font-size: 13px; color: {WARNING}; background: transparent;")
         elif has_token:
-            self.status_icon.setStyleSheet("font-size: 16px; color: #F59E0B; background: transparent;")
+            self.status_icon.setStyleSheet(f"font-size: 16px; color: {WARNING}; background: transparent;")
             self.status_text.setText("⚡ Токен сохранён, ожидание подключения")
-            self.token_indicator.setStyleSheet("background: #F59E0B; border-radius: 4px;")
+            self.token_indicator.setStyleSheet(f"background: {WARNING}; border-radius: 4px;")
             self.token_label.setText("Токен есть")
-            self.token_label.setStyleSheet("font-size: 13px; color: #F59E0B; background: transparent;")
+            self.token_label.setStyleSheet(f"font-size: 13px; color: {WARNING}; background: transparent;")
         else:
-            self.status_icon.setStyleSheet("font-size: 16px; color: #EF4444; background: transparent;")
+            self.status_icon.setStyleSheet(f"font-size: 16px; color: {DANGER}; background: transparent;")
             self.status_text.setText("⚡ Текущая точка: не привязана")
-            self.token_indicator.setStyleSheet("background: #EF4444; border-radius: 4px;")
+            self.token_indicator.setStyleSheet(f"background: {DANGER}; border-radius: 4px;")
             self.token_label.setText("Нет токена")
-            self.token_label.setStyleSheet("font-size: 13px; color: #EF4444; background: transparent;")
+            self.token_label.setStyleSheet(f"font-size: 13px; color: {DANGER}; background: transparent;")
 
 
 class ModernActionButton(QPushButton):
@@ -115,97 +120,97 @@ class ModernActionButton(QPushButton):
         super().__init__(text)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(44)
-        
+
         # Добавляем иконку если есть
         if icon:
             self.setText(f"{icon}  {text}")
-        
+
         # Стили для разных вариантов
         styles = {
-            "primary": """
-                QPushButton {
+            "primary": f"""
+                QPushButton {{
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #2563EB, stop:1 #3B82F6);
+                        stop:0 #2563EB, stop:1 {ACCENT});
                     color: white;
                     border: none;
                     border-radius: 12px;
                     font-weight: 600;
                     font-size: 14px;
                     padding: 0 24px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #3B82F6, stop:1 #60A5FA);
-                }
-                QPushButton:pressed {
+                        stop:0 {ACCENT}, stop:1 #60A5FA);
+                }}
+                QPushButton:pressed {{
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                         stop:0 #1D4ED8, stop:1 #2563EB);
-                }
+                }}
             """,
-            "success": """
-                QPushButton {
+            "success": f"""
+                QPushButton {{
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #059669, stop:1 #10B981);
+                        stop:0 #059669, stop:1 {SUCCESS});
                     color: white;
                     border: none;
                     border-radius: 12px;
                     font-weight: 600;
                     font-size: 14px;
                     padding: 0 24px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #10B981, stop:1 #34D399);
-                }
+                        stop:0 {SUCCESS}, stop:1 #34D399);
+                }}
             """,
-            "danger": """
-                QPushButton {
+            "danger": f"""
+                QPushButton {{
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #DC2626, stop:1 #EF4444);
+                        stop:0 #DC2626, stop:1 {DANGER});
                     color: white;
                     border: none;
                     border-radius: 12px;
                     font-weight: 600;
                     font-size: 14px;
                     padding: 0 24px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #EF4444, stop:1 #F87171);
-                }
+                        stop:0 {DANGER}, stop:1 #F87171);
+                }}
             """,
-            "ghost": """
-                QPushButton {
+            "ghost": f"""
+                QPushButton {{
                     background: transparent;
-                    color: #93A5C1;
-                    border: 1.5px solid #2D3A4F;
+                    color: {TEXT_MUTED};
+                    border: 1.5px solid {BORDER};
                     border-radius: 12px;
                     font-weight: 500;
                     font-size: 14px;
                     padding: 0 24px;
-                }
-                QPushButton:hover {
+                }}
+                QPushButton:hover {{
                     background: rgba(45, 58, 79, 0.3);
-                    color: #E8F0FE;
-                    border-color: #3B82F6;
-                }
+                    color: {TEXT};
+                    border-color: {ACCENT};
+                }}
             """,
-            "default": """
-                QPushButton {
-                    background: #1E2A3A;
-                    color: #E8F0FE;
+            "default": f"""
+                QPushButton {{
+                    background: {BORDER};
+                    color: {TEXT};
                     border: none;
                     border-radius: 12px;
                     font-weight: 500;
                     font-size: 14px;
                     padding: 0 24px;
-                }
-                QPushButton:hover {
-                    background: #2D3A4F;
-                }
+                }}
+                QPushButton:hover {{
+                    background: {BORDER};
+                }}
             """
         }
-        
+
         self.setStyleSheet(styles.get(variant, styles["default"]))
 
 
@@ -214,65 +219,65 @@ class DeviceTableWidget(QTableWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setup_style()
-        
+
     def setup_style(self):
         """Настройка стиля таблицы"""
         self.setShowGrid(False)
         self.setAlternatingRowColors(True)
         self.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        
+
         # Дополнительные стили
-        self.setStyleSheet("""
-            QTableWidget {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+        self.setStyleSheet(f"""
+            QTableWidget {{
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 14px;
                 gridline-color: transparent;
                 selection-background-color: #1E3A5F;
-            }
-            QTableWidget::item {
+            }}
+            QTableWidget::item {{
                 padding: 12px 8px;
-                border-bottom: 1px solid #1E2A3A;
-            }
-            QTableWidget::item:selected {
+                border-bottom: 1px solid {BORDER};
+            }}
+            QTableWidget::item:selected {{
                 background: #1E3A5F;
-            }
-            QTableWidget::item:hover {
+            }}
+            QTableWidget::item:hover {{
                 background: #1A2634;
-            }
-            QTableWidget::item:selected:hover {
+            }}
+            QTableWidget::item:selected:hover {{
                 background: #234973;
-            }
+            }}
         """)
-        
+
     def add_status_badge(self, row: int, column: int, status: str):
         """Добавление цветного бейджа статуса"""
         badge = QFrame()
         badge.setFixedSize(8, 8)
-        
+
         if status == "Активно":
-            badge.setStyleSheet("background: #10B981; border-radius: 4px;")
+            badge.setStyleSheet(f"background: {SUCCESS}; border-radius: 4px;")
         else:
-            badge.setStyleSheet("background: #EF4444; border-radius: 4px;")
-            
+            badge.setStyleSheet(f"background: {DANGER}; border-radius: 4px;")
+
         self.setCellWidget(row, column, badge)
 
 
 class AdminTerminalTab(QWidget):
     """Улучшенная вкладка администратора терминала"""
-    
+
     # Сигналы для обновления UI
     devices_loaded = pyqtSignal(int)
     device_selected = pyqtSignal(dict)
-    
+
     def __init__(self, main_window):
         super().__init__(main_window)
         self.main_window = main_window
         self.devices: list[dict] = []
         self.animation_group = []
         self.init_ui()
-        
+
     def init_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 20, 20, 20)
@@ -288,13 +293,13 @@ class AdminTerminalTab(QWidget):
                 padding: 12px 16px;
             }
         """)
-        
+
         info_layout = QHBoxLayout(info_container)
         info_layout.setContentsMargins(16, 12, 16, 12)
-        
+
         info_icon = QLabel("ℹ️")
         info_icon.setStyleSheet("font-size: 16px;")
-        
+
         self.info_label = QLabel(
             "Super Admin режим. Здесь можно привязать программу к точке "
             "и сохранить device token локально."
@@ -302,10 +307,10 @@ class AdminTerminalTab(QWidget):
         self.info_label.setWordWrap(True)
         self.info_label.setProperty("class", "muted")
         self.info_label.setStyleSheet("font-size: 13px; line-height: 1.5;")
-        
+
         info_layout.addWidget(info_icon)
         info_layout.addWidget(self.info_label, 1)
-        
+
         root.addWidget(info_container)
 
         # Карточка текущего статуса
@@ -319,38 +324,38 @@ class AdminTerminalTab(QWidget):
                 background: transparent;
             }
         """)
-        
+
         actions = QHBoxLayout(actions_container)
         actions.setContentsMargins(0, 0, 0, 0)
         actions.setSpacing(12)
-        
+
         # Кнопки действий
         self.refresh_btn = ModernActionButton("Обновить устройства", "⟳", "primary")
         self.refresh_btn.clicked.connect(self.load_devices)
-        
+
         self.apply_btn = ModernActionButton("Привязать точку", "✓", "success")
         self.apply_btn.clicked.connect(self.apply_selected)
         self.apply_btn.setEnabled(False)
-        
+
         self.clear_btn = ModernActionButton("Сбросить", "✗", "danger")
         self.clear_btn.clicked.connect(self.clear_binding)
-        
+
         # Статистика устройств
         self.stats_label = QLabel("Устройств: 0")
         self.stats_label.setProperty("class", "muted")
-        self.stats_label.setStyleSheet("""
+        self.stats_label.setStyleSheet(f"""
             font-size: 13px;
             padding: 8px 16px;
-            background: #1E2A3A;
+            background: {BORDER};
             border-radius: 20px;
         """)
-        
+
         actions.addWidget(self.refresh_btn)
         actions.addWidget(self.apply_btn)
         actions.addWidget(self.clear_btn)
         actions.addStretch(1)
         actions.addWidget(self.stats_label)
-        
+
         root.addWidget(actions_container)
 
         # Таблица устройств
@@ -358,59 +363,59 @@ class AdminTerminalTab(QWidget):
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(["ID", "Точка", "Устройство", "Режим", "Модули", "Статус"])
         self.table.setColumnHidden(0, True)
-        
+
         # Настройка растяжения колонок
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        
+
         # Подключение сигнала выбора
         self.table.itemSelectionChanged.connect(self.on_selection_changed)
-        
+
         root.addWidget(self.table, 1)
 
         # Подсказка внизу
         hint_container = QFrame()
-        hint_container.setStyleSheet("""
-            QFrame {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+        hint_container.setStyleSheet(f"""
+            QFrame {{
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 padding: 8px 12px;
-            }
+            }}
         """)
-        
+
         hint_layout = QHBoxLayout(hint_container)
         hint_layout.setContentsMargins(12, 8, 12, 8)
-        
+
         hint_icon = QLabel("💡")
         hint_icon.setStyleSheet("font-size: 14px;")
-        
+
         hint_text = QLabel("Выберите устройство из списка и нажмите «Привязать точку»")
         hint_text.setProperty("class", "muted")
         hint_text.setStyleSheet("font-size: 12px;")
-        
+
         hint_layout.addWidget(hint_icon)
         hint_layout.addWidget(hint_text, 1)
-        
+
         root.addWidget(hint_container)
 
         # Обновление статуса
         self.refresh_current_label()
-        
+
         # Подключение сигналов
         self.devices_loaded.connect(self.update_stats)
-        
+
     def refresh_current_label(self):
         """Обновление карточки статуса"""
         company = ((self.main_window.bootstrap_data or {}).get("company") or {}) if self.main_window.bootstrap_data else {}
         device = ((self.main_window.bootstrap_data or {}).get("device") or {}) if self.main_window.bootstrap_data else {}
         token = str(self.main_window.config.get("device_token") or "").strip()
-        
+
         is_online = self.main_window.bootstrap_data is not None
-        
+
         if company:
             self.status_card.update_status(
                 company_name=company.get('name', '—'),
@@ -433,14 +438,14 @@ class AdminTerminalTab(QWidget):
         # Показываем индикатор загрузки
         self.refresh_btn.setEnabled(False)
         self.refresh_btn.setText("⟳ Загрузка...")
-        
+
         try:
             response = self.main_window.api.list_admin_devices(creds["email"], creds["password"])
             self.devices = ((response.get("data") or {}).get("devices") or [])
-            
+
             # Анимируем обновление
             self.animate_table_update()
-            
+
         except Exception as error:
             self.show_message("Super Admin", str(error), QMessageBox.Icon.Critical)
         finally:
@@ -450,40 +455,40 @@ class AdminTerminalTab(QWidget):
     def animate_table_update(self):
         """Анимированное обновление таблицы"""
         self.table.setRowCount(len(self.devices))
-        
+
         for row_index, device in enumerate(self.devices):
             company = device.get("company") or {}
             flags = device.get("feature_flags") or {}
-            
+
             # Форматирование флагов
             flags_text = self.format_feature_flags(flags)
             status = "Активно" if device.get("is_active") else "Выключено"
 
             # Заполнение ячеек
             self.table.setItem(row_index, 0, QTableWidgetItem(str(device.get("id") or "")))
-            
+
             # Точка с иконкой
             company_item = QTableWidgetItem(f"🏢 {str(company.get('name') or 'Точка')}")
             self.table.setItem(row_index, 1, company_item)
-            
+
             # Устройство с иконкой
             device_item = QTableWidgetItem(f"📱 {str(device.get('name') or 'Устройство')}")
             self.table.setItem(row_index, 2, device_item)
-            
+
             # Режим работы
             mode = device.get("point_mode") or "—"
             mode_icons = {"arena": "🎯", "ramen": "🍜", "market": "🏪"}
             mode_item = QTableWidgetItem(f"{mode_icons.get(mode, '📋')} {mode}")
             self.table.setItem(row_index, 3, mode_item)
-            
+
             self.table.setItem(row_index, 4, QTableWidgetItem(flags_text))
-            
+
             # Статус с цветным индикатором
             status_item = QTableWidgetItem(status)
             if status == "Активно":
-                status_item.setForeground(QColor("#10B981"))
+                status_item.setForeground(QColor(SUCCESS))
             else:
-                status_item.setForeground(QColor("#EF4444"))
+                status_item.setForeground(QColor(DANGER))
             self.table.setItem(row_index, 5, status_item)
 
         self.devices_loaded.emit(len(self.devices))
@@ -498,19 +503,19 @@ class AdminTerminalTab(QWidget):
             "inventory": "📦 Инвентарь",
             "analytics": "📊 Аналитика"
         }
-        
+
         active_flags = [flag_map[key] for key, label in flag_map.items() if flags.get(key)]
-        
+
         if not active_flags:
             return "⚙️ Без модулей"
-        
+
         return " • ".join(active_flags)
 
     def on_selection_changed(self):
         """Обработка выбора устройства"""
         has_selection = self.table.currentRow() >= 0
         self.apply_btn.setEnabled(has_selection)
-        
+
         if has_selection:
             device = self.selected_device()
             if device:
@@ -533,21 +538,21 @@ class AdminTerminalTab(QWidget):
         # Подтверждение действия
         company_name = device.get('company', {}).get('name') or 'Точка'
         device_name = device.get('name') or 'Устройство'
-        
+
         reply = QMessageBox.question(
             self,
             "Подтверждение",
             f"Привязать программу к точке:\n\n🏢 {company_name}\n📱 {device_name}?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        
+
         if reply != QMessageBox.StandardButton.Yes:
             return
 
         # Сохранение токена
         self.main_window.config["device_token"] = str(device.get("device_token") or "")
         self.main_window.save_config()
-        
+
         # Попытка bootstrap
         if not self.main_window.bootstrap_if_possible(show_error=False):
             self.show_message(
@@ -556,10 +561,10 @@ class AdminTerminalTab(QWidget):
                 QMessageBox.Icon.Critical
             )
             return
-            
+
         self.main_window.build_workspace_for_role()
         self.refresh_current_label()
-        
+
         # Показываем успех с анимацией
         self.show_success_message(f"Программа привязана к точке {company_name}")
 
@@ -570,7 +575,7 @@ class AdminTerminalTab(QWidget):
         if not token:
             self.show_message("Super Admin", "Нет активной привязки.", QMessageBox.Icon.Information)
             return
-            
+
         # Подтверждение
         reply = QMessageBox.question(
             self,
@@ -578,7 +583,7 @@ class AdminTerminalTab(QWidget):
             "Сбросить локальную привязку точки?\n\nЭто действие не удалит данные на сервере.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        
+
         if reply != QMessageBox.StandardButton.Yes:
             return
 
@@ -588,7 +593,7 @@ class AdminTerminalTab(QWidget):
         self.main_window.bootstrap_data = None
         self.main_window.build_workspace_for_role()
         self.refresh_current_label()
-        
+
         self.show_message("Super Admin", "Локальная привязка точки сброшена.", QMessageBox.Icon.Information)
 
     def update_stats(self, count: int):
@@ -602,31 +607,31 @@ class AdminTerminalTab(QWidget):
         msg.setWindowTitle(title)
         msg.setText(text)
         msg.setIcon(icon)
-        
+
         # Стилизация сообщения
-        msg.setStyleSheet("""
-            QMessageBox {
-                background: #0F172A;
-            }
-            QMessageBox QLabel {
-                color: #E8F0FE;
+        msg.setStyleSheet(f"""
+            QMessageBox {{
+                background: {BG};
+            }}
+            QMessageBox QLabel {{
+                color: {TEXT};
                 font-size: 14px;
                 min-width: 300px;
-            }
-            QPushButton {
-                background: #1E2A3A;
-                color: #E8F0FE;
+            }}
+            QPushButton {{
+                background: {BORDER};
+                color: {TEXT};
                 border: none;
                 border-radius: 8px;
                 padding: 8px 20px;
                 font-weight: 600;
                 min-width: 80px;
-            }
-            QPushButton:hover {
-                background: #2D3A4F;
-            }
+            }}
+            QPushButton:hover {{
+                background: {BORDER};
+            }}
         """)
-        
+
         msg.exec()
 
     def show_success_message(self, text: str):
@@ -635,25 +640,25 @@ class AdminTerminalTab(QWidget):
         msg.setWindowTitle("Успешно")
         msg.setText(text)
         msg.setIcon(QMessageBox.Icon.Information)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background: #0F172A;
-            }
-            QMessageBox QLabel {
-                color: #10B981;
+        msg.setStyleSheet(f"""
+            QMessageBox {{
+                background: {BG};
+            }}
+            QMessageBox QLabel {{
+                color: {SUCCESS};
                 font-size: 14px;
                 min-width: 300px;
-            }
-            QPushButton {
-                background: #10B981;
+            }}
+            QPushButton {{
+                background: {SUCCESS};
                 color: white;
                 border: none;
                 border-radius: 8px;
                 padding: 8px 20px;
                 font-weight: 600;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background: #059669;
-            }
+            }}
         """)
         msg.exec()

@@ -32,6 +32,11 @@ from scanner_tab import ScannerTab
 from settings_tab import SettingsTab
 from shift_tab import ShiftReportTab
 from storage import OfflineQueue
+from theme import (
+    BG, SURFACE, SURFACE_2, SURFACE_3, BORDER, BORDER_2,
+    TEXT, TEXT_MUTED, TEXT_DIM,
+    ACCENT, ACCENT_DARK, SUCCESS, SUCCESS_BG, WARNING, DANGER, DANGER_BG, VIOLET, VIOLET_BG,
+)
 
 SERVER_URL = "https://ordaops.kz"
 
@@ -41,11 +46,11 @@ SERVER_URL = "https://ordaops.kz"
 # ──────────────────────────────────────────────
 
 _PILL_STYLES = {
-    "success": ("rgba(63,185,80,0.12)", "#3FB950", "rgba(63,185,80,0.35)"),
+    "success": ("rgba(63,185,80,0.12)", SUCCESS, "rgba(63,185,80,0.35)"),
     "warning": ("rgba(210,153,34,0.12)", "#D29922", "rgba(210,153,34,0.35)"),
-    "error":   ("rgba(248,81,73,0.12)",  "#F85149", "rgba(248,81,73,0.35)"),
-    "info":    ("rgba(43,127,245,0.12)", "#2B7FF5", "rgba(43,127,245,0.35)"),
-    "default": ("#21262D",              "#8B949E", "#30363D"),
+    "error":   ("rgba(248,81,73,0.12)",  DANGER, "rgba(248,81,73,0.35)"),
+    "info":    ("rgba(43,127,245,0.12)", ACCENT, "rgba(43,127,245,0.35)"),
+    "default": (SURFACE_2,              TEXT_MUTED, BORDER),
 }
 
 
@@ -80,7 +85,7 @@ class Card(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setStyleSheet(
-            "QFrame { background: #161B22; border: 1px solid #30363D; border-radius: 8px; }"
+            f"QFrame {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 8px; }}"
         )
 
 
@@ -97,7 +102,7 @@ class _Divider(QFrame):
         else:
             self.setFrameShape(QFrame.Shape.VLine)
             self.setFixedWidth(1)
-        self.setStyleSheet("border: none; background: #30363D;")
+        self.setStyleSheet(f"border: none; background: {BORDER};")
 
 
 ModernDivider = _Divider
@@ -116,7 +121,7 @@ class EmptyTab(QWidget):
         label = QLabel(text)
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setStyleSheet("font-size: 14px; color: #8B949E; padding: 12px 30px;")
+        label.setStyleSheet(f"font-size: 14px; color: {TEXT_MUTED}; padding: 12px 30px;")
 
         layout.addWidget(icon)
         layout.addSpacing(8)
@@ -206,11 +211,11 @@ class PointMainWindow(QMainWindow):
         """Современная шапка с логотипом и статусами"""
         bar = QWidget()
         bar.setFixedHeight(64)
-        bar.setStyleSheet("""
-            QWidget {
+        bar.setStyleSheet(f"""
+            QWidget {{
                 background: rgba(11, 18, 30, 0.95);
-                border-bottom: 1px solid #21262D;
-            }
+                border-bottom: 1px solid {BORDER_2};
+            }}
         """)
         
         layout = QHBoxLayout(bar)
@@ -222,17 +227,17 @@ class PointMainWindow(QMainWindow):
         logo_container.setSpacing(8)
         
         logo_mark = QLabel("◈")
-        logo_mark.setStyleSheet("""
+        logo_mark.setStyleSheet(f"""
             font-size: 24px;
-            color: #2B7FF5;
+            color: {ACCENT};
             font-weight: 300;
         """)
         
         logo_name = QLabel("Orda Control Point")
-        logo_name.setStyleSheet("""
+        logo_name.setStyleSheet(f"""
             font-size: 18px;
             font-weight: 700;
-            color: #E6EDF3;
+            color: {TEXT};
             letter-spacing: 0.3px;
         """)
         
@@ -282,10 +287,10 @@ class PointMainWindow(QMainWindow):
 
         # Заголовок
         title = QLabel("Вход в систему")
-        title.setStyleSheet("""
+        title.setStyleSheet(f"""
             font-size: 28px;
             font-weight: 700;
-            color: #E6EDF3;
+            color: {TEXT};
             letter-spacing: -0.3px;
         """)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -293,19 +298,19 @@ class PointMainWindow(QMainWindow):
 
         # Статус точки
         self._login_point_card = QFrame()
-        self._login_point_card.setStyleSheet("""
-            QFrame {
-                background: #161B22;
-                border: 1px solid #30363D;
+        self._login_point_card.setStyleSheet(f"""
+            QFrame {{
+                background: {SURFACE};
+                border: 1px solid {BORDER};
                 border-radius: 16px;
-            }
+            }}
         """)
         
         point_layout = QHBoxLayout(self._login_point_card)
         point_layout.setContentsMargins(16, 12, 16, 12)
         
         self._login_point_icon = QLabel("●")
-        self._login_point_icon.setStyleSheet("font-size: 14px; color: #F85149;")
+        self._login_point_icon.setStyleSheet(f"font-size: 14px; color: {DANGER};")
         
         self._login_point_text = QLabel("Терминал не привязан")
         self._login_point_text.setProperty("class", "muted")
@@ -319,13 +324,13 @@ class PointMainWindow(QMainWindow):
 
         # Переключатель режимов
         mode_selector = QFrame()
-        mode_selector.setStyleSheet("""
-            QFrame {
-                background: #161B22;
-                border: 1px solid #21262D;
+        mode_selector.setStyleSheet(f"""
+            QFrame {{
+                background: {SURFACE};
+                border: 1px solid {BORDER_2};
                 border-radius: 40px;
                 padding: 4px;
-            }
+            }}
         """)
         
         mode_layout = QHBoxLayout(mode_selector)
@@ -350,13 +355,13 @@ class PointMainWindow(QMainWindow):
 
         # Сообщение об ошибке
         self._login_error = QFrame()
-        self._login_error.setStyleSheet("""
-            QFrame {
-                background: rgba(239, 68, 68, 0.1);
-                border: 1px solid rgba(239, 68, 68, 0.3);
+        self._login_error.setStyleSheet(f"""
+            QFrame {{
+                background: rgba(248, 81, 73, 0.1);
+                border: 1px solid rgba(248, 81, 73, 0.3);
                 border-radius: 12px;
                 padding: 12px;
-            }
+            }}
         """)
         self._login_error.hide()
         
@@ -367,7 +372,7 @@ class PointMainWindow(QMainWindow):
         error_icon.setStyleSheet("font-size: 16px;")
         
         self._login_error_label = QLabel("")
-        self._login_error_label.setStyleSheet("color: #F85149; font-size: 13px;")
+        self._login_error_label.setStyleSheet(f"color: {DANGER}; font-size: 13px;")
         self._login_error_label.setWordWrap(True)
         
         error_layout.addWidget(error_icon)
@@ -387,32 +392,32 @@ class PointMainWindow(QMainWindow):
         btn.setFixedHeight(44)
         
         if active:
-            btn.setStyleSheet("""
-                QPushButton {
-                    background: #2B7FF5;
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {ACCENT};
                     color: white;
                     border: none;
                     border-radius: 40px;
                     font-weight: 600;
                     font-size: 14px;
-                }
-                QPushButton:hover {
-                    background: #2563EB;
-                }
+                }}
+                QPushButton:hover {{
+                    background: {ACCENT_DARK};
+                }}
             """)
         else:
-            btn.setStyleSheet("""
-                QPushButton {
+            btn.setStyleSheet(f"""
+                QPushButton {{
                     background: transparent;
-                    color: #8B949E;
+                    color: {TEXT_MUTED};
                     border: none;
                     border-radius: 40px;
                     font-size: 14px;
-                }
-                QPushButton:hover {
-                    color: #E6EDF3;
-                    background: rgba(59, 130, 246, 0.1);
-                }
+                }}
+                QPushButton:hover {{
+                    color: {TEXT};
+                    background: rgba(43, 127, 245, 0.1);
+                }}
             """)
         
         return btn
@@ -476,7 +481,7 @@ class PointMainWindow(QMainWindow):
         
         self._op_state_label = QLabel("")
         self._op_state_label.setWordWrap(True)
-        self._op_state_label.setStyleSheet("color: #3FB950; font-size: 12px;")
+        self._op_state_label.setStyleSheet(f"color: {SUCCESS}; font-size: 12px;")
         
         state_layout.addWidget(state_icon)
         state_layout.addWidget(self._op_state_label, 1)
@@ -553,7 +558,7 @@ class PointMainWindow(QMainWindow):
             "и просмотра отчётов. Оператор этот экран не видит."
         )
         hint_text.setWordWrap(True)
-        hint_text.setStyleSheet("color: #8B949E; font-size: 12px; line-height: 1.5;")
+        hint_text.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; line-height: 1.5;")
         
         hint_layout.addWidget(hint_icon)
         hint_layout.addWidget(hint_text, 1)
@@ -595,12 +600,12 @@ class PointMainWindow(QMainWindow):
     def _build_session_bar(self) -> QWidget:
         """Красивая панель с информацией о сессии"""
         bar = QFrame()
-        bar.setStyleSheet("""
-            QFrame {
-                background: #161B22;
-                border: 1px solid #21262D;
+        bar.setStyleSheet(f"""
+            QFrame {{
+                background: {SURFACE};
+                border: 1px solid {BORDER_2};
                 border-radius: 16px;
-            }
+            }}
         """)
         
         layout = QHBoxLayout(bar)
@@ -615,10 +620,10 @@ class PointMainWindow(QMainWindow):
         operator_icon.setStyleSheet("font-size: 18px;")
         
         self._session_operator_lbl = QLabel("—")
-        self._session_operator_lbl.setStyleSheet("""
+        self._session_operator_lbl.setStyleSheet(f"""
             font-size: 15px;
             font-weight: 600;
-            color: #E6EDF3;
+            color: {TEXT};
         """)
         
         operator_container.addWidget(operator_icon)
@@ -712,32 +717,32 @@ class PointMainWindow(QMainWindow):
         for btn, active in [(self._op_tab_btn, not is_admin), 
                            (self._admin_tab_btn, is_admin)]:
             if active:
-                btn.setStyleSheet("""
-                    QPushButton {
-                        background: #2B7FF5;
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {ACCENT};
                         color: white;
                         border: none;
                         border-radius: 40px;
                         font-weight: 600;
                         font-size: 14px;
-                    }
-                    QPushButton:hover {
-                        background: #2563EB;
-                    }
+                    }}
+                    QPushButton:hover {{
+                        background: {ACCENT_DARK};
+                    }}
                 """)
             else:
-                btn.setStyleSheet("""
-                    QPushButton {
+                btn.setStyleSheet(f"""
+                    QPushButton {{
                         background: transparent;
-                        color: #8B949E;
+                        color: {TEXT_MUTED};
                         border: none;
                         border-radius: 40px;
                         font-size: 14px;
-                    }
-                    QPushButton:hover {
-                        color: #E6EDF3;
-                        background: rgba(59, 130, 246, 0.1);
-                    }
+                    }}
+                    QPushButton:hover {{
+                        color: {TEXT};
+                        background: rgba(43, 127, 245, 0.1);
+                    }}
                 """)
 
         # Обновление состояния формы оператора
@@ -807,48 +812,48 @@ class PointMainWindow(QMainWindow):
         token = str(self.config.get("device_token") or "").strip()
 
         if company:
-            self._login_point_icon.setStyleSheet("font-size: 14px; color: #3FB950;")
+            self._login_point_icon.setStyleSheet(f"font-size: 14px; color: {SUCCESS};")
             self._login_point_text.setText(
                 f"{company.get('name', '—')} • {device.get('name', '—')}"
             )
-            self._login_point_text.setStyleSheet("color: #3FB950; font-size: 14px;")
-            
+            self._login_point_text.setStyleSheet(f"color: {SUCCESS}; font-size: 14px;")
+
             self._header_point_pill.setText(company.get('name', '—'))
-            self._header_point_pill.setStyleSheet("""
-                background: rgba(16, 185, 129, 0.1);
-                color: #3FB950;
-                border: 1px solid rgba(16, 185, 129, 0.3);
+            self._header_point_pill.setStyleSheet(f"""
+                background: rgba(63, 185, 80, 0.1);
+                color: {SUCCESS};
+                border: 1px solid rgba(63, 185, 80, 0.3);
                 border-radius: 20px;
                 padding: 4px 14px;
                 font-size: 12px;
                 font-weight: 600;
             """)
-            
+
         elif token:
-            self._login_point_icon.setStyleSheet("font-size: 14px; color: #F59E0B;")
+            self._login_point_icon.setStyleSheet(f"font-size: 14px; color: {WARNING};")
             self._login_point_text.setText("Токен сохранён, нет связи с сервером")
-            self._login_point_text.setStyleSheet("color: #F59E0B; font-size: 14px;")
-            
+            self._login_point_text.setStyleSheet(f"color: {WARNING}; font-size: 14px;")
+
             self._header_point_pill.setText("Офлайн")
-            self._header_point_pill.setStyleSheet("""
-                background: rgba(245, 158, 11, 0.1);
-                color: #F59E0B;
-                border: 1px solid rgba(245, 158, 11, 0.3);
+            self._header_point_pill.setStyleSheet(f"""
+                background: rgba(210, 153, 34, 0.1);
+                color: {WARNING};
+                border: 1px solid rgba(210, 153, 34, 0.3);
                 border-radius: 20px;
                 padding: 4px 14px;
                 font-size: 12px;
                 font-weight: 600;
             """)
         else:
-            self._login_point_icon.setStyleSheet("font-size: 14px; color: #F85149;")
+            self._login_point_icon.setStyleSheet(f"font-size: 14px; color: {DANGER};")
             self._login_point_text.setText("Терминал не привязан")
-            self._login_point_text.setStyleSheet("color: #8B949E; font-size: 14px;")
-            
+            self._login_point_text.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 14px;")
+
             self._header_point_pill.setText("Не подключено")
-            self._header_point_pill.setStyleSheet("""
-                background: #21262D;
-                color: #8B949E;
-                border: 1px solid #30363D;
+            self._header_point_pill.setStyleSheet(f"""
+                background: {SURFACE_2};
+                color: {TEXT_MUTED};
+                border: 1px solid {BORDER};
                 border-radius: 20px;
                 padding: 4px 14px;
                 font-size: 12px;
@@ -861,9 +866,9 @@ class PointMainWindow(QMainWindow):
         """Обновление статусной строки"""
         if self.bootstrap_data:
             self._sb_connection.setText("● Подключено")
-            self._sb_connection.setStyleSheet("""
-                background: rgba(16, 185, 129, 0.1);
-                color: #3FB950;
+            self._sb_connection.setStyleSheet(f"""
+                background: rgba(63, 185, 80, 0.1);
+                color: {SUCCESS};
                 padding: 2px 8px;
                 border-radius: 12px;
                 font-size: 12px;
@@ -872,18 +877,18 @@ class PointMainWindow(QMainWindow):
             token = str(self.config.get("device_token") or "").strip()
             if token:
                 self._sb_connection.setText("● Офлайн")
-                self._sb_connection.setStyleSheet("""
-                    background: rgba(245, 158, 11, 0.1);
-                    color: #F59E0B;
+                self._sb_connection.setStyleSheet(f"""
+                    background: rgba(210, 153, 34, 0.1);
+                    color: {WARNING};
                     padding: 2px 8px;
                     border-radius: 12px;
                     font-size: 12px;
                 """)
             else:
                 self._sb_connection.setText("● Нет токена")
-                self._sb_connection.setStyleSheet("""
-                    background: rgba(239, 68, 68, 0.1);
-                    color: #F85149;
+                self._sb_connection.setStyleSheet(f"""
+                    background: rgba(248, 81, 73, 0.1);
+                    color: {DANGER};
                     padding: 2px 8px;
                     border-radius: 12px;
                     font-size: 12px;
@@ -892,10 +897,10 @@ class PointMainWindow(QMainWindow):
         total = self.queue.count_shifts() + self.queue.count_debt_actions()
         if total > 0:
             self._sb_queue_count.setText(f"В очереди: {total}")
-            self._sb_queue_count.setStyleSheet("color: #F59E0B; font-size: 12px;")
+            self._sb_queue_count.setStyleSheet(f"color: {WARNING}; font-size: 12px;")
         else:
             self._sb_queue_count.setText("Очередь чиста")
-            self._sb_queue_count.setStyleSheet("color: #6B7B93; font-size: 12px;")
+            self._sb_queue_count.setStyleSheet(f"color: {TEXT_DIM}; font-size: 12px;")
 
     # ────────────────────────────────────────
     # LOGIN HANDLERS
@@ -1039,9 +1044,9 @@ class PointMainWindow(QMainWindow):
             )
             self._session_company_lbl.setText(f"{company_name} • {mode}")
             self._header_mode_pill.setText("SUPER ADMIN")
-            self._header_mode_pill.setStyleSheet("""
+            self._header_mode_pill.setStyleSheet(f"""
                 background: rgba(139, 92, 246, 0.1);
-                color: #8B5CF6;
+                color: {VIOLET};
                 border: 1px solid rgba(139, 92, 246, 0.3);
                 border-radius: 20px;
                 padding: 4px 14px;
@@ -1065,10 +1070,10 @@ class PointMainWindow(QMainWindow):
             self._session_operator_lbl.setText(f"{name} • @{username}")
             self._session_company_lbl.setText(f"{company_name} • {mode}")
             self._header_mode_pill.setText(role.upper())
-            self._header_mode_pill.setStyleSheet("""
-                background: rgba(16, 185, 129, 0.1);
-                color: #3FB950;
-                border: 1px solid rgba(16, 185, 129, 0.3);
+            self._header_mode_pill.setStyleSheet(f"""
+                background: rgba(63, 185, 80, 0.1);
+                color: {SUCCESS};
+                border: 1px solid rgba(63, 185, 80, 0.3);
                 border-radius: 20px;
                 padding: 4px 14px;
                 font-size: 11px;
@@ -1113,10 +1118,10 @@ class PointMainWindow(QMainWindow):
         
         if total > 0:
             self._queue_pill.setText(f"В очереди: {total}")
-            self._queue_pill.setStyleSheet("""
-                background: rgba(245, 158, 11, 0.1);
-                color: #F59E0B;
-                border: 1px solid rgba(245, 158, 11, 0.3);
+            self._queue_pill.setStyleSheet(f"""
+                background: rgba(210, 153, 34, 0.1);
+                color: {WARNING};
+                border: 1px solid rgba(210, 153, 34, 0.3);
                 border-radius: 20px;
                 padding: 4px 14px;
                 font-size: 12px;
@@ -1124,10 +1129,10 @@ class PointMainWindow(QMainWindow):
             """)
         else:
             self._queue_pill.setText("Синхронизировано")
-            self._queue_pill.setStyleSheet("""
-                background: rgba(16, 185, 129, 0.1);
-                color: #3FB950;
-                border: 1px solid rgba(16, 185, 129, 0.3);
+            self._queue_pill.setStyleSheet(f"""
+                background: rgba(63, 185, 80, 0.1);
+                color: {SUCCESS};
+                border: 1px solid rgba(63, 185, 80, 0.3);
                 border-radius: 20px;
                 padding: 4px 14px;
                 font-size: 12px;

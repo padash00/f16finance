@@ -4,12 +4,17 @@ Modern dialogs for Orda Control Point
 from __future__ import annotations
 
 from typing import Optional, Dict, Any
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QIcon, QFont, QColor, QPalette, QPixmap, QPainter, QBrush, QLinearGradient
+from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QDialog, QFormLayout, QHBoxLayout, QVBoxLayout, QLabel, 
+    QDialog, QFormLayout, QHBoxLayout, QVBoxLayout, QLabel,
     QLineEdit, QPushButton, QFrame, QGraphicsDropShadowEffect,
     QProgressBar, QWidget, QCheckBox
+)
+from theme import (
+    BG, SURFACE, SURFACE_2, BORDER,
+    TEXT, TEXT_MUTED,
+    ACCENT, SUCCESS, WARNING, DANGER, VIOLET, VIOLET_BG,
 )
 
 
@@ -18,119 +23,119 @@ from PyQt6.QtWidgets import (
 class ModernDialog(QDialog):
     """
     Базовый класс для всех современных диалогов
-    
+
     Особенности:
     - Единый стиль
     - Анимация появления
     - Тень и градиент
     - Центрирование на родителе
     """
-    
+
     def __init__(self, parent=None, title: str = "", width: int = 480):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setModal(True)
         self.setFixedWidth(width)
-        
+
         # Убираем стандартный заголовок окна
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        
+
         # Основной контейнер с тенью
         self.container = QFrame(self)
         self.container.setObjectName("dialogContainer")
-        
+
         # Тень
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(30)
         shadow.setColor(QColor(0, 0, 0, 80))
         shadow.setOffset(0, 8)
         self.container.setGraphicsEffect(shadow)
-        
+
         # Стиль контейнера
-        self.container.setStyleSheet("""
-            QFrame#dialogContainer {
+        self.container.setStyleSheet(f"""
+            QFrame#dialogContainer {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #0F1A2A, stop:1 #0B1422);
-                border: 1px solid #1E3248;
+                    stop:0 {BG}, stop:1 {BG});
+                border: 1px solid {BORDER};
                 border-radius: 24px;
-            }
+            }}
         """)
-        
+
         # Основной layout контейнера
         self.container_layout = QVBoxLayout(self.container)
         self.container_layout.setContentsMargins(32, 28, 32, 28)
         self.container_layout.setSpacing(20)
-        
+
         # Заголовок
         if title:
             self.title_label = QLabel(title)
-            self.title_label.setStyleSheet("""
+            self.title_label.setStyleSheet(f"""
                 font-size: 22px;
                 font-weight: 700;
-                color: #E8F0FE;
+                color: {TEXT};
                 background: transparent;
                 letter-spacing: -0.3px;
             """)
             self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.container_layout.addWidget(self.title_label)
-            
+
             # Разделитель
             separator = QFrame()
             separator.setFrameShape(QFrame.Shape.HLine)
-            separator.setStyleSheet("""
+            separator.setStyleSheet(f"""
                 border: none;
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 transparent, stop:0.5 #1E3248, stop:1 transparent);
+                    stop:0 transparent, stop:0.5 {BORDER}, stop:1 transparent);
                 max-height: 1px;
             """)
             self.container_layout.addWidget(separator)
-        
+
         # Анимация появления
         self.animation = QPropertyAnimation(self, b"windowOpacity")
         self.animation.setDuration(300)
         self.animation.setStartValue(0)
         self.animation.setEndValue(1)
         self.animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        
+
     def showEvent(self, event):
         """Анимация при показе"""
         super().showEvent(event)
         self.animation.start()
-        
+
     def resizeEvent(self, event):
         """Обновление позиции контейнера при изменении размера"""
         super().resizeEvent(event)
         self.container.resize(self.width() - 40, self.height() - 40)
         self.container.move(20, 20)
-        
+
     def add_content(self, widget: QWidget):
         """Добавление контента в диалог"""
         self.container_layout.addWidget(widget)
-        
+
     def add_buttons(self, buttons: list[tuple[str, str, callable]]):
         """
         Добавление кнопок
-        
+
         Args:
             buttons: Список кортежей (текст, стиль, callback)
         """
         button_layout = QHBoxLayout()
         button_layout.setSpacing(12)
-        
+
         for text, style, callback in buttons:
             btn = QPushButton(text)
             btn.setProperty("class", style)
             btn.setMinimumHeight(44)
             btn.clicked.connect(callback)
             button_layout.addWidget(btn)
-            
+
         self.container_layout.addLayout(button_layout)
 
 
 class GlassFrame(QFrame):
     """Стеклянная панель для выделения важной информации"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setStyleSheet("""
@@ -145,13 +150,13 @@ class GlassFrame(QFrame):
 
 class IconLabel(QLabel):
     """Лейбл с иконкой и текстом"""
-    
+
     def __init__(self, icon: str, text: str, parent=None):
         super().__init__(parent)
         self.setText(f"{icon}  {text}")
-        self.setStyleSheet("""
+        self.setStyleSheet(f"""
             font-size: 14px;
-            color: #93A5C1;
+            color: {TEXT_MUTED};
             background: transparent;
             padding: 4px 0;
         """)
@@ -162,24 +167,24 @@ class IconLabel(QLabel):
 class ActivationDialog(ModernDialog):
     """
     Современный диалог активации точки
-    
+
     Особенности:
     - Визуальная обратная связь
     - Валидация в реальном времени
     - Подсказки
     """
-    
+
     def __init__(self, config: dict, parent=None):
         super().__init__(parent, "🔌 Подключение точки", 520)
-        
+
         self.config = config
-        
+
         # Добавляем контент
         self.setup_ui()
-        
+
     def setup_ui(self):
         """Настройка интерфейса"""
-        
+
         # Информационная иконка
         icon_label = QLabel("🔗")
         icon_label.setStyleSheet("""
@@ -189,7 +194,7 @@ class ActivationDialog(ModernDialog):
         """)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.add_content(icon_label)
-        
+
         # Описание
         intro = QLabel(
             "Укажите адрес сервера Orda Control и токен устройства.\n"
@@ -197,172 +202,172 @@ class ActivationDialog(ModernDialog):
         )
         intro.setWordWrap(True)
         intro.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        intro.setStyleSheet("""
+        intro.setStyleSheet(f"""
             font-size: 13px;
-            color: #93A5C1;
+            color: {TEXT_MUTED};
             background: transparent;
             line-height: 1.5;
             padding: 8px 0;
         """)
         self.add_content(intro)
-        
+
         # Форма
         form_container = QFrame()
-        form_container.setStyleSheet("""
-            QFrame {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+        form_container.setStyleSheet(f"""
+            QFrame {{
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 16px;
                 padding: 20px;
-            }
+            }}
         """)
-        
+
         form_layout = QFormLayout(form_container)
         form_layout.setVerticalSpacing(16)
         form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        
+
         # API URL
         api_label = QLabel("🌐 API URL")
-        api_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #3B82F6;")
-        
+        api_label.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ACCENT};")
+
         self.api_url = QLineEdit(self.config.get("api_base_url") or "https://ordaops.kz")
         self.api_url.setPlaceholderText("https://ordaops.kz")
         self.api_url.setMinimumHeight(44)
         self.api_url.textChanged.connect(self.validate_input)
-        self.api_url.setStyleSheet("""
-            QLineEdit {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.api_url.setStyleSheet(f"""
+            QLineEdit {{
+                background: {SURFACE};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 padding: 0 12px;
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #3B82F6;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {ACCENT};
+            }}
         """)
-        
+
         # Device Token
         token_label = QLabel("🔑 Device Token")
-        token_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #3B82F6;")
-        
+        token_label.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ACCENT};")
+
         token_container = QWidget()
         token_layout = QHBoxLayout(token_container)
         token_layout.setContentsMargins(0, 0, 0, 0)
         token_layout.setSpacing(8)
-        
+
         self.device_token = QLineEdit(self.config.get("device_token") or "")
         self.device_token.setPlaceholderText("Вставьте токен устройства")
         self.device_token.setMinimumHeight(44)
         self.device_token.setEchoMode(QLineEdit.EchoMode.Password)
         self.device_token.textChanged.connect(self.validate_input)
-        self.device_token.setStyleSheet("""
-            QLineEdit {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.device_token.setStyleSheet(f"""
+            QLineEdit {{
+                background: {SURFACE};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 padding: 0 12px;
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #3B82F6;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {ACCENT};
+            }}
         """)
-        
+
         self.toggle_token_btn = QPushButton("👁")
         self.toggle_token_btn.setFixedSize(44, 44)
         self.toggle_token_btn.setCheckable(True)
-        self.toggle_token_btn.setStyleSheet("""
-            QPushButton {
-                background: #1E2A3A;
-                border: 1px solid #2D3A4F;
+        self.toggle_token_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {SURFACE_2};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 font-size: 16px;
-            }
-            QPushButton:hover {
-                background: #2D3A4F;
-            }
-            QPushButton:checked {
-                background: #3B82F6;
-            }
+            }}
+            QPushButton:hover {{
+                background: {BORDER};
+            }}
+            QPushButton:checked {{
+                background: {ACCENT};
+            }}
         """)
         self.toggle_token_btn.toggled.connect(self.toggle_token_visibility)
-        
+
         token_layout.addWidget(self.device_token, 1)
         token_layout.addWidget(self.toggle_token_btn)
-        
+
         form_layout.addRow(api_label, self.api_url)
         form_layout.addRow(token_label, token_container)
-        
+
         self.add_content(form_container)
-        
+
         # Индикатор валидации
         self.validation_label = QLabel("")
         self.validation_label.setWordWrap(True)
-        self.validation_label.setStyleSheet("""
+        self.validation_label.setStyleSheet(f"""
             font-size: 12px;
-            color: #F59E0B;
+            color: {WARNING};
             background: transparent;
             padding: 4px 8px;
         """)
         self.validation_label.hide()
         self.add_content(self.validation_label)
-        
+
         # Подсказка
         hint_frame = GlassFrame()
         hint_layout = QHBoxLayout(hint_frame)
         hint_layout.setContentsMargins(16, 12, 16, 12)
-        
+
         hint_icon = QLabel("💡")
         hint_icon.setStyleSheet("font-size: 18px; background: transparent;")
-        
+
         hint_text = QLabel(
             "Токен устройства можно найти в личном кабинете "
             "в разделе управления точками."
         )
         hint_text.setWordWrap(True)
-        hint_text.setStyleSheet("font-size: 12px; color: #93A5C1; background: transparent;")
-        
+        hint_text.setStyleSheet(f"font-size: 12px; color: {TEXT_MUTED}; background: transparent;")
+
         hint_layout.addWidget(hint_icon)
         hint_layout.addWidget(hint_text, 1)
-        
+
         self.add_content(hint_frame)
-        
+
         # Кнопки
         self.add_buttons([
             ("Отмена", "ghost", self.reject),
             ("Подключить", "primary", self.accept)
         ])
-        
+
         # Первоначальная валидация
         self.validate_input()
-        
+
     def toggle_token_visibility(self, checked: bool):
         """Переключение видимости токена"""
         mode = QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
         self.device_token.setEchoMode(mode)
-        
+
     def validate_input(self):
         """Валидация введённых данных"""
         api_url = self.api_url.text().strip()
         token = self.device_token.text().strip()
-        
+
         messages = []
-        
+
         if not api_url:
             messages.append("• Укажите API URL")
         elif not api_url.startswith(("http://", "https://")):
             messages.append("• API URL должен начинаться с http:// или https://")
-            
+
         if not token:
             messages.append("• Введите device token")
         elif len(token) < 10:
             messages.append("• Device token слишком короткий")
-            
+
         if messages:
             self.validation_label.setText("\n".join(messages))
             self.validation_label.show()
-            
+
             # Ищем кнопку подключения и делаем её неактивной
             for btn in self.findChildren(QPushButton):
                 if btn.text() == "Подключить":
@@ -374,7 +379,7 @@ class ActivationDialog(ModernDialog):
                 if btn.text() == "Подключить":
                     btn.setEnabled(True)
                     break
-                    
+
     def payload(self) -> dict:
         """Получение данных для сохранения"""
         return {
@@ -386,23 +391,23 @@ class ActivationDialog(ModernDialog):
 class OperatorLoginDialog(ModernDialog):
     """
     Современный диалог входа оператора
-    
+
     Особенности:
     - Запоминание последнего логина
     - Валидация в реальном времени
     - Кнопка показа пароля
     - Визуальная обратная связь
     """
-    
+
     def __init__(self, remembered_username: str | None = None, parent=None):
         super().__init__(parent, "👤 Вход оператора", 460)
-        
+
         self.remembered_username = remembered_username or ""
         self.setup_ui()
-        
+
     def setup_ui(self):
         """Настройка интерфейса"""
-        
+
         # Иконка
         icon_label = QLabel("🔐")
         icon_label.setStyleSheet("""
@@ -412,7 +417,7 @@ class OperatorLoginDialog(ModernDialog):
         """)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.add_content(icon_label)
-        
+
         # Описание
         intro = QLabel(
             "Войдите под своим логином и паролем.\n"
@@ -420,178 +425,178 @@ class OperatorLoginDialog(ModernDialog):
         )
         intro.setWordWrap(True)
         intro.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        intro.setStyleSheet("""
+        intro.setStyleSheet(f"""
             font-size: 13px;
-            color: #93A5C1;
+            color: {TEXT_MUTED};
             background: transparent;
             line-height: 1.5;
             padding: 8px 0;
         """)
         self.add_content(intro)
-        
+
         # Форма
         form_container = QFrame()
-        form_container.setStyleSheet("""
-            QFrame {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+        form_container.setStyleSheet(f"""
+            QFrame {{
+                background: {BG};
+                border: 1px solid {BORDER};
                 border-radius: 16px;
                 padding: 20px;
-            }
+            }}
         """)
-        
+
         form_layout = QFormLayout(form_container)
         form_layout.setVerticalSpacing(16)
         form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        
+
         # Логин
         username_label = QLabel("👤 Логин")
-        username_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #3B82F6;")
-        
+        username_label.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ACCENT};")
+
         self.username = QLineEdit(self.remembered_username)
         self.username.setPlaceholderText("Введите логин")
         self.username.setMinimumHeight(44)
         self.username.textChanged.connect(self.validate_input)
-        self.username.setStyleSheet("""
-            QLineEdit {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.username.setStyleSheet(f"""
+            QLineEdit {{
+                background: {SURFACE};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 padding: 0 12px;
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #3B82F6;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {ACCENT};
+            }}
         """)
-        
+
         # Пароль
         password_label = QLabel("🔑 Пароль")
-        password_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #3B82F6;")
-        
+        password_label.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {ACCENT};")
+
         password_container = QWidget()
         password_layout = QHBoxLayout(password_container)
         password_layout.setContentsMargins(0, 0, 0, 0)
         password_layout.setSpacing(8)
-        
+
         self.password = QLineEdit()
         self.password.setPlaceholderText("············")
         self.password.setMinimumHeight(44)
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
         self.password.textChanged.connect(self.validate_input)
         self.password.returnPressed.connect(self.try_accept)
-        self.password.setStyleSheet("""
-            QLineEdit {
-                background: #1A2332;
-                border: 1px solid #2D3A4F;
+        self.password.setStyleSheet(f"""
+            QLineEdit {{
+                background: {SURFACE};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 padding: 0 12px;
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #3B82F6;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {ACCENT};
+            }}
         """)
-        
+
         self.toggle_password_btn = QPushButton("👁")
         self.toggle_password_btn.setFixedSize(44, 44)
         self.toggle_password_btn.setCheckable(True)
-        self.toggle_password_btn.setStyleSheet("""
-            QPushButton {
-                background: #1E2A3A;
-                border: 1px solid #2D3A4F;
+        self.toggle_password_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {SURFACE_2};
+                border: 1px solid {BORDER};
                 border-radius: 10px;
                 font-size: 16px;
-            }
-            QPushButton:hover {
-                background: #2D3A4F;
-            }
-            QPushButton:checked {
-                background: #3B82F6;
-            }
+            }}
+            QPushButton:hover {{
+                background: {BORDER};
+            }}
+            QPushButton:checked {{
+                background: {ACCENT};
+            }}
         """)
         self.toggle_password_btn.toggled.connect(self.toggle_password_visibility)
-        
+
         password_layout.addWidget(self.password, 1)
         password_layout.addWidget(self.toggle_password_btn)
-        
+
         # Запомнить меня
         remember_container = QHBoxLayout()
         self.remember_check = QCheckBox("Запомнить логин")
         self.remember_check.setChecked(True)
-        self.remember_check.setStyleSheet("""
-            QCheckBox {
-                color: #93A5C1;
+        self.remember_check.setStyleSheet(f"""
+            QCheckBox {{
+                color: {TEXT_MUTED};
                 font-size: 13px;
                 spacing: 8px;
-            }
-            QCheckBox::indicator {
+            }}
+            QCheckBox::indicator {{
                 width: 18px;
                 height: 18px;
-                border: 1px solid #2D3A4F;
+                border: 1px solid {BORDER};
                 border-radius: 4px;
-                background: #1A2332;
-            }
-            QCheckBox::indicator:checked {
-                background: #3B82F6;
-                border-color: #3B82F6;
-            }
+                background: {SURFACE};
+            }}
+            QCheckBox::indicator:checked {{
+                background: {ACCENT};
+                border-color: {ACCENT};
+            }}
         """)
-        
+
         remember_container.addWidget(self.remember_check)
         remember_container.addStretch()
-        
+
         form_layout.addRow(username_label, self.username)
         form_layout.addRow(password_label, password_container)
         form_layout.addRow("", remember_container)
-        
+
         self.add_content(form_container)
-        
+
         # Индикатор валидации
         self.validation_label = QLabel("")
         self.validation_label.setWordWrap(True)
-        self.validation_label.setStyleSheet("""
+        self.validation_label.setStyleSheet(f"""
             font-size: 12px;
-            color: #F59E0B;
+            color: {WARNING};
             background: transparent;
             padding: 4px 8px;
         """)
         self.validation_label.hide()
         self.add_content(self.validation_label)
-        
+
         # Кнопки
         self.add_buttons([
             ("Отмена", "ghost", self.reject),
             ("Войти", "primary", self.accept)
         ])
-        
+
         # Первоначальная валидация
         self.validate_input()
-        
+
     def toggle_password_visibility(self, checked: bool):
         """Переключение видимости пароля"""
         mode = QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
         self.password.setEchoMode(mode)
-        
+
     def validate_input(self):
         """Валидация введённых данных"""
         username = self.username.text().strip()
         password = self.password.text()
-        
+
         messages = []
-        
+
         if not username:
             messages.append("• Введите логин")
-            
+
         if not password:
             messages.append("• Введите пароль")
         elif len(password) < 3:
             messages.append("• Пароль слишком короткий")
-            
+
         if messages:
             self.validation_label.setText("\n".join(messages))
             self.validation_label.show()
-            
+
             # Делаем кнопку входа неактивной
             for btn in self.findChildren(QPushButton):
                 if btn.text() == "Войти":
@@ -603,19 +608,19 @@ class OperatorLoginDialog(ModernDialog):
                 if btn.text() == "Войти":
                     btn.setEnabled(True)
                     break
-                    
+
     def try_accept(self):
         """Попытка принять диалог при нажатии Enter"""
         if self.findChild(QPushButton, "").isEnabled():
             self.accept()
-                    
+
     def payload(self) -> dict:
         """Получение данных для входа"""
         return {
             "username": self.username.text().strip(),
             "password": self.password.text(),
         }
-        
+
     def should_remember(self) -> bool:
         """Нужно ли запоминать логин"""
         return self.remember_check.isChecked()
@@ -624,20 +629,20 @@ class OperatorLoginDialog(ModernDialog):
 class SuperAdminLoginDialog(ModernDialog):
     """
     Диалог входа Super Admin
-    
+
     Особенности:
     - Специальный дизайн для администратора
     - Дополнительные подсказки
     """
-    
+
     def __init__(self, parent=None):
         super().__init__(parent, "⚡ Super Admin", 460)
-        
+
         self.setup_ui()
-        
+
     def setup_ui(self):
         """Настройка интерфейса"""
-        
+
         # Иконка
         icon_label = QLabel("👑")
         icon_label.setStyleSheet("""
@@ -647,7 +652,7 @@ class SuperAdminLoginDialog(ModernDialog):
         """)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.add_content(icon_label)
-        
+
         # Описание
         intro = QLabel(
             "Вход в режим администратора.\n"
@@ -655,106 +660,106 @@ class SuperAdminLoginDialog(ModernDialog):
         )
         intro.setWordWrap(True)
         intro.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        intro.setStyleSheet("""
+        intro.setStyleSheet(f"""
             font-size: 13px;
-            color: #8B5CF6;
+            color: {VIOLET};
             background: transparent;
             line-height: 1.5;
             padding: 8px 0;
         """)
         self.add_content(intro)
-        
+
         # Форма
         form_container = QFrame()
-        form_container.setStyleSheet("""
-            QFrame {
-                background: #0F172A;
-                border: 1px solid #2D1A4A;
+        form_container.setStyleSheet(f"""
+            QFrame {{
+                background: {BG};
+                border: 1px solid {VIOLET_BG};
                 border-radius: 16px;
                 padding: 20px;
-            }
+            }}
         """)
-        
+
         form_layout = QFormLayout(form_container)
         form_layout.setVerticalSpacing(16)
         form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        
+
         # Email
         email_label = QLabel("📧 Email")
-        email_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #8B5CF6;")
-        
+        email_label.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {VIOLET};")
+
         self.email = QLineEdit()
         self.email.setPlaceholderText("admin@ordaops.kz")
         self.email.setMinimumHeight(44)
         self.email.textChanged.connect(self.validate_input)
-        self.email.setStyleSheet("""
-            QLineEdit {
-                background: #1A2332;
-                border: 1px solid #3D2A5A;
+        self.email.setStyleSheet(f"""
+            QLineEdit {{
+                background: {SURFACE};
+                border: 1px solid {VIOLET_BG};
                 border-radius: 10px;
                 padding: 0 12px;
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #8B5CF6;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {VIOLET};
+            }}
         """)
-        
+
         # Пароль
         pass_label = QLabel("🔑 Пароль")
-        pass_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #8B5CF6;")
-        
+        pass_label.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {VIOLET};")
+
         password_container = QWidget()
         password_layout = QHBoxLayout(password_container)
         password_layout.setContentsMargins(0, 0, 0, 0)
         password_layout.setSpacing(8)
-        
+
         self.password = QLineEdit()
         self.password.setPlaceholderText("············")
         self.password.setMinimumHeight(44)
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
         self.password.textChanged.connect(self.validate_input)
         self.password.returnPressed.connect(self.try_accept)
-        self.password.setStyleSheet("""
-            QLineEdit {
-                background: #1A2332;
-                border: 1px solid #3D2A5A;
+        self.password.setStyleSheet(f"""
+            QLineEdit {{
+                background: {SURFACE};
+                border: 1px solid {VIOLET_BG};
                 border-radius: 10px;
                 padding: 0 12px;
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #8B5CF6;
-            }
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {VIOLET};
+            }}
         """)
-        
+
         self.toggle_password_btn = QPushButton("👁")
         self.toggle_password_btn.setFixedSize(44, 44)
         self.toggle_password_btn.setCheckable(True)
-        self.toggle_password_btn.setStyleSheet("""
-            QPushButton {
-                background: #1E2A3A;
-                border: 1px solid #3D2A5A;
+        self.toggle_password_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {SURFACE_2};
+                border: 1px solid {VIOLET_BG};
                 border-radius: 10px;
                 font-size: 16px;
-            }
-            QPushButton:hover {
-                background: #2D3A4F;
-            }
-            QPushButton:checked {
-                background: #8B5CF6;
-            }
+            }}
+            QPushButton:hover {{
+                background: {BORDER};
+            }}
+            QPushButton:checked {{
+                background: {VIOLET};
+            }}
         """)
         self.toggle_password_btn.toggled.connect(self.toggle_password_visibility)
-        
+
         password_layout.addWidget(self.password, 1)
         password_layout.addWidget(self.toggle_password_btn)
-        
+
         form_layout.addRow(email_label, self.email)
         form_layout.addRow(pass_label, password_container)
-        
+
         self.add_content(form_container)
-        
+
         # Предупреждение
         warning_frame = QFrame()
         warning_frame.setStyleSheet("""
@@ -765,70 +770,70 @@ class SuperAdminLoginDialog(ModernDialog):
                 padding: 12px;
             }
         """)
-        
+
         warning_layout = QHBoxLayout(warning_frame)
         warning_layout.setContentsMargins(12, 8, 12, 8)
-        
+
         warning_icon = QLabel("⚠️")
         warning_icon.setStyleSheet("font-size: 16px; background: transparent;")
-        
+
         warning_text = QLabel(
             "Этот режим даёт полный доступ к управлению "
             "терминалом и настройкам точки."
         )
         warning_text.setWordWrap(True)
-        warning_text.setStyleSheet("font-size: 12px; color: #EF4444; background: transparent;")
-        
+        warning_text.setStyleSheet(f"font-size: 12px; color: {DANGER}; background: transparent;")
+
         warning_layout.addWidget(warning_icon)
         warning_layout.addWidget(warning_text, 1)
-        
+
         self.add_content(warning_frame)
-        
+
         # Индикатор валидации
         self.validation_label = QLabel("")
         self.validation_label.setWordWrap(True)
-        self.validation_label.setStyleSheet("""
+        self.validation_label.setStyleSheet(f"""
             font-size: 12px;
-            color: #F59E0B;
+            color: {WARNING};
             background: transparent;
             padding: 4px 8px;
         """)
         self.validation_label.hide()
         self.add_content(self.validation_label)
-        
+
         # Кнопки
         self.add_buttons([
             ("Отмена", "ghost", self.reject),
             ("Войти", "primary", self.accept)
         ])
-        
+
         # Первоначальная валидация
         self.validate_input()
-        
+
     def toggle_password_visibility(self, checked: bool):
         """Переключение видимости пароля"""
         mode = QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
         self.password.setEchoMode(mode)
-        
+
     def validate_input(self):
         """Валидация введённых данных"""
         email = self.email.text().strip()
         password = self.password.text()
-        
+
         messages = []
-        
+
         if not email:
             messages.append("• Введите email")
         elif "@" not in email or "." not in email:
             messages.append("• Введите корректный email")
-            
+
         if not password:
             messages.append("• Введите пароль")
-            
+
         if messages:
             self.validation_label.setText("\n".join(messages))
             self.validation_label.show()
-            
+
             for btn in self.findChildren(QPushButton):
                 if btn.text() == "Войти":
                     btn.setEnabled(False)
@@ -839,12 +844,12 @@ class SuperAdminLoginDialog(ModernDialog):
                 if btn.text() == "Войти":
                     btn.setEnabled(True)
                     break
-                    
+
     def try_accept(self):
         """Попытка принять диалог при нажатии Enter"""
         if self.findChild(QPushButton, "").isEnabled():
             self.accept()
-                    
+
     def payload(self) -> dict:
         """Получение данных для входа"""
         return {
@@ -856,32 +861,32 @@ class SuperAdminLoginDialog(ModernDialog):
 class ConfirmDialog(ModernDialog):
     """
     Диалог подтверждения действия
-    
+
     Особенности:
     - Разные варианты (danger/warning/info)
     - Кастомизируемый текст
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
                  parent=None,
                  title: str = "Подтверждение",
                  message: str = "Вы уверены?",
                  confirm_text: str = "Подтвердить",
                  cancel_text: str = "Отмена",
                  variant: str = "warning"):
-        
+
         super().__init__(parent, title, 400)
-        
+
         # Выбор иконки и цвета в зависимости от варианта
         icons = {
-            "danger": ("⚠️", "#EF4444"),
-            "warning": ("⚠️", "#F59E0B"),
-            "info": ("ℹ️", "#3B82F6"),
-            "success": ("✅", "#10B981")
+            "danger": ("⚠️", DANGER),
+            "warning": ("⚠️", WARNING),
+            "info": ("ℹ️", ACCENT),
+            "success": ("✅", SUCCESS)
         }
-        
-        icon, color = icons.get(variant, ("❓", "#93A5C1"))
-        
+
+        icon, color = icons.get(variant, ("❓", TEXT_MUTED))
+
         # Иконка
         icon_label = QLabel(icon)
         icon_label.setStyleSheet(f"""
@@ -892,20 +897,20 @@ class ConfirmDialog(ModernDialog):
         """)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.add_content(icon_label)
-        
+
         # Сообщение
         msg_label = QLabel(message)
         msg_label.setWordWrap(True)
         msg_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         msg_label.setStyleSheet(f"""
             font-size: 15px;
-            color: #E8F0FE;
+            color: {TEXT};
             background: transparent;
             line-height: 1.6;
             padding: 16px 0;
         """)
         self.add_content(msg_label)
-        
+
         # Кнопки
         self.add_buttons([
             (cancel_text, "ghost", self.reject),
