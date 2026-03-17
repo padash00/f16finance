@@ -1,13 +1,14 @@
 """
-Orda Control Point v2.0 - Futuristic Edition
+Orda Control Point v2.0
+Entry point: splash → setup wizard (first run) → main window
 """
 from __future__ import annotations
 
 import sys
 import time
 
-from PyQt6.QtCore import Qt, QThread, QTimer, QPropertyAnimation, QEasingCurve, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QPen, QLinearGradient, QFont, QPalette, QBrush, QPainterPath
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
@@ -30,308 +31,353 @@ from config import load_config, save_config
 from window import PointMainWindow
 
 APP_VERSION = "2.0.0"
-APP_NAME = "ORDA CONTROL"
-APP_SUBTITLE = "Футуристический центр управления"
+APP_NAME = "Orda Control Point"
+APP_SUBTITLE = "Программа управления точкой"
 SERVER_URL = "https://ordaops.kz"
 
 
-# ========== НЕОНОВЫЙ СТИЛЬ ==========
+# ──────────────────────────────────────────────
+# GLOBAL STYLESHEET  (clean dark, GitHub-inspired)
+# ──────────────────────────────────────────────
 APP_STYLESHEET = """
-/* ===== ГЛОБАЛЬНЫЙ СТИЛЬ ===== */
+/* ─── BASE ─── */
 QWidget {
-    background: #030712;
-    color: #FFFFFF;
-    font-family: "Segoe UI", "Inter", "SF Pro Display", -apple-system, sans-serif;
+    background: #0D1117;
+    color: #E6EDF3;
+    font-family: "Segoe UI", "Inter", sans-serif;
     font-size: 13px;
     font-weight: 400;
-    letter-spacing: 0.3px;
 }
 
-/* ===== НЕОНОВЫЕ АКЦЕНТЫ ===== */
 QMainWindow, QDialog {
-    background: #030712;
+    background: #0D1117;
 }
 
 QLabel {
-    color: #FFFFFF;
+    color: #E6EDF3;
     background: transparent;
 }
 
-QLabel[class="glow"] {
-    color: #00F0FF;
-    font-weight: 700;
-    text-shadow: 0 0 10px #00F0FF;
-}
-
-QLabel[class="neon-pink"] {
-    color: #FF00FF;
-    text-shadow: 0 0 10px #FF00FF;
-}
-
-QLabel[class="neon-blue"] {
-    color: #00FFFF;
-    text-shadow: 0 0 10px #00FFFF;
-}
-
-QLabel[class="neon-green"] {
-    color: #00FF9D;
-    text-shadow: 0 0 10px #00FF9D;
-}
-
 QLabel[class="muted"] {
-    color: #6B7280;
+    color: #8B949E;
     font-size: 12px;
 }
 
-/* ===== НЕОНОВЫЕ ПОЛЯ ВВОДА ===== */
-QLineEdit, QComboBox, QSpinBox, QDateEdit, QPlainTextEdit {
-    background: #111827;
-    color: #FFFFFF;
-    border: 1px solid #2D3748;
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 14px;
-    selection-background-color: #00FFFF;
-    selection-color: #030712;
+QLabel[class="accent"] {
+    color: #2B7FF5;
+    font-weight: 600;
+}
+
+QLabel[class="success"] { color: #3FB950; }
+QLabel[class="warning"] { color: #D29922; }
+QLabel[class="danger"]  { color: #F85149; }
+
+/* ─── INPUTS ─── */
+QLineEdit, QComboBox, QSpinBox, QDateEdit, QPlainTextEdit, QTextEdit {
+    background: #161B22;
+    color: #E6EDF3;
+    border: 1px solid #30363D;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    selection-background-color: #2B7FF5;
+    selection-color: #ffffff;
 }
 
 QLineEdit:hover, QComboBox:hover, QSpinBox:hover,
-QDateEdit:hover, QPlainTextEdit:hover {
-    border: 1px solid #00FFFF;
-    background: #1A2332;
+QDateEdit:hover, QPlainTextEdit:hover, QTextEdit:hover {
+    border-color: #484F58;
 }
 
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus,
-QDateEdit:focus, QPlainTextEdit:focus {
-    border: 2px solid #00FFFF;
-    background: #1E2A3A;
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+QDateEdit:focus, QPlainTextEdit:focus, QTextEdit:focus {
+    border-color: #2B7FF5;
+    outline: none;
 }
 
-/* ===== НЕОНОВЫЕ КНОПКИ ===== */
+QComboBox::drop-down {
+    border: none;
+    width: 28px;
+}
+
+QComboBox::down-arrow {
+    width: 12px;
+    height: 12px;
+}
+
+QComboBox QAbstractItemView {
+    background: #161B22;
+    border: 1px solid #30363D;
+    border-radius: 6px;
+    selection-background-color: #21262D;
+    color: #E6EDF3;
+    padding: 4px;
+}
+
+/* ─── BUTTONS ─── */
 QPushButton {
-    background: #1E293B;
-    color: #FFFFFF;
-    border: 1px solid #334155;
-    border-radius: 8px;
-    padding: 14px 24px;
-    font-weight: 700;
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    transition: all 0.2s ease;
+    background: #21262D;
+    color: #E6EDF3;
+    border: 1px solid #30363D;
+    border-radius: 6px;
+    padding: 7px 16px;
+    font-weight: 500;
+    font-size: 13px;
+    min-height: 28px;
 }
 
 QPushButton:hover {
-    background: #2D3A4F;
-    border: 1px solid #00FFFF;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
-    transform: translateY(-2px);
+    background: #30363D;
+    border-color: #484F58;
 }
 
 QPushButton:pressed {
-    background: #0F172A;
-    transform: translateY(0);
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+    background: #161B22;
+}
+
+QPushButton:disabled {
+    background: #161B22;
+    color: #484F58;
+    border-color: #21262D;
 }
 
 QPushButton[class="primary"] {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #00FFFF, stop:1 #FF00FF);
-    color: #030712;
-    font-weight: 800;
-    border: none;
-    box-shadow: 0 0 30px rgba(255, 0, 255, 0.5);
+    background: #238636;
+    color: #ffffff;
+    border-color: #2EA043;
+    font-weight: 600;
 }
 
 QPushButton[class="primary"]:hover {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #FF00FF, stop:1 #00FFFF);
-    box-shadow: 0 0 40px rgba(0, 255, 255, 0.7);
+    background: #2EA043;
+    border-color: #3FB950;
 }
 
-QPushButton[class="success"] {
-    background: #00FF9D;
-    color: #030712;
-    font-weight: 800;
-    border: none;
-    box-shadow: 0 0 30px rgba(0, 255, 157, 0.5);
+QPushButton[class="primary"]:pressed {
+    background: #1A7431;
+}
+
+QPushButton[class="blue"] {
+    background: #1F4B8E;
+    color: #ffffff;
+    border-color: #2B7FF5;
+    font-weight: 600;
+}
+
+QPushButton[class="blue"]:hover {
+    background: #2B7FF5;
+    border-color: #388BFD;
 }
 
 QPushButton[class="danger"] {
-    background: #FF0066;
-    color: #FFFFFF;
-    font-weight: 800;
-    border: none;
-    box-shadow: 0 0 30px rgba(255, 0, 102, 0.5);
+    background: #6E1A1A;
+    color: #F85149;
+    border-color: #F85149;
+}
+
+QPushButton[class="danger"]:hover {
+    background: #8A2020;
 }
 
 QPushButton[class="ghost"] {
     background: transparent;
-    color: #FFFFFF;
-    border: 2px solid #FF00FF;
+    color: #8B949E;
+    border-color: #30363D;
 }
 
 QPushButton[class="ghost"]:hover {
-    background: rgba(255, 0, 255, 0.1);
-    border: 2px solid #00FFFF;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+    background: #21262D;
+    color: #E6EDF3;
+    border-color: #484F58;
 }
 
-/* ===== НЕОНОВЫЕ ТАБЫ ===== */
+/* ─── TABS ─── */
 QTabWidget::pane {
-    border: 1px solid #FF00FF;
-    border-radius: 12px;
-    background: #0F172A;
+    border: 1px solid #30363D;
+    border-radius: 6px;
+    background: #0D1117;
     top: -1px;
 }
 
 QTabBar::tab {
-    background: #1E293B;
-    color: #94A3B8;
-    border: 1px solid #334155;
+    background: transparent;
+    color: #8B949E;
+    border: 1px solid transparent;
     border-bottom: none;
-    border-top-left-radius: 10px;
-    border-top-right-radius: 10px;
-    padding: 12px 24px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    padding: 8px 18px;
     margin-right: 2px;
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 12px;
-    letter-spacing: 0.5px;
+    font-weight: 500;
+    font-size: 13px;
 }
 
 QTabBar::tab:selected {
-    background: #0F172A;
-    color: #00FFFF;
-    border: 1px solid #FF00FF;
-    border-bottom: 1px solid #0F172A;
+    background: #0D1117;
+    color: #E6EDF3;
+    border-color: #30363D;
+    border-bottom: 1px solid #0D1117;
     margin-bottom: -1px;
-    text-shadow: 0 0 10px #00FFFF;
+    font-weight: 600;
 }
 
-QTabBar::tab:hover {
-    background: #2D3A4F;
-    border-color: #00FFFF;
+QTabBar::tab:hover:!selected {
+    background: #161B22;
+    color: #C9D1D9;
 }
 
-/* ===== НЕОНОВЫЕ ГРУППЫ ===== */
+/* ─── GROUP BOX ─── */
 QGroupBox {
-    border: 1px solid #FF00FF;
-    border-radius: 12px;
-    margin-top: 16px;
-    font-weight: 700;
-    color: #00FFFF;
-    background: #0F172A;
-    padding: 16px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    border: 1px solid #30363D;
+    border-radius: 8px;
+    margin-top: 14px;
+    font-weight: 600;
+    color: #8B949E;
+    background: transparent;
+    padding-top: 8px;
+    font-size: 12px;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
-    left: 16px;
-    padding: 0 12px;
-    background: #030712;
-    font-size: 12px;
+    left: 12px;
+    padding: 0 6px;
+    background: #0D1117;
 }
 
-/* ===== НЕОНОВЫЕ ТАБЛИЦЫ ===== */
+/* ─── TABLES ─── */
 QTableWidget {
-    background: #0F172A;
-    border: 1px solid #FF00FF;
-    border-radius: 10px;
-    gridline-color: #2D3748;
-    selection-background-color: rgba(255, 0, 255, 0.2);
-    selection-color: #00FFFF;
-}
-
-QHeaderView::section {
-    background: #1E293B;
-    color: #00FFFF;
-    border: none;
-    border-bottom: 2px solid #FF00FF;
-    padding: 12px 8px;
-    font-weight: 700;
-    font-size: 12px;
-    text-transform: uppercase;
+    background: #0D1117;
+    border: 1px solid #30363D;
+    border-radius: 6px;
+    gridline-color: #21262D;
+    selection-background-color: #1C2128;
+    selection-color: #E6EDF3;
+    alternate-background-color: #161B22;
 }
 
 QTableWidget::item {
-    padding: 10px 8px;
-    border-bottom: 1px solid #2D3748;
-    color: #FFFFFF;
+    padding: 8px 10px;
+    border-bottom: 1px solid #21262D;
+    color: #E6EDF3;
 }
 
 QTableWidget::item:selected {
-    background: rgba(255, 0, 255, 0.3);
-    color: #FFFFFF;
+    background: #1C2128;
+    color: #E6EDF3;
 }
 
-/* ===== НЕОНОВЫЕ СКРОЛЛБАРЫ ===== */
+QHeaderView::section {
+    background: #161B22;
+    color: #8B949E;
+    border: none;
+    border-bottom: 1px solid #30363D;
+    border-right: 1px solid #21262D;
+    padding: 8px 10px;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ─── SCROLLBARS ─── */
 QScrollBar:vertical {
-    background: #0F172A;
-    width: 8px;
-    border-radius: 4px;
+    background: transparent;
+    width: 6px;
+    margin: 0;
 }
 
 QScrollBar::handle:vertical {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #FF00FF, stop:1 #00FFFF);
-    min-height: 30px;
-    border-radius: 4px;
+    background: #30363D;
+    min-height: 32px;
+    border-radius: 3px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #00FFFF, stop:1 #FF00FF);
+    background: #484F58;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
 }
 
 QScrollBar:horizontal {
-    background: #0F172A;
-    height: 8px;
-    border-radius: 4px;
+    background: transparent;
+    height: 6px;
+    margin: 0;
 }
 
 QScrollBar::handle:horizontal {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #FF00FF, stop:1 #00FFFF);
-    min-width: 30px;
-    border-radius: 4px;
+    background: #30363D;
+    min-width: 32px;
+    border-radius: 3px;
 }
 
-/* ===== НЕОНОВЫЙ ПРОГРЕСС ===== */
+QScrollBar::handle:horizontal:hover {
+    background: #484F58;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+}
+
+/* ─── PROGRESS BAR ─── */
 QProgressBar {
-    background: #1E293B;
-    border: 1px solid #FF00FF;
-    border-radius: 6px;
+    background: #21262D;
+    border: 1px solid #30363D;
+    border-radius: 4px;
     text-align: center;
-    color: #FFFFFF;
-    height: 8px;
+    color: #8B949E;
+    font-size: 11px;
+    height: 6px;
 }
 
 QProgressBar::chunk {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #FF00FF, stop:1 #00FFFF);
-    border-radius: 6px;
+    background: #2B7FF5;
+    border-radius: 4px;
 }
 
-/* ===== НЕОНОВЫЙ СТАТУС БАР ===== */
+/* ─── STATUS BAR ─── */
 QStatusBar {
-    background: #030712;
-    border-top: 1px solid #FF00FF;
-    color: #6B7280;
+    background: #161B22;
+    border-top: 1px solid #30363D;
+    color: #8B949E;
     font-size: 12px;
-    padding: 4px 12px;
+    padding: 2px 12px;
 }
 
 QStatusBar QLabel {
-    color: #6B7280;
+    color: #8B949E;
+}
+
+/* ─── SPLITTER ─── */
+QSplitter::handle {
+    background: #30363D;
+}
+
+QSplitter::handle:horizontal {
+    width: 1px;
+}
+
+QSplitter::handle:vertical {
+    height: 1px;
+}
+
+/* ─── MESSAGE BOX ─── */
+QMessageBox {
+    background: #161B22;
+}
+
+QMessageBox QLabel {
+    color: #E6EDF3;
+    font-size: 13px;
 }
 """
 
 
-# ========== ФУТУРИСТИЧНЫЙ СПЛЕШ ==========
+# ──────────────────────────────────────────────
+# SPLASH SCREEN  (minimal & clean)
+# ──────────────────────────────────────────────
 class SplashWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -340,10 +386,10 @@ class SplashWindow(QWidget):
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.Tool
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(600, 400)
+        self.setFixedSize(480, 280)
+        self.setStyleSheet("QWidget { background: #161B22; }")
 
-        # Центрирование
+        # Centre on screen
         screen = QApplication.primaryScreen()
         if screen:
             sg = screen.availableGeometry()
@@ -352,100 +398,70 @@ class SplashWindow(QWidget):
                 sg.center().y() - self.height() // 2,
             )
 
-        # Главный контейнер
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        root.setContentsMargins(48, 40, 48, 40)
+        root.setSpacing(0)
 
-        # Карточка с неоновой рамкой
-        card = QFrame()
-        card.setStyleSheet("""
-            QFrame {
-                background: #030712;
-                border: 2px solid qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #FF00FF, stop:1 #00FFFF);
-                border-radius: 30px;
-            }
-        """)
-        
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(50, 50, 50, 50)
-        card_layout.setSpacing(20)
+        # Logo mark + name
+        logo_row = QHBoxLayout()
+        logo_row.setSpacing(10)
+        logo_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Логотип с неоновым эффектом
-        logo_container = QVBoxLayout()
-        logo_container.setSpacing(5)
-        logo_container.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        logo_symbol = QLabel("◈◈◈")
-        logo_symbol.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo_symbol.setStyleSheet("""
-            font-size: 48px;
-            font-weight: 300;
-            color: #00FFFF;
-            text-shadow: 0 0 20px #00FFFF, 0 0 40px #FF00FF;
-            letter-spacing: 10px;
-        """)
-        
-        logo_text = QLabel(APP_NAME)
-        logo_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo_text.setStyleSheet("""
-            font-size: 42px;
-            font-weight: 900;
-            color: #FFFFFF;
-            text-shadow: 0 0 30px #00FFFF, 0 0 60px #FF00FF;
-            letter-spacing: 5px;
-        """)
-        
-        logo_container.addWidget(logo_symbol)
-        logo_container.addWidget(logo_text)
-        card_layout.addLayout(logo_container)
+        mark = QLabel("◈")
+        mark.setStyleSheet("font-size: 28px; color: #2B7FF5; font-weight: 300;")
 
-        # Подзаголовок
+        name = QLabel(APP_NAME)
+        name.setStyleSheet(
+            "font-size: 22px; font-weight: 700; color: #E6EDF3; letter-spacing: -0.3px;"
+        )
+
+        logo_row.addWidget(mark)
+        logo_row.addWidget(name)
+        root.addLayout(logo_row)
+
+        root.addSpacing(6)
+
         subtitle = QLabel(APP_SUBTITLE)
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle.setStyleSheet("""
-            font-size: 16px;
-            color: #6B7280;
-            letter-spacing: 2px;
-            margin-top: -10px;
-        """)
-        card_layout.addWidget(subtitle)
+        subtitle.setStyleSheet("font-size: 13px; color: #6E7681;")
+        root.addWidget(subtitle)
 
-        card_layout.addSpacing(30)
+        root.addSpacing(32)
 
-        # Прогресс бар
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setFixedHeight(8)
-        card_layout.addWidget(self.progress_bar)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setFixedHeight(3)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                background: #21262D;
+                border: none;
+                border-radius: 2px;
+            }
+            QProgressBar::chunk {
+                background: #2B7FF5;
+                border-radius: 2px;
+            }
+        """)
+        root.addWidget(self.progress_bar)
 
-        # Статус
-        self.status_label = QLabel("ИНИЦИАЛИЗАЦИЯ СИСТЕМЫ...")
+        root.addSpacing(12)
+
+        self.status_label = QLabel("Загрузка...")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setStyleSheet("""
-            font-size: 12px;
-            color: #00FFFF;
-            text-shadow: 0 0 10px #00FFFF;
-            letter-spacing: 2px;
-            margin-top: 10px;
-        """)
-        card_layout.addWidget(self.status_label)
+        self.status_label.setStyleSheet("font-size: 12px; color: #6E7681;")
+        root.addWidget(self.status_label)
 
-        # Версия
-        version_label = QLabel(f"v{APP_VERSION} | CYBER EDITION")
+        root.addStretch()
+
+        version_label = QLabel(f"v{APP_VERSION}")
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        version_label.setStyleSheet("""
-            font-size: 11px;
-            color: #6B7280;
-            margin-top: 20px;
-        """)
-        card_layout.addWidget(version_label)
-
-        root.addWidget(card)
+        version_label.setStyleSheet("font-size: 11px; color: #484F58;")
+        root.addWidget(version_label)
 
     def set_status(self, text: str):
-        self.status_label.setText(text.upper())
+        self.status_label.setText(text)
         QApplication.processEvents()
 
     def set_progress(self, value: int):
@@ -453,167 +469,119 @@ class SplashWindow(QWidget):
         QApplication.processEvents()
 
 
-# ========== НЕОНОВЫЙ ВИЗАРД ==========
-class NeonWizardDialog(QDialog):
-    """Футуристичный визард настройки"""
-    
+# ──────────────────────────────────────────────
+# SETUP WIZARD  (first run — enter device token)
+# ──────────────────────────────────────────────
+class SetupWizardDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("⚡ ПЕРВИЧНАЯ НАСТРОЙКА")
-        self.setFixedSize(600, 500)
+        self.setWindowTitle("Настройка — Orda Control Point")
+        self.setFixedSize(520, 340)
         self.setWindowFlags(
             self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
         )
-        
-        # Делаем окно прозрачным
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        
         self._bootstrap_data = None
-        
-        self.init_ui()
-        
-    def init_ui(self):
+        self._init_ui()
+
+    def _init_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 20, 20, 20)
+        root.setContentsMargins(36, 32, 36, 32)
+        root.setSpacing(20)
 
-        # Основная карточка
-        card = QFrame()
-        card.setStyleSheet("""
-            QFrame {
-                background: #030712;
-                border: 2px solid qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #FF00FF, stop:1 #00FFFF);
-                border-radius: 30px;
-            }
-        """)
-        
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(25)
+        # Header
+        title = QLabel("Первичная настройка терминала")
+        title.setStyleSheet(
+            "font-size: 18px; font-weight: 700; color: #E6EDF3;"
+        )
+        root.addWidget(title)
 
-        # Заголовок
-        title = QLabel("⚡ НАСТРОЙКА ТЕРМИНАЛА")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("""
-            font-size: 24px;
-            font-weight: 900;
-            color: #00FFFF;
-            text-shadow: 0 0 20px #00FFFF;
-            letter-spacing: 3px;
-        """)
-        layout.addWidget(title)
+        hint = QLabel(
+            "Введите Device Token, выданный в разделе «Точки и устройства» на ordaops.kz."
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet("font-size: 13px; color: #8B949E; line-height: 1.5;")
+        root.addWidget(hint)
 
-        # Токен устройства
-        token_label = QLabel("DEVICE TOKEN")
-        token_label.setStyleSheet("""
-            font-size: 12px;
-            color: #FF00FF;
-            text-shadow: 0 0 10px #FF00FF;
-            letter-spacing: 2px;
-        """)
-        layout.addWidget(token_label)
-        
+        # Token field
+        token_lbl = QLabel("Device Token")
+        token_lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #8B949E;")
+        root.addWidget(token_lbl)
+
         self.token_input = QLineEdit()
-        self.token_input.setPlaceholderText("ВСТАВЬТЕ TOKEN УСТРОЙСТВА")
-        self.token_input.setStyleSheet("""
-            QLineEdit {
-                background: #111827;
-                border: 2px solid #2D3748;
-                border-radius: 10px;
-                padding: 15px;
-                font-size: 14px;
-                font-family: monospace;
-                color: #00FFFF;
-            }
-            QLineEdit:focus {
-                border: 2px solid #FF00FF;
-                box-shadow: 0 0 20px rgba(255, 0, 255, 0.3);
-            }
-        """)
-        layout.addWidget(self.token_input)
+        self.token_input.setPlaceholderText("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+        self.token_input.setStyleSheet(
+            "font-family: 'Consolas', monospace; font-size: 13px; padding: 10px 12px;"
+        )
+        self.token_input.textChanged.connect(self._on_token_changed)
+        root.addWidget(self.token_input)
 
-        # Кнопка проверки
-        self.test_btn = QPushButton("🔍 ПРОВЕРИТЬ ПОДКЛЮЧЕНИЕ")
+        # Status
+        self.status_lbl = QLabel("")
+        self.status_lbl.setStyleSheet("font-size: 12px; color: #8B949E;")
+        root.addWidget(self.status_lbl)
+
+        root.addStretch()
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        self.test_btn = QPushButton("Проверить подключение")
         self.test_btn.setProperty("class", "ghost")
-        self.test_btn.setMinimumHeight(50)
-        self.test_btn.clicked.connect(self.test_connection)
-        layout.addWidget(self.test_btn)
+        self.test_btn.clicked.connect(self._test_connection)
 
-        # Результат
-        self.result_frame = QFrame()
-        self.result_frame.setStyleSheet("""
-            QFrame {
-                background: #111827;
-                border: 1px solid #00FF00;
-                border-radius: 10px;
-                padding: 15px;
-            }
-        """)
-        self.result_frame.hide()
-        
-        result_layout = QVBoxLayout(self.result_frame)
-        self.result_label = QLabel("")
-        self.result_label.setWordWrap(True)
-        self.result_label.setStyleSheet("color: #00FF00; font-size: 13px;")
-        result_layout.addWidget(self.result_label)
-        
-        layout.addWidget(self.result_frame)
+        self.save_btn = QPushButton("Сохранить и продолжить")
+        self.save_btn.setProperty("class", "primary")
+        self.save_btn.setEnabled(False)
+        self.save_btn.clicked.connect(self.accept)
 
-        layout.addStretch()
+        btn_row.addWidget(self.test_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(self.save_btn)
+        root.addLayout(btn_row)
 
-        # Кнопки навигации
-        nav_layout = QHBoxLayout()
-        
-        self.back_btn = QPushButton("◄ НАЗАД")
-        self.back_btn.setProperty("class", "ghost")
-        self.back_btn.setMinimumHeight(50)
-        self.back_btn.clicked.connect(self.reject)
-        
-        self.next_btn = QPushButton("ДАЛЕЕ ►")
-        self.next_btn.setProperty("class", "primary")
-        self.next_btn.setMinimumHeight(50)
-        self.next_btn.setEnabled(False)
-        self.next_btn.clicked.connect(self.accept)
-        
-        nav_layout.addWidget(self.back_btn)
-        nav_layout.addWidget(self.next_btn)
-        
-        layout.addLayout(nav_layout)
+    def _on_token_changed(self):
+        token = self.token_input.text().strip()
+        has_token = len(token) >= 10
+        self.save_btn.setEnabled(has_token)
+        self.test_btn.setEnabled(has_token)
+        if self.status_lbl.text() not in ("", "Введите токен"):
+            self.status_lbl.setText("")
 
-        root.addWidget(card)
-        
-    def test_connection(self):
+    def _test_connection(self):
         token = self.token_input.text().strip()
         if not token:
+            self.status_lbl.setText("Введите токен")
             return
-            
-        self.test_btn.setText("⏳ ПРОВЕРКА...")
+
+        self.test_btn.setText("Проверка...")
         self.test_btn.setEnabled(False)
-        
-        # Здесь должна быть реальная проверка
-        QTimer.singleShot(1500, self.connection_success)
-        
-    def connection_success(self):
-        self.result_frame.show()
-        self.result_label.setText(
-            "✅ ПОДКЛЮЧЕНИЕ УСТАНОВЛЕНО\n"
-            "ТОЧКА: ORDA TEST\n"
-            "УСТРОЙСТВО: TERMINAL-01\n"
-            "СТАТУС: АКТИВЕН"
-        )
-        self.next_btn.setEnabled(True)
-        self.test_btn.setText("✅ ПРОВЕРЕНО")
-        self.test_btn.setStyleSheet("""
-            QPushButton {
-                background: #00FF00;
-                color: #030712;
-                border: none;
-                font-weight: 800;
-            }
-        """)
+        QApplication.processEvents()
+
+        try:
+            api = PointApiClient(SERVER_URL, token)
+            data = api.bootstrap()
+            company = (data.get("company") or {}).get("name", "—")
+            device = (data.get("device") or {}).get("name", "—")
+            self._bootstrap_data = data
+            self.status_lbl.setStyleSheet("font-size: 12px; color: #3FB950;")
+            self.status_lbl.setText(f"✓ Подключено: {company} • {device}")
+            self.save_btn.setEnabled(True)
+        except Exception as e:
+            self.status_lbl.setStyleSheet("font-size: 12px; color: #F85149;")
+            self.status_lbl.setText(f"Ошибка: {e}")
+
+        self.test_btn.setText("Проверить подключение")
+        self.test_btn.setEnabled(True)
+
+    @property
+    def token(self) -> str:
+        return self.token_input.text().strip()
 
 
-# ========== ОСНОВНОЙ ЗАПУСК ==========
+# ──────────────────────────────────────────────
+# ENTRY POINT
+# ──────────────────────────────────────────────
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
@@ -621,17 +589,17 @@ def main():
     app.setStyle("Fusion")
     app.setStyleSheet(APP_STYLESHEET)
 
-    # Сплеш
+    # Splash
     splash = SplashWindow()
     splash.show()
 
-    splash.set_status("ЗАГРУЗКА КОНФИГУРАЦИИ...")
+    splash.set_status("Загрузка конфигурации...")
     splash.set_progress(15)
 
     config = load_config()
     device_token = (config.get("device_token") or "").strip()
 
-    splash.set_status("ПРОВЕРКА ПОДКЛЮЧЕНИЯ...")
+    splash.set_status("Проверка подключения...")
     splash.set_progress(40)
 
     if device_token:
@@ -639,25 +607,27 @@ def main():
             api = PointApiClient(SERVER_URL, device_token)
             bootstrap_data = api.bootstrap()
             company_name = (bootstrap_data.get("company") or {}).get("name", "")
-            splash.set_status(f"ПОДКЛЮЧЕНО К {company_name.upper()}")
+            splash.set_status(f"Подключено: {company_name}")
         except Exception:
-            splash.set_status("ОФЛАЙН РЕЖИМ")
+            splash.set_status("Офлайн режим")
     else:
-        splash.set_status("ТРЕБУЕТСЯ НАСТРОЙКА")
+        splash.set_status("Требуется настройка")
 
     splash.set_progress(80)
-    time.sleep(0.5)
+    time.sleep(0.4)
     splash.set_progress(100)
-    time.sleep(0.3)
+    time.sleep(0.2)
     splash.close()
 
-    # Визард при первом запуске
+    # First-run wizard
     if not device_token:
-        wizard = NeonWizardDialog()
+        wizard = SetupWizardDialog()
         if wizard.exec() != QDialog.DialogCode.Accepted:
             sys.exit(0)
+        config["device_token"] = wizard.token
+        save_config(config)
 
-    # Главное окно
+    # Main window
     window = PointMainWindow(app_version=APP_VERSION)
     window.show()
     sys.exit(app.exec())

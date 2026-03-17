@@ -4,8 +4,8 @@ Main window: login screen + workspace with tabs
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtSignal
-from PyQt6.QtGui import QIcon, QFont, QPalette, QColor
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -20,7 +20,6 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
-    QGraphicsDropShadowEffect,
 )
 
 from admin_tab import AdminTerminalTab
@@ -38,77 +37,58 @@ SERVER_URL = "https://ordaops.kz"
 
 
 # ──────────────────────────────────────────────
-# MODERN UI COMPONENTS
+# UI COMPONENTS
 # ──────────────────────────────────────────────
 
+_PILL_STYLES = {
+    "success": ("rgba(63,185,80,0.12)", "#3FB950", "rgba(63,185,80,0.35)"),
+    "warning": ("rgba(210,153,34,0.12)", "#D29922", "rgba(210,153,34,0.35)"),
+    "error":   ("rgba(248,81,73,0.12)",  "#F85149", "rgba(248,81,73,0.35)"),
+    "info":    ("rgba(43,127,245,0.12)", "#2B7FF5", "rgba(43,127,245,0.35)"),
+    "default": ("#21262D",              "#8B949E", "#30363D"),
+}
+
+
+def _pill(text: str, variant: str = "default") -> QLabel:
+    lbl = QLabel(text)
+    bg, fg, border = _PILL_STYLES.get(variant, _PILL_STYLES["default"])
+    lbl.setStyleSheet(
+        f"background: {bg}; color: {fg}; border: 1px solid {border}; "
+        "border-radius: 10px; padding: 3px 10px; font-size: 12px; font-weight: 600;"
+    )
+    return lbl
+
+
 class ModernPill(QLabel):
-    """Современный стилизованный индикатор"""
     def __init__(self, text: str, variant: str = "default"):
         super().__init__(text)
-        self.setProperty("class", "pill")
-        
-        styles = {
-            "success": """
-                background: rgba(16, 185, 129, 0.1);
-                color: #10B981;
-                border: 1px solid rgba(16, 185, 129, 0.3);
-            """,
-            "warning": """
-                background: rgba(245, 158, 11, 0.1);
-                color: #F59E0B;
-                border: 1px solid rgba(245, 158, 11, 0.3);
-            """,
-            "error": """
-                background: rgba(239, 68, 68, 0.1);
-                color: #EF4444;
-                border: 1px solid rgba(239, 68, 68, 0.3);
-            """,
-            "info": """
-                background: rgba(59, 130, 246, 0.1);
-                color: #3B82F6;
-                border: 1px solid rgba(59, 130, 246, 0.3);
-            """,
-            "default": """
-                background: #1E2A3A;
-                color: #93A5C1;
-                border: 1px solid #2D3A4F;
-            """
-        }
-        
-        base_style = """
-            border-radius: 20px;
-            padding: 4px 14px;
-            font-size: 12px;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-        """
-        
-        self.setStyleSheet(base_style + styles.get(variant, styles["default"]))
+        bg, fg, border = _PILL_STYLES.get(variant, _PILL_STYLES["default"])
+        self.setStyleSheet(
+            f"background: {bg}; color: {fg}; border: 1px solid {border}; "
+            "border-radius: 10px; padding: 3px 10px; font-size: 12px; font-weight: 600;"
+        )
+
+    def set_variant(self, variant: str):
+        bg, fg, border = _PILL_STYLES.get(variant, _PILL_STYLES["default"])
+        self.setStyleSheet(
+            f"background: {bg}; color: {fg}; border: 1px solid {border}; "
+            "border-radius: 10px; padding: 3px 10px; font-size: 12px; font-weight: 600;"
+        )
 
 
-class GlassCard(QFrame):
-    """Карточка с эффектом стекла"""
+class Card(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setProperty("class", "glass-card")
-        self.setStyleSheet("""
-            GlassCard {
-                background: rgba(15, 23, 42, 0.7);
-                border: 1px solid rgba(45, 58, 79, 0.5);
-                border-radius: 24px;
-            }
-        """)
-        
-        # Тень
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 60))
-        shadow.setOffset(0, 4)
-        self.setGraphicsEffect(shadow)
+        self.setStyleSheet(
+            "QFrame { background: #161B22; border: 1px solid #30363D; border-radius: 8px; }"
+        )
 
 
-class ModernDivider(QFrame):
-    """Стилизованный разделитель"""
+# Keep alias for compatibility
+GlassCard = Card
+
+
+class _Divider(QFrame):
     def __init__(self, orientation=Qt.Orientation.Horizontal):
         super().__init__()
         if orientation == Qt.Orientation.Horizontal:
@@ -117,61 +97,30 @@ class ModernDivider(QFrame):
         else:
             self.setFrameShape(QFrame.Shape.VLine)
             self.setFixedWidth(1)
-        
-        self.setStyleSheet("""
-            border: none;
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 transparent, stop:0.5 #2D3A4F, stop:1 transparent);
-        """)
+        self.setStyleSheet("border: none; background: #30363D;")
+
+
+ModernDivider = _Divider
 
 
 class EmptyTab(QWidget):
-    """Красивый пустой таб с иконкой"""
     def __init__(self, text: str, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(16)
-        
-        # Контейнер с центровкой
-        container = QFrame()
-        container.setStyleSheet("""
-            QFrame {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
-                border-radius: 24px;
-                padding: 40px;
-            }
-        """)
-        
-        container_layout = QVBoxLayout(container)
-        container_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        # Анимированная иконка (статичная пока)
-        icon = QLabel("✨")
-        icon.setStyleSheet("""
-            font-size: 64px;
-            background: transparent;
-            opacity: 0.8;
-        """)
+
+        icon = QLabel("⚙️")
+        icon.setStyleSheet("font-size: 40px; background: transparent;")
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        # Текст
+
         label = QLabel(text)
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setProperty("class", "muted")
-        label.setStyleSheet("""
-            font-size: 15px;
-            line-height: 1.6;
-            max-width: 300px;
-        """)
-        
-        container_layout.addWidget(icon)
-        container_layout.addSpacing(16)
-        container_layout.addWidget(label)
-        
-        layout.addWidget(container)
+        label.setStyleSheet("font-size: 14px; color: #8B949E; padding: 12px 30px;")
+
+        layout.addWidget(icon)
+        layout.addSpacing(8)
+        layout.addWidget(label)
 
 
 # ──────────────────────────────────────────────
@@ -260,7 +209,7 @@ class PointMainWindow(QMainWindow):
         bar.setStyleSheet("""
             QWidget {
                 background: rgba(11, 18, 30, 0.95);
-                border-bottom: 1px solid #1E2A3A;
+                border-bottom: 1px solid #21262D;
             }
         """)
         
@@ -275,7 +224,7 @@ class PointMainWindow(QMainWindow):
         logo_mark = QLabel("◈")
         logo_mark.setStyleSheet("""
             font-size: 24px;
-            color: #3B82F6;
+            color: #2B7FF5;
             font-weight: 300;
         """)
         
@@ -283,7 +232,7 @@ class PointMainWindow(QMainWindow):
         logo_name.setStyleSheet("""
             font-size: 18px;
             font-weight: 700;
-            color: #E8F0FE;
+            color: #E6EDF3;
             letter-spacing: 0.3px;
         """)
         
@@ -336,7 +285,7 @@ class PointMainWindow(QMainWindow):
         title.setStyleSheet("""
             font-size: 28px;
             font-weight: 700;
-            color: #E8F0FE;
+            color: #E6EDF3;
             letter-spacing: -0.3px;
         """)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -346,8 +295,8 @@ class PointMainWindow(QMainWindow):
         self._login_point_card = QFrame()
         self._login_point_card.setStyleSheet("""
             QFrame {
-                background: rgba(26, 35, 50, 0.5);
-                border: 1px solid #2D3A4F;
+                background: #161B22;
+                border: 1px solid #30363D;
                 border-radius: 16px;
             }
         """)
@@ -356,7 +305,7 @@ class PointMainWindow(QMainWindow):
         point_layout.setContentsMargins(16, 12, 16, 12)
         
         self._login_point_icon = QLabel("●")
-        self._login_point_icon.setStyleSheet("font-size: 14px; color: #EF4444;")
+        self._login_point_icon.setStyleSheet("font-size: 14px; color: #F85149;")
         
         self._login_point_text = QLabel("Терминал не привязан")
         self._login_point_text.setProperty("class", "muted")
@@ -372,8 +321,8 @@ class PointMainWindow(QMainWindow):
         mode_selector = QFrame()
         mode_selector.setStyleSheet("""
             QFrame {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+                background: #161B22;
+                border: 1px solid #21262D;
                 border-radius: 40px;
                 padding: 4px;
             }
@@ -418,7 +367,7 @@ class PointMainWindow(QMainWindow):
         error_icon.setStyleSheet("font-size: 16px;")
         
         self._login_error_label = QLabel("")
-        self._login_error_label.setStyleSheet("color: #EF4444; font-size: 13px;")
+        self._login_error_label.setStyleSheet("color: #F85149; font-size: 13px;")
         self._login_error_label.setWordWrap(True)
         
         error_layout.addWidget(error_icon)
@@ -440,7 +389,7 @@ class PointMainWindow(QMainWindow):
         if active:
             btn.setStyleSheet("""
                 QPushButton {
-                    background: #3B82F6;
+                    background: #2B7FF5;
                     color: white;
                     border: none;
                     border-radius: 40px;
@@ -455,13 +404,13 @@ class PointMainWindow(QMainWindow):
             btn.setStyleSheet("""
                 QPushButton {
                     background: transparent;
-                    color: #93A5C1;
+                    color: #8B949E;
                     border: none;
                     border-radius: 40px;
                     font-size: 14px;
                 }
                 QPushButton:hover {
-                    color: #E8F0FE;
+                    color: #E6EDF3;
                     background: rgba(59, 130, 246, 0.1);
                 }
             """)
@@ -512,8 +461,8 @@ class PointMainWindow(QMainWindow):
         self._op_state_container = QFrame()
         self._op_state_container.setStyleSheet("""
             QFrame {
-                background: rgba(16, 185, 129, 0.05);
-                border: 1px solid rgba(16, 185, 129, 0.2);
+                background: rgba(63,185,80,0.06);
+                border: 1px solid rgba(63,185,80,0.25);
                 border-radius: 10px;
                 padding: 10px;
             }
@@ -527,7 +476,7 @@ class PointMainWindow(QMainWindow):
         
         self._op_state_label = QLabel("")
         self._op_state_label.setWordWrap(True)
-        self._op_state_label.setStyleSheet("color: #10B981; font-size: 12px;")
+        self._op_state_label.setStyleSheet("color: #3FB950; font-size: 12px;")
         
         state_layout.addWidget(state_icon)
         state_layout.addWidget(self._op_state_label, 1)
@@ -586,8 +535,8 @@ class PointMainWindow(QMainWindow):
         hint = QFrame()
         hint.setStyleSheet("""
             QFrame {
-                background: rgba(59, 130, 246, 0.05);
-                border: 1px solid rgba(59, 130, 246, 0.2);
+                background: rgba(43,127,245,0.06);
+                border: 1px solid rgba(43,127,245,0.25);
                 border-radius: 10px;
                 padding: 12px;
             }
@@ -604,7 +553,7 @@ class PointMainWindow(QMainWindow):
             "и просмотра отчётов. Оператор этот экран не видит."
         )
         hint_text.setWordWrap(True)
-        hint_text.setStyleSheet("color: #93A5C1; font-size: 12px; line-height: 1.5;")
+        hint_text.setStyleSheet("color: #8B949E; font-size: 12px; line-height: 1.5;")
         
         hint_layout.addWidget(hint_icon)
         hint_layout.addWidget(hint_text, 1)
@@ -648,8 +597,8 @@ class PointMainWindow(QMainWindow):
         bar = QFrame()
         bar.setStyleSheet("""
             QFrame {
-                background: #0F172A;
-                border: 1px solid #1E2A3A;
+                background: #161B22;
+                border: 1px solid #21262D;
                 border-radius: 16px;
             }
         """)
@@ -669,7 +618,7 @@ class PointMainWindow(QMainWindow):
         self._session_operator_lbl.setStyleSheet("""
             font-size: 15px;
             font-weight: 600;
-            color: #E8F0FE;
+            color: #E6EDF3;
         """)
         
         operator_container.addWidget(operator_icon)
@@ -765,7 +714,7 @@ class PointMainWindow(QMainWindow):
             if active:
                 btn.setStyleSheet("""
                     QPushButton {
-                        background: #3B82F6;
+                        background: #2B7FF5;
                         color: white;
                         border: none;
                         border-radius: 40px;
@@ -780,13 +729,13 @@ class PointMainWindow(QMainWindow):
                 btn.setStyleSheet("""
                     QPushButton {
                         background: transparent;
-                        color: #93A5C1;
+                        color: #8B949E;
                         border: none;
                         border-radius: 40px;
                         font-size: 14px;
                     }
                     QPushButton:hover {
-                        color: #E8F0FE;
+                        color: #E6EDF3;
                         background: rgba(59, 130, 246, 0.1);
                     }
                 """)
@@ -805,8 +754,8 @@ class PointMainWindow(QMainWindow):
             )
             self._op_state_container.setStyleSheet("""
                 QFrame {
-                    background: rgba(16, 185, 129, 0.05);
-                    border: 1px solid rgba(16, 185, 129, 0.2);
+                    background: rgba(63,185,80,0.06);
+                    border: 1px solid rgba(63,185,80,0.25);
                     border-radius: 10px;
                     padding: 10px;
                 }
@@ -858,16 +807,16 @@ class PointMainWindow(QMainWindow):
         token = str(self.config.get("device_token") or "").strip()
 
         if company:
-            self._login_point_icon.setStyleSheet("font-size: 14px; color: #10B981;")
+            self._login_point_icon.setStyleSheet("font-size: 14px; color: #3FB950;")
             self._login_point_text.setText(
                 f"{company.get('name', '—')} • {device.get('name', '—')}"
             )
-            self._login_point_text.setStyleSheet("color: #10B981; font-size: 14px;")
+            self._login_point_text.setStyleSheet("color: #3FB950; font-size: 14px;")
             
             self._header_point_pill.setText(company.get('name', '—'))
             self._header_point_pill.setStyleSheet("""
                 background: rgba(16, 185, 129, 0.1);
-                color: #10B981;
+                color: #3FB950;
                 border: 1px solid rgba(16, 185, 129, 0.3);
                 border-radius: 20px;
                 padding: 4px 14px;
@@ -891,15 +840,15 @@ class PointMainWindow(QMainWindow):
                 font-weight: 600;
             """)
         else:
-            self._login_point_icon.setStyleSheet("font-size: 14px; color: #EF4444;")
+            self._login_point_icon.setStyleSheet("font-size: 14px; color: #F85149;")
             self._login_point_text.setText("Терминал не привязан")
-            self._login_point_text.setStyleSheet("color: #93A5C1; font-size: 14px;")
+            self._login_point_text.setStyleSheet("color: #8B949E; font-size: 14px;")
             
             self._header_point_pill.setText("Не подключено")
             self._header_point_pill.setStyleSheet("""
-                background: #1E2A3A;
-                color: #93A5C1;
-                border: 1px solid #2D3A4F;
+                background: #21262D;
+                color: #8B949E;
+                border: 1px solid #30363D;
                 border-radius: 20px;
                 padding: 4px 14px;
                 font-size: 12px;
@@ -914,7 +863,7 @@ class PointMainWindow(QMainWindow):
             self._sb_connection.setText("● Подключено")
             self._sb_connection.setStyleSheet("""
                 background: rgba(16, 185, 129, 0.1);
-                color: #10B981;
+                color: #3FB950;
                 padding: 2px 8px;
                 border-radius: 12px;
                 font-size: 12px;
@@ -934,7 +883,7 @@ class PointMainWindow(QMainWindow):
                 self._sb_connection.setText("● Нет токена")
                 self._sb_connection.setStyleSheet("""
                     background: rgba(239, 68, 68, 0.1);
-                    color: #EF4444;
+                    color: #F85149;
                     padding: 2px 8px;
                     border-radius: 12px;
                     font-size: 12px;
@@ -1118,7 +1067,7 @@ class PointMainWindow(QMainWindow):
             self._header_mode_pill.setText(role.upper())
             self._header_mode_pill.setStyleSheet("""
                 background: rgba(16, 185, 129, 0.1);
-                color: #10B981;
+                color: #3FB950;
                 border: 1px solid rgba(16, 185, 129, 0.3);
                 border-radius: 20px;
                 padding: 4px 14px;
@@ -1177,7 +1126,7 @@ class PointMainWindow(QMainWindow):
             self._queue_pill.setText("Синхронизировано")
             self._queue_pill.setStyleSheet("""
                 background: rgba(16, 185, 129, 0.1);
-                color: #10B981;
+                color: #3FB950;
                 border: 1px solid rgba(16, 185, 129, 0.3);
                 border-radius: 20px;
                 padding: 4px 14px;
