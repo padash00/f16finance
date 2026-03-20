@@ -567,13 +567,18 @@ export function Sidebar() {
       const json = await response?.json().catch(() => null)
 
       if (!ignore && response?.ok) {
-        setIsSuperAdmin(!!json?.isSuperAdmin)
+        const superAdmin = !!json?.isSuperAdmin
+        setIsSuperAdmin(superAdmin)
         setIsStaff(!!json?.isStaff)
         setIsOperator(!!json?.isOperator)
         setIsLeadOperator(!!json?.isLeadOperator)
         setStaffRole((json?.staffRole as StaffRole | null) || null)
         setDisplayName((json?.displayName as string | null) || null)
         setRoleLabel((json?.roleLabel as string | null) || null)
+        // Super admin sees all sections expanded
+        if (superAdmin) {
+          setOpenSections(Object.fromEntries(navSections.map((s) => [s.id, true])))
+        }
       }
     }
 
