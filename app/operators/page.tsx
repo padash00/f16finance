@@ -420,7 +420,7 @@ export default function OperatorsPage() {
         (profiles.get(op.id)?.position?.toLowerCase() || '').includes(search.toLowerCase()) ||
         (profiles.get(op.id)?.email?.toLowerCase() || '').includes(search.toLowerCase())
 
-      const matchesActive = showInactive ? true : op.is_active
+      const matchesActive = op.is_active
 
       return matchesSearch && matchesActive
     })
@@ -656,15 +656,6 @@ export default function OperatorsPage() {
                 <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
               </button>
 
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showInactive}
-                  onChange={(e) => setShowInactive(e.target.checked)}
-                  className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
-                />
-                <span className="text-sm text-gray-400">Показывать неактивных</span>
-              </label>
 
               {canManageOperators && selectedOperators.size > 0 && (
                 <Button

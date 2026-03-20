@@ -87,12 +87,18 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: createError.message }, { status: 500 })
       }
 
-      const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
-      if (usersError) {
-        return NextResponse.json({ error: usersError.message }, { status: 500 })
+      // Ищем через пагинацию — надёжнее чем perPage:1000
+      let foundUser: { id: string; email?: string } | null = null
+      let page = 1
+      while (!foundUser) {
+        const { data: pageData, error: usersError } = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
+        if (usersError) {
+          return NextResponse.json({ error: usersError.message }, { status: 500 })
+        }
+        foundUser = pageData.users.find((u) => u.email?.toLowerCase() === authEmail.toLowerCase()) ?? null
+        if (foundUser || pageData.users.length < 1000) break
+        page++
       }
-
-      const foundUser = usersData.users.find((user) => user.email?.toLowerCase() === authEmail.toLowerCase()) ?? null
       if (!foundUser) {
         return NextResponse.json({ error: createError.message }, { status: 500 })
       }

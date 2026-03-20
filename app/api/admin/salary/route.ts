@@ -269,28 +269,38 @@ async function ensureSalaryWeekSnapshot(params: {
     if (error) throw error
   }
 
-  const { error: deleteAllocationsError } = await params.supabase
-    .from('operator_salary_week_company_allocations')
-    .delete()
-    .eq('salary_week_id', weekId)
-
-  if (deleteAllocationsError) throw deleteAllocationsError
-
   if (summary.companyAllocations.length > 0) {
-    const { error: insertAllocationsError } = await params.supabase
-      .from('operator_salary_week_company_allocations')
-      .insert(
-        summary.companyAllocations.map((allocation) => ({
-          salary_week_id: weekId,
-          operator_id: params.operatorId,
-          company_id: allocation.companyId,
-          accrued_amount: allocation.accruedAmount,
-          share_ratio: allocation.shareRatio,
-          allocated_net_amount: allocation.netAmount,
-        })),
-      )
+    const newRows = summary.companyAllocations.map((allocation) => ({
+      salary_week_id: weekId,
+      operator_id: params.operatorId,
+      company_id: allocation.companyId,
+      accrued_amount: allocation.accruedAmount,
+      share_ratio: allocation.shareRatio,
+      allocated_net_amount: allocation.netAmount,
+    }))
 
-    if (insertAllocationsError) throw insertAllocationsError
+    const { error: upsertAllocationsError } = await params.supabase
+      .from('operator_salary_week_company_allocations')
+      .upsert(newRows, { onConflict: 'salary_week_id,company_id' })
+
+    if (upsertAllocationsError) throw upsertAllocationsError
+
+    // Удаляем строки которых больше нет (компании вышедшие из расчёта)
+    const newCompanyIds = summary.companyAllocations.map((a) => a.companyId)
+    const { error: deleteStaleError } = await params.supabase
+      .from('operator_salary_week_company_allocations')
+      .delete()
+      .eq('salary_week_id', weekId)
+      .not('company_id', 'in', `(${newCompanyIds.map((id) => `"${id}"`).join(',')})`)
+
+    if (deleteStaleError) throw deleteStaleError
+  } else {
+    const { error: deleteAllocationsError } = await params.supabase
+      .from('operator_salary_week_company_allocations')
+      .delete()
+      .eq('salary_week_id', weekId)
+
+    if (deleteAllocationsError) throw deleteAllocationsError
   }
 
   return {
@@ -330,6 +340,7 @@ export async function GET(req: Request) {
         supabase
           .from('operators')
           .select('id,name,short_name,is_active,telegram_chat_id,operator_profiles(*)')
+          .eq('is_active', true)
           .order('name'),
         supabase.from('operator_documents').select('operator_id,expiry_date'),
       ])

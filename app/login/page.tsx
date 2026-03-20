@@ -88,7 +88,8 @@ export default function UnifiedLoginPage() {
         const response = await fetch('/api/auth/session-role').catch(() => null)
         const json = await response?.json().catch(() => null)
         const rawPath = response?.ok && json?.defaultPath ? String(json.defaultPath) : '/'
-        const defaultPath = rawPath === '/login' || rawPath === '/operator-login' ? '/' : rawPath
+        const isSafePath = rawPath.startsWith('/') && !rawPath.startsWith('//')
+        const defaultPath = isSafePath && rawPath !== '/login' && rawPath !== '/operator-login' ? rawPath : '/'
 
         router.push(defaultPath)
         router.refresh()
@@ -111,7 +112,7 @@ export default function UnifiedLoginPage() {
       const operatorUserId = operatorUser?.id || null
 
       if (!operatorUserId) {
-        throw new Error('РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ СЃРµСЃСЃРёСЋ РѕРїРµСЂР°С‚РѕСЂР°')
+        throw new Error('Не удалось получить сессию оператора')
       }
 
       const { data: authByUser, error: authByUserError } = await supabase
@@ -124,7 +125,7 @@ export default function UnifiedLoginPage() {
       if (authByUserError) throw authByUserError
       if (!authByUser?.id) {
         await supabase.auth.signOut().catch(() => null)
-        throw new Error('РќРµРІРµСЂРЅС‹Р№ Р»РѕРіРёРЅ РёР»Рё РїР°СЂРѕР»СЊ')
+        throw new Error('Неверный логин или пароль')
       }
 
       await fetch('/api/auth/login-attempt', {
