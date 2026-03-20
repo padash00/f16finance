@@ -24,6 +24,7 @@ type SalaryData = { weekStart: string; weekEnd: string; companies: CompanyOption
 type AdjustmentKind = 'bonus' | 'fine' | 'debt'
 
 const input = 'h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
+const selectCls = 'h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-emerald-400/40 focus:outline-none [color-scheme:dark]'
 const textarea = 'min-h-[96px] w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
 const money = formatMoney
 const parseMoney = (v: string) => { const n = Number(v.replace(',', '.').replace(/\s/g, '')); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0 }
@@ -79,19 +80,18 @@ export default function SalaryPage() {
 
   const weekEnd = useMemo(() => addDaysISO(weekStart, 6), [weekStart])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
+    if (!silent) setError(null)
     try {
       const res = await fetch(`/api/admin/salary?view=weekly&weekStart=${encodeURIComponent(weekStart)}`, { cache: 'no-store' })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || `Ошибка загрузки (${res.status})`)
       setData(json.data as SalaryData)
     } catch (e: any) {
-      console.error(e)
       setError(e?.message || 'Не удалось загрузить данные')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [weekStart])
 
@@ -118,10 +118,10 @@ export default function SalaryPage() {
     return json
   }
 
-  const submitAdvance = async (e: FormEvent) => { e.preventDefault(); if (!advanceTarget) return; const cash = parseMoney(advanceCash), kaspi = parseMoney(advanceKaspi); if (!advanceCompanyId) return setError('Для аванса нужно выбрать точку'); if (cash + kaspi <= 0) return setError('Сумма аванса должна быть больше 0'); setAdvanceSaving(true); setError(null); try { await post({ action: 'createAdvance', payload: { operator_id: advanceTarget.operator.id, week_start: weekStart, company_id: advanceCompanyId, payment_date: advanceDate, cash_amount: cash, kaspi_amount: kaspi, comment: advanceComment.trim() || null } }); setAdvanceTarget(null); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось выдать аванс') } finally { setAdvanceSaving(false) } }
-  const submitPayment = async (e: FormEvent) => { e.preventDefault(); if (!payTarget) return; const cash = parseMoney(payCash), kaspi = parseMoney(payKaspi), total = cash + kaspi; if (total <= 0) return setError('Сумма выплаты должна быть больше 0'); if (total - payTarget.week.remainingAmount > 0.009) return setError('Сумма выплаты превышает остаток по неделе'); setPaySaving(true); setError(null); try { await post({ action: 'createWeeklyPayment', payload: { operator_id: payTarget.operator.id, week_start: weekStart, payment_date: payDate, cash_amount: cash, kaspi_amount: kaspi, comment: payComment.trim() || null } }); setPayTarget(null); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось провести выплату') } finally { setPaySaving(false) } }
-  const submitAdjustment = async (e: FormEvent) => { e.preventDefault(); const amount = parseMoney(adjAmount); if (!adjOperatorId) return setError('Выберите оператора'); if (amount <= 0) return setError('Сумма корректировки должна быть больше 0'); setAdjSaving(true); setError(null); try { await post({ action: 'createAdjustment', payload: { operator_id: adjOperatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } }); setAdjAmount(''); setAdjComment(''); setAdjSuccess(true); setTimeout(() => setAdjSuccess(false), 3000); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить корректировку') } finally { setAdjSaving(false) } }
-  const saveChatId = async (e: FormEvent) => { e.preventDefault(); if (!chatTarget) return; const trimmed = chatValue.trim(); if (trimmed && !/^-?\d+$/.test(trimmed)) return setError('telegram_chat_id должен быть числом'); setChatSaving(true); setError(null); try { await post({ action: 'updateOperatorChatId', operatorId: chatTarget.operator.id, telegram_chat_id: trimmed || null }); setChatTarget(null); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить Telegram chat_id') } finally { setChatSaving(false) } }
+  const submitAdvance = async (e: FormEvent) => { e.preventDefault(); if (!advanceTarget) return; const cash = parseMoney(advanceCash), kaspi = parseMoney(advanceKaspi); if (!advanceCompanyId) return setError('Для аванса нужно выбрать точку'); if (cash + kaspi <= 0) return setError('Сумма аванса должна быть больше 0'); setAdvanceSaving(true); setError(null); try { await post({ action: 'createAdvance', payload: { operator_id: advanceTarget.operator.id, week_start: weekStart, company_id: advanceCompanyId, payment_date: advanceDate, cash_amount: cash, kaspi_amount: kaspi, comment: advanceComment.trim() || null } }); setAdvanceTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось выдать аванс') } finally { setAdvanceSaving(false) } }
+  const submitPayment = async (e: FormEvent) => { e.preventDefault(); if (!payTarget) return; const cash = parseMoney(payCash), kaspi = parseMoney(payKaspi), total = cash + kaspi; if (total <= 0) return setError('Сумма выплаты должна быть больше 0'); if (total - payTarget.week.remainingAmount > 0.009) return setError('Сумма выплаты превышает остаток по неделе'); setPaySaving(true); setError(null); try { await post({ action: 'createWeeklyPayment', payload: { operator_id: payTarget.operator.id, week_start: weekStart, payment_date: payDate, cash_amount: cash, kaspi_amount: kaspi, comment: payComment.trim() || null } }); setPayTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось провести выплату') } finally { setPaySaving(false) } }
+  const submitAdjustment = async (e: FormEvent) => { e.preventDefault(); const amount = parseMoney(adjAmount); if (!adjOperatorId) return setError('Выберите оператора'); if (amount <= 0) return setError('Сумма корректировки должна быть больше 0'); setAdjSaving(true); setError(null); try { await post({ action: 'createAdjustment', payload: { operator_id: adjOperatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } }); setAdjAmount(''); setAdjComment(''); setAdjSuccess(true); setTimeout(() => setAdjSuccess(false), 3000); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить корректировку') } finally { setAdjSaving(false) } }
+  const saveChatId = async (e: FormEvent) => { e.preventDefault(); if (!chatTarget) return; const trimmed = chatValue.trim(); if (trimmed && !/^-?\d+$/.test(trimmed)) return setError('telegram_chat_id должен быть числом'); setChatSaving(true); setError(null); try { await post({ action: 'updateOperatorChatId', operatorId: chatTarget.operator.id, telegram_chat_id: trimmed || null }); setChatTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить Telegram chat_id') } finally { setChatSaving(false) } }
   const sendOne = async (operatorId: string) => { setSendingId(operatorId); setError(null); try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) throw new Error(json?.error || `Ошибка отправки (${res.status})`) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось отправить расчёт в Telegram') } finally { setSendingId(null) } }
   const sendAll = async () => { if (loading || broadcastSending || !broadcastTargets.length) return; setBroadcastSending(true); setBroadcastDone(0); setBroadcastTotal(broadcastTargets.length); setBroadcastErrors([]); setError(null); try { for (let i = 0; i < broadcastTargets.length; i += 1) { const item = broadcastTargets[i]; try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId: item.operator.id, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${json?.error || `HTTP ${res.status}`}`]) } catch (e: any) { setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${e?.message || 'ошибка'}`]) } setBroadcastDone(i + 1); await new Promise((r) => setTimeout(r, 250)) } } finally { setBroadcastSending(false) } }
 
@@ -271,14 +271,14 @@ export default function SalaryPage() {
               </div>
             </div>
             <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-6" onSubmit={submitAdjustment}>
-              <select className={input} value={adjOperatorId} onChange={(e) => setAdjOperatorId(e.target.value)}>
+              <select className={selectCls} value={adjOperatorId} onChange={(e) => setAdjOperatorId(e.target.value)}>
                 {(data?.operators || []).map((i) => <option key={i.operator.id} value={i.operator.id}>{getOperatorDisplayName(i.operator)}</option>)}
               </select>
-              <select className={input} value={adjCompanyId} onChange={(e) => setAdjCompanyId(e.target.value)}>
+              <select className={selectCls} value={adjCompanyId} onChange={(e) => setAdjCompanyId(e.target.value)}>
                 <option value="">Без привязки к точке</option>
                 {(data?.companies || []).map((c) => <option key={c.id} value={c.id}>{c.name || c.code || c.id}</option>)}
               </select>
-              <select className={input} value={adjKind} onChange={(e) => setAdjKind(e.target.value as AdjustmentKind)}>
+              <select className={selectCls} value={adjKind} onChange={(e) => setAdjKind(e.target.value as AdjustmentKind)}>
                 <option value="fine">Штраф</option>
                 <option value="debt">Долг</option>
                 <option value="bonus">Бонус</option>
@@ -301,7 +301,7 @@ export default function SalaryPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm text-slate-300">Точка</label>
-                <select className={input} value={advanceCompanyId} onChange={(e) => setAdvanceCompanyId(e.target.value)}>
+                <select className={selectCls} value={advanceCompanyId} onChange={(e) => setAdvanceCompanyId(e.target.value)}>
                   {(advanceTarget.week.companyAllocations.length ? advanceTarget.week.companyAllocations.map((a) => ({ id: a.companyId, label: a.companyName || a.companyCode || a.companyId })) : (data?.companies || []).map((c) => ({ id: c.id, label: c.name || c.code || c.id }))).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>

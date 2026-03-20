@@ -43,6 +43,7 @@ type PageData = { operator: Operator; companies: CompanyOption[]; week: WeekData
 type AdjKind = 'bonus' | 'fine' | 'debt'
 
 const input = 'h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
+const selectCls = 'h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-emerald-400/40 focus:outline-none [color-scheme:dark]'
 const textarea = 'min-h-[80px] w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
 const money = formatMoney
 const parseMoney = (v: string) => { const n = Number(v.replace(',', '.').replace(/\s/g, '')); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0 }
@@ -101,10 +102,10 @@ export default function OperatorSalaryDetailPage() {
 
   const weekEnd = useMemo(() => addDaysISO(weekStart, 6), [weekStart])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (!operatorId) return
-    setLoading(true)
-    setError(null)
+    if (!silent) setLoading(true)
+    if (!silent) setError(null)
     try {
       const res = await fetch(`/api/admin/salary?view=operatorWeekly&operatorId=${encodeURIComponent(operatorId)}&weekStart=${encodeURIComponent(weekStart)}`, { cache: 'no-store' })
       const json = await res.json().catch(() => null)
@@ -113,7 +114,7 @@ export default function OperatorSalaryDetailPage() {
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить данные')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [operatorId, weekStart])
 
@@ -137,7 +138,7 @@ export default function OperatorSalaryDetailPage() {
     setAdvanceSaving(true); setError(null)
     try {
       await post({ action: 'createAdvance', payload: { operator_id: operatorId, week_start: weekStart, company_id: advanceCompanyId, payment_date: advanceDate, cash_amount: cash, kaspi_amount: kaspi, comment: advanceComment.trim() || null } })
-      setAdvanceOpen(false); await load()
+      setAdvanceOpen(false); await load(true)
     } catch (e: any) { setError(e?.message || 'Не удалось выдать аванс') } finally { setAdvanceSaving(false) }
   }
 
@@ -150,7 +151,7 @@ export default function OperatorSalaryDetailPage() {
     setPaySaving(true); setError(null)
     try {
       await post({ action: 'createWeeklyPayment', payload: { operator_id: operatorId, week_start: weekStart, payment_date: payDate, cash_amount: cash, kaspi_amount: kaspi, comment: payComment.trim() || null } })
-      setPayOpen(false); await load()
+      setPayOpen(false); await load(true)
     } catch (e: any) { setError(e?.message || 'Не удалось провести выплату') } finally { setPaySaving(false) }
   }
 
@@ -171,7 +172,7 @@ export default function OperatorSalaryDetailPage() {
     setAdjSaving(true); setError(null)
     try {
       await post({ action: 'createAdjustment', payload: { operator_id: operatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } })
-      setAdjAmount(''); setAdjComment(''); setAdjSuccess(true); setTimeout(() => setAdjSuccess(false), 3000); await load()
+      setAdjAmount(''); setAdjComment(''); setAdjSuccess(true); setTimeout(() => setAdjSuccess(false), 3000); await load(true)
     } catch (e: any) { setError(e?.message || 'Не удалось сохранить корректировку') } finally { setAdjSaving(false) }
   }
 
@@ -363,12 +364,12 @@ export default function OperatorSalaryDetailPage() {
               <Card className="border-white/10 bg-white/[0.04] p-5">
                 <div className="mb-4 text-sm font-medium text-white">Ручная корректировка</div>
                 <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-5" onSubmit={submitAdjustment}>
-                  <select className={input} value={adjKind} onChange={(e) => setAdjKind(e.target.value as AdjKind)}>
+                  <select className={selectCls} value={adjKind} onChange={(e) => setAdjKind(e.target.value as AdjKind)}>
                     <option value="fine">Штраф</option>
                     <option value="debt">Долг</option>
                     <option value="bonus">Бонус</option>
                   </select>
-                  <select className={input} value={adjCompanyId} onChange={(e) => setAdjCompanyId(e.target.value)}>
+                  <select className={selectCls} value={adjCompanyId} onChange={(e) => setAdjCompanyId(e.target.value)}>
                     <option value="">Без привязки к точке</option>
                     {data.companies.map((c) => <option key={c.id} value={c.id}>{c.name || c.code || c.id}</option>)}
                   </select>
@@ -433,7 +434,7 @@ export default function OperatorSalaryDetailPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm text-slate-300">Точка</label>
-                <select className={input} value={advanceCompanyId} onChange={(e) => setAdvanceCompanyId(e.target.value)}>
+                <select className={selectCls} value={advanceCompanyId} onChange={(e) => setAdvanceCompanyId(e.target.value)}>
                   {(data?.week.companyAllocations.length ? data.week.companyAllocations.map((a) => ({ id: a.companyId, label: a.companyName || a.companyCode || a.companyId })) : (data?.companies || []).map((c) => ({ id: c.id, label: c.name || c.code || c.id }))).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
