@@ -1,598 +1,492 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
-
-import { Sidebar } from '@/components/sidebar'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { DEFAULT_SHIFT_BASE_PAY } from '@/lib/core/constants'
-import { calculateOperatorShiftBreakdown, type SalaryShiftBreakdown } from '@/lib/domain/salary'
-import { getOperatorDisplayName } from '@/lib/core/operator-name'
+import { useParams, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft,
-  Banknote,
-  CalendarDays,
+  Building2,
   CheckCircle2,
-  Circle,
+  CreditCard,
+  DollarSign,
   Loader2,
+  MessageCircle,
   Moon,
-  Settings2,
+  Plus,
+  RefreshCw,
+  Send,
   Sun,
-  TrendingUp,
+  TrendingDown,
   UserCircle2,
+  Wallet,
 } from 'lucide-react'
 
+import { Sidebar } from '@/components/sidebar'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from '@/lib/core/date'
+import { formatMoney } from '@/lib/core/format'
+import { getOperatorDisplayName } from '@/lib/core/operator-name'
+import { calculateOperatorShiftBreakdown } from '@/lib/domain/salary'
+
 type Shift = 'day' | 'night'
+type IncomeRow = { id: string; date: string; company_id: string; operator_id: string | null; shift: Shift; zone: string | null; cash_amount: number | null; kaspi_amount: number | null; card_amount: number | null; comment: string | null }
+type CompanyOption = { id: string; name: string | null; code: string | null }
+type Allocation = { companyId: string; companyCode: string | null; companyName: string | null; accruedAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; shareRatio: number }
+type Payment = { id: string; payment_date: string; cash_amount: number; kaspi_amount: number; total_amount: number; comment: string | null; status: string }
+type Operator = { id: string; name: string; short_name: string | null; full_name: string | null; is_active: boolean; photo_url: string | null; position: string | null; telegram_chat_id?: string | null }
+type WeekData = { id: string; weekStart: string; weekEnd: string; grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid'; companyAllocations: Allocation[]; payments: Payment[] }
+type RecentWeek = { id: string; weekStart: string; weekEnd: string; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid' }
+type PageData = { operator: Operator; companies: CompanyOption[]; week: WeekData; incomes: IncomeRow[]; recentWeeks: RecentWeek[] }
+type AdjKind = 'bonus' | 'fine' | 'debt'
 
-type IncomeRow = {
-  id: string
-  date: string
-  company_id: string
-  operator_id: string | null
-  shift: Shift
-  zone: string | null
-  cash_amount: number | null
-  kaspi_amount: number | null
-  card_amount: number | null
-  comment: string | null
+const input = 'h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
+const textarea = 'min-h-[80px] w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
+const money = formatMoney
+const parseMoney = (v: string) => { const n = Number(v.replace(',', '.').replace(/\s/g, '')); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0 }
+const statusMeta = (s: WeekData['status']) => s === 'paid' ? { label: 'Выплачено', className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' } : s === 'partial' ? { label: 'Частично', className: 'border-amber-500/30 bg-amber-500/10 text-amber-300' } : { label: 'Не выплачено', className: 'border-slate-500/30 bg-slate-500/10 text-slate-300' }
+
+function Modal(props: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"><div className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#10182b] p-6 shadow-2xl shadow-black/40"><div className="mb-6 flex items-start justify-between gap-4"><div><h3 className="text-xl font-semibold text-white">{props.title}</h3>{props.subtitle ? <p className="mt-1 text-sm text-slate-400">{props.subtitle}</p> : null}</div><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-300 hover:bg-white/10" onClick={props.onClose}>Закрыть</Button></div>{props.children}</div></div>
 }
 
-type Company = {
-  id: string
-  name: string
-  code: string | null
-}
-
-type Operator = {
-  id: string
-  name: string
-  full_name?: string | null
-  short_name: string | null
-  operator_profiles?: { full_name?: string | null }[] | null
-  is_active: boolean
-}
-
-type SalaryRule = {
-  company_code: string
-  shift_type: Shift
-  base_per_shift: number | null
-  senior_operator_bonus: number | null
-  senior_cashier_bonus: number | null
-  threshold1_turnover: number | null
-  threshold1_bonus: number | null
-  threshold2_turnover: number | null
-  threshold2_bonus: number | null
-}
-
-type AssignmentRow = {
-  operator_id: string
-  company_id: string
-  role_in_company: 'operator' | 'senior_operator' | 'senior_cashier'
-  is_active: boolean
-}
-
-type PayoutRow = {
-  id: number
-  operator_id: string
-  date: string
-  shift: Shift
-  is_paid: boolean
-  paid_at: string | null
-  comment: string | null
-}
-
-type SalaryDetailResponse = {
-  operator: Operator
-  companies: Company[]
-  rules: SalaryRule[]
-  assignments: AssignmentRow[]
-  incomes: IncomeRow[]
-  payouts: PayoutRow[]
-}
-
-type DateRangePreset = 'month' | 'week' | 'all'
-
-const toISODateLocal = (date: Date) => {
-  const localTime = date.getTime() - date.getTimezoneOffset() * 60_000
-  return new Date(localTime).toISOString().slice(0, 10)
-}
-
-const fromISODateLocal = (iso: string) => {
-  const [year, month, day] = iso.split('-').map(Number)
-  return new Date(year, (month || 1) - 1, day || 1)
-}
-
-const todayISO = () => toISODateLocal(new Date())
-
-const addDaysISO = (iso: string, diff: number) => {
-  const date = fromISODateLocal(iso || todayISO())
-  date.setDate(date.getDate() + diff)
-  return toISODateLocal(date)
-}
-
-const formatMoney = (value: number | null | undefined) => (value ?? 0).toLocaleString('ru-RU')
-
-const formatDate = (iso: string) => {
-  if (!iso) return ''
-  return fromISODateLocal(iso).toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
-}
-
-const formatDateTime = (iso: string | null) => {
-  if (!iso) return null
-  return new Date(iso).toLocaleString('ru-RU')
-}
-
-export default function OperatorSalaryPage() {
+export default function OperatorSalaryDetailPage() {
   const params = useParams<{ operatorId?: string | string[] }>()
+  const searchParams = useSearchParams()
+
   const operatorId = useMemo(() => {
     const raw = params?.operatorId
     const value = Array.isArray(raw) ? raw[0] || '' : raw || ''
-    if (value === 'undefined' || value === 'null') return ''
-    return value
+    return value === 'undefined' || value === 'null' ? '' : value
   }, [params])
 
-  const [operator, setOperator] = useState<Operator | null>(null)
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [rules, setRules] = useState<SalaryRule[]>([])
-  const [assignments, setAssignments] = useState<AssignmentRow[]>([])
-  const [incomes, setIncomes] = useState<IncomeRow[]>([])
-  const [payouts, setPayouts] = useState<PayoutRow[]>([])
+  const currentWeek = toISODateLocal(mondayOfDate(new Date()))
+  const initialWeek = useMemo(() => {
+    const fromParam = searchParams?.get('dateFrom') || searchParams?.get('weekStart') || ''
+    const normalized = /^\d{4}-\d{2}-\d{2}$/.test(fromParam.trim()) ? fromParam.trim() : ''
+    return normalized || currentWeek
+  }, [searchParams, currentWeek])
 
+  const [weekStart, setWeekStart] = useState(initialWeek)
+  const [data, setData] = useState<PageData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [updatingKey, setUpdatingKey] = useState<string | null>(null)
 
-  const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -29))
-  const [dateTo, setDateTo] = useState(todayISO())
-  const [preset, setPreset] = useState<DateRangePreset | null>('month')
+  const [advanceOpen, setAdvanceOpen] = useState(false)
+  const [advanceCompanyId, setAdvanceCompanyId] = useState('')
+  const [advanceDate, setAdvanceDate] = useState(todayISO())
+  const [advanceCash, setAdvanceCash] = useState('')
+  const [advanceKaspi, setAdvanceKaspi] = useState('')
+  const [advanceComment, setAdvanceComment] = useState('')
+  const [advanceSaving, setAdvanceSaving] = useState(false)
 
-  const payoutMap = useMemo(() => {
-    const map = new Map<string, PayoutRow>()
-    for (const payout of payouts) {
-      map.set(`${payout.date}_${payout.shift}`, payout)
-    }
-    return map
-  }, [payouts])
+  const [payOpen, setPayOpen] = useState(false)
+  const [payDate, setPayDate] = useState(todayISO())
+  const [payCash, setPayCash] = useState('')
+  const [payKaspi, setPayKaspi] = useState('')
+  const [payComment, setPayComment] = useState('')
+  const [paySaving, setPaySaving] = useState(false)
 
-  useEffect(() => {
-    let alive = true
+  const [tgSending, setTgSending] = useState(false)
 
-    const load = async () => {
-      if (!operatorId) {
-        setError('Некорректный id оператора')
-        setLoading(false)
-        return
-      }
+  const [adjKind, setAdjKind] = useState<AdjKind>('fine')
+  const [adjCompanyId, setAdjCompanyId] = useState('')
+  const [adjDate, setAdjDate] = useState(todayISO())
+  const [adjAmount, setAdjAmount] = useState('')
+  const [adjComment, setAdjComment] = useState('')
+  const [adjSaving, setAdjSaving] = useState(false)
+  const [adjSuccess, setAdjSuccess] = useState(false)
 
-      setLoading(true)
-      setError(null)
+  const weekEnd = useMemo(() => addDaysISO(weekStart, 6), [weekStart])
 
-      const params = new URLSearchParams({
-        view: 'operatorDetail',
-        operatorId,
-        dateFrom: dateFrom || '1900-01-01',
-        dateTo: dateTo || '2999-12-31',
-      })
-      const response = await fetch(`/api/admin/salary?${params.toString()}`, {
-        credentials: 'include',
-      })
-      const payload = (await response.json().catch(() => null)) as { error?: string; data?: SalaryDetailResponse } | null
-
-      if (!alive) return
-
-      if (!response.ok || !payload?.data) {
-        setError(payload?.error || 'Ошибка при загрузке данных')
-        setLoading(false)
-        return
-      }
-
-      setOperator(payload.data.operator)
-      setCompanies(payload.data.companies)
-      setRules(payload.data.rules)
-      setAssignments(payload.data.assignments)
-      setIncomes(payload.data.incomes)
-      setPayouts(payload.data.payouts)
+  const load = useCallback(async () => {
+    if (!operatorId) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/salary?view=operatorWeekly&operatorId=${encodeURIComponent(operatorId)}&weekStart=${encodeURIComponent(weekStart)}`, { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || `Ошибка загрузки (${res.status})`)
+      setData(json.data as PageData)
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось загрузить данные')
+    } finally {
       setLoading(false)
     }
+  }, [operatorId, weekStart])
 
-    load()
-    return () => {
-      alive = false
-    }
-  }, [operatorId, dateFrom, dateTo])
+  useEffect(() => { void load() }, [load])
+  useEffect(() => { if (!error) return; const t = setTimeout(() => setError(null), 6000); return () => clearTimeout(t) }, [error])
+  useEffect(() => { if (advanceOpen) { setAdvanceCompanyId(data?.week.companyAllocations[0]?.companyId || data?.companies[0]?.id || ''); setAdvanceDate(todayISO()); setAdvanceCash(''); setAdvanceKaspi(''); setAdvanceComment('') } }, [advanceOpen, data])
+  useEffect(() => { if (payOpen && data) { setPayDate(todayISO()); setPayCash(String(Math.max(data.week.remainingAmount, 0))); setPayKaspi(''); setPayComment('') } }, [payOpen, data])
 
-  const shifts = useMemo<SalaryShiftBreakdown[]>(() => {
-    if (!operatorId) return []
+  async function post(body: unknown) {
+    const res = await fetch('/api/admin/salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const json = await res.json().catch(() => null)
+    if (!res.ok) throw new Error(json?.error || `Ошибка запроса (${res.status})`)
+    return json
+  }
+
+  const submitAdvance = async (e: FormEvent) => {
+    e.preventDefault()
+    const cash = parseMoney(advanceCash), kaspi = parseMoney(advanceKaspi)
+    if (!advanceCompanyId) return setError('Выберите точку для аванса')
+    if (cash + kaspi <= 0) return setError('Сумма аванса должна быть больше 0')
+    setAdvanceSaving(true); setError(null)
+    try {
+      await post({ action: 'createAdvance', payload: { operator_id: operatorId, week_start: weekStart, company_id: advanceCompanyId, payment_date: advanceDate, cash_amount: cash, kaspi_amount: kaspi, comment: advanceComment.trim() || null } })
+      setAdvanceOpen(false); await load()
+    } catch (e: any) { setError(e?.message || 'Не удалось выдать аванс') } finally { setAdvanceSaving(false) }
+  }
+
+  const submitPayment = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!data) return
+    const cash = parseMoney(payCash), kaspi = parseMoney(payKaspi), total = cash + kaspi
+    if (total <= 0) return setError('Сумма выплаты должна быть больше 0')
+    if (total - data.week.remainingAmount > 0.009) return setError('Сумма выплаты превышает остаток по неделе')
+    setPaySaving(true); setError(null)
+    try {
+      await post({ action: 'createWeeklyPayment', payload: { operator_id: operatorId, week_start: weekStart, payment_date: payDate, cash_amount: cash, kaspi_amount: kaspi, comment: payComment.trim() || null } })
+      setPayOpen(false); await load()
+    } catch (e: any) { setError(e?.message || 'Не удалось провести выплату') } finally { setPaySaving(false) }
+  }
+
+  const sendTelegram = async () => {
+    if (!data?.operator.telegram_chat_id) return setError('У оператора не задан Telegram chat_id')
+    setTgSending(true); setError(null)
+    try {
+      const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId, dateFrom: weekStart, dateTo: weekEnd, weekStart }) })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || `Ошибка отправки (${res.status})`)
+    } catch (e: any) { setError(e?.message || 'Не удалось отправить расчёт') } finally { setTgSending(false) }
+  }
+
+  const submitAdjustment = async (e: FormEvent) => {
+    e.preventDefault()
+    const amount = parseMoney(adjAmount)
+    if (amount <= 0) return setError('Сумма корректировки должна быть больше 0')
+    setAdjSaving(true); setError(null)
+    try {
+      await post({ action: 'createAdjustment', payload: { operator_id: operatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } })
+      setAdjAmount(''); setAdjComment(''); setAdjSuccess(true); setTimeout(() => setAdjSuccess(false), 3000); await load()
+    } catch (e: any) { setError(e?.message || 'Не удалось сохранить корректировку') } finally { setAdjSaving(false) }
+  }
+
+  const shifts = useMemo(() => {
+    if (!data || !operatorId) return []
     return calculateOperatorShiftBreakdown({
       operatorId,
-      companies,
-      rules,
-      assignments,
-      incomes,
+      companies: data.companies,
+      rules: [],
+      assignments: [],
+      incomes: data.incomes,
     })
-  }, [assignments, companies, incomes, operatorId, rules])
+  }, [data, operatorId])
 
-  const assignedCompanyNames = useMemo(() => {
-    const companyMap = new Map(companies.map((company) => [company.id, company.name]))
-    return assignments
-      .map((assignment) => companyMap.get(assignment.company_id))
-      .filter(Boolean) as string[]
-  }, [assignments, companies])
-
-  const relevantRules = useMemo(() => {
-    const assignedCodes = new Set(
-      assignments
-        .map((assignment) => companies.find((company) => company.id === assignment.company_id)?.code?.toLowerCase() || null)
-        .filter(Boolean) as string[],
-    )
-    return rules.filter((rule) => assignedCodes.has(rule.company_code.toLowerCase()))
-  }, [assignments, companies, rules])
-
-  const totals = useMemo(() => {
-    const totalShifts = shifts.length
-    const totalRevenue = shifts.reduce((sum, shift) => sum + shift.totalIncome, 0)
-    const totalSalary = shifts.reduce((sum, shift) => sum + shift.salary, 0)
-    const avgRevenuePerShift = totalShifts > 0 ? totalRevenue / totalShifts : 0
-    const avgSalaryPerShift = totalShifts > 0 ? totalSalary / totalShifts : 0
-    const paidCount = shifts.reduce((acc, shift) => acc + (payoutMap.get(shift.payoutKey)?.is_paid ? 1 : 0), 0)
-
-    return {
-      totalShifts,
-      totalRevenue,
-      totalSalary,
-      avgRevenuePerShift,
-      avgSalaryPerShift,
-      paidCount,
-    }
-  }, [payoutMap, shifts])
-
-  const handlePreset = (nextPreset: DateRangePreset) => {
-    const today = todayISO()
-    setPreset(nextPreset)
-
-    if (nextPreset === 'month') {
-      setDateFrom(addDaysISO(today, -29))
-      setDateTo(today)
-      return
-    }
-
-    if (nextPreset === 'week') {
-      setDateFrom(addDaysISO(today, -6))
-      setDateTo(today)
-      return
-    }
-
-    setDateFrom('')
-    setDateTo('')
-  }
-
-  const togglePaid = useCallback(
-    async (shift: SalaryShiftBreakdown) => {
-      if (!operatorId) {
-        setError('Некорректный id оператора')
-        return
-      }
-
-      setError(null)
-      setUpdatingKey(shift.id)
-
-      try {
-        const current = payoutMap.get(shift.payoutKey)
-        const nextPaid = !(current?.is_paid ?? false)
-        const response = await fetch('/api/admin/salary', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            action: 'toggleShiftPayout',
-            payload: {
-              operator_id: operatorId,
-              date: shift.date,
-              shift: shift.shift,
-              is_paid: nextPaid,
-              paid_at: nextPaid ? new Date().toISOString() : null,
-            },
-          }),
-        })
-        const payload = (await response.json().catch(() => null)) as { error?: string; data?: PayoutRow } | null
-        if (!response.ok || !payload?.data) {
-          throw new Error(payload?.error || 'Не удалось обновить статус оплаты')
-        }
-
-        setPayouts((prev) => {
-          const next = prev.filter((item) => `${item.date}_${item.shift}` !== shift.payoutKey)
-          next.push(payload.data as PayoutRow)
-          return next
-        })
-      } catch (err: any) {
-        console.error(err)
-        setError(err?.message || 'Не удалось обновить статус оплаты')
-      } finally {
-        setUpdatingKey(null)
-      }
-    },
-    [operatorId, payoutMap],
-  )
-
-  const periodLabel = dateFrom || dateTo ? `${formatDate(dateFrom)} - ${formatDate(dateTo)}` : 'Весь период'
-
-  if (loading) {
+  if (!operatorId) {
     return (
-      <div className="flex min-h-screen bg-background">
+      <div className="flex min-h-screen bg-[#0a1220] text-white">
         <Sidebar />
-        <main className="flex flex-1 items-center justify-center px-4 pt-20 text-muted-foreground md:px-8 md:pt-0">
-          Загрузка карточки оператора...
-        </main>
+        <main className="flex flex-1 items-center justify-center text-slate-400">Некорректный id оператора</main>
       </div>
     )
   }
 
-  if (error || !operator) {
-    return (
-      <div className="flex min-h-screen bg-background">
-        <Sidebar />
-        <main className="flex flex-1 flex-col items-center justify-center gap-3 px-4 pt-20 text-muted-foreground md:px-8 md:pt-0">
-          <p>{error || 'Оператор не найден'}</p>
-          <Link href="/salary">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Назад к зарплате
-            </Button>
-          </Link>
-        </main>
-      </div>
-    )
-  }
+  const st = data ? statusMeta(data.week.status) : null
+  const canPay = data ? data.week.remainingAmount > 0.009 : false
+  const title = data ? getOperatorDisplayName(data.operator) : '...'
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-[#0a1220] text-white">
       <Sidebar />
-      <main className="min-w-0 flex-1 overflow-auto pt-20 md:pt-0">
-        <div className="mx-auto max-w-7xl space-y-6 px-4 pb-8 pt-4 md:p-8">
-          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-            <div className="flex items-start gap-3">
-              <Link href="/salary">
-                <Button variant="ghost" size="icon" className="mr-1 hidden md:inline-flex">
-                  <ArrowLeft className="h-4 w-4" />
+      <main className="min-w-0 flex-1 overflow-x-hidden pt-20 md:pt-0">
+        <div className="mx-auto max-w-[1400px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6 xl:px-8">
+
+          {/* Header */}
+          <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.96),_rgba(2,6,23,0.96))] p-5 md:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex items-center gap-4">
+                <Link href="/salary" className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-300 hover:bg-white/10">
+                  <ArrowLeft className="h-5 w-5" />
+                </Link>
+                {data?.operator.photo_url ? (
+                  <div className="h-12 w-12 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500">
+                    <Image src={data.operator.photo_url} alt={title} width={48} height={48} className="h-full w-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
+                    <UserCircle2 className="h-7 w-7" />
+                  </div>
+                )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-semibold text-white">{title}</h1>
+                    {data && !data.operator.is_active && <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-400">неактивен</span>}
+                  </div>
+                  {data?.operator.position && <p className="mt-0.5 text-sm text-slate-400">{data.operator.position}</p>}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>Прошлая неделя</Button>
+                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(currentWeek)}>Текущая</Button>
+                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, 7))}>Следующая</Button>
+                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void load()}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Обновить
                 </Button>
-              </Link>
-              <div>
-                <div className="flex items-center gap-2">
-                  <UserCircle2 className="h-6 w-6 text-purple-500" />
-                  <h1 className="text-2xl font-bold md:text-3xl">{getOperatorDisplayName(operator)}</h1>
-                  {!operator.is_active && (
-                    <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-400">
-                      неактивен
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Детальная статистика смен и зарплаты за выбранный период
-                </p>
               </div>
             </div>
-
-            <Link href="/salary/rules">
-              <Button variant="outline" size="sm" className="gap-2 text-xs">
-                <Settings2 className="h-4 w-4" />
-                Правила зарплаты
-              </Button>
-            </Link>
-          </div>
-
-          <Card className="space-y-3 border-border bg-card/80 p-4 md:p-5">
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <Card className="flex flex-col justify-center border-border bg-background/40 p-4">
-                <div className="mb-1 flex items-center gap-2 text-muted-foreground">
-                  <Banknote className="h-4 w-4" />
-                  <span className="text-xs uppercase tracking-wide">Всего зарплата</span>
-                </div>
-                <div className="text-xl font-bold text-foreground md:text-2xl">{formatMoney(totals.totalSalary)} ₸</div>
-              </Card>
-
-              <Card className="flex flex-col justify-center border-border bg-background/40 p-4">
-                <div className="mb-1 flex items-center gap-2 text-muted-foreground">
-                  <TrendingUp className="h-4 w-4" />
-                  <span className="text-xs uppercase tracking-wide">Выручка</span>
-                </div>
-                <div className="text-xl font-bold text-foreground md:text-2xl">{formatMoney(totals.totalRevenue)} ₸</div>
-                <div className="text-[10px] text-muted-foreground">
-                  В среднем за смену: <span className="font-semibold">{formatMoney(totals.avgRevenuePerShift)} ₸</span>
-                </div>
-              </Card>
-
-              <Card className="flex flex-col justify-center border-border bg-background/40 p-4">
-                <div className="mb-1 flex items-center gap-2 text-muted-foreground">
-                  <CalendarDays className="h-4 w-4" />
-                  <span className="text-xs uppercase tracking-wide">Кол-во смен</span>
-                </div>
-                <div className="text-xl font-bold text-foreground md:text-2xl">{totals.totalShifts}</div>
-                <div className="text-[10px] text-muted-foreground">
-                  Средняя зарплата за смену: <span className="font-semibold">{formatMoney(totals.avgSalaryPerShift)} ₸</span>
-                </div>
-              </Card>
-
-              <Card className="flex flex-col justify-center border border-accent/60 bg-accent/10 p-4">
-                <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Текущие правила</div>
-                <div className="space-y-1 text-xs text-foreground">
-                  <div>Активных правил: {relevantRules.length || 0}</div>
-                  <div>
-                    Точки: {assignedCompanyNames.length ? assignedCompanyNames.join(', ') : 'не назначены'}
-                  </div>
-                  <div>Роль-бонус учитывается автоматически</div>
-                  <div>Ставка по умолчанию: {formatMoney(DEFAULT_SHIFT_BASE_PAY)} ₸</div>
-                  <div className="pt-2 text-[11px] text-muted-foreground">
-                    Оплачено смен: <span className="font-semibold text-foreground">{totals.paidCount}</span> /{' '}
-                    <span className="font-semibold text-foreground">{totals.totalShifts}</span>
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <CalendarDays className="h-3 w-3" />
-                <span className="uppercase tracking-wide">Период:</span>
-                <span className="font-mono">{periodLabel}</span>
-              </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-300">
+              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Неделя: <span className="font-semibold text-white">{formatRuDate(weekStart)} — {formatRuDate(weekEnd)}</span></div>
+              {st && <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${st.className}`}>{st.label}</span>}
             </div>
           </Card>
 
-          <Card className="border-border bg-card p-4">
-            <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Период</label>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative flex items-center rounded-md border border-border/50 bg-input/50 px-2 py-1">
-                    <CalendarDays className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
-                    <input
-                      type="date"
-                      value={dateFrom}
-                      onChange={(event) => {
-                        setDateFrom(event.target.value)
-                        setPreset(null)
-                      }}
-                      className="cursor-pointer bg-transparent px-1 py-1 text-xs text-foreground outline-none"
-                    />
-                    <span className="px-1 text-xs text-muted-foreground">→</span>
-                    <input
-                      type="date"
-                      value={dateTo}
-                      onChange={(event) => {
-                        setDateTo(event.target.value)
-                        setPreset(null)
-                      }}
-                      className="cursor-pointer bg-transparent px-1 py-1 text-xs text-foreground outline-none"
-                    />
-                  </div>
+          {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
 
-                  <div className="flex rounded-md border border-border/30 bg-input/30 p-0.5">
-                    {(['week', 'month', 'all'] as DateRangePreset[]).map((value) => (
-                      <button
-                        key={value}
-                        onClick={() => handlePreset(value)}
-                        className={`rounded px-3 py-1 text-[10px] transition-colors ${
-                          preset === value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-white/10'
-                        }`}
-                      >
-                        {value === 'week' && 'Неделя'}
-                        {value === 'month' && '30 дн.'}
-                        {value === 'all' && 'Все'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+          {/* Weekly summary */}
+          {loading ? (
+            <Card className="flex items-center justify-center gap-2 border-white/10 bg-white/[0.04] p-16 text-slate-400">
+              <Loader2 className="h-5 w-5 animate-spin" />Загрузка данных...
+            </Card>
+          ) : data ? (
+            <>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2.5 text-emerald-300"><DollarSign className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Начислено</div><div className="mt-1 text-2xl font-semibold text-white">{money(data.week.grossAmount)}</div><div className="mt-0.5 text-xs text-slate-500">бонусы: <span className="text-emerald-300">+{money(data.week.bonusAmount)}</span></div></div></div></Card>
+                <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-rose-500/15 p-2.5 text-rose-300"><TrendingDown className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Удержания</div><div className="mt-1 text-2xl font-semibold text-white">{money(data.week.fineAmount + data.week.debtAmount + data.week.advanceAmount)}</div><div className="mt-0.5 text-xs text-slate-500">штрафы {money(data.week.fineAmount)} · долги {money(data.week.debtAmount)} · авансы {money(data.week.advanceAmount)}</div></div></div></Card>
+                <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2.5 text-blue-300"><CheckCircle2 className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Выплачено</div><div className="mt-1 text-2xl font-semibold text-white">{money(data.week.paidAmount)}</div></div></div></Card>
+                <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2.5 text-amber-300"><CreditCard className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-1 text-2xl font-semibold text-white">{money(data.week.remainingAmount)}</div></div></div></Card>
               </div>
-            </div>
-          </Card>
 
-          <Card className="overflow-hidden border-border bg-card">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="sticky top-0 z-10 border-b border-border bg-secondary/40 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur">
-                    <th className="px-4 py-3 text-left">Дата</th>
-                    <th className="px-4 py-3 text-center">Смена</th>
-                    <th className="px-4 py-3 text-left">Точка</th>
-                    <th className="px-4 py-3 text-left">Зоны</th>
-                    <th className="px-4 py-3 text-right text-green-500">Нал</th>
-                    <th className="px-4 py-3 text-right text-blue-500">Kaspi</th>
-                    <th className="px-4 py-3 text-right text-purple-500">Карта</th>
-                    <th className="px-4 py-3 text-right">Выручка</th>
-                    <th className="px-4 py-3 text-right">Зарплата</th>
-                    <th className="px-4 py-3 text-left">Комментарии</th>
-                    <th className="px-4 py-3 text-center">Оплата</th>
-                  </tr>
-                </thead>
-
-                <tbody className="text-sm">
-                  {shifts.length === 0 && (
-                    <tr>
-                      <td colSpan={11} className="px-6 py-10 text-center text-muted-foreground">
-                        Нет смен за выбранный период.
-                      </td>
-                    </tr>
-                  )}
-
-                  {shifts.map((shift, index) => {
-                    const payout = payoutMap.get(shift.payoutKey)
-                    const isPaid = payout?.is_paid ?? false
-                    const busy = updatingKey === shift.id
-
+              {/* History of weeks */}
+              {data.recentWeeks.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {data.recentWeeks.map((w) => {
+                    const wst = statusMeta(w.status)
+                    const isCurrent = w.weekStart === weekStart
                     return (
-                      <tr
-                        key={shift.id}
-                        className={`border-b border-border/40 transition-colors hover:bg-white/5 ${index % 2 === 0 ? 'bg-card/40' : ''}`}
-                      >
-                        <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
-                          {formatDate(shift.date)}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {shift.shift === 'day' ? (
-                            <Sun className="inline h-4 w-4 text-yellow-400" />
-                          ) : (
-                            <Moon className="inline h-4 w-4 text-blue-400" />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">
-                          {shift.companyName || shift.companyCode || '—'}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">
-                          {shift.zones.length ? shift.zones.join(', ') : '—'}
-                        </td>
-                        <td className={`px-4 py-3 text-right font-mono ${shift.cash ? 'text-foreground' : 'text-muted-foreground/20'}`}>
-                          {shift.cash ? formatMoney(shift.cash) : '—'}
-                        </td>
-                        <td className={`px-4 py-3 text-right font-mono ${shift.kaspi ? 'text-foreground' : 'text-muted-foreground/20'}`}>
-                          {shift.kaspi ? formatMoney(shift.kaspi) : '—'}
-                        </td>
-                        <td className={`px-4 py-3 text-right font-mono ${shift.card ? 'text-foreground' : 'text-muted-foreground/20'}`}>
-                          {shift.card ? formatMoney(shift.card) : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono">{formatMoney(shift.totalIncome)}</td>
-                        <td className="bg-accent/5 px-4 py-3 text-right font-mono font-semibold text-accent">
-                          {formatMoney(shift.salary)}
-                        </td>
-                        <td className="max-w-[260px] px-4 py-3 text-xs text-muted-foreground">
-                          {shift.comments.length ? shift.comments.join(' | ') : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <Button
-                            size="xs"
-                            variant={isPaid ? 'default' : 'outline'}
-                            className={`gap-2 ${isPaid ? 'bg-emerald-600 hover:bg-emerald-600/90' : ''}`}
-                            disabled={busy}
-                            onClick={() => togglePaid(shift)}
-                          >
-                            {busy ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : isPaid ? (
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                            ) : (
-                              <Circle className="h-3.5 w-3.5" />
-                            )}
-                            <span className="text-[11px]">{isPaid ? 'Оплачено' : 'Не оплачено'}</span>
-                          </Button>
-
-                          {isPaid && payout?.paid_at && (
-                            <div className="mt-1 text-[10px] text-muted-foreground">{formatDateTime(payout.paid_at)}</div>
-                          )}
-                        </td>
-                      </tr>
+                      <button key={w.id} type="button" onClick={() => setWeekStart(w.weekStart)} className={`shrink-0 rounded-2xl border p-3 text-left text-xs transition ${isCurrent ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'}`}>
+                        <div className="font-medium text-white">{formatRuDate(w.weekStart)}</div>
+                        <div className="mt-1 text-slate-400">{formatRuDate(w.weekEnd)}</div>
+                        <div className={`mt-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${wst.className}`}>{wst.label}</div>
+                        <div className="mt-1 text-slate-300">Остаток: {money(w.remainingAmount)}</div>
+                      </button>
                     )
                   })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex flex-wrap gap-3">
+                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setAdvanceOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />Выдать аванс
+                </Button>
+                <Button type="button" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayOpen(true)}>
+                  <Wallet className="mr-2 h-4 w-4" />Выплатить
+                </Button>
+                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 disabled:opacity-40" disabled={!data.operator.telegram_chat_id || tgSending} onClick={() => void sendTelegram()}>
+                  {tgSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageCircle className="mr-2 h-4 w-4" />}
+                  {data.operator.telegram_chat_id ? 'Отправить в Telegram' : 'Нет Telegram'}
+                </Button>
+              </div>
+
+              {/* Company allocations */}
+              {data.week.companyAllocations.length > 0 && (
+                <Card className="border-white/10 bg-white/[0.04] p-5">
+                  <div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">
+                    <Building2 className="h-4 w-4 text-emerald-300" />Разбивка по точкам
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs">
+                      <thead className="text-slate-500">
+                        <tr>
+                          <th className="pb-3 text-left font-medium">Точка</th>
+                          <th className="pb-3 text-right font-medium">Начислено</th>
+                          <th className="pb-3 text-right font-medium">Бонусы</th>
+                          <th className="pb-3 text-right font-medium">Штрафы</th>
+                          <th className="pb-3 text-right font-medium">Долги</th>
+                          <th className="pb-3 text-right font-medium">Авансы</th>
+                          <th className="pb-3 text-right font-medium">К выплате</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.week.companyAllocations.map((a) => (
+                          <tr key={a.companyId} className="border-t border-white/5 text-slate-200">
+                            <td className="py-3 pr-3">
+                              <div className="font-medium text-white">{a.companyName || a.companyCode || a.companyId}</div>
+                              <div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div>
+                            </td>
+                            <td className="py-3 text-right">{money(a.accruedAmount)}</td>
+                            <td className="py-3 text-right text-emerald-300">{money(a.bonusAmount)}</td>
+                            <td className="py-3 text-right text-rose-300">{money(a.fineAmount)}</td>
+                            <td className="py-3 text-right text-rose-300">{money(a.debtAmount)}</td>
+                            <td className="py-3 text-right text-amber-300">{money(a.advanceAmount)}</td>
+                            <td className="py-3 text-right font-medium text-white">{money(a.netAmount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+
+              {/* Payments */}
+              <Card className="border-white/10 bg-white/[0.04] p-5">
+                <div className="mb-4 text-sm font-medium text-white">Платежи недели</div>
+                {data.week.payments.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-400">По этой неделе ещё нет платежей.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {data.week.payments.map((p) => (
+                      <div key={p.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-white">{formatRuDate(p.payment_date)}</div>
+                            <div className="mt-1 text-xs text-slate-400">Нал: {money(p.cash_amount)} · Kaspi: {money(p.kaspi_amount)}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-emerald-300">{money(p.total_amount)}</div>
+                            <div className="text-[11px] text-slate-500">{p.status === 'active' ? 'активен' : p.status}</div>
+                          </div>
+                        </div>
+                        {p.comment ? <div className="mt-2 text-xs text-slate-400">{p.comment}</div> : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              {/* Adjustment form */}
+              <Card className="border-white/10 bg-white/[0.04] p-5">
+                <div className="mb-4 text-sm font-medium text-white">Ручная корректировка</div>
+                <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-5" onSubmit={submitAdjustment}>
+                  <select className={input} value={adjKind} onChange={(e) => setAdjKind(e.target.value as AdjKind)}>
+                    <option value="fine">Штраф</option>
+                    <option value="debt">Долг</option>
+                    <option value="bonus">Бонус</option>
+                  </select>
+                  <select className={input} value={adjCompanyId} onChange={(e) => setAdjCompanyId(e.target.value)}>
+                    <option value="">Без привязки к точке</option>
+                    {data.companies.map((c) => <option key={c.id} value={c.id}>{c.name || c.code || c.id}</option>)}
+                  </select>
+                  <input className={input} type="date" value={adjDate} onChange={(e) => setAdjDate(e.target.value)} />
+                  <input className={input} type="text" placeholder="Сумма" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)} />
+                  <Button type="submit" className="h-11 rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">
+                    {adjSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}
+                  </Button>
+                  <input className={`${input} md:col-span-2 xl:col-span-5`} type="text" placeholder="Комментарий" value={adjComment} onChange={(e) => setAdjComment(e.target.value)} />
+                </form>
+                {adjSuccess ? <div className="mt-3 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />Корректировка сохранена</div> : null}
+              </Card>
+
+              {/* Shifts table */}
+              <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
+                <div className="border-b border-white/10 px-5 py-4 text-sm font-medium text-white">
+                  Смены за неделю <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-400">{shifts.length}</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-slate-950/50 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3 text-left">Дата</th>
+                        <th className="px-4 py-3 text-center">Смена</th>
+                        <th className="px-4 py-3 text-left">Точка</th>
+                        <th className="px-4 py-3 text-right text-green-400">Нал</th>
+                        <th className="px-4 py-3 text-right text-blue-400">Kaspi</th>
+                        <th className="px-4 py-3 text-right text-purple-400">Карта</th>
+                        <th className="px-4 py-3 text-right">Выручка</th>
+                        <th className="px-4 py-3 text-left">Комментарий</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shifts.length === 0 ? (
+                        <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">Нет смен за эту неделю.</td></tr>
+                      ) : shifts.map((shift) => (
+                        <tr key={shift.id} className="border-t border-white/5 hover:bg-white/[0.02]">
+                          <td className="px-4 py-3 font-mono text-xs text-slate-300">{formatRuDate(shift.date)}</td>
+                          <td className="px-4 py-3 text-center">
+                            {shift.shift === 'day' ? <Sun className="inline h-4 w-4 text-yellow-400" /> : <Moon className="inline h-4 w-4 text-blue-400" />}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-slate-400">{shift.companyName || shift.companyCode || '—'}</td>
+                          <td className={`px-4 py-3 text-right font-mono text-xs ${shift.cash ? 'text-white' : 'text-slate-600'}`}>{shift.cash ? money(shift.cash) : '—'}</td>
+                          <td className={`px-4 py-3 text-right font-mono text-xs ${shift.kaspi ? 'text-white' : 'text-slate-600'}`}>{shift.kaspi ? money(shift.kaspi) : '—'}</td>
+                          <td className={`px-4 py-3 text-right font-mono text-xs ${shift.card ? 'text-white' : 'text-slate-600'}`}>{shift.card ? money(shift.card) : '—'}</td>
+                          <td className="px-4 py-3 text-right font-mono text-xs text-white">{money(shift.totalIncome)}</td>
+                          <td className="max-w-[200px] truncate px-4 py-3 text-xs text-slate-400">{shift.comments.length ? shift.comments.join(' · ') : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </>
+          ) : null}
         </div>
       </main>
+
+      {advanceOpen ? (
+        <Modal title="Выдать аванс" subtitle={`${title} · ${formatRuDate(weekStart)} — ${formatRuDate(weekEnd)}`} onClose={() => setAdvanceOpen(false)}>
+          <form className="space-y-4" onSubmit={submitAdvance}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Точка</label>
+                <select className={input} value={advanceCompanyId} onChange={(e) => setAdvanceCompanyId(e.target.value)}>
+                  {(data?.week.companyAllocations.length ? data.week.companyAllocations.map((a) => ({ id: a.companyId, label: a.companyName || a.companyCode || a.companyId })) : (data?.companies || []).map((c) => ({ id: c.id, label: c.name || c.code || c.id }))).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Дата</label>
+                <input className={input} type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Наличные</label>
+                <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={advanceCash} onChange={(e) => setAdvanceCash(e.target.value)} placeholder="0" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Kaspi</label>
+                <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={advanceKaspi} onChange={(e) => setAdvanceKaspi(e.target.value)} placeholder="0" />
+              </div>
+            </div>
+            <textarea className={textarea} value={advanceComment} onChange={(e) => setAdvanceComment(e.target.value)} placeholder="Комментарий" />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">Итого: <span className="font-semibold text-white">{money(parseMoney(advanceCash) + parseMoney(advanceKaspi))}</span></div>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setAdvanceOpen(false)}>Отмена</Button>
+              <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{advanceSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Выдать аванс'}</Button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {payOpen && data ? (
+        <Modal title="Выплатить зарплату" subtitle={`${title} · остаток ${money(data.week.remainingAmount)}`} onClose={() => setPayOpen(false)}>
+          <form className="space-y-4" onSubmit={submitPayment}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Дата выплаты</label>
+                <input className={input} type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+              </div>
+              <div className="flex items-center rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-400">Выплата разложится по точкам пропорционально начислению</div>
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Наличные</label>
+                <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={payCash} onChange={(e) => setPayCash(e.target.value)} placeholder="0" />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Kaspi</label>
+                <Input className="border-white/10 bg-slate-900/60 text-white" type="text" value={payKaspi} onChange={(e) => setPayKaspi(e.target.value)} placeholder="0" />
+              </div>
+            </div>
+            <textarea className={textarea} value={payComment} onChange={(e) => setPayComment(e.target.value)} placeholder="Комментарий" />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">Выплата: <span className="font-semibold text-white">{money(parseMoney(payCash) + parseMoney(payKaspi))}</span></div>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setPayOpen(false)}>Отмена</Button>
+              <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{paySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Провести выплату'}</Button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
     </div>
   )
 }

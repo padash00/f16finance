@@ -41,6 +41,7 @@ export default function SalaryPage() {
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [showZero, setShowZero] = useState(true)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'partial' | 'paid'>('all')
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [broadcastSending, setBroadcastSending] = useState(false)
   const [broadcastDone, setBroadcastDone] = useState(0)
@@ -73,6 +74,8 @@ export default function SalaryPage() {
   const [adjAmount, setAdjAmount] = useState('')
   const [adjComment, setAdjComment] = useState('')
   const [adjSaving, setAdjSaving] = useState(false)
+  const [adjSuccess, setAdjSuccess] = useState(false)
+  const [broadcastConfirm, setBroadcastConfirm] = useState(false)
 
   const weekEnd = useMemo(() => addDaysISO(weekStart, 6), [weekStart])
 
@@ -86,19 +89,25 @@ export default function SalaryPage() {
       setData(json.data as SalaryData)
     } catch (e: any) {
       console.error(e)
-      setError(e?.message || 'Не удалось загрузить weekly payroll')
+      setError(e?.message || 'Не удалось загрузить данные')
     } finally {
       setLoading(false)
     }
   }, [weekStart])
 
   useEffect(() => { void load() }, [load])
+  useEffect(() => { if (!error) return; const t = setTimeout(() => setError(null), 6000); return () => clearTimeout(t) }, [error])
   useEffect(() => { if (advanceTarget) { setAdvanceCompanyId(advanceTarget.week.companyAllocations[0]?.companyId || data?.companies[0]?.id || ''); setAdvanceDate(todayISO()); setAdvanceCash(''); setAdvanceKaspi(''); setAdvanceComment('') } }, [advanceTarget, data?.companies])
   useEffect(() => { if (payTarget) { setPayDate(todayISO()); setPayCash(String(Math.max(payTarget.week.remainingAmount, 0))); setPayKaspi(''); setPayComment('') } }, [payTarget])
   useEffect(() => { if (chatTarget) setChatValue(chatTarget.operator.telegram_chat_id || '') }, [chatTarget])
   useEffect(() => { if (data?.operators.length) setAdjOperatorId((cur) => cur || data.operators[0].operator.id) }, [data?.operators])
 
-  const operators = useMemo(() => showZero ? (data?.operators || []) : (data?.operators || []).filter((i) => i.hasActivity || i.week.remainingAmount > 0), [data?.operators, showZero])
+  const operators = useMemo(() => {
+    let list = data?.operators || []
+    if (!showZero) list = list.filter((i) => i.hasActivity || i.week.remainingAmount > 0)
+    if (statusFilter !== 'all') list = list.filter((i) => i.week.status === statusFilter)
+    return list
+  }, [data?.operators, showZero, statusFilter])
   const broadcastTargets = useMemo(() => (data?.operators || []).filter((i) => i.operator.is_active && i.operator.telegram_chat_id), [data?.operators])
   const summaryText = useMemo(() => { const top = [...(data?.operators || [])].sort((a, b) => b.week.remainingAmount - a.week.remainingAmount)[0]; return top && top.week.remainingAmount > 0 ? `Самый большой остаток у ${getOperatorDisplayName(top.operator)}: ${money(top.week.remainingAmount)}.` : 'На этой неделе остатки закрыты или ещё не сформированы.' }, [data?.operators])
 
@@ -111,7 +120,7 @@ export default function SalaryPage() {
 
   const submitAdvance = async (e: FormEvent) => { e.preventDefault(); if (!advanceTarget) return; const cash = parseMoney(advanceCash), kaspi = parseMoney(advanceKaspi); if (!advanceCompanyId) return setError('Для аванса нужно выбрать точку'); if (cash + kaspi <= 0) return setError('Сумма аванса должна быть больше 0'); setAdvanceSaving(true); setError(null); try { await post({ action: 'createAdvance', payload: { operator_id: advanceTarget.operator.id, week_start: weekStart, company_id: advanceCompanyId, payment_date: advanceDate, cash_amount: cash, kaspi_amount: kaspi, comment: advanceComment.trim() || null } }); setAdvanceTarget(null); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось выдать аванс') } finally { setAdvanceSaving(false) } }
   const submitPayment = async (e: FormEvent) => { e.preventDefault(); if (!payTarget) return; const cash = parseMoney(payCash), kaspi = parseMoney(payKaspi), total = cash + kaspi; if (total <= 0) return setError('Сумма выплаты должна быть больше 0'); if (total - payTarget.week.remainingAmount > 0.009) return setError('Сумма выплаты превышает остаток по неделе'); setPaySaving(true); setError(null); try { await post({ action: 'createWeeklyPayment', payload: { operator_id: payTarget.operator.id, week_start: weekStart, payment_date: payDate, cash_amount: cash, kaspi_amount: kaspi, comment: payComment.trim() || null } }); setPayTarget(null); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось провести выплату') } finally { setPaySaving(false) } }
-  const submitAdjustment = async (e: FormEvent) => { e.preventDefault(); const amount = parseMoney(adjAmount); if (!adjOperatorId) return setError('Выберите оператора'); if (amount <= 0) return setError('Сумма корректировки должна быть больше 0'); setAdjSaving(true); setError(null); try { await post({ action: 'createAdjustment', payload: { operator_id: adjOperatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } }); setAdjAmount(''); setAdjComment(''); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить корректировку') } finally { setAdjSaving(false) } }
+  const submitAdjustment = async (e: FormEvent) => { e.preventDefault(); const amount = parseMoney(adjAmount); if (!adjOperatorId) return setError('Выберите оператора'); if (amount <= 0) return setError('Сумма корректировки должна быть больше 0'); setAdjSaving(true); setError(null); try { await post({ action: 'createAdjustment', payload: { operator_id: adjOperatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } }); setAdjAmount(''); setAdjComment(''); setAdjSuccess(true); setTimeout(() => setAdjSuccess(false), 3000); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить корректировку') } finally { setAdjSaving(false) } }
   const saveChatId = async (e: FormEvent) => { e.preventDefault(); if (!chatTarget) return; const trimmed = chatValue.trim(); if (trimmed && !/^-?\d+$/.test(trimmed)) return setError('telegram_chat_id должен быть числом'); setChatSaving(true); setError(null); try { await post({ action: 'updateOperatorChatId', operatorId: chatTarget.operator.id, telegram_chat_id: trimmed || null }); setChatTarget(null); await load() } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить Telegram chat_id') } finally { setChatSaving(false) } }
   const sendOne = async (operatorId: string) => { setSendingId(operatorId); setError(null); try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) throw new Error(json?.error || `Ошибка отправки (${res.status})`) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось отправить расчёт в Telegram') } finally { setSendingId(null) } }
   const sendAll = async () => { if (loading || broadcastSending || !broadcastTargets.length) return; setBroadcastSending(true); setBroadcastDone(0); setBroadcastTotal(broadcastTargets.length); setBroadcastErrors([]); setError(null); try { for (let i = 0; i < broadcastTargets.length; i += 1) { const item = broadcastTargets[i]; try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId: item.operator.id, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${json?.error || `HTTP ${res.status}`}`]) } catch (e: any) { setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${e?.message || 'ошибка'}`]) } setBroadcastDone(i + 1); await new Promise((r) => setTimeout(r, 250)) } } finally { setBroadcastSending(false) } }
@@ -139,7 +148,7 @@ export default function SalaryPage() {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" onClick={sendAll} disabled={loading || broadcastSending || !broadcastTargets.length} className="rounded-xl bg-blue-500 text-white hover:bg-blue-400 disabled:opacity-50">
+                <Button type="button" onClick={() => setBroadcastConfirm(true)} disabled={loading || broadcastSending || !broadcastTargets.length} className="rounded-xl bg-blue-500 text-white hover:bg-blue-400 disabled:opacity-50">
                   {broadcastSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                   {broadcastSending ? `Рассылка ${broadcastDone}/${broadcastTotal}` : 'Отправить всем'}
                 </Button>
@@ -157,13 +166,21 @@ export default function SalaryPage() {
               {data ? <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-emerald-300">Выплачено операторов: <span className="font-semibold">{data.totals.paidOperators}</span></div> : null}
               {broadcastTotal > 0 && !broadcastSending ? <div className={`rounded-full border px-3 py-1.5 ${broadcastErrors.length ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}>Рассылка: {broadcastDone}/{broadcastTotal}</div> : null}
             </div>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
+                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
               <div className="min-w-0 flex-1">{summaryText}</div>
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setShowZero((v) => !v)}>{showZero ? 'РЎРєСЂС‹С‚СЊ РїСѓСЃС‚С‹Рµ СЃС‚СЂРѕРєРё' : 'РџРѕРєР°Р·Р°С‚СЊ РІСЃРµ СЃС‚СЂРѕРєРё'}</Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs">
+                  {(['all', 'draft', 'partial', 'paid'] as const).map((s) => (
+                    <button key={s} type="button" onClick={() => setStatusFilter(s)} className={`rounded-lg px-3 py-1.5 transition ${statusFilter === s ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                      {s === 'all' ? 'Все' : s === 'draft' ? 'Не выплачено' : s === 'partial' ? 'Частично' : 'Выплачено'}
+                    </button>
+                  ))}
+                </div>
+                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setShowZero((v) => !v)}>{showZero ? 'Скрыть пустые строки' : 'Показать все строки'}</Button>
+              </div>
             </div>
           </Card>
 
-          <Card className="hidden border-white/10 bg-white/[0.04] p-4 text-sm text-slate-300">{summaryText}</Card>
           {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -172,13 +189,6 @@ export default function SalaryPage() {
             <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2.5 text-amber-300"><CreditCard className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Авансы</div><div className="mt-1 text-2xl font-semibold text-white">{data ? money(data.totals.advanceAmount) : '—'}</div></div></div></Card>
             <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-red-500/15 p-2.5 text-red-300"><TrendingDown className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-1 text-2xl font-semibold text-white">{data ? money(data.totals.remainingAmount) : '—'}</div></div></div></Card>
           </div>
-
-          <Card className="hidden border-white/10 bg-white/[0.04] p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-sm text-slate-300">Показано операторов: <span className="font-semibold text-white">{operators.length}</span></div>
-              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setShowZero((v) => !v)}>{showZero ? 'Скрыть пустые строки' : 'Показать все строки'}</Button>
-            </div>
-          </Card>
 
           <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
             <div className="overflow-x-auto">
@@ -199,7 +209,7 @@ export default function SalaryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading ? <tr><td colSpan={11} className="px-4 py-16 text-center text-slate-400"><div className="inline-flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" />Загрузка weekly payroll...</div></td></tr> : null}
+                  {loading ? <tr><td colSpan={11} className="px-4 py-16 text-center text-slate-400"><div className="inline-flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" />Загрузка данных...</div></td></tr> : null}
                   {!loading && operators.length === 0 ? <tr><td colSpan={11} className="px-4 py-16 text-center text-slate-400">В этой неделе пока нет строк для отображения.</td></tr> : null}
                   {!loading ? operators.map((item) => {
                     const st = statusMeta(item.week.status)
@@ -238,7 +248,7 @@ export default function SalaryPage() {
                           <td className="px-4 py-4 text-right text-sky-300">{money(item.week.paidAmount)}</td>
                           <td className="px-4 py-4 text-right text-lg font-semibold text-white">{money(item.week.remainingAmount)}</td>
                           <td className="px-4 py-4 text-center"><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${st.className}`}>{st.label}</span></td>
-                          <td className="px-4 py-4"><div className="flex flex-wrap items-center justify-center gap-2"><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setAdvanceTarget(item)}><Plus className="mr-2 h-4 w-4" />Аванс</Button><Button type="button" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}><Wallet className="mr-2 h-4 w-4" />Выплатить</Button><Link href={`/salary/${item.operator.id}?dateFrom=${weekStart}&dateTo=${weekEnd}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-slate-200 transition hover:bg-white/10">Детали</Link></div></td>
+                          <td className="px-4 py-4"><div className="flex flex-wrap items-center justify-center gap-2"><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setAdvanceTarget(item)}><Plus className="mr-2 h-4 w-4" />Аванс</Button><Button type="button" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}><Wallet className="mr-2 h-4 w-4" />Выплатить</Button><Link href={`/salary/${item.operator.id}?weekStart=${weekStart}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-slate-200 transition hover:bg-white/10">Детали</Link></div></td>
                           <td className="px-4 py-4"><div className="flex flex-col items-center gap-2"><div className="flex items-center gap-2"><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setChatTarget(item)}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 disabled:opacity-50" disabled={!hasChat || sendingId === item.operator.id || broadcastSending} onClick={() => void sendOne(item.operator.id)}>{sendingId === item.operator.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}</Button></div>{item.operator.telegram_chat_id ? <div className="max-w-[140px] truncate text-center text-[11px] text-emerald-300/70">{item.operator.telegram_chat_id}</div> : <div className="text-[11px] text-slate-500">нет chat_id</div>}</div></td>
                         </tr>
                         {open ? <tr className="border-t border-white/5 bg-slate-950/30"><td colSpan={11} className="px-4 py-5"><div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]"><Card className="border-white/10 bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-white"><Building2 className="h-4 w-4 text-emerald-300" />Разбивка по компаниям</div><div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Компания</th><th className="pb-3 text-right font-medium">Начислено</th><th className="pb-3 text-right font-medium">Бонусы</th><th className="pb-3 text-right font-medium">Штрафы</th><th className="pb-3 text-right font-medium">Долги</th><th className="pb-3 text-right font-medium">Аванс</th><th className="pb-3 text-right font-medium">К выплате</th></tr></thead><tbody>{item.week.companyAllocations.map((a) => <tr key={a.companyId} className="border-t border-white/5 text-slate-200"><td className="py-3 pr-3"><div className="font-medium text-white">{a.companyName || a.companyCode || a.companyId}</div><div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div></td><td className="py-3 text-right">{money(a.accruedAmount)}</td><td className="py-3 text-right text-emerald-300">{money(a.bonusAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.fineAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.debtAmount)}</td><td className="py-3 text-right text-amber-300">{money(a.advanceAmount)}</td><td className="py-3 text-right font-medium text-white">{money(a.netAmount)}</td></tr>)}</tbody></table></div></Card><Card className="border-white/10 bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">Платежи недели</div>{item.week.payments.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-400">По этой неделе ещё нет платежей.</div> : <div className="space-y-3">{item.week.payments.map((p) => <div key={p.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-white">{formatRuDate(p.payment_date)}</div><div className="mt-1 text-xs text-slate-400">Нал: {money(p.cash_amount)} • Kaspi: {money(p.kaspi_amount)}</div></div><div className="text-right"><div className="text-sm font-semibold text-emerald-300">{money(p.total_amount)}</div><div className="text-[11px] text-slate-500">{p.status}</div></div></div>{p.comment ? <div className="mt-2 text-xs text-slate-400">{p.comment}</div> : null}</div>)}</div>}</Card></div></td></tr> : null}
@@ -280,6 +290,7 @@ export default function SalaryPage() {
               </Button>
               <input className={`${input} md:col-span-2 xl:col-span-6`} type="text" placeholder="Комментарий" value={adjComment} onChange={(e) => setAdjComment(e.target.value)} />
             </form>
+            {adjSuccess ? <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />Корректировка сохранена</div> : null}
           </Card>
         </div>
       </main>
@@ -354,6 +365,18 @@ export default function SalaryPage() {
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{chatSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}</Button>
             </div>
           </form>
+        </Modal>
+      ) : null}
+
+      {broadcastConfirm ? (
+        <Modal title="Отправить расчёт всем?" subtitle={`Рассылка Telegram для ${broadcastTargets.length} операторов с активным chat_id`} onClose={() => setBroadcastConfirm(false)}>
+          <div className="space-y-4">
+            <p className="text-sm text-slate-300">Каждый оператор получит сообщение со своим расчётом за неделю {formatRuDate(weekStart)} — {formatRuDate(weekEnd)}.</p>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setBroadcastConfirm(false)}>Отмена</Button>
+              <Button type="button" className="rounded-xl bg-blue-500 text-white hover:bg-blue-400" onClick={() => { setBroadcastConfirm(false); void sendAll() }}><Send className="mr-2 h-4 w-4" />Отправить</Button>
+            </div>
+          </div>
         </Modal>
       ) : null}
     </div>

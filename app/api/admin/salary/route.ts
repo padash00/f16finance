@@ -49,17 +49,6 @@ type MutationBody =
       operatorId: string
       telegram_chat_id: string | null
     }
-  | {
-      action: 'toggleShiftPayout'
-      payload: {
-        operator_id: string
-        date: string
-        shift: 'day' | 'night'
-        is_paid: boolean
-        paid_at?: string | null
-        comment?: string | null
-      }
-    }
 
 type PaymentSplit = {
   cashAmount: number
@@ -579,6 +568,132 @@ export async function GET(req: Request) {
       })
     }
 
+    if (view === 'operatorWeekly') {
+      const operatorId = (url.searchParams.get('operatorId') || '').trim()
+      const weekStart = normalizeIsoDate(url.searchParams.get('weekStart'))
+
+      if (!operatorId || !weekStart) {
+        return json({ error: 'operatorId and weekStart are required' }, 400)
+      }
+
+      const weekEnd = addDaysISO(weekStart, 6)
+      const supabase = createAdminSupabaseClient()
+
+      const [
+        { data: operatorRow, error: operatorError },
+        references,
+        { data: incomes, error: incomesError },
+      ] = await Promise.all([
+        supabase
+          .from('operators')
+          .select('id, name, short_name, is_active, telegram_chat_id, operator_profiles(*)')
+          .eq('id', operatorId)
+          .maybeSingle(),
+        listSalaryReferenceData(supabase),
+        supabase
+          .from('incomes')
+          .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, card_amount, comment')
+          .eq('operator_id', operatorId)
+          .gte('date', weekStart)
+          .lte('date', weekEnd)
+          .order('date', { ascending: false }),
+      ])
+
+      if (operatorError) throw operatorError
+      if (incomesError) throw incomesError
+      if (!operatorRow) return json({ error: 'operator-not-found' }, 404)
+
+      const snapshot = await ensureSalaryWeekSnapshot({ supabase, operatorId, weekStart, actorUserId: null, references })
+
+      const { data: payments, error: paymentsError } = await supabase
+        .from('operator_salary_week_payments')
+        .select('id, payment_date, cash_amount, kaspi_amount, total_amount, comment, status, created_at')
+        .eq('salary_week_id', snapshot.weekId)
+        .order('payment_date', { ascending: false })
+        .order('created_at', { ascending: false })
+
+      if (paymentsError) throw paymentsError
+
+      const { data: recentWeeksRaw, error: recentWeeksError } = await supabase
+        .from('operator_salary_weeks')
+        .select('id, week_start, week_end, net_amount, paid_amount, remaining_amount, status')
+        .eq('operator_id', operatorId)
+        .order('week_start', { ascending: false })
+        .limit(12)
+
+      if (recentWeeksError) throw recentWeeksError
+
+      const companyMap = new Map(references.companies.map((c) => [c.id, c]))
+      const allocations = snapshot.summary.companyAllocations.map((a) => {
+        const company = companyMap.get(a.companyId)
+        return {
+          companyId: a.companyId,
+          companyCode: company?.code || a.companyCode || null,
+          companyName: company?.name || a.companyName || null,
+          accruedAmount: a.accruedAmount,
+          bonusAmount: a.bonusAmount,
+          fineAmount: a.fineAmount,
+          debtAmount: a.debtAmount,
+          advanceAmount: a.advanceAmount,
+          netAmount: a.netAmount,
+          shareRatio: a.shareRatio,
+        }
+      })
+
+      const profile = Array.isArray(operatorRow.operator_profiles) ? operatorRow.operator_profiles[0] : operatorRow.operator_profiles
+
+      return json({
+        ok: true,
+        data: {
+          operator: {
+            id: String(operatorRow.id),
+            name: operatorRow.name || 'Без имени',
+            short_name: operatorRow.short_name || null,
+            is_active: operatorRow.is_active !== false,
+            full_name: (profile as any)?.full_name || null,
+            photo_url: (profile as any)?.photo_url || null,
+            position: (profile as any)?.position || null,
+            telegram_chat_id: (operatorRow as any).telegram_chat_id || null,
+          },
+          companies: references.companies,
+          week: {
+            id: snapshot.weekId,
+            weekStart: snapshot.weekStart,
+            weekEnd: snapshot.weekEnd,
+            grossAmount: snapshot.summary.grossAmount,
+            bonusAmount: snapshot.summary.bonusAmount,
+            fineAmount: snapshot.summary.fineAmount,
+            debtAmount: snapshot.summary.debtAmount,
+            advanceAmount: snapshot.summary.advanceAmount,
+            netAmount: snapshot.summary.netAmount,
+            paidAmount: snapshot.paidAmount,
+            remainingAmount: snapshot.remainingAmount,
+            status: snapshot.status,
+            companyAllocations: allocations,
+            payments: (payments || []).map((p: any) => ({
+              id: String(p.id),
+              payment_date: p.payment_date,
+              cash_amount: roundMoney(Number(p.cash_amount || 0)),
+              kaspi_amount: roundMoney(Number(p.kaspi_amount || 0)),
+              total_amount: roundMoney(Number(p.total_amount || 0)),
+              comment: p.comment || null,
+              status: p.status || 'active',
+            })),
+          },
+          incomes: incomes || [],
+          recentWeeks: (recentWeeksRaw || []).map((w: any) => ({
+            id: String(w.id),
+            weekStart: String(w.week_start),
+            weekEnd: String(w.week_end),
+            netAmount: roundMoney(Number(w.net_amount || 0)),
+            paidAmount: roundMoney(Number(w.paid_amount || 0)),
+            remainingAmount: roundMoney(Number(w.remaining_amount || 0)),
+            status: (w.status || 'draft') as 'draft' | 'partial' | 'paid',
+          })),
+        },
+      })
+    }
+
     if (view !== 'operatorDetail') {
       return json({ error: 'unsupported-view' }, 400)
     }
@@ -977,47 +1092,6 @@ export async function POST(req: Request) {
           week: weekAfterPayment,
         },
       })
-    }
-
-    if (body.action === 'toggleShiftPayout') {
-      const { operator_id, date, shift, is_paid, paid_at, comment } = body.payload
-      if (!operator_id || !normalizeIsoDate(date) || !['day', 'night'].includes(shift)) {
-        return json({ error: 'invalid-shift-payout-payload' }, 400)
-      }
-
-      const { data, error } = await supabase
-        .from('operator_salary_payouts')
-        .upsert(
-          {
-            operator_id,
-            date,
-            shift,
-            is_paid,
-            paid_at: is_paid ? paid_at || new Date().toISOString() : null,
-            comment: comment?.trim() || null,
-          },
-          { onConflict: 'operator_id,date,shift' },
-        )
-        .select('id, operator_id, date, shift, is_paid, paid_at, comment')
-        .single()
-
-      if (error) throw error
-
-      await writeAuditLog(supabase, {
-        actorUserId: user?.id || null,
-        entityType: 'operator-salary-payout',
-        entityId: String(data.id),
-        action: is_paid ? 'mark-paid' : 'mark-unpaid',
-        payload: {
-          operator_id: data.operator_id,
-          date: data.date,
-          shift: data.shift,
-          is_paid: data.is_paid,
-          paid_at: data.paid_at,
-        },
-      })
-
-      return json({ ok: true, data })
     }
 
     if (!body.operatorId) {
