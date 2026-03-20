@@ -5,6 +5,7 @@ import { normalizeOperatorUsername, toOperatorAuthEmail } from '@/lib/core/auth'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 
 type LoginBody = {
   username?: string
@@ -17,6 +18,13 @@ function json(data: unknown, status = 200) {
 
 export async function POST(request: Request) {
   try {
+    // Rate limit: 20 login attempts per IP per minute
+    const ip = getClientIp(request)
+    const rl = checkRateLimit(`point-login:${ip}`, 20, 60_000)
+    if (!rl.allowed) {
+      return json({ error: 'too-many-requests' }, 429)
+    }
+
     const point = await requirePointDevice(request)
     if ('response' in point) return point.response
 

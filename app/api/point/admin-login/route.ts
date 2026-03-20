@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { isAdminEmail } from '@/lib/server/admin'
 import { requiredEnv } from '@/lib/server/env'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -16,6 +17,13 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
+    // Rate limit: 10 admin login attempts per IP per minute
+    const ip = getClientIp(request)
+    const rl = checkRateLimit(`admin-login:${ip}`, 10, 60_000)
+    if (!rl.allowed) {
+      return json({ error: 'too-many-requests' }, 429)
+    }
+
     const body = (await request.json().catch(() => null)) as Body | null
     const email = String(body?.email || '').trim().toLowerCase()
     const password = String(body?.password || '').trim()

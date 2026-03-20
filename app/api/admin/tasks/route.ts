@@ -431,6 +431,8 @@ export async function GET(req: Request) {
     const status = url.searchParams.get('status') as TaskStatus | null
     const operatorId = url.searchParams.get('operator_id')
     const companyId = url.searchParams.get('company_id')
+    const page = Math.max(0, Number(url.searchParams.get('page') || '0'))
+    const pageSize = Math.min(200, Math.max(1, Number(url.searchParams.get('page_size') || '100')))
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
@@ -440,7 +442,7 @@ export async function GET(req: Request) {
       .from('tasks')
       .select('id, task_number, title, description, status, priority, due_date, operator_id, company_id, created_at')
       .order('created_at', { ascending: false })
-      .limit(500)
+      .range(page * pageSize, (page + 1) * pageSize - 1)
 
     if (status) query = query.eq('status', status)
     if (operatorId) query = query.eq('operator_id', operatorId)
@@ -449,7 +451,7 @@ export async function GET(req: Request) {
     const { data, error } = await query
     if (error) throw error
 
-    return json({ data: data ?? [] })
+    return json({ data: data ?? [], page, pageSize, hasMore: (data?.length ?? 0) === pageSize })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/tasks GET', message: error?.message || 'error' })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)

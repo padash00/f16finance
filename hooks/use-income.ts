@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export type IncomeRow = {
   id: string
@@ -34,8 +34,7 @@ export type UseIncomeOptions = {
 
 /**
  * Fetches income rows from GET /api/admin/incomes.
- * Supports all the same filters as the income page:
- * date range, company, shift, operator, payment type.
+ * Handles race conditions via AbortController.
  */
 export function useIncome(options: UseIncomeOptions = {}) {
   const { from, to, companyId, shift, operatorId, operatorNull, payFilter, enabled = true } = options
@@ -43,8 +42,14 @@ export function useIncome(options: UseIncomeOptions = {}) {
   const [rows, setRows] = useState<IncomeRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const load = useCallback(async () => {
+    // Cancel previous in-flight request
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setLoading(true)
     setError(null)
     try {
@@ -57,7 +62,7 @@ export function useIncome(options: UseIncomeOptions = {}) {
       else if (operatorId) params.set('operator_id', operatorId)
       if (payFilter) params.set('pay_filter', payFilter)
 
-      const res = await fetch(`/api/admin/incomes?${params}`)
+      const res = await fetch(`/api/admin/incomes?${params}`, { signal: controller.signal })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error || `HTTP ${res.status}`)
@@ -65,14 +70,16 @@ export function useIncome(options: UseIncomeOptions = {}) {
       const body = await res.json()
       setRows(body.data ?? [])
     } catch (e: unknown) {
+      if ((e as Error)?.name === 'AbortError') return
       setError(e instanceof Error ? e.message : 'Ошибка загрузки доходов')
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
     }
   }, [from, to, companyId, shift, operatorId, operatorNull, payFilter])
 
   useEffect(() => {
     if (enabled) load()
+    return () => abortRef.current?.abort()
   }, [load, enabled])
 
   return { rows, loading, error, reload: load }

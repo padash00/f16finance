@@ -142,54 +142,52 @@ export default function OperatorsPage() {
         })
         setProfiles(profilesMap)
 
-        // Загружаем статистику для каждого оператора (за последние 30 дней)
+        // Загружаем статистику для всех операторов за 30 дней (3 запроса вместо N*3)
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
         const dateStr = thirtyDaysAgo.toISOString().split('T')[0]
+        const operatorIds = operatorsList.map(o => o.id)
 
-        const statsMap = new Map()
-        
-        for (const op of operatorsList) {
-          // Получаем смены
-          const { data: incomesData } = await supabase
+        const [incomesRes, debtsRes, bonusesRes] = await Promise.all([
+          supabase
             .from('incomes')
-            .select('cash_amount, kaspi_amount, online_amount, card_amount')
-            .eq('operator_id', op.id)
-            .gte('date', dateStr)
-
-          const totalTurnover = (incomesData || []).reduce((sum: any, inc: any) => 
-            sum + (inc.cash_amount || 0) + (inc.kaspi_amount || 0) + 
-            (inc.online_amount || 0) + (inc.card_amount || 0), 0
-          )
-
-          const totalShifts = (incomesData || []).length
-
-          // Получаем долги
-          const { data: debtsData } = await supabase
+            .select('operator_id, cash_amount, kaspi_amount, online_amount, card_amount')
+            .in('operator_id', operatorIds)
+            .gte('date', dateStr),
+          supabase
             .from('debts')
-            .select('amount')
-            .eq('operator_id', op.id)
-            .eq('status', 'active')
-
-          const totalDebts = (debtsData || []).reduce((sum: any, d: any) => sum + (d.amount || 0), 0)
-
-          // Получаем премии
-          const { data: bonusesData } = await supabase
+            .select('operator_id, amount')
+            .in('operator_id', operatorIds)
+            .eq('status', 'active'),
+          supabase
             .from('operator_salary_adjustments')
-            .select('amount')
-            .eq('operator_id', op.id)
+            .select('operator_id, amount')
+            .in('operator_id', operatorIds)
             .eq('kind', 'bonus')
-            .gte('date', dateStr)
+            .gte('date', dateStr),
+        ])
 
-          const totalBonuses = (bonusesData || []).reduce((sum: any, b: any) => sum + (b.amount || 0), 0)
+        const statsMap = new Map<string, OperatorStats>()
+        for (const op of operatorsList) {
+          statsMap.set(op.id, { totalShifts: 0, totalTurnover: 0, avgPerShift: 0, totalDebts: 0, totalBonuses: 0 })
+        }
 
-          statsMap.set(op.id, {
-            totalShifts,
-            totalTurnover,
-            avgPerShift: totalShifts > 0 ? totalTurnover / totalShifts : 0,
-            totalDebts,
-            totalBonuses,
-          })
+        for (const inc of (incomesRes.data || [])) {
+          const s = statsMap.get(inc.operator_id)
+          if (!s) continue
+          s.totalShifts += 1
+          s.totalTurnover += (inc.cash_amount || 0) + (inc.kaspi_amount || 0) + (inc.online_amount || 0) + (inc.card_amount || 0)
+        }
+        for (const d of (debtsRes.data || [])) {
+          const s = statsMap.get(d.operator_id)
+          if (s) s.totalDebts += (d.amount || 0)
+        }
+        for (const b of (bonusesRes.data || [])) {
+          const s = statsMap.get(b.operator_id)
+          if (s) s.totalBonuses += (b.amount || 0)
+        }
+        for (const s of statsMap.values()) {
+          s.avgPerShift = s.totalShifts > 0 ? s.totalTurnover / s.totalShifts : 0
         }
 
         setStats(statsMap)
