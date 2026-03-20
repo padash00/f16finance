@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
 
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
@@ -91,10 +92,6 @@ type SalaryDetailResponse = {
   payouts: PayoutRow[]
 }
 
-type PageProps = {
-  params: { operatorId: string }
-}
-
 type DateRangePreset = 'month' | 'week' | 'all'
 
 const toISODateLocal = (date: Date) => {
@@ -131,8 +128,14 @@ const formatDateTime = (iso: string | null) => {
   return new Date(iso).toLocaleString('ru-RU')
 }
 
-export default function OperatorSalaryPage({ params }: PageProps) {
-  const { operatorId } = params
+export default function OperatorSalaryPage() {
+  const params = useParams<{ operatorId?: string | string[] }>()
+  const operatorId = useMemo(() => {
+    const raw = params?.operatorId
+    const value = Array.isArray(raw) ? raw[0] || '' : raw || ''
+    if (value === 'undefined' || value === 'null') return ''
+    return value
+  }, [params])
 
   const [operator, setOperator] = useState<Operator | null>(null)
   const [companies, setCompanies] = useState<Company[]>([])
@@ -161,6 +164,12 @@ export default function OperatorSalaryPage({ params }: PageProps) {
     let alive = true
 
     const load = async () => {
+      if (!operatorId) {
+        setError('Некорректный id оператора')
+        setLoading(false)
+        return
+      }
+
       setLoading(true)
       setError(null)
 
@@ -199,6 +208,7 @@ export default function OperatorSalaryPage({ params }: PageProps) {
   }, [operatorId, dateFrom, dateTo])
 
   const shifts = useMemo<SalaryShiftBreakdown[]>(() => {
+    if (!operatorId) return []
     return calculateOperatorShiftBreakdown({
       operatorId,
       companies,
@@ -264,6 +274,11 @@ export default function OperatorSalaryPage({ params }: PageProps) {
 
   const togglePaid = useCallback(
     async (shift: SalaryShiftBreakdown) => {
+      if (!operatorId) {
+        setError('Некорректный id оператора')
+        return
+      }
+
       setError(null)
       setUpdatingKey(shift.id)
 
@@ -311,7 +326,7 @@ export default function OperatorSalaryPage({ params }: PageProps) {
     return (
       <div className="flex min-h-screen bg-background">
         <Sidebar />
-        <main className="flex flex-1 items-center justify-center text-muted-foreground">
+        <main className="flex flex-1 items-center justify-center px-4 pt-20 text-muted-foreground md:px-8 md:pt-0">
           Загрузка карточки оператора...
         </main>
       </div>
@@ -322,7 +337,7 @@ export default function OperatorSalaryPage({ params }: PageProps) {
     return (
       <div className="flex min-h-screen bg-background">
         <Sidebar />
-        <main className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+        <main className="flex flex-1 flex-col items-center justify-center gap-3 px-4 pt-20 text-muted-foreground md:px-8 md:pt-0">
           <p>{error || 'Оператор не найден'}</p>
           <Link href="/salary">
             <Button variant="outline" size="sm">
@@ -338,8 +353,8 @@ export default function OperatorSalaryPage({ params }: PageProps) {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-7xl space-y-6 p-8">
+      <main className="min-w-0 flex-1 overflow-auto pt-20 md:pt-0">
+        <div className="mx-auto max-w-7xl space-y-6 px-4 pb-8 pt-4 md:p-8">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div className="flex items-start gap-3">
               <Link href="/salary">

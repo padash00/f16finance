@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowLeft, Building2, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Wallet } from 'lucide-react'
@@ -117,12 +117,12 @@ export default function SalaryPage() {
   const sendAll = async () => { if (loading || broadcastSending || !broadcastTargets.length) return; setBroadcastSending(true); setBroadcastDone(0); setBroadcastTotal(broadcastTargets.length); setBroadcastErrors([]); setError(null); try { for (let i = 0; i < broadcastTargets.length; i += 1) { const item = broadcastTargets[i]; try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId: item.operator.id, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${json?.error || `HTTP ${res.status}`}`]) } catch (e: any) { setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${e?.message || 'ошибка'}`]) } setBroadcastDone(i + 1); await new Promise((r) => setTimeout(r, 250)) } } finally { setBroadcastSending(false) } }
 
   return (
-    <div className="min-h-screen bg-[#0a1220] text-white">
+    <div className="flex min-h-screen bg-[#0a1220] text-white">
       <Sidebar />
-      <main className="min-h-screen p-4 md:pl-72 md:p-8">
-        <div className="mx-auto max-w-[1600px] space-y-6">
-          <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.96),_rgba(2,6,23,0.96))] p-6">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+      <main className="min-w-0 flex-1 overflow-x-hidden pt-20 md:pt-0">
+        <div className="mx-auto max-w-[1600px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6 xl:px-8">
+          <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.96),_rgba(2,6,23,0.96))] p-5 md:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-3">
                 <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white">
                   <ArrowLeft className="h-4 w-4" />
@@ -138,7 +138,7 @@ export default function SalaryPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button type="button" onClick={sendAll} disabled={loading || broadcastSending || !broadcastTargets.length} className="rounded-xl bg-blue-500 text-white hover:bg-blue-400 disabled:opacity-50">
                   {broadcastSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                   {broadcastSending ? `Рассылка ${broadcastDone}/${broadcastTotal}` : 'Отправить всем'}
@@ -157,9 +157,13 @@ export default function SalaryPage() {
               {data ? <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-emerald-300">Выплачено операторов: <span className="font-semibold">{data.totals.paidOperators}</span></div> : null}
               {broadcastTotal > 0 && !broadcastSending ? <div className={`rounded-full border px-3 py-1.5 ${broadcastErrors.length ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}>Рассылка: {broadcastDone}/{broadcastTotal}</div> : null}
             </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
+              <div className="min-w-0 flex-1">{summaryText}</div>
+              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setShowZero((v) => !v)}>{showZero ? 'РЎРєСЂС‹С‚СЊ РїСѓСЃС‚С‹Рµ СЃС‚СЂРѕРєРё' : 'РџРѕРєР°Р·Р°С‚СЊ РІСЃРµ СЃС‚СЂРѕРєРё'}</Button>
+            </div>
           </Card>
 
-          <Card className="border-white/10 bg-white/[0.04] p-4 text-sm text-slate-300">{summaryText}</Card>
+          <Card className="hidden border-white/10 bg-white/[0.04] p-4 text-sm text-slate-300">{summaryText}</Card>
           {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -169,7 +173,7 @@ export default function SalaryPage() {
             <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-red-500/15 p-2.5 text-red-300"><TrendingDown className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-1 text-2xl font-semibold text-white">{data ? money(data.totals.remainingAmount) : '—'}</div></div></div></Card>
           </div>
 
-          <Card className="border-white/10 bg-white/[0.04] p-4">
+          <Card className="hidden border-white/10 bg-white/[0.04] p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-sm text-slate-300">Показано операторов: <span className="font-semibold text-white">{operators.length}</span></div>
               <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setShowZero((v) => !v)}>{showZero ? 'Скрыть пустые строки' : 'Показать все строки'}</Button>
@@ -204,7 +208,7 @@ export default function SalaryPage() {
                     const hasChat = Boolean(item.operator.telegram_chat_id)
                     const title = getOperatorDisplayName(item.operator)
                     return (
-                      <>
+                      <Fragment key={item.operator.id}>
                         <tr key={item.operator.id} className="border-t border-white/5 align-top">
                           <td className="px-4 py-4">
                             <div className="flex items-start gap-3">
@@ -238,7 +242,7 @@ export default function SalaryPage() {
                           <td className="px-4 py-4"><div className="flex flex-col items-center gap-2"><div className="flex items-center gap-2"><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setChatTarget(item)}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 disabled:opacity-50" disabled={!hasChat || sendingId === item.operator.id || broadcastSending} onClick={() => void sendOne(item.operator.id)}>{sendingId === item.operator.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}</Button></div>{item.operator.telegram_chat_id ? <div className="max-w-[140px] truncate text-center text-[11px] text-emerald-300/70">{item.operator.telegram_chat_id}</div> : <div className="text-[11px] text-slate-500">нет chat_id</div>}</div></td>
                         </tr>
                         {open ? <tr className="border-t border-white/5 bg-slate-950/30"><td colSpan={11} className="px-4 py-5"><div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]"><Card className="border-white/10 bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-white"><Building2 className="h-4 w-4 text-emerald-300" />Разбивка по компаниям</div><div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Компания</th><th className="pb-3 text-right font-medium">Начислено</th><th className="pb-3 text-right font-medium">Бонусы</th><th className="pb-3 text-right font-medium">Штрафы</th><th className="pb-3 text-right font-medium">Долги</th><th className="pb-3 text-right font-medium">Аванс</th><th className="pb-3 text-right font-medium">К выплате</th></tr></thead><tbody>{item.week.companyAllocations.map((a) => <tr key={a.companyId} className="border-t border-white/5 text-slate-200"><td className="py-3 pr-3"><div className="font-medium text-white">{a.companyName || a.companyCode || a.companyId}</div><div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div></td><td className="py-3 text-right">{money(a.accruedAmount)}</td><td className="py-3 text-right text-emerald-300">{money(a.bonusAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.fineAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.debtAmount)}</td><td className="py-3 text-right text-amber-300">{money(a.advanceAmount)}</td><td className="py-3 text-right font-medium text-white">{money(a.netAmount)}</td></tr>)}</tbody></table></div></Card><Card className="border-white/10 bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">Платежи недели</div>{item.week.payments.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-400">По этой неделе ещё нет платежей.</div> : <div className="space-y-3">{item.week.payments.map((p) => <div key={p.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-white">{formatRuDate(p.payment_date)}</div><div className="mt-1 text-xs text-slate-400">Нал: {money(p.cash_amount)} • Kaspi: {money(p.kaspi_amount)}</div></div><div className="text-right"><div className="text-sm font-semibold text-emerald-300">{money(p.total_amount)}</div><div className="text-[11px] text-slate-500">{p.status}</div></div></div>{p.comment ? <div className="mt-2 text-xs text-slate-400">{p.comment}</div> : null}</div>)}</div>}</Card></div></td></tr> : null}
-                      </>
+                      </Fragment>
                     )
                   }) : null}
                 </tbody>
