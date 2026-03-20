@@ -232,13 +232,10 @@ export async function deleteDebt(
 // API возвращает все данные устройства без фильтрации — фильтруем на клиенте
 
 export async function getReports(config: AppConfig, adminCredentials?: { email: string; password: string }) {
-  let path = '/api/point/reports'
+  const extraHeaders: Record<string, string> = {}
   if (adminCredentials) {
-    const params = new URLSearchParams({
-      adminEmail: adminCredentials.email,
-      adminPassword: adminCredentials.password,
-    })
-    path = `${path}?${params.toString()}`
+    extraHeaders['x-admin-email'] = adminCredentials.email
+    extraHeaders['x-admin-password'] = adminCredentials.password
   }
   return request<{
     ok: boolean
@@ -249,7 +246,7 @@ export async function getReports(config: AppConfig, adminCredentials?: { email: 
       worker_totals: unknown[]
       client_totals: unknown[]
     }
-  }>(config, 'GET', path)
+  }>(config, 'GET', '/api/point/reports', undefined, extraHeaders)
 }
 
 // ─── Admin devices ────────────────────────────────────────────────────────────

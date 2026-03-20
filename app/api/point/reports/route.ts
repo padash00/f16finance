@@ -42,10 +42,9 @@ export async function GET(request: Request) {
 
     const { supabase: deviceSupabase, device } = point
 
-    // Суперадмин может передать credentials для получения данных ВСЕХ точек
-    const url = new URL(request.url)
-    const adminEmail = url.searchParams.get('adminEmail') || ''
-    const adminPassword = url.searchParams.get('adminPassword') || ''
+    // Суперадмин может передать credentials через заголовки для получения данных ВСЕХ точек
+    const adminEmail = request.headers.get('x-admin-email') || ''
+    const adminPassword = request.headers.get('x-admin-password') || ''
     const isSuperAdmin = adminEmail && adminPassword
       ? await checkSuperAdmin(adminEmail, adminPassword)
       : false
