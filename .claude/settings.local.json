@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"C:\\\\Users\\\\padas\\\\Desktop\\\\f16finance-main\\\\docs\" -type f -name \"*.md\" | xargs wc -l | sort -rn | head -15)",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Read(//c/Users/padas/Desktop/**)",
+      "Bash(dir \"C:\\\\Users\\\\padas\\\\Desktop\")",
+      "Bash(xargs wc:*)",
+      "Bash(mkdir -p \"/c/Users/padas/OneDrive/Рабочий стол/shift_calculator/core\")",
+      "Bash(mkdir -p \"/c/Users/padas/OneDrive/Рабочий стол/shift_calculator/ui\")",
+      "Bash(python -m py_compile config.py)",
+      "Bash(python -m py_compile core/auth.py)",
+      "Bash(python -m py_compile core/calculator.py)",
+      "Bash(python -m py_compile core/telegram_bot.py)",
+      "Bash(python -m py_compile core/database.py)",
+      "Bash(python -m py_compile main.py)",
+      "Bash(python -m py_compile build.py)",
+      "Bash(python -m py_compile ui/login_window.py)",
+      "Bash(python -m py_compile ui/calculator_tab.py)",
+      "Bash(python -m py_compile ui/history_tab.py)",
+      "Bash(pip show:*)",
+      "Bash(python -m pip show customtkinter)",
+      "Bash(npm run:*)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(find 'C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance' -type f -name *.json -o -name *.ts -o -name *.tsx -o -name *.css -o -name *.mjs)",
+      "Bash(find 'C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance' -type f \\\\\\(-name *salary* -o -name *долг* \\\\\\))",
+      "Bash(find 'C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance/app/admin' -type f -name *.tsx)"
+    ]
+  }
+}
