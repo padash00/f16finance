@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useParams, useSearchParams } from 'next/navigation'
 import {
+  AlertTriangle,
   ArrowLeft,
   Building2,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
   Send,
   Sun,
   TrendingDown,
+  Trash2,
   UserCircle2,
   Wallet,
 } from 'lucide-react'
@@ -39,8 +41,10 @@ type Payment = { id: string; payment_date: string; cash_amount: number; kaspi_am
 type Operator = { id: string; name: string; short_name: string | null; full_name: string | null; is_active: boolean; photo_url: string | null; position: string | null; telegram_chat_id?: string | null }
 type WeekData = { id: string; weekStart: string; weekEnd: string; grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid'; companyAllocations: Allocation[]; payments: Payment[] }
 type RecentWeek = { id: string; weekStart: string; weekEnd: string; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid' }
-type PageData = { operator: Operator; companies: CompanyOption[]; week: WeekData; incomes: IncomeRow[]; recentWeeks: RecentWeek[] }
+type PageData = { operator: Operator; companies: CompanyOption[]; week: WeekData; incomes: IncomeRow[]; recentWeeks: RecentWeek[]; adjustments: AdjustmentRow[] }
 type AdjKind = 'bonus' | 'fine' | 'debt'
+type AdjustmentRow = { id: string; date: string; amount: number; kind: string; comment: string | null; company_id: string | null; status: string; salary_week_id: string | null; linked_expense_id: string | null }
+type VoidTarget = { type: 'payment' | 'adjustment'; id: string; label: string }
 
 const input = 'h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-slate-500 focus:border-emerald-400/40 focus:outline-none'
 const selectCls = 'h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-emerald-400/40 focus:outline-none [color-scheme:dark]'
@@ -99,6 +103,9 @@ export default function OperatorSalaryDetailPage() {
   const [adjComment, setAdjComment] = useState('')
   const [adjSaving, setAdjSaving] = useState(false)
   const [adjSuccess, setAdjSuccess] = useState(false)
+
+  const [voidConfirm, setVoidConfirm] = useState<VoidTarget | null>(null)
+  const [voidSaving, setVoidSaving] = useState(false)
 
   const weekEnd = useMemo(() => addDaysISO(weekStart, 6), [weekStart])
 
@@ -174,6 +181,19 @@ export default function OperatorSalaryDetailPage() {
       await post({ action: 'createAdjustment', payload: { operator_id: operatorId, date: adjDate, amount, kind: adjKind, comment: adjComment.trim() || null, company_id: adjCompanyId || null } })
       setAdjAmount(''); setAdjComment(''); setAdjSuccess(true); setTimeout(() => setAdjSuccess(false), 3000); await load(true)
     } catch (e: any) { setError(e?.message || 'Не удалось сохранить корректировку') } finally { setAdjSaving(false) }
+  }
+
+  const voidItem = async () => {
+    if (!voidConfirm) return
+    setVoidSaving(true); setError(null)
+    try {
+      if (voidConfirm.type === 'payment') {
+        await post({ action: 'voidPayment', paymentId: voidConfirm.id, weekStart, operatorId })
+      } else {
+        await post({ action: 'voidAdjustment', adjustmentId: voidConfirm.id, weekStart, operatorId })
+      }
+      setVoidConfirm(null); await load(true)
+    } catch (e: any) { setError(e?.message || 'Не удалось аннулировать') } finally { setVoidSaving(false) }
   }
 
   const shifts = useMemo(() => {
@@ -342,15 +362,24 @@ export default function OperatorSalaryDetailPage() {
                 ) : (
                   <div className="space-y-3">
                     {data.week.payments.map((p) => (
-                      <div key={p.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <div key={p.id} className={`rounded-2xl border p-4 ${p.status === 'voided' ? 'border-red-500/20 bg-red-500/5 opacity-60' : 'border-white/10 bg-white/[0.03]'}`}>
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <div className="text-sm font-medium text-white">{formatRuDate(p.payment_date)}</div>
+                            <div className="flex items-center gap-2">
+                              <div className={`text-sm font-medium ${p.status === 'voided' ? 'line-through text-slate-500' : 'text-white'}`}>{formatRuDate(p.payment_date)}</div>
+                              {p.status === 'voided' && <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-400">аннулирован</span>}
+                            </div>
                             <div className="mt-1 text-xs text-slate-400">Нал: {money(p.cash_amount)} · Kaspi: {money(p.kaspi_amount)}</div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-sm font-semibold text-emerald-300">{money(p.total_amount)}</div>
-                            <div className="text-[11px] text-slate-500">{p.status === 'active' ? 'активен' : p.status}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-right">
+                              <div className={`text-sm font-semibold ${p.status === 'voided' ? 'line-through text-slate-500' : 'text-emerald-300'}`}>{money(p.total_amount)}</div>
+                            </div>
+                            {p.status === 'active' && (
+                              <button type="button" onClick={() => setVoidConfirm({ type: 'payment', id: p.id, label: `Выплата ${money(p.total_amount)} от ${formatRuDate(p.payment_date)}` })} className="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-red-400 hover:bg-red-500/20">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
                         {p.comment ? <div className="mt-2 text-xs text-slate-400">{p.comment}</div> : null}
@@ -359,6 +388,40 @@ export default function OperatorSalaryDetailPage() {
                   </div>
                 )}
               </Card>
+
+              {/* Adjustments list */}
+              {data.adjustments.length > 0 && (
+                <Card className="border-white/10 bg-white/[0.04] p-5">
+                  <div className="mb-4 text-sm font-medium text-white">Корректировки за неделю</div>
+                  <div className="space-y-2">
+                    {data.adjustments.map((a) => {
+                      const kindLabel = a.kind === 'bonus' ? 'Бонус' : a.kind === 'fine' ? 'Штраф' : a.kind === 'debt' ? 'Долг' : 'Аванс'
+                      const kindCls = a.kind === 'bonus' ? 'text-emerald-300' : 'text-rose-300'
+                      const company = a.company_id ? data.companies.find((c) => c.id === a.company_id) : null
+                      const isVoided = a.status === 'voided'
+                      return (
+                        <div key={a.id} className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${isVoided ? 'border-red-500/20 bg-red-500/5 opacity-60' : 'border-white/10 bg-white/[0.03]'}`}>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-xs font-semibold ${isVoided ? 'text-slate-500' : kindCls}`}>{kindLabel}</span>
+                              <span className={`text-sm font-medium ${isVoided ? 'line-through text-slate-500' : 'text-white'}`}>{money(a.amount)}</span>
+                              {isVoided && <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-400">аннулировано</span>}
+                              <span className="text-xs text-slate-500">{formatRuDate(a.date)}</span>
+                              {company && <span className="text-xs text-slate-500">{company.name || company.code}</span>}
+                            </div>
+                            {a.comment ? <div className="mt-1 truncate text-xs text-slate-500">{a.comment}</div> : null}
+                          </div>
+                          {!isVoided && (
+                            <button type="button" onClick={() => setVoidConfirm({ type: 'adjustment', id: a.id, label: `${kindLabel} ${money(a.amount)} от ${formatRuDate(a.date)}` })} className="shrink-0 rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-red-400 hover:bg-red-500/20">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </Card>
+              )}
 
               {/* Adjustment form */}
               <Card className="border-white/10 bg-white/[0.04] p-5">
@@ -458,6 +521,27 @@ export default function OperatorSalaryDetailPage() {
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{advanceSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Выдать аванс'}</Button>
             </div>
           </form>
+        </Modal>
+      ) : null}
+
+      {voidConfirm ? (
+        <Modal title="Аннулировать?" subtitle={voidConfirm.label} onClose={() => !voidSaving && setVoidConfirm(null)}>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+              <div>
+                {voidConfirm.type === 'payment'
+                  ? 'Выплата будет аннулирована, а связанные расходы — удалены. Это действие нельзя отменить.'
+                  : 'Корректировка будет аннулирована. Если это аванс — связанный расход тоже будет удалён.'}
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setVoidConfirm(null)} disabled={voidSaving}>Отмена</Button>
+              <Button type="button" className="rounded-xl bg-red-500 text-white hover:bg-red-400" onClick={() => void voidItem()} disabled={voidSaving}>
+                {voidSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Trash2 className="mr-2 h-4 w-4" />Аннулировать</>}
+              </Button>
+            </div>
+          </div>
         </Modal>
       ) : null}
 

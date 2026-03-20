@@ -355,6 +355,7 @@ export function calculateOperatorSalarySummary(params: {
 
   for (const adjustment of params.adjustments) {
     if (adjustment.operator_id !== params.operatorId) continue
+    if (!isActiveStatus(adjustment.status)) continue
     const amount = toAmount(adjustment.amount)
     if (amount <= 0) continue
 
@@ -758,6 +759,7 @@ export function calculateSalaryBoard(params: {
   }
 
   for (const adjustment of params.adjustments) {
+    if (!isActiveStatus(adjustment.status)) continue
     const stat = ensureOperator(adjustment.operator_id)
     const amount = toAmount(adjustment.amount)
     if (amount <= 0) continue

@@ -49,6 +49,18 @@ type MutationBody =
       operatorId: string
       telegram_chat_id: string | null
     }
+  | {
+      action: 'voidPayment'
+      paymentId: string
+      weekStart: string
+      operatorId: string
+    }
+  | {
+      action: 'voidAdjustment'
+      adjustmentId: string
+      weekStart: string
+      operatorId: string
+    }
 
 type PaymentSplit = {
   cashAmount: number
@@ -605,14 +617,27 @@ export async function GET(req: Request) {
 
       const snapshot = await ensureSalaryWeekSnapshot({ supabase, operatorId, weekStart, actorUserId: null, references })
 
-      const { data: payments, error: paymentsError } = await supabase
-        .from('operator_salary_week_payments')
-        .select('id, payment_date, cash_amount, kaspi_amount, total_amount, comment, status, created_at')
-        .eq('salary_week_id', snapshot.weekId)
-        .order('payment_date', { ascending: false })
-        .order('created_at', { ascending: false })
+      const [
+        { data: payments, error: paymentsError },
+        { data: adjustmentsRaw, error: adjustmentsError2 },
+      ] = await Promise.all([
+        supabase
+          .from('operator_salary_week_payments')
+          .select('id, payment_date, cash_amount, kaspi_amount, total_amount, comment, status, created_at')
+          .eq('salary_week_id', snapshot.weekId)
+          .order('payment_date', { ascending: false })
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('operator_salary_adjustments')
+          .select('id, date, amount, kind, comment, company_id, status, salary_week_id, linked_expense_id')
+          .eq('operator_id', operatorId)
+          .gte('date', weekStart)
+          .lte('date', weekEnd)
+          .order('date', { ascending: false }),
+      ])
 
       if (paymentsError) throw paymentsError
+      if (adjustmentsError2) throw adjustmentsError2
 
       const { data: recentWeeksRaw, error: recentWeeksError } = await supabase
         .from('operator_salary_weeks')
@@ -681,6 +706,17 @@ export async function GET(req: Request) {
             })),
           },
           incomes: incomes || [],
+          adjustments: (adjustmentsRaw || []).map((a: any) => ({
+            id: String(a.id),
+            date: a.date,
+            amount: roundMoney(Number(a.amount || 0)),
+            kind: a.kind as string,
+            comment: a.comment || null,
+            company_id: a.company_id || null,
+            status: (a.status || 'active') as string,
+            salary_week_id: a.salary_week_id || null,
+            linked_expense_id: a.linked_expense_id || null,
+          })),
           recentWeeks: (recentWeeksRaw || []).map((w: any) => ({
             id: String(w.id),
             weekStart: String(w.week_start),
@@ -1092,6 +1128,93 @@ export async function POST(req: Request) {
           week: weekAfterPayment,
         },
       })
+    }
+
+    if (body.action === 'voidPayment') {
+      const weekStart2 = normalizeIsoDate(body.weekStart)
+      if (!body.paymentId || !weekStart2 || !body.operatorId) {
+        return json({ error: 'paymentId, weekStart и operatorId обязательны' }, 400)
+      }
+
+      const { data: payment, error: paymentFetchError } = await supabase
+        .from('operator_salary_week_payments')
+        .select('id, salary_week_id, operator_id, status')
+        .eq('id', body.paymentId)
+        .maybeSingle()
+
+      if (paymentFetchError) throw paymentFetchError
+      if (!payment) return json({ error: 'Платёж не найден' }, 404)
+      if (String(payment.operator_id) !== body.operatorId) return json({ error: 'Платёж не принадлежит этому оператору' }, 403)
+      if (payment.status === 'voided') return json({ error: 'Платёж уже аннулирован' }, 400)
+
+      const { data: expenseLinks, error: linksError } = await supabase
+        .from('operator_salary_week_payment_expenses')
+        .select('expense_id')
+        .eq('payment_id', body.paymentId)
+
+      if (linksError) throw linksError
+
+      const expenseIds = (expenseLinks || []).map((row: any) => String(row.expense_id))
+
+      if (expenseIds.length > 0) {
+        const { error: deleteExpError } = await supabase.from('expenses').delete().in('id', expenseIds)
+        if (deleteExpError) throw deleteExpError
+        const { error: deleteLinksError } = await supabase.from('operator_salary_week_payment_expenses').delete().eq('payment_id', body.paymentId)
+        if (deleteLinksError) throw deleteLinksError
+      }
+
+      const { error: voidPayError } = await supabase.from('operator_salary_week_payments').update({ status: 'voided' }).eq('id', body.paymentId)
+      if (voidPayError) throw voidPayError
+
+      const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null })
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'operator-salary-week-payment',
+        entityId: body.paymentId,
+        action: 'void',
+        payload: { operator_id: body.operatorId, week_start: weekStart2, expense_count: expenseIds.length },
+      })
+
+      return json({ ok: true, data: { week: weekAfterVoid } })
+    }
+
+    if (body.action === 'voidAdjustment') {
+      const weekStart2 = normalizeIsoDate(body.weekStart)
+      if (!body.adjustmentId || !weekStart2 || !body.operatorId) {
+        return json({ error: 'adjustmentId, weekStart и operatorId обязательны' }, 400)
+      }
+
+      const { data: adjustment, error: adjFetchError } = await supabase
+        .from('operator_salary_adjustments')
+        .select('id, operator_id, status, kind, linked_expense_id, amount')
+        .eq('id', body.adjustmentId)
+        .maybeSingle()
+
+      if (adjFetchError) throw adjFetchError
+      if (!adjustment) return json({ error: 'Корректировка не найдена' }, 404)
+      if (String(adjustment.operator_id) !== body.operatorId) return json({ error: 'Корректировка не принадлежит этому оператору' }, 403)
+      if (adjustment.status === 'voided') return json({ error: 'Корректировка уже аннулирована' }, 400)
+
+      if (adjustment.kind === 'advance' && adjustment.linked_expense_id) {
+        const { error: deleteExpError } = await supabase.from('expenses').delete().eq('id', String(adjustment.linked_expense_id))
+        if (deleteExpError) throw deleteExpError
+      }
+
+      const { error: voidAdjError } = await supabase.from('operator_salary_adjustments').update({ status: 'voided' }).eq('id', body.adjustmentId)
+      if (voidAdjError) throw voidAdjError
+
+      const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null })
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'operator-salary-adjustment',
+        entityId: body.adjustmentId,
+        action: 'void',
+        payload: { operator_id: body.operatorId, kind: adjustment.kind, amount: adjustment.amount },
+      })
+
+      return json({ ok: true, data: { week: weekAfterVoid } })
     }
 
     if (!body.operatorId) {
