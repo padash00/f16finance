@@ -2,9 +2,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
+import { toOperatorAuthEmail } from '@/lib/core/auth'
 import { supabase } from '@/lib/supabaseClient'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -327,23 +329,43 @@ export default function OperatorSettingsPage() {
         throw new Error('Новые пароли не совпадают')
       }
 
-      if (passwordData.new.length < 6) {
-        throw new Error('Пароль должен быть не менее 6 символов')
+      if (passwordData.new.length < 8) {
+        throw new Error('Пароль должен быть не менее 8 символов')
       }
 
-      const response = await fetch('/api/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: operator?.id,
-          password: passwordData.new
-        })
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error('РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РєРѕРЅС„РёРіСѓСЂР°С†РёСЋ Supabase')
+      }
+
+      const verificationClient = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
       })
 
-      const data = await response.json()
+      const { error: signInError } = await verificationClient.auth.signInWithPassword({
+        email: toOperatorAuthEmail(username),
+        password: passwordData.current,
+      })
 
-      if (!response.ok) {
+      const data = { error: signInError?.message || 'Current password is invalid' }
+
+      if (signInError) {
         throw new Error(data.error || 'Ошибка смены пароля')
+      }
+
+      await verificationClient.auth.signOut().catch(() => null)
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: passwordData.new,
+      })
+
+      if (updateError) {
+        throw updateError
       }
 
       setSuccess('Пароль успешно изменен')
@@ -362,6 +384,8 @@ export default function OperatorSettingsPage() {
     try {
       setChangingLogin(true)
       setError(null)
+
+      throw new Error('РЎРјРµРЅР° Р»РѕРіРёРЅР° РІСЂРµРјРµРЅРЅРѕ РѕС‚РєР»СЋС‡РµРЅР°. РЎРЅР°С‡Р°Р»Р° РЅСѓР¶РЅРѕ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ Р»РѕРіРёРЅ СЃ auth-Р°РєРєР°СѓРЅС‚РѕРј, С‡С‚РѕР±С‹ РЅРµ СЃР»РѕРјР°С‚СЊ РІС…РѕРґ.')
 
       if (!loginData.current || !loginData.new) {
         throw new Error('Заполните все поля')

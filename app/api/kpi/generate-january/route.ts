@@ -1,102 +1,153 @@
 import { NextResponse } from "next/server"
-import { supabase } from "@/lib/supabaseClient"
 
-type ShiftType = "day" | "night"
-type CompanyCode = "arena" | "ramen" | "extra"
+import { calculateForecast, type CompanyCode } from "@/lib/kpiEngine"
+import { getRequestAccessContext } from "@/lib/server/request-auth"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
-function monthBounds(year: number, month1to12: number) {
-  const from = new Date(Date.UTC(year, month1to12 - 1, 1))
-  const to = new Date(Date.UTC(year, month1to12, 0))
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
-  return { from: iso(from), to: iso(to) }
+type GenerateKpiBody = {
+  monthStart?: string
+  companies?: CompanyCode[]
 }
 
-function round0(n: number) {
-  return Math.round(n)
+type IncomeRow = {
+  date: string
+  cash_amount: number | null
+  kaspi_amount: number | null
+  card_amount: number | null
+  companies?: { code?: string | null } | null
 }
 
-async function sumTurnover(from: string, to: string, companyCode?: CompanyCode, shift?: ShiftType) {
-  // incomes: cash + kaspi + card
-  let q = supabase
-    .from("incomes")
-    .select("date, shift, cash_amount, kaspi_amount, card_amount, companies!inner(code)")
-    .gte("date", from)
-    .lte("date", to)
+const DEFAULT_COMPANIES: CompanyCode[] = ["arena", "ramen", "extra"]
+const WEEKS_IN_MONTH = 4.345
 
-  if (companyCode) q = q.eq("companies.code", companyCode)
-  if (shift) q = q.eq("shift", shift)
-
-  const { data, error } = await q
-  if (error) throw error
-
-  const total = (data || []).reduce((s: number, r: any) => {
-    const cash = Number(r.cash_amount || 0)
-    const kaspi = Number(r.kaspi_amount || 0)
-    const card = Number(r.card_amount || 0)
-    return s + cash + kaspi + card
-  }, 0)
-
-  return total
+function toIsoDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
-export async function POST() {
+function monthStartFromInput(raw?: string) {
+  if (raw) {
+    const normalized = raw.length === 7 ? `${raw}-01` : raw.slice(0, 10)
+    const parsed = new Date(`${normalized}T00:00:00`)
+    if (!Number.isNaN(parsed.getTime())) {
+      return new Date(parsed.getFullYear(), parsed.getMonth(), 1)
+    }
+  }
+
+  const nextMonth = new Date()
+  return new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 1)
+}
+
+function addMonths(date: Date, months: number) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1)
+}
+
+function getMonthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+}
+
+function getAmount(row: IncomeRow) {
+  return Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0)
+}
+
+export async function POST(request: Request) {
   try {
-    // Январь 2026 (пример): генерим план на следующий январь
-    const targetYear = 2026
-    const jan = { from: `${targetYear}-01-01`, to: `${targetYear}-01-31` }
-
-    // Базовые месяцы: ноябрь и декабрь 2025
-    const nov = monthBounds(2025, 11)
-    const dec = monthBounds(2025, 12)
-
-    const GROWTH = 0.05 // 5% — потом вынесем в настройки
-
-    const companies: CompanyCode[] = ["arena", "ramen"]
-
-    // 1) Коллективный план по точкам и общий
-    let totalPlanAll = 0
-
-    for (const code of companies) {
-      const novTotal = await sumTurnover(nov.from, nov.to, code)
-      const decTotal = await sumTurnover(dec.from, dec.to, code)
-
-      const base = (novTotal + decTotal) / 2
-      const planMonth = round0(base * (1 + GROWTH))
-      totalPlanAll += planMonth
-
-      // shift shares
-      const novDay = await sumTurnover(nov.from, nov.to, code, "day")
-      const novNight = await sumTurnover(nov.from, nov.to, code, "night")
-      const decDay = await sumTurnover(dec.from, dec.to, code, "day")
-      const decNight = await sumTurnover(dec.from, dec.to, code, "night")
-
-      const baseDay = (novDay + decDay) / 2
-      const baseNight = (novNight + decNight) / 2
-      const baseTotal = baseDay + baseNight || 1
-
-      const dayPlan = round0(planMonth * (baseDay / baseTotal))
-      const nightPlan = round0(planMonth * (baseNight / baseTotal))
-
-      // пишем планы (month + shift)
-      const rows = [
-        { period_start: jan.from, period_type: "month", company_code: code, metric: "turnover", target: planMonth },
-        { period_start: jan.from, period_type: "shift", company_code: code, shift_type: "day", metric: "turnover", target: dayPlan },
-        { period_start: jan.from, period_type: "shift", company_code: code, shift_type: "night", metric: "turnover", target: nightPlan },
-      ]
-
-      const ins = await supabase.from("kpi_plans").insert(rows)
-      if (ins.error) throw ins.error
+    const ip = getClientIp(request)
+    const rl = checkRateLimit(`kpi-generate:${ip}`, 10, 60_000)
+    if (!rl.allowed) {
+      return NextResponse.json({ ok: false, error: "too-many-requests" }, { status: 429 })
     }
 
-    // общий план по всем точкам
-    const insAll = await supabase.from("kpi_plans").insert([
-      { period_start: jan.from, period_type: "month", company_code: null, metric: "turnover", target: totalPlanAll },
-    ])
-    if (insAll.error) throw insAll.error
+    const access = await getRequestAccessContext(request)
+    if ("response" in access) return access.response
 
-    return NextResponse.json({ ok: true, jan, totalPlanAll })
+    if (!access.isSuperAdmin && access.staffRole !== "manager" && access.staffRole !== "owner") {
+      return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 })
+    }
+
+    const body = (await request.json().catch(() => null)) as GenerateKpiBody | null
+    const targetMonth = monthStartFromInput(body?.monthStart)
+    const prev1 = addMonths(targetMonth, -1)
+    const prev2 = addMonths(targetMonth, -2)
+    const monthStart = toIsoDate(targetMonth)
+
+    const selectedCompanies = (body?.companies || DEFAULT_COMPANIES).filter((company): company is CompanyCode =>
+      DEFAULT_COMPANIES.includes(company),
+    )
+
+    if (selectedCompanies.length === 0) {
+      return NextResponse.json({ ok: false, error: "companies-required" }, { status: 400 })
+    }
+
+    const { data, error } = await access.supabase
+      .from("incomes")
+      .select("date, cash_amount, kaspi_amount, card_amount, companies!inner(code)")
+      .gte("date", toIsoDate(prev2))
+      .lte("date", toIsoDate(new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0)))
+      .in("companies.code", selectedCompanies)
+
+    if (error) throw error
+
+    const prev1Key = getMonthKey(prev1)
+    const prev2Key = getMonthKey(prev2)
+    const totals = new Map<CompanyCode, { prev1: number; prev2: number }>()
+
+    for (const company of selectedCompanies) {
+      totals.set(company, { prev1: 0, prev2: 0 })
+    }
+
+    for (const row of ((data || []) as IncomeRow[])) {
+      const companyCode = String(row.companies?.code || "").toLowerCase() as CompanyCode
+      if (!totals.has(companyCode)) continue
+
+      const bucket = totals.get(companyCode)!
+      const amount = getAmount(row)
+      const monthKey = String(row.date).slice(0, 7)
+
+      if (monthKey === prev1Key) bucket.prev1 += amount
+      if (monthKey === prev2Key) bucket.prev2 += amount
+    }
+
+    const rows = selectedCompanies.map((company) => {
+      const source = totals.get(company) || { prev1: 0, prev2: 0 }
+      const forecast = calculateForecast(targetMonth, source.prev1, source.prev2)
+      const turnoverTargetMonth = Math.round(forecast.forecast)
+      const turnoverTargetWeek = Math.round(turnoverTargetMonth / WEEKS_IN_MONTH)
+
+      return {
+        plan_key: `${monthStart}|collective|${company}`,
+        month_start: monthStart,
+        entity_type: "collective",
+        company_code: company,
+        operator_id: null,
+        role_code: null,
+        turnover_target_month: turnoverTargetMonth,
+        turnover_target_week: turnoverTargetWeek,
+        shifts_target_month: 0,
+        shifts_target_week: 0,
+        meta: {
+          generated_via: "api/kpi/generate-january",
+          baseline_prev2: Math.round(source.prev2),
+          baseline_prev1: Math.round(source.prev1),
+          prev1_estimated: Math.round(forecast.prev1Estimated),
+          trend_percent: Number(forecast.trend.toFixed(1)),
+          is_partial_month: forecast.isPartial,
+        },
+        is_locked: false,
+      }
+    })
+
+    const { error: upsertError } = await access.supabase.from("kpi_plans").upsert(rows, { onConflict: "plan_key" })
+    if (upsertError) throw upsertError
+
+    return NextResponse.json({
+      ok: true,
+      monthStart,
+      companies: selectedCompanies,
+      totalTargetMonth: rows.reduce((sum, row) => sum + row.turnover_target_month, 0),
+      rows,
+    })
   } catch (e: any) {
-    console.error(e)
-    return NextResponse.json({ ok: false, error: e.message || "error" }, { status: 500 })
+    console.error("POST /api/kpi/generate-january failed:", e)
+    return NextResponse.json({ ok: false, error: e?.message || "error" }, { status: 500 })
   }
 }
