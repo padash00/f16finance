@@ -170,9 +170,10 @@ async function ensureSalaryWeekSnapshot(params: {
   operatorId: string
   weekStart: string
   actorUserId: string | null
+  references?: Awaited<ReturnType<typeof listSalaryReferenceData>>
 }) {
   const weekEnd = addDaysISO(params.weekStart, 6)
-  const references = await listSalaryReferenceData(params.supabase)
+  const references = params.references || (await listSalaryReferenceData(params.supabase))
   const operatorData = await listOperatorSalaryData(params.supabase, {
     operatorId: params.operatorId,
     dateFrom: params.weekStart,
@@ -310,6 +311,263 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url)
     const view = url.searchParams.get('view')
+    if (view === 'weekly') {
+      const weekStart = normalizeIsoDate(url.searchParams.get('weekStart'))
+      if (!weekStart) {
+        return json({ error: 'weekStart is required' }, 400)
+      }
+
+      const weekEnd = addDaysISO(weekStart, 6)
+      const supabase = createAdminSupabaseClient()
+      const referencesPromise = listSalaryReferenceData(supabase)
+
+      const [
+        references,
+        { data: operators, error: operatorsError },
+        { data: documents, error: documentsError },
+      ] = await Promise.all([
+        referencesPromise,
+        supabase
+          .from('operators')
+          .select('id,name,short_name,is_active,telegram_chat_id,operator_profiles(*)')
+          .order('name'),
+        supabase.from('operator_documents').select('operator_id,expiry_date'),
+      ])
+
+      if (operatorsError) throw operatorsError
+      if (documentsError) throw documentsError
+
+      const today = new Date()
+      const expiringThreshold = new Date(today)
+      expiringThreshold.setDate(expiringThreshold.getDate() + 30)
+
+      const documentStats = new Map<string, { documents_count: number; expiring_documents: number }>()
+      for (const row of documents || []) {
+        const operatorId = String((row as any).operator_id || '')
+        if (!operatorId) continue
+
+        const current = documentStats.get(operatorId) || { documents_count: 0, expiring_documents: 0 }
+        current.documents_count += 1
+
+        const expiryRaw = String((row as any).expiry_date || '')
+        const expiryDate = expiryRaw ? new Date(expiryRaw) : null
+        if (expiryDate && !Number.isNaN(expiryDate.getTime()) && expiryDate >= today && expiryDate <= expiringThreshold) {
+          current.expiring_documents += 1
+        }
+
+        documentStats.set(operatorId, current)
+      }
+
+      const operatorRows = ((operators || []) as any[]).map((row) => {
+        const profile = Array.isArray(row.operator_profiles) ? row.operator_profiles[0] : row.operator_profiles
+        const docs = documentStats.get(String(row.id)) || { documents_count: 0, expiring_documents: 0 }
+
+        return {
+          id: String(row.id),
+          name: row.name || 'Без имени',
+          short_name: row.short_name || null,
+          is_active: row.is_active !== false,
+          telegram_chat_id: row.telegram_chat_id || null,
+          full_name: profile?.full_name || null,
+          photo_url: profile?.photo_url || null,
+          position: profile?.position || null,
+          phone: profile?.phone || null,
+          email: profile?.email || null,
+          hire_date: profile?.hire_date || null,
+          documents_count: docs.documents_count,
+          expiring_documents: docs.expiring_documents,
+        }
+      })
+
+      const snapshots = await Promise.all(
+        operatorRows.map((operator) =>
+          ensureSalaryWeekSnapshot({
+            supabase,
+            operatorId: operator.id,
+            weekStart,
+            actorUserId: null,
+            references,
+          }),
+        ),
+      )
+
+      const weekIds = snapshots.map((snapshot) => snapshot.weekId)
+      const emptyResult = { data: [], error: null as any }
+
+      const [{ data: payments, error: paymentsError }, { data: allocations, error: allocationsError }] = await Promise.all([
+        weekIds.length > 0
+          ? supabase
+              .from('operator_salary_week_payments')
+              .select(
+                'id,salary_week_id,operator_id,payment_date,cash_amount,kaspi_amount,total_amount,comment,status,created_at',
+              )
+              .in('salary_week_id', weekIds)
+              .order('payment_date', { ascending: false })
+              .order('created_at', { ascending: false })
+          : Promise.resolve(emptyResult),
+        weekIds.length > 0
+          ? supabase
+              .from('operator_salary_week_company_allocations')
+              .select('salary_week_id,company_id,accrued_amount,share_ratio,allocated_net_amount')
+              .in('salary_week_id', weekIds)
+          : Promise.resolve(emptyResult),
+      ])
+
+      if (paymentsError) throw paymentsError
+      if (allocationsError) throw allocationsError
+
+      const companyMap = new Map(references.companies.map((company) => [company.id, company]))
+      const paymentsByWeek = new Map<string, any[]>()
+      const allocationsByWeek = new Map<string, any[]>()
+
+      for (const row of payments || []) {
+        const key = String((row as any).salary_week_id)
+        const list = paymentsByWeek.get(key) || []
+        list.push(row)
+        paymentsByWeek.set(key, list)
+      }
+
+      for (const row of allocations || []) {
+        const key = String((row as any).salary_week_id)
+        const list = allocationsByWeek.get(key) || []
+        list.push(row)
+        allocationsByWeek.set(key, list)
+      }
+
+      const weeklyOperators = operatorRows
+        .map((operator, index) => {
+          const snapshot = snapshots[index]
+          const weekPayments = (paymentsByWeek.get(snapshot.weekId) || []).map((payment: any) => ({
+            id: String(payment.id),
+            payment_date: payment.payment_date,
+            cash_amount: roundMoney(Number(payment.cash_amount || 0)),
+            kaspi_amount: roundMoney(Number(payment.kaspi_amount || 0)),
+            total_amount: roundMoney(Number(payment.total_amount || 0)),
+            comment: payment.comment || null,
+            status: payment.status || 'active',
+            created_at: payment.created_at || null,
+          }))
+
+          const weekAllocations = (allocationsByWeek.get(snapshot.weekId) || [])
+            .map((allocation: any) => {
+              const company = companyMap.get(String(allocation.company_id))
+              const fallback = snapshot.summary.companyAllocations.find(
+                (item) => item.companyId === String(allocation.company_id),
+              )
+
+              return {
+                companyId: String(allocation.company_id),
+                companyCode: company?.code || fallback?.companyCode || null,
+                companyName: company?.name || fallback?.companyName || null,
+                accruedAmount: roundMoney(Number(allocation.accrued_amount || fallback?.accruedAmount || 0)),
+                bonusAmount: roundMoney(Number(fallback?.bonusAmount || 0)),
+                fineAmount: roundMoney(Number(fallback?.fineAmount || 0)),
+                debtAmount: roundMoney(Number(fallback?.debtAmount || 0)),
+                advanceAmount: roundMoney(Number(fallback?.advanceAmount || 0)),
+                netAmount: roundMoney(Number(allocation.allocated_net_amount || fallback?.netAmount || 0)),
+                shareRatio: roundMoney(Number(allocation.share_ratio || fallback?.shareRatio || 0)),
+              }
+            })
+            .sort((left, right) => right.netAmount - left.netAmount)
+
+          const hasActivity =
+            snapshot.summary.grossAmount > 0 ||
+            snapshot.summary.bonusAmount > 0 ||
+            snapshot.summary.fineAmount > 0 ||
+            snapshot.summary.debtAmount > 0 ||
+            snapshot.summary.advanceAmount > 0 ||
+            snapshot.paidAmount > 0 ||
+            weekPayments.length > 0
+
+          return {
+            operator,
+            week: {
+              id: snapshot.weekId,
+              weekStart: snapshot.weekStart,
+              weekEnd: snapshot.weekEnd,
+              grossAmount: snapshot.summary.grossAmount,
+              bonusAmount: snapshot.summary.bonusAmount,
+              fineAmount: snapshot.summary.fineAmount,
+              debtAmount: snapshot.summary.debtAmount,
+              advanceAmount: snapshot.summary.advanceAmount,
+              netAmount: snapshot.summary.netAmount,
+              paidAmount: snapshot.paidAmount,
+              remainingAmount: snapshot.remainingAmount,
+              status: snapshot.status,
+              companyAllocations: weekAllocations,
+              payments: weekPayments,
+            },
+            hasActivity,
+          }
+        })
+        .sort((left, right) => {
+          if (left.operator.is_active !== right.operator.is_active) {
+            return left.operator.is_active ? -1 : 1
+          }
+          if (left.week.remainingAmount !== right.week.remainingAmount) {
+            return right.week.remainingAmount - left.week.remainingAmount
+          }
+          return String(left.operator.full_name || left.operator.name).localeCompare(
+            String(right.operator.full_name || right.operator.name),
+            'ru',
+          )
+        })
+
+      const totals = weeklyOperators.reduce(
+        (acc, item) => {
+          acc.grossAmount += item.week.grossAmount
+          acc.bonusAmount += item.week.bonusAmount
+          acc.fineAmount += item.week.fineAmount
+          acc.debtAmount += item.week.debtAmount
+          acc.advanceAmount += item.week.advanceAmount
+          acc.netAmount += item.week.netAmount
+          acc.paidAmount += item.week.paidAmount
+          acc.remainingAmount += item.week.remainingAmount
+          if (item.week.status === 'paid') acc.paidOperators += 1
+          if (item.week.status === 'partial') acc.partialOperators += 1
+          if (item.operator.is_active) acc.activeOperators += 1
+          return acc
+        },
+        {
+          grossAmount: 0,
+          bonusAmount: 0,
+          fineAmount: 0,
+          debtAmount: 0,
+          advanceAmount: 0,
+          netAmount: 0,
+          paidAmount: 0,
+          remainingAmount: 0,
+          paidOperators: 0,
+          partialOperators: 0,
+          activeOperators: 0,
+        },
+      )
+
+      return json({
+        ok: true,
+        data: {
+          weekStart,
+          weekEnd,
+          companies: references.companies,
+          operators: weeklyOperators,
+          totals: {
+            grossAmount: roundMoney(totals.grossAmount),
+            bonusAmount: roundMoney(totals.bonusAmount),
+            fineAmount: roundMoney(totals.fineAmount),
+            debtAmount: roundMoney(totals.debtAmount),
+            advanceAmount: roundMoney(totals.advanceAmount),
+            netAmount: roundMoney(totals.netAmount),
+            paidAmount: roundMoney(totals.paidAmount),
+            remainingAmount: roundMoney(totals.remainingAmount),
+            paidOperators: totals.paidOperators,
+            partialOperators: totals.partialOperators,
+            activeOperators: totals.activeOperators,
+            totalOperators: weeklyOperators.length,
+          },
+        },
+      })
+    }
+
     if (view !== 'operatorDetail') {
       return json({ error: 'unsupported-view' }, 400)
     }
