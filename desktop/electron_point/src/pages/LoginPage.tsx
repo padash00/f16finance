@@ -6,13 +6,13 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import * as api from '@/lib/api'
 import { DEFAULT_API_URL } from '@/lib/config'
-import type { AppConfig, BootstrapData, OperatorSession, AdminSession } from '@/types'
+import type { AppConfig, BootstrapData, CompanyOption, OperatorSession, AdminSession } from '@/types'
 
 interface Props {
   config: AppConfig | null
   bootstrap: BootstrapData
   isOffline?: boolean
-  onOperatorLogin: (session: OperatorSession) => void
+  onOperatorLogin: (session: OperatorSession, allCompanies: CompanyOption[]) => void
   onAdminLogin: (session: AdminSession) => void
   onSaveConfig: (config: AppConfig) => void
 }
@@ -46,6 +46,7 @@ export default function LoginPage({ config, bootstrap, isOffline, onOperatorLogi
     'invalid-credentials': 'Неверный логин или пароль',
     'operator-auth-not-found': 'Оператор не найден',
     'operator-not-assigned-to-device-point': 'Оператор не прикреплён к этой точке',
+    'operator-not-assigned-to-any-point': 'Оператор не прикреплён ни к одной точке',
     'super-admin-only': 'Требуется учётная запись администратора',
   }
 
@@ -60,8 +61,8 @@ export default function LoginPage({ config, bootstrap, isOffline, onOperatorLogi
         if (!username.trim()) { setError('Введите логин'); setLoading(false); return }
         if (!password.trim()) { setError('Введите пароль'); setLoading(false); return }
 
-        const { operator, company } = await api.loginOperator(config, username.trim(), password)
-        onOperatorLogin({ type: 'operator', operator, company, bootstrap })
+        const { operator, company, allCompanies } = await api.loginOperator(config, username.trim(), password)
+        onOperatorLogin({ type: 'operator', operator, company, bootstrap }, allCompanies)
       } else {
         if (!email.trim()) { setError('Введите email'); setLoading(false); return }
         if (!password.trim()) { setError('Введите пароль'); setLoading(false); return }
@@ -112,11 +113,9 @@ export default function LoginPage({ config, bootstrap, isOffline, onOperatorLogi
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
               <span className="text-xl font-bold text-primary-foreground">F</span>
             </div>
-            <h1 className="text-xl font-bold mt-3">
-              {noConfig ? 'Orda Point' : bootstrap.company.name}
-            </h1>
+            <h1 className="text-xl font-bold mt-3">Orda Point</h1>
             <p className="text-xs text-muted-foreground">
-              {noConfig ? 'Устройство не настроено' : bootstrap.device.name}
+              {noConfig ? 'Устройство не настроено' : 'Введите логин и пароль'}
             </p>
           </div>
 

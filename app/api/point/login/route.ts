@@ -72,23 +72,37 @@ export async function POST(request: Request) {
       return json({ error: 'operator-auth-user-mismatch' }, 403)
     }
 
-    const { data: assignment, error: assignmentError } = await supabase
+    const { data: assignments, error: assignmentError } = await supabase
       .from('operator_company_assignments')
-      .select('id, company_id, role_in_company, is_primary, is_active')
+      .select('id, company_id, role_in_company, is_primary, is_active, company:company_id(id, name, code)')
       .eq('operator_id', operatorAuth.operator_id)
-      .eq('company_id', device.company_id)
       .eq('is_active', true)
-      .maybeSingle()
 
     if (assignmentError) throw assignmentError
-    if (!assignment) {
-      return json({ error: 'operator-not-assigned-to-device-point' }, 403)
+    if (!assignments || assignments.length === 0) {
+      return json({ error: 'operator-not-assigned-to-any-point' }, 403)
     }
 
     const operator = Array.isArray((operatorAuth as any).operator)
       ? (operatorAuth as any).operator[0] || null
       : (operatorAuth as any).operator || null
     const profile = Array.isArray(operator?.operator_profiles) ? operator.operator_profiles[0] || null : null
+
+    const primaryAssignment =
+      assignments.find((a: any) => a.company_id === device.company_id && a.is_primary) ||
+      assignments.find((a: any) => a.company_id === device.company_id) ||
+      assignments.find((a: any) => a.is_primary) ||
+      assignments[0]
+
+    const allCompanies = assignments.map((a: any) => {
+      const co = Array.isArray(a.company) ? a.company[0] : a.company
+      return {
+        id: a.company_id,
+        name: co?.name || 'Точка',
+        code: co?.code || null,
+        role_in_company: a.role_in_company,
+      }
+    })
 
     await writeAuditLog(supabase, {
       entityType: 'point-login',
@@ -100,11 +114,23 @@ export async function POST(request: Request) {
         company_id: device.company_id,
         operator_id: operatorAuth.operator_id,
         username,
-        role_in_company: assignment.role_in_company,
+        role_in_company: primaryAssignment.role_in_company,
+        all_company_count: allCompanies.length,
       },
     })
 
     await authClient.auth.signOut().catch(() => null)
+
+    const primaryCompany = (() => {
+      const co = Array.isArray(primaryAssignment.company)
+        ? primaryAssignment.company[0]
+        : primaryAssignment.company
+      return {
+        id: primaryAssignment.company_id,
+        name: co?.name || device.company?.name || 'Точка',
+        code: co?.code ?? device.company?.code ?? null,
+      }
+    })()
 
     return json({
       ok: true,
@@ -116,14 +142,11 @@ export async function POST(request: Request) {
         short_name: operator?.short_name || null,
         full_name: profile?.full_name || null,
         telegram_chat_id: operator?.telegram_chat_id || null,
-        role_in_company: assignment.role_in_company,
-        is_primary: !!assignment.is_primary,
+        role_in_company: primaryAssignment.role_in_company,
+        is_primary: !!primaryAssignment.is_primary,
       },
-      company: {
-        id: device.company_id,
-        name: device.company?.name || 'Точка',
-        code: device.company?.code || null,
-      },
+      company: primaryCompany,
+      allCompanies,
     })
   } catch (error: any) {
     await writeSystemErrorLogSafe({

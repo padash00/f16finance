@@ -71,11 +71,18 @@ export type Session = OperatorSession | AdminSession
 
 // ─── App State Machine ────────────────────────────────────────────────────────
 
+export interface CompanyOption {
+  id: string
+  name: string
+  code: string | null
+  role_in_company: string
+}
+
 export type AppView =
   | { screen: 'setup' }
   | { screen: 'booting' }
   | { screen: 'login'; bootstrap: BootstrapData }
-  | { screen: 'point-select'; bootstrap: BootstrapData; session: OperatorSession }
+  | { screen: 'point-select'; bootstrap: BootstrapData; session: OperatorSession; allCompanies: CompanyOption[] }
   | { screen: 'shift'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'scanner'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'admin'; session: AdminSession; bootstrap?: BootstrapData }

@@ -3,10 +3,11 @@ import { loadConfig, saveConfig, DEFAULT_API_URL } from '@/lib/config'
 import { getCachedBootstrap, saveBootstrapCache } from '@/lib/cache'
 import * as api from '@/lib/api'
 import LoginPage from '@/pages/LoginPage'
+import PointSelectPage from '@/pages/PointSelectPage'
 import ShiftPage from '@/pages/ShiftPage'
 import ScannerPage from '@/pages/ScannerPage'
 import AdminLayout from '@/pages/admin/AdminLayout'
-import type { AppConfig, AppView, OperatorSession, AdminSession, BootstrapData } from '@/types'
+import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData } from '@/types'
 
 // Типизируем window.electron (из preload.cjs)
 declare global {
@@ -98,8 +99,8 @@ export default function App() {
     await showLogin(newConfig)
   }
 
-  // ─── Вход оператора ────────────────────────────────────────────────────────
-  function handleOperatorLogin(session: OperatorSession) {
+  // ─── Переход к рабочему экрану после выбора точки ─────────────────────────
+  function proceedToApp(session: OperatorSession) {
     const bootstrap = session.bootstrap
     const flags = bootstrap.device.feature_flags
 
@@ -108,6 +109,26 @@ export default function App() {
     } else {
       setView({ screen: 'shift', bootstrap, session })
     }
+  }
+
+  // ─── Вход оператора ────────────────────────────────────────────────────────
+  function handleOperatorLogin(session: OperatorSession, allCompanies: CompanyOption[]) {
+    if (allCompanies.length > 1) {
+      setView({ screen: 'point-select', bootstrap: session.bootstrap, session, allCompanies })
+    } else {
+      proceedToApp(session)
+    }
+  }
+
+  // ─── Выбор точки (при нескольких компаниях) ────────────────────────────────
+  function handlePointSelect(company: CompanyOption) {
+    if (view.screen !== 'point-select') return
+    const session: OperatorSession = {
+      ...view.session,
+      company: { id: company.id, name: company.name, code: company.code },
+      operator: { ...view.session.operator, role_in_company: company.role_in_company },
+    }
+    proceedToApp(session)
   }
 
   // ─── Вход администратора ───────────────────────────────────────────────────
@@ -145,6 +166,17 @@ export default function App() {
         onOperatorLogin={handleOperatorLogin}
         onAdminLogin={handleAdminLogin}
         onSaveConfig={handleSaveConfig}
+      />
+    )
+  }
+
+  if (view.screen === 'point-select') {
+    return (
+      <PointSelectPage
+        session={view.session}
+        allCompanies={view.allCompanies}
+        onSelect={handlePointSelect}
+        onLogout={handleLogout}
       />
     )
   }

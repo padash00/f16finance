@@ -1,17 +1,18 @@
-import { MapPin, ArrowRight } from 'lucide-react'
+import { MapPin, ArrowRight, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import type { BootstrapData, OperatorSession } from '@/types'
+import type { CompanyOption, OperatorSession } from '@/types'
 
 interface Props {
-  sessions: OperatorSession[]  // sessions для разных точек
-  onSelect: (session: OperatorSession) => void
+  session: OperatorSession
+  allCompanies: CompanyOption[]
+  onSelect: (company: CompanyOption) => void
+  onLogout: () => void
 }
 
-// Используется когда оператор прикреплён к нескольким точкам
-// В текущей архитектуре — один device_token = одна точка,
-// поэтому страница используется редко, но готова к расширению.
-export default function PointSelectPage({ sessions, onSelect }: Props) {
+export default function PointSelectPage({ session, allCompanies, onSelect, onLogout }: Props) {
+  const operatorName = session.operator.short_name || session.operator.name || session.operator.username
+
   return (
     <div className="flex h-screen flex-col bg-background">
       <div className="h-9 drag-region" />
@@ -21,29 +22,41 @@ export default function PointSelectPage({ sessions, onSelect }: Props) {
             <MapPin className="mx-auto h-10 w-10 text-muted-foreground" />
             <h1 className="text-lg font-semibold">Выберите точку</h1>
             <p className="text-sm text-muted-foreground">
-              Вы прикреплены к нескольким точкам
+              {operatorName}, вы прикреплены к нескольким точкам
             </p>
           </div>
 
           <div className="space-y-2">
-            {sessions.map((s, i) => (
+            {allCompanies.map((company) => (
               <Card
-                key={i}
+                key={company.id}
                 className="cursor-pointer hover:bg-accent/50 transition-colors no-drag"
-                onClick={() => onSelect(s)}
+                onClick={() => onSelect(company)}
               >
                 <CardContent className="flex items-center justify-between p-4">
                   <div>
-                    <p className="text-sm font-medium">{s.company.name}</p>
+                    <p className="text-sm font-medium">{company.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {s.operator.role_in_company}
-                      {s.operator.is_primary && ' · Основная'}
+                      {company.role_in_company}
+                      {company.code && ` · ${company.code}`}
                     </p>
                   </div>
                   <ArrowRight className="h-4 w-4 text-muted-foreground" />
                 </CardContent>
               </Card>
             ))}
+          </div>
+
+          <div className="text-center no-drag">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onLogout}
+              className="gap-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Выйти
+            </Button>
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import type {
   AppConfig,
   BootstrapData,
+  CompanyOption,
   OperatorInfo,
   Product,
   DebtItem,
@@ -52,13 +53,14 @@ export async function loginOperator(
   config: AppConfig,
   username: string,
   password: string,
-): Promise<{ operator: OperatorInfo; company: { id: string; name: string; code: string | null } }> {
+): Promise<{ operator: OperatorInfo; company: { id: string; name: string; code: string | null }; allCompanies: CompanyOption[] }> {
   const data = await request<{
     ok: boolean
     operator: OperatorInfo
     company: { id: string; name: string; code: string | null }
+    allCompanies: CompanyOption[]
   }>(config, 'POST', '/api/point/login', { username, password })
-  return data
+  return { ...data, allCompanies: data.allCompanies ?? [] }
 }
 
 export async function loginAdmin(
