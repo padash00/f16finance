@@ -37,6 +37,8 @@ export type SalaryIncomeRow = {
   card_amount: number | null
   operator_id: string | null
   operator_name?: string | null
+  zone?: string | null
+  comment?: string | null
 }
 
 export type SalaryAdjustmentRow = {
@@ -97,6 +99,26 @@ export type SalaryBoardOperatorStat = SalarySummary & {
   documents_count: number
   expiring_documents: number
   telegram_chat_id: string | null
+}
+
+export type SalaryShiftBreakdown = {
+  id: string
+  payoutKey: string
+  date: string
+  shift: ShiftType
+  companyId: string
+  companyCode: string | null
+  companyName: string | null
+  totalIncome: number
+  cash: number
+  kaspi: number
+  card: number
+  zones: string[]
+  comments: string[]
+  baseSalary: number
+  autoBonus: number
+  roleBonus: number
+  salary: number
 }
 
 type AggregatedShift = {
@@ -287,6 +309,104 @@ export function calculateOperatorSalarySummary(params: {
     manualPlus: manualBonuses,
     advances: totalAdvances,
   }
+}
+
+export function calculateOperatorShiftBreakdown(params: {
+  operatorId: string
+  companies: SalaryCompany[]
+  rules: SalaryRule[]
+  assignments?: SalaryOperatorCompanyAssignment[]
+  incomes: SalaryIncomeRow[]
+  options?: CalculationOptions
+}): SalaryShiftBreakdown[] {
+  const companyCodeMap = createCompanyCodeMap(params.companies)
+  const companyNameMap = new Map<string, string | null>()
+  for (const company of params.companies) {
+    companyNameMap.set(company.id, company.name || null)
+  }
+
+  const ruleMap = createRuleMap(params.rules)
+  const operatorCompanyRoleMap = createOperatorCompanyRoleMap({
+    assignments: params.assignments || [],
+    companies: params.companies,
+  })
+  const allowedCodes = new Set((params.options?.companyCodes || DEFAULT_COMPANY_CODES).map((item) => item.toLowerCase()))
+  const aggregated = new Map<
+    string,
+    Omit<SalaryShiftBreakdown, 'baseSalary' | 'autoBonus' | 'roleBonus' | 'salary'>
+  >()
+
+  for (const row of params.incomes) {
+    if (row.operator_id !== params.operatorId) continue
+    if (!row.shift) continue
+
+    const companyCode = companyCodeMap.get(row.company_id)
+    if (!companyCode || !allowedCodes.has(companyCode)) continue
+
+    const key = `${row.date}_${row.shift}_${row.company_id}`
+    const existing = aggregated.get(key)
+    const cash = toAmount(row.cash_amount)
+    const kaspi = toAmount(row.kaspi_amount)
+    const card = toAmount(row.card_amount)
+    const totalIncome = cash + kaspi + card
+
+    if (existing) {
+      existing.totalIncome += totalIncome
+      existing.cash += cash
+      existing.kaspi += kaspi
+      existing.card += card
+      if (row.zone && !existing.zones.includes(row.zone)) existing.zones.push(row.zone)
+      if (row.comment && !existing.comments.includes(row.comment)) existing.comments.push(row.comment)
+      continue
+    }
+
+    aggregated.set(key, {
+      id: key,
+      payoutKey: `${row.date}_${row.shift}`,
+      date: row.date,
+      shift: row.shift,
+      companyId: row.company_id,
+      companyCode,
+      companyName: companyNameMap.get(row.company_id) || null,
+      totalIncome,
+      cash,
+      kaspi,
+      card,
+      zones: row.zone ? [row.zone] : [],
+      comments: row.comment ? [row.comment] : [],
+    })
+  }
+
+  const breakdown = Array.from(aggregated.values()).map((shift) => {
+    const rule = ruleMap.get(`${shift.companyCode}_${shift.shift}`)
+    const baseSalary = toAmount(rule?.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
+    const assignmentRole = operatorCompanyRoleMap.get(`${params.operatorId}_${shift.companyCode}`)
+    const roleBonus =
+      assignmentRole === 'senior_operator'
+        ? toAmount(rule?.senior_operator_bonus)
+        : assignmentRole === 'senior_cashier'
+          ? toAmount(rule?.senior_cashier_bonus)
+          : 0
+
+    let autoBonus = 0
+    if (toAmount(rule?.threshold1_turnover) > 0 && shift.totalIncome >= toAmount(rule?.threshold1_turnover)) {
+      autoBonus += toAmount(rule?.threshold1_bonus)
+    }
+    if (toAmount(rule?.threshold2_turnover) > 0 && shift.totalIncome >= toAmount(rule?.threshold2_turnover)) {
+      autoBonus += toAmount(rule?.threshold2_bonus)
+    }
+
+    return {
+      ...shift,
+      baseSalary,
+      autoBonus,
+      roleBonus,
+      salary: baseSalary + autoBonus + roleBonus,
+    }
+  })
+
+  breakdown.sort((left, right) => left.date.localeCompare(right.date) || left.shift.localeCompare(right.shift))
+  return breakdown
 }
 
 export function calculateSalaryBoard(params: {

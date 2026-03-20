@@ -2,6 +2,7 @@ import type {
   AppConfig,
   BootstrapData,
   CompanyOption,
+  OperatorBasic,
   OperatorInfo,
   Product,
   DebtItem,
@@ -61,6 +62,13 @@ export async function loginOperator(
     allCompanies: CompanyOption[]
   }>(config, 'POST', '/api/point/login', { username, password })
   return { ...data, allCompanies: data.allCompanies ?? [] }
+}
+
+export async function getAllOperators(config: AppConfig): Promise<OperatorBasic[]> {
+  const data = await request<{ ok: boolean; operators: OperatorBasic[] }>(
+    config, 'GET', '/api/point/all-operators',
+  )
+  return data.operators ?? []
 }
 
 export async function loginAdmin(

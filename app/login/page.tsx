@@ -97,16 +97,6 @@ export default function UnifiedLoginPage() {
 
       const username = normalizeOperatorUsername(login)
 
-      const { data: authData, error: authError } = await supabase
-        .from('operator_auth')
-        .select('id')
-        .eq('username', username)
-        .eq('is_active', true)
-        .maybeSingle()
-
-      if (authError) throw authError
-      if (!authData) throw new Error('Неверный логин или пароль')
-
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: toOperatorAuthEmail(username),
         password,
@@ -114,10 +104,33 @@ export default function UnifiedLoginPage() {
 
       if (signInError) throw new Error('Неверный логин или пароль')
 
+      const {
+        data: { user: operatorUser },
+      } = await supabase.auth.getUser()
+
+      const operatorUserId = operatorUser?.id || null
+
+      if (!operatorUserId) {
+        throw new Error('РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ СЃРµСЃСЃРёСЋ РѕРїРµСЂР°С‚РѕСЂР°')
+      }
+
+      const { data: authByUser, error: authByUserError } = await supabase
+        .from('operator_auth')
+        .select('id, username')
+        .eq('user_id', operatorUserId)
+        .eq('is_active', true)
+        .maybeSingle()
+
+      if (authByUserError) throw authByUserError
+      if (!authByUser?.id) {
+        await supabase.auth.signOut().catch(() => null)
+        throw new Error('РќРµРІРµСЂРЅС‹Р№ Р»РѕРіРёРЅ РёР»Рё РїР°СЂРѕР»СЊ')
+      }
+
       await fetch('/api/auth/login-attempt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method: 'operator', target: 'operator', status: 'success', identifier: username }),
+        body: JSON.stringify({ method: 'operator', target: 'operator', status: 'success', identifier: authByUser.username || username }),
       }).catch(() => null)
 
       await fetch('/api/auth/login-log', {
@@ -129,7 +142,7 @@ export default function UnifiedLoginPage() {
       await fetch('/api/auth/operator-last-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authId: authData.id }),
+        body: JSON.stringify({ authId: authByUser.id }),
       })
 
       router.push('/operator-dashboard')

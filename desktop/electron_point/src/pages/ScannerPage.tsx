@@ -16,7 +16,7 @@ import * as api from '@/lib/api'
 import { queueCreateDebt, queueDeleteDebt, syncQueue, getPendingCount } from '@/lib/offline'
 import { getCachedProducts, saveProductsCache } from '@/lib/cache'
 import QueueViewer from '@/components/QueueViewer'
-import type { AppConfig, BootstrapData, OperatorSession, Product, DebtItem } from '@/types'
+import type { AppConfig, BootstrapData, OperatorBasic, OperatorSession, Product, DebtItem } from '@/types'
 
 interface Props {
   config: AppConfig
@@ -30,6 +30,7 @@ interface Props {
 export default function ScannerPage({ config, bootstrap, session, isOffline: initOffline, onLogout, onSwitchToShift }: Props) {
   const [products, setProducts] = useState<Product[]>([])
   const [debts, setDebts] = useState<DebtItem[]>([])
+  const [allOperators, setAllOperators] = useState<OperatorBasic[]>([])
   const [loading, setLoading] = useState(true)
   const [offline, setOffline] = useState(initOffline ?? false)
 
@@ -85,6 +86,20 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         const cached = await getCachedProducts()
         setProducts(cached.filter(p => p.is_active))
         setOffline(true)
+      }
+
+      // Все операторы системы (для записи долга)
+      try {
+        const ops = await api.getAllOperators(config)
+        setAllOperators(ops)
+      } catch {
+        // Фолбек — только операторы устройства из bootstrap
+        setAllOperators(bootstrap.operators.map(o => ({
+          id: o.id,
+          name: o.name,
+          short_name: o.short_name,
+          full_name: o.full_name,
+        })))
       }
 
       // Долги — только онлайн
@@ -366,9 +381,9 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                           <SelectValue placeholder="Выберите оператора" />
                         </SelectTrigger>
                         <SelectContent>
-                          {bootstrap.operators.map(op => (
+                          {allOperators.map(op => (
                             <SelectItem key={op.id} value={op.id}>
-                              {op.full_name || op.name}
+                              {op.short_name || op.full_name || op.name}
                             </SelectItem>
                           ))}
                         </SelectContent>

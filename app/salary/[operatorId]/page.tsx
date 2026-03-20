@@ -1,24 +1,26 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { DEFAULT_SHIFT_BASE_PAY } from '@/lib/core/constants'
+import { calculateOperatorShiftBreakdown, type SalaryShiftBreakdown } from '@/lib/domain/salary'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
-import { supabase } from '@/lib/supabaseClient'
 import {
   ArrowLeft,
-  CalendarDays,
   Banknote,
-  Sun,
-  Moon,
-  UserCircle2,
-  TrendingUp,
-  Settings2,
+  CalendarDays,
   CheckCircle2,
   Circle,
   Loader2,
+  Moon,
+  Settings2,
+  Sun,
+  TrendingUp,
+  UserCircle2,
 } from 'lucide-react'
 
 type Shift = 'day' | 'night'
@@ -39,7 +41,7 @@ type IncomeRow = {
 type Company = {
   id: string
   name: string
-  code?: string | null
+  code: string | null
 }
 
 type Operator = {
@@ -52,25 +54,22 @@ type Operator = {
 }
 
 type SalaryRule = {
-  key: string
-  label: string | null
-  description: string | null
-  value: number | null
+  company_code: string
+  shift_type: Shift
+  base_per_shift: number | null
+  senior_operator_bonus: number | null
+  senior_cashier_bonus: number | null
+  threshold1_turnover: number | null
+  threshold1_bonus: number | null
+  threshold2_turnover: number | null
+  threshold2_bonus: number | null
 }
 
-type DateRangePreset = 'month' | 'week' | 'all'
-
-type AggregatedShift = {
-  id: string // `${date}_${shift}`
-  date: string
-  shift: Shift
-  totalIncome: number
-  cash: number
-  kaspi: number
-  card: number
-  zones: string[]
-  comments: string[]
-  salary: number
+type AssignmentRow = {
+  operator_id: string
+  company_id: string
+  role_in_company: 'operator' | 'senior_operator' | 'senior_cashier'
+  is_active: boolean
 }
 
 type PayoutRow = {
@@ -83,51 +82,53 @@ type PayoutRow = {
   comment: string | null
 }
 
+type SalaryDetailResponse = {
+  operator: Operator
+  companies: Company[]
+  rules: SalaryRule[]
+  assignments: AssignmentRow[]
+  incomes: IncomeRow[]
+  payouts: PayoutRow[]
+}
+
 type PageProps = {
   params: { operatorId: string }
 }
 
-// ---------- helpers (без UTC-сдвигов) ----------
-const toISODateLocal = (d: Date) => {
-  const t = d.getTime() - d.getTimezoneOffset() * 60_000
-  return new Date(t).toISOString().slice(0, 10)
+type DateRangePreset = 'month' | 'week' | 'all'
+
+const toISODateLocal = (date: Date) => {
+  const localTime = date.getTime() - date.getTimezoneOffset() * 60_000
+  return new Date(localTime).toISOString().slice(0, 10)
 }
 
 const fromISODateLocal = (iso: string) => {
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, (m || 1) - 1, d || 1)
+  const [year, month, day] = iso.split('-').map(Number)
+  return new Date(year, (month || 1) - 1, day || 1)
 }
 
 const todayISO = () => toISODateLocal(new Date())
 
 const addDaysISO = (iso: string, diff: number) => {
-  const d = fromISODateLocal(iso || todayISO())
-  d.setDate(d.getDate() + diff)
-  return toISODateLocal(d)
+  const date = fromISODateLocal(iso || todayISO())
+  date.setDate(date.getDate() + diff)
+  return toISODateLocal(date)
 }
 
-const formatMoney = (v: number | null | undefined) =>
-  (v ?? 0).toLocaleString('ru-RU')
+const formatMoney = (value: number | null | undefined) => (value ?? 0).toLocaleString('ru-RU')
 
 const formatDate = (iso: string) => {
   if (!iso) return ''
-  const d = fromISODateLocal(iso)
-  return d.toLocaleDateString('ru-RU', {
+  return fromISODateLocal(iso).toLocaleDateString('ru-RU', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   })
 }
 
-const formatIsoToRu = (iso: string | '') => {
-  if (!iso) return '…'
-  const d = fromISODateLocal(iso)
-  if (Number.isNaN(d.getTime())) return '…'
-  return d.toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+const formatDateTime = (iso: string | null) => {
+  if (!iso) return null
+  return new Date(iso).toLocaleString('ru-RU')
 }
 
 export default function OperatorSalaryPage({ params }: PageProps) {
@@ -135,51 +136,27 @@ export default function OperatorSalaryPage({ params }: PageProps) {
 
   const [operator, setOperator] = useState<Operator | null>(null)
   const [companies, setCompanies] = useState<Company[]>([])
-  const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [rules, setRules] = useState<SalaryRule[]>([])
+  const [assignments, setAssignments] = useState<AssignmentRow[]>([])
+  const [incomes, setIncomes] = useState<IncomeRow[]>([])
   const [payouts, setPayouts] = useState<PayoutRow[]>([])
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [updatingKey, setUpdatingKey] = useState<string | null>(null)
 
   const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -29))
   const [dateTo, setDateTo] = useState(todayISO())
   const [preset, setPreset] = useState<DateRangePreset | null>('month')
 
-  const [updatingKey, setUpdatingKey] = useState<string | null>(null)
-
-  // reference maps
-  const companyMap = useMemo(() => {
-    const map = new Map<string, Company>()
-    for (const c of companies) map.set(c.id, c)
-    return map
-  }, [companies])
-
-  // rules map
-  const rulesMap = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const r of rules) {
-      if (r.value != null) map.set(r.key, Number(r.value))
-    }
-    return map
-  }, [rules])
-
-  // payout map
   const payoutMap = useMemo(() => {
     const map = new Map<string, PayoutRow>()
-    for (const p of payouts) {
-      map.set(`${p.date}_${p.shift}`, p)
+    for (const payout of payouts) {
+      map.set(`${payout.date}_${payout.shift}`, payout)
     }
     return map
   }, [payouts])
 
-  const baseRate = rulesMap.get('base_rate') ?? 8000
-  const bonus120Threshold = rulesMap.get('bonus_120_threshold') ?? 120_000
-  const bonus120Value = rulesMap.get('bonus_120_value') ?? 2000
-  const bonus160Threshold = rulesMap.get('bonus_160_threshold') ?? 160_000
-  const bonus160Value = rulesMap.get('bonus_160_value') ?? 2000
-
-  // load operator + companies + rules + incomes + payouts
   useEffect(() => {
     let alive = true
 
@@ -187,66 +164,31 @@ export default function OperatorSalaryPage({ params }: PageProps) {
       setLoading(true)
       setError(null)
 
-      const from = dateFrom || '1900-01-01'
-      const to = dateTo || '2999-12-31'
-
-      const [
-        { data: opData, error: opErr },
-        { data: compData, error: compErr },
-        { data: rulesData, error: rulesErr },
-        { data: incomeData, error: incomeErr },
-        { data: payoutData, error: payoutErr },
-      ] = await Promise.all([
-        supabase
-          .from('operators')
-          .select('id, name, short_name, is_active, operator_profiles(*)')
-          .eq('id', operatorId)
-          .single(),
-        supabase.from('companies').select('id, name, code').order('name'),
-        supabase.from('salary_rules').select('key, label, description, value').order('key'),
-        supabase
-          .from('incomes')
-          .select(
-            'id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, card_amount, comment',
-          )
-          .eq('operator_id', operatorId)
-          .gte('date', from)
-          .lte('date', to)
-          .order('date', { ascending: false }),
-        supabase
-          .from('operator_salary_payouts')
-          .select('id, operator_id, date, shift, is_paid, paid_at, comment')
-          .eq('operator_id', operatorId)
-          .gte('date', from)
-          .lte('date', to),
-      ])
+      const params = new URLSearchParams({
+        view: 'operatorDetail',
+        operatorId,
+        dateFrom: dateFrom || '1900-01-01',
+        dateTo: dateTo || '2999-12-31',
+      })
+      const response = await fetch(`/api/admin/salary?${params.toString()}`, {
+        credentials: 'include',
+      })
+      const payload = (await response.json().catch(() => null)) as { error?: string; data?: SalaryDetailResponse } | null
 
       if (!alive) return
 
-      if (opErr) {
-        console.error(opErr)
-        setError('Оператор не найден')
+      if (!response.ok || !payload?.data) {
+        setError(payload?.error || 'Ошибка при загрузке данных')
         setLoading(false)
         return
       }
 
-      if (compErr || rulesErr || incomeErr || payoutErr) {
-        console.error('Error loading operator salary data', {
-          compErr,
-          rulesErr,
-          incomeErr,
-          payoutErr,
-        })
-        setError('Ошибка при загрузке данных')
-        setLoading(false)
-        return
-      }
-
-      setOperator(opData as Operator)
-      setCompanies((compData || []) as Company[])
-      setRules((rulesData || []) as SalaryRule[])
-      setIncomes((incomeData || []) as IncomeRow[])
-      setPayouts((payoutData || []) as PayoutRow[])
+      setOperator(payload.data.operator)
+      setCompanies(payload.data.companies)
+      setRules(payload.data.rules)
+      setAssignments(payload.data.assignments)
+      setIncomes(payload.data.incomes)
+      setPayouts(payload.data.payouts)
       setLoading(false)
     }
 
@@ -256,80 +198,39 @@ export default function OperatorSalaryPage({ params }: PageProps) {
     }
   }, [operatorId, dateFrom, dateTo])
 
-  // aggregated shifts
-  const shifts: AggregatedShift[] = useMemo(() => {
-    if (!incomes.length) return []
-
-    const map = new Map<string, Omit<AggregatedShift, 'id' | 'salary'>>()
-
-    for (const r of incomes) {
-      if (!r.shift) continue
-      const key = `${r.date}_${r.shift}`
-
-      let agg = map.get(key)
-      if (!agg) {
-        agg = {
-          date: r.date,
-          shift: r.shift,
-          totalIncome: 0,
-          cash: 0,
-          kaspi: 0,
-          card: 0,
-          zones: [],
-          comments: [],
-        }
-        map.set(key, agg)
-      }
-
-      const cash = Number(r.cash_amount || 0)
-      const kaspi = Number(r.kaspi_amount || 0)
-      const card = Number(r.card_amount || 0)
-      const total = cash + kaspi + card
-
-      agg.totalIncome += total
-      agg.cash += cash
-      agg.kaspi += kaspi
-      agg.card += card
-
-      if (r.zone && !agg.zones.includes(r.zone)) agg.zones.push(r.zone)
-      if (r.comment && !agg.comments.includes(r.comment)) agg.comments.push(r.comment)
-    }
-
-    const result: AggregatedShift[] = Array.from(map.entries()).map(([key, agg]) => {
-      let salary = baseRate
-      if (agg.totalIncome >= bonus120Threshold) salary += bonus120Value
-      if (agg.totalIncome >= bonus160Threshold) salary += bonus160Value
-
-      return {
-        id: key,
-        date: agg.date,
-        shift: agg.shift,
-        totalIncome: agg.totalIncome,
-        cash: agg.cash,
-        kaspi: agg.kaspi,
-        card: agg.card,
-        zones: agg.zones,
-        comments: agg.comments,
-        salary,
-      }
+  const shifts = useMemo<SalaryShiftBreakdown[]>(() => {
+    return calculateOperatorShiftBreakdown({
+      operatorId,
+      companies,
+      rules,
+      assignments,
+      incomes,
     })
+  }, [assignments, companies, incomes, operatorId, rules])
 
-    result.sort((a, b) => a.date.localeCompare(b.date) || (a.shift > b.shift ? 1 : -1))
-    return result
-  }, [incomes, baseRate, bonus120Threshold, bonus120Value, bonus160Threshold, bonus160Value])
+  const assignedCompanyNames = useMemo(() => {
+    const companyMap = new Map(companies.map((company) => [company.id, company.name]))
+    return assignments
+      .map((assignment) => companyMap.get(assignment.company_id))
+      .filter(Boolean) as string[]
+  }, [assignments, companies])
+
+  const relevantRules = useMemo(() => {
+    const assignedCodes = new Set(
+      assignments
+        .map((assignment) => companies.find((company) => company.id === assignment.company_id)?.code?.toLowerCase() || null)
+        .filter(Boolean) as string[],
+    )
+    return rules.filter((rule) => assignedCodes.has(rule.company_code.toLowerCase()))
+  }, [assignments, companies, rules])
 
   const totals = useMemo(() => {
     const totalShifts = shifts.length
-    const totalRevenue = shifts.reduce((sum, s) => sum + s.totalIncome, 0)
-    const totalSalary = shifts.reduce((sum, s) => sum + s.salary, 0)
-
+    const totalRevenue = shifts.reduce((sum, shift) => sum + shift.totalIncome, 0)
+    const totalSalary = shifts.reduce((sum, shift) => sum + shift.salary, 0)
     const avgRevenuePerShift = totalShifts > 0 ? totalRevenue / totalShifts : 0
     const avgSalaryPerShift = totalShifts > 0 ? totalSalary / totalShifts : 0
-
-    const paidCount = shifts.reduce((acc, s) => {
-      const p = payoutMap.get(s.id)
-      return acc + (p?.is_paid ? 1 : 0)
-    }, 0)
+    const paidCount = shifts.reduce((acc, shift) => acc + (payoutMap.get(shift.payoutKey)?.is_paid ? 1 : 0), 0)
 
     return {
       totalShifts,
@@ -339,58 +240,64 @@ export default function OperatorSalaryPage({ params }: PageProps) {
       avgSalaryPerShift,
       paidCount,
     }
-  }, [shifts, payoutMap])
+  }, [payoutMap, shifts])
 
-  const handlePreset = (p: DateRangePreset) => {
+  const handlePreset = (nextPreset: DateRangePreset) => {
     const today = todayISO()
-    setPreset(p)
+    setPreset(nextPreset)
 
-    if (p === 'month') {
+    if (nextPreset === 'month') {
       setDateFrom(addDaysISO(today, -29))
       setDateTo(today)
-    } else if (p === 'week') {
+      return
+    }
+
+    if (nextPreset === 'week') {
       setDateFrom(addDaysISO(today, -6))
       setDateTo(today)
-    } else if (p === 'all') {
-      setDateFrom('')
-      setDateTo('')
+      return
     }
+
+    setDateFrom('')
+    setDateTo('')
   }
 
   const togglePaid = useCallback(
-    async (s: AggregatedShift) => {
+    async (shift: SalaryShiftBreakdown) => {
       setError(null)
-      setUpdatingKey(s.id)
+      setUpdatingKey(shift.id)
 
       try {
-        const current = payoutMap.get(s.id)
+        const current = payoutMap.get(shift.payoutKey)
         const nextPaid = !(current?.is_paid ?? false)
-
-        const payload = {
-          operator_id: operatorId,
-          date: s.date,
-          shift: s.shift,
-          is_paid: nextPaid,
-          paid_at: nextPaid ? new Date().toISOString() : null,
+        const response = await fetch('/api/admin/salary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            action: 'toggleShiftPayout',
+            payload: {
+              operator_id: operatorId,
+              date: shift.date,
+              shift: shift.shift,
+              is_paid: nextPaid,
+              paid_at: nextPaid ? new Date().toISOString() : null,
+            },
+          }),
+        })
+        const payload = (await response.json().catch(() => null)) as { error?: string; data?: PayoutRow } | null
+        if (!response.ok || !payload?.data) {
+          throw new Error(payload?.error || 'Не удалось обновить статус оплаты')
         }
 
-        const { data, error } = await supabase
-          .from('operator_salary_payouts')
-          .upsert(payload, { onConflict: 'operator_id,date,shift' })
-          .select('id, operator_id, date, shift, is_paid, paid_at, comment')
-          .single()
-
-        if (error) throw error
-
         setPayouts((prev) => {
-          const key = `${data.date}_${data.shift}`
-          const next = prev.filter((x) => `${x.date}_${x.shift}` !== key)
-          next.push(data as PayoutRow)
+          const next = prev.filter((item) => `${item.date}_${item.shift}` !== shift.payoutKey)
+          next.push(payload.data as PayoutRow)
           return next
         })
-      } catch (e: any) {
-        console.error(e)
-        setError(e.message || 'Не удалось обновить статус оплаты')
+      } catch (err: any) {
+        console.error(err)
+        setError(err?.message || 'Не удалось обновить статус оплаты')
       } finally {
         setUpdatingKey(null)
       }
@@ -398,16 +305,13 @@ export default function OperatorSalaryPage({ params }: PageProps) {
     [operatorId, payoutMap],
   )
 
-  const periodLabel =
-    dateFrom || dateTo ? `${formatIsoToRu(dateFrom)} — ${formatIsoToRu(dateTo)}` : 'Весь период'
-
-  const baseLabel = rules.find((r) => r.key === 'base_rate')?.label || 'Ставка за смену'
+  const periodLabel = dateFrom || dateTo ? `${formatDate(dateFrom)} - ${formatDate(dateTo)}` : 'Весь период'
 
   if (loading) {
     return (
       <div className="flex min-h-screen bg-background">
         <Sidebar />
-        <main className="flex-1 flex items-center justify-center text-muted-foreground">
+        <main className="flex flex-1 items-center justify-center text-muted-foreground">
           Загрузка карточки оператора...
         </main>
       </div>
@@ -418,11 +322,11 @@ export default function OperatorSalaryPage({ params }: PageProps) {
     return (
       <div className="flex min-h-screen bg-background">
         <Sidebar />
-        <main className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+        <main className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
           <p>{error || 'Оператор не найден'}</p>
           <Link href="/salary">
             <Button variant="outline" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-2" />
+              <ArrowLeft className="mr-2 h-4 w-4" />
               Назад к зарплате
             </Button>
           </Link>
@@ -435,97 +339,79 @@ export default function OperatorSalaryPage({ params }: PageProps) {
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <main className="flex-1 overflow-auto">
-        <div className="p-8 space-y-6 max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="mx-auto max-w-7xl space-y-6 p-8">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div className="flex items-start gap-3">
               <Link href="/salary">
                 <Button variant="ghost" size="icon" className="mr-1 hidden md:inline-flex">
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="h-4 w-4" />
                 </Button>
               </Link>
               <div>
                 <div className="flex items-center gap-2">
-                  <UserCircle2 className="w-6 h-6 text-purple-500" />
-                  <h1 className="text-2xl md:text-3xl font-bold">
-                    {getOperatorDisplayName(operator)}
-                  </h1>
+                  <UserCircle2 className="h-6 w-6 text-purple-500" />
+                  <h1 className="text-2xl font-bold md:text-3xl">{getOperatorDisplayName(operator)}</h1>
                   {!operator.is_active && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/40">
+                    <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-400">
                       неактивен
                     </span>
                   )}
                 </div>
-                <p className="text-muted-foreground text-sm mt-1">
+                <p className="mt-1 text-sm text-muted-foreground">
                   Детальная статистика смен и зарплаты за выбранный период
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 justify-end">
-              <Link href="/salary/rules">
-                <Button variant="outline" size="sm" className="gap-2 text-xs">
-                  <Settings2 className="w-4 h-4" />
-                  Правила зарплаты
-                </Button>
-              </Link>
-            </div>
+            <Link href="/salary/rules">
+              <Button variant="outline" size="sm" className="gap-2 text-xs">
+                <Settings2 className="h-4 w-4" />
+                Правила зарплаты
+              </Button>
+            </Link>
           </div>
 
-          {/* KPI блок */}
-          <Card className="p-4 md:p-5 border-border bg-card/80 space-y-3">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Banknote className="w-4 h-4" />
+          <Card className="space-y-3 border-border bg-card/80 p-4 md:p-5">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <Card className="flex flex-col justify-center border-border bg-background/40 p-4">
+                <div className="mb-1 flex items-center gap-2 text-muted-foreground">
+                  <Banknote className="h-4 w-4" />
                   <span className="text-xs uppercase tracking-wide">Всего зарплата</span>
                 </div>
-                <div className="text-xl md:text-2xl font-bold text-foreground">
-                  {formatMoney(totals.totalSalary)} ₸
-                </div>
+                <div className="text-xl font-bold text-foreground md:text-2xl">{formatMoney(totals.totalSalary)} ₸</div>
               </Card>
 
-              <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <TrendingUp className="w-4 h-4" />
+              <Card className="flex flex-col justify-center border-border bg-background/40 p-4">
+                <div className="mb-1 flex items-center gap-2 text-muted-foreground">
+                  <TrendingUp className="h-4 w-4" />
                   <span className="text-xs uppercase tracking-wide">Выручка</span>
                 </div>
-                <div className="text-xl md:text-2xl font-bold text-foreground">
-                  {formatMoney(totals.totalRevenue)} ₸
-                </div>
+                <div className="text-xl font-bold text-foreground md:text-2xl">{formatMoney(totals.totalRevenue)} ₸</div>
                 <div className="text-[10px] text-muted-foreground">
-                  В среднем за смену:{' '}
-                  <span className="font-semibold">{formatMoney(totals.avgRevenuePerShift)} ₸</span>
+                  В среднем за смену: <span className="font-semibold">{formatMoney(totals.avgRevenuePerShift)} ₸</span>
                 </div>
               </Card>
 
-              <Card className="p-4 border-border bg-background/40 flex flex-col justify-center">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <CalendarDays className="w-4 h-4" />
+              <Card className="flex flex-col justify-center border-border bg-background/40 p-4">
+                <div className="mb-1 flex items-center gap-2 text-muted-foreground">
+                  <CalendarDays className="h-4 w-4" />
                   <span className="text-xs uppercase tracking-wide">Кол-во смен</span>
                 </div>
-                <div className="text-xl md:text-2xl font-bold text-foreground">{totals.totalShifts}</div>
+                <div className="text-xl font-bold text-foreground md:text-2xl">{totals.totalShifts}</div>
                 <div className="text-[10px] text-muted-foreground">
-                  Средняя зарплата за смену:{' '}
-                  <span className="font-semibold">{formatMoney(totals.avgSalaryPerShift)} ₸</span>
+                  Средняя зарплата за смену: <span className="font-semibold">{formatMoney(totals.avgSalaryPerShift)} ₸</span>
                 </div>
               </Card>
 
-              <Card className="p-4 border border-accent/60 bg-accent/10 flex flex-col justify-center">
-                <div className="text-[11px] text-muted-foreground mb-1 uppercase tracking-wider">
-                  Текущие правила
-                </div>
-                <div className="text-xs space-y-1 text-foreground">
+              <Card className="flex flex-col justify-center border border-accent/60 bg-accent/10 p-4">
+                <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Текущие правила</div>
+                <div className="space-y-1 text-xs text-foreground">
+                  <div>Активных правил: {relevantRules.length || 0}</div>
                   <div>
-                    <span className="font-semibold">{baseLabel}</span>: {formatMoney(baseRate)} ₸
+                    Точки: {assignedCompanyNames.length ? assignedCompanyNames.join(', ') : 'не назначены'}
                   </div>
-                  <div>
-                    Бонус ≥ {formatMoney(bonus120Threshold)} ₸: {formatMoney(bonus120Value)} ₸
-                  </div>
-                  <div>
-                    Бонус ≥ {formatMoney(bonus160Threshold)} ₸: {formatMoney(bonus160Value)} ₸
-                  </div>
-
+                  <div>Роль-бонус учитывается автоматически</div>
+                  <div>Ставка по умолчанию: {formatMoney(DEFAULT_SHIFT_BASE_PAY)} ₸</div>
                   <div className="pt-2 text-[11px] text-muted-foreground">
                     Оплачено смен: <span className="font-semibold text-foreground">{totals.paidCount}</span> /{' '}
                     <span className="font-semibold text-foreground">{totals.totalShifts}</span>
@@ -536,61 +422,53 @@ export default function OperatorSalaryPage({ params }: PageProps) {
 
             <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-1">
-                <CalendarDays className="w-3 h-3" />
+                <CalendarDays className="h-3 w-3" />
                 <span className="uppercase tracking-wide">Период:</span>
                 <span className="font-mono">{periodLabel}</span>
-              </div>
-              <div>
-                Смен: <span className="font-semibold">{totals.totalShifts}</span>
               </div>
             </div>
           </Card>
 
-          {/* Фильтры дат */}
-          <Card className="p-4 border-border bg-card">
-            <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-end">
+          <Card className="border-border bg-card p-4">
+            <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
               <div className="flex flex-col gap-2">
-                <label className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">
-                  Период
-                </label>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Период</label>
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative flex items-center bg-input/50 rounded-md border border-border/50 px-2 py-1">
-                    <CalendarDays className="w-3.5 h-3.5 text-muted-foreground mr-1.5" />
+                  <div className="relative flex items-center rounded-md border border-border/50 bg-input/50 px-2 py-1">
+                    <CalendarDays className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
                     <input
                       type="date"
                       value={dateFrom}
-                      onChange={(e) => {
-                        setDateFrom(e.target.value)
+                      onChange={(event) => {
+                        setDateFrom(event.target.value)
                         setPreset(null)
                       }}
-                      className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
+                      className="cursor-pointer bg-transparent px-1 py-1 text-xs text-foreground outline-none"
                     />
-                    <span className="text-muted-foreground text-xs px-1">→</span>
+                    <span className="px-1 text-xs text-muted-foreground">→</span>
                     <input
                       type="date"
                       value={dateTo}
-                      onChange={(e) => {
-                        setDateTo(e.target.value)
+                      onChange={(event) => {
+                        setDateTo(event.target.value)
                         setPreset(null)
                       }}
-                      className="bg-transparent text-xs px-1 py-1 text-foreground outline-none cursor-pointer"
+                      className="cursor-pointer bg-transparent px-1 py-1 text-xs text-foreground outline-none"
                     />
                   </div>
 
-                  <div className="flex bg-input/30 rounded-md border border-border/30 p-0.5">
-                    {(['week', 'month', 'all'] as DateRangePreset[]).map((p) => (
+                  <div className="flex rounded-md border border-border/30 bg-input/30 p-0.5">
+                    {(['week', 'month', 'all'] as DateRangePreset[]).map((value) => (
                       <button
-                        key={p}
-                        onClick={() => handlePreset(p)}
-                        className={`px-3 py-1 text-[10px] rounded transition-colors ${
-                          preset === p
-                            ? 'bg-accent text-accent-foreground'
-                            : 'hover:bg-white/10 text-muted-foreground'
+                        key={value}
+                        onClick={() => handlePreset(value)}
+                        className={`rounded px-3 py-1 text-[10px] transition-colors ${
+                          preset === value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-white/10'
                         }`}
                       >
-                        {p === 'week' && 'Неделя'}
-                        {p === 'month' && '30 дн.'}
-                        {p === 'all' && 'Всё'}
+                        {value === 'week' && 'Неделя'}
+                        {value === 'month' && '30 дн.'}
+                        {value === 'all' && 'Все'}
                       </button>
                     ))}
                   </div>
@@ -599,14 +477,14 @@ export default function OperatorSalaryPage({ params }: PageProps) {
             </div>
           </Card>
 
-          {/* Таблица смен */}
-          <Card className="border-border bg-card overflow-hidden">
+          <Card className="overflow-hidden border-border bg-card">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="sticky top-0 z-10 border-b border-border bg-secondary/40 backdrop-blur text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  <tr className="sticky top-0 z-10 border-b border-border bg-secondary/40 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur">
                     <th className="px-4 py-3 text-left">Дата</th>
                     <th className="px-4 py-3 text-center">Смена</th>
+                    <th className="px-4 py-3 text-left">Точка</th>
                     <th className="px-4 py-3 text-left">Зоны</th>
                     <th className="px-4 py-3 text-right text-green-500">Нал</th>
                     <th className="px-4 py-3 text-right text-blue-500">Kaspi</th>
@@ -621,99 +499,74 @@ export default function OperatorSalaryPage({ params }: PageProps) {
                 <tbody className="text-sm">
                   {shifts.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="px-6 py-10 text-center text-muted-foreground">
+                      <td colSpan={11} className="px-6 py-10 text-center text-muted-foreground">
                         Нет смен за выбранный период.
                       </td>
                     </tr>
                   )}
 
-                  {shifts.map((s, idx) => {
-                    const pay = payoutMap.get(s.id)
-                    const isPaid = pay?.is_paid ?? false
-                    const busy = updatingKey === s.id
+                  {shifts.map((shift, index) => {
+                    const payout = payoutMap.get(shift.payoutKey)
+                    const isPaid = payout?.is_paid ?? false
+                    const busy = updatingKey === shift.id
 
                     return (
                       <tr
-                        key={s.id}
-                        className={`border-b border-border/40 hover:bg-white/5 transition-colors ${
-                          idx % 2 === 0 ? 'bg-card/40' : ''
-                        }`}
+                        key={shift.id}
+                        className={`border-b border-border/40 transition-colors hover:bg-white/5 ${index % 2 === 0 ? 'bg-card/40' : ''}`}
                       >
-                        <td className="px-4 py-3 whitespace-nowrap text-muted-foreground font-mono text-xs">
-                          {formatDate(s.date)}
+                        <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
+                          {formatDate(shift.date)}
                         </td>
-
                         <td className="px-4 py-3 text-center">
-                          {s.shift === 'day' ? (
-                            <Sun className="w-4 h-4 text-yellow-400 inline" />
+                          {shift.shift === 'day' ? (
+                            <Sun className="inline h-4 w-4 text-yellow-400" />
                           ) : (
-                            <Moon className="w-4 h-4 text-blue-400 inline" />
+                            <Moon className="inline h-4 w-4 text-blue-400" />
                           )}
                         </td>
-
                         <td className="px-4 py-3 text-xs text-muted-foreground">
-                          {s.zones.length ? s.zones.join(', ') : '—'}
+                          {shift.companyName || shift.companyCode || '—'}
                         </td>
-
-                        <td
-                          className={`px-4 py-3 text-right font-mono ${
-                            s.cash ? 'text-foreground' : 'text-muted-foreground/20'
-                          }`}
-                        >
-                          {s.cash ? formatMoney(s.cash) : '—'}
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {shift.zones.length ? shift.zones.join(', ') : '—'}
                         </td>
-
-                        <td
-                          className={`px-4 py-3 text-right font-mono ${
-                            s.kaspi ? 'text-foreground' : 'text-muted-foreground/20'
-                          }`}
-                        >
-                          {s.kaspi ? formatMoney(s.kaspi) : '—'}
+                        <td className={`px-4 py-3 text-right font-mono ${shift.cash ? 'text-foreground' : 'text-muted-foreground/20'}`}>
+                          {shift.cash ? formatMoney(shift.cash) : '—'}
                         </td>
-
-                        <td
-                          className={`px-4 py-3 text-right font-mono ${
-                            s.card ? 'text-foreground' : 'text-muted-foreground/20'
-                          }`}
-                        >
-                          {s.card ? formatMoney(s.card) : '—'}
+                        <td className={`px-4 py-3 text-right font-mono ${shift.kaspi ? 'text-foreground' : 'text-muted-foreground/20'}`}>
+                          {shift.kaspi ? formatMoney(shift.kaspi) : '—'}
                         </td>
-
-                        <td className="px-4 py-3 text-right font-mono">{formatMoney(s.totalIncome)}</td>
-
-                        <td className="px-4 py-3 text-right font-mono font-semibold text-accent bg-accent/5">
-                          {formatMoney(s.salary)}
+                        <td className={`px-4 py-3 text-right font-mono ${shift.card ? 'text-foreground' : 'text-muted-foreground/20'}`}>
+                          {shift.card ? formatMoney(shift.card) : '—'}
                         </td>
-
-                        <td className="px-4 py-3 text-xs text-muted-foreground max-w-[260px]">
-                          {s.comments.length ? s.comments.join(' | ') : '—'}
+                        <td className="px-4 py-3 text-right font-mono">{formatMoney(shift.totalIncome)}</td>
+                        <td className="bg-accent/5 px-4 py-3 text-right font-mono font-semibold text-accent">
+                          {formatMoney(shift.salary)}
                         </td>
-
+                        <td className="max-w-[260px] px-4 py-3 text-xs text-muted-foreground">
+                          {shift.comments.length ? shift.comments.join(' | ') : '—'}
+                        </td>
                         <td className="px-4 py-3 text-center">
                           <Button
                             size="xs"
                             variant={isPaid ? 'default' : 'outline'}
                             className={`gap-2 ${isPaid ? 'bg-emerald-600 hover:bg-emerald-600/90' : ''}`}
                             disabled={busy}
-                            onClick={() => togglePaid(s)}
-                            title={isPaid ? 'Отметить как НЕ оплачено' : 'Отметить как ОПЛАЧЕНО'}
+                            onClick={() => togglePaid(shift)}
                           >
                             {busy ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : isPaid ? (
-                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <CheckCircle2 className="h-3.5 w-3.5" />
                             ) : (
-                              <Circle className="w-3.5 h-3.5" />
+                              <Circle className="h-3.5 w-3.5" />
                             )}
-                            <span className="text-[11px]">
-                              {isPaid ? 'Оплачено' : 'Не оплачено'}
-                            </span>
+                            <span className="text-[11px]">{isPaid ? 'Оплачено' : 'Не оплачено'}</span>
                           </Button>
 
-                          {pay?.paid_at && isPaid && (
-                            <div className="text-[10px] text-muted-foreground mt-1">
-                              {new Date(pay.paid_at).toLocaleString('ru-RU')}
-                            </div>
+                          {isPaid && payout?.paid_at && (
+                            <div className="mt-1 text-[10px] text-muted-foreground">{formatDateTime(payout.paid_at)}</div>
                           )}
                         </td>
                       </tr>

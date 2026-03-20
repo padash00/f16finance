@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     const { data: operatorAuth, error: operatorAuthError } = await supabase
       .from('operator_auth')
       .select('id, user_id, operator_id, username, role, is_active, operator:operator_id(id, name, short_name, telegram_chat_id, is_active, operator_profiles(*))')
-      .eq('username', username)
+      .eq('user_id', authData.user.id)
       .eq('is_active', true)
       .maybeSingle()
 
@@ -124,7 +124,8 @@ export async function POST(request: Request) {
         point_device_name: device.name,
         company_id: device.company_id,
         operator_id: operatorAuth.operator_id,
-        username,
+        username: operatorAuth.username || username,
+        entered_username: username,
         role_in_company: primaryAssignment.role_in_company,
         all_company_count: allCompanies.length,
       },
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
       operator: {
         auth_id: operatorAuth.id,
         operator_id: operatorAuth.operator_id,
-        username,
+        username: operatorAuth.username || username,
         name: operator?.name || null,
         short_name: operator?.short_name || null,
         full_name: profile?.full_name || null,

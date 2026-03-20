@@ -5,8 +5,6 @@ import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { supabase } from '@/lib/supabaseClient'
-import { calculateForecast } from '@/lib/kpiEngine'
 import {
   RefreshCcw,
   Wand2,
@@ -78,6 +76,14 @@ type PayRow = {
   total: number
 }
 
+type DashboardResponse = {
+  collectivePlans: KpiRow[]
+  weekRows: IncomeRow[]
+  monthRows: IncomeRow[]
+  weekdayShare: Record<CompanyCode, number>
+  operatorNames: OperatorMap
+}
+
 // ================== UTILS ==================
 const money = (v: number) => (v ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 
@@ -96,23 +102,6 @@ function startOfMonth(monthStartISO: string) {
 function endOfMonth(monthStartISO: string) {
   const s = parseLocalDate(monthStartISO)
   return new Date(s.getFullYear(), s.getMonth() + 1, 0)
-}
-
-function getMonthKey(d: Date) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}`
-}
-
-function getForecastDates(targetMonthStart: string) {
-  const target = parseLocalDate(targetMonthStart)
-  const prev1 = new Date(target.getFullYear(), target.getMonth() - 1, 1)
-  const prev2 = new Date(target.getFullYear(), target.getMonth() - 2, 1)
-
-  const fetchStart = `${getMonthKey(prev2)}-01`
-  const endPrev1 = new Date(prev1.getFullYear(), prev1.getMonth() + 1, 0)
-  const fetchEnd = iso(endPrev1)
-  return { target, prev1, prev2, fetchStart, fetchEnd }
 }
 
 function getWeeksInMonth(monthStartISO: string) {
@@ -248,16 +237,19 @@ export default function KPIStatusAndPayoutPage() {
 
     try {
       // 1) Планы collective
-      const { data: plans, error: ep } = await supabase
-        .from('kpi_plans')
-        .select('*')
-        .eq('month_start', monthStart)
-        .eq('entity_type', 'collective')
-
-      if (ep) throw ep
+      const params = new URLSearchParams({
+        monthStart,
+        weekStart: weekRange.start,
+        weekEnd: weekRange.end,
+      })
+      const response = await fetch(`/api/admin/kpi-dashboard?${params.toString()}`, {
+        credentials: 'include',
+      })
+      const payload = (await response.json().catch(() => null)) as (DashboardResponse & { error?: string }) | null
+      if (!response.ok) throw new Error(payload?.error || 'Ошибка загрузки KPI')
 
       const p: any = { arena: { week: 0, month: 0 }, ramen: { week: 0, month: 0 }, extra: { week: 0, month: 0 } }
-      ;(plans as KpiRow[] | null)?.forEach((r) => {
+      ;(payload?.collectivePlans || []).forEach((r) => {
         const c = String(r.company_code || '').toLowerCase() as CompanyCode
         if (!COMPANIES.includes(c)) return
         p[c] = { week: Number(r.turnover_target_week || 0), month: Number(r.turnover_target_month || 0) }
@@ -265,30 +257,10 @@ export default function KPIStatusAndPayoutPage() {
       setCollectivePlans(p)
 
       // 2) Факты неделя + месяц
-      const mStart = iso(startOfMonth(monthStart))
-      const mEnd = iso(endOfMonth(monthStart))
+      const weekList = payload?.weekRows || []
+      const monthList = payload?.monthRows || []
 
       // ✅ ВАЖНО: select только из реальных колонок
-      const selectIncome = 'date, cash_amount, kaspi_amount, card_amount, operator_id, companies!inner(code)'
-
-      const { data: incomesMonth, error: em } = await supabase
-        .from('incomes')
-        .select(selectIncome)
-        .gte('date', mStart)
-        .lte('date', mEnd)
-
-      if (em) throw em
-
-      const { data: incomesWeek, error: ew } = await supabase
-        .from('incomes')
-        .select(selectIncome)
-        .gte('date', weekRange.start)
-        .lte('date', weekRange.end)
-
-      if (ew) throw ew
-
-      const weekList = (incomesWeek as any[] | null) || []
-      const monthList = (incomesMonth as any[] | null) || []
       setWeekRows(weekList)
       setMonthRows(monthList)
 
@@ -316,47 +288,10 @@ export default function KPIStatusAndPayoutPage() {
       setFactsMonth(monthAgg)
 
       // 3) Доля Пн–Чт / Пт–Вс по истории (N-2..N-1)
-      const { fetchStart, fetchEnd } = getForecastDates(monthStart)
-
-      const { data: hist, error: eh } = await supabase
-        .from('incomes')
-        .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
-        .gte('date', fetchStart)
-        .lte('date', fetchEnd)
-
-      if (eh) throw eh
-
-      const shareAgg: any = { arena: { wd: 0, we: 0 }, ramen: { wd: 0, we: 0 }, extra: { wd: 0, we: 0 } }
-      ;((hist as any[]) || []).forEach((r: any) => {
-        const c = String(r.companies?.code || '').toLowerCase()
-        if (!(COMPANIES as readonly string[]).includes(c)) return
-        const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
-        const team: TeamKey = isWeekdayTeam(r.date) ? 'weekday' : 'weekend'
-        if (team === 'weekday') shareAgg[c].wd += amount
-        else shareAgg[c].we += amount
-      })
-
-      const shareRes: any = { arena: 4 / 7, ramen: 4 / 7, extra: 4 / 7 }
-      for (const c of COMPANIES) {
-        const total = shareAgg[c].wd + shareAgg[c].we
-        shareRes[c] = total > 0 ? shareAgg[c].wd / total : 4 / 7
-      }
-      setWeekdayShare(shareRes)
+      setWeekdayShare(payload?.weekdayShare || { arena: 4 / 7, ramen: 4 / 7, extra: 4 / 7 })
 
       // 4) Имена операторов
-      const ids = new Set<string>()
-      weekList.forEach((r: IncomeRow) => r.operator_id && ids.add(r.operator_id))
-      monthList.forEach((r: IncomeRow) => r.operator_id && ids.add(r.operator_id))
-
-      const idArr = Array.from(ids)
-      if (idArr.length) {
-        const { data: ops, error: eo } = await supabase.from('operators').select('id, name').in('id', idArr)
-        if (!eo) {
-          const map: OperatorMap = {}
-          ;(ops as any[] | null)?.forEach((o) => (map[o.id] = o.name))
-          setOperatorNames(map)
-        }
-      }
+      setOperatorNames(payload?.operatorNames || {})
 
       setStatus({ type: 'success', msg: 'Данные обновлены' })
     } catch (e: any) {
@@ -377,59 +312,17 @@ export default function KPIStatusAndPayoutPage() {
     setStatus(null)
 
     try {
-      const { target, prev1, prev2, fetchStart, fetchEnd } = getForecastDates(monthStart)
-
-      const { data: incomes, error } = await supabase
-        .from('incomes')
-        .select('date, cash_amount, kaspi_amount, card_amount, companies!inner(code)')
-        .gte('date', fetchStart)
-        .lte('date', fetchEnd)
-
-      if (error) throw error
-
-      const k1 = getMonthKey(prev1)
-      const k2 = getMonthKey(prev2)
-
-      const sums: Record<CompanyCode, { t1: number; t2: number }> = {
-        arena: { t1: 0, t2: 0 },
-        ramen: { t1: 0, t2: 0 },
-        extra: { t1: 0, t2: 0 },
-      }
-
-      ;((incomes as any[]) || []).forEach((r: any) => {
-        const c = String(r.companies?.code || '').toLowerCase()
-        if (!(COMPANIES as readonly string[]).includes(c)) return
-        const amount = Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0)
-        const mKey = String(r.date).slice(0, 7)
-        if (mKey === k2) sums[c as CompanyCode].t2 += amount
-        if (mKey === k1) sums[c as CompanyCode].t1 += amount
+      const response = await fetch('/api/admin/kpi-dashboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'generateCollectivePlans',
+          monthStart,
+        }),
       })
-
-      const newRows: KpiRow[] = []
-
-      for (const c of COMPANIES) {
-        const calc = calculateForecast(target, sums[c].t1, sums[c].t2)
-        const targetMonth = Math.round(calc.forecast)
-        const targetWeek = Math.round(targetMonth / 4.345)
-
-        newRows.push({
-          plan_key: `${monthStart}|collective|${c}`,
-          month_start: monthStart,
-          entity_type: 'collective',
-          company_code: c,
-          operator_id: null,
-          role_code: null,
-          turnover_target_month: targetMonth,
-          turnover_target_week: targetWeek,
-          shifts_target_month: 0,
-          shifts_target_week: 0,
-          meta: { prev2: Math.round(sums[c].t2), prev1_est: Math.round(calc.prev1Estimated), trend: calc.trend.toFixed(1) },
-          is_locked: false,
-        })
-      }
-
-      const { error: up } = await supabase.from('kpi_plans').upsert(newRows, { onConflict: 'plan_key' })
-      if (up) throw up
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null
+      if (!response.ok) throw new Error(payload?.error || 'Ошибка генерации')
 
       setStatus({ type: 'success', msg: 'Планы сгенерированы' })
       await loadAll()

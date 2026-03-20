@@ -80,9 +80,6 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
   const [syncing, setSyncing] = useState(false)
   const [showQueue, setShowQueue] = useState(false)
 
-  // Выбранный оператор (по умолчанию залогиненный)
-  const [selectedOperatorId, setSelectedOperatorId] = useState(session.operator.operator_id)
-
   // Диалог подтверждения
   const [confirmDialog, setConfirmDialog] = useState(false)
 
@@ -98,15 +95,13 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
   const wiponLabel = isArena ? 'Senet (система)' : 'Wipon (система)'
   const kaspiLabel = isArena ? 'Kaspi POS' : 'Kaspi'
 
-  // Авто-определение смены по времени (только при первом открытии без черновика)
+  // Авто-определение смены по времени (только если нет сохранённого черновика)
   useEffect(() => {
-    const hour = new Date().getHours()
-    const auto = hour >= 8 && hour < 20 ? 'day' : 'night'
-    setForm(f => {
-      if (f.shift === 'day' && auto === 'night') return { ...f, shift: 'night' }
-      if (f.shift === 'night' && auto === 'day') return { ...f, shift: 'day' }
-      return f
-    })
+    const hasDraft = !!localStorage.getItem(DRAFT_KEY)
+    if (!hasDraft) {
+      const hour = new Date().getHours()
+      setForm(f => ({ ...f, shift: hour >= 8 && hour < 20 ? 'day' : 'night' }))
+    }
   }, [])
 
   // Автосохранение черновика
@@ -222,7 +217,7 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
     setResult(null)
 
     if (fact <= 0) { setError('Введите сумму выручки'); return }
-    if (!selectedOperatorId) { setError('Выберите оператора'); return }
+    if (!session.operator.operator_id) { setError('Выберите оператора'); return }
 
     // Arena + ночная + последний день месяца → разбивка
     if (isArena && form.shift === 'night' && isLastDayOfMonth(form.date)) {
@@ -238,7 +233,7 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
   async function handleConfirm() {
     setConfirmDialog(false)
     setSubmitting(true)
-    const fullForm: ShiftForm = { ...form, operator_id: selectedOperatorId }
+    const fullForm: ShiftForm = { ...form, operator_id: session.operator.operator_id }
     const r = await sendOne(fullForm)
     setPendingCount(await getPendingCount())
     setResult(r)
@@ -250,7 +245,7 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
     setSplitDialog(false)
     setSubmitting(true)
 
-    const fullForm: ShiftForm = { ...form, operator_id: selectedOperatorId }
+    const fullForm: ShiftForm = { ...form, operator_id: session.operator.operator_id }
 
     const afterCash = parseMoney(splitAfter.cash)
     const afterKaspiPos = parseMoney(splitAfter.kaspi_pos)
@@ -284,7 +279,7 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
   async function handleSplitSkip() {
     setSplitDialog(false)
     setSubmitting(true)
-    const fullForm: ShiftForm = { ...form, operator_id: selectedOperatorId }
+    const fullForm: ShiftForm = { ...form, operator_id: session.operator.operator_id }
     const r = await sendOne(fullForm)
     setPendingCount(await getPendingCount())
     setResult(r)
@@ -359,25 +354,6 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4 no-drag">
-              {/* Оператор */}
-              {bootstrap.operators.length > 1 && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Оператор</Label>
-                  <Select value={selectedOperatorId} onValueChange={setSelectedOperatorId} disabled={submitting}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Выберите оператора" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {bootstrap.operators.map(op => (
-                        <SelectItem key={op.id} value={op.id}>
-                          {op.short_name || op.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
               {/* Date + Shift */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -529,12 +505,9 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-1.5 text-sm">
-                {(() => {
-                  const opName = bootstrap.operators.find(o => o.id === selectedOperatorId)?.short_name
-                    || bootstrap.operators.find(o => o.id === selectedOperatorId)?.name
-                    || session.operator.name
-                  return <p className="text-xs text-muted-foreground mb-2">👤 {opName} · {form.date} · {form.shift === 'day' ? '☀️ Дневная' : '🌙 Ночная'}</p>
-                })()}
+                <p className="text-xs text-muted-foreground mb-2">
+                  👤 {session.operator.short_name || session.operator.name || session.operator.username} · {form.date} · {form.shift === 'day' ? '☀️ Дневная' : '🌙 Ночная'}
+                </p>
                 {vCash > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Наличные</span><span>{formatMoney(vCash)} ₸</span></div>}
                 {vCoins > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Мелочь</span><span>{formatMoney(vCoins)} ₸</span></div>}
                 {vKaspi > 0 && <div className="flex justify-between"><span className="text-muted-foreground">{kaspiLabel}</span><span>{formatMoney(vKaspi)} ₸</span></div>}

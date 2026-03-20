@@ -71,6 +71,13 @@ export type Session = OperatorSession | AdminSession
 
 // ─── App State Machine ────────────────────────────────────────────────────────
 
+export interface OperatorBasic {
+  id: string
+  name: string
+  short_name: string | null
+  full_name: string | null
+}
+
 export interface CompanyOption {
   id: string
   name: string
