@@ -100,6 +100,10 @@ export async function proxy(request: NextRequest) {
   }
 
   if (url.pathname.startsWith('/login') || url.pathname.startsWith('/operator-login')) {
+    // Guard: if defaultPath resolves back to /login (unresolved role), don't redirect — prevents infinite loop
+    if (defaultPath === '/login' || defaultPath.startsWith('/login')) {
+      return response
+    }
     url.pathname = defaultPath
     return NextResponse.redirect(url)
   }
