@@ -378,30 +378,33 @@ export default function PointDevicesPage() {
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-3">
-              {[
-                ['shift_report', 'Сменные отчёты'],
-                ['income_report', 'Доходы'],
-                ['debt_report', 'Долги'],
-              ].map(([key, label]) => (
+              {([
+                ['shift_report', 'Сменные отчёты', 'Форма смены: наличные, Kaspi, итоги → Telegram и salary. Нужно всем точкам.'],
+                ['income_report', 'Доходы', 'Отдельная форма доходов. Зарезервировано, пока не используется.'],
+                ['debt_report', 'Долги и сканер', 'Включает страницу сканера: запись долгов и штрихкодов. Главный экран меняется с формы смены на сканер.'],
+              ] as [string, string, string][]).map(([key, label, hint]) => (
                 <label
                   key={key}
-                  className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm"
+                  className="flex flex-col gap-1.5 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm cursor-pointer"
                 >
-                  <input
-                    type="checkbox"
-                    checked={newDevice.feature_flags[key as keyof PointFeatureFlags]}
-                    onChange={(event) =>
-                      setNewDevice((prev) => ({
-                        ...prev,
-                        feature_flags: {
-                          ...prev.feature_flags,
-                          [key]: event.target.checked,
-                        },
-                      }))
-                    }
-                    className="rounded border-white/10 bg-background"
-                  />
-                  <span>{label}</span>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={newDevice.feature_flags[key as keyof PointFeatureFlags]}
+                      onChange={(event) =>
+                        setNewDevice((prev) => ({
+                          ...prev,
+                          feature_flags: {
+                            ...prev.feature_flags,
+                            [key]: event.target.checked,
+                          },
+                        }))
+                      }
+                      className="rounded border-white/10 bg-background"
+                    />
+                    <span className="font-medium">{label}</span>
+                  </div>
+                  <p className="pl-6 text-xs text-muted-foreground leading-relaxed">{hint}</p>
                 </label>
               ))}
             </div>
@@ -498,30 +501,33 @@ export default function PointDevicesPage() {
                               </div>
 
                               <div className="grid gap-3 md:grid-cols-3">
-                                {[
-                                  ['shift_report', 'Сменные отчёты'],
-                                  ['income_report', 'Доходы'],
-                                  ['debt_report', 'Долги'],
-                                ].map(([key, label]) => (
+                                {([
+                                  ['shift_report', 'Сменные отчёты', 'Форма смены → Telegram и salary. Нужно всем точкам.'],
+                                  ['income_report', 'Доходы', 'Зарезервировано, пока не используется.'],
+                                  ['debt_report', 'Долги и сканер', 'Включает сканер. Главный экран меняется на сканер долгов.'],
+                                ] as [string, string, string][]).map(([key, label, hint]) => (
                                   <label
                                     key={key}
-                                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-background/50 px-3 py-3 text-sm"
+                                    className="flex flex-col gap-1.5 rounded-xl border border-white/10 bg-background/50 px-3 py-3 text-sm cursor-pointer"
                                   >
-                                    <input
-                                      type="checkbox"
-                                      checked={form.feature_flags[key as keyof PointFeatureFlags]}
-                                      onChange={(event) =>
-                                        setEditingDevice((prev) => ({
-                                          ...prev,
-                                          feature_flags: {
-                                            ...prev.feature_flags,
-                                            [key]: event.target.checked,
-                                          },
-                                        }))
-                                      }
-                                      className="rounded border-white/10 bg-background"
-                                    />
-                                    <span>{label}</span>
+                                    <div className="flex items-center gap-3">
+                                      <input
+                                        type="checkbox"
+                                        checked={form.feature_flags[key as keyof PointFeatureFlags]}
+                                        onChange={(event) =>
+                                          setEditingDevice((prev) => ({
+                                            ...prev,
+                                            feature_flags: {
+                                              ...prev.feature_flags,
+                                              [key]: event.target.checked,
+                                            },
+                                          }))
+                                        }
+                                        className="rounded border-white/10 bg-background"
+                                      />
+                                      <span className="font-medium">{label}</span>
+                                    </div>
+                                    <p className="pl-6 text-xs text-muted-foreground leading-relaxed">{hint}</p>
                                   </label>
                                 ))}
                               </div>
@@ -624,17 +630,17 @@ export default function PointDevicesPage() {
                                 </div>
 
                                 <div className="grid gap-2">
-                                  {[
+                                  {([
                                     ['shift_report', 'Сменные отчёты'],
                                     ['income_report', 'Доходы'],
-                                    ['debt_report', 'Долги'],
-                                  ].map(([key, label]) => (
+                                    ['debt_report', 'Долги и сканер'],
+                                  ] as [string, string][]).map(([key, label]) => (
                                     <div
                                       key={key}
                                       className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${
                                         device.feature_flags[key as keyof PointFeatureFlags]
                                           ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200'
-                                          : 'border-white/10 bg-white/5 text-muted-foreground'
+                                          : 'border-white/10 bg-white/5 text-muted-foreground line-through opacity-40'
                                       }`}
                                     >
                                       <span>{label}</span>
