@@ -45,11 +45,15 @@ export type SalaryAdjustmentRow = {
   operator_id: string
   amount: number
   kind: AdjustmentKind
+  company_id?: string | null
+  status?: string | null
 }
 
 export type SalaryDebtRow = {
   operator_id: string | null
   amount: number | null
+  company_id?: string | null
+  status?: string | null
 }
 
 export type SalaryOperatorMeta = {
@@ -121,6 +125,30 @@ export type SalaryShiftBreakdown = {
   salary: number
 }
 
+export type SalaryWeekCompanyAllocation = {
+  companyId: string
+  companyCode: string | null
+  companyName: string | null
+  accruedAmount: number
+  bonusAmount: number
+  fineAmount: number
+  debtAmount: number
+  advanceAmount: number
+  netAmount: number
+  shareRatio: number
+}
+
+export type SalaryWeekSummary = {
+  operatorId: string
+  grossAmount: number
+  bonusAmount: number
+  fineAmount: number
+  debtAmount: number
+  advanceAmount: number
+  netAmount: number
+  companyAllocations: SalaryWeekCompanyAllocation[]
+}
+
 type AggregatedShift = {
   operatorId: string
   operatorName: string
@@ -138,6 +166,58 @@ type CalculationOptions = {
 function toAmount(value: number | null | undefined): number {
   const amount = Number(value || 0)
   return Number.isFinite(amount) ? amount : 0
+}
+
+function isActiveStatus(value: string | null | undefined) {
+  return !value || value === 'active'
+}
+
+function roundMoney(value: number) {
+  return Math.round((Number.isFinite(value) ? value : 0) * 100) / 100
+}
+
+function distributeAmountByWeights<T extends { key: string; weight: number }>(
+  amount: number,
+  items: T[],
+): Map<string, number> {
+  const total = roundMoney(amount)
+  const result = new Map<string, number>()
+  if (!items.length || total === 0) return result
+
+  const normalizedItems = items.map((item) => ({
+    ...item,
+    weight: Math.max(0, roundMoney(item.weight)),
+  }))
+  const totalWeight = normalizedItems.reduce((sum, item) => sum + item.weight, 0)
+
+  if (totalWeight <= 0) {
+    result.set(normalizedItems[0].key, total)
+    return result
+  }
+
+  let assigned = 0
+  const drafts = normalizedItems.map((item) => {
+    const raw = (total * item.weight) / totalWeight
+    const rounded = roundMoney(raw)
+    assigned += rounded
+    return { key: item.key, rounded, delta: raw - rounded }
+  })
+
+  let remainder = roundMoney(total - assigned)
+  drafts.sort((left, right) => right.delta - left.delta)
+
+  for (const item of drafts) {
+    if (remainder === 0) break
+    const step = remainder > 0 ? 0.01 : -0.01
+    item.rounded = roundMoney(item.rounded + step)
+    remainder = roundMoney(remainder - step)
+  }
+
+  for (const item of drafts) {
+    result.set(item.key, roundMoney(item.rounded))
+  }
+
+  return result
 }
 
 function createCompanyCodeMap(companies: SalaryCompany[]): Map<string, string> {
@@ -407,6 +487,178 @@ export function calculateOperatorShiftBreakdown(params: {
 
   breakdown.sort((left, right) => left.date.localeCompare(right.date) || left.shift.localeCompare(right.shift))
   return breakdown
+}
+
+export function calculateOperatorWeekSummary(params: {
+  operatorId: string
+  companies: SalaryCompany[]
+  rules: SalaryRule[]
+  assignments?: SalaryOperatorCompanyAssignment[]
+  incomes: SalaryIncomeRow[]
+  adjustments: SalaryAdjustmentRow[]
+  debts: SalaryDebtRow[]
+  options?: CalculationOptions
+}): SalaryWeekSummary {
+  const shifts = calculateOperatorShiftBreakdown({
+    operatorId: params.operatorId,
+    companies: params.companies,
+    rules: params.rules,
+    assignments: params.assignments,
+    incomes: params.incomes,
+    options: params.options,
+  })
+
+  const companyMeta = new Map<string, { companyCode: string | null; companyName: string | null }>()
+  for (const company of params.companies) {
+    companyMeta.set(company.id, {
+      companyCode: company.code || null,
+      companyName: company.name || null,
+    })
+  }
+
+  const companyAllocations = new Map<string, SalaryWeekCompanyAllocation>()
+  const ensureCompany = (companyId: string) => {
+    const existing = companyAllocations.get(companyId)
+    if (existing) return existing
+
+    const meta = companyMeta.get(companyId)
+    const next: SalaryWeekCompanyAllocation = {
+      companyId,
+      companyCode: meta?.companyCode || null,
+      companyName: meta?.companyName || null,
+      accruedAmount: 0,
+      bonusAmount: 0,
+      fineAmount: 0,
+      debtAmount: 0,
+      advanceAmount: 0,
+      netAmount: 0,
+      shareRatio: 0,
+    }
+    companyAllocations.set(companyId, next)
+    return next
+  }
+
+  for (const shift of shifts) {
+    const company = ensureCompany(shift.companyId)
+    company.accruedAmount += shift.salary
+  }
+
+  let bonusAmount = 0
+  let fineAmount = 0
+  let advanceAmount = 0
+
+  const unassignedBonuses: number[] = []
+  const unassignedFines: number[] = []
+  const unassignedAdvances: number[] = []
+
+  for (const adjustment of params.adjustments) {
+    if (adjustment.operator_id !== params.operatorId) continue
+    if (!isActiveStatus(adjustment.status)) continue
+
+    const amount = toAmount(adjustment.amount)
+    if (amount <= 0) continue
+
+    if (adjustment.kind === 'bonus') bonusAmount += amount
+    else if (adjustment.kind === 'advance') advanceAmount += amount
+    else fineAmount += amount
+
+    const targetCompanyId = adjustment.company_id || null
+    if (targetCompanyId) {
+      const company = ensureCompany(targetCompanyId)
+      if (adjustment.kind === 'bonus') company.bonusAmount += amount
+      else if (adjustment.kind === 'advance') company.advanceAmount += amount
+      else company.fineAmount += amount
+      continue
+    }
+
+    if (adjustment.kind === 'bonus') unassignedBonuses.push(amount)
+    else if (adjustment.kind === 'advance') unassignedAdvances.push(amount)
+    else unassignedFines.push(amount)
+  }
+
+  let debtAmount = 0
+  const unassignedDebts: number[] = []
+  for (const debt of params.debts) {
+    if (debt.operator_id !== params.operatorId) continue
+    if (!isActiveStatus(debt.status)) continue
+
+    const amount = toAmount(debt.amount)
+    if (amount <= 0) continue
+    debtAmount += amount
+
+    const targetCompanyId = debt.company_id || null
+    if (targetCompanyId) {
+      const company = ensureCompany(targetCompanyId)
+      company.debtAmount += amount
+      continue
+    }
+
+    unassignedDebts.push(amount)
+  }
+
+  const weightedCompanies = Array.from(companyAllocations.values()).map((company) => ({
+    key: company.companyId,
+    weight: company.accruedAmount,
+  }))
+
+  const distributeUnassigned = (
+    values: number[],
+    apply: (company: SalaryWeekCompanyAllocation, amount: number) => void,
+  ) => {
+    for (const value of values) {
+      const distributed = distributeAmountByWeights(value, weightedCompanies)
+      for (const [companyId, amount] of distributed.entries()) {
+        apply(ensureCompany(companyId), amount)
+      }
+    }
+  }
+
+  distributeUnassigned(unassignedBonuses, (company, amount) => {
+    company.bonusAmount += amount
+  })
+  distributeUnassigned(unassignedFines, (company, amount) => {
+    company.fineAmount += amount
+  })
+  distributeUnassigned(unassignedAdvances, (company, amount) => {
+    company.advanceAmount += amount
+  })
+  distributeUnassigned(unassignedDebts, (company, amount) => {
+    company.debtAmount += amount
+  })
+
+  const grossAmount = Array.from(companyAllocations.values()).reduce((sum, company) => sum + company.accruedAmount, 0)
+  const denominator = grossAmount > 0 ? grossAmount : 1
+
+  const allocations = Array.from(companyAllocations.values())
+    .map((company) => {
+      const netAmount =
+        company.accruedAmount + company.bonusAmount - company.fineAmount - company.debtAmount - company.advanceAmount
+
+      return {
+        ...company,
+        accruedAmount: roundMoney(company.accruedAmount),
+        bonusAmount: roundMoney(company.bonusAmount),
+        fineAmount: roundMoney(company.fineAmount),
+        debtAmount: roundMoney(company.debtAmount),
+        advanceAmount: roundMoney(company.advanceAmount),
+        netAmount: roundMoney(netAmount),
+        shareRatio: grossAmount > 0 ? roundMoney(company.accruedAmount / denominator) : 0,
+      }
+    })
+    .sort((left, right) => (right.accruedAmount - left.accruedAmount) || left.companyName?.localeCompare(right.companyName || '', 'ru') || 0)
+
+  return {
+    operatorId: params.operatorId,
+    grossAmount: roundMoney(grossAmount),
+    bonusAmount: roundMoney(bonusAmount),
+    fineAmount: roundMoney(fineAmount),
+    debtAmount: roundMoney(debtAmount),
+    advanceAmount: roundMoney(advanceAmount),
+    netAmount: roundMoney(
+      grossAmount + bonusAmount - fineAmount - debtAmount - advanceAmount,
+    ),
+    companyAllocations: allocations,
+  }
 }
 
 export function calculateSalaryBoard(params: {

@@ -267,8 +267,6 @@ export default function OperatorDashboardPage() {
       try {
         setLoading(true)
         
-        console.log('1️⃣ Проверяем авторизацию...')
-        
         const { data: { user }, error: userError } = await supabase.auth.getUser()
         
         if (userError) throw new Error(userError.message)
@@ -276,8 +274,6 @@ export default function OperatorDashboardPage() {
           router.push('/login')
           return
         }
-
-        console.log('2️⃣ Пользователь найден:', user.id)
 
         // Ищем оператора по user_id
         const { data: authData, error: authError } = await supabase
@@ -319,8 +315,6 @@ export default function OperatorDashboardPage() {
         const operatorId = op.id
 
         // ========== ЗАГРУЖАЕМ ДАННЫЕ ЗА ВЫБРАННЫЙ ПЕРИОД ==========
-        console.log('📅 Период:', dateRange.from, '→', dateRange.to)
-
         const [
           companiesRes,
           rulesRes,
@@ -371,7 +365,6 @@ export default function OperatorDashboardPage() {
         const shifts = shiftsRes.data
         const adjustments = adjustmentsRes.data
 
-        console.log(`📊 Загружено смен: ${shifts?.length || 0} за период ${dateRange.from} - ${dateRange.to}`)
         const history: PaymentHistory[] = []
 
         for (const adj of adjustments || []) {
@@ -451,19 +444,6 @@ export default function OperatorDashboardPage() {
           })
         }
 
-        console.log('🧮 ИТОГО:', {
-          totalShifts: salarySummary.shifts,
-          baseSalary: salarySummary.baseSalary,
-          autoBonuses: salarySummary.autoBonuses,
-          manualBonuses: salarySummary.manualBonuses,
-          totalAccrued: salarySummary.totalAccrued,
-          autoDebts: salarySummary.autoDebts,
-          fines: salarySummary.totalFines,
-          advances: salarySummary.totalAdvances,
-          totalDeductions: salarySummary.totalDeductions,
-          remaining: salarySummary.remainingAmount
-        })
-
         setSalaryStats({
           totalShifts: salarySummary.shifts,
           baseSalary: salarySummary.baseSalary,
@@ -540,7 +520,7 @@ export default function OperatorDashboardPage() {
 
     const interval = window.setInterval(() => {
       void syncWorkspaceSummary(true)
-    }, 10000)
+    }, 30000)
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
@@ -1109,52 +1089,52 @@ export default function OperatorDashboardPage() {
                 Детализация за {formatDateRange(dateRange.from, dateRange.to)}
               </h3>
               <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white/5 rounded-lg">
                   <span className="text-sm text-gray-400">
-                    Базовая зарплата ({salaryStats?.totalShifts} смен × {DEFAULT_SHIFT_BASE_PAY.toLocaleString('ru-RU')} ₸)
+                    База ({salaryStats?.totalShifts} смен × {DEFAULT_SHIFT_BASE_PAY.toLocaleString('ru-RU')} ₸)
                   </span>
-                  <span className="text-sm font-medium text-white">+{salaryStats?.baseSalary.toLocaleString()} ₸</span>
+                  <span className="text-sm font-medium text-white shrink-0">+{salaryStats?.baseSalary.toLocaleString()} ₸</span>
                 </div>
-                
+
                 {salaryStats && salaryStats.autoBonuses > 0 && (
-                  <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white/5 rounded-lg">
                     <span className="text-sm text-gray-400">Авто-бонусы (за выручку)</span>
-                    <span className="text-sm font-medium text-amber-400">+{salaryStats.autoBonuses.toLocaleString()} ₸</span>
+                    <span className="text-sm font-medium text-amber-400 shrink-0">+{salaryStats.autoBonuses.toLocaleString()} ₸</span>
                   </div>
                 )}
 
                 {salaryStats && salaryStats.manualBonuses > 0 && (
-                  <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white/5 rounded-lg">
                     <span className="text-sm text-gray-400">Ручные премии</span>
-                    <span className="text-sm font-medium text-violet-400">+{salaryStats.manualBonuses.toLocaleString()} ₸</span>
+                    <span className="text-sm font-medium text-violet-400 shrink-0">+{salaryStats.manualBonuses.toLocaleString()} ₸</span>
                   </div>
                 )}
 
                 {salaryStats && salaryStats.totalFines > 0 && (
-                  <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white/5 rounded-lg">
                     <span className="text-sm text-gray-400">Штрафы + ручные долги</span>
-                    <span className="text-sm font-medium text-rose-400">-{salaryStats.totalFines.toLocaleString()} ₸</span>
+                    <span className="text-sm font-medium text-rose-400 shrink-0">-{salaryStats.totalFines.toLocaleString()} ₸</span>
                   </div>
                 )}
 
                 {salaryStats && salaryStats.totalAdvances > 0 && (
-                  <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white/5 rounded-lg">
                     <span className="text-sm text-gray-400">Авансы</span>
-                    <span className="text-sm font-medium text-rose-400">-{salaryStats.totalAdvances.toLocaleString()} ₸</span>
+                    <span className="text-sm font-medium text-rose-400 shrink-0">-{salaryStats.totalAdvances.toLocaleString()} ₸</span>
                   </div>
                 )}
 
                 {salaryStats && salaryStats.autoDebts > 0 && (
-                  <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white/5 rounded-lg">
                     <span className="text-sm text-gray-400">Авто-долги (из программы)</span>
-                    <span className="text-sm font-medium text-rose-400">-{salaryStats.autoDebts.toLocaleString()} ₸</span>
+                    <span className="text-sm font-medium text-rose-400 shrink-0">-{salaryStats.autoDebts.toLocaleString()} ₸</span>
                   </div>
                 )}
 
                 <div className="h-px bg-white/5 my-2" />
-                <div className="flex justify-between items-center p-3 bg-violet-500/20 rounded-lg">
+                <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-violet-500/20 rounded-lg">
                   <span className="text-sm font-medium text-white">Итого к выплате</span>
-                  <span className="text-lg font-bold text-violet-400">{salaryStats?.remainingAmount.toLocaleString()} ₸</span>
+                  <span className="text-lg font-bold text-violet-400 shrink-0">{salaryStats?.remainingAmount.toLocaleString()} ₸</span>
                 </div>
               </div>
             </Card>
@@ -1178,20 +1158,20 @@ export default function OperatorDashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {paymentHistory.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        {item.kind === 'bonus' && <Award className="w-4 h-4 text-violet-400" />}
-                        {item.kind === 'auto_bonus' && <Zap className="w-4 h-4 text-amber-400" />}
-                        {item.kind === 'fine' && <AlertTriangle className="w-4 h-4 text-rose-400" />}
-                        {item.kind === 'advance' && <CreditCard className="w-4 h-4 text-blue-400" />}
-                        {item.kind === 'debt' && <Landmark className="w-4 h-4 text-purple-400" />}
-                        {item.kind === 'salary' && <Wallet className="w-4 h-4 text-emerald-400" />}
-                        <div>
-                          <p className="text-sm text-white">{item.comment}</p>
+                    <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white/5 rounded-lg">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {item.kind === 'bonus' && <Award className="w-4 h-4 text-violet-400 shrink-0" />}
+                        {item.kind === 'auto_bonus' && <Zap className="w-4 h-4 text-amber-400 shrink-0" />}
+                        {item.kind === 'fine' && <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />}
+                        {item.kind === 'advance' && <CreditCard className="w-4 h-4 text-blue-400 shrink-0" />}
+                        {item.kind === 'debt' && <Landmark className="w-4 h-4 text-purple-400 shrink-0" />}
+                        {item.kind === 'salary' && <Wallet className="w-4 h-4 text-emerald-400 shrink-0" />}
+                        <div className="min-w-0">
+                          <p className="text-sm text-white truncate">{item.comment}</p>
                           <p className="text-xs text-gray-500">{new Date(item.date).toLocaleDateString('ru-RU')}</p>
                         </div>
                       </div>
-                      <span className={`text-sm font-medium ${
+                      <span className={`text-sm font-medium shrink-0 ${
                         ['bonus', 'auto_bonus', 'salary'].includes(item.kind) ? 'text-emerald-400' : 'text-rose-400'
                       }`}>
                         {['bonus', 'auto_bonus', 'salary'].includes(item.kind) ? '+' : '-'}{item.amount.toLocaleString()} ₸

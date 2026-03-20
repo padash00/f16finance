@@ -1,10 +1,31 @@
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
+import { isAdminEmail } from '@/lib/server/admin'
+import { requiredEnv } from '@/lib/server/env'
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+async function checkSuperAdmin(email: string, password: string): Promise<boolean> {
+  try {
+    const authClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || requiredEnv('SUPABASE_URL'),
+      requiredEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    )
+    const { data, error } = await authClient.auth.signInWithPassword({ email, password })
+    if (error || !data.user) return false
+    const ok = isAdminEmail(data.user.email)
+    await authClient.auth.signOut().catch(() => null)
+    return ok
+  } catch {
+    return false
+  }
 }
 
 function extractBarcode(comment: string | null | undefined) {
@@ -19,30 +40,57 @@ export async function GET(request: Request) {
     const point = await requirePointDevice(request)
     if ('response' in point) return point.response
 
-    const { supabase, device } = point
+    const { supabase: deviceSupabase, device } = point
+
+    // Суперадмин может передать credentials для получения данных ВСЕХ точек
+    const url = new URL(request.url)
+    const adminEmail = url.searchParams.get('adminEmail') || ''
+    const adminPassword = url.searchParams.get('adminPassword') || ''
+    const isSuperAdmin = adminEmail && adminPassword
+      ? await checkSuperAdmin(adminEmail, adminPassword)
+      : false
+
+    const supabase = isSuperAdmin ? createAdminSupabaseClient() : deviceSupabase
+
+    const debtQuery = supabase
+      .from('point_debt_items')
+      .select('id, operator_id, client_name, item_name, quantity, total_amount, comment, status, created_at, deleted_at, operator:operator_id(id, name, short_name)')
+      .order('created_at', { ascending: false })
+      .limit(isSuperAdmin ? 2000 : 500)
+
+    const shiftsQuery = supabase
+      .from('incomes')
+      .select('id, date, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment, operator_id, company_id')
+      .order('date', { ascending: false })
+      .limit(isSuperAdmin ? 1000 : 200)
+
+    if (!isSuperAdmin) {
+      debtQuery.eq('company_id', device.company_id)
+      shiftsQuery.eq('company_id', device.company_id)
+    }
 
     const [
       { data: debtItems, error: debtItemsError },
       { data: shiftRows, error: shiftRowsError },
-    ] = await Promise.all([
-      supabase
-        .from('point_debt_items')
-        .select(
-          'id, operator_id, client_name, item_name, quantity, total_amount, comment, status, created_at, deleted_at, operator:operator_id(id, name, short_name)',
-        )
-        .eq('company_id', device.company_id)
-        .order('created_at', { ascending: false })
-        .limit(500),
-      supabase
-        .from('incomes')
-        .select('id, date, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment, operator_id')
-        .eq('company_id', device.company_id)
-        .order('date', { ascending: false })
-        .limit(200),
-    ])
+    ] = await Promise.all([debtQuery, shiftsQuery])
 
     if (debtItemsError) throw debtItemsError
     if (shiftRowsError) throw shiftRowsError
+
+    // Для суперадмина загружаем названия компаний
+    const companyNameMap = new Map<string, string>()
+    if (isSuperAdmin) {
+      const companyIds = [...new Set((shiftRows || []).map((r: any) => r.company_id).filter(Boolean))]
+      if (companyIds.length > 0) {
+        const { data: companiesData } = await supabase
+          .from('companies')
+          .select('id, name')
+          .in('id', companyIds)
+        for (const c of companiesData || []) {
+          companyNameMap.set(c.id, c.name)
+        }
+      }
+    }
 
     const activeDebtItems = ((debtItems || []) as any[]).filter((item) => item.status === 'active')
 
@@ -106,6 +154,8 @@ export async function GET(request: Request) {
         date: row.date,
         shift: row.shift,
         zone: row.zone,
+        company_id: row.company_id || null,
+        company_name: companyNameMap.get(row.company_id) || null,
         operator_id: row.operator_id || null,
         operator_name: null, // resolved on client via bootstrap.operators
         cash_amount: Number(row.cash_amount || 0),

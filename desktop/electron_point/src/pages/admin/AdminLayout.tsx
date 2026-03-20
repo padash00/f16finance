@@ -51,10 +51,11 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
             <span className="text-sm font-bold text-primary-foreground">F</span>
           </div>
           <div>
-            <p className="text-sm font-semibold leading-none">
-              {bootstrap?.company.name || 'Orda Point'}
+            <p className="text-sm font-semibold leading-none">Суперадминистратор</p>
+            <p className="text-xs text-muted-foreground">
+              {session.email}
+              {bootstrap?.company.name ? ` · ${bootstrap.company.name}` : ''}
             </p>
-            <p className="text-xs text-muted-foreground">Администратор · {session.email}</p>
           </div>
         </div>
 
@@ -94,8 +95,8 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
 
         {/* Page content */}
         <main className="flex-1 overflow-auto">
-          {activeTab === 'shifts' && <ShiftHistoryPage config={config} bootstrap={bootstrap} />}
-          {activeTab === 'debts' && <DebtHistoryPage config={config} bootstrap={bootstrap} />}
+          {activeTab === 'shifts' && <ShiftHistoryPage config={config} session={session} bootstrap={bootstrap} />}
+          {activeTab === 'debts' && <DebtHistoryPage config={config} session={session} bootstrap={bootstrap} />}
           {activeTab === 'products' && <ProductsPage config={config} session={session} bootstrap={bootstrap} />}
           {activeTab === 'devices' && <DevicesPage config={config} session={session} />}
         </main>

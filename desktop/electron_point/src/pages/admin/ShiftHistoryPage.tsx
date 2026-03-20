@@ -6,10 +6,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, Download, ChevronDown, ChevronRight } from 'lucide-react'
 import * as api from '@/lib/api'
-import type { AppConfig, BootstrapData } from '@/types'
+import type { AppConfig, AdminSession, BootstrapData } from '@/types'
 
 interface Props {
   config: AppConfig
+  session?: AdminSession
   bootstrap?: BootstrapData
 }
 
@@ -18,13 +19,15 @@ interface ShiftRow {
   date: string
   shift: string
   operator_name: string | null
+  company_id: string | null
+  company_name: string | null
   cash: number
   kaspi: number
   kaspi_online: number
-  total: number  // cash + kaspi + kaspi_online
+  total: number
 }
 
-export default function ShiftHistoryPage({ config, bootstrap }: Props) {
+export default function ShiftHistoryPage({ config, session, bootstrap }: Props) {
   const [allRows, setAllRows] = useState<ShiftRow[]>([])
   const [loading, setLoading] = useState(true)
   const [from, setFrom] = useState(() => {
@@ -38,7 +41,8 @@ export default function ShiftHistoryPage({ config, bootstrap }: Props) {
   async function load() {
     setLoading(true)
     try {
-      const data = await api.getReports(config)
+      const adminCreds = session ? { email: session.email, password: session.password } : undefined
+      const data = await api.getReports(config, adminCreds)
       const operatorById = new Map(
         (bootstrap?.operators || []).map(op => [op.id, op.full_name || op.name])
       )
@@ -56,6 +60,8 @@ export default function ShiftHistoryPage({ config, bootstrap }: Props) {
           date: r.date,
           shift: r.shift,
           operator_name: operatorName,
+          company_id: r.company_id || null,
+          company_name: r.company_name || null,
           cash,
           kaspi,
           kaspi_online,
@@ -116,6 +122,8 @@ export default function ShiftHistoryPage({ config, bootstrap }: Props) {
     XLSX.utils.book_append_sheet(wb, ws, 'Смены')
     XLSX.writeFile(wb, `shifts_${from}_${to}.xlsx`)
   }
+
+  const isAdmin = !!session
 
   return (
     <div className="p-5 space-y-4">
@@ -204,6 +212,7 @@ export default function ShiftHistoryPage({ config, bootstrap }: Props) {
                   <th className="w-6 px-2 py-2.5" />
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Дата</th>
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Смена</th>
+                  {isAdmin && <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Точка</th>}
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Оператор</th>
                   <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Выручка</th>
                 </tr>
@@ -232,6 +241,7 @@ export default function ShiftHistoryPage({ config, bootstrap }: Props) {
                             {row.shift === 'day' ? '☀️ День' : '🌙 Ночь'}
                           </Badge>
                         </td>
+                        {isAdmin && <td className="px-4 py-2.5 text-xs text-muted-foreground">{row.company_name || '—'}</td>}
                         <td className="px-4 py-2.5 text-muted-foreground">{row.operator_name || '—'}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{formatMoney(row.total)}</td>
                       </tr>

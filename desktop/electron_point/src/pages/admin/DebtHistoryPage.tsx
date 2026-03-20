@@ -6,10 +6,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, Download } from 'lucide-react'
 import * as api from '@/lib/api'
-import type { AppConfig, BootstrapData } from '@/types'
+import type { AppConfig, AdminSession, BootstrapData } from '@/types'
 
 interface Props {
   config: AppConfig
+  session?: AdminSession
   bootstrap?: BootstrapData
 }
 
@@ -25,7 +26,7 @@ interface DebtItem {
   deleted_at: string | null
 }
 
-export default function DebtHistoryPage({ config }: Props) {
+export default function DebtHistoryPage({ config, session }: Props) {
   const [allRows, setAllRows] = useState<DebtItem[]>([])
   const [loading, setLoading] = useState(true)
   const [from, setFrom] = useState(() => {
@@ -39,7 +40,8 @@ export default function DebtHistoryPage({ config }: Props) {
   async function load() {
     setLoading(true)
     try {
-      const data = await api.getReports(config)
+      const adminCreds = session ? { email: session.email, password: session.password } : undefined
+      const data = await api.getReports(config, adminCreds)
       const debts = (data.data.debt_history as any[] || []).map(r => ({
         id: r.id || String(Math.random()),
         debtor_name: r.debtor_name || '—',

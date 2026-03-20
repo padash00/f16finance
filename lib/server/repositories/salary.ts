@@ -89,12 +89,16 @@ export async function listOperatorSalaryData(
 
   const adjustmentsQuery = supabase
     .from('operator_salary_adjustments')
-    .select('operator_id,amount,kind')
+    .select('operator_id,amount,kind,company_id,status')
     .eq('operator_id', operatorId)
     .gte('date', dateFrom)
     .lte('date', dateTo)
 
-  const debtsBase = supabase.from('debts').select('operator_id,amount').eq('operator_id', operatorId).eq('status', 'active')
+  const debtsBase = supabase
+    .from('debts')
+    .select('operator_id,amount,company_id,status')
+    .eq('operator_id', operatorId)
+    .eq('status', 'active')
 
   const debtsQuery = weekStart
     ? debtsBase.eq('week_start', weekStart)

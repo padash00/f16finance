@@ -231,7 +231,15 @@ export async function deleteDebt(
 // ─── Reports ─────────────────────────────────────────────────────────────────
 // API возвращает все данные устройства без фильтрации — фильтруем на клиенте
 
-export async function getReports(config: AppConfig) {
+export async function getReports(config: AppConfig, adminCredentials?: { email: string; password: string }) {
+  let path = '/api/point/reports'
+  if (adminCredentials) {
+    const params = new URLSearchParams({
+      adminEmail: adminCredentials.email,
+      adminPassword: adminCredentials.password,
+    })
+    path = `${path}?${params.toString()}`
+  }
   return request<{
     ok: boolean
     data: {
@@ -241,7 +249,7 @@ export async function getReports(config: AppConfig) {
       worker_totals: unknown[]
       client_totals: unknown[]
     }
-  }>(config, 'GET', '/api/point/reports')
+  }>(config, 'GET', path)
 }
 
 // ─── Admin devices ────────────────────────────────────────────────────────────
