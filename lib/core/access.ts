@@ -313,7 +313,7 @@ export function getDefaultAppPath(params: {
   if (isSuperAdmin) return '/'
   if (isStaff) return getDefaultPathForStaffRole(normalizeStaffRole(staffRole))
   if (isOperator) return '/operator-dashboard'
-  return '/login'
+  return '/unauthorized'
 }
 
 export function staffRoleHasCapability(role: StaffRole, capability: StaffCapability) {

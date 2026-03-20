@@ -87,7 +87,8 @@ export default function UnifiedLoginPage() {
 
         const response = await fetch('/api/auth/session-role').catch(() => null)
         const json = await response?.json().catch(() => null)
-        const defaultPath = response?.ok && json?.defaultPath ? String(json.defaultPath) : '/'
+        const rawPath = response?.ok && json?.defaultPath ? String(json.defaultPath) : '/'
+        const defaultPath = rawPath === '/login' || rawPath === '/operator-login' ? '/' : rawPath
 
         router.push(defaultPath)
         router.refresh()
