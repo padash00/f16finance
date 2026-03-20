@@ -74,13 +74,24 @@ export async function POST(request: Request) {
 
     const { data: assignments, error: assignmentError } = await supabase
       .from('operator_company_assignments')
-      .select('id, company_id, role_in_company, is_primary, is_active, company:company_id(id, name, code)')
+      .select('id, company_id, role_in_company, is_primary, is_active')
       .eq('operator_id', operatorAuth.operator_id)
       .eq('is_active', true)
 
     if (assignmentError) throw assignmentError
     if (!assignments || assignments.length === 0) {
       return json({ error: 'operator-not-assigned-to-any-point' }, 403)
+    }
+
+    const companyIds = assignments.map((a: any) => a.company_id)
+    const { data: companiesData } = await supabase
+      .from('companies')
+      .select('id, name, code')
+      .in('id', companyIds)
+
+    const companyMap: Record<string, { id: string; name: string; code: string | null }> = {}
+    for (const c of companiesData || []) {
+      companyMap[c.id] = c
     }
 
     const operator = Array.isArray((operatorAuth as any).operator)
@@ -95,7 +106,7 @@ export async function POST(request: Request) {
       assignments[0]
 
     const allCompanies = assignments.map((a: any) => {
-      const co = Array.isArray(a.company) ? a.company[0] : a.company
+      const co = companyMap[a.company_id]
       return {
         id: a.company_id,
         name: co?.name || 'Точка',
@@ -121,16 +132,12 @@ export async function POST(request: Request) {
 
     await authClient.auth.signOut().catch(() => null)
 
-    const primaryCompany = (() => {
-      const co = Array.isArray(primaryAssignment.company)
-        ? primaryAssignment.company[0]
-        : primaryAssignment.company
-      return {
-        id: primaryAssignment.company_id,
-        name: co?.name || device.company?.name || 'Точка',
-        code: co?.code ?? device.company?.code ?? null,
-      }
-    })()
+    const primaryCo = companyMap[primaryAssignment.company_id]
+    const primaryCompany = {
+      id: primaryAssignment.company_id,
+      name: primaryCo?.name || device.company?.name || 'Точка',
+      code: primaryCo?.code ?? device.company?.code ?? null,
+    }
 
     return json({
       ok: true,
