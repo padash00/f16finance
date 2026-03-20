@@ -80,12 +80,15 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
   const [syncing, setSyncing] = useState(false)
   const [showQueue, setShowQueue] = useState(false)
 
+  // Выбранный оператор (по умолчанию залогиненный)
+  const [selectedOperatorId, setSelectedOperatorId] = useState(session.operator.operator_id)
+
+  // Диалог подтверждения
+  const [confirmDialog, setConfirmDialog] = useState(false)
+
   // Разбивка дат (только Arena)
   const [splitDialog, setSplitDialog] = useState(false)
   const [splitAfter, setSplitAfter] = useState({ cash: '', kaspi_pos: '', kaspi_online: '' })
-
-  // Диалог недостачи
-  const [nedostachaDialog, setNedostachaDialog] = useState(false)
 
   const flags = bootstrap.device.feature_flags
   const hasScanner = flags.debt_report && onSwitchToScanner
@@ -94,6 +97,17 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
   const isArena = pointMode.includes('arena')
   const wiponLabel = isArena ? 'Senet (система)' : 'Wipon (система)'
   const kaspiLabel = isArena ? 'Kaspi POS' : 'Kaspi'
+
+  // Авто-определение смены по времени (только при первом открытии без черновика)
+  useEffect(() => {
+    const hour = new Date().getHours()
+    const auto = hour >= 8 && hour < 20 ? 'day' : 'night'
+    setForm(f => {
+      if (f.shift === 'day' && auto === 'night') return { ...f, shift: 'night' }
+      if (f.shift === 'night' && auto === 'day') return { ...f, shift: 'day' }
+      return f
+    })
+  }, [])
 
   // Автосохранение черновика
   useEffect(() => {
@@ -208,24 +222,23 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
     setResult(null)
 
     if (fact <= 0) { setError('Введите сумму выручки'); return }
+    if (!selectedOperatorId) { setError('Выберите оператора'); return }
 
-    const fullForm: ShiftForm = { ...form, operator_id: session.operator.operator_id }
-
-    // Недостача — предупреждаем
-    if (itog < 0 && !nedostachaDialog) {
-      setNedostachaDialog(true)
-      return
-    }
-    setNedostachaDialog(false)
-
-    // Arena + ночная + последний день месяца → предлагаем разбивку
+    // Arena + ночная + последний день месяца → разбивка
     if (isArena && form.shift === 'night' && isLastDayOfMonth(form.date)) {
       setSplitAfter({ cash: '', kaspi_pos: '', kaspi_online: '' })
       setSplitDialog(true)
       return
     }
 
+    // Показываем диалог подтверждения
+    setConfirmDialog(true)
+  }
+
+  async function handleConfirm() {
+    setConfirmDialog(false)
     setSubmitting(true)
+    const fullForm: ShiftForm = { ...form, operator_id: selectedOperatorId }
     const r = await sendOne(fullForm)
     setPendingCount(await getPendingCount())
     setResult(r)
@@ -237,7 +250,7 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
     setSplitDialog(false)
     setSubmitting(true)
 
-    const fullForm: ShiftForm = { ...form, operator_id: session.operator.operator_id }
+    const fullForm: ShiftForm = { ...form, operator_id: selectedOperatorId }
 
     const afterCash = parseMoney(splitAfter.cash)
     const afterKaspiPos = parseMoney(splitAfter.kaspi_pos)
@@ -271,7 +284,7 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
   async function handleSplitSkip() {
     setSplitDialog(false)
     setSubmitting(true)
-    const fullForm: ShiftForm = { ...form, operator_id: session.operator.operator_id }
+    const fullForm: ShiftForm = { ...form, operator_id: selectedOperatorId }
     const r = await sendOne(fullForm)
     setPendingCount(await getPendingCount())
     setResult(r)
@@ -346,6 +359,25 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4 no-drag">
+              {/* Оператор */}
+              {bootstrap.operators.length > 1 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Оператор</Label>
+                  <Select value={selectedOperatorId} onValueChange={setSelectedOperatorId} disabled={submitting}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите оператора" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {bootstrap.operators.map(op => (
+                        <SelectItem key={op.id} value={op.id}>
+                          {op.short_name || op.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {/* Date + Shift */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -483,33 +515,49 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
         </div>
       </div>
 
-      {/* ─── Диалог недостачи ─── */}
-      {nedostachaDialog && (
+      {/* ─── Диалог подтверждения ─── */}
+      {confirmDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <Card className="w-full max-w-sm mx-4 border-destructive/40">
+          <Card className={`w-full max-w-sm mx-4 ${itog < 0 ? 'border-destructive/40' : ''}`}>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2 text-destructive-foreground">
-                <AlertTriangle className="h-4 w-4" /> Недостача
+              <CardTitle className="text-base flex items-center gap-2">
+                {itog < 0
+                  ? <><AlertTriangle className="h-4 w-4 text-destructive-foreground" /> Недостача — подтвердить?</>
+                  : <><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Подтвердить отчёт</>
+                }
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                ИТОГ составляет <span className="font-bold text-destructive-foreground">{formatMoney(itog)}</span>.
-                Проверьте данные. Закрыть смену с недостачей?
-              </p>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-1.5 text-sm">
+                {(() => {
+                  const opName = bootstrap.operators.find(o => o.id === selectedOperatorId)?.short_name
+                    || bootstrap.operators.find(o => o.id === selectedOperatorId)?.name
+                    || session.operator.name
+                  return <p className="text-xs text-muted-foreground mb-2">👤 {opName} · {form.date} · {form.shift === 'day' ? '☀️ Дневная' : '🌙 Ночная'}</p>
+                })()}
+                {vCash > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Наличные</span><span>{formatMoney(vCash)} ₸</span></div>}
+                {vCoins > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Мелочь</span><span>{formatMoney(vCoins)} ₸</span></div>}
+                {vKaspi > 0 && <div className="flex justify-between"><span className="text-muted-foreground">{kaspiLabel}</span><span>{formatMoney(vKaspi)} ₸</span></div>}
+                {isArena && vKaspiOnline > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Kaspi Online</span><span>{formatMoney(vKaspiOnline)} ₸</span></div>}
+                {vDebts > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Тех</span><span>{formatMoney(vDebts)} ₸</span></div>}
+                {vStart > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Старт</span><span>−{formatMoney(vStart)} ₸</span></div>}
+                {vWipon > 0 && <div className="flex justify-between"><span className="text-muted-foreground">{wiponLabel}</span><span>−{formatMoney(vWipon)} ₸</span></div>}
+                <div className="border-t border-white/10 pt-2 flex justify-between font-semibold">
+                  <span>ИТОГ</span>
+                  <span className={itog < 0 ? 'text-destructive-foreground' : 'text-emerald-400'}>
+                    {itog > 0 ? '+' : ''}{formatMoney(itog)} ₸
+                  </span>
+                </div>
+              </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setNedostachaDialog(false)}>
+                <Button variant="outline" className="flex-1" onClick={() => setConfirmDialog(false)}>
                   Исправить
                 </Button>
                 <Button
-                  variant="destructive"
-                  className="flex-1"
-                  onClick={() => {
-                    // Вызываем submit повторно — nedostachaDialog уже true, пройдёт проверку
-                    document.getElementById('shift-submit-btn')?.click()
-                  }}
+                  className={`flex-1 ${itog < 0 ? 'bg-destructive hover:bg-destructive/90' : ''}`}
+                  onClick={handleConfirm}
                 >
-                  Закрыть всё равно
+                  Отправить
                 </Button>
               </div>
             </CardContent>

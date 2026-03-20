@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { loadConfig, saveConfig, DEFAULT_API_URL } from '@/lib/config'
-import { getCachedBootstrap, saveBootstrapCache } from '@/lib/cache'
+import { getCachedBootstrap, saveBootstrapCache, saveOperatorSession, loadOperatorSession, clearOperatorSession } from '@/lib/cache'
 import * as api from '@/lib/api'
 import LoginPage from '@/pages/LoginPage'
 import PointSelectPage from '@/pages/PointSelectPage'
@@ -70,6 +70,18 @@ export default function App() {
       const bootstrap = await api.bootstrap(cfg)
       await saveBootstrapCache(bootstrap)
       setIsOffline(false)
+
+      // Восстанавливаем сессию оператора если не истекла (10 часов)
+      const cachedSession = await loadOperatorSession()
+      if (cachedSession) {
+        const session: typeof cachedSession = { ...cachedSession, bootstrap }
+        const flags = bootstrap.device.feature_flags
+        setView(flags.debt_report
+          ? { screen: 'scanner', bootstrap, session }
+          : { screen: 'shift', bootstrap, session })
+        return
+      }
+
       setView({ screen: 'login', bootstrap })
     } catch {
       // Нет сети — пробуем кеш
@@ -101,6 +113,7 @@ export default function App() {
 
   // ─── Переход к рабочему экрану после выбора точки ─────────────────────────
   function proceedToApp(session: OperatorSession) {
+    saveOperatorSession(session).catch(() => null)
     const bootstrap = session.bootstrap
     const flags = bootstrap.device.feature_flags
 
@@ -139,6 +152,7 @@ export default function App() {
 
   // ─── Выход ────────────────────────────────────────────────────────────────
   function handleLogout() {
+    clearOperatorSession().catch(() => null)
     showLogin(config)
   }
 

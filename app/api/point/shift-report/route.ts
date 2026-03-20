@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requirePointDevice } from '@/lib/server/point-devices'
-import { notifyShiftDeficit } from '@/lib/server/telegram'
+import { notifyShiftReport } from '@/lib/server/telegram'
 
 type ShiftReportBody = {
   action: 'createShiftReport'
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
 
     const { data: assignment, error: assignmentError } = await supabase
       .from('operator_company_assignments')
-      .select('id, role_in_company, operator:operator_id(id, name, short_name)')
+      .select('id, role_in_company, operator:operator_id(id, name, short_name, telegram_chat_id)')
       .eq('company_id', device.company_id)
       .eq('operator_id', payload.operator_id)
       .eq('is_active', true)
@@ -164,19 +164,22 @@ export async function POST(request: Request) {
       },
     })
 
-    // Уведомление в Telegram при недостаче (ИТОГ < 0)
-    if (meta?.diff !== null && meta?.diff !== undefined && meta.diff < 0) {
-      notifyShiftDeficit({
-        companyName: device.company?.name || 'Точка',
-        operatorName: operator?.name || null,
-        date: payload.date,
-        shift: payload.shift,
-        cashAmount: normalized.cash_amount,
-        kaspiAmount: normalized.kaspi_amount,
-        wipon: meta.wipon ?? null,
-        diff: meta.diff,
-      }).catch(() => null)
-    }
+    // Уведомление в Telegram при каждой закрытой смене
+    notifyShiftReport({
+      companyName: device.company?.name || 'Точка',
+      operatorName: operator?.name || null,
+      operatorChatId: operator?.telegram_chat_id || null,
+      date: payload.date,
+      shift: payload.shift,
+      cashAmount: normalized.cash_amount,
+      kaspiAmount: normalized.kaspi_amount,
+      onlineAmount: normalized.online_amount,
+      coins: meta?.coins ?? null,
+      debts: meta?.debts ?? null,
+      startCash: meta?.start_cash ?? null,
+      wipon: meta?.wipon ?? null,
+      diff: meta?.diff ?? null,
+    }).catch(() => null)
 
     return json({
       ok: true,

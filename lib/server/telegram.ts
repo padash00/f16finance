@@ -29,6 +29,53 @@ export async function sendTelegram(
   })
 }
 
+export async function notifyShiftReport(params: {
+  companyName: string
+  operatorName: string | null
+  operatorChatId?: string | null
+  date: string
+  shift: 'day' | 'night'
+  cashAmount: number
+  kaspiAmount: number
+  onlineAmount: number
+  coins?: number | null
+  debts?: number | null
+  startCash?: number | null
+  wipon?: number | null
+  diff?: number | null
+}): Promise<void> {
+  if (!isTelegramConfigured()) return
+
+  const fmt = (n: number) => n.toLocaleString('ru-RU')
+  const shiftLabel = params.shift === 'day' ? '☀️ Дневная' : '🌙 Ночная'
+  const diff = params.diff ?? 0
+  const diffSign = diff >= 0 ? '+' : ''
+  const diffIcon = diff < 0 ? '🔴' : '🟢'
+
+  const lines = [
+    `${diffIcon} <b>Смена закрыта</b>`,
+    ``,
+    `📍 <b>${params.companyName}</b>`,
+    `👤 ${params.operatorName || '—'} · ${params.date} · ${shiftLabel}`,
+    ``,
+    params.cashAmount ? `💵 Наличные: ${fmt(params.cashAmount)} ₸` : null,
+    params.coins ? `🪙 Мелочь: ${fmt(params.coins)} ₸` : null,
+    params.kaspiAmount ? `💳 Kaspi: ${fmt(params.kaspiAmount)} ₸` : null,
+    params.onlineAmount ? `🌐 Kaspi Online: ${fmt(params.onlineAmount)} ₸` : null,
+    params.debts ? `📋 Тех: ${fmt(params.debts)} ₸` : null,
+    params.startCash ? `➖ Старт: ${fmt(params.startCash)} ₸` : null,
+    params.wipon ? `➖ Вычет: ${fmt(params.wipon)} ₸` : null,
+    ``,
+    `<b>ИТОГ: ${diffSign}${fmt(diff)} ₸</b>`,
+  ].filter(Boolean).join('\n')
+
+  await sendTelegram(lines)
+  if (params.operatorChatId) {
+    await sendTelegram(lines, params.operatorChatId).catch(() => null)
+  }
+}
+
+/** @deprecated use notifyShiftReport */
 export async function notifyShiftDeficit(params: {
   companyName: string
   operatorName: string | null
@@ -39,23 +86,5 @@ export async function notifyShiftDeficit(params: {
   wipon: number | null
   diff: number | null
 }): Promise<void> {
-  if (!isTelegramConfigured()) return
-
-  const shiftLabel = params.shift === 'day' ? '☀️ Дневная' : '🌙 Ночная'
-  const diff = params.diff ?? 0
-  const diffStr = diff >= 0 ? `+${diff.toLocaleString('ru')}` : diff.toLocaleString('ru')
-
-  const lines = [
-    `🔴 <b>Недостача по смене</b>`,
-    ``,
-    `<b>Точка:</b> ${params.companyName}`,
-    `<b>Оператор:</b> ${params.operatorName || '—'}`,
-    `<b>Дата:</b> ${params.date} · ${shiftLabel}`,
-    ``,
-    `<b>ИТОГ:</b> ${diffStr} ₸`,
-    params.kaspiAmount ? `<b>Kaspi:</b> ${params.kaspiAmount.toLocaleString('ru')} ₸` : null,
-    params.wipon ? `<b>Вычет:</b> ${params.wipon.toLocaleString('ru')} ₸` : null,
-  ].filter(Boolean).join('\n')
-
-  await sendTelegram(lines)
+  return notifyShiftReport({ ...params, onlineAmount: 0 })
 }

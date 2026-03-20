@@ -1,8 +1,11 @@
-import type { BootstrapData, Product } from '@/types'
+import type { BootstrapData, OperatorSession, Product } from '@/types'
+
+const SESSION_MAX_AGE_MS = 10 * 60 * 60 * 1000 // 10 часов
 
 interface AppCache {
   bootstrap?: BootstrapData
   products?: Product[]
+  operatorSession?: { session: OperatorSession; savedAt: string }
   cachedAt?: string
 }
 
@@ -37,4 +40,22 @@ export async function getCachedProducts(): Promise<Product[]> {
 
 export async function saveProductsCache(products: Product[]): Promise<void> {
   await save({ products })
+}
+
+export async function saveOperatorSession(session: OperatorSession): Promise<void> {
+  await save({ operatorSession: { session, savedAt: new Date().toISOString() } })
+}
+
+export async function loadOperatorSession(): Promise<OperatorSession | null> {
+  const c = await load()
+  if (!c.operatorSession) return null
+  const age = Date.now() - new Date(c.operatorSession.savedAt).getTime()
+  if (age > SESSION_MAX_AGE_MS) return null
+  return c.operatorSession.session
+}
+
+export async function clearOperatorSession(): Promise<void> {
+  const c = await load()
+  const { operatorSession: _, ...rest } = c
+  await ipc.cache.set({ ...rest })
 }
