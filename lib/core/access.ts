@@ -87,6 +87,7 @@ export const ADMIN_PATHS = [
 ] as const
 
 const MANAGER_PATHS = [
+  '/',
   '/welcome',
   '/tasks',
   '/income',
@@ -101,6 +102,9 @@ const MANAGER_PATHS = [
   '/goals',
   '/birthdays',
   '/weekly-report',
+  '/profitability',
+  '/reports',
+  '/analysis',
   '/structure',
   '/operators',
   '/operators/*',
@@ -108,6 +112,10 @@ const MANAGER_PATHS = [
   '/shifts/*',
   '/salary',
   '/salary/*',
+  '/categories',
+  '/tax',
+  '/kpi',
+  '/kpi/*',
 ] as const
 
 const MARKETER_PATHS = ['/welcome', '/tasks'] as const
