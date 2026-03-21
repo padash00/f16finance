@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 import { normalizeStaffRole, staffRoleHasCapability, type StaffCapability, type StaffRole } from '@/lib/core/access'
@@ -8,16 +9,16 @@ import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { requiredEnv } from '@/lib/server/env'
 
 function parseCookies(header: string | null): Map<string, string> {
-  const cookies = new Map<string, string>()
-  if (!header) return cookies
+  const map = new Map<string, string>()
+  if (!header) return map
 
   for (const chunk of header.split(';')) {
     const [rawName, ...rawValue] = chunk.trim().split('=')
     if (!rawName) continue
-    cookies.set(rawName, rawValue.join('='))
+    map.set(rawName, rawValue.join('='))
   }
 
-  return cookies
+  return map
 }
 
 export function createRequestSupabaseClient(request: Request) {
@@ -28,8 +29,20 @@ export function createRequestSupabaseClient(request: Request) {
       get(name: string) {
         return cookieMap.get(name)
       },
-      set(_name: string, _value: string, _options: CookieOptions) {},
-      remove(_name: string, _options: CookieOptions) {},
+      async set(name: string, value: string, options: CookieOptions) {
+        try {
+          ;(await cookies()).set(name, value, options as any)
+        } catch {
+          // no-op if cookies can't be set (e.g. headers already sent)
+        }
+      },
+      async remove(name: string, options: CookieOptions) {
+        try {
+          ;(await cookies()).delete({ name, ...options } as any)
+        } catch {
+          // no-op if cookies can't be deleted
+        }
+      },
     },
   })
 }
