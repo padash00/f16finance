@@ -279,7 +279,6 @@ export default function ShiftsPage() {
   )
 
   const fetchScheduleData = useCallback(async () => {
-    console.log('🔄 Обновление данных...')
 
     const weekStart = weekDays[0].dateISO
     const weekEnd = weekDays[6].dateISO
@@ -1659,7 +1658,6 @@ function EditableShiftCell({
     }
 
     setStatus('saving')
-    console.log(`💾 Сохранение: ${date} | ${shiftType} | "${oldName}" -> "${newName}"`)
 
     try {
       const response = await fetch('/api/admin/shifts', {

@@ -127,51 +127,26 @@ export default function OperatorChatPage() {
   const loadOperatorProfile = async (userId: string) => {
     try {
       setLoadingProfile(true)
-      console.log(`📥 Загрузка профиля пользователя ${userId}`)
-      
-      // Получаем данные оператора
+
       const { data: authData, error: authError } = await supabase
         .from('operator_auth')
-        .select(`
-          id,
-          operator_id,
-          operators (
-            id,
-            name,
-            short_name,
-            operator_profiles (*)
-          )
-        `)
+        .select('id, operator_id, is_online, last_seen, operators(id, name, short_name, operator_profiles(photo_url, position, phone, email, hire_date))')
         .eq('id', userId)
         .maybeSingle()
 
       if (authError) throw authError
-      if (!authData) {
-        console.log('❌ Оператор не найден')
-        return
-      }
+      if (!authData) return
 
       const op = authData.operators as any
       const profile = op?.operator_profiles || {}
-      const operatorId = op.id
+      const opId = op.id
 
-      // Получаем уровень и XP
-      const { data: levelData } = await supabase
-        .rpc('get_operator_level_info', { operator_uuid: operatorId })
+      const [levelRes, achievementsRes] = await Promise.all([
+        supabase.rpc('get_operator_level_info', { operator_uuid: opId }),
+        supabase.rpc('get_operator_achievements', { operator_uuid: opId }),
+      ])
 
-      // Получаем количество достижений
-      const { data: achievementsData } = await supabase
-        .rpc('get_operator_achievements', { operator_uuid: operatorId })
-
-      const levelInfo = levelData && levelData.length > 0 ? levelData[0] : { calculated_level: 1, total_xp: 0 }
-      const achievementsCount = achievementsData?.length || 0
-
-      // Получаем статус онлайн
-      const { data: statusData } = await supabase
-        .from('operator_auth')
-        .select('is_online, last_seen')
-        .eq('id', userId)
-        .maybeSingle()
+      const levelInfo = levelRes.data?.[0] || { calculated_level: 1, total_xp: 0 }
 
       setSelectedProfile({
         id: userId,
@@ -184,9 +159,9 @@ export default function OperatorChatPage() {
         hire_date: profile.hire_date,
         total_xp: levelInfo.total_xp || 0,
         level: levelInfo.calculated_level || 1,
-        achievements_count: achievementsCount,
-        last_seen: statusData?.last_seen || new Date().toISOString(),
-        is_online: statusData?.is_online || false,
+        achievements_count: achievementsRes.data?.length || 0,
+        last_seen: authData.last_seen || new Date().toISOString(),
+        is_online: authData.is_online || false,
       })
 
     } catch (err) {
@@ -204,12 +179,7 @@ export default function OperatorChatPage() {
 
     const initChat = async () => {
       try {
-        console.log('1️⃣ Начинаем инициализацию чата')
-        
-        // Получаем пользователя
         const { data: { user } } = await supabase.auth.getUser()
-        console.log('2️⃣ Пользователь:', user?.id)
-        
         if (!user) {
           router.push('/login')
           return
@@ -228,8 +198,6 @@ export default function OperatorChatPage() {
           `)
           .eq('user_id', user.id)
           .maybeSingle()
-
-        console.log('3️⃣ Данные оператора:', authData)
 
         if (authData && isSubscribed) {
           const op = authData.operators as any
@@ -270,27 +238,16 @@ export default function OperatorChatPage() {
           })))
         }
 
-        // Загружаем последние 50 сообщений
-        console.log('4️⃣ Загружаем сообщения...')
         const retentionCutoff = getChatRetentionCutoffISO()
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('operator_chat_messages')
           .select('*')
           .gte('created_at', retentionCutoff)
           .order('created_at', { ascending: true })
           .limit(50)
 
-        if (error) {
-          console.error('5️⃣ Ошибка загрузки:', error)
-        } else {
-          console.log('5️⃣ Загружено сообщений:', data?.length)
-          if (isSubscribed) {
-            setMessages(data || [])
-          }
-        }
+        if (isSubscribed) setMessages(data || [])
 
-        // Подписка на новые сообщения
-        console.log('6️⃣ Настраиваем подписку на сообщения...')
         subscription = supabase
           .channel('chat-messages')
           .on(
@@ -301,7 +258,6 @@ export default function OperatorChatPage() {
               table: 'operator_chat_messages'
             },
             (payload: any) => {
-              console.log('7️⃣ 🔔 НОВОЕ СООБЩЕНИЕ!', payload.new)
               if (new Date((payload.new as any).created_at).getTime() < Date.now() - CHAT_RETENTION_HOURS * 60 * 60 * 1000) {
                 return
               }
@@ -333,7 +289,6 @@ export default function OperatorChatPage() {
               table: 'operator_auth'
             },
             (payload: any) => {
-              console.log('🔄 Статус изменен:', payload.new)
               setOnlineUsers(prev => 
                 prev.map(u => 
                   u.id === payload.new.id 
@@ -365,7 +320,6 @@ export default function OperatorChatPage() {
 
     // Очистка при размонтировании
     return () => {
-      console.log('9️⃣ Очищаем подписки')
       isSubscribed = false
       updateOnlineStatus(false)
       if (subscription) {
@@ -379,8 +333,6 @@ export default function OperatorChatPage() {
 
     const text = newMessage.trim()
     setNewMessage('')
-    
-    console.log('📤 Отправляем сообщение:', text)
 
     try {
       const { data, error } = await supabase
@@ -394,10 +346,8 @@ export default function OperatorChatPage() {
         .single()
 
       if (error) {
-        console.error('❌ Ошибка отправки:', error)
         setNewMessage(text)
       } else {
-        console.log('✅ Сообщение отправлено')
         if (new Date((data as any).created_at).getTime() >= Date.now() - CHAT_RETENTION_HOURS * 60 * 60 * 1000) {
           setMessages(prev => [...prev, data])
         }

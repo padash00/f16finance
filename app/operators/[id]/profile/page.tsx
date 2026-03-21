@@ -990,199 +990,46 @@ export default function OperatorProfilePage() {
         setLoading(true)
         setError(null)
 
-        console.log('Loading operator data for ID:', operatorId)
+        if (!operatorId) throw new Error('ID оператора не указан')
 
-        if (!operatorId) {
-          throw new Error('ID оператора не указан')
-        }
+        // Все независимые запросы — параллельно
+        const [
+          { data: { user } },
+          { data: companiesData },
+          { data: operatorData, error: operatorError },
+          { data: profileData },
+          { data: workData },
+          { data: docsData },
+          { data: notesData },
+          { data: accountData },
+        ] = await Promise.all([
+          supabase.auth.getUser(),
+          supabase.from('companies').select('id, name, code').order('name'),
+          supabase.from('operators').select('*').eq('id', operatorId).single(),
+          supabase.from('operator_profiles').select('*').eq('operator_id', operatorId).maybeSingle(),
+          supabase.from('operator_work_history').select('*, companies:company_id(name, code)').eq('operator_id', operatorId).order('start_date', { ascending: false }),
+          supabase.from('operator_documents').select('*').eq('operator_id', operatorId).order('created_at', { ascending: false }),
+          supabase.from('operator_notes').select('*').eq('operator_id', operatorId).order('created_at', { ascending: false }),
+          supabase.from('operator_auth').select('*').eq('operator_id', operatorId).maybeSingle(),
+        ])
 
-        // Получаем текущего пользователя
-        try {
-          const { data: { user } } = await supabase.auth.getUser()
-          setCurrentUser(user)
-          console.log('Current user:', user?.id || 'No user')
-        } catch (authErr) {
-          console.warn('Auth error:', authErr)
-        }
+        if (operatorError) throw operatorError
+        if (!operatorData) throw new Error('Оператор не найден')
 
-        // Загружаем список компаний
-        try {
-          console.log('Loading companies...')
-          const { data: companiesData, error: companiesError } = await supabase
-            .from('companies')
-            .select('*')
-            .order('name')
-
-          if (companiesError) {
-            console.error('Companies error:', companiesError)
-          } else {
-            setCompanies(companiesData || [])
-            console.log('Companies loaded:', companiesData?.length || 0)
-          }
-        } catch (err) {
-          console.error('Error loading companies:', err)
-        }
-
-        // Загружаем основную информацию об операторе
-        try {
-          console.log('Loading operator...')
-          const { data: operatorData, error: operatorError } = await supabase
-            .from('operators')
-            .select('*')
-            .eq('id', operatorId)
-            .single()
-
-          if (operatorError) {
-            console.error('Operator error:', operatorError)
-            throw operatorError
-          }
-          if (!operatorData) throw new Error('Оператор не найден')
-
-          setOperator(operatorData)
-          setEditedTelegramChatId(operatorData.telegram_chat_id || '')
-          console.log('Operator loaded:', operatorData.name)
-        } catch (err) {
-          console.error('Error loading operator:', err)
-          throw err
-        }
-
-        // Загружаем профиль
-        try {
-          console.log('Loading profile...')
-          const { data: profileData, error: profileError } = await supabase
-            .from('operator_profiles')
-            .select('*')
-            .eq('operator_id', operatorId)
-            .maybeSingle()
-
-          if (profileError) {
-            console.error('Profile error:', profileError)
-          } else if (profileData) {
-            setProfile(profileData)
-            setEditedProfile(profileData)
-            console.log('Profile loaded')
-          } else {
-            console.log('No profile found')
-          }
-        } catch (err) {
-          console.error('Error loading profile:', err)
-        }
-
-        // Загружаем историю работы
-        try {
-          console.log('Loading work history...')
-          const { data: workData, error: workError } = await supabase
-            .from('operator_work_history')
-            .select(`
-              *,
-              companies:company_id (
-                name,
-                code
-              )
-            `)
-            .eq('operator_id', operatorId)
-            .order('start_date', { ascending: false })
-
-          if (workError) {
-            console.error('Work history error:', workError)
-          } else if (workData) {
-            setWorkHistory(workData.map((w: any) => ({
-              ...w,
-              company_name: w.companies?.name,
-              company_code: w.companies?.code
-            })))
-            console.log('Work history loaded:', workData.length)
-          }
-        } catch (err) {
-          console.error('Error loading work history:', err)
-        }
-
-        // Загружаем документы
-        try {
-          console.log('Loading documents...')
-          const { data: docsData, error: docsError } = await supabase
-            .from('operator_documents')
-            .select('*')
-            .eq('operator_id', operatorId)
-            .order('created_at', { ascending: false })
-
-          if (docsError) {
-            console.error('Documents error:', docsError)
-          } else if (docsData) {
-            setDocuments(docsData)
-            console.log('Documents loaded:', docsData.length)
-          }
-        } catch (err) {
-          console.error('Error loading documents:', err)
-        }
-
-        // Загружаем заметки
-        try {
-          console.log('Loading notes...')
-          
-          const { data: notesData, error: notesError } = await supabase
-            .from('operator_notes')
-            .select('*')
-            .eq('operator_id', operatorId)
-            .order('created_at', { ascending: false })
-
-          if (notesError) {
-            console.error('Notes error:', notesError)
-          } else if (notesData) {
-            setNotes(notesData.map((n: any) => ({
-              ...n,
-              created_by_name: 'Система'
-            })))
-            console.log('Notes loaded:', notesData.length)
-          }
-        } catch (err) {
-          console.error('Error loading notes:', err)
-        }
-
-        // Загружаем информацию об аккаунте оператора
-        try {
-          console.log('Loading operator account...')
-          
-          // Проверяем, существует ли таблица
-          const { error: tableCheckError } = await supabase
-            .from('operator_auth')
-            .select('id')
-            .limit(1)
-
-          if (tableCheckError) {
-            console.log('Table operator_auth does not exist yet - skipping')
-          } else {
-            const { data: accountData, error: accountError } = await supabase
-              .from('operator_auth')
-              .select('*')
-              .eq('operator_id', operatorId)
-              .maybeSingle()
-
-            if (accountError) {
-              console.error('Account error:', accountError)
-            } else if (accountData) {
-              setOperatorAccount(accountData)
-              console.log('Operator account loaded')
-            } else {
-              console.log('No operator account found')
-            }
-          }
-        } catch (err) {
-          console.error('Error loading operator account:', err)
-        }
-
-        console.log('All data loaded successfully')
+        setCurrentUser(user)
+        setCompanies(companiesData || [])
+        setOperator(operatorData)
+        setEditedTelegramChatId(operatorData.telegram_chat_id || '')
+        if (profileData) { setProfile(profileData); setEditedProfile(profileData) }
+        if (workData) setWorkHistory(workData.map((w: any) => ({ ...w, company_name: w.companies?.name, company_code: w.companies?.code })))
+        if (docsData) setDocuments(docsData)
+        if (notesData) setNotes(notesData.map((n: any) => ({ ...n, created_by_name: 'Система' })))
+        if (accountData) setOperatorAccount(accountData)
 
       } catch (err: any) {
-        console.error('Fatal error in loadOperatorData:', err)
-        
         let errorMessage = 'Ошибка загрузки'
-        if (err.code === 'PGRST116') {
-          errorMessage = 'Оператор не найден'
-        } else if (err.message) {
-          errorMessage = err.message
-        }
-        
+        if (err.code === 'PGRST116') errorMessage = 'Оператор не найден'
+        else if (err.message) errorMessage = err.message
         setError(errorMessage)
       } finally {
         setLoading(false)
@@ -1358,13 +1205,6 @@ export default function OperatorProfilePage() {
       // Формируем email (обязательно валидный формат)
       const email = `${username}@operator.local`.toLowerCase()
 
-      console.log('Creating account with:', { 
-        username, 
-        email, 
-        operatorId: operator.id,
-        name: operator.name 
-      })
-
       // Создаем пользователя в auth.users через API
       const response = await fetch('/api/admin/create-operator-account', {
         method: 'POST',
@@ -1378,7 +1218,6 @@ export default function OperatorProfilePage() {
       })
 
       const data = await response.json()
-      console.log('API response:', data)
 
       if (!response.ok) {
         throw new Error(data.error || 'Ошибка создания аккаунта')

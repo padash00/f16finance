@@ -119,7 +119,7 @@ export default function OperatorsPage() {
       // Загружаем операторов
       const { data: operatorsData, error: operatorsError } = await supabase
         .from('operators')
-        .select('*')
+        .select('id, name, short_name, is_active, created_at, role, telegram_chat_id')
         .order('name')
 
       if (operatorsError) throw operatorsError
@@ -131,7 +131,7 @@ export default function OperatorsPage() {
       if (operatorsList.length > 0) {
         const { data: profilesData, error: profilesError } = await supabase
           .from('operator_profiles')
-          .select('*')
+          .select('id, operator_id, full_name, phone, email, hire_date, position, emergency_contact_name, emergency_contact_phone, photo_url')
           .in('operator_id', operatorsList.map(o => o.id))
 
         if (profilesError) throw profilesError

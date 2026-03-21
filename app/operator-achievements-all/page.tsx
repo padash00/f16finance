@@ -106,151 +106,70 @@ export default function OperatorAchievementsAllPage() {
     const loadData = async () => {
       try {
         setLoading(true)
-        
-        console.log('📊 Начинаем загрузку данных для страницы всех достижений')
-        console.log('1️⃣ Проверяем авторизацию...')
-        
-        // Проверяем авторизацию
+
         const { data: { user }, error: userError } = await supabase.auth.getUser()
-        
-        if (userError) {
-          console.error('❌ Ошибка авторизации:', userError)
-          throw userError
-        }
-        
-        if (!user) {
-          console.log('👤 Пользователь не авторизован, редирект на /login')
-          router.push('/login')
-          return
-        }
-        
-        console.log('✅ Пользователь авторизован:', user.email)
-        
-        // Получаем всех активных операторов
-        console.log('2️⃣ Загружаем список активных операторов из таблицы operators...')
+        if (userError) throw userError
+        if (!user) { router.push('/login'); return }
+
         const { data: operatorsData, error: operatorsError } = await supabase
           .from('operators')
-          .select(`
-            id,
-            name,
-            short_name,
-            is_active,
-            operator_profiles (
-              photo_url,
-              position
-            )
-          `)
+          .select('id, name, short_name, is_active, operator_profiles(photo_url, position)')
           .eq('is_active', true)
           .order('name')
 
-        if (operatorsError) {
-          console.error('❌ Ошибка загрузки операторов:', operatorsError)
-          throw operatorsError
-        }
+        if (operatorsError) throw operatorsError
 
-        console.log(`✅ Загружено ${operatorsData?.length || 0} активных операторов`)
-        console.log('📋 Список операторов:', operatorsData?.map((op: any) => ({ 
-          id: op.id, 
-          name: op.name,
-          has_profile: !!op.operator_profiles 
-        })))
+        // Загружаем уровень и достижения всех операторов параллельно
+        const operatorsWithAchievements = await Promise.all(
+          (operatorsData || []).map(async (op: any) => {
+            const profile = Array.isArray(op.operator_profiles)
+              ? op.operator_profiles[0] || null
+              : op.operator_profiles || null
 
-        const operatorsWithAchievements: OperatorWithAchievements[] = []
+            const [levelRes, achievementsRes] = await Promise.all([
+              supabase.rpc('get_operator_level_info', { operator_uuid: op.id }),
+              supabase.rpc('get_operator_achievements', { operator_uuid: op.id }),
+            ])
 
-        // Для каждого оператора загружаем достижения и уровень
-        console.log('3️⃣ Начинаем загрузку достижений для каждого оператора...')
-        
-        for (let i = 0; i < (operatorsData?.length || 0); i++) {
-          const op = operatorsData[i]
-          const profile = Array.isArray(op.operator_profiles)
-            ? op.operator_profiles[0] || null
-            : op.operator_profiles || null
-          
-          console.log(`   🔄 Оператор ${i+1}/${operatorsData?.length}: ${op.name} (ID: ${op.id})`)
-          
-          // Получаем уровень и XP
-          console.log(`      ⏳ Загружаем уровень и XP...`)
-          const { data: levelData, error: levelError } = await supabase
-            .rpc('get_operator_level_info', { operator_uuid: op.id })
+            const achievements: Achievement[] = achievementsRes.data || []
+            const levelInfo = levelRes.data?.[0] || { calculated_level: 1, total_xp: 0 }
 
-          if (levelError) {
-            console.error(`      ❌ Ошибка загрузки уровня для ${op.name}:`, levelError)
-          } else {
-            console.log(`      ✅ Уровень загружен:`, levelData)
-          }
+            const lastAchievement = achievements.length > 0
+              ? [...achievements].sort((a, b) =>
+                  new Date(b.achieved_at).getTime() - new Date(a.achieved_at).getTime()
+                )[0].achievement_name
+              : null
 
-          // Получаем все ачивки
-          console.log(`      ⏳ Загружаем достижения...`)
-          const { data: achievementsData, error: achievementsError } = await supabase
-            .rpc('get_operator_achievements', { operator_uuid: op.id })
-
-          if (achievementsError) {
-            console.error(`      ❌ Ошибка загрузки достижений для ${op.name}:`, achievementsError)
-          } else {
-            console.log(`      ✅ Загружено ${achievementsData?.length || 0} достижений`)
-          }
-
-          const achievements = achievementsData || []
-          const levelInfo = levelData && levelData.length > 0 ? levelData[0] : { calculated_level: 1, total_xp: 0 }
-          
-          // Находим последнее достижение
-          let lastAchievement = null
-          if (achievements.length > 0) {
-            const sorted = [...achievements].sort((a, b) => 
-              new Date(b.achieved_at).getTime() - new Date(a.achieved_at).getTime()
-            )
-            lastAchievement = sorted[0].achievement_name
-            console.log(`      🏆 Последнее достижение: ${lastAchievement}`)
-          }
-
-          operatorsWithAchievements.push({
-            id: op.id,
-            name: op.name,
-            short_name: op.short_name,
-            photo_url: profile?.photo_url || null,
-            position: profile?.position || null,
-            achievements,
-            total_xp: levelInfo.total_xp || 0,
-            level: levelInfo.calculated_level || 1,
-            achievements_count: achievements.length,
-            last_achievement: lastAchievement,
+            return {
+              id: op.id,
+              name: op.name,
+              short_name: op.short_name,
+              photo_url: profile?.photo_url || null,
+              position: profile?.position || null,
+              achievements,
+              total_xp: levelInfo.total_xp || 0,
+              level: levelInfo.calculated_level || 1,
+              achievements_count: achievements.length,
+              last_achievement: lastAchievement,
+            }
           })
-        }
+        )
 
-        console.log('✅ Завершена загрузка всех операторов')
-        console.log('📊 Итоговые данные:', operatorsWithAchievements.map(op => ({
-          name: op.name,
-          level: op.level,
-          xp: op.total_xp,
-          achievements: op.achievements_count
-        })))
-
-        // Сортируем по умолчанию (по XP)
         const sorted = [...operatorsWithAchievements].sort((a, b) => b.total_xp - a.total_xp)
-        
         setOperators(sorted)
         setFilteredOperators(sorted)
 
-        // Рассчитываем статистику
         const totalXP = sorted.reduce((sum, op) => sum + op.total_xp, 0)
-        const newStats = {
+        setStats({
           totalOperators: sorted.length,
           totalAchievements: sorted.reduce((sum, op) => sum + op.achievements_count, 0),
-          totalXP: totalXP,
+          totalXP,
           averageXP: sorted.length > 0 ? Math.round(totalXP / sorted.length) : 0,
           topOperator: sorted.length > 0 ? (sorted[0].short_name || sorted[0].name) : '',
-        }
-        
-        console.log('📈 Статистика:', newStats)
-        setStats(newStats)
-
+        })
       } catch (err: any) {
-        console.error('❌ Критическая ошибка в loadData:', err)
-        console.error('   Сообщение:', err.message)
-        console.error('   Стек:', err.stack)
         setError(err.message)
       } finally {
-        console.log('🏁 Загрузка данных завершена')
         setLoading(false)
       }
     }
@@ -259,25 +178,20 @@ export default function OperatorAchievementsAllPage() {
   }, [router])
 
   const handleLogout = async () => {
-    console.log('🚪 Выход из системы...')
     await supabase.auth.signOut()
     router.push('/login')
   }
 
   // Поиск и сортировка
   useEffect(() => {
-    console.log(`🔍 Поиск: "${searchQuery}", Сортировка: ${sortBy} (${sortDirection})`)
-    
     let filtered = [...operators]
 
-    // Поиск по имени
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(op => 
+      filtered = filtered.filter(op =>
         op.name.toLowerCase().includes(query) ||
         (op.short_name && op.short_name.toLowerCase().includes(query))
       )
-      console.log(`   Найдено ${filtered.length} операторов по запросу "${searchQuery}"`)
     }
 
     // Сортировка
@@ -321,8 +235,6 @@ export default function OperatorAchievementsAllPage() {
   }
 
   const handleViewAchievements = (op: OperatorWithAchievements) => {
-    console.log(`👁️ Просмотр достижений оператора: ${op.name} (ID: ${op.id})`)
-    console.log(`   Уровень: ${op.level}, XP: ${op.total_xp}, Достижений: ${op.achievements_count}`)
     setSelectedOperator(op)
   }
 
@@ -341,7 +253,6 @@ export default function OperatorAchievementsAllPage() {
   }
 
   if (error) {
-    console.error('❌ Рендер страницы с ошибкой:', error)
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center p-4">
         <Card className="p-8 max-w-md border-red-500/20 bg-red-500/5">
@@ -360,8 +271,6 @@ export default function OperatorAchievementsAllPage() {
     )
   }
 
-  console.log(`🖥️ Рендер страницы: ${filteredOperators.length} операторов отображается`)
-  
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
       {/* Шапка */}
