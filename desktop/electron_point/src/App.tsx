@@ -52,6 +52,14 @@ function canUseScanner(bootstrap: BootstrapData) {
   return flags.debt_report === true && scannerModes.has(pointMode)
 }
 
+function isOperatorAttachedToCurrentPoint(session: OperatorSession, bootstrap: BootstrapData) {
+  return session.company.id === bootstrap.company.id
+}
+
+function canUseScannerForSession(session: OperatorSession) {
+  return canUseScanner(session.bootstrap) && isOperatorAttachedToCurrentPoint(session, session.bootstrap)
+}
+
 export default function App() {
   const [view, setView] = useState<AppView>({ screen: 'booting' })
   const [config, setConfig] = useState<AppConfig | null>(null)
@@ -83,7 +91,7 @@ export default function App() {
       const cachedSession = await loadOperatorSession()
       if (cachedSession) {
         const session: typeof cachedSession = { ...cachedSession, bootstrap }
-        setView(canUseScanner(bootstrap)
+        setView(canUseScannerForSession(session)
           ? { screen: 'scanner', bootstrap, session }
           : { screen: 'shift', bootstrap, session })
         return
@@ -123,7 +131,7 @@ export default function App() {
     saveOperatorSession(session).catch(() => null)
     const bootstrap = session.bootstrap
 
-    if (canUseScanner(bootstrap)) {
+    if (canUseScannerForSession(session)) {
       setView({ screen: 'scanner', bootstrap, session })
     } else {
       setView({ screen: 'shift', bootstrap, session })
@@ -214,7 +222,7 @@ export default function App() {
         session={view.session}
         isOffline={isOffline}
         onLogout={handleLogout}
-        onSwitchToScanner={canUseScanner(view.bootstrap) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
+        onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
         onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
       />
     )

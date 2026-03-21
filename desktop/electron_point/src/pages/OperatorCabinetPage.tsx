@@ -112,45 +112,38 @@ export default function OperatorCabinetPage({
     setError(null)
     setSectionErrors({})
 
-    const [reportsResult, debtsResult, tasksResult] = await Promise.allSettled([
-      api.getReports(config),
-      api.getDebts(config),
+    const [cabinetResult, tasksResult] = await Promise.allSettled([
+      api.getPointOperatorCabinet(config, session),
       api.getPointOperatorTasks(config, session),
     ])
 
     const nextErrors: Partial<Record<'shifts' | 'debts' | 'tasks', string>> = {}
 
-    if (reportsResult.status === 'fulfilled') {
-      const ownShifts = ((reportsResult.value.data.shifts as any[]) || [])
-        .filter((row) => String(row.operator_id || '') === session.operator.operator_id)
-        .map((row) => {
-          const cash = Number(row.cash_amount || row.cash || 0)
-          const kaspi = Number(row.kaspi_amount || row.kaspi_pos || 0)
-          const kaspiOnline = Number(row.online_amount || row.kaspi_online || 0)
-          return {
-            id: String(row.id),
-            date: String(row.date),
-            shift: String(row.shift || 'day'),
-            company_name: row.company_name || session.company.name,
-            cash,
-            kaspi,
-            kaspi_online: kaspiOnline,
-            total: cash + kaspi + kaspiOnline,
-          }
-        })
+    if (cabinetResult.status === 'fulfilled') {
+      const ownShifts = (cabinetResult.value.shifts || []).map((row: any) => {
+        const cash = Number(row.cash_amount || row.cash || 0)
+        const kaspi = Number(row.kaspi_amount || row.kaspi_pos || 0)
+        const kaspiOnline = Number(row.online_amount || row.kaspi_online || 0)
+        return {
+          id: String(row.id),
+          date: String(row.date),
+          shift: String(row.shift || 'day'),
+          company_name: row.company_name || session.company.name,
+          cash,
+          kaspi,
+          kaspi_online: kaspiOnline,
+          total: Number(row.total || cash + kaspi + kaspiOnline),
+        }
+      })
 
       setShifts(ownShifts)
+      setDebts(cabinetResult.value.debts || [])
     } else {
       setShifts([])
-      nextErrors.shifts = reportsResult.reason instanceof Error ? reportsResult.reason.message : 'Не удалось загрузить смены'
-    }
-
-    if (debtsResult.status === 'fulfilled') {
-      const ownDebts = debtsResult.value.filter((item) => String(item.operator_id || '') === session.operator.operator_id)
-      setDebts(ownDebts)
-    } else {
       setDebts([])
-      nextErrors.debts = debtsResult.reason instanceof Error ? debtsResult.reason.message : 'Не удалось загрузить долги'
+      const message = cabinetResult.reason instanceof Error ? cabinetResult.reason.message : 'Не удалось загрузить данные кабинета'
+      nextErrors.shifts = message
+      nextErrors.debts = message
     }
 
     if (tasksResult.status === 'fulfilled') {
@@ -161,7 +154,7 @@ export default function OperatorCabinetPage({
     }
 
     setSectionErrors(nextErrors)
-    if (Object.keys(nextErrors).length === 3) {
+    if (Object.keys(nextErrors).length >= 3) {
       setError('Не удалось загрузить личный кабинет. Проверьте сеть и попробуйте обновить.')
     }
     setLoading(false)

@@ -11,6 +11,7 @@ import type {
   DebtItem,
   ShiftForm,
   DailyKaspiReport,
+  ShiftRecord,
 } from '@/types'
 import { parseMoney } from '@/lib/utils'
 
@@ -327,5 +328,30 @@ export async function getPointOperatorTasks(
   return {
     tasks: data.tasks || [],
     comments: data.comments || [],
+  }
+}
+
+export async function getPointOperatorCabinet(
+  config: AppConfig,
+  session: OperatorSession,
+): Promise<{
+  shifts: (ShiftRecord & { company_name?: string | null })[]
+  debts: DebtItem[]
+}> {
+  const data = await request<{
+    ok: boolean
+    shifts: (ShiftRecord & { company_name?: string | null })[]
+    debts: DebtItem[]
+  }>(
+    config,
+    'GET',
+    '/api/point/operator-cabinet',
+    undefined,
+    operatorHeaders(session),
+  )
+
+  return {
+    shifts: data.shifts || [],
+    debts: data.debts || [],
   }
 }
