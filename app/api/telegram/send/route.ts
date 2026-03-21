@@ -26,7 +26,9 @@ export async function POST(req: Request) {
     const text = body?.text?.trim()
 
     if (!chatId) return json({ error: 'chatId обязателен' }, 400)
+    if (!/^-?\d+$/.test(chatId)) return json({ error: 'chatId должен быть числом' }, 400)
     if (!text) return json({ error: 'text обязателен' }, 400)
+    if (text.length > 4096) return json({ error: 'text не должен превышать 4096 символов' }, 400)
 
     const requestClient = createRequestSupabaseClient(req)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient

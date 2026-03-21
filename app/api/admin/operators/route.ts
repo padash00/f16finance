@@ -231,6 +231,7 @@ export async function POST(req: Request) {
     if (body.action === 'bulkDeleteOperators') {
       const ids = Array.isArray(body.operatorIds) ? body.operatorIds.filter(Boolean) : []
       if (ids.length === 0) return json({ error: 'Нужен список операторов' }, 400)
+      if (ids.length > 100) return json({ error: 'Максимум 100 операторов за один запрос' }, 400)
 
       const { error } = await supabase.from('operators').delete().in('id', ids)
       if (error) throw error

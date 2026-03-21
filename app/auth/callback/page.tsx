@@ -88,7 +88,7 @@ function CallbackContent() {
 
         if (!active) return
 
-        if (nextParam) {
+        if (nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')) {
           router.replace(nextParam)
           return
         }

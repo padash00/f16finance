@@ -61,8 +61,10 @@ export async function POST(req: Request) {
     const authUser = usersData.users.find(u => u.email?.toLowerCase() === staffRow.email!.toLowerCase()) ?? null
     if (!authUser) return json({ error: 'Аккаунт не найден. Сначала отправьте приглашение.', code: 'no_account' }, 404)
 
-    // Generate or use provided password (минимум 8 символов)
-    const password = (body.password && body.password.length >= 8) ? body.password : generatePassword()
+    // Generate or use provided password (минимум 8 символов, должен содержать буквы и цифры)
+    const isStrongPassword = (p: string) =>
+      p.length >= 8 && /[A-Za-z]/.test(p) && /[0-9]/.test(p)
+    const password = (body.password && isStrongPassword(body.password)) ? body.password : generatePassword()
 
     const { error: updateError } = await supabase.auth.admin.updateUserById(authUser.id, { password })
     if (updateError) throw updateError
