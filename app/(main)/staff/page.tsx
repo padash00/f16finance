@@ -63,7 +63,6 @@ type Staff = {
   short_name: string | null
   monthly_salary: number | null
   is_active: boolean
-  hire_date?: string | null
   phone?: string | null
   email?: string | null
 }
@@ -342,7 +341,7 @@ export default function StaffPageSmart() {
     else setLoading(true)
 
     const [staffRes, payRes] = await Promise.all([
-      supabase.from('staff').select('id, full_name, role, short_name, monthly_salary, is_active, hire_date, phone, email').order('full_name'),
+      supabase.from('staff').select('id, full_name, role, short_name, monthly_salary, is_active, phone, email').order('full_name'),
       supabase
         .from('staff_salary_payments')
         .select('id, staff_id, pay_date, slot, amount, comment, created_at')
@@ -1266,7 +1265,6 @@ function AddStaffDialog({ isOpen, onClose, onSuccess }: AddStaffDialogProps) {
     monthly_salary: '',
     phone: '',
     email: '',
-    hire_date: toISODateLocal(new Date()),
   })
   const [loading, setLoading] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -1299,8 +1297,7 @@ function AddStaffDialog({ isOpen, onClose, onSuccess }: AddStaffDialogProps) {
         monthly_salary: '',
         phone: '',
         email: '',
-        hire_date: toISODateLocal(new Date()),
-      })
+          })
       onClose()
       return
     }
@@ -1344,15 +1341,6 @@ function AddStaffDialog({ isOpen, onClose, onSuccess }: AddStaffDialogProps) {
                 onChange={e => setForm({...form, short_name: e.target.value})}
                 className="bg-gray-800/50 border-white/10 text-white"
                 placeholder="Иван"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs text-gray-400 font-medium">Дата найма</label>
-              <Input 
-                type="date"
-                value={form.hire_date} 
-                onChange={e => setForm({...form, hire_date: e.target.value})}
-                className="bg-gray-800/50 border-white/10 text-white"
               />
             </div>
           </div>
