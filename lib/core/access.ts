@@ -240,6 +240,8 @@ export const SUPER_ADMIN_MATRIX_ENTRY = {
 } satisfies RoleMatrixEntry
 
 export const OPERATOR_PATHS = [
+  '/operator',
+  '/operator/*',
   '/operator-dashboard',
   '/operator-dashboard/*',
   '/operator-lead',
@@ -324,7 +326,7 @@ export function getDefaultAppPath(params: {
 
   if (isSuperAdmin) return '/dashboard'
   if (isStaff) return getDefaultPathForStaffRole(normalizeStaffRole(staffRole))
-  if (isOperator) return '/operator-dashboard'
+  if (isOperator) return '/operator'
   return '/unauthorized'
 }
 
