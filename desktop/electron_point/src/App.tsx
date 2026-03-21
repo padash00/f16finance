@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { loadConfig, saveConfig, DEFAULT_API_URL } from '@/lib/config'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { loadConfig, saveConfig } from '@/lib/config'
 import { getCachedBootstrap, saveBootstrapCache, saveOperatorSession, loadOperatorSession, clearOperatorSession } from '@/lib/cache'
 import * as api from '@/lib/api'
 import { toastInfo } from '@/lib/toast'
@@ -8,8 +8,9 @@ import PointSelectPage from '@/pages/PointSelectPage'
 import ShiftPage from '@/pages/ShiftPage'
 import ScannerPage from '@/pages/ScannerPage'
 import OperatorCabinetPage from '@/pages/OperatorCabinetPage'
+import SetupPage from '@/pages/SetupPage'
 import AdminLayout from '@/pages/admin/AdminLayout'
-import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData } from '@/types'
+import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData, AppUpdateState } from '@/types'
 
 // Типизируем window.electron (из preload.cjs)
 declare global {
@@ -38,6 +39,14 @@ declare global {
       }
       app: {
         version: () => Promise<string>
+      }
+      updater: {
+        getState: () => Promise<AppUpdateState>
+        check: () => Promise<AppUpdateState>
+        download: () => Promise<AppUpdateState>
+        install: () => Promise<{ ok: boolean; error?: string }>
+        openReleases: () => Promise<{ ok: boolean }>
+        onStateChange: (callback: (state: AppUpdateState) => void) => () => void
       }
       shell: {
         openExternal: (url: string) => Promise<void>
@@ -72,10 +81,163 @@ function isTaskOpen(status: string) {
   return !['done', 'archived'].includes(status)
 }
 
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 Б'
+  const units = ['Б', 'КБ', 'МБ', 'ГБ']
+  let value = bytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
+}
+
+function UpdateBanner({
+  state,
+  onCheck,
+  onDownload,
+  onInstall,
+  onOpenReleases,
+}: {
+  state: AppUpdateState | null
+  onCheck: () => void
+  onDownload: () => void
+  onInstall: () => void
+  onOpenReleases: () => void
+}) {
+  if (!state || state.status === 'development' || state.status === 'idle') return null
+
+  const progressPercent = Math.max(0, Math.min(100, Math.round(state.progress?.percent || 0)))
+
+  return (
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[100] w-[min(92vw,380px)]">
+      <div className="pointer-events-auto rounded-3xl border border-white/10 bg-black/90 p-4 shadow-2xl backdrop-blur-xl">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-white">Обновление Orda Point</p>
+            <p className="mt-1 text-xs text-white/65">
+              Текущая версия {state.currentVersion}
+              {state.latestVersion ? ` · новая ${state.latestVersion}` : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenReleases}
+            className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-medium text-white/75 transition hover:border-white/20 hover:text-white"
+          >
+            Релизы
+          </button>
+        </div>
+
+        {state.status === 'checking' && (
+          <p className="text-sm text-white/80">Проверяем, вышла ли новая версия...</p>
+        )}
+
+        {state.status === 'available' && (
+          <>
+            <p className="text-sm text-white/85">
+              Доступна новая версия. Программа может сама скачать обновление и предложить установку.
+            </p>
+            {state.releaseNotes && (
+              <p className="mt-2 line-clamp-3 text-xs text-white/55">{state.releaseNotes}</p>
+            )}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={onDownload}
+                className="rounded-2xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-emerald-400"
+              >
+                Скачать обновление
+              </button>
+              <button
+                type="button"
+                onClick={onCheck}
+                className="rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-white/20 hover:text-white"
+              >
+                Проверить ещё раз
+              </button>
+            </div>
+          </>
+        )}
+
+        {state.status === 'downloading' && (
+          <>
+            <p className="text-sm text-white/85">Скачиваем новую версию...</p>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-xs text-white/60">
+              <span>{progressPercent}%</span>
+              <span>
+                {formatBytes(state.progress?.transferred || 0)} / {formatBytes(state.progress?.total || 0)}
+              </span>
+            </div>
+          </>
+        )}
+
+        {state.status === 'downloaded' && (
+          <>
+            <p className="text-sm text-white/85">
+              Обновление скачано. Осталось перезапустить программу, и новая версия установится автоматически.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={onInstall}
+                className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+              >
+                Перезапустить и обновить
+              </button>
+              <button
+                type="button"
+                onClick={onOpenReleases}
+                className="rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-white/20 hover:text-white"
+              >
+                Что нового
+              </button>
+            </div>
+          </>
+        )}
+
+        {state.status === 'installing' && (
+          <p className="text-sm text-white/85">Закрываем программу и устанавливаем обновление...</p>
+        )}
+
+        {state.status === 'error' && (
+          <>
+            <p className="text-sm text-rose-300">{state.error || 'Не удалось обновить приложение.'}</p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={onCheck}
+                className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+              >
+                Повторить
+              </button>
+              <button
+                type="button"
+                onClick={onOpenReleases}
+                className="rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-white/80 transition hover:border-white/20 hover:text-white"
+              >
+                Открыть релизы
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [view, setView] = useState<AppView>({ screen: 'booting' })
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [isOffline, setIsOffline] = useState(false)
+  const [updateState, setUpdateState] = useState<AppUpdateState | null>(null)
   const seenTaskIdsRef = useRef<Set<string> | null>(null)
   const latestViewRef = useRef<AppView>({ screen: 'booting' })
 
@@ -84,6 +246,29 @@ export default function App() {
   }, [view])
 
   useEffect(() => { init() }, [])
+
+  useEffect(() => {
+    let unsubscribe = () => {}
+
+    async function initUpdater() {
+      try {
+        const state = await window.electron.updater.getState()
+        setUpdateState(state)
+      } catch {
+        // ignore initial updater read errors
+      }
+
+      unsubscribe = window.electron.updater.onStateChange((state) => {
+        setUpdateState(state)
+      })
+    }
+
+    void initUpdater()
+
+    return () => {
+      unsubscribe()
+    }
+  }, [])
 
   useEffect(() => {
     const session = getActiveOperatorSession(view)
@@ -159,7 +344,6 @@ export default function App() {
 
   async function init() {
     const cfg = await loadConfig()
-    // Всегда показываем Login — настройка токена доступна внутри Login через диалог
     setConfig(cfg)
     await showLogin(cfg)
   }
@@ -167,7 +351,7 @@ export default function App() {
   async function showLogin(cfg: AppConfig | null) {
     if (!cfg) {
       setIsOffline(false)
-      setView({ screen: 'login', bootstrap: emptyBootstrap() })
+      setView({ screen: 'setup' })
       return
     }
 
@@ -189,10 +373,9 @@ export default function App() {
 
       setView({ screen: 'login', bootstrap })
     } catch {
-      // Нет сети — пробуем кеш
       const cached = await getCachedBootstrap()
       setIsOffline(true)
-      setView({ screen: 'login', bootstrap: cached ?? emptyBootstrap() })
+      setView(cached ? { screen: 'login', bootstrap: cached } : { screen: 'setup' })
     }
   }
 
@@ -214,6 +397,10 @@ export default function App() {
     await saveConfig(newConfig)
     setConfig(newConfig)
     await showLogin(newConfig)
+  }
+
+  function handleOpenSetup() {
+    setView({ screen: 'setup' })
   }
 
   // ─── Переход к рабочему экрану после выбора точки ─────────────────────────
@@ -260,15 +447,66 @@ export default function App() {
     showLogin(config)
   }
 
+  async function handleCheckForUpdates() {
+    try {
+      const state = await window.electron.updater.check()
+      setUpdateState(state)
+      if (state.status === 'idle') {
+        toastInfo('Новых обновлений пока нет.', 4000)
+      }
+    } catch {
+      toastInfo('Не удалось проверить обновления.', 5000)
+    }
+  }
+
+  async function handleDownloadUpdate() {
+    try {
+      const state = await window.electron.updater.download()
+      setUpdateState(state)
+    } catch {
+      toastInfo('Не удалось скачать обновление.', 5000)
+    }
+  }
+
+  async function handleInstallUpdate() {
+    try {
+      const result = await window.electron.updater.install()
+      if (!result.ok) {
+        toastInfo(result.error || 'Обновление ещё не готово к установке.', 5000)
+      }
+    } catch {
+      toastInfo('Не удалось запустить установку обновления.', 5000)
+    }
+  }
+
+  function handleOpenReleases() {
+    window.electron.updater.openReleases().catch(() => null)
+  }
+
   function handleOpenOperatorCabinet(returnTo: 'shift' | 'scanner') {
     if (view.screen !== 'shift' && view.screen !== 'scanner') return
     setView({ screen: 'operator-cabinet', bootstrap: view.bootstrap, session: view.session, returnTo })
   }
 
+  function withUpdateBanner(content: ReactNode) {
+    return (
+      <>
+        {content}
+        <UpdateBanner
+          state={updateState}
+          onCheck={handleCheckForUpdates}
+          onDownload={handleDownloadUpdate}
+          onInstall={handleInstallUpdate}
+          onOpenReleases={handleOpenReleases}
+        />
+      </>
+    )
+  }
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   if (view.screen === 'booting') {
-    return (
+    return withUpdateBanner(
       <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background">
         <div className="h-9 drag-region absolute inset-x-0 top-0" />
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary">
@@ -276,36 +514,46 @@ export default function App() {
         </div>
         <span className="animate-spin h-5 w-5 border-2 border-border border-t-foreground rounded-full" />
         <p className="text-xs text-muted-foreground">Подключение...</p>
-      </div>
+      </div>,
+    )
+  }
+
+  if (view.screen === 'setup') {
+    return withUpdateBanner(
+      <SetupPage
+        initialConfig={config}
+        onDone={handleSaveConfig}
+        onCancel={config ? () => showLogin(config) : undefined}
+      />,
     )
   }
 
   if (view.screen === 'login') {
-    return (
+    return withUpdateBanner(
       <LoginPage
-        config={config}
+        config={config!}
         bootstrap={view.bootstrap}
         isOffline={isOffline}
         onOperatorLogin={handleOperatorLogin}
         onAdminLogin={handleAdminLogin}
-        onSaveConfig={handleSaveConfig}
-      />
+        onOpenSetup={handleOpenSetup}
+      />,
     )
   }
 
   if (view.screen === 'point-select') {
-    return (
+    return withUpdateBanner(
       <PointSelectPage
         session={view.session}
         allCompanies={view.allCompanies}
         onSelect={handlePointSelect}
         onLogout={handleLogout}
-      />
+      />,
     )
   }
 
   if (view.screen === 'shift') {
-    return (
+    return withUpdateBanner(
       <ShiftPage
         config={config!}
         bootstrap={view.bootstrap}
@@ -314,12 +562,12 @@ export default function App() {
         onLogout={handleLogout}
         onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
         onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
-      />
+      />,
     )
   }
 
   if (view.screen === 'scanner') {
-    return (
+    return withUpdateBanner(
       <ScannerPage
         config={config!}
         bootstrap={view.bootstrap}
@@ -328,12 +576,12 @@ export default function App() {
         onLogout={handleLogout}
         onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
         onOpenCabinet={() => handleOpenOperatorCabinet('scanner')}
-      />
+      />,
     )
   }
 
   if (view.screen === 'operator-cabinet') {
-    return (
+    return withUpdateBanner(
       <OperatorCabinetPage
         config={config!}
         bootstrap={view.bootstrap}
@@ -341,20 +589,20 @@ export default function App() {
         returnTo={view.returnTo}
         onBackToWork={() => setView({ screen: view.returnTo, bootstrap: view.bootstrap, session: view.session })}
         onLogout={handleLogout}
-      />
+      />,
     )
   }
 
   if (view.screen === 'admin') {
-    return (
+    return withUpdateBanner(
       <AdminLayout
         config={config!}
         session={view.session}
         bootstrap={view.bootstrap}
         onLogout={handleLogout}
-      />
+      />,
     )
   }
 
-  return null
+  return withUpdateBanner(null)
 }

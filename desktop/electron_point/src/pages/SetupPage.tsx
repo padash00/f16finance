@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Wifi, KeyRound, ArrowRight, Server } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,14 +9,21 @@ import { saveConfig, DEFAULT_API_URL } from '@/lib/config'
 import type { AppConfig } from '@/types'
 
 interface Props {
+  initialConfig?: AppConfig | null
   onDone: (config: AppConfig) => void
+  onCancel?: () => void
 }
 
-export default function SetupPage({ onDone }: Props) {
-  const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL)
-  const [deviceToken, setDeviceToken] = useState('')
+export default function SetupPage({ initialConfig, onDone, onCancel }: Props) {
+  const [apiUrl, setApiUrl] = useState(initialConfig?.apiUrl ?? DEFAULT_API_URL)
+  const [deviceToken, setDeviceToken] = useState(initialConfig?.deviceToken ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [appVersion, setAppVersion] = useState('')
+
+  useEffect(() => {
+    window.electron.app.version().then(setAppVersion).catch(() => {})
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -24,23 +32,32 @@ export default function SetupPage({ onDone }: Props) {
     const url = apiUrl.trim().replace(/\/$/, '')
     const token = deviceToken.trim()
 
-    if (!url) { setError('Введите URL сервера'); return }
-    if (!token) { setError('Введите токен устройства'); return }
+    if (!url) {
+      setError('Введите адрес сервера.')
+      return
+    }
+
+    if (!token) {
+      setError('Введите токен устройства.')
+      return
+    }
 
     setLoading(true)
     try {
-      // Проверяем соединение через bootstrap
       const res = await fetch(`${url}/api/point/bootstrap`, {
         headers: { 'x-point-device-token': token },
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`)
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Ошибка ${res.status}`)
+      }
 
       const config: AppConfig = { apiUrl: url, deviceToken: token }
       await saveConfig(config)
       onDone(config)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Не удалось подключиться к серверу')
+      setError(err instanceof Error ? err.message : 'Не удалось подключиться к серверу.')
     } finally {
       setLoading(false)
     }
@@ -49,22 +66,24 @@ export default function SetupPage({ onDone }: Props) {
   return (
     <div className="flex h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-md space-y-6">
-        {/* Logo */}
         <div className="text-center space-y-2">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary">
             <span className="text-2xl font-bold text-primary-foreground">F</span>
           </div>
           <h1 className="text-2xl font-bold">Orda Point</h1>
-          <p className="text-sm text-muted-foreground">Первоначальная настройка терминала</p>
+          <p className="text-sm text-muted-foreground">
+            {initialConfig ? 'Настройка устройства и сервера' : 'Первоначальная настройка терминала'}
+          </p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Server className="h-4 w-4" /> Настройка подключения
+              <Server className="h-4 w-4" />
+              Настройка подключения
             </CardTitle>
             <CardDescription>
-              Введите адрес сервера и токен устройства. Токен выдаёт администратор на сайте в разделе «Устройства».
+              Введите адрес сервера и токен устройства. Это техническая настройка терминала, а не обычный вход оператора.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -72,12 +91,12 @@ export default function SetupPage({ onDone }: Props) {
               <div className="space-y-2">
                 <Label htmlFor="apiUrl" className="flex items-center gap-1.5">
                   <Wifi className="h-3.5 w-3.5 text-muted-foreground" />
-                  URL сервера
+                  Адрес сервера
                 </Label>
                 <Input
                   id="apiUrl"
                   value={apiUrl}
-                  onChange={e => setApiUrl(e.target.value)}
+                  onChange={(e) => setApiUrl(e.target.value)}
                   placeholder="https://ordaops.kz"
                   disabled={loading}
                   className="no-drag"
@@ -92,7 +111,7 @@ export default function SetupPage({ onDone }: Props) {
                 <Input
                   id="deviceToken"
                   value={deviceToken}
-                  onChange={e => setDeviceToken(e.target.value)}
+                  onChange={(e) => setDeviceToken(e.target.value)}
                   placeholder="Вставьте токен из панели администратора"
                   disabled={loading}
                   className="no-drag font-mono text-xs"
@@ -100,25 +119,31 @@ export default function SetupPage({ onDone }: Props) {
               </div>
 
               {error && (
-                <p className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive-foreground">
+                <p className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
                   {error}
                 </p>
               )}
 
               <Button type="submit" className="w-full gap-2" disabled={loading} size="lg">
                 {loading ? (
-                  <span className="animate-spin h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full" />
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
                 ) : (
                   <ArrowRight className="h-4 w-4" />
                 )}
                 {loading ? 'Проверяю подключение...' : 'Подключить устройство'}
               </Button>
+
+              {onCancel && (
+                <Button type="button" variant="outline" className="w-full" disabled={loading} onClick={onCancel}>
+                  Назад ко входу
+                </Button>
+              )}
             </form>
           </CardContent>
         </Card>
 
         <p className="text-center text-xs text-muted-foreground">
-          Orda Point v2.0 · Electron
+          {appVersion ? `Orda Point v${appVersion}` : 'Orda Point'}
         </p>
       </div>
     </div>

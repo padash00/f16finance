@@ -35,7 +35,7 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
     setSyncing(true)
     try {
       const { synced, failed } = await syncQueue(config)
-      if (synced > 0) toastSuccess(`Синхронизировано: ${synced} ${synced === 1 ? 'запись' : 'записей'}`)
+      if (synced > 0) toastSuccess(`Синхронизировано: ${synced}`)
       if (failed > 0) toastError(`Не удалось синхронизировать: ${failed}`)
       if (synced === 0 && failed === 0) toastSuccess('Очередь пустая')
     } finally {
@@ -45,21 +45,25 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <header className="drag-region flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-card px-5">
-        <div className="flex items-center gap-3 no-drag">
+      <header className="drag-region flex h-16 shrink-0 items-center justify-between gap-4 border-b bg-card px-5">
+        <div className="no-drag flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <span className="text-sm font-bold text-primary-foreground">F</span>
           </div>
-          <div>
-            <p className="text-sm font-semibold leading-none">Суперадминистратор</p>
-            <p className="text-xs text-muted-foreground">
-              {session.email}
-              {bootstrap?.company.name ? ` · устройство ${bootstrap.company.name}` : ''}
-            </p>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold leading-none">Глобальный администратор</p>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>{session.email}</span>
+              {bootstrap?.company.name ? (
+                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-foreground/80">
+                  Устройство: {bootstrap.company.name}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 no-drag">
+        <div className="no-drag flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={doSync} disabled={syncing} className="text-muted-foreground">
             <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
           </Button>
@@ -78,7 +82,7 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors cursor-pointer no-drag',
+                  'no-drag flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
                   activeTab === tab.id
                     ? 'bg-sidebar-primary text-sidebar-primary-foreground'
                     : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',

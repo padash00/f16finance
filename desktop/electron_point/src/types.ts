@@ -96,6 +96,23 @@ export type AppView =
   | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'scanner' }
   | { screen: 'admin'; session: AdminSession; bootstrap?: BootstrapData }
 
+export interface AppUpdateProgress {
+  percent: number
+  transferred: number
+  total: number
+  bytesPerSecond: number
+}
+
+export interface AppUpdateState {
+  status: 'development' | 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'installing' | 'error'
+  currentVersion: string
+  latestVersion: string | null
+  releaseNotes: string | null
+  releaseDate: string | null
+  progress: AppUpdateProgress | null
+  error: string | null
+}
+
 // Products
 
 export interface Product {

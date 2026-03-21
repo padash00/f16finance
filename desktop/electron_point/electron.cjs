@@ -2,8 +2,210 @@
 const { app, BrowserWindow, ipcMain, dialog, session, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { autoUpdater } = require('electron-updater')
 
 const isDev = !app.isPackaged
+const releasePageUrl = 'https://github.com/padash00/f16finance/releases'
+
+const updaterState = {
+  status: isDev ? 'development' : 'idle',
+  currentVersion: app.getVersion(),
+  latestVersion: null,
+  releaseNotes: null,
+  releaseDate: null,
+  progress: null,
+  error: null,
+}
+
+let updateCheckPromise = null
+let updateDownloadPromise = null
+
+function normalizeReleaseNotes(notes) {
+  if (!notes) return null
+  if (Array.isArray(notes)) {
+    return notes
+      .map((entry) => entry?.note || entry?.version || '')
+      .filter(Boolean)
+      .join('\n\n')
+  }
+  return String(notes)
+}
+
+function broadcastUpdaterState() {
+  BrowserWindow.getAllWindows().forEach((window) => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('updater:state', { ...updaterState })
+    }
+  })
+}
+
+function updateUpdaterState(patch) {
+  Object.assign(updaterState, patch)
+  broadcastUpdaterState()
+}
+
+function ensureUpdaterReady() {
+  if (isDev) {
+    updateUpdaterState({
+      status: 'development',
+      error: null,
+    })
+    return false
+  }
+
+  return true
+}
+
+async function checkForAppUpdates(options = {}) {
+  const silent = options.silent === true
+  if (!ensureUpdaterReady()) return { ...updaterState }
+  if (updateCheckPromise) return updateCheckPromise
+
+  updateCheckPromise = autoUpdater.checkForUpdates()
+    .then(() => ({ ...updaterState }))
+    .catch((error) => {
+      if (!silent) {
+        updateUpdaterState({
+          status: 'error',
+          error: error?.message || 'Не удалось проверить обновления.',
+        })
+      }
+      return { ...updaterState }
+    })
+    .finally(() => {
+      updateCheckPromise = null
+    })
+
+  return updateCheckPromise
+}
+
+async function downloadAppUpdate() {
+  if (!ensureUpdaterReady()) return { ...updaterState }
+
+  if (updaterState.status === 'downloaded') {
+    return { ...updaterState }
+  }
+
+  if (updaterState.status !== 'available' && updaterState.status !== 'downloading') {
+    await checkForAppUpdates()
+  }
+
+  if (updaterState.status !== 'available' && updaterState.status !== 'downloading') {
+    return { ...updaterState }
+  }
+
+  if (updateDownloadPromise) return updateDownloadPromise
+
+  updateDownloadPromise = autoUpdater.downloadUpdate()
+    .then(() => ({ ...updaterState }))
+    .catch((error) => {
+      updateUpdaterState({
+        status: 'error',
+        error: error?.message || 'Не удалось скачать обновление.',
+      })
+      return { ...updaterState }
+    })
+    .finally(() => {
+      updateDownloadPromise = null
+    })
+
+  return updateDownloadPromise
+}
+
+function installAppUpdate() {
+  if (!ensureUpdaterReady()) return { ok: false }
+  if (updaterState.status !== 'downloaded') {
+    return { ok: false, error: 'Обновление ещё не скачано.' }
+  }
+
+  updateUpdaterState({
+    status: 'installing',
+    error: null,
+  })
+
+  setTimeout(() => {
+    autoUpdater.quitAndInstall(false, true)
+  }, 250)
+
+  return { ok: true }
+}
+
+function initAutoUpdater() {
+  if (!ensureUpdaterReady()) return
+
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('checking-for-update', () => {
+    updateUpdaterState({
+      status: 'checking',
+      error: null,
+      progress: null,
+    })
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    updateUpdaterState({
+      status: 'available',
+      latestVersion: info.version || null,
+      releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+      releaseDate: info.releaseDate || null,
+      progress: null,
+      error: null,
+    })
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    updateUpdaterState({
+      status: 'idle',
+      latestVersion: null,
+      releaseNotes: null,
+      releaseDate: null,
+      progress: null,
+      error: null,
+    })
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    updateUpdaterState({
+      status: 'downloading',
+      progress: {
+        percent: Number(progress.percent || 0),
+        transferred: Number(progress.transferred || 0),
+        total: Number(progress.total || 0),
+        bytesPerSecond: Number(progress.bytesPerSecond || 0),
+      },
+      error: null,
+    })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    updateUpdaterState({
+      status: 'downloaded',
+      latestVersion: info.version || updaterState.latestVersion,
+      releaseNotes: normalizeReleaseNotes(info.releaseNotes) || updaterState.releaseNotes,
+      releaseDate: info.releaseDate || updaterState.releaseDate,
+      progress: {
+        percent: 100,
+        transferred: updaterState.progress?.total || 0,
+        total: updaterState.progress?.total || 0,
+        bytesPerSecond: 0,
+      },
+      error: null,
+    })
+  })
+
+  autoUpdater.on('error', (error) => {
+    updateUpdaterState({
+      status: 'error',
+      error: error?.message || 'Ошибка обновления.',
+    })
+  })
+
+  setTimeout(() => {
+    void checkForAppUpdates({ silent: true })
+  }, 3000)
+}
 
 // ─── Window ──────────────────────────────────────────────────────────────────
 
@@ -40,6 +242,10 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, 'dist/index.html'))
   }
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    broadcastUpdaterState()
+  })
 }
 
 app.whenReady().then(() => {
@@ -56,6 +262,7 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  initAutoUpdater()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -184,6 +391,14 @@ ipcMain.handle('cache:set', (_, data) => {
 // ─── App info ─────────────────────────────────────────────────────────────────
 
 ipcMain.handle('app:version', () => app.getVersion())
+ipcMain.handle('updater:getState', () => ({ ...updaterState }))
+ipcMain.handle('updater:check', () => checkForAppUpdates())
+ipcMain.handle('updater:download', () => downloadAppUpdate())
+ipcMain.handle('updater:install', () => installAppUpdate())
+ipcMain.handle('updater:openReleases', () => {
+  shell.openExternal(releasePageUrl)
+  return { ok: true }
+})
 
 // ─── Open URL in system browser ──────────────────────────────────────────────
 
