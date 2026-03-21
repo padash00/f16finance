@@ -342,43 +342,66 @@ export default function MarketingHomePage() {
 
       <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
         <div className="max-w-3xl">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Для кого это</div>
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Кому и зачем</div>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
-            Система интересна тем, у кого бизнес уже перерос таблицы
+            Страница должна сразу объяснять, кому это полезно и какой результат дает
           </h2>
           <p className="mt-4 text-base leading-7 text-slate-300">
-            Чем больше точек, смен, операторов, долгов и ручных согласований, тем сильнее ценность единого контура, а не разрозненных инструментов.
+            Вместо разрозненных карточек здесь лучше работает один понятный блок: роли, ценность и эффект после внедрения.
           </p>
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          {audiences.map((item) => {
-            const Icon = item.icon
-            return (
-              <Card key={item.title} className="border-white/10 bg-white/5 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-200">
-                  <Icon className="h-5 w-5" />
+        <div className="mt-8 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+          <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-1">
+            {audiences.map((item) => {
+              const Icon = item.icon
+              return (
+                <Card key={item.title} className="border-white/10 bg-white/5 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-200">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="mt-5 text-xl font-semibold">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-300">{item.text}</p>
+                </Card>
+              )
+            })}
+          </div>
+
+          <Card className="border-white/10 bg-black/20 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
+              <Clock3 className="h-3.5 w-3.5" />
+              Что получает бизнес
+            </div>
+            <h3 className="mt-4 text-3xl font-semibold tracking-[-0.03em]">Меньше хаоса, больше понятных цифр и быстрых решений</h3>
+            <p className="mt-4 text-base leading-7 text-slate-300">
+              Сильная система цепляет не только списком функций. Она показывает, что после внедрения у команды меньше ручной суеты, а у руководителя больше контроля.
+            </p>
+
+            <div className="mt-6 grid gap-3">
+              {outcomes.map((item) => (
+                <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-amber-300" />
+                  <div className="text-sm leading-6 text-slate-200">{item}</div>
                 </div>
-                <h3 className="mt-5 text-xl font-semibold">{item.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-300">{item.text}</p>
-              </Card>
-            )
-          })}
+              ))}
+            </div>
+          </Card>
         </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
-        <Card className="border-white/10 bg-black/20 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
-          <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-            <div>
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Что уже есть в продукте</div>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em]">Не концепт, а рабочая экосистема</h2>
-              <p className="mt-4 text-base leading-7 text-slate-300">
-                На главной должно быть видно, что проект уже закрывает важные процессы: кассу, смены, point-работу,
-                зарплату операторов, задачи, роли и финансовую аналитику.
-              </p>
-            </div>
+        <div className="max-w-3xl">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Контуры продукта</div>
+          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
+            Не концепт, а уже собранная рабочая экосистема
+          </h2>
+          <p className="mt-4 text-base leading-7 text-slate-300">
+            Важно показать, что продукт закрывает не один кабинет, а сразу несколько реальных контуров: точка, Telegram, зарплата, задачи и управленка.
+          </p>
+        </div>
 
+        <div className="mt-8 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card className="border-white/10 bg-black/20 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
             <div className="grid gap-3 sm:grid-cols-2">
               {productBlocks.map((item) => {
                 const Icon = item.icon
@@ -393,8 +416,20 @@ export default function MarketingHomePage() {
                 )
               })}
             </div>
-          </div>
-        </Card>
+          </Card>
+
+          <Card className="border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.34)] sm:p-8">
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Почему это не обычный учетный сайт</div>
+            <div className="mt-5 grid gap-3">
+              {differentiation.map((item) => (
+                <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 text-amber-300" />
+                  <p className="text-sm leading-7 text-slate-300">{item}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
@@ -532,91 +567,47 @@ export default function MarketingHomePage() {
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
-        <div className="max-w-3xl">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Как это работает</div>
-          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
-            Понятная цепочка от точки до управленки
-          </h2>
-        </div>
-
-        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {workflowSteps.map((step, index) => (
-            <Card key={step.title} className="border-white/10 bg-white/5 p-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Шаг {index + 1}</div>
-              <h3 className="mt-3 text-xl font-semibold">{step.title}</h3>
-              <p className="mt-3 text-sm leading-7 text-slate-300">{step.text}</p>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
         <Card className="border-white/10 bg-black/20 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
-          <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
-                <Clock3 className="h-3.5 w-3.5" />
-                Что получает бизнес
-              </div>
-              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em]">Не просто интерфейс, а меньше операционного шума</h2>
-              <p className="mt-4 text-base leading-7 text-slate-300">
-                Сильный продукт привлекает не только дизайном. Он притягивает тем, что после внедрения становится меньше ручной суеты, спорных цифр и сломанных процессов.
-              </p>
-            </div>
+          <div className="max-w-3xl">
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Как это работает</div>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
+              Понятная цепочка от точки до управленки
+            </h2>
+          </div>
 
-            <div className="grid gap-3">
-              {outcomes.map((item) => (
-                <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-amber-300" />
-                  <div className="text-sm leading-6 text-slate-200">{item}</div>
-                </div>
-              ))}
-            </div>
+          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {workflowSteps.map((step, index) => (
+              <div key={step.title} className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Шаг {index + 1}</div>
+                <h3 className="mt-3 text-xl font-semibold">{step.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-300">{step.text}</p>
+              </div>
+            ))}
           </div>
         </Card>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
-        <div className="max-w-3xl">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Чем отличается</div>
-          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
-            Почему это не выглядит как обычный учетный сайт
-          </h2>
-        </div>
+        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card className="border-white/10 bg-black/20 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Страницы для поиска</div>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white">Отдельные входы под главные запросы</h2>
+            <p className="mt-4 text-base leading-7 text-slate-300">
+              Сайт должен находиться не только по бренду. Поэтому под важные сценарии уже вынесены отдельные страницы с понятным контекстом.
+            </p>
+          </Card>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          {differentiation.map((item) => (
-            <Card key={item} className="border-white/10 bg-white/5 p-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-0.5 h-5 w-5 text-amber-300" />
-                <p className="text-sm leading-7 text-slate-300">{item}</p>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
-        <div className="max-w-3xl">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Страницы для поиска</div>
-          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
-            Отдельные страницы под главные поисковые запросы
-          </h2>
-          <p className="mt-4 text-base leading-7 text-slate-300">
-            Мы уже выделили отдельные страницы под самые важные темы, чтобы сайт находили не только по названию бренда.
-          </p>
-        </div>
-
-        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {seoPages.map((page) => (
-            <Card key={page.href} className="border-white/10 bg-white/5 p-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
-              <h3 className="text-lg font-semibold">{page.title}</h3>
-              <p className="mt-3 text-sm leading-7 text-slate-300">{page.text}</p>
-              <Button asChild variant="outline" className="mt-5 w-full border-white/15 bg-white/5 text-white hover:bg-white/10">
-                <Link href={page.href}>Открыть страницу</Link>
-              </Button>
-            </Card>
-          ))}
+          <div className="grid gap-4 md:grid-cols-2">
+            {seoPages.map((page) => (
+              <Card key={page.href} className="border-white/10 bg-white/5 p-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
+                <h3 className="text-lg font-semibold">{page.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-300">{page.text}</p>
+                <Button asChild variant="outline" className="mt-5 w-full border-white/15 bg-white/5 text-white hover:bg-white/10">
+                  <Link href={page.href}>Открыть страницу</Link>
+                </Button>
+              </Card>
+            ))}
+          </div>
         </div>
       </section>
 
