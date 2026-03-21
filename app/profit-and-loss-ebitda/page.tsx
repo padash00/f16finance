@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 export default function ProfitAndLossEbitdaPage() {
   return (
     <SeoPageShell
+      path="/profit-and-loss-ebitda"
       eyebrow="ОПиУ и EBITDA"
       title="Управленческий учет, ОПиУ и EBITDA по точкам"
       description="Orda Control собирает доходы, расходы, зарплаты, комиссии и суточную выручку в управленческий слой, где можно видеть прибыльность точек по календарным суткам, неделям и месяцам."

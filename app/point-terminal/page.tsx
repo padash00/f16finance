@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 export default function PointTerminalPage() {
   return (
     <SeoPageShell
+      path="/point-terminal"
       eyebrow="Point terminal"
       title="Программа для точки: сменный калькулятор, долги и отчеты"
       description="Для точки в Orda Control есть отдельная программа на Electron: она помогает быстро закрывать смены, оформлять долги, работать при плохом интернете и отправлять отчеты без лишней ручной возни."

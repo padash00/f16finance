@@ -24,6 +24,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ContactLeadForm } from '@/components/public/contact-lead-form'
+import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/core/site'
 
 export const metadata: Metadata = {
@@ -231,30 +232,11 @@ const faqItems = [
   },
 ]
 
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: SITE_NAME,
-  applicationCategory: 'BusinessApplication',
-  operatingSystem: 'Web, Windows',
-  url: SITE_URL,
-  description: SITE_DESCRIPTION,
-  offers: {
-    '@type': 'Offer',
-    price: '0',
-    priceCurrency: 'KZT',
-  },
-  publisher: {
-    '@type': 'Organization',
-    name: SITE_NAME,
-    url: SITE_URL,
-  },
-}
-
 export default function MarketingHomePage() {
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.12),transparent_20%),linear-gradient(180deg,#050816_0%,#0a1020_48%,#050816_100%)] text-white">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <WebsiteStructuredData />
+      <FaqStructuredData faq={faqItems} />
 
       <section className="mx-auto max-w-7xl px-6 pb-10 pt-8 sm:px-8 lg:px-10">
         <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-5 py-4 backdrop-blur">

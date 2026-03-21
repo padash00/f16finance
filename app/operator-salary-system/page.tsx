@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 export default function OperatorSalarySystemPage() {
   return (
     <SeoPageShell
+      path="/operator-salary-system"
       eyebrow="Зарплата операторов"
       title="Расчет зарплаты операторов, авансов, долгов и weekly-выплат"
       description="Orda Control считает зарплату операторов не в отрыве от реальной работы, а на основе смен, правил начисления, долгов, авансов и фактических выплат по неделям."

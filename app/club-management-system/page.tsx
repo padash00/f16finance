@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 export default function ClubManagementSystemPage() {
   return (
     <SeoPageShell
+      path="/club-management-system"
       eyebrow="Управление клубом"
       title="Система управления клубом, точками и командой"
       description="Эта страница отвечает на самый частый запрос: как собрать смены, кассу, задачи, операторов, выручку и управленческий учет в одной рабочей системе без хаоса из таблиц и чатов."

@@ -37,9 +37,15 @@ export const metadata: Metadata = {
     'ОПиУ',
     'EBITDA',
     'кассовая программа для точки',
+    'telegram отчеты для бизнеса',
+    'калькулятор смен',
+    'программа для клуба',
   ],
   alternates: {
     canonical: '/',
+  },
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
   },
   openGraph: {
     title: SITE_NAME,
