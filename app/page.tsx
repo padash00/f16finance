@@ -72,6 +72,29 @@ const useCases = [
   'Контроль задач, KPI и операционной дисциплины',
 ]
 
+const seoPages = [
+  {
+    href: '/club-management-system',
+    title: 'Система управления клубом',
+    text: 'Для запросов про клуб, точки, смены, команду и единый операционный контур.',
+  },
+  {
+    href: '/operator-salary-system',
+    title: 'Зарплата операторов',
+    text: 'Для запросов про начисления, авансы, долги и weekly-выплаты.',
+  },
+  {
+    href: '/profit-and-loss-ebitda',
+    title: 'ОПиУ и EBITDA',
+    text: 'Для запросов про управленческий учет, прибыльность и суточный Kaspi.',
+  },
+  {
+    href: '/point-terminal',
+    title: 'Программа для точки',
+    text: 'Для запросов про кассовую программу, сменный калькулятор и point terminal.',
+  },
+]
+
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -252,6 +275,30 @@ export default function MarketingHomePage() {
             </div>
           </div>
         </Card>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
+        <div className="max-w-3xl">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Страницы для поиска</div>
+          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
+            Отдельные страницы под главные поисковые запросы
+          </h2>
+          <p className="mt-4 text-base leading-7 text-slate-300">
+            Эти страницы уже заточены под конкретные сценарии: управление клубом, зарплата операторов, ОПиУ и программа для точки.
+          </p>
+        </div>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {seoPages.map((page) => (
+            <Card key={page.href} className="border-white/10 bg-white/5 p-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
+              <h3 className="text-lg font-semibold">{page.title}</h3>
+              <p className="mt-3 text-sm leading-7 text-slate-300">{page.text}</p>
+              <Button asChild variant="outline" className="mt-5 w-full border-white/15 bg-white/5 text-white hover:bg-white/10">
+                <Link href={page.href}>Открыть страницу</Link>
+              </Button>
+            </Card>
+          ))}
+        </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-20 sm:px-8 lg:px-10">

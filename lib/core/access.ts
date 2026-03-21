@@ -1,5 +1,9 @@
 export const PUBLIC_PATHS = [
   '/',
+  '/club-management-system',
+  '/operator-salary-system',
+  '/profit-and-loss-ebitda',
+  '/point-terminal',
   '/login',
   '/operator-login',
   '/unauthorized',
