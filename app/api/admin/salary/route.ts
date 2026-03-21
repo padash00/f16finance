@@ -294,7 +294,7 @@ async function ensureSalaryWeekSnapshot(params: {
       .from('operator_salary_week_company_allocations')
       .delete()
       .eq('salary_week_id', weekId)
-      .not('company_id', 'in', `(${newCompanyIds.map((id) => `"${id}"`).join(',')})`)
+      .not('company_id', 'in', `(${newCompanyIds.join(',')})`)
 
     if (deleteStaleError) throw deleteStaleError
   } else {
