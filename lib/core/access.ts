@@ -277,6 +277,10 @@ export function matchesPath(pathname: string, rule: string): boolean {
 }
 
 export function isPublicPath(pathname: string): boolean {
+  if (pathname.startsWith('/google') && pathname.endsWith('.html')) {
+    return true
+  }
+
   return PUBLIC_PATHS.some((rule) => matchesPath(pathname, rule))
 }
 
