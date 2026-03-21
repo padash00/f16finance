@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { loadConfig, saveConfig, DEFAULT_API_URL } from '@/lib/config'
 import { getCachedBootstrap, saveBootstrapCache, saveOperatorSession, loadOperatorSession, clearOperatorSession } from '@/lib/cache'
 import * as api from '@/lib/api'
+import { toastInfo } from '@/lib/toast'
 import LoginPage from '@/pages/LoginPage'
 import PointSelectPage from '@/pages/PointSelectPage'
 import ShiftPage from '@/pages/ShiftPage'
@@ -60,12 +61,101 @@ function canUseScannerForSession(session: OperatorSession) {
   return canUseScanner(session.bootstrap) && isOperatorAttachedToCurrentPoint(session, session.bootstrap)
 }
 
+function getActiveOperatorSession(view: AppView): OperatorSession | null {
+  if (view.screen === 'shift' || view.screen === 'scanner' || view.screen === 'operator-cabinet') {
+    return view.session
+  }
+  return null
+}
+
+function isTaskOpen(status: string) {
+  return !['done', 'archived'].includes(status)
+}
+
 export default function App() {
   const [view, setView] = useState<AppView>({ screen: 'booting' })
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [isOffline, setIsOffline] = useState(false)
+  const seenTaskIdsRef = useRef<Set<string> | null>(null)
+  const latestViewRef = useRef<AppView>({ screen: 'booting' })
+
+  useEffect(() => {
+    latestViewRef.current = view
+  }, [view])
 
   useEffect(() => { init() }, [])
+
+  useEffect(() => {
+    const session = getActiveOperatorSession(view)
+    if (!config || !session) {
+      seenTaskIdsRef.current = null
+      return
+    }
+
+    let cancelled = false
+
+    async function pollTasks() {
+      try {
+        const payload = await api.getPointOperatorTasks(config, session)
+        if (cancelled) return
+
+        const activeTasks = (payload.tasks || []).filter((task) => isTaskOpen(task.status))
+        const currentIds = new Set(activeTasks.map((task) => String(task.id)))
+
+        if (seenTaskIdsRef.current === null) {
+          seenTaskIdsRef.current = currentIds
+          return
+        }
+
+        const newTasks = activeTasks.filter((task) => !seenTaskIdsRef.current?.has(String(task.id)))
+        seenTaskIdsRef.current = currentIds
+
+        if (newTasks.length === 0) return
+
+        const message =
+          newTasks.length === 1
+            ? `Новая задача: ${newTasks[0].title}`
+            : `Новых задач: ${newTasks.length}`
+
+        toastInfo(message, 7000)
+
+        if (typeof Notification !== 'undefined') {
+          if (Notification.permission === 'default') {
+            Notification.requestPermission().catch(() => null)
+          }
+
+          if (Notification.permission === 'granted') {
+            const notification = new Notification('Orda Point', {
+              body: message,
+            })
+            notification.onclick = () => {
+              const currentView = latestViewRef.current
+              if (currentView.screen === 'shift' || currentView.screen === 'scanner' || currentView.screen === 'operator-cabinet') {
+                setView({
+                  screen: 'operator-cabinet',
+                  bootstrap: currentView.bootstrap,
+                  session: currentView.session,
+                  returnTo: currentView.screen === 'scanner' ? 'scanner' : 'shift',
+                })
+              }
+            }
+          }
+        }
+      } catch {
+        // silently ignore polling errors; cabinet/tasks screen shows explicit errors on demand
+      }
+    }
+
+    void pollTasks()
+    const interval = window.setInterval(() => {
+      void pollTasks()
+    }, 60_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [config, view])
 
   async function init() {
     const cfg = await loadConfig()
