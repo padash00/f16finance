@@ -184,7 +184,7 @@ export default function OperatorProfileMobilePage() {
         <p className="mt-1 text-sm text-slate-400">Если нужно поправить данные или открыть рабочие каналы связи.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <Button asChild className="w-full">
-            <Link href="/operator-settings">
+            <Link href="/operator/settings">
               <Settings className="h-4 w-4" />
               Открыть настройки
             </Link>

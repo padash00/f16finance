@@ -83,9 +83,17 @@ const metaByPath: Array<{
     title: 'Мой профиль',
     subtitle: 'Контакты, точки, Telegram и быстрый доступ к рабочим настройкам.',
   },
+  {
+    match: (pathname) => pathname.startsWith('/operator/settings'),
+    title: 'Настройки оператора',
+    subtitle: 'Безопасность, уведомления и быстрые рабочие действия в мобильном формате.',
+  },
 ]
 
 function isActivePath(pathname: string, href: string) {
+  if (href === '/operator/profile' && pathname.startsWith('/operator/settings')) {
+    return true
+  }
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
@@ -96,17 +104,17 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,165,80,0.16),transparent_26%),linear-gradient(180deg,#07101c_0%,#0b1324_48%,#040814_100%)] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col px-4 pb-28 pt-5 sm:px-5">
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.34)] backdrop-blur-2xl">
-          <div className="flex items-start justify-between gap-4">
+      <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col px-3 pb-28 pt-4 sm:px-5 sm:pt-5">
+        <div className="overflow-hidden rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-4 shadow-[0_30px_90px_rgba(0,0,0,0.34)] backdrop-blur-2xl sm:rounded-[2rem] sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-amber-200">
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-amber-200 sm:text-[11px]">
                 Операторский контур
               </div>
-              <h1 className="mt-4 text-2xl font-semibold tracking-tight text-white">{currentMeta.title}</h1>
+              <h1 className="mt-3 text-xl font-semibold tracking-tight text-white sm:mt-4 sm:text-2xl">{currentMeta.title}</h1>
               <p className="mt-2 max-w-md text-sm leading-6 text-slate-300">{currentMeta.subtitle}</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-right">
+            <div className="self-start rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-left sm:text-right">
               <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Раздел</div>
               <div className="mt-1 text-sm font-medium text-white">{activeItem.shortLabel}</div>
             </div>
@@ -126,7 +134,7 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'group flex min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-medium transition',
+                  'group flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[10px] font-medium leading-none transition sm:flex-row sm:gap-2 sm:px-3 sm:py-3 sm:text-xs',
                   active
                     ? 'bg-[linear-gradient(135deg,rgba(255,179,107,0.96),rgba(255,122,89,0.94))] text-slate-950 shadow-[0_16px_34px_rgba(255,140,88,0.28)]'
                     : 'text-slate-400 hover:bg-white/[0.05] hover:text-white',
