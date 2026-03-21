@@ -117,7 +117,7 @@ export async function proxy(request: NextRequest) {
     isSuperAdmin,
   })
 
-  if (requestedPath === '/' && !hasAccess) {
+  if (requestedPath === '/') {
     url.pathname = defaultPath
     return NextResponse.redirect(url)
   }

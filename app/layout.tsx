@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import { IBM_Plex_Mono, Space_Grotesk } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+
 import { ClientErrorReporter } from '@/components/client-error-reporter'
 import { GlobalAssistant } from '@/components/ai/global-assistant'
 import { Toaster } from '@/components/ui/toaster'
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/core/site'
 import './globals.css'
 
 const spaceGrotesk = Space_Grotesk({
@@ -18,9 +20,40 @@ const ibmPlexMono = IBM_Plex_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Orda Control',
-  description: 'Операционная система для клуба, команды, задач, смен и финансового контроля',
-  generator: 'Orda Control',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  generator: SITE_NAME,
+  keywords: [
+    'управление клубом',
+    'учет смен',
+    'зарплата операторов',
+    'учет расходов',
+    'учет доходов',
+    'ОПиУ',
+    'EBITDA',
+    'кассовая программа для точки',
+  ],
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    locale: 'ru_RU',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
   icons: {
     icon: [
       {

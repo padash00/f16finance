@@ -262,7 +262,7 @@ export default function OperatorAchievementsAllPage() {
             </div>
             <h2 className="text-xl font-semibold text-white">Ошибка</h2>
             <p className="text-gray-400">{error}</p>
-            <Button onClick={() => router.push('/')} variant="outline" className="border-white/10">
+            <Button onClick={() => router.push('/dashboard')} variant="outline" className="border-white/10">
               Вернуться на главную
             </Button>
           </div>

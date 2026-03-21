@@ -32,7 +32,7 @@ export type RoleMatrixEntry = {
 }
 
 export const ADMIN_PATHS = [
-  '/',
+  '/dashboard',
   '/welcome',
   '/logs',
   '/point-devices',
@@ -87,7 +87,7 @@ export const ADMIN_PATHS = [
 ] as const
 
 const MANAGER_PATHS = [
-  '/',
+  '/dashboard',
   '/welcome',
   '/tasks',
   '/income',
@@ -121,7 +121,7 @@ const MANAGER_PATHS = [
 const MARKETER_PATHS = ['/welcome', '/tasks'] as const
 
 const OWNER_PATHS = [
-  '/',
+  '/dashboard',
   '/welcome',
   '/point-devices',
   '/income',
@@ -221,7 +221,7 @@ export const STAFF_ROLE_MATRIX: Record<StaffRole, RoleMatrixEntry> = {
 
 export const SUPER_ADMIN_MATRIX_ENTRY = {
   label: 'Супер-администратор',
-  home: '/',
+  home: '/dashboard',
   paths: ADMIN_PATHS,
   capabilities: ['tasks', 'shifts', 'salary', 'staff', 'staff_accounts', 'operators', 'operator_structure', 'finance_create', 'finance_manage'] as const,
   summary: 'Имеет полный доступ ко всем разделам, аккаунтам, настройкам, логам и системным операциям.',
@@ -318,7 +318,7 @@ export function getDefaultAppPath(params: {
 }) {
   const { isSuperAdmin, isStaff, isOperator, staffRole } = params
 
-  if (isSuperAdmin) return '/'
+  if (isSuperAdmin) return '/dashboard'
   if (isStaff) return getDefaultPathForStaffRole(normalizeStaffRole(staffRole))
   if (isOperator) return '/operator-dashboard'
   return '/unauthorized'

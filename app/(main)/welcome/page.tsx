@@ -58,7 +58,7 @@ const MARKETER_ACTIONS: WelcomeAction[] = [
 ]
 
 const OWNER_ACTIONS: WelcomeAction[] = [
-  { href: '/', label: 'Главная панель', note: 'Общий статус бизнеса и ключевые метрики', icon: LayoutDashboard },
+  { href: '/dashboard', label: 'Главная панель', note: 'Общий статус бизнеса и ключевые метрики', icon: LayoutDashboard },
   { href: '/income', label: 'Доходы', note: 'Оборот, выручка и притоки денег', icon: TrendingUp },
   { href: '/expenses', label: 'Расходы', note: 'Списания, статьи и контроль затрат', icon: TrendingDown },
   { href: '/cashflow', label: 'Cash Flow', note: 'Движение денег и баланс нарастающим итогом', icon: Wallet },
@@ -99,7 +99,7 @@ export default function WelcomePage() {
         setDisplayName((json.displayName as string | null) || null)
 
         if (json.isSuperAdmin) {
-          router.replace('/')
+          router.replace('/dashboard')
           return
         }
 
