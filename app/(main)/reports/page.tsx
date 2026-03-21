@@ -662,6 +662,265 @@ const AnomalyCard = memo(({ anomaly }: { anomaly: Anomaly }) => {
 AnomalyCard.displayName = 'AnomalyCard'
 
 // =====================
+// DRILL-DOWN MODAL
+// =====================
+
+type DrillDownType = 'income' | 'expense' | 'profit'
+
+const DRILL_TITLES: Record<DrillDownType, string> = {
+  income: 'Доходы — детализация',
+  expense: 'Расходы — детализация',
+  profit: 'Доходы и расходы — детализация',
+}
+
+function DrillDownModal({
+  type,
+  incomes,
+  expenses,
+  companies,
+  companyName,
+  onClose,
+}: {
+  type: DrillDownType
+  incomes: IncomeRow[]
+  expenses: ExpenseRow[]
+  companies: Company[]
+  companyName: (id: string) => string
+  onClose: () => void
+}) {
+  const [filterCompany, setFilterCompany] = useState<'all' | string>('all')
+  const [sortField, setSortField] = useState<'date' | 'company' | 'amount'>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [search, setSearch] = useState('')
+
+  const rows = useMemo(() => {
+    const result: Array<{
+      id: string
+      date: string
+      type: 'income' | 'expense'
+      companyId: string
+      companyName: string
+      amount: number
+      cash: number
+      kaspi: number
+      label: string
+    }> = []
+
+    if (type === 'income' || type === 'profit') {
+      for (const r of incomes) {
+        const amount = (r.cash_amount ?? 0) + (r.kaspi_amount ?? 0) + (r.online_amount ?? 0) + (r.card_amount ?? 0)
+        result.push({
+          id: r.id,
+          date: r.date,
+          type: 'income',
+          companyId: r.company_id,
+          companyName: companyName(r.company_id),
+          amount,
+          cash: r.cash_amount ?? 0,
+          kaspi: r.kaspi_amount ?? 0,
+          label: [r.zone, r.shift ? SHIFT_LABELS[r.shift] : null].filter(Boolean).join(' · ') || '—',
+        })
+      }
+    }
+
+    if (type === 'expense' || type === 'profit') {
+      for (const r of expenses) {
+        const amount = (r.cash_amount ?? 0) + (r.kaspi_amount ?? 0)
+        result.push({
+          id: r.id,
+          date: r.date,
+          type: 'expense',
+          companyId: r.company_id,
+          companyName: companyName(r.company_id),
+          amount,
+          cash: r.cash_amount ?? 0,
+          kaspi: r.kaspi_amount ?? 0,
+          label: r.category || r.comment || '—',
+        })
+      }
+    }
+
+    return result
+  }, [type, incomes, expenses, companyName])
+
+  const filtered = useMemo(() => {
+    let r = rows
+    if (filterCompany !== 'all') r = r.filter((x) => x.companyId === filterCompany)
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      r = r.filter((x) =>
+        x.companyName.toLowerCase().includes(q) ||
+        x.label.toLowerCase().includes(q) ||
+        x.date.includes(q)
+      )
+    }
+    return [...r].sort((a, b) => {
+      let v = 0
+      if (sortField === 'date') v = a.date.localeCompare(b.date)
+      else if (sortField === 'company') v = a.companyName.localeCompare(b.companyName)
+      else if (sortField === 'amount') v = a.amount - b.amount
+      return sortDir === 'asc' ? v : -v
+    })
+  }, [rows, filterCompany, search, sortField, sortDir])
+
+  const totalIncome = filtered.filter((r) => r.type === 'income').reduce((s, r) => s + r.amount, 0)
+  const totalExpense = filtered.filter((r) => r.type === 'expense').reduce((s, r) => s + r.amount, 0)
+
+  const toggleSort = (f: typeof sortField) => {
+    if (sortField === f) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortField(f); setSortDir('desc') }
+  }
+
+  const SortIcon = ({ f }: { f: typeof sortField }) =>
+    sortField === f ? (
+      <span className="ml-1 text-violet-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
+    ) : (
+      <span className="ml-1 text-gray-600">↕</span>
+    )
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative z-10 w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-gray-900 border border-white/10 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 flex-shrink-0">
+          <h2 className="text-lg font-semibold text-white">{DRILL_TITLES[type]}</h2>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-3 px-6 py-3 border-b border-white/5 flex-shrink-0">
+          {/* Company filter */}
+          <select
+            value={filterCompany}
+            onChange={(e) => setFilterCompany(e.target.value)}
+            className="h-9 rounded-lg bg-gray-800 border border-white/10 text-sm text-white px-3 focus:outline-none focus:ring-1 focus:ring-violet-500"
+          >
+            <option value="all">Все компании</option>
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+
+          {/* Search */}
+          <div className="relative flex-1 min-w-[180px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Поиск по компании, категории…"
+              className="w-full h-9 pl-9 pr-3 rounded-lg bg-gray-800 border border-white/10 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
+          </div>
+
+          {/* Row count */}
+          <span className="text-xs text-gray-500 ml-auto">{filtered.length} записей</span>
+        </div>
+
+        {/* Totals bar */}
+        <div className="flex gap-6 px-6 py-2.5 bg-gray-800/30 border-b border-white/5 flex-shrink-0 text-sm">
+          {(type === 'income' || type === 'profit') && (
+            <span>Доходы: <span className="font-semibold text-emerald-400">{formatMoneyFull(totalIncome)}</span></span>
+          )}
+          {(type === 'expense' || type === 'profit') && (
+            <span>Расходы: <span className="font-semibold text-rose-400">{formatMoneyFull(totalExpense)}</span></span>
+          )}
+          {type === 'profit' && (
+            <span>Прибыль: <span className={`font-semibold ${totalIncome - totalExpense >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>{formatMoneyFull(totalIncome - totalExpense)}</span></span>
+          )}
+        </div>
+
+        {/* Table */}
+        <div className="overflow-auto flex-1 min-h-0">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-gray-900/95 backdrop-blur-sm z-10">
+              <tr className="text-gray-400 border-b border-white/5">
+                <th
+                  className="text-left px-4 py-3 font-medium cursor-pointer hover:text-white select-none whitespace-nowrap"
+                  onClick={() => toggleSort('date')}
+                >
+                  Дата <SortIcon f="date" />
+                </th>
+                <th
+                  className="text-left px-4 py-3 font-medium cursor-pointer hover:text-white select-none"
+                  onClick={() => toggleSort('company')}
+                >
+                  Компания <SortIcon f="company" />
+                </th>
+                {type === 'profit' && (
+                  <th className="text-left px-4 py-3 font-medium">Тип</th>
+                )}
+                <th className="text-left px-4 py-3 font-medium">Категория / смена</th>
+                <th className="text-right px-4 py-3 font-medium">Нал</th>
+                <th className="text-right px-4 py-3 font-medium">Kaspi</th>
+                <th
+                  className="text-right px-4 py-3 font-medium cursor-pointer hover:text-white select-none"
+                  onClick={() => toggleSort('amount')}
+                >
+                  Итого <SortIcon f="amount" />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={type === 'profit' ? 7 : 6} className="text-center py-16 text-gray-500">
+                    Нет данных
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((row) => (
+                  <tr
+                    key={`${row.type}-${row.id}`}
+                    className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                  >
+                    <td className="px-4 py-2.5 text-gray-300 whitespace-nowrap">
+                      {fromISO(row.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td className="px-4 py-2.5 text-white font-medium">{row.companyName}</td>
+                    {type === 'profit' && (
+                      <td className="px-4 py-2.5">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          row.type === 'income'
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-rose-500/20 text-rose-400'
+                        }`}>
+                          {row.type === 'income' ? 'Доход' : 'Расход'}
+                        </span>
+                      </td>
+                    )}
+                    <td className="px-4 py-2.5 text-gray-400 max-w-[200px] truncate">{row.label}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-300">{row.cash > 0 ? formatMoneyCompact(row.cash) : '—'}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-300">{row.kaspi > 0 ? formatMoneyCompact(row.kaspi) : '—'}</td>
+                    <td className={`px-4 py-2.5 text-right font-semibold ${
+                      row.type === 'income' ? 'text-emerald-400' : 'text-rose-400'
+                    }`}>
+                      {row.type === 'expense' ? '−' : ''}{formatMoneyFull(row.amount)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =====================
 // MAIN CONTENT COMPONENT
 // =====================
 
@@ -727,6 +986,7 @@ function ReportsContent() {
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [comparisonMode, setComparisonMode] = useState(false)
+  const [drillDown, setDrillDown] = useState<DrillDownType | null>(null)
   
   const toastTimer = useRef<number | null>(null)
   const reqIdRef = useRef(0)
@@ -2199,29 +2459,32 @@ function ReportsContent() {
             <div className="space-y-6">
               {/* Stats Grid */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard 
+                <StatCard
                   title="Общая выручка"
                   value={formatMoneyFull(totals.totalIncome)}
                   subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.totalIncome)}` : `${formatMoneyCompact(totals.incomeCash)} нал / ${formatMoneyCompact(totals.incomeNonCash)} безнал`}
                   icon={DollarSign}
                   trend={totalsPrev.totalIncome > 0 ? Number(((totals.totalIncome - totalsPrev.totalIncome) / totalsPrev.totalIncome * 100).toFixed(1)) : undefined}
                   color="green"
+                  onClick={() => setDrillDown('income')}
                 />
-                <StatCard 
+                <StatCard
                   title="Расходы"
                   value={formatMoneyFull(totals.totalExpense)}
                   subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.totalExpense)}` : `${formatMoneyCompact(totals.expenseCash)} нал / ${formatMoneyCompact(totals.expenseKaspi)} Kaspi`}
                   icon={TrendingDown}
                   trend={totalsPrev.totalExpense > 0 ? Number(((totals.totalExpense - totalsPrev.totalExpense) / totalsPrev.totalExpense * 100).toFixed(1)) : undefined}
                   color="red"
+                  onClick={() => setDrillDown('expense')}
                 />
-                <StatCard 
+                <StatCard
                   title="Чистая прибыль"
                   value={formatMoneyFull(totals.profit)}
                   subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.profit)}` : `Маржа ${totals.totalIncome > 0 ? (totals.profit / totals.totalIncome * 100).toFixed(1) : 0}%`}
                   icon={Wallet}
                   trend={totalsPrev.profit !== 0 ? Number(((totals.profit - totalsPrev.profit) / Math.abs(totalsPrev.profit) * 100).toFixed(1)) : undefined}
                   color={totals.profit >= 0 ? 'blue' : 'red'}
+                  onClick={() => setDrillDown('profit')}
                 />
                 <StatCard 
                   title="Остаток средств"
@@ -2839,6 +3102,18 @@ function ReportsContent() {
             </div>
           )}
         </div>
+
+      {/* Drill-down modal */}
+      {drillDown && (
+        <DrillDownModal
+          type={drillDown}
+          incomes={incomes}
+          expenses={expenses}
+          companies={companies}
+          companyName={companyName}
+          onClose={() => setDrillDown(null)}
+        />
+      )}
     </>
   )
 }
