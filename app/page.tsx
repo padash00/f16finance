@@ -23,6 +23,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { ContactLeadForm } from '@/components/public/contact-lead-form'
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/core/site'
 
 export const metadata: Metadata = {
@@ -616,6 +617,40 @@ export default function MarketingHomePage() {
               </Button>
             </Card>
           ))}
+        </div>
+      </section>
+
+      <section id="contact" className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
+        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card className="border-white/10 bg-black/20 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
+              Связаться
+            </div>
+            <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em]">Оставьте заявку, и она сразу придет на почту</h2>
+            <p className="mt-4 text-base leading-7 text-slate-300">
+              Если хотите обсудить внедрение, автоматизацию точки, зарплату операторов, Telegram-отчеты или управленку,
+              просто оставьте контакты. Заявка придет на почту, и дальше можно будет быстро созвониться.
+            </p>
+
+            <div className="mt-6 space-y-3 text-sm text-slate-300">
+              <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 text-amber-300" />
+                <div>Подходит, если у вас уже есть точки, смены, сотрудники и ручной хаос в отчетах.</div>
+              </div>
+              <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 text-amber-300" />
+                <div>Можно написать нишу, кратко описать задачу и оставить телефон или Telegram.</div>
+              </div>
+              <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 text-amber-300" />
+                <div>Заявка уходит на почту и не теряется внутри сайта.</div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.34)] sm:p-8">
+            <ContactLeadForm />
+          </Card>
         </div>
       </section>
 
