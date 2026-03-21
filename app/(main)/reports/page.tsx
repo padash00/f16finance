@@ -679,6 +679,8 @@ function DrillDownModal({
   expenses,
   companies,
   companyName,
+  dateFrom,
+  dateTo,
   onClose,
 }: {
   type: DrillDownType
@@ -686,6 +688,8 @@ function DrillDownModal({
   expenses: ExpenseRow[]
   companies: Company[]
   companyName: (id: string) => string
+  dateFrom: string
+  dateTo: string
   onClose: () => void
 }) {
   const [filterCompany, setFilterCompany] = useState<'all' | string>('all')
@@ -708,6 +712,7 @@ function DrillDownModal({
 
     if (type === 'income' || type === 'profit') {
       for (const r of incomes) {
+        if (r.date < dateFrom || r.date > dateTo) continue // только текущий период
         const amount = (r.cash_amount ?? 0) + (r.kaspi_amount ?? 0) + (r.online_amount ?? 0) + (r.card_amount ?? 0)
         result.push({
           id: r.id,
@@ -725,6 +730,7 @@ function DrillDownModal({
 
     if (type === 'expense' || type === 'profit') {
       for (const r of expenses) {
+        if (r.date < dateFrom || r.date > dateTo) continue // только текущий период
         const amount = (r.cash_amount ?? 0) + (r.kaspi_amount ?? 0)
         result.push({
           id: r.id,
@@ -741,7 +747,7 @@ function DrillDownModal({
     }
 
     return result
-  }, [type, incomes, expenses, companyName])
+  }, [type, incomes, expenses, companyName, dateFrom, dateTo])
 
   const filtered = useMemo(() => {
     let r = rows
@@ -3111,6 +3117,8 @@ function ReportsContent() {
           expenses={expenses}
           companies={companies}
           companyName={companyName}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
           onClose={() => setDrillDown(null)}
         />
       )}
