@@ -14,12 +14,12 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: 'ru',
     icons: [
       {
-        src: '/icon-light-32x32.png',
-        sizes: '32x32',
+        src: '/icon',
+        sizes: '64x64',
         type: 'image/png',
       },
       {
-        src: '/apple-icon.png',
+        src: '/apple-icon',
         sizes: '180x180',
         type: 'image/png',
       },

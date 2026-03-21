@@ -48,15 +48,24 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     locale: 'ru_RU',
     type: 'website',
+    images: [
+      {
+        url: `${SITE_URL}/og-image`,
+        width: 1200,
+        height: 630,
+        alt: SITE_NAME,
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: SITE_NAME,
     description: SITE_DESCRIPTION,
+    images: [`${SITE_URL}/og-image`],
   },
   icons: {
     icon: [{ url: '/icon' }, { url: '/icon.svg', type: 'image/svg+xml' }],
-    apple: '/apple-icon.png',
+    apple: '/apple-icon',
   },
 }
 
