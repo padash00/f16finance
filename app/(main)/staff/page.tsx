@@ -351,6 +351,14 @@ export default function StaffPageSmart() {
         .order('pay_date', { ascending: true }),
     ])
 
+    if (staffRes.error) {
+      console.error('staff load error:', staffRes.error)
+      setPageNotice({ tone: 'error', text: `Ошибка загрузки сотрудников: ${staffRes.error.message}` })
+      setLoading(false)
+      setRefreshing(false)
+      return
+    }
+
     if (!staffRes.error && !payRes.error) {
       const staffRows = (staffRes.data as Staff[]) || []
       setStaff(staffRows)
