@@ -90,7 +90,8 @@ export async function POST(request: Request) {
       // Ищем через пагинацию — надёжнее чем perPage:1000
       let foundUser: { id: string; email?: string } | null = null
       let page = 1
-      while (!foundUser) {
+      const MAX_PAGES = 20
+      while (!foundUser && page <= MAX_PAGES) {
         const { data: pageData, error: usersError } = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
         if (usersError) {
           return NextResponse.json({ error: usersError.message }, { status: 500 })

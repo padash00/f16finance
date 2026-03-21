@@ -94,8 +94,11 @@ export async function GET(req: Request) {
     if (payFilter === 'cash') query = query.gt('cash_amount', 0)
     else if (payFilter === 'kaspi') query = query.gt('kaspi_amount', 0)
     if (search && search.length >= 2) {
-      // Экранируем спецсимволы PostgREST чтобы исключить инъекцию через ilike
-      const safeSearch = search.replace(/[%_\\]/g, '\\$&').replace(/['"]/g, '')
+      // Экранируем спецсимволы LIKE-паттерна и PostgREST-синтаксиса
+      const safeSearch = search
+        .slice(0, 100)
+        .replace(/[%_\\]/g, '\\$&')   // escape LIKE wildcards
+        .replace(/[,().]/g, ' ')       // strip PostgREST .or() syntax delimiters
       query = query.or(`comment.ilike.%${safeSearch}%,category.ilike.%${safeSearch}%`)
     }
 

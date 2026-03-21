@@ -59,7 +59,9 @@ export async function POST(request: Request) {
       'application/pdf': 'pdf',
     }
     const ext = allowedExtensions[detectedMime]
-    const fileName = `${expenseId}_${Date.now()}.${ext}`
+    const randomSuffix = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+      .map(b => b.toString(16).padStart(2, '0')).join('')
+    const fileName = `${expenseId}_${randomSuffix}.${ext}`
 
     // Use admin client for storage + DB update to bypass RLS silently blocking the write
     const adminClient = hasAdminSupabaseCredentials()
