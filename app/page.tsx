@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 }
 
 const highlights = [
-  'Собственная point-программа для точки и кассы',
+  'Собственная программа для точки и кассы',
   'Интеграция с Telegram для отчетов и уведомлений',
   'Калькулятор смены для дневных и ночных смен',
   'ОПиУ и EBITDA по календарным суткам, а не вручную',
@@ -41,8 +41,8 @@ const highlights = [
 
 const heroStats = [
   { label: 'Рабочих контуров', value: '8+' },
-  { label: 'Telegram-сценариев', value: 'Live' },
-  { label: 'Форматов смен', value: 'Day / Night' },
+  { label: 'Telegram-сценариев', value: 'В деле' },
+  { label: 'Форматов смен', value: 'День / Ночь' },
 ]
 
 const advantages = [
@@ -63,13 +63,13 @@ const advantages = [
   },
   {
     icon: Wallet,
-    title: 'Зарплата, авансы и weekly-выплаты',
+    title: 'Зарплата, авансы и выплаты по неделям',
     text: 'Операторы, авансы, долги и выплаты собраны в одном контуре. Это позволяет видеть начислено, выплачено и остаток без отдельных таблиц.',
   },
   {
     icon: Workflow,
     title: 'Задачи, роли и дисциплина',
-    text: 'Owner, manager, marketer, operator и superadmin работают в одной системе, но видят только свой контур. Плюс задачи, KPI и контроль сроков.',
+    text: 'Владелец, менеджер, маркетолог, оператор и суперадмин работают в одной системе, но видят только свой контур. Плюс задачи, KPI и контроль сроков.',
   },
   {
     icon: LineChart,
@@ -82,17 +82,17 @@ const productBlocks = [
   {
     icon: CreditCard,
     title: 'Доходы и расходы',
-    text: 'Выручка по точкам, категории расходов, cash flow и ежедневный контроль цифр без ручной каши.',
+    text: 'Выручка по точкам, категории расходов, движение денег и ежедневный контроль цифр без ручной каши.',
   },
   {
     icon: Users,
     title: 'Команда и операторы',
-    text: 'Профили, роли, структура, задачи, долги, weekly-зарплата и понятный операторский контур.',
+    text: 'Профили, роли, структура, задачи, долги, зарплата по неделям и понятный операторский контур.',
   },
   {
     icon: Target,
     title: 'KPI и план-факт',
-    text: 'KPI, weekly-планы, контроль выполнения и управленческие решения по цифрам, а не по ощущениям.',
+    text: 'KPI, недельные планы, контроль выполнения и управленческие решения по цифрам, а не по ощущениям.',
   },
   {
     icon: BellRing,
@@ -102,10 +102,10 @@ const productBlocks = [
 ]
 
 const differentiation = [
-  'Это не шаблонная CRM и не очередная таблица, а система, собранная под реальную сменную работу точки.',
-  'У продукта уже есть собственная desktop-программа для точки, а не только кабинет руководителя.',
+  'Это не шаблонная система учета и не очередная таблица, а продукт, собранный под реальную сменную работу точки.',
+  'У продукта уже есть собственная программа для точки, а не только кабинет руководителя.',
   'Телеграм интегрирован в операционный контур: отчеты, уведомления и связь с командой уже встроены.',
-  'Система учитывает ночные смены, Kaspi, weekly-выплаты, долги и зарплату операторов как реальные бизнес-сценарии, а не как “допишем потом”.',
+  'Система учитывает ночные смены, Kaspi, выплаты по неделям, долги и зарплату операторов как реальные бизнес-сценарии, а не как “допишем потом”.',
 ]
 
 const seoPages = [
@@ -117,7 +117,7 @@ const seoPages = [
   {
     href: '/operator-salary-system',
     title: 'Зарплата операторов',
-    text: 'Для запросов про начисления, авансы, долги и weekly-выплаты.',
+    text: 'Для запросов про начисления, авансы, долги и выплаты по неделям.',
   },
   {
     href: '/profit-and-loss-ebitda',
@@ -127,7 +127,7 @@ const seoPages = [
   {
     href: '/point-terminal',
     title: 'Программа для точки',
-    text: 'Для запросов про кассовую программу, сменный калькулятор и point terminal.',
+    text: 'Для запросов про кассовую программу, сменный калькулятор и терминал точки.',
   },
 ]
 
@@ -159,11 +159,11 @@ const outcomes = [
 const workflowSteps = [
   {
     title: 'Точка закрывает смену',
-    text: 'Сотрудник работает в отдельной point-программе: калькулятор смены, Kaspi, комментарии, долги и быстрый ввод без лишнего интерфейса.',
+    text: 'Сотрудник работает в отдельной программе для точки: калькулятор смены, Kaspi, комментарии, долги и быстрый ввод без лишнего интерфейса.',
   },
   {
     title: 'Система собирает цифры',
-    text: 'Доходы, расходы, Kaspi, weekly-зарплата, долги и задачи попадают в один контур без ручного копирования между таблицами.',
+    text: 'Доходы, расходы, Kaspi, зарплата по неделям, долги и задачи попадают в один контур без ручного копирования между таблицами.',
   },
   {
     title: 'Telegram отправляет отчет',
@@ -236,7 +236,7 @@ export default function MarketingHomePage() {
             </h1>
             <p className="max-w-3xl text-lg leading-8 text-slate-300">
               Orda Control собирает в одном месте все, что обычно расползается по Excel, чатам и ручным отчетам:
-              смены, доходы, расходы, зарплату операторов, долги, KPI, Telegram-отчеты, point-программу для точки и
+              смены, доходы, расходы, зарплату операторов, долги, KPI, Telegram-отчеты, программу для точки и
               управленческий учет.
             </p>
           </div>
@@ -276,13 +276,13 @@ export default function MarketingHomePage() {
           <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-5">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-400">
               <span>Почему это цепляет</span>
-              <span>Product</span>
+              <span>Продукт</span>
             </div>
             <div className="mt-5 grid gap-4">
               <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
                 <div className="flex items-center gap-2 text-emerald-300">
                   <MonitorSmartphone className="h-4 w-4" />
-                  Point-программа уже есть
+                  Программа для точки уже есть
                 </div>
                 <div className="mt-3 text-2xl font-semibold">Смена, долги, офлайн и Telegram</div>
                 <div className="mt-1 text-sm text-slate-300">
@@ -305,7 +305,7 @@ export default function MarketingHomePage() {
 
               <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-slate-300">
                 Сильная сторона продукта не в “красивом кабинете”, а в том, что в нем уже учтены живые сценарии:
-                дневные и ночные смены, долги по товарам, зарплата операторов, Telegram-отчеты, точки и weekly-выплаты.
+                дневные и ночные смены, долги по товарам, зарплата операторов, Telegram-отчеты, точки и выплаты по неделям.
               </div>
             </div>
           </div>
@@ -436,7 +436,7 @@ export default function MarketingHomePage() {
         <div className="max-w-3xl">
           <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Как выглядит продукт</div>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
-            Витринные product-shots на основе реальных модулей системы
+            Витринные экраны на основе реальных модулей системы
           </h2>
           <p className="mt-4 text-base leading-7 text-slate-300">
             Здесь показано не абстрактное “облако функций”, а то, как продукт ощущается: точка, зарплата, управленка и Telegram-контур.
@@ -447,8 +447,8 @@ export default function MarketingHomePage() {
           <Card className="overflow-hidden border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-5 text-white shadow-[0_24px_70px_rgba(0,0,0,0.34)]">
             <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-4">
               <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-400">
-                <span>Point terminal</span>
-                <span>Shift live</span>
+                <span>Терминал точки</span>
+                <span>Работа смены</span>
               </div>
               <div className="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
                 <div className="rounded-2xl border border-white/10 bg-[#0a0e17] p-4">
@@ -483,7 +483,7 @@ export default function MarketingHomePage() {
                       <div className="text-xs text-slate-400">Точка отправляет цифры сразу после смены</div>
                     </div>
                     <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">
-                      online
+                      онлайн
                     </div>
                   </div>
                   <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-slate-200">
@@ -505,8 +505,8 @@ export default function MarketingHomePage() {
             <Card className="overflow-hidden border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-5 text-white shadow-[0_24px_70px_rgba(0,0,0,0.34)]">
               <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-4">
                 <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-400">
-                  <span>Salary</span>
-                  <span>Weekly</span>
+                  <span>Зарплата</span>
+                  <span>Неделя</span>
                 </div>
                 <div className="mt-4 rounded-2xl border border-white/10 bg-[#0a0e17] p-4">
                   <div className="grid grid-cols-4 gap-3 text-xs uppercase tracking-wide text-slate-500">
