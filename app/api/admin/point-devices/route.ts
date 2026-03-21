@@ -8,6 +8,7 @@ type PointFeatureFlags = {
   shift_report: boolean
   income_report: boolean
   debt_report: boolean
+  kaspi_daily_split: boolean
 }
 
 type Body =
@@ -61,6 +62,7 @@ function normalizeFlags(input: Partial<PointFeatureFlags> | null | undefined): P
     shift_report: input?.shift_report !== false,
     income_report: input?.income_report !== false,
     debt_report: input?.debt_report === true,
+    kaspi_daily_split: input?.kaspi_daily_split === true,
   }
 }
 

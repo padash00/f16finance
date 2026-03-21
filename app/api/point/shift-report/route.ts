@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { buildPointDailyKaspiReport } from '@/lib/server/services/point-kaspi'
 import { notifyShiftReport } from '@/lib/server/telegram'
 
 type ShiftReportBody = {
@@ -13,6 +14,7 @@ type ShiftReportBody = {
     zone?: string | null
     cash_amount?: number | null
     kaspi_amount?: number | null
+    kaspi_before_midnight?: number | null
     online_amount?: number | null
     card_amount?: number | null
     comment?: string | null
@@ -37,6 +39,10 @@ function json(data: unknown, status = 200) {
 
 function canShiftReport(input: Record<string, unknown> | null | undefined) {
   return input?.shift_report !== false
+}
+
+function isKaspiDailySplitEnabled(input: Record<string, unknown> | null | undefined) {
+  return input?.kaspi_daily_split === true
 }
 
 function resolveIncomeZone(params: {
@@ -105,6 +111,10 @@ export async function POST(request: Request) {
       }),
       cash_amount: payload.cash_amount ?? 0,
       kaspi_amount: payload.kaspi_amount ?? 0,
+      kaspi_before_midnight:
+        payload.shift === 'night' && payload.kaspi_before_midnight != null
+          ? payload.kaspi_before_midnight
+          : null,
       online_amount: payload.online_amount ?? 0,
       card_amount: payload.card_amount ?? 0,
       comment: payload.comment?.trim() || null,
@@ -125,10 +135,16 @@ export async function POST(request: Request) {
       return json({ error: 'amount-required' }, 400)
     }
 
-    const { data: created, error: insertError } = await supabase.from('incomes').insert([normalized]).select('*').single()
+    const { data: created, error: insertError } = await supabase
+      .from('incomes')
+      .insert([normalized])
+      .select('*')
+      .single()
     if (insertError) throw insertError
 
-    const operator = Array.isArray((assignment as any).operator) ? (assignment as any).operator[0] || null : (assignment as any).operator || null
+    const operator = Array.isArray((assignment as any).operator)
+      ? (assignment as any).operator[0] || null
+      : (assignment as any).operator || null
 
     await writeAuditLog(supabase, {
       entityType: 'point-shift-report',
@@ -159,6 +175,7 @@ export async function POST(request: Request) {
               split_mode: meta.split_mode === true,
               split_part: meta.split_part || null,
               original_date: meta.original_date || null,
+              kaspi_before_midnight: normalized.kaspi_before_midnight,
             }
           : null,
       },
@@ -199,5 +216,47 @@ export async function POST(request: Request) {
       message: error?.message || 'Unknown point shift report error',
     })
     return json({ error: error?.message || 'Не удалось сохранить сменный отчёт' }, 500)
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const point = await requirePointDevice(request)
+    if ('response' in point) return point.response
+
+    const { supabase, device } = point
+    const url = new URL(request.url)
+    const view = url.searchParams.get('view')
+    const date = String(url.searchParams.get('date') || '').trim()
+
+    if (view !== 'daily-kaspi') {
+      return json({ error: 'invalid-view' }, 400)
+    }
+
+    if (!date) {
+      return json({ error: 'date-required' }, 400)
+    }
+
+    if (!isKaspiDailySplitEnabled(device.feature_flags || {})) {
+      return json({ error: 'kaspi-daily-split-disabled-for-device' }, 403)
+    }
+
+    const report = await buildPointDailyKaspiReport({
+      supabase,
+      companyId: device.company_id,
+      date,
+    })
+
+    return json({
+      ok: true,
+      data: report,
+    })
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'point-shift-report:get',
+      message: error?.message || 'Unknown point shift report GET error',
+    })
+    return json({ error: error?.message || 'Не удалось загрузить суточный Kaspi отчёт' }, 500)
   }
 }

@@ -31,6 +31,7 @@ type PointFeatureFlags = {
   shift_report: boolean
   income_report: boolean
   debt_report: boolean
+  kaspi_daily_split: boolean
 }
 
 type PointDevice = {
@@ -38,6 +39,7 @@ type PointDevice = {
   company_id: string
   name: string
   device_token: string
+  shift_report_chat_id: string | null
   point_mode: string
   feature_flags: PointFeatureFlags
   is_active: boolean
@@ -60,6 +62,7 @@ type PointDevicesResponse = {
 type DeviceForm = {
   company_id: string
   name: string
+  shift_report_chat_id: string
   point_mode: string
   notes: string
   feature_flags: PointFeatureFlags
@@ -68,12 +71,14 @@ type DeviceForm = {
 const DEFAULT_FORM: DeviceForm = {
   company_id: '',
   name: '',
+  shift_report_chat_id: '',
   point_mode: 'shift-report',
   notes: '',
   feature_flags: {
     shift_report: true,
     income_report: true,
     debt_report: false,
+    kaspi_daily_split: false,
   },
 }
 
@@ -167,12 +172,14 @@ export default function PointDevicesPage() {
     setEditingDevice({
       company_id: device.company_id,
       name: device.name,
+      shift_report_chat_id: device.shift_report_chat_id || '',
       point_mode: device.point_mode,
       notes: device.notes || '',
       feature_flags: {
         shift_report: device.feature_flags.shift_report !== false,
         income_report: device.feature_flags.income_report !== false,
         debt_report: device.feature_flags.debt_report === true,
+        kaspi_daily_split: device.feature_flags.kaspi_daily_split === true,
       },
     })
   }
@@ -191,6 +198,7 @@ export default function PointDevicesPage() {
         action: 'createDevice',
         payload: {
           ...newDevice,
+          shift_report_chat_id: newDevice.shift_report_chat_id || null,
           notes: newDevice.notes || null,
         },
       })
@@ -219,6 +227,7 @@ export default function PointDevicesPage() {
         deviceId,
         payload: {
           ...editingDevice,
+          shift_report_chat_id: editingDevice.shift_report_chat_id || null,
           notes: editingDevice.notes || null,
         },
       })

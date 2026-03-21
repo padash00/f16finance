@@ -13,9 +13,12 @@ function json(data: unknown, status = 200) {
 type Body = {
   email?: string
   password?: string
-  action?: 'updateShiftReportChatId'
+  action?: 'updateShiftReportChatId' | 'updateDeviceSettings'
   deviceId?: string
   shift_report_chat_id?: string | null
+  feature_flags?: {
+    kaspi_daily_split?: boolean
+  } | null
 }
 
 function normalizeFlags(input: Record<string, unknown> | null | undefined) {
@@ -23,6 +26,7 @@ function normalizeFlags(input: Record<string, unknown> | null | undefined) {
     shift_report: input?.shift_report !== false,
     income_report: input?.income_report !== false,
     debt_report: input?.debt_report === true,
+    kaspi_daily_split: input?.kaspi_daily_split === true,
   }
 }
 
@@ -80,14 +84,28 @@ export async function POST(request: Request) {
 
     const supabase = createAdminSupabaseClient()
 
-    if (body?.action === 'updateShiftReportChatId') {
+    if (body?.action === 'updateShiftReportChatId' || body?.action === 'updateDeviceSettings') {
       const deviceId = String(body.deviceId || '').trim()
       if (!deviceId) return json({ error: 'device-id-required' }, 400)
+
+      const { data: existing, error: existingError } = await supabase
+        .from('point_devices')
+        .select('feature_flags')
+        .eq('id', deviceId)
+        .single()
+
+      if (existingError) throw existingError
+
+      const nextFlags = normalizeFlags((existing as any)?.feature_flags)
+      if (body.feature_flags && typeof body.feature_flags.kaspi_daily_split === 'boolean') {
+        nextFlags.kaspi_daily_split = body.feature_flags.kaspi_daily_split === true
+      }
 
       const { data, error } = await supabase
         .from('point_devices')
         .update({
           shift_report_chat_id: normalizeShiftReportChatId(body.shift_report_chat_id),
+          feature_flags: nextFlags,
         })
         .eq('id', deviceId)
         .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')

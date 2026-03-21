@@ -1,18 +1,33 @@
+'use client'
+
 import { useState, useEffect, useCallback } from 'react'
-import { Send, Clock, LogOut, RefreshCw, CheckCircle2, AlertTriangle, SplitSquareVertical, WifiOff } from 'lucide-react'
+import {
+  AlertTriangle,
+  Building2,
+  Calculator,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  LogOut,
+  ReceiptText,
+  RefreshCw,
+  Send,
+  SplitSquareVertical,
+  UserCircle2,
+  WifiOff,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import { formatMoney, parseMoney, todayISO, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
 import { syncQueue, getPendingCount, queueShiftReport } from '@/lib/offline'
 import QueueViewer from '@/components/QueueViewer'
-import type { AppConfig, BootstrapData, OperatorSession, ShiftForm } from '@/types'
+import type { AppConfig, BootstrapData, DailyKaspiReport, OperatorSession, ShiftForm } from '@/types'
 
 interface Props {
   config: AppConfig
@@ -23,7 +38,6 @@ interface Props {
   onSwitchToScanner?: () => void
 }
 
-// Разбивка выручки на 2 даты (Arena: ночная смена в последний день месяца)
 interface SplitEntry {
   date: string
   cash: number
@@ -40,6 +54,7 @@ const emptyForm = (): ShiftForm => ({
   cash: '',
   coins: '',
   kaspi_pos: '',
+  kaspi_before_midnight: '',
   kaspi_online: '',
   debts: '',
   start: '',
@@ -60,13 +75,26 @@ function nextDayISO(dateISO: string): string {
   return d.toISOString().slice(0, 10)
 }
 
-export default function ShiftPage({ config, bootstrap, session, isOffline, onLogout, onSwitchToScanner }: Props) {
+export default function ShiftPage({
+  config,
+  bootstrap,
+  session,
+  isOffline,
+  onLogout,
+  onSwitchToScanner,
+}: Props) {
   const [form, setForm] = useState<ShiftForm>(() => {
     try {
       const saved = localStorage.getItem(DRAFT_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        if ('kaspi_online' in parsed) return parsed
+        if ('kaspi_online' in parsed) {
+          return {
+            ...emptyForm(),
+            ...parsed,
+            kaspi_before_midnight: typeof parsed.kaspi_before_midnight === 'string' ? parsed.kaspi_before_midnight : '',
+          }
+        }
       }
     } catch {}
     localStorage.removeItem(DRAFT_KEY)
@@ -80,62 +108,46 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
   const [syncing, setSyncing] = useState(false)
   const [showQueue, setShowQueue] = useState(false)
 
-  // Диалог подтверждения
   const [confirmDialog, setConfirmDialog] = useState(false)
-
-  // Разбивка дат (только Arena)
   const [splitDialog, setSplitDialog] = useState(false)
   const [splitAfter, setSplitAfter] = useState({ cash: '', kaspi_pos: '', kaspi_online: '' })
+  const [viewMode, setViewMode] = useState<'shift' | 'daily'>('shift')
+  const [dailyDate, setDailyDate] = useState(todayISO())
+  const [dailyLoading, setDailyLoading] = useState(false)
+  const [dailyError, setDailyError] = useState<string | null>(null)
+  const [dailyReport, setDailyReport] = useState<DailyKaspiReport | null>(null)
 
   const flags = bootstrap.device.feature_flags
   const hasScanner = flags.debt_report && onSwitchToScanner
+  const kaspiDailySplitEnabled = flags.kaspi_daily_split === true
+  const isNightKaspiSplit = kaspiDailySplitEnabled && form.shift === 'night'
 
   const pointMode = (bootstrap.device.point_mode || '').toLowerCase()
   const isArena = pointMode.includes('arena')
   const wiponLabel = isArena ? 'Senet (система)' : 'Wipon (система)'
   const kaspiLabel = isArena ? 'Kaspi POS' : 'Kaspi'
 
-  // Авто-определение смены по времени (только если нет сохранённого черновика)
   useEffect(() => {
     const hasDraft = !!localStorage.getItem(DRAFT_KEY)
     if (!hasDraft) {
       const hour = new Date().getHours()
-      setForm(f => ({ ...f, shift: hour >= 8 && hour < 20 ? 'day' : 'night' }))
+      setForm((current) => ({
+        ...current,
+        shift: hour >= 8 && hour < 20 ? 'day' : 'night',
+      }))
     }
   }, [])
 
-  // Автосохранение черновика
   useEffect(() => {
-    const t = setTimeout(() => localStorage.setItem(DRAFT_KEY, JSON.stringify(form)), 500)
-    return () => clearTimeout(t)
+    const timeout = setTimeout(() => localStorage.setItem(DRAFT_KEY, JSON.stringify(form)), 500)
+    return () => clearTimeout(timeout)
   }, [form])
 
-  // Счётчик очереди
   useEffect(() => {
     const refresh = async () => setPendingCount(await getPendingCount())
-    refresh()
+    void refresh()
     const interval = setInterval(refresh, 10000)
     return () => clearInterval(interval)
-  }, [])
-
-  // Авто-синхронизация каждые 60 сек
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const count = await getPendingCount()
-      if (count > 0) doSync()
-    }, 60000)
-    return () => clearInterval(interval)
-  }, [])
-
-  // Ctrl+Enter для отправки
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.ctrlKey && e.key === 'Enter') {
-        document.getElementById('shift-submit-btn')?.click()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   const doSync = useCallback(async () => {
@@ -150,27 +162,67 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
     }
   }, [config])
 
-  // Авто-синхронизация при восстановлении сети
   useEffect(() => {
-    const handleOnline = () => doSync()
+    const interval = setInterval(async () => {
+      const count = await getPendingCount()
+      if (count > 0) void doSync()
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [doSync])
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.ctrlKey && event.key === 'Enter') {
+        document.getElementById('shift-submit-btn')?.click()
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
+    const handleOnline = () => void doSync()
     window.addEventListener('online', handleOnline)
     return () => window.removeEventListener('online', handleOnline)
   }, [doSync])
 
-  // Формулы
+  const loadDailyReport = useCallback(async (date: string) => {
+    if (!kaspiDailySplitEnabled) return
+    setDailyLoading(true)
+    setDailyError(null)
+    try {
+      const data = await api.getPointDailyKaspiReport(config, date)
+      setDailyReport(data)
+    } catch (err: any) {
+      setDailyReport(null)
+      setDailyError(err?.message || 'Не удалось загрузить суточный Kaspi отчёт')
+    } finally {
+      setDailyLoading(false)
+    }
+  }, [config, kaspiDailySplitEnabled])
+
+  useEffect(() => {
+    if (viewMode === 'daily' && kaspiDailySplitEnabled) {
+      void loadDailyReport(dailyDate)
+    }
+  }, [dailyDate, kaspiDailySplitEnabled, loadDailyReport, viewMode])
+
   const vCash = parseMoney(form.cash)
   const vCoins = parseMoney(form.coins)
   const vKaspi = parseMoney(form.kaspi_pos)
+  const vKaspiBeforeMidnight = parseMoney(form.kaspi_before_midnight)
+  const vKaspiTotal = isNightKaspiSplit ? vKaspiBeforeMidnight + vKaspi : vKaspi
   const vKaspiOnline = parseMoney(form.kaspi_online)
   const vDebts = parseMoney(form.debts)
   const vStart = parseMoney(form.start)
   const vWipon = parseMoney(form.wipon)
 
-  const fact = vCash + vCoins + vKaspi + vDebts - vStart   // ФАКТ
-  const itog = fact - vWipon                                 // ИТОГ
+  const fact = vCash + vCoins + vKaspiTotal + vDebts - vStart
+  const itog = fact - vWipon
 
   function setField(key: keyof ShiftForm, value: string) {
-    setForm(f => ({ ...f, [key]: value }))
+    setForm((current) => ({ ...current, [key]: value }))
     setResult(null)
     setError(null)
   }
@@ -182,7 +234,6 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
     setError(null)
   }
 
-  // ─── Отправка одного отчёта ────────────────────────────────────────────────
   async function sendOne(formToSend: ShiftForm): Promise<'success' | 'queued'> {
     const ref = localRef()
     try {
@@ -194,107 +245,138 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
     }
   }
 
-  // ─── Отправка с разбивкой на 2 даты ───────────────────────────────────────
   async function sendSplit(baseForm: ShiftForm, entries: SplitEntry[]): Promise<'success' | 'queued'> {
     let anyQueued = false
+
     for (const entry of entries) {
-      const f: ShiftForm = {
+      const nextForm: ShiftForm = {
         ...baseForm,
         date: entry.date,
         cash: String(entry.cash),
         kaspi_pos: String(entry.kaspi_pos),
         kaspi_online: String(entry.kaspi_online),
       }
-      const r = await sendOne(f)
-      if (r === 'queued') anyQueued = true
+
+      const result = await sendOne(nextForm)
+      if (result === 'queued') anyQueued = true
     }
+
     return anyQueued ? 'queued' : 'success'
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
     setError(null)
     setResult(null)
 
-    if (fact <= 0) { setError('Введите сумму выручки'); return }
-    if (!session.operator.operator_id) { setError('Выберите оператора'); return }
+    if (fact <= 0) {
+      setError('Введите сумму выручки')
+      return
+    }
 
-    // Arena + ночная + последний день месяца → разбивка
-    if (isArena && form.shift === 'night' && isLastDayOfMonth(form.date)) {
+    if (!session.operator.operator_id) {
+      setError('Выберите оператора')
+      return
+    }
+
+    if (isNightKaspiSplit && (form.kaspi_before_midnight.trim() === '' || form.kaspi_pos.trim() === '')) {
+      setError('Для ночной смены заполните Kaspi до 00:00 и после 00:00')
+      return
+    }
+
+    if (!kaspiDailySplitEnabled && isArena && form.shift === 'night' && isLastDayOfMonth(form.date)) {
       setSplitAfter({ cash: '', kaspi_pos: '', kaspi_online: '' })
       setSplitDialog(true)
       return
     }
 
-    // Показываем диалог подтверждения
     setConfirmDialog(true)
   }
 
   async function handleConfirm() {
     setConfirmDialog(false)
     setSubmitting(true)
-    const fullForm: ShiftForm = { ...form, operator_id: session.operator.operator_id }
-    const r = await sendOne(fullForm)
-    setPendingCount(await getPendingCount())
-    setResult(r)
-    if (r === 'success' || r === 'queued') resetForm()
-    setSubmitting(false)
+    try {
+      const fullForm: ShiftForm = {
+        ...form,
+        operator_id: session.operator.operator_id,
+        kaspi_before_midnight: isNightKaspiSplit ? form.kaspi_before_midnight : '',
+      }
+      const sendResult = await sendOne(fullForm)
+      setPendingCount(await getPendingCount())
+      setResult(sendResult)
+      if (sendResult === 'success' || sendResult === 'queued') resetForm()
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   async function handleSplitConfirm() {
     setSplitDialog(false)
     setSubmitting(true)
+    try {
+      const fullForm: ShiftForm = {
+        ...form,
+        operator_id: session.operator.operator_id,
+        kaspi_before_midnight: '',
+      }
 
-    const fullForm: ShiftForm = { ...form, operator_id: session.operator.operator_id }
+      const afterCash = parseMoney(splitAfter.cash)
+      const afterKaspiPos = parseMoney(splitAfter.kaspi_pos)
+      const afterKaspiOnline = parseMoney(splitAfter.kaspi_online)
 
-    const afterCash = parseMoney(splitAfter.cash)
-    const afterKaspiPos = parseMoney(splitAfter.kaspi_pos)
-    const afterKaspiOnline = parseMoney(splitAfter.kaspi_online)
+      const entries: SplitEntry[] = [
+        {
+          date: form.date,
+          cash: vCash - afterCash,
+          kaspi_pos: vKaspi - afterKaspiPos,
+          kaspi_online: vKaspiOnline - afterKaspiOnline,
+        },
+        {
+          date: nextDayISO(form.date),
+          cash: afterCash,
+          kaspi_pos: afterKaspiPos,
+          kaspi_online: afterKaspiOnline,
+        },
+      ]
 
-    const today = form.date
-    const tomorrow = nextDayISO(form.date)
-
-    const entries: SplitEntry[] = [
-      {
-        date: today,
-        cash: vCash - afterCash,
-        kaspi_pos: vKaspi - afterKaspiPos,
-        kaspi_online: vKaspiOnline - afterKaspiOnline,
-      },
-      {
-        date: tomorrow,
-        cash: afterCash,
-        kaspi_pos: afterKaspiPos,
-        kaspi_online: afterKaspiOnline,
-      },
-    ]
-
-    const r = await sendSplit(fullForm, entries)
-    setPendingCount(await getPendingCount())
-    setResult(r)
-    resetForm()
-    setSubmitting(false)
+      const sendResult = await sendSplit(fullForm, entries)
+      setPendingCount(await getPendingCount())
+      setResult(sendResult)
+      resetForm()
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   async function handleSplitSkip() {
     setSplitDialog(false)
     setSubmitting(true)
-    const fullForm: ShiftForm = { ...form, operator_id: session.operator.operator_id }
-    const r = await sendOne(fullForm)
-    setPendingCount(await getPendingCount())
-    setResult(r)
-    resetForm()
-    setSubmitting(false)
+    try {
+      const fullForm: ShiftForm = {
+        ...form,
+        operator_id: session.operator.operator_id,
+        kaspi_before_midnight: '',
+      }
+      const sendResult = await sendOne(fullForm)
+      setPendingCount(await getPendingCount())
+      setResult(sendResult)
+      resetForm()
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const operatorName = session.operator.full_name || session.operator.name || session.operator.username
+  const shiftLabel = form.shift === 'day' ? 'Дневная смена' : 'Ночная смена'
+  const shiftIcon = form.shift === 'day' ? '☀️' : '🌙'
+  const totalEntered = vCash + vCoins + vKaspiTotal + vKaspiOnline + vDebts + vStart + vWipon
 
   return (
-    <div className="flex h-screen flex-col bg-background overflow-hidden">
-      {/* Drag region for Windows title bar controls */}
-      <div className="h-9 drag-region shrink-0" />
-      {/* Header */}
-      <header className="flex h-12 items-center justify-between border-b bg-card px-5 gap-4 shrink-0">
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <div className="h-9 shrink-0 drag-region" />
+
+      <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b bg-card px-5">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <span className="text-sm font-bold text-primary-foreground">F</span>
@@ -306,28 +388,29 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
         </div>
 
         <div className="flex items-center gap-2 no-drag">
-          {isOffline && (
+          {isOffline ? (
             <Badge variant="warning" className="gap-1">
-              <WifiOff className="h-3 w-3" /> Офлайн
+              <WifiOff className="h-3 w-3" />
+              Оффлайн
             </Badge>
-          )}
+          ) : null}
 
-          {pendingCount > 0 && (
+          {pendingCount > 0 ? (
             <Badge
               variant="secondary"
-              className="gap-1 cursor-pointer hover:opacity-80"
+              className="cursor-pointer gap-1 hover:opacity-80"
               onClick={() => setShowQueue(true)}
             >
               <Clock className="h-3 w-3" />
               {pendingCount} в очереди
             </Badge>
-          )}
+          ) : null}
 
-          {hasScanner && (
+          {hasScanner ? (
             <Button variant="outline" size="sm" onClick={onSwitchToScanner}>
               Сканер
             </Button>
-          )}
+          ) : null}
 
           <Button
             variant="ghost"
@@ -345,177 +428,487 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
         </div>
       </header>
 
-      {/* Content */}
-      <div className="flex flex-1 items-start justify-center gap-5 overflow-auto p-5">
-        {/* Form */}
-        <Card className="w-full max-w-sm shrink-0">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Отчёт по смене</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4 no-drag">
-              {/* Date + Shift */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Дата</Label>
-                  <Input
-                    type="date"
-                    value={form.date}
-                    onChange={e => setField('date', e.target.value)}
-                    disabled={submitting}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Смена</Label>
-                  <Select value={form.shift} onValueChange={v => setField('shift', v)}>
-                    <SelectTrigger disabled={submitting}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="day">☀️ Дневная</SelectItem>
-                      <SelectItem value="night">🌙 Ночная</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Приход */}
-              <div className="space-y-2.5">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Приход</p>
-                <MoneyInput label="Наличные" value={form.cash} onChange={v => setField('cash', v)} disabled={submitting} />
-                <MoneyInput label="Мелочь" value={form.coins} onChange={v => setField('coins', v)} disabled={submitting} />
-                <MoneyInput label={kaspiLabel} value={form.kaspi_pos} onChange={v => setField('kaspi_pos', v)} disabled={submitting} labelWidth="w-32" />
-                {isArena && (
-                  <MoneyInput label="Kaspi Online" value={form.kaspi_online} onChange={v => setField('kaspi_online', v)} disabled={submitting} labelWidth="w-32" note="не в ФАКТ" />
-                )}
-                <MoneyInput label="Тех (компенс.)" value={form.debts} onChange={v => setField('debts', v)} disabled={submitting} labelWidth="w-32" />
-              </div>
-
-              <Separator />
-
-              {/* Вычет */}
-              <div className="space-y-2.5">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Вычет</p>
-                <MoneyInput label="Старт (касса)" value={form.start} onChange={v => setField('start', v)} disabled={submitting} labelWidth="w-32" />
-                <MoneyInput label={wiponLabel} value={form.wipon} onChange={v => setField('wipon', v)} disabled={submitting} labelWidth="w-32" />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs">Комментарий</Label>
-                <Input
-                  value={form.comment}
-                  onChange={e => setField('comment', e.target.value)}
-                  placeholder="Необязательно"
-                  disabled={submitting}
-                />
-              </div>
-
-              {/* Arena: подсказка разбивки */}
-              {isArena && form.shift === 'night' && isLastDayOfMonth(form.date) && (
-                <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 flex items-center gap-2 text-xs text-primary">
-                  <SplitSquareVertical className="h-3.5 w-3.5 shrink-0" />
-                  Последний день месяца — при отправке спросим про разбивку дат
-                </div>
-              )}
-
-              {error && (
-                <p className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive-foreground flex items-center gap-2">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {error}
-                </p>
-              )}
-
-              {result === 'success' && (
-                <p className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Отчёт отправлен
-                </p>
-              )}
-              {result === 'queued' && (
-                <p className="rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                  <Clock className="h-3.5 w-3.5 shrink-0" /> Нет сети — сохранено в очередь
-                </p>
-              )}
-
-              <Button id="shift-submit-btn" type="submit" className="w-full gap-2" disabled={submitting} size="lg">
-                {submitting
-                  ? <span className="animate-spin h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full" />
-                  : <Send className="h-4 w-4" />
-                }
-                {submitting ? 'Отправляю...' : 'Отправить отчёт'}
-                {!submitting && <span className="ml-auto text-xs opacity-50">Ctrl+↵</span>}
+      <div className="flex flex-1 overflow-auto">
+        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5 p-5">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={viewMode === 'shift' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('shift')}
+            >
+              Смена
+            </Button>
+            {kaspiDailySplitEnabled ? (
+              <Button
+                type="button"
+                variant={viewMode === 'daily' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('daily')}
+              >
+                Суточный Kaspi
               </Button>
-            </form>
-          </CardContent>
-        </Card>
+            ) : null}
+          </div>
 
-        {/* Summary card */}
-        <div className="w-60 space-y-3 shrink-0">
-          {/* ФАКТ */}
-          <Card>
-            <CardContent className="pt-5 space-y-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">ФАКТ</p>
-                <p className="text-3xl font-bold tabular-nums">{formatMoney(fact)}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  нал + мелочь + {isArena ? 'kaspi pos' : 'kaspi'} + тех − старт
-                </p>
+          {viewMode === 'daily' && kaspiDailySplitEnabled ? (
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="space-y-4">
+                <Card className="overflow-hidden border-primary/10 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]">
+                  <CardContent className="space-y-5 p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-3">
+                        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          Суточная сверка
+                        </div>
+                        <div>
+                          <h1 className="text-2xl font-semibold tracking-tight">Kaspi за календарные сутки</h1>
+                          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                            Сумма собирается из дневной смены выбранной даты, ночной смены этой даты до 00:00 и хвоста прошлой ночной смены после 00:00.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                            <Building2 className="h-3.5 w-3.5" />
+                            Точка
+                          </div>
+                          <div className="mt-1 text-sm font-medium">{session.company.name}</div>
+                          <div className="text-xs text-muted-foreground">{bootstrap.device.name || bootstrap.device.point_mode}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                            <Calculator className="h-3.5 w-3.5" />
+                            Режим
+                          </div>
+                          <div className="mt-1 text-sm font-medium">Kaspi split</div>
+                          <div className="text-xs text-muted-foreground">Ночные смены до и после 00:00</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-[220px_auto]">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Дата суток</Label>
+                        <Input
+                          type="date"
+                          value={dailyDate}
+                          onChange={(event) => setDailyDate(event.target.value)}
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="gap-2"
+                          onClick={() => void loadDailyReport(dailyDate)}
+                          disabled={dailyLoading}
+                        >
+                          <RefreshCw className={`h-4 w-4 ${dailyLoading ? 'animate-spin' : ''}`} />
+                          Обновить
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-white/10 bg-card/90">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Разбивка суточного Kaspi</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {dailyError ? (
+                      <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+                        {dailyError}
+                      </div>
+                    ) : null}
+
+                    {!dailyError && dailyLoading ? (
+                      <div className="flex h-32 items-center justify-center">
+                        <span className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" />
+                      </div>
+                    ) : null}
+
+                    {!dailyError && !dailyLoading && dailyReport ? (
+                      <>
+                        <div className="grid gap-3 md:grid-cols-3">
+                          {dailyReport.parts.map((part) => (
+                            <div key={part.key} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{part.label}</div>
+                              <div className="mt-2 text-2xl font-semibold tabular-nums">{formatMoney(part.amount)}</div>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {part.rowCount > 0 ? `Смен: ${part.rowCount}` : 'Нет записей'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {dailyReport.warning ? (
+                          <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+                            {dailyReport.warning}
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </CardContent>
+                </Card>
               </div>
-              {(vCash + vCoins + vKaspi + vDebts + vStart) > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  {vCash > 0 && <SummaryRow label="Наличные" value={vCash} />}
-                  {vCoins > 0 && <SummaryRow label="Мелочь" value={vCoins} />}
-                  {vKaspi > 0 && <SummaryRow label={kaspiLabel} value={vKaspi} />}
-                  {isArena && vKaspiOnline > 0 && <SummaryRow label="Kaspi Online" value={vKaspiOnline} dim />}
-                  {vDebts > 0 && <SummaryRow label="Тех" value={vDebts} />}
-                  {vStart > 0 && <SummaryRow label="− Старт" value={-vStart} highlight />}
+
+              <aside className="space-y-4 xl:sticky xl:top-5 xl:h-fit">
+                <Card className="overflow-hidden border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]">
+                  <CardContent className="space-y-4 p-5">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Kaspi за сутки</p>
+                      <p className="mt-2 text-4xl font-semibold tabular-nums">
+                        {dailyReport ? formatMoney(dailyReport.total) : '0'}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">{dailyDate}</p>
+                    </div>
+                    <Badge variant={dailyReport?.isPrecise === false ? 'warning' : 'secondary'}>
+                      {dailyReport?.isPrecise === false ? 'Есть старые неточные смены' : 'Точный расчёт'}
+                    </Badge>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-white/10 bg-card/90">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Формула суток</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2.5 text-sm text-muted-foreground">
+                    <div>Дневная смена даты</div>
+                    <div>+ Ночная смена даты до 00:00</div>
+                    <div>+ Ночная смена предыдущей даты после 00:00</div>
+                    <div className="pt-2 text-xs text-muted-foreground/80">
+                      `kaspi_amount` хранит полный Kaspi по смене, а `kaspi_before_midnight` нужен только для точной суточной сверки.
+                    </div>
+                  </CardContent>
+                </Card>
+              </aside>
+            </div>
+          ) : null}
+
+          <div className={viewMode === 'shift' ? 'grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]' : 'hidden'}>
+            <form id="shift-report-form" onSubmit={handleSubmit} className="space-y-4 no-drag">
+              <Card className="overflow-hidden border-primary/10 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]">
+                <CardContent className="space-y-5 p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-3">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                        <ReceiptText className="h-3.5 w-3.5" />
+                        Рабочая смена
+                      </div>
+                      <div>
+                        <h1 className="text-2xl font-semibold tracking-tight">Отчёт по смене</h1>
+                        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                          Быстрый ввод выручки с живым расчётом факта и итоговой суммы. Черновик сохраняется автоматически.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                          <Building2 className="h-3.5 w-3.5" />
+                          Точка
+                        </div>
+                        <div className="mt-1 text-sm font-medium">{session.company.name}</div>
+                        <div className="text-xs text-muted-foreground">{bootstrap.device.name || bootstrap.device.point_mode}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                          <UserCircle2 className="h-3.5 w-3.5" />
+                          Оператор
+                        </div>
+                        <div className="mt-1 text-sm font-medium">{operatorName}</div>
+                        <div className="text-xs text-muted-foreground">{shiftIcon} {shiftLabel}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary" className="gap-1.5">
+                      <CalendarDays className="h-3 w-3" />
+                      {form.date}
+                    </Badge>
+                    <Badge variant="secondary" className="gap-1.5">
+                      <Calculator className="h-3 w-3" />
+                      Ввод: {formatMoney(totalEntered)}
+                    </Badge>
+                    {pendingCount > 0 ? (
+                      <Badge variant="secondary" className="gap-1.5">
+                        <Clock className="h-3 w-3" />
+                        Очередь: {pendingCount}
+                      </Badge>
+                    ) : null}
+                    {isOffline ? (
+                      <Badge variant="warning" className="gap-1.5">
+                        <WifiOff className="h-3 w-3" />
+                        Сеть недоступна
+                      </Badge>
+                    ) : null}
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs uppercase tracking-wide text-muted-foreground">Дата</Label>
+                      <Input
+                        type="date"
+                        value={form.date}
+                        onChange={(event) => setField('date', event.target.value)}
+                        disabled={submitting}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs uppercase tracking-wide text-muted-foreground">Смена</Label>
+                      <Select value={form.shift} onValueChange={(value) => setField('shift', value)}>
+                        <SelectTrigger disabled={submitting}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="day">☀️ Дневная</SelectItem>
+                          <SelectItem value="night">🌙 Ночная</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.78fr)]">
+                <Card className="border-white/10 bg-card/90">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Приход</CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      Всё, что формирует факт по кассе на этой смене.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <MoneyInput label="Наличные" value={form.cash} onChange={(value) => setField('cash', value)} disabled={submitting} />
+                    <MoneyInput label="Мелочь" value={form.coins} onChange={(value) => setField('coins', value)} disabled={submitting} />
+                    {isNightKaspiSplit ? (
+                      <>
+                        <MoneyInput
+                          label={`${kaspiLabel} до 00:00`}
+                          value={form.kaspi_before_midnight}
+                          onChange={(value) => setField('kaspi_before_midnight', value)}
+                          disabled={submitting}
+                          labelWidth="w-32"
+                        />
+                        <MoneyInput
+                          label={`${kaspiLabel} после 00:00`}
+                          value={form.kaspi_pos}
+                          onChange={(value) => setField('kaspi_pos', value)}
+                          disabled={submitting}
+                          labelWidth="w-32"
+                          note="в сумме это общий Kaspi смены"
+                        />
+                      </>
+                    ) : (
+                      <MoneyInput
+                        label={kaspiLabel}
+                        value={form.kaspi_pos}
+                        onChange={(value) => setField('kaspi_pos', value)}
+                        disabled={submitting}
+                        labelWidth="w-32"
+                      />
+                    )}
+                    {isArena ? (
+                      <MoneyInput label="Kaspi Online" value={form.kaspi_online} onChange={(value) => setField('kaspi_online', value)} disabled={submitting} labelWidth="w-32" note="не входит в ФАКТ" />
+                    ) : null}
+                    <MoneyInput label="Тех. компенс." value={form.debts} onChange={(value) => setField('debts', value)} disabled={submitting} labelWidth="w-32" />
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-4">
+                  <Card className="border-white/10 bg-card/90">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Вычеты</CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        Эти значения уменьшают итог по смене.
+                      </p>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <MoneyInput label="Старт кассы" value={form.start} onChange={(value) => setField('start', value)} disabled={submitting} labelWidth="w-32" />
+                      <MoneyInput label={wiponLabel} value={form.wipon} onChange={(value) => setField('wipon', value)} disabled={submitting} labelWidth="w-32" />
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-white/10 bg-card/90">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Комментарий</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <Input
+                        value={form.comment}
+                        onChange={(event) => setField('comment', event.target.value)}
+                        placeholder="Например: позднее закрытие, инкассация, корректировка"
+                        disabled={submitting}
+                      />
+                      {isNightKaspiSplit ? (
+                        <div className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-primary">
+                          <div className="flex items-start gap-2">
+                            <SplitSquareVertical className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span>Для ночной смены Kaspi делится на две части: до 00:00 и после 00:00. В итоге смены будет учтена общая сумма.</span>
+                          </div>
+                        </div>
+                      ) : null}
+                      {isArena && !kaspiDailySplitEnabled && form.shift === 'night' && isLastDayOfMonth(form.date) ? (
+                        <div className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-primary">
+                          <div className="flex items-start gap-2">
+                            <SplitSquareVertical className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span>Последний день месяца: перед отправкой программа предложит разбить ночную смену на две даты.</span>
+                          </div>
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* ИТОГ */}
-          <Card className={itog < 0 ? 'border-destructive/40' : ''}>
-            <CardContent className="pt-5 space-y-2">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">ИТОГ = ФАКТ − {wiponLabel}</p>
-                <p className={`text-3xl font-bold tabular-nums ${itog < 0 ? 'text-destructive-foreground' : ''}`}>
-                  {itog > 0 ? '+' : ''}{formatMoney(itog)}
-                </p>
               </div>
-              {vWipon > 0 && (
-                <SummaryRow label={`− ${wiponLabel}`} value={-vWipon} highlight />
-              )}
-            </CardContent>
-          </Card>
+            </form>
+
+            <aside className="space-y-4 xl:sticky xl:top-5 xl:h-fit">
+              <Card className={`${itog < 0 ? 'border-destructive/30' : 'border-emerald-500/20'} overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]`}>
+                <CardContent className="space-y-4 p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итог смены</p>
+                      <p className={`mt-2 text-4xl font-semibold tabular-nums ${itog < 0 ? 'text-destructive-foreground' : 'text-foreground'}`}>
+                        {itog > 0 ? '+' : ''}{formatMoney(itog)}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">ФАКТ минус {wiponLabel}</p>
+                    </div>
+                    <Badge variant={itog < 0 ? 'destructive' : 'secondary'}>
+                      {itog < 0 ? 'Недостача' : 'Готово'}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">ФАКТ</div>
+                      <div className="mt-1 text-2xl font-semibold tabular-nums">{formatMoney(fact)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{wiponLabel}</div>
+                      <div className="mt-1 text-2xl font-semibold tabular-nums">{formatMoney(vWipon)}</div>
+                    </div>
+                  </div>
+
+                  <Button form="shift-report-form" id="shift-submit-btn" type="submit" className="w-full gap-2" disabled={submitting} size="lg">
+                    {submitting ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    {submitting ? 'Отправляю...' : 'Отправить отчёт'}
+                    {!submitting ? <span className="ml-auto text-xs opacity-60">Ctrl+↵</span> : null}
+                  </Button>
+
+                  {error ? (
+                    <p className="flex items-center gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive-foreground">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      {error}
+                    </p>
+                  ) : null}
+                  {result === 'success' ? (
+                    <p className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      Отчёт отправлен успешно
+                    </p>
+                  ) : null}
+                  {result === 'queued' ? (
+                    <p className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+                      <Clock className="h-3.5 w-3.5 shrink-0" />
+                      Нет сети — отчёт сохранён в локальную очередь
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              <Card className="border-white/10 bg-card/90">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Формула расчёта</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2.5">
+                  <SummaryRow label="Наличные" value={vCash} />
+                  <SummaryRow label="Мелочь" value={vCoins} />
+                  <SummaryRow label={kaspiLabel} value={vKaspiTotal} />
+                  {isNightKaspiSplit ? <SummaryRow label="до 00:00" value={vKaspiBeforeMidnight} dim /> : null}
+                  {isNightKaspiSplit ? <SummaryRow label="после 00:00" value={vKaspi} dim /> : null}
+                  {isArena ? <SummaryRow label="Kaspi Online" value={vKaspiOnline} dim /> : null}
+                  <SummaryRow label="Тех. компенс." value={vDebts} />
+                  <SummaryRow label="− Старт кассы" value={-vStart} highlight={vStart > 0} />
+                  <div className="my-2 border-t border-border/70" />
+                  <SummaryRow label="ФАКТ" value={fact} />
+                  <SummaryRow label={`− ${wiponLabel}`} value={-vWipon} highlight={vWipon > 0} />
+                  <div className="my-2 border-t border-border/70" />
+                  <SummaryRow label="ИТОГ" value={itog} emphasize />
+                </CardContent>
+              </Card>
+
+              <Card className="border-white/10 bg-card/90">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Быстрые подсказки</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm text-muted-foreground">
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">После отправки</div>
+                    <div className="mt-1 text-sm text-foreground/90">Если сеть есть, отчёт сразу уйдёт на сервер. Если сети нет, он автоматически попадёт в очередь.</div>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Горячая клавиша</div>
+                    <div className="mt-1 text-sm text-foreground/90">Используй <span className="font-medium">Ctrl+Enter</span>, чтобы отправить смену без мышки.</div>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Режим точки</div>
+                    <div className="mt-1 text-sm text-foreground/90">
+                      {isArena
+                        ? 'Arena: учитываем Kaspi Online и сценарий разбивки ночной смены на две даты.'
+                        : 'Стандартный режим: быстрый отчёт без разбивки по датам.'}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </aside>
+          </div>
         </div>
       </div>
 
-      {/* ─── Диалог подтверждения ─── */}
-      {confirmDialog && (
+      {confirmDialog ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <Card className={`w-full max-w-sm mx-4 ${itog < 0 ? 'border-destructive/40' : ''}`}>
+          <Card className={`mx-4 w-full max-w-sm ${itog < 0 ? 'border-destructive/40' : ''}`}>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                {itog < 0
-                  ? <><AlertTriangle className="h-4 w-4 text-destructive-foreground" /> Недостача — подтвердить?</>
-                  : <><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Подтвердить отчёт</>
-                }
+              <CardTitle className="flex items-center gap-2 text-base">
+                {itog < 0 ? (
+                  <>
+                    <AlertTriangle className="h-4 w-4 text-destructive-foreground" />
+                    Недостача — подтвердить?
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    Подтвердить отчёт
+                  </>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-1.5 text-sm">
-                <p className="text-xs text-muted-foreground mb-2">
+              <div className="space-y-1.5 rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
+                <p className="mb-2 text-xs text-muted-foreground">
                   👤 {session.operator.short_name || session.operator.name || session.operator.username} · {form.date} · {form.shift === 'day' ? '☀️ Дневная' : '🌙 Ночная'}
                 </p>
-                {vCash > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Наличные</span><span>{formatMoney(vCash)} ₸</span></div>}
-                {vCoins > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Мелочь</span><span>{formatMoney(vCoins)} ₸</span></div>}
-                {vKaspi > 0 && <div className="flex justify-between"><span className="text-muted-foreground">{kaspiLabel}</span><span>{formatMoney(vKaspi)} ₸</span></div>}
-                {isArena && vKaspiOnline > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Kaspi Online</span><span>{formatMoney(vKaspiOnline)} ₸</span></div>}
-                {vDebts > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Тех</span><span>{formatMoney(vDebts)} ₸</span></div>}
-                {vStart > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Старт</span><span>−{formatMoney(vStart)} ₸</span></div>}
-                {vWipon > 0 && <div className="flex justify-between"><span className="text-muted-foreground">{wiponLabel}</span><span>−{formatMoney(vWipon)} ₸</span></div>}
-                <div className="border-t border-white/10 pt-2 flex justify-between font-semibold">
+                {vCash > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Наличные</span><span>{formatMoney(vCash)} ₸</span></div> : null}
+                {vCoins > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Мелочь</span><span>{formatMoney(vCoins)} ₸</span></div> : null}
+                {vKaspiTotal > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">{kaspiLabel}</span><span>{formatMoney(vKaspiTotal)} ₸</span></div> : null}
+                {isNightKaspiSplit && vKaspiBeforeMidnight > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">до 00:00</span><span>{formatMoney(vKaspiBeforeMidnight)} ₸</span></div> : null}
+                {isNightKaspiSplit && vKaspi > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">после 00:00</span><span>{formatMoney(vKaspi)} ₸</span></div> : null}
+                {isArena && vKaspiOnline > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Kaspi Online</span><span>{formatMoney(vKaspiOnline)} ₸</span></div> : null}
+                {vDebts > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Тех</span><span>{formatMoney(vDebts)} ₸</span></div> : null}
+                {vStart > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Старт</span><span>−{formatMoney(vStart)} ₸</span></div> : null}
+                {vWipon > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">{wiponLabel}</span><span>−{formatMoney(vWipon)} ₸</span></div> : null}
+                <div className="flex justify-between border-t border-white/10 pt-2 font-semibold">
                   <span>ИТОГ</span>
                   <span className={itog < 0 ? 'text-destructive-foreground' : 'text-emerald-400'}>
                     {itog > 0 ? '+' : ''}{formatMoney(itog)} ₸
@@ -526,56 +919,51 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
                 <Button variant="outline" className="flex-1" onClick={() => setConfirmDialog(false)}>
                   Исправить
                 </Button>
-                <Button
-                  className={`flex-1 ${itog < 0 ? 'bg-destructive hover:bg-destructive/90' : ''}`}
-                  onClick={handleConfirm}
-                >
+                <Button className={`flex-1 ${itog < 0 ? 'bg-destructive hover:bg-destructive/90' : ''}`} onClick={handleConfirm}>
                   Отправить
                 </Button>
               </div>
             </CardContent>
           </Card>
         </div>
-      )}
+      ) : null}
 
       <QueueViewer open={showQueue} onClose={() => setShowQueue(false)} />
 
-      {/* ─── Диалог разбивки дат (Arena, ночная, последний день месяца) ─── */}
-      {splitDialog && (
+      {splitDialog ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <Card className="w-full max-w-sm mx-4">
+          <Card className="mx-4 w-full max-w-sm">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <SplitSquareVertical className="h-4 w-4 text-primary" />
                 <CardTitle className="text-base">Разбивка по месяцу</CardTitle>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Ночная смена в последний день месяца.<br />
-                Укажите суммы <b>после 00:00</b> (следующий месяц).
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ночная смена в последний день месяца. Укажите суммы <b>после 00:00</b>, которые должны уйти на следующую дату.
               </p>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground pb-1">
+              <div className="grid grid-cols-2 gap-2 pb-1 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">{form.date}</span>
-                <span className="font-medium text-foreground text-right">{nextDayISO(form.date)}</span>
+                <span className="text-right font-medium text-foreground">{nextDayISO(form.date)}</span>
               </div>
 
               <MoneyInput
                 label="Нал после 00:00"
                 value={splitAfter.cash}
-                onChange={v => setSplitAfter(s => ({ ...s, cash: v }))}
+                onChange={(value) => setSplitAfter((current) => ({ ...current, cash: value }))}
                 labelWidth="w-36"
               />
               <MoneyInput
                 label="Kaspi POS после 00:00"
                 value={splitAfter.kaspi_pos}
-                onChange={v => setSplitAfter(s => ({ ...s, kaspi_pos: v }))}
+                onChange={(value) => setSplitAfter((current) => ({ ...current, kaspi_pos: value }))}
                 labelWidth="w-36"
               />
               <MoneyInput
                 label="Kaspi Online после 00:00"
                 value={splitAfter.kaspi_online}
-                onChange={v => setSplitAfter(s => ({ ...s, kaspi_online: v }))}
+                onChange={(value) => setSplitAfter((current) => ({ ...current, kaspi_online: value }))}
                 labelWidth="w-36"
               />
 
@@ -590,15 +978,22 @@ export default function ShiftPage({ config, bootstrap, session, isOffline, onLog
             </CardContent>
           </Card>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
 
-function MoneyInput({ label, value, onChange, disabled, labelWidth = 'w-24', note }: {
+function MoneyInput({
+  label,
+  value,
+  onChange,
+  disabled,
+  labelWidth = 'w-24',
+  note,
+}: {
   label: string
   value: string
-  onChange: (v: string) => void
+  onChange: (value: string) => void
   disabled?: boolean
   labelWidth?: string
   note?: string
@@ -606,8 +1001,8 @@ function MoneyInput({ label, value, onChange, disabled, labelWidth = 'w-24', not
   return (
     <div className="flex items-center gap-3">
       <div className={`${labelWidth} shrink-0`}>
-        <Label className="text-xs text-muted-foreground leading-none">{label}</Label>
-        {note && <span className="text-[10px] text-muted-foreground/60 block">{note}</span>}
+        <Label className="block text-xs leading-none text-muted-foreground">{label}</Label>
+        {note ? <span className="mt-1 block text-[10px] text-muted-foreground/60">{note}</span> : null}
       </div>
       <div className="relative flex-1">
         <Input
@@ -615,7 +1010,7 @@ function MoneyInput({ label, value, onChange, disabled, labelWidth = 'w-24', not
           min="0"
           step="1"
           value={value}
-          onChange={e => onChange(e.target.value)}
+          onChange={(event) => onChange(event.target.value)}
           placeholder="0"
           disabled={disabled}
           className="pr-6 text-right tabular-nums"
@@ -626,15 +1021,39 @@ function MoneyInput({ label, value, onChange, disabled, labelWidth = 'w-24', not
   )
 }
 
-function SummaryRow({ label, value, highlight, dim }: { label: string; value: number; highlight?: boolean; dim?: boolean }) {
+function SummaryRow({
+  label,
+  value,
+  highlight,
+  dim,
+  emphasize,
+}: {
+  label: string
+  value: number
+  highlight?: boolean
+  dim?: boolean
+  emphasize?: boolean
+}) {
+  const textClass = emphasize
+    ? 'text-foreground'
+    : highlight
+      ? 'text-destructive-foreground/80'
+      : dim
+        ? 'text-muted-foreground/50'
+        : 'text-muted-foreground'
+
+  const valueClass = emphasize
+    ? 'font-semibold text-foreground'
+    : highlight
+      ? 'text-destructive-foreground'
+      : dim
+        ? 'text-muted-foreground/50'
+        : 'text-foreground'
+
   return (
     <div className="flex justify-between text-sm">
-      <span className={highlight ? 'text-destructive-foreground/70' : dim ? 'text-muted-foreground/50' : 'text-muted-foreground'}>
-        {label}
-      </span>
-      <span className={`tabular-nums font-medium ${highlight ? 'text-destructive-foreground' : dim ? 'text-muted-foreground/50' : ''}`}>
-        {formatMoney(value)}
-      </span>
+      <span className={textClass}>{label}</span>
+      <span className={`tabular-nums ${valueClass}`}>{formatMoney(value)}</span>
     </div>
   )
 }

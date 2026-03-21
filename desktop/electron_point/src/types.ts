@@ -1,16 +1,17 @@
-// ─── Config ───────────────────────────────────────────────────────────────────
+// Config
 
 export interface AppConfig {
-  apiUrl: string       // https://ordaops.kz
-  deviceToken: string  // x-point-device-token
+  apiUrl: string
+  deviceToken: string
 }
 
-// ─── Bootstrap ────────────────────────────────────────────────────────────────
+// Bootstrap
 
 export interface FeatureFlags {
   shift_report: boolean
   income_report: boolean
   debt_report: boolean
+  kaspi_daily_split: boolean
 }
 
 export interface BootstrapOperator {
@@ -39,7 +40,7 @@ export interface BootstrapData {
   operators: BootstrapOperator[]
 }
 
-// ─── Sessions ─────────────────────────────────────────────────────────────────
+// Sessions
 
 export interface OperatorInfo {
   auth_id: string
@@ -63,13 +64,13 @@ export interface OperatorSession {
 export interface AdminSession {
   type: 'admin'
   email: string
-  password: string  // хранится только в памяти, нужен для admin-devices API
+  password: string
   bootstrap?: BootstrapData
 }
 
 export type Session = OperatorSession | AdminSession
 
-// ─── App State Machine ────────────────────────────────────────────────────────
+// App State Machine
 
 export interface OperatorBasic {
   id: string
@@ -94,7 +95,7 @@ export type AppView =
   | { screen: 'scanner'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'admin'; session: AdminSession; bootstrap?: BootstrapData }
 
-// ─── Products ─────────────────────────────────────────────────────────────────
+// Products
 
 export interface Product {
   id: string
@@ -107,7 +108,7 @@ export interface Product {
   updated_at: string
 }
 
-// ─── Debts ────────────────────────────────────────────────────────────────────
+// Debts
 
 export interface DebtItem {
   id: string
@@ -125,7 +126,7 @@ export interface DebtItem {
   status: string
 }
 
-// ─── Queue ────────────────────────────────────────────────────────────────────
+// Queue
 
 export interface QueueItem {
   id: number
@@ -138,23 +139,39 @@ export interface QueueItem {
   created_at: string
 }
 
-// ─── Shift report form ────────────────────────────────────────────────────────
+// Shift report form
 
 export interface ShiftForm {
   date: string
   operator_id: string
   shift: 'day' | 'night'
-  cash: string         // Наличные
-  coins: string        // Мелочь
-  kaspi_pos: string    // Kaspi (терминал)
-  kaspi_online: string // Kaspi Online — только для Arena, не входит в ФАКТ
-  debts: string        // Тех (компенсации)
-  start: string        // Старт (касса с утра)
-  wipon: string        // Senet (Arena) / Wipon (Ramen)
+  cash: string
+  coins: string
+  kaspi_pos: string
+  kaspi_before_midnight: string
+  kaspi_online: string
+  debts: string
+  start: string
+  wipon: string
   comment: string
 }
 
-// ─── Reports ─────────────────────────────────────────────────────────────────
+export interface DailyKaspiReportBucket {
+  key: 'day' | 'night-before-midnight' | 'previous-night-after-midnight'
+  label: string
+  amount: number
+  rowCount: number
+}
+
+export interface DailyKaspiReport {
+  date: string
+  total: number
+  isPrecise: boolean
+  warning: string | null
+  parts: DailyKaspiReportBucket[]
+}
+
+// Reports
 
 export interface ShiftRecord {
   id: string

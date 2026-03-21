@@ -12,6 +12,7 @@ function normalizeFlags(input: Record<string, unknown> | null | undefined) {
     shift_report: input?.shift_report !== false,
     income_report: input?.income_report !== false,
     debt_report: input?.debt_report === true,
+    kaspi_daily_split: input?.kaspi_daily_split === true,
   }
 }
 
@@ -84,6 +85,7 @@ export async function GET(request: Request) {
         supports_shift_report: featureFlags.shift_report,
         supports_income_report: featureFlags.income_report,
         supports_debt_report: featureFlags.debt_report,
+        supports_kaspi_daily_split: featureFlags.kaspi_daily_split,
       },
     })
   } catch (error: any) {

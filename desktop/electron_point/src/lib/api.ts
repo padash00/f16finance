@@ -7,6 +7,7 @@ import type {
   Product,
   DebtItem,
   ShiftForm,
+  DailyKaspiReport,
 } from '@/types'
 import { parseMoney } from '@/lib/utils'
 
@@ -88,7 +89,12 @@ export async function sendShiftReport(
 ): Promise<{ ok: boolean; data: { id: string } }> {
   const cash = parseMoney(form.cash)
   const coins = parseMoney(form.coins)
-  const kaspiPos = parseMoney(form.kaspi_pos)
+  const kaspiBeforeMidnight = parseMoney(form.kaspi_before_midnight)
+  const kaspiAfterMidnight = parseMoney(form.kaspi_pos)
+  const kaspiPos =
+    form.shift === 'night' && form.kaspi_before_midnight.trim().length > 0
+      ? kaspiBeforeMidnight + kaspiAfterMidnight
+      : kaspiAfterMidnight
   const kaspiOnline = parseMoney(form.kaspi_online)
   const debts = parseMoney(form.debts)
   const start = parseMoney(form.start)
@@ -104,6 +110,10 @@ export async function sendShiftReport(
       shift: form.shift,
       cash_amount: cash,
       kaspi_amount: kaspiPos,
+      kaspi_before_midnight:
+        form.shift === 'night' && form.kaspi_before_midnight.trim().length > 0
+          ? kaspiBeforeMidnight
+          : null,
       online_amount: kaspiOnline,
       card_amount: 0,
       comment: form.comment || null,
@@ -115,10 +125,22 @@ export async function sendShiftReport(
         start_cash: start,
         wipon,
         diff: itog,
-        split_mode: false,
+        split_mode: form.shift === 'night' && form.kaspi_before_midnight.trim().length > 0,
       },
     },
   })
+}
+
+export async function getPointDailyKaspiReport(
+  config: AppConfig,
+  date: string,
+): Promise<DailyKaspiReport> {
+  const data = await request<{ ok: boolean; data: DailyKaspiReport }>(
+    config,
+    'GET',
+    `/api/point/shift-report?date=${encodeURIComponent(date)}&view=daily-kaspi`,
+  )
+  return data.data
 }
 
 // ─── Products ─────────────────────────────────────────────────────────────────
@@ -264,6 +286,7 @@ export async function updateAdminDeviceShiftReportChat(
   password: string,
   deviceId: string,
   shiftReportChatId: string | null,
+  featureFlags?: { kaspi_daily_split?: boolean },
 ) {
   return request<{ ok: boolean; data: { device: unknown } }>(
     config,
@@ -272,9 +295,10 @@ export async function updateAdminDeviceShiftReportChat(
     {
       email,
       password,
-      action: 'updateShiftReportChatId',
+      action: 'updateDeviceSettings',
       deviceId,
       shift_report_chat_id: shiftReportChatId,
+      feature_flags: featureFlags,
     },
   )
 }
