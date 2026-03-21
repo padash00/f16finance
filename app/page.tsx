@@ -175,6 +175,62 @@ const workflowSteps = [
   },
 ]
 
+const implementationSteps = [
+  {
+    title: 'Разбираем текущий процесс',
+    text: 'Смотрим, как у вас сейчас устроены смены, точки, Telegram-отчеты, зарплата и где именно начинается ручной хаос.',
+  },
+  {
+    title: 'Настраиваем контуры под ваш бизнес',
+    text: 'Подключаем роли, точки, программы, зарплатную логику, каналы Telegram и те сценарии, которые реально нужны в работе.',
+  },
+  {
+    title: 'Запускаем точку и команду',
+    text: 'Точка начинает работать в программе, руководитель получает отчеты и финансы, а команда переходит с таблиц на единый рабочий контур.',
+  },
+  {
+    title: 'Доводим до стабильного режима',
+    text: 'После запуска подкручиваем детали: задачи, KPI, уведомления, weekly-выплаты, суточный Kaspi и управленческую картину.',
+  },
+]
+
+const comparisonBefore = [
+  'Смены закрываются в одном месте, отчеты пересылаются вручную в другом.',
+  'Kaspi и выручка на стыке суток начинают спорить с выпиской и ОПиУ.',
+  'Зарплата, долги и авансы живут в отдельных таблицах и сообщениях.',
+  'Telegram используется как чат, но не как часть рабочего процесса.',
+]
+
+const comparisonAfter = [
+  'Точка, Telegram, зарплата и управленка работают на одних и тех же данных.',
+  'Ночные смены и суточный Kaspi собираются по календарным суткам, а не “примерно”.',
+  'Долги, выплаты, weekly-зарплата и задачи видны в одном месте.',
+  'Руководитель быстрее понимает, что происходит по точкам и где проседают процессы.',
+]
+
+const faqItems = [
+  {
+    question: 'Это готовый шаблон или можно подстроить под мой процесс?',
+    answer:
+      'Система уже собрана под реальные процессы, но сильная часть как раз в том, что ее можно адаптировать под ваши точки, роли, Telegram-сценарии, зарплатную логику и формат смен.',
+  },
+  {
+    question: 'Подходит ли это только для клуба?',
+    answer:
+      'Нет. Основа продукта хорошо подходит для бизнеса, где есть точки, смены, сотрудники, касса, Telegram и потребность видеть управленку на живых данных.',
+  },
+  {
+    question: 'Чем это лучше таблиц и чатов?',
+    answer:
+      'Таблицы обычно не держат дисциплину процессов. Здесь точка, оператор, зарплата, долги, Telegram и управленка связаны между собой, поэтому меньше ручных сверок и потерянных данных.',
+  },
+  {
+    question: 'Нужно ли ставить отдельную программу?',
+    answer:
+      'Для точки уже есть собственная desktop-программа. Это плюс: сотруднику не нужно разбираться в большом кабинете, у него есть быстрый рабочий экран под смену.',
+  },
+]
+
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -585,6 +641,81 @@ export default function MarketingHomePage() {
             ))}
           </div>
         </Card>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
+        <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+          <Card className="border-white/10 bg-black/20 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
+              <Workflow className="h-3.5 w-3.5" />
+              Как внедряем
+            </div>
+            <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em]">Не просто продаем доступ, а собираем рабочий контур</h2>
+            <p className="mt-4 text-base leading-7 text-slate-300">
+              Для такого продукта важен не только интерфейс. Важно, как он встраивается в точку, команду, Telegram и финансовую логику бизнеса.
+            </p>
+          </Card>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {implementationSteps.map((step, index) => (
+              <Card key={step.title} className="border-white/10 bg-white/5 p-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Этап {index + 1}</div>
+                <h3 className="mt-3 text-xl font-semibold">{step.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-300">{step.text}</p>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Card className="border-red-500/15 bg-red-500/5 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-red-200">Без единой системы</div>
+            <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em]">Процессы расползаются по таблицам и чатам</h2>
+            <div className="mt-6 grid gap-3">
+              {comparisonBefore.map((item) => (
+                <div key={item} className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm leading-6 text-slate-300">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="border-emerald-500/15 bg-emerald-500/5 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-200">С Orda Control</div>
+            <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em]">Операционка и цифры собираются в один ритм</h2>
+            <div className="mt-6 grid gap-3">
+              {comparisonAfter.map((item) => (
+                <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-300" />
+                  <div className="text-sm leading-6 text-slate-200">{item}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
+        <div className="max-w-3xl">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Частые вопросы</div>
+          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
+            Возражения, которые обычно появляются до заявки
+          </h2>
+          <p className="mt-4 text-base leading-7 text-slate-300">
+            Эти вопросы лучше закрыть прямо на лендинге, чтобы человеку не приходилось догадываться, подойдет ли ему система и как она внедряется.
+          </p>
+        </div>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-2">
+          {faqItems.map((item) => (
+            <Card key={item.question} className="border-white/10 bg-white/5 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
+              <h3 className="text-xl font-semibold">{item.question}</h3>
+              <p className="mt-4 text-sm leading-7 text-slate-300">{item.answer}</p>
+            </Card>
+          ))}
+        </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
