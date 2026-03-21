@@ -15,10 +15,21 @@ export type LeadRequestPayload = {
 let cachedTransporter: nodemailer.Transporter | null = null
 
 function getMailerConfig() {
-  const host = process.env.SMTP_HOST
+  const user =
+    process.env.SMTP_USER ||
+    process.env.GMAIL_USER ||
+    process.env.EMAIL_USER ||
+    process.env.MAIL_USER ||
+    ''
+  const pass =
+    process.env.SMTP_PASS ||
+    process.env.GMAIL_APP_PASSWORD ||
+    process.env.GMAIL_PASS ||
+    process.env.EMAIL_PASS ||
+    process.env.MAIL_PASS ||
+    ''
+  const host = process.env.SMTP_HOST || process.env.MAIL_HOST || (user && pass ? 'smtp.gmail.com' : '')
   const port = Number(process.env.SMTP_PORT || 465)
-  const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
   const from = process.env.SMTP_FROM || user
   const to = process.env.CONTACT_LEAD_TO || 'padash00@gmail.com'
   const secure = (process.env.SMTP_SECURE || 'true').toLowerCase() !== 'false'

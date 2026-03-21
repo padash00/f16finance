@@ -63,6 +63,7 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [`${SITE_URL}/og-image`],
   },
+  manifest: '/manifest.webmanifest',
   icons: {
     icon: [{ url: '/icon' }, { url: '/icon.svg', type: 'image/svg+xml' }],
     apple: '/apple-icon',
