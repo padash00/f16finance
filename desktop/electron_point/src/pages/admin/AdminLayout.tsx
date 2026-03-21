@@ -54,9 +54,9 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
             <p className="text-sm font-semibold leading-none">Глобальный администратор</p>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>{session.email}</span>
-              {bootstrap?.company.name ? (
-                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-foreground/80">
-                  Устройство: {bootstrap.company.name}
+              {bootstrap?.device?.name ? (
+                <span className="rounded-full border border-border px-2 py-0.5 text-[11px]">
+                  Текущий терминал подключён
                 </span>
               ) : null}
             </div>

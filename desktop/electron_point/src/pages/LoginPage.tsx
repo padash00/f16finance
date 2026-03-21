@@ -277,14 +277,18 @@ export default function LoginPage({
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{appVersion ? `Версия ${appVersion}` : 'Orda Point'}</span>
-            <button
-              type="button"
-              onClick={openSetupGate}
-              className="no-drag inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-            >
-              <Settings className="h-3.5 w-3.5" />
-              Настроить устройство
-            </button>
+            {mode === 'admin' ? (
+              <button
+                type="button"
+                onClick={openSetupGate}
+                className="no-drag inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+              >
+                <Settings className="h-3.5 w-3.5" />
+                Настроить устройство
+              </button>
+            ) : (
+              <span />
+            )}
           </div>
         </div>
       </div>
