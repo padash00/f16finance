@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { buildDailyKaspiSeriesFromRows, sumDailyKaspiReports, type DailyKaspiReport } from '@/lib/server/services/daily-kaspi'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 type ProfitabilityPayload = {
@@ -33,6 +34,14 @@ type MutationBody = {
   payload: ProfitabilityPayload
 }
 
+type ProfitabilityKaspiSeriesItem = {
+  date: string
+  total: number
+  isPrecise: boolean
+  warning: string | null
+  parts: DailyKaspiReport['parts']
+}
+
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
@@ -45,6 +54,26 @@ function normalizeMonth(value: string | null | undefined) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return `${trimmed.slice(0, 7)}-01`
 
   return null
+}
+
+function monthStart(month: string) {
+  return `${month.slice(0, 7)}-01`
+}
+
+function monthEnd(month: string) {
+  const [year, monthNumber] = month.slice(0, 7).split('-').map(Number)
+  const last = new Date(year, monthNumber, 0)
+  return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`
+}
+
+function prevDayISO(dateISO: string) {
+  const next = new Date(`${dateISO}T00:00:00`)
+  next.setDate(next.getDate() - 1)
+  return next.toISOString().slice(0, 10)
+}
+
+function monthKey(dateISO: string) {
+  return dateISO.slice(0, 7)
 }
 
 function normalizeAmount(value: number | null | undefined) {
@@ -95,6 +124,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const from = normalizeMonth(url.searchParams.get('from'))
     const to = normalizeMonth(url.searchParams.get('to'))
+    const includeKaspiDaily = url.searchParams.get('includeKaspiDaily') === '1'
 
     const supabase = createAdminSupabaseClient()
     let query = supabase.from('monthly_profitability_inputs').select('*').order('month', { ascending: true })
@@ -105,7 +135,85 @@ export async function GET(req: Request) {
     const { data, error } = await query
     if (error) throw error
 
-    return json({ items: data || [] })
+    if (!includeKaspiDaily || !from || !to) {
+      return json({ items: data || [] })
+    }
+
+    const dateFrom = monthStart(from)
+    const dateTo = monthEnd(to)
+    const previousDate = prevDayISO(dateFrom)
+
+    const [{ data: deviceRows, error: devicesError }, { data: incomeRows, error: incomesError }] = await Promise.all([
+      supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true),
+      supabase
+        .from('incomes')
+        .select('company_id,date,shift,kaspi_amount,kaspi_before_midnight')
+        .gte('date', previousDate)
+        .lte('date', dateTo),
+    ])
+
+    if (devicesError) throw devicesError
+    if (incomesError) throw incomesError
+
+    const splitCompanyIds = new Set<string>(
+      ((deviceRows || []) as any[])
+        .filter((row) => row?.company_id && row?.feature_flags?.kaspi_daily_split === true)
+        .map((row) => String(row.company_id)),
+    )
+
+    const splitRows = ((incomeRows || []) as any[])
+      .filter((row) => splitCompanyIds.has(String(row.company_id || '')))
+      .map((row) => ({
+        id: `${row.company_id}:${row.date}:${row.shift}`,
+        date: String(row.date),
+        shift: (row.shift === 'night' ? 'night' : 'day') as 'day' | 'night',
+        kaspi_amount: Number(row.kaspi_amount || 0),
+        kaspi_before_midnight: row.kaspi_before_midnight == null ? null : Number(row.kaspi_before_midnight || 0),
+      }))
+
+    const splitDaily = buildDailyKaspiSeriesFromRows({
+      dateFrom,
+      dateTo,
+      rows: splitRows,
+    })
+
+    const rawByDate = new Map<string, number>()
+    for (const row of ((incomeRows || []) as any[])) {
+      const companyId = String(row.company_id || '')
+      if (splitCompanyIds.has(companyId)) continue
+      const date = String(row.date || '')
+      rawByDate.set(date, Number(rawByDate.get(date) || 0) + Number(row.kaspi_amount || 0))
+    }
+
+    const mergedDaily: ProfitabilityKaspiSeriesItem[] = splitDaily.map((item) => ({
+      ...item,
+      total: item.total + Number(rawByDate.get(item.date) || 0),
+      parts: item.parts,
+      warning: item.warning,
+      isPrecise: item.isPrecise,
+    }))
+
+    const monthlyKaspi = Object.fromEntries(
+      Object.entries(
+        mergedDaily.reduce<Record<string, number>>((acc, item) => {
+          const key = monthKey(item.date)
+          acc[key] = Number(acc[key] || 0) + Number(item.total || 0)
+          return acc
+        }, {}),
+      ).map(([key, value]) => [key, Math.round((value + Number.EPSILON) * 100) / 100]),
+    )
+
+    return json({
+      items: data || [],
+      kaspiDaily: {
+        from: dateFrom,
+        to: dateTo,
+        splitCompanyIds: Array.from(splitCompanyIds),
+        days: mergedDaily,
+        total: sumDailyKaspiReports(mergedDaily),
+        monthly: monthlyKaspi,
+      },
+    })
   } catch (error: any) {
     console.error('Admin profitability GET error', error)
     await writeSystemErrorLogSafe({
