@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { formatMoney, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
@@ -286,15 +287,12 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
             </Badge>
           )}
 
-          <Button variant="outline" size="sm" onClick={onSwitchToShift}>
-            <ReceiptText className="h-4 w-4 mr-1" /> Смена
-          </Button>
-
-          {onOpenCabinet ? (
-            <Button variant="outline" size="sm" onClick={onOpenCabinet}>
-              Мое
-            </Button>
-          ) : null}
+          <WorkModeSwitch
+            active="scanner"
+            showScanner
+            onShift={onSwitchToShift}
+            onCabinet={onOpenCabinet}
+          />
 
           <Button variant="ghost" size="sm" onClick={doSync} disabled={syncing} className="text-muted-foreground">
             <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />

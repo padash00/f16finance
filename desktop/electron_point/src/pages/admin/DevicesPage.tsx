@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Monitor, CheckCircle2, XCircle, RefreshCw, ExternalLink, Save, MessageSquare } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -23,6 +24,7 @@ interface Device {
   shift_report_chat_id: string | null
   feature_flags: {
     kaspi_daily_split: boolean
+    debt_report: boolean
   }
   last_seen_at: string | null
 }
@@ -35,6 +37,7 @@ export default function DevicesPage({ config, session }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [chatIds, setChatIds] = useState<Record<string, string>>({})
   const [kaspiSplitFlags, setKaspiSplitFlags] = useState<Record<string, boolean>>({})
+  const [debtScannerFlags, setDebtScannerFlags] = useState<Record<string, boolean>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -52,12 +55,15 @@ export default function DevicesPage({ config, session }: Props) {
         shift_report_chat_id: d.shift_report_chat_id || null,
         feature_flags: {
           kaspi_daily_split: d.feature_flags?.kaspi_daily_split === true,
+          debt_report: d.feature_flags?.debt_report === true,
         },
         last_seen_at: d.last_seen_at || null,
       }))
+
       setDevices(nextDevices)
       setChatIds(Object.fromEntries(nextDevices.map((device: Device) => [device.id, device.shift_report_chat_id || ''])))
       setKaspiSplitFlags(Object.fromEntries(nextDevices.map((device: Device) => [device.id, device.feature_flags.kaspi_daily_split === true])))
+      setDebtScannerFlags(Object.fromEntries(nextDevices.map((device: Device) => [device.id, device.feature_flags.debt_report === true])))
     } catch {
       setDevices([])
       setError('Не удалось загрузить устройства')
@@ -96,6 +102,7 @@ export default function DevicesPage({ config, session }: Props) {
         chatIds[deviceId]?.trim() || null,
         {
           kaspi_daily_split: kaspiSplitFlags[deviceId] === true,
+          debt_report: debtScannerFlags[deviceId] === true,
         },
       )
       setMessage('Настройки устройства сохранены')
@@ -117,7 +124,7 @@ export default function DevicesPage({ config, session }: Props) {
         <div>
           <h2 className="text-sm font-semibold">Устройства</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Здесь можно задать Telegram chat ID для сменных отчётов и включить суточную сверку Kaspi для ночной смены.
+            Здесь можно задать Telegram chat ID, включить ночную сверку Kaspi и отдельно выключить сканер долгов по точке.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -183,22 +190,22 @@ export default function DevicesPage({ config, session }: Props) {
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Токен</span>
-                    <span className="font-mono text-foreground">
-                      {device.device_token.slice(0, 6)}••••••••
-                    </span>
+                    <span className="font-mono text-foreground">{device.device_token.slice(0, 6)}••••••••</span>
                   </div>
                 </div>
 
                 <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                     <MessageSquare className="h-3.5 w-3.5" />
-                    Telegram и суточный Kaspi
+                    Telegram и режимы точки
                   </div>
+
                   <Input
                     value={chatIds[device.id] || ''}
                     onChange={(event) => setChatIds((prev) => ({ ...prev, [device.id]: event.target.value }))}
                     placeholder="-1001234567890"
                   />
+
                   <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground">
                     <input
                       type="checkbox"
@@ -216,12 +223,32 @@ export default function DevicesPage({ config, session }: Props) {
                       В форме смены появятся поля "до 00:00" и "после 00:00".
                     </span>
                   </label>
+
+                  <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={debtScannerFlags[device.id] === true}
+                      onChange={(event) =>
+                        setDebtScannerFlags((prev) => ({
+                          ...prev,
+                          [device.id]: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span>
+                      Включить сканер долгов для этой точки.
+                      Он работает только для режимов <span className="font-medium text-foreground">cash-desk</span>, <span className="font-medium text-foreground">universal</span> и <span className="font-medium text-foreground">debts</span>.
+                    </span>
+                  </label>
+
                   <p className="text-[11px] text-muted-foreground">
-                    Chat ID нужен для канала или группы со сменными отчётами. Отдельно можно включить ночную разбивку Kaspi именно для этой точки.
+                    Chat ID нужен для канала или группы со сменными отчётами. Если точка не магазин, просто выключите сканер долгов здесь.
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    Сканер долгов в программе открывается только для режимов <span className="font-medium text-foreground">cash-desk</span>, <span className="font-medium text-foreground">universal</span> и <span className="font-medium text-foreground">debts</span>. Для режима <span className="font-medium text-foreground">shift-report</span> главной страницей всегда остаётся калькулятор смены.
+                    Для режима <span className="font-medium text-foreground">shift-report</span> главной страницей всё равно остаётся калькулятор смены, даже если сканер случайно включён.
                   </p>
+
                   <Button
                     size="sm"
                     className="w-full gap-2"

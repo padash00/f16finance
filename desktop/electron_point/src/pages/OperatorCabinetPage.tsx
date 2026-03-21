@@ -5,10 +5,10 @@ import {
   CreditCard,
   LogOut,
   RefreshCw,
-  ReceiptText,
   UserCircle2,
 } from 'lucide-react'
 
+import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,7 +38,7 @@ type ShiftRow = {
   total: number
 }
 
-const TABS: { id: CabinetTab; label: string; icon: React.ElementType }[] = [
+const TABS: { id: CabinetTab; label: string; icon: typeof CalendarDays }[] = [
   { id: 'shifts', label: 'Мои смены', icon: CalendarDays },
   { id: 'tasks', label: 'Мои задачи', icon: CheckSquare },
   { id: 'debts', label: 'Мои долги', icon: CreditCard },
@@ -47,22 +47,42 @@ const TABS: { id: CabinetTab; label: string; icon: React.ElementType }[] = [
 
 function taskStatusLabel(status: string) {
   switch (status) {
-    case 'done': return 'Готово'
-    case 'in_progress': return 'В работе'
-    case 'review': return 'На проверке'
-    case 'todo': return 'К выполнению'
-    case 'archived': return 'Архив'
-    default: return 'Бэклог'
+    case 'done':
+      return 'Готово'
+    case 'in_progress':
+      return 'В работе'
+    case 'review':
+      return 'На проверке'
+    case 'todo':
+      return 'К выполнению'
+    case 'archived':
+      return 'Архив'
+    default:
+      return 'Бэклог'
   }
 }
 
 function taskPriorityLabel(priority: string) {
   switch (priority) {
-    case 'critical': return 'Критично'
-    case 'high': return 'Высокий'
-    case 'medium': return 'Средний'
-    default: return 'Низкий'
+    case 'critical':
+      return 'Критично'
+    case 'high':
+      return 'Высокий'
+    case 'medium':
+      return 'Средний'
+    default:
+      return 'Низкий'
   }
+}
+
+function SectionError({ message }: { message?: string }) {
+  if (!message) return null
+
+  return (
+    <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+      {message}
+    </div>
+  )
 }
 
 export default function OperatorCabinetPage({
@@ -76,6 +96,7 @@ export default function OperatorCabinetPage({
   const [activeTab, setActiveTab] = useState<CabinetTab>('shifts')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [sectionErrors, setSectionErrors] = useState<Partial<Record<'shifts' | 'debts' | 'tasks', string>>>({})
   const [shifts, setShifts] = useState<ShiftRow[]>([])
   const [debts, setDebts] = useState<DebtItem[]>([])
   const [tasks, setTasks] = useState<OperatorTask[]>([])
@@ -89,14 +110,18 @@ export default function OperatorCabinetPage({
   async function load() {
     setLoading(true)
     setError(null)
-    try {
-      const [reports, debtItems, taskPayload] = await Promise.all([
-        api.getReports(config),
-        api.getDebts(config),
-        api.getPointOperatorTasks(config, session),
-      ])
+    setSectionErrors({})
 
-      const ownShifts = ((reports.data.shifts as any[]) || [])
+    const [reportsResult, debtsResult, tasksResult] = await Promise.allSettled([
+      api.getReports(config),
+      api.getDebts(config),
+      api.getPointOperatorTasks(config, session),
+    ])
+
+    const nextErrors: Partial<Record<'shifts' | 'debts' | 'tasks', string>> = {}
+
+    if (reportsResult.status === 'fulfilled') {
+      const ownShifts = ((reportsResult.value.data.shifts as any[]) || [])
         .filter((row) => String(row.operator_id || '') === session.operator.operator_id)
         .map((row) => {
           const cash = Number(row.cash_amount || row.cash || 0)
@@ -114,19 +139,32 @@ export default function OperatorCabinetPage({
           }
         })
 
-      const ownDebts = debtItems.filter((item) => String(item.operator_id || '') === session.operator.operator_id)
-
       setShifts(ownShifts)
-      setDebts(ownDebts)
-      setTasks(taskPayload.tasks || [])
-    } catch (err: any) {
-      setError(err?.message || 'Не удалось загрузить личный кабинет')
+    } else {
       setShifts([])
-      setDebts([])
-      setTasks([])
-    } finally {
-      setLoading(false)
+      nextErrors.shifts = reportsResult.reason instanceof Error ? reportsResult.reason.message : 'Не удалось загрузить смены'
     }
+
+    if (debtsResult.status === 'fulfilled') {
+      const ownDebts = debtsResult.value.filter((item) => String(item.operator_id || '') === session.operator.operator_id)
+      setDebts(ownDebts)
+    } else {
+      setDebts([])
+      nextErrors.debts = debtsResult.reason instanceof Error ? debtsResult.reason.message : 'Не удалось загрузить долги'
+    }
+
+    if (tasksResult.status === 'fulfilled') {
+      setTasks(tasksResult.value.tasks || [])
+    } else {
+      setTasks([])
+      nextErrors.tasks = tasksResult.reason instanceof Error ? tasksResult.reason.message : 'Не удалось загрузить задачи'
+    }
+
+    setSectionErrors(nextErrors)
+    if (Object.keys(nextErrors).length === 3) {
+      setError('Не удалось загрузить личный кабинет. Проверьте сеть и попробуйте обновить.')
+    }
+    setLoading(false)
   }
 
   useEffect(() => {
@@ -163,10 +201,12 @@ export default function OperatorCabinetPage({
         </div>
 
         <div className="flex items-center gap-2 no-drag">
-          <Button variant="outline" size="sm" onClick={onBackToWork}>
-            <ReceiptText className="mr-1 h-4 w-4" />
-            {returnTo === 'scanner' ? 'Сканер' : 'Смена'}
-          </Button>
+          <WorkModeSwitch
+            active="cabinet"
+            showScanner={returnTo === 'scanner'}
+            onShift={returnTo === 'shift' ? onBackToWork : undefined}
+            onScanner={returnTo === 'scanner' ? onBackToWork : undefined}
+          />
           <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="text-muted-foreground">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
@@ -218,7 +258,7 @@ export default function OperatorCabinetPage({
                 <CardContent className="p-4">
                   <div className="text-xs text-muted-foreground">Активный долг</div>
                   <div className="mt-2 text-2xl font-semibold">{formatMoney(totalDebt)}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">Позиций: {filteredDebts.length}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Позиции: {filteredDebts.length}</div>
                 </CardContent>
               </Card>
             </div>
@@ -254,6 +294,7 @@ export default function OperatorCabinetPage({
                   <CardTitle className="text-base">Мои смены</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  <SectionError message={sectionErrors.shifts} />
                   {filteredShifts.length === 0 ? (
                     <div className="text-sm text-muted-foreground">За выбранный период смен нет.</div>
                   ) : (
@@ -282,6 +323,7 @@ export default function OperatorCabinetPage({
                   <CardTitle className="text-base">Мои задачи</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  <SectionError message={sectionErrors.tasks} />
                   {tasks.length === 0 ? (
                     <div className="text-sm text-muted-foreground">Сейчас задач нет.</div>
                   ) : (
@@ -316,6 +358,7 @@ export default function OperatorCabinetPage({
                   <CardTitle className="text-base">Мои долги</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  <SectionError message={sectionErrors.debts} />
                   {filteredDebts.length === 0 ? (
                     <div className="text-sm text-muted-foreground">За выбранный период долгов нет.</div>
                   ) : (

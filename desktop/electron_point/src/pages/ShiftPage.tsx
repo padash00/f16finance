@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { formatMoney, parseMoney, todayISO, localRef } from '@/lib/utils'
 import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
@@ -408,17 +409,12 @@ export default function ShiftPage({
             </Badge>
           ) : null}
 
-          {hasScanner ? (
-            <Button variant="outline" size="sm" onClick={onSwitchToScanner}>
-              Сканер
-            </Button>
-          ) : null}
-
-          {onOpenCabinet ? (
-            <Button variant="outline" size="sm" onClick={onOpenCabinet}>
-              Мое
-            </Button>
-          ) : null}
+          <WorkModeSwitch
+            active="shift"
+            showScanner={!!hasScanner}
+            onScanner={hasScanner ? onSwitchToScanner : undefined}
+            onCabinet={onOpenCabinet}
+          />
 
           <Button
             variant="ghost"

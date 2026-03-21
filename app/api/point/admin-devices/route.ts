@@ -18,6 +18,7 @@ type Body = {
   shift_report_chat_id?: string | null
   feature_flags?: {
     kaspi_daily_split?: boolean
+    debt_report?: boolean
   } | null
 }
 
@@ -99,6 +100,9 @@ export async function POST(request: Request) {
       const nextFlags = normalizeFlags((existing as any)?.feature_flags)
       if (body.feature_flags && typeof body.feature_flags.kaspi_daily_split === 'boolean') {
         nextFlags.kaspi_daily_split = body.feature_flags.kaspi_daily_split === true
+      }
+      if (body.feature_flags && typeof body.feature_flags.debt_report === 'boolean') {
+        nextFlags.debt_report = body.feature_flags.debt_report === true
       }
 
       const { data, error } = await supabase
