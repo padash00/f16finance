@@ -120,6 +120,25 @@ const seoPages = [
   },
 ]
 
+const workflowSteps = [
+  {
+    title: 'Точка закрывает смену',
+    text: 'Сотрудник работает в отдельной point-программе: калькулятор смены, Kaspi, комментарии, долги и быстрый ввод без лишнего интерфейса.',
+  },
+  {
+    title: 'Система собирает цифры',
+    text: 'Доходы, расходы, Kaspi, weekly-зарплата, долги и задачи попадают в один контур без ручного копирования между таблицами.',
+  },
+  {
+    title: 'Telegram отправляет отчет',
+    text: 'Сменные отчеты и уведомления уходят в нужные каналы и личные сообщения, чтобы руководитель и команда сразу были в курсе.',
+  },
+  {
+    title: 'Руководитель видит управленку',
+    text: 'ОПиУ, EBITDA, KPI, план-факт и финансовая картина по точкам обновляются на основе тех же данных, а не отдельной ручной сводки.',
+  },
+]
+
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -304,6 +323,159 @@ export default function MarketingHomePage() {
             </div>
           </div>
         </Card>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
+        <div className="max-w-3xl">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Как выглядит продукт</div>
+          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
+            Витринные product-shots на основе реальных модулей системы
+          </h2>
+          <p className="mt-4 text-base leading-7 text-slate-300">
+            Здесь показано не абстрактное “облако функций”, а то, как продукт ощущается: точка, зарплата, управленка и Telegram-контур.
+          </p>
+        </div>
+
+        <div className="mt-8 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card className="overflow-hidden border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-5 text-white shadow-[0_24px_70px_rgba(0,0,0,0.34)]">
+            <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-4">
+              <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-400">
+                <span>Point terminal</span>
+                <span>Shift live</span>
+              </div>
+              <div className="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="rounded-2xl border border-white/10 bg-[#0a0e17] p-4">
+                  <div className="text-sm font-semibold text-white">Калькулятор смены</div>
+                  <div className="mt-3 space-y-2 text-sm text-slate-300">
+                    <div className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
+                      <span>Kaspi</span>
+                      <span className="font-medium text-white">194 025 ₸</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
+                      <span>Наличные</span>
+                      <span className="font-medium text-white">26 000 ₸</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
+                      <span>Мелочь</span>
+                      <span className="font-medium text-white">600 ₸</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl bg-emerald-500/10 px-3 py-2 text-emerald-300">
+                      <span>Итог смены</span>
+                      <span className="font-semibold">220 625 ₸</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-400/10 px-3 py-3 text-xs leading-5 text-amber-100">
+                    Для ночной смены можно разделить Kaspi до и после полуночи, чтобы ОПиУ и EBITDA считались по календарным суткам.
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-[#090d16] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-white">Telegram-отчет</div>
+                      <div className="text-xs text-slate-400">Точка отправляет цифры сразу после смены</div>
+                    </div>
+                    <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">
+                      online
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-slate-200">
+                    <div className="font-semibold text-white">Отчет: 20.03.2026 07:42</div>
+                    <div className="mt-2">Точка: F16 Ramen</div>
+                    <div>Смена: Ночь</div>
+                    <div className="mt-3">Kaspi: 194 025 ₸</div>
+                    <div>Нал: 26 000 ₸</div>
+                    <div>Мелочь: 600 ₸</div>
+                    <div>Тех: 2 400 ₸</div>
+                    <div className="mt-3 text-emerald-300">Все четко: 20 ₸</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <div className="grid gap-6">
+            <Card className="overflow-hidden border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-5 text-white shadow-[0_24px_70px_rgba(0,0,0,0.34)]">
+              <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-4">
+                <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-400">
+                  <span>Salary</span>
+                  <span>Weekly</span>
+                </div>
+                <div className="mt-4 rounded-2xl border border-white/10 bg-[#0a0e17] p-4">
+                  <div className="grid grid-cols-4 gap-3 text-xs uppercase tracking-wide text-slate-500">
+                    <span>Оператор</span>
+                    <span>Начислено</span>
+                    <span>Выплачено</span>
+                    <span>Остаток</span>
+                  </div>
+                  <div className="mt-3 space-y-2 text-sm text-slate-300">
+                    <div className="grid grid-cols-4 gap-3 rounded-xl bg-white/5 px-3 py-3">
+                      <span className="font-medium text-white">Улан</span>
+                      <span>98 000 ₸</span>
+                      <span className="text-emerald-300">68 000 ₸</span>
+                      <span className="font-semibold text-amber-200">30 000 ₸</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-3 rounded-xl bg-white/5 px-3 py-3">
+                      <span className="font-medium text-white">Амангелдие</span>
+                      <span>54 500 ₸</span>
+                      <span className="text-emerald-300">20 000 ₸</span>
+                      <span className="font-semibold text-amber-200">34 500 ₸</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="overflow-hidden border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-5 text-white shadow-[0_24px_70px_rgba(0,0,0,0.34)]">
+              <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-4">
+                <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-400">
+                  <span>ОПиУ</span>
+                  <span>EBITDA</span>
+                </div>
+                <div className="mt-4 rounded-2xl border border-white/10 bg-[#0a0e17] p-4">
+                  <div className="text-sm font-semibold text-white">Финансовая картина по точке</div>
+                  <div className="mt-4 space-y-3 text-sm text-slate-300">
+                    <div className="flex items-center justify-between">
+                      <span>Выручка</span>
+                      <span className="font-medium text-white">4 820 000 ₸</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Расходы</span>
+                      <span className="font-medium text-white">1 740 000 ₸</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>ФОТ</span>
+                      <span className="font-medium text-white">1 120 000 ₸</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl bg-emerald-500/10 px-3 py-2 text-emerald-300">
+                      <span>EBITDA</span>
+                      <span className="font-semibold">1 960 000 ₸</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
+        <div className="max-w-3xl">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Как это работает</div>
+          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
+            Понятная цепочка от точки до управленки
+          </h2>
+        </div>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {workflowSteps.map((step, index) => (
+            <Card key={step.title} className="border-white/10 bg-white/5 p-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Шаг {index + 1}</div>
+              <h3 className="mt-3 text-xl font-semibold">{step.title}</h3>
+              <p className="mt-3 text-sm leading-7 text-slate-300">{step.text}</p>
+            </Card>
+          ))}
+        </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
