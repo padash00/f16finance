@@ -346,10 +346,10 @@ export default function StaffPageSmart() {
     else setLoading(true)
 
     const [staffRes, payRes] = await Promise.all([
-      supabase.from('staff').select('*').order('full_name'),
+      supabase.from('staff').select('id, full_name, role, short_name, monthly_salary, is_active, hire_date, phone, email').order('full_name'),
       supabase
         .from('staff_salary_payments')
-        .select('*')
+        .select('id, staff_id, pay_date, slot, amount, comment, created_at')
         .gte('pay_date', monthFrom)
         .lte('pay_date', monthTo)
         .order('pay_date', { ascending: true }),

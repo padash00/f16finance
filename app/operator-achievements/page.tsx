@@ -459,8 +459,6 @@ export default function OperatorAchievementsPage() {
         if (achievementsError) {
           console.error('Error loading achievements:', achievementsError)
         } else if (achievementsData) {
-          console.log('Achievements loaded:', achievementsData)
-          
           // Добавляем детали к каждой ачивке
           const achievementsWithDetails = achievementsData.map((ach: Achievement) => ({
             ...ach,

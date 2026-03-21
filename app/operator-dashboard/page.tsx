@@ -769,8 +769,8 @@ export default function OperatorDashboardPage() {
                 <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-gradient-to-r from-yellow-500 to-amber-500"
-                    style={{ 
-                      width: `${(levelInfo.total_xp / levelInfo.next_level_xp) * 100}%`
+                    style={{
+                      width: `${levelInfo.next_level_xp > 0 ? Math.min(100, (levelInfo.total_xp / levelInfo.next_level_xp) * 100) : 100}%`
                     }}
                   />
                 </div>

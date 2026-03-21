@@ -80,8 +80,8 @@ export default function SettingsPage() {
   const fetchData = async () => {
     setLoading(true)
     const [compRes, staffRes] = await Promise.all([
-        supabase.from('companies').select('*').order('name'),
-        supabase.from('staff').select('*').order('full_name')
+        supabase.from('companies').select('id, name, code, show_in_structure').order('name'),
+        supabase.from('staff').select('id, full_name, phone, email, role').order('full_name')
     ])
 
     if (compRes.error || staffRes.error) {

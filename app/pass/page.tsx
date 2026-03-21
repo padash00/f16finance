@@ -214,7 +214,6 @@ export default function AccessPage() {
 
       for (const op of operators) {
         if (!op.user_id) {
-          console.log(`Оператор ${op.name} без auth.user_id`)
           failCount++
           continue
         }
