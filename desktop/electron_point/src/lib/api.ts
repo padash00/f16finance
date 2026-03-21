@@ -3,7 +3,10 @@ import type {
   BootstrapData,
   CompanyOption,
   OperatorBasic,
+  OperatorSession,
   OperatorInfo,
+  OperatorTask,
+  OperatorTaskComment,
   Product,
   DebtItem,
   ShiftForm,
@@ -40,6 +43,13 @@ async function request<T>(
   }
 
   return json as T
+}
+
+function operatorHeaders(session: OperatorSession) {
+  return {
+    'x-point-operator-id': session.operator.operator_id,
+    'x-point-operator-auth-id': session.operator.auth_id,
+  }
 }
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
@@ -301,4 +311,21 @@ export async function updateAdminDeviceShiftReportChat(
       feature_flags: featureFlags,
     },
   )
+}
+
+export async function getPointOperatorTasks(
+  config: AppConfig,
+  session: OperatorSession,
+): Promise<{ tasks: OperatorTask[]; comments: OperatorTaskComment[] }> {
+  const data = await request<{ ok: boolean; tasks: OperatorTask[]; comments: OperatorTaskComment[] }>(
+    config,
+    'GET',
+    '/api/point/operator-tasks',
+    undefined,
+    operatorHeaders(session),
+  )
+  return {
+    tasks: data.tasks || [],
+    comments: data.comments || [],
+  }
 }

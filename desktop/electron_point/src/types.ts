@@ -93,6 +93,7 @@ export type AppView =
   | { screen: 'point-select'; bootstrap: BootstrapData; session: OperatorSession; allCompanies: CompanyOption[] }
   | { screen: 'shift'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'scanner'; bootstrap: BootstrapData; session: OperatorSession }
+  | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'scanner' }
   | { screen: 'admin'; session: AdminSession; bootstrap?: BootstrapData }
 
 // Products
@@ -193,4 +194,29 @@ export interface DebtRecord {
   client_name: string | null
   total_amount: number
   week_start: string
+}
+
+export interface OperatorTaskComment {
+  id: string
+  task_id: string
+  content: string
+  created_at: string
+  author_name: string
+  author_type: 'staff' | 'operator'
+}
+
+export interface OperatorTask {
+  id: string
+  task_number: number
+  title: string
+  description: string | null
+  status: 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  due_date: string | null
+  company_id: string | null
+  company_name: string | null
+  company_code: string | null
+  created_at: string
+  updated_at: string
+  completed_at: string | null
 }

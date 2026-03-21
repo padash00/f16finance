@@ -36,6 +36,7 @@ interface Props {
   isOffline?: boolean
   onLogout: () => void
   onSwitchToScanner?: () => void
+  onOpenCabinet?: () => void
 }
 
 interface SplitEntry {
@@ -82,6 +83,7 @@ export default function ShiftPage({
   isOffline,
   onLogout,
   onSwitchToScanner,
+  onOpenCabinet,
 }: Props) {
   const [form, setForm] = useState<ShiftForm>(() => {
     try {
@@ -409,6 +411,12 @@ export default function ShiftPage({
           {hasScanner ? (
             <Button variant="outline" size="sm" onClick={onSwitchToScanner}>
               Сканер
+            </Button>
+          ) : null}
+
+          {onOpenCabinet ? (
+            <Button variant="outline" size="sm" onClick={onOpenCabinet}>
+              Мое
             </Button>
           ) : null}
 

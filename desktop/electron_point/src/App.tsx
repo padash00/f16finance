@@ -6,6 +6,7 @@ import LoginPage from '@/pages/LoginPage'
 import PointSelectPage from '@/pages/PointSelectPage'
 import ShiftPage from '@/pages/ShiftPage'
 import ScannerPage from '@/pages/ScannerPage'
+import OperatorCabinetPage from '@/pages/OperatorCabinetPage'
 import AdminLayout from '@/pages/admin/AdminLayout'
 import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData } from '@/types'
 
@@ -44,6 +45,13 @@ declare global {
   }
 }
 
+function canUseScanner(bootstrap: BootstrapData) {
+  const flags = bootstrap.device.feature_flags
+  const pointMode = String(bootstrap.device.point_mode || '').trim().toLowerCase()
+  const scannerModes = new Set(['cash-desk', 'universal', 'debts'])
+  return flags.debt_report === true && scannerModes.has(pointMode)
+}
+
 export default function App() {
   const [view, setView] = useState<AppView>({ screen: 'booting' })
   const [config, setConfig] = useState<AppConfig | null>(null)
@@ -75,8 +83,7 @@ export default function App() {
       const cachedSession = await loadOperatorSession()
       if (cachedSession) {
         const session: typeof cachedSession = { ...cachedSession, bootstrap }
-        const flags = bootstrap.device.feature_flags
-        setView(flags.debt_report
+        setView(canUseScanner(bootstrap)
           ? { screen: 'scanner', bootstrap, session }
           : { screen: 'shift', bootstrap, session })
         return
@@ -97,7 +104,7 @@ export default function App() {
         id: '',
         name: 'Не настроено',
         point_mode: 'unknown',
-        feature_flags: { shift_report: true, income_report: true, debt_report: false },
+        feature_flags: { shift_report: true, income_report: true, debt_report: false, kaspi_daily_split: false },
       },
       company: { id: '', name: '', code: null },
       operators: [],
@@ -115,9 +122,8 @@ export default function App() {
   function proceedToApp(session: OperatorSession) {
     saveOperatorSession(session).catch(() => null)
     const bootstrap = session.bootstrap
-    const flags = bootstrap.device.feature_flags
 
-    if (flags.debt_report) {
+    if (canUseScanner(bootstrap)) {
       setView({ screen: 'scanner', bootstrap, session })
     } else {
       setView({ screen: 'shift', bootstrap, session })
@@ -154,6 +160,11 @@ export default function App() {
   function handleLogout() {
     clearOperatorSession().catch(() => null)
     showLogin(config)
+  }
+
+  function handleOpenOperatorCabinet(returnTo: 'shift' | 'scanner') {
+    if (view.screen !== 'shift' && view.screen !== 'scanner') return
+    setView({ screen: 'operator-cabinet', bootstrap: view.bootstrap, session: view.session, returnTo })
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -196,7 +207,6 @@ export default function App() {
   }
 
   if (view.screen === 'shift') {
-    const flags = view.bootstrap.device.feature_flags
     return (
       <ShiftPage
         config={config!}
@@ -204,7 +214,8 @@ export default function App() {
         session={view.session}
         isOffline={isOffline}
         onLogout={handleLogout}
-        onSwitchToScanner={flags.debt_report ? () => setView({ ...view, screen: 'scanner' }) : undefined}
+        onSwitchToScanner={canUseScanner(view.bootstrap) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
+        onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
       />
     )
   }
@@ -218,6 +229,20 @@ export default function App() {
         isOffline={isOffline}
         onLogout={handleLogout}
         onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
+        onOpenCabinet={() => handleOpenOperatorCabinet('scanner')}
+      />
+    )
+  }
+
+  if (view.screen === 'operator-cabinet') {
+    return (
+      <OperatorCabinetPage
+        config={config!}
+        bootstrap={view.bootstrap}
+        session={view.session}
+        returnTo={view.returnTo}
+        onBackToWork={() => setView({ screen: view.returnTo, bootstrap: view.bootstrap, session: view.session })}
+        onLogout={handleLogout}
       />
     )
   }

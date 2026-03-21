@@ -25,9 +25,10 @@ interface Props {
   isOffline?: boolean
   onLogout: () => void
   onSwitchToShift: () => void
+  onOpenCabinet?: () => void
 }
 
-export default function ScannerPage({ config, bootstrap, session, isOffline: initOffline, onLogout, onSwitchToShift }: Props) {
+export default function ScannerPage({ config, bootstrap, session, isOffline: initOffline, onLogout, onSwitchToShift, onOpenCabinet }: Props) {
   const [products, setProducts] = useState<Product[]>([])
   const [debts, setDebts] = useState<DebtItem[]>([])
   const [allOperators, setAllOperators] = useState<OperatorBasic[]>([])
@@ -288,6 +289,12 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
           <Button variant="outline" size="sm" onClick={onSwitchToShift}>
             <ReceiptText className="h-4 w-4 mr-1" /> Смена
           </Button>
+
+          {onOpenCabinet ? (
+            <Button variant="outline" size="sm" onClick={onOpenCabinet}>
+              Мое
+            </Button>
+          ) : null}
 
           <Button variant="ghost" size="sm" onClick={doSync} disabled={syncing} className="text-muted-foreground">
             <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />

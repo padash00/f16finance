@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ReceiptText, Package, CreditCard, Settings, LogOut, RefreshCw } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { syncQueue } from '@/lib/offline'
@@ -43,9 +44,8 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background overflow-hidden">
-      {/* Header */}
-      <header className="drag-region flex h-14 items-center justify-between border-b bg-card px-5 gap-4 shrink-0">
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <header className="drag-region flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-card px-5">
         <div className="flex items-center gap-3 no-drag">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <span className="text-sm font-bold text-primary-foreground">F</span>
@@ -54,7 +54,7 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
             <p className="text-sm font-semibold leading-none">Суперадминистратор</p>
             <p className="text-xs text-muted-foreground">
               {session.email}
-              {bootstrap?.company.name ? ` · ${bootstrap.company.name}` : ''}
+              {bootstrap?.company.name ? ` · устройство ${bootstrap.company.name}` : ''}
             </p>
           </div>
         </div>
@@ -69,18 +69,16 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
         </div>
       </header>
 
-      {/* Sidebar + content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <nav className="w-48 shrink-0 border-r bg-sidebar flex flex-col py-3 gap-1 px-2">
-          {TABS.map(tab => {
+        <nav className="flex w-48 shrink-0 flex-col gap-1 border-r bg-sidebar px-2 py-3">
+          {TABS.map((tab) => {
             const Icon = tab.icon
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors text-left cursor-pointer no-drag',
+                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors cursor-pointer no-drag',
                   activeTab === tab.id
                     ? 'bg-sidebar-primary text-sidebar-primary-foreground'
                     : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
@@ -93,7 +91,6 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
           })}
         </nav>
 
-        {/* Page content */}
         <main className="flex-1 overflow-auto">
           {activeTab === 'shifts' && <ShiftHistoryPage config={config} session={session} bootstrap={bootstrap} />}
           {activeTab === 'debts' && <DebtHistoryPage config={config} session={session} bootstrap={bootstrap} />}
