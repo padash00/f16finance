@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, CreditCard, DollarSign, Loader2, RefreshCw, TrendingDown, Wallet } from 'lucide-react'
 
-import { Card } from '@/components/ui/card'
+import {
+  OperatorEmptyState,
+  OperatorMetricCard,
+  OperatorPanel,
+  OperatorPill,
+  OperatorSectionHeading,
+} from '@/components/operator/operator-mobile-ui'
 import { Button } from '@/components/ui/button'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
@@ -118,21 +124,16 @@ export default function OperatorSalaryMobilePage() {
 
   return (
     <div className="space-y-4">
-      <Card className="border-white/10 bg-white/[0.045] p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-sm text-slate-400">Зарплата по неделям</div>
-            <div className="mt-1 text-xl font-semibold text-white">
-              {formatRuDate(weekStart)} - {formatRuDate(addDaysISO(weekStart, 6))}
-            </div>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
-              Здесь видно начисление за неделю, долги, авансы и фактические выплаты без похода в админский контур.
-            </p>
-          </div>
-          <div className="rounded-2xl bg-amber-500/15 p-3 text-amber-300">
-            <Wallet className="h-6 w-6" />
-          </div>
-        </div>
+      <OperatorPanel accent="amber">
+        <OperatorSectionHeading
+          title={`${formatRuDate(weekStart)} - ${formatRuDate(addDaysISO(weekStart, 6))}`}
+          description="Здесь видно начисление за неделю, долги, авансы и фактические выплаты без похода в админский контур."
+          action={
+            <Button type="button" variant="ghost" className="text-slate-300 hover:text-white" onClick={() => void load()}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          }
+        />
         <div className="mt-4 flex flex-wrap gap-2">
           <Button type="button" variant="outline" className="border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>
             <ChevronLeft className="h-4 w-4" />
@@ -145,147 +146,108 @@ export default function OperatorSalaryMobilePage() {
             Следующая
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button type="button" variant="ghost" className="text-slate-300 hover:text-white" onClick={() => void load()}>
-            <RefreshCw className="h-4 w-4" />
-            Обновить
-          </Button>
         </div>
-      </Card>
+      </OperatorPanel>
 
-      {error ? <Card className="border-red-500/25 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
+      {error ? <OperatorPanel className="border-red-500/25 bg-red-500/10 text-sm text-red-200">{error}</OperatorPanel> : null}
 
       {loading ? (
-        <Card className="border-white/10 bg-white/[0.045] p-6 text-slate-300">
-          <div className="flex items-center gap-3 text-sm">
+        <OperatorPanel>
+          <div className="flex items-center gap-3 text-sm text-slate-300">
             <Loader2 className="h-5 w-5 animate-spin" />
             Загружаю недельный расчёт...
           </div>
-        </Card>
+        </OperatorPanel>
       ) : null}
 
       {!loading && data ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Card className="border-white/10 bg-white/[0.045] p-5">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-emerald-500/15 p-2.5 text-emerald-300">
-                  <DollarSign className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">К выплате</div>
-                  <div className="mt-1 text-2xl font-semibold text-white">{formatMoney(data.week.remainingAmount)}</div>
-                </div>
-              </div>
-              <div className="mt-3 text-sm text-slate-300">Статус недели: {weekStatusLabel(data.week.status)}</div>
-            </Card>
-            <Card className="border-white/10 bg-white/[0.045] p-5">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Начислено</div>
-                  <div className="mt-2 font-semibold text-white">{formatMoney(data.week.netAmount)}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Выплачено</div>
-                  <div className="mt-2 font-semibold text-white">{formatMoney(data.week.paidAmount)}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Авансы</div>
-                  <div className="mt-2 font-semibold text-white">{formatMoney(data.week.advanceAmount)}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Долги</div>
-                  <div className="mt-2 font-semibold text-white">{formatMoney(data.week.debtAmount)}</div>
-                </div>
-              </div>
-            </Card>
+            <OperatorMetricCard label="К выплате" value={formatMoney(data.week.remainingAmount)} icon={DollarSign} tone="emerald" hint={`Статус недели: ${weekStatusLabel(data.week.status)}`} />
+            <OperatorMetricCard label="Выплачено" value={formatMoney(data.week.paidAmount)} icon={CreditCard} tone="blue" hint={`Начислено: ${formatMoney(data.week.netAmount)}`} />
+            <OperatorMetricCard label="Авансы" value={formatMoney(data.week.advanceAmount)} icon={Wallet} tone="amber" />
+            <OperatorMetricCard label="Долги" value={formatMoney(data.week.debtAmount)} icon={TrendingDown} tone="red" />
           </div>
 
-          <Card className="border-white/10 bg-white/[0.045] p-5">
-            <div className="text-lg font-semibold text-white">По точкам</div>
-            <p className="mt-1 text-sm text-slate-400">Как недельная сумма раскладывается по компаниям, где вы работали.</p>
+          <OperatorPanel>
+            <OperatorSectionHeading title="По точкам" description="Как недельная сумма раскладывается по компаниям, где вы работали." />
             <div className="mt-4 space-y-3">
-              {data.week.allocations.length === 0 ? <div className="text-sm text-slate-400">На этой неделе пока нет разложенных начислений.</div> : null}
-              {data.week.allocations.map((item) => (
-                <div key={item.companyId} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-white">{item.companyName || 'Точка'}</div>
-                      <div className="mt-1 text-xs text-slate-400">
-                        Доля недели: {Math.round((item.shareRatio || 0) * 100)}%
+              {data.week.allocations.length === 0 ? (
+                <OperatorEmptyState title="Разбивки по точкам пока нет" description="На этой неделе пока не появилось начислений, которые можно разложить по компаниям." />
+              ) : (
+                data.week.allocations.map((item) => (
+                  <div key={item.companyId} className="rounded-[1.4rem] border border-white/10 bg-slate-950/40 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-white">{item.companyName || 'Точка'}</div>
+                        <div className="mt-1 text-xs text-slate-400">Доля недели: {Math.round((item.shareRatio || 0) * 100)}%</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-white">{formatMoney(item.netAmount)}</div>
+                        <div className="mt-1 text-xs text-slate-400">Начислено: {formatMoney(item.accruedAmount)}</div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold text-white">{formatMoney(item.netAmount)}</div>
-                      <div className="mt-1 text-xs text-slate-400">Начислено: {formatMoney(item.accruedAmount)}</div>
-                    </div>
+                    {item.details ? (
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-300">
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">Бонусы: {formatMoney(item.details.bonusAmount)}</div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">Штрафы: {formatMoney(item.details.fineAmount)}</div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">Долги: {formatMoney(item.details.debtAmount)}</div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">Авансы: {formatMoney(item.details.advanceAmount)}</div>
+                      </div>
+                    ) : null}
                   </div>
-                  {item.details ? (
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-300">
-                      <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">Бонусы: {formatMoney(item.details.bonusAmount)}</div>
-                      <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">Штрафы: {formatMoney(item.details.fineAmount)}</div>
-                      <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">Долги: {formatMoney(item.details.debtAmount)}</div>
-                      <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">Авансы: {formatMoney(item.details.advanceAmount)}</div>
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+                ))
+              )}
             </div>
-          </Card>
+          </OperatorPanel>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Card className="border-white/10 bg-white/[0.045] p-5">
-              <div className="flex items-center gap-2 text-lg font-semibold text-white">
-                <CreditCard className="h-5 w-5 text-blue-300" />
-                Выплаты
-              </div>
+            <OperatorPanel>
+              <OperatorSectionHeading title="Выплаты" description="Фактические выплаты по неделе с разбивкой по способу оплаты." />
               <div className="mt-4 space-y-3">
-                {data.week.payments.length === 0 ? <div className="text-sm text-slate-400">По этой неделе выплат пока нет.</div> : null}
-                {data.week.payments.map((payment) => (
-                  <div key={payment.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-white">{formatRuDate(payment.payment_date, 'full')}</div>
-                        <div className="mt-1 text-xs text-slate-400">
-                          Нал: {formatMoney(payment.cash_amount)} · Kaspi: {formatMoney(payment.kaspi_amount)}
+                {data.week.payments.length === 0 ? (
+                  <OperatorEmptyState title="Выплат пока нет" description="Когда по этой неделе появятся выплаты, они будут отображаться здесь." />
+                ) : (
+                  data.week.payments.map((payment) => (
+                    <div key={payment.id} className="rounded-[1.4rem] border border-white/10 bg-slate-950/40 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-white">{formatRuDate(payment.payment_date, 'full')}</div>
+                          <div className="mt-1 text-xs text-slate-400">
+                            Нал: {formatMoney(payment.cash_amount)} · Kaspi: {formatMoney(payment.kaspi_amount)}
+                          </div>
                         </div>
+                        <div className="text-sm font-semibold text-white">{formatMoney(payment.total_amount)}</div>
                       </div>
-                      <div className="text-sm font-semibold text-white">{formatMoney(payment.total_amount)}</div>
+                      {payment.comment ? <div className="mt-2 text-xs text-slate-400">{payment.comment}</div> : null}
                     </div>
-                    {payment.comment ? <div className="mt-2 text-xs text-slate-400">{payment.comment}</div> : null}
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
-            </Card>
+            </OperatorPanel>
 
-            <Card className="border-white/10 bg-white/[0.045] p-5">
-              <div className="flex items-center gap-2 text-lg font-semibold text-white">
-                <TrendingDown className="h-5 w-5 text-red-300" />
-                Корректировки недели
-              </div>
+            <OperatorPanel>
+              <OperatorSectionHeading title="Корректировки недели" description="Бонусы, штрафы, авансы и долги, которые влияют на итог." />
+
               <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-slate-400">
-                  Бонусы
-                  <div className="mt-1 font-semibold text-white">{formatMoney(adjustmentSummary.bonuses)}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-slate-400">
-                  Штрафы
-                  <div className="mt-1 font-semibold text-white">{formatMoney(adjustmentSummary.fines)}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-slate-400">
-                  Авансы
-                  <div className="mt-1 font-semibold text-white">{formatMoney(adjustmentSummary.advances)}</div>
-                </div>
+                <OperatorPill tone="emerald">Бонусы: {formatMoney(adjustmentSummary.bonuses)}</OperatorPill>
+                <OperatorPill tone="red">Штрафы: {formatMoney(adjustmentSummary.fines)}</OperatorPill>
+                <OperatorPill tone="amber">Авансы: {formatMoney(adjustmentSummary.advances)}</OperatorPill>
               </div>
 
               <div className="mt-4 space-y-3">
-                {[...data.week.adjustments, ...data.week.debts].length === 0 ? <div className="text-sm text-slate-400">На этой неделе корректировок нет.</div> : null}
+                {[...data.week.adjustments, ...data.week.debts].length === 0 ? (
+                  <OperatorEmptyState title="Корректировок нет" description="На этой неделе не было бонусов, штрафов, авансов или долгов." />
+                ) : null}
+
                 {data.week.adjustments.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <div key={item.id} className="rounded-[1.4rem] border border-white/10 bg-slate-950/40 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-medium text-white">{item.kind === 'bonus' ? 'Бонус' : item.kind === 'advance' ? 'Аванс' : 'Штраф'}</div>
                         <div className="mt-1 text-xs text-slate-400">
-                          {formatRuDate(item.date, 'full')}{item.companyName ? ` · ${item.companyName}` : ''}
+                          {formatRuDate(item.date, 'full')}
+                          {item.companyName ? ` · ${item.companyName}` : ''}
                         </div>
                       </div>
                       <div className="text-sm font-semibold text-white">{formatMoney(item.amount)}</div>
@@ -293,13 +255,15 @@ export default function OperatorSalaryMobilePage() {
                     {item.comment ? <div className="mt-2 text-xs text-slate-400">{item.comment}</div> : null}
                   </div>
                 ))}
+
                 {data.week.debts.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
+                  <div key={item.id} className="rounded-[1.4rem] border border-red-500/20 bg-red-500/10 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-medium text-white">Долг</div>
                         <div className="mt-1 text-xs text-red-100/80">
-                          {item.date ? formatRuDate(item.date, 'full') : 'Дата не указана'}{item.companyName ? ` · ${item.companyName}` : ''}
+                          {item.date ? formatRuDate(item.date, 'full') : 'Дата не указана'}
+                          {item.companyName ? ` · ${item.companyName}` : ''}
                         </div>
                       </div>
                       <div className="text-sm font-semibold text-red-100">{formatMoney(item.amount)}</div>
@@ -308,31 +272,29 @@ export default function OperatorSalaryMobilePage() {
                   </div>
                 ))}
               </div>
-            </Card>
+            </OperatorPanel>
           </div>
 
-          <Card className="border-white/10 bg-white/[0.045] p-5">
-            <div className="text-lg font-semibold text-white">История по неделям</div>
-            <p className="mt-1 text-sm text-slate-400">Последние недели, чтобы быстро понимать динамику выплат.</p>
+          <OperatorPanel>
+            <OperatorSectionHeading title="История по неделям" description="Последние недели, чтобы быстро понимать динамику выплат." />
             <div className="mt-4 space-y-3">
               {data.recentWeeks.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => setWeekStart(item.weekStart)}
-                  className={`w-full rounded-2xl border p-4 text-left transition ${
-                    item.weekStart === weekStart
-                      ? 'border-amber-400/30 bg-amber-400/10'
-                      : 'border-white/10 bg-slate-950/40 hover:border-white/20'
+                  className={`w-full rounded-[1.4rem] border p-4 text-left transition ${
+                    item.weekStart === weekStart ? 'border-amber-400/30 bg-amber-400/10' : 'border-white/10 bg-slate-950/40 hover:border-white/20'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-sm font-medium text-white">
                         {formatRuDate(item.weekStart)} - {formatRuDate(item.weekEnd)}
                       </div>
                       <div className="mt-1 text-xs text-slate-400">
-                        Выплат: {item.paymentsCount}{item.lastPaymentDate ? ` · Последняя ${formatRuDate(item.lastPaymentDate)}` : ''}
+                        Выплат: {item.paymentsCount}
+                        {item.lastPaymentDate ? ` · Последняя ${formatRuDate(item.lastPaymentDate)}` : ''}
                       </div>
                     </div>
                     <div className="text-right">
@@ -343,7 +305,7 @@ export default function OperatorSalaryMobilePage() {
                 </button>
               ))}
             </div>
-          </Card>
+          </OperatorPanel>
         </>
       ) : null}
     </div>

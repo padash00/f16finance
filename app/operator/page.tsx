@@ -2,10 +2,26 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowRight, BadgeCheck, Briefcase, CalendarDays, Loader2, MapPin, Sparkles, Wallet } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  BadgeCheck,
+  Briefcase,
+  CalendarDays,
+  Loader2,
+  MapPin,
+  Sparkles,
+  Wallet,
+} from 'lucide-react'
 
 import { OperatorSectionCard } from '@/components/operator/operator-app-shell'
-import { Card } from '@/components/ui/card'
+import {
+  OperatorEmptyState,
+  OperatorMetricCard,
+  OperatorPanel,
+  OperatorPill,
+  OperatorSectionHeading,
+} from '@/components/operator/operator-mobile-ui'
 import { Button } from '@/components/ui/button'
 import { formatRuDate } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
@@ -74,39 +90,39 @@ export default function OperatorHomePage() {
   const chips = useMemo(() => {
     if (!data) return []
     return [
-      { label: 'Текущая неделя', value: `${formatRuDate(data.week.weekStart)} - ${formatRuDate(data.week.weekEnd)}` },
-      { label: 'Статус', value: statusLabel(data.week.status) },
-      { label: 'Новых задач', value: String(data.counters.activeTasks) },
+      { label: 'Текущая неделя', value: `${formatRuDate(data.week.weekStart)} - ${formatRuDate(data.week.weekEnd)}`, tone: 'blue' as const },
+      { label: 'Статус', value: statusLabel(data.week.status), tone: data.week.status === 'paid' ? ('emerald' as const) : data.week.status === 'partial' ? ('amber' as const) : ('default' as const) },
+      { label: 'Новых задач', value: String(data.counters.activeTasks), tone: data.counters.activeTasks > 0 ? ('amber' as const) : ('default' as const) },
     ]
   }, [data])
 
   if (loading) {
     return (
-      <Card className="mt-4 border-white/10 bg-white/[0.045] p-6 text-slate-300">
-        <div className="flex items-center gap-3 text-sm">
+      <OperatorPanel>
+        <div className="flex items-center gap-3 text-sm text-slate-300">
           <Loader2 className="h-5 w-5 animate-spin" />
           Загружаю ваш рабочий день...
         </div>
-      </Card>
+      </OperatorPanel>
     )
   }
 
   if (error || !data) {
     return (
-      <Card className="mt-4 border-red-500/25 bg-red-500/10 p-6 text-sm text-red-200">
-        <div className="flex items-start gap-3">
+      <OperatorPanel className="border-red-500/25 bg-red-500/10">
+        <div className="flex items-start gap-3 text-sm text-red-200">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
           <div>{error || 'Не удалось загрузить операторский кабинет'}</div>
         </div>
-      </Card>
+      </OperatorPanel>
     )
   }
 
   return (
     <div className="space-y-4">
-      <Card className="border-white/10 bg-[radial-gradient(circle_at_top_right,_rgba(16,185,129,0.16),_transparent_34%),linear-gradient(180deg,_rgba(255,255,255,0.05),_rgba(255,255,255,0.03))] p-5">
+      <OperatorPanel accent="emerald">
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="text-sm text-slate-400">Здравствуйте</div>
             <div className="mt-1 text-2xl font-semibold text-white">{data.operator.name}</div>
             <p className="mt-3 text-sm leading-6 text-slate-300">
@@ -120,99 +136,34 @@ export default function OperatorHomePage() {
 
         <div className="mt-4 flex flex-wrap gap-2">
           {chips.map((chip) => (
-            <div key={chip.label} className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-slate-300">
-              {chip.label}: <span className="font-medium text-white">{chip.value}</span>
-            </div>
+            <OperatorPill key={chip.label} tone={chip.tone}>
+              {chip.label}: <span className="ml-1 font-semibold">{chip.value}</span>
+            </OperatorPill>
           ))}
         </div>
-      </Card>
+      </OperatorPanel>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card className="border-white/10 bg-white/[0.045] p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-blue-500/15 p-2.5 text-blue-300">
-              <CalendarDays className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Следующая смена</div>
-              <div className="mt-1 text-base font-semibold text-white">{data.nextShift?.label || 'Сейчас нет смен в графике'}</div>
-            </div>
-          </div>
-          <Button asChild variant="outline" className="mt-4 w-full border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]">
-            <Link href="/operator/shifts">Открыть график</Link>
-          </Button>
-        </Card>
-
-        <Card className="border-white/10 bg-white/[0.045] p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-amber-500/15 p-2.5 text-amber-300">
-              <Wallet className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">К выплате за неделю</div>
-              <div className="mt-1 text-2xl font-semibold text-white">{formatMoney(data.week.remainingAmount)}</div>
-            </div>
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-slate-400">
-              Начислено
-              <div className="mt-1 text-sm font-semibold text-white">{formatMoney(data.week.netAmount)}</div>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-slate-400">
-              Выплачено
-              <div className="mt-1 text-sm font-semibold text-white">{formatMoney(data.week.paidAmount)}</div>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-slate-400">
-              Долги
-              <div className="mt-1 text-sm font-semibold text-white">{formatMoney(data.week.debtAmount)}</div>
-            </div>
-          </div>
-        </Card>
+        <OperatorMetricCard
+          label="Следующая смена"
+          value={data.nextShift?.label || 'Сейчас в графике нет смен'}
+          icon={CalendarDays}
+          tone="blue"
+          hint="Если график уже опубликован, здесь всегда будет ближайшая смена."
+        />
+        <OperatorMetricCard
+          label="К выплате за неделю"
+          value={formatMoney(data.week.remainingAmount)}
+          icon={Wallet}
+          tone="amber"
+          hint={`Начислено ${formatMoney(data.week.netAmount)} · Выплачено ${formatMoney(data.week.paidAmount)}`}
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="border-white/10 bg-white/[0.045] p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-violet-500/15 p-2.5 text-violet-300">
-              <Briefcase className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Задачи</div>
-              <div className="mt-1 text-2xl font-semibold text-white">{data.counters.activeTasks}</div>
-            </div>
-          </div>
-          <div className="mt-3 text-sm text-slate-300">
-            На проверке: <span className="font-medium text-white">{data.counters.reviewTasks}</span>
-          </div>
-        </Card>
-
-        <Card className="border-white/10 bg-white/[0.045] p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-red-500/15 p-2.5 text-red-300">
-              <AlertTriangle className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Долги</div>
-              <div className="mt-1 text-2xl font-semibold text-white">{formatMoney(data.counters.activeDebtAmount)}</div>
-            </div>
-          </div>
-          <div className="mt-3 text-sm text-slate-300">
-            Активных записей: <span className="font-medium text-white">{data.counters.activeDebts}</span>
-          </div>
-        </Card>
-
-        <Card className="border-white/10 bg-white/[0.045] p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-emerald-500/15 p-2.5 text-emerald-300">
-              <BadgeCheck className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Точки ответственности</div>
-              <div className="mt-1 text-2xl font-semibold text-white">{data.counters.leadPoints}</div>
-            </div>
-          </div>
-          <div className="mt-3 text-sm text-slate-300">Если вы старший, здесь будут ваши закреплённые точки.</div>
-        </Card>
+        <OperatorMetricCard label="Активные задачи" value={data.counters.activeTasks} icon={Briefcase} tone="violet" hint={`На проверке: ${data.counters.reviewTasks}`} />
+        <OperatorMetricCard label="Долги" value={formatMoney(data.counters.activeDebtAmount)} icon={AlertTriangle} tone="red" hint={`Активных записей: ${data.counters.activeDebts}`} />
+        <OperatorMetricCard label="Точки ответственности" value={data.counters.leadPoints} icon={BadgeCheck} tone="emerald" hint="Показывает закреплённые точки, если вы старший." />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -242,67 +193,79 @@ export default function OperatorHomePage() {
         />
       </div>
 
-      {(data.activeTasks.length > 0 || data.recentDebts.length > 0) && (
-        <div className="grid gap-4">
-          {data.activeTasks.length > 0 ? (
-            <Card className="border-white/10 bg-white/[0.045] p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-lg font-semibold text-white">Что важно сделать сейчас</div>
-                  <p className="mt-1 text-sm text-slate-400">Три ближайшие задачи, чтобы не пропустить рабочие поручения.</p>
+      <OperatorPanel>
+        <OperatorSectionHeading
+          title="Фокус на сегодня"
+          description="Короткая сводка по тому, что важно не пропустить."
+          action={
+            <Button asChild variant="ghost" className="text-slate-300 hover:text-white">
+              <Link href="/operator/tasks">
+                Все задачи
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          }
+        />
+
+        <div className="mt-4 space-y-3">
+          {data.activeTasks.length === 0 ? (
+            <OperatorEmptyState title="Новых задач нет" description="Когда появятся новые поручения, они сразу будут показаны здесь и в разделе задач." />
+          ) : (
+            data.activeTasks.map((task) => (
+              <div key={task.id} className="rounded-[1.4rem] border border-white/10 bg-slate-950/40 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-white">{task.title}</div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {task.due_date ? `Срок: ${formatRuDate(task.due_date, 'full')}` : 'Без дедлайна'}
+                    </div>
+                  </div>
+                  <OperatorPill tone={task.priority === 'critical' || task.priority === 'high' ? 'amber' : 'default'}>{task.priority}</OperatorPill>
                 </div>
-                <Button asChild variant="ghost" className="text-slate-300 hover:text-white">
-                  <Link href="/operator/tasks">
-                    Все задачи
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
               </div>
-
-              <div className="mt-4 space-y-3">
-                {data.activeTasks.map((task) => (
-                  <div key={task.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-white">{task.title}</div>
-                        <div className="mt-1 text-xs text-slate-400">
-                          {task.due_date ? `Срок: ${formatRuDate(task.due_date, 'full')}` : 'Без дедлайна'}
-                        </div>
-                      </div>
-                      <div className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] uppercase tracking-[0.16em] text-slate-300">
-                        {task.priority}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          ) : null}
-
-          {data.recentDebts.length > 0 ? (
-            <Card className="border-white/10 bg-white/[0.045] p-5">
-              <div className="text-lg font-semibold text-white">Свежие долги</div>
-              <p className="mt-1 text-sm text-slate-400">Что уже попало в расчёт этой недели.</p>
-              <div className="mt-4 space-y-3">
-                {data.recentDebts.map((debt) => (
-                  <div key={debt.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-white">{debt.comment || 'Долг по товару'}</div>
-                        <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
-                          <MapPin className="h-3.5 w-3.5" />
-                          {debt.companyName || 'Точка не указана'}
-                        </div>
-                      </div>
-                      <div className="text-sm font-semibold text-red-300">{formatMoney(debt.amount)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          ) : null}
+            ))
+          )}
         </div>
-      )}
+      </OperatorPanel>
+
+      <div className="grid gap-4">
+        <OperatorPanel>
+          <OperatorSectionHeading title="Свежие долги" description="Что уже попало в расчёт этой недели." />
+          <div className="mt-4 space-y-3">
+            {data.recentDebts.length === 0 ? (
+              <OperatorEmptyState title="Свежих долгов нет" description="Если на этой неделе не было долгов по товарам, блок останется пустым." />
+            ) : (
+              data.recentDebts.map((debt) => (
+                <div key={debt.id} className="rounded-[1.4rem] border border-white/10 bg-slate-950/40 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-white">{debt.comment || 'Долг по товару'}</div>
+                      <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {debt.companyName || 'Точка не указана'}
+                      </div>
+                    </div>
+                    <div className="text-sm font-semibold text-red-300">{formatMoney(debt.amount)}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </OperatorPanel>
+
+        {data.leadAssignments.length > 0 ? (
+          <OperatorPanel accent="blue">
+            <OperatorSectionHeading title="Точки под вашей ответственностью" description="Показываем закреплённые точки, если вы работаете как старший." />
+            <div className="mt-4 flex flex-wrap gap-2">
+              {data.leadAssignments.map((assignment) => (
+                <OperatorPill key={assignment.id} tone={assignment.isPrimary ? 'blue' : 'default'}>
+                  {assignment.companyName || 'Точка'}{assignment.isPrimary ? ' · основная' : ''}
+                </OperatorPill>
+              ))}
+            </div>
+          </OperatorPanel>
+        ) : null}
+      </div>
     </div>
   )
 }

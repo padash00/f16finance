@@ -1,9 +1,24 @@
 'use client'
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Loader2, MessageSquareWarning, RefreshCw } from 'lucide-react'
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  MessageSquareWarning,
+  RefreshCw,
+} from 'lucide-react'
 
-import { Card } from '@/components/ui/card'
+import {
+  OperatorEmptyState,
+  OperatorMetricCard,
+  OperatorPanel,
+  OperatorPill,
+  OperatorSectionHeading,
+} from '@/components/operator/operator-mobile-ui'
 import { Button } from '@/components/ui/button'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal } from '@/lib/core/date'
 
@@ -125,21 +140,16 @@ export default function OperatorShiftsPage() {
 
   return (
     <div className="space-y-4">
-      <Card className="border-white/10 bg-white/[0.045] p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-sm text-slate-400">Неделя</div>
-            <div className="mt-1 text-xl font-semibold text-white">
-              {formatRuDate(weekStart)} - {formatRuDate(addDaysISO(weekStart, 6))}
-            </div>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
-              Здесь видно ваш график по точкам. Если неделя уже опубликована, можно подтвердить её или отправить замечание по конкретной смене.
-            </p>
-          </div>
-          <div className="rounded-2xl bg-blue-500/15 p-3 text-blue-300">
-            <CalendarDays className="h-6 w-6" />
-          </div>
-        </div>
+      <OperatorPanel accent="blue">
+        <OperatorSectionHeading
+          title={`${formatRuDate(weekStart)} - ${formatRuDate(addDaysISO(weekStart, 6))}`}
+          description="Здесь виден ваш график по точкам. Если неделя уже опубликована, можно подтвердить её или отправить замечание по конкретной смене."
+          action={
+            <Button type="button" variant="ghost" className="text-slate-300 hover:text-white" onClick={() => void load()}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          }
+        />
 
         <div className="mt-4 flex flex-wrap gap-2">
           <Button type="button" variant="outline" className="border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.08]" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>
@@ -153,61 +163,58 @@ export default function OperatorShiftsPage() {
             Следующая
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button type="button" variant="ghost" className="text-slate-300 hover:text-white" onClick={() => void load()}>
-            <RefreshCw className="h-4 w-4" />
-            Обновить
-          </Button>
         </div>
-      </Card>
+      </OperatorPanel>
 
-      {error ? <Card className="border-red-500/25 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
-      {notice ? <Card className="border-emerald-500/25 bg-emerald-500/10 p-4 text-sm text-emerald-200">{notice}</Card> : null}
+      {error ? <OperatorPanel className="border-red-500/25 bg-red-500/10 text-sm text-red-200">{error}</OperatorPanel> : null}
+      {notice ? <OperatorPanel className="border-emerald-500/25 bg-emerald-500/10 text-sm text-emerald-200">{notice}</OperatorPanel> : null}
 
-      <div className="grid gap-4 sm:grid-cols-4">
-        <Card className="border-white/10 bg-white/[0.045] p-4"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">Всего смен</div><div className="mt-2 text-2xl font-semibold text-white">{weekStats.total}</div></Card>
-        <Card className="border-white/10 bg-white/[0.045] p-4"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">День / ночь</div><div className="mt-2 text-2xl font-semibold text-white">{weekStats.day} / {weekStats.night}</div></Card>
-        <Card className="border-white/10 bg-white/[0.045] p-4"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">Подтвердить</div><div className="mt-2 text-2xl font-semibold text-white">{weekStats.pendingConfirm}</div></Card>
-        <Card className="border-white/10 bg-white/[0.045] p-4"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">Открытые вопросы</div><div className="mt-2 text-2xl font-semibold text-white">{weekStats.openIssues}</div></Card>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <OperatorMetricCard label="Всего смен" value={weekStats.total} icon={CalendarDays} tone="blue" />
+        <OperatorMetricCard label="День / ночь" value={`${weekStats.day} / ${weekStats.night}`} icon={CalendarDays} tone="default" />
+        <OperatorMetricCard label="Нужно подтвердить" value={weekStats.pendingConfirm} icon={CheckCircle2} tone="amber" />
+        <OperatorMetricCard label="Открытые вопросы" value={weekStats.openIssues} icon={AlertTriangle} tone="red" />
       </div>
 
       {loading ? (
-        <Card className="border-white/10 bg-white/[0.045] p-6 text-slate-300">
-          <div className="flex items-center gap-3 text-sm">
+        <OperatorPanel>
+          <div className="flex items-center gap-3 text-sm text-slate-300">
             <Loader2 className="h-5 w-5 animate-spin" />
             Загружаю ваш график...
           </div>
-        </Card>
+        </OperatorPanel>
       ) : null}
 
       {!loading && (!data || data.schedule.length === 0) ? (
-        <Card className="border-white/10 bg-white/[0.045] p-6 text-sm text-slate-300">
-          На этой неделе у вас пока нет опубликованных смен.
-        </Card>
+        <OperatorPanel>
+          <OperatorEmptyState title="Смен пока нет" description="На этой неделе у вас пока нет опубликованных смен." />
+        </OperatorPanel>
       ) : null}
 
-      {!loading && data?.schedule.map((group) => {
-        const canConfirm = Boolean(group.publication?.id && group.response?.id && group.response.status !== 'confirmed')
-        const openRequests = group.requests.filter((request) => !['resolved', 'dismissed'].includes(request.status))
-        return (
-          <Card key={group.company.id} className="border-white/10 bg-white/[0.045] p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-lg font-semibold text-white">{group.company.name || 'Точка'}</div>
-                <div className="mt-1 text-sm text-slate-400">
-                  {group.company.code ? `Код: ${group.company.code}` : 'Код точки не указан'}
-                </div>
-              </div>
-              <div className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-slate-300">
-                {group.response?.status === 'confirmed' ? 'Подтверждено' : 'Нужна проверка'}
-              </div>
-            </div>
+      {!loading &&
+        data?.schedule.map((group) => {
+          const canConfirm = Boolean(group.publication?.id && group.response?.id && group.response.status !== 'confirmed')
+          const openRequests = group.requests.filter((request) => !['resolved', 'dismissed'].includes(request.status))
 
-            {group.shifts.length > 0 ? (
+          return (
+            <OperatorPanel key={group.company.id}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-lg font-semibold text-white">{group.company.name || 'Точка'}</div>
+                  <div className="mt-1 text-sm text-slate-400">
+                    {group.company.code ? `Код: ${group.company.code}` : 'Код точки не указан'}
+                  </div>
+                </div>
+                <OperatorPill tone={group.response?.status === 'confirmed' ? 'emerald' : 'amber'}>
+                  {group.response?.status === 'confirmed' ? 'Подтверждено' : 'Нужна проверка'}
+                </OperatorPill>
+              </div>
+
               <div className="mt-4 space-y-3">
                 {group.shifts.map((shift) => (
-                  <div key={`${group.company.id}:${shift.date}:${shift.shift_type}`} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <div key={`${group.company.id}:${shift.date}:${shift.shift_type}`} className="rounded-[1.4rem] border border-white/10 bg-slate-950/40 p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-sm font-medium text-white">
                           {formatRuDate(shift.date, 'full')} · {shiftLabel(shift.shift_type)}
                         </div>
@@ -236,38 +243,32 @@ export default function OperatorShiftsPage() {
                   </div>
                 ))}
               </div>
-            ) : null}
 
-            {openRequests.length > 0 ? (
-              <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-amber-200">
-                  <AlertTriangle className="h-4 w-4" />
-                  Открытые замечания: {openRequests.length}
+              {openRequests.length > 0 ? (
+                <div className="mt-4 rounded-[1.4rem] border border-amber-500/20 bg-amber-500/10 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-amber-200">
+                    <AlertTriangle className="h-4 w-4" />
+                    Открытые замечания: {openRequests.length}
+                  </div>
+                  <div className="mt-2 space-y-2 text-xs text-amber-100/90">
+                    {openRequests.map((request) => (
+                      <div key={request.id}>
+                        {formatRuDate(request.shift_date)} · {shiftLabel(request.shift_type)} · {request.status}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="mt-2 space-y-2 text-xs text-amber-100/90">
-                  {openRequests.map((request) => (
-                    <div key={request.id}>
-                      {formatRuDate(request.shift_date)} · {shiftLabel(request.shift_type)} · {request.status}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+              ) : null}
 
-            {canConfirm ? (
-              <Button
-                type="button"
-                className="mt-4 w-full"
-                onClick={() => void confirmWeek(group.response!.id)}
-                disabled={actionLoading === group.response?.id}
-              >
-                {actionLoading === group.response?.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                Подтвердить график по этой точке
-              </Button>
-            ) : null}
-          </Card>
-        )
-      })}
+              {canConfirm ? (
+                <Button type="button" className="mt-4 w-full" onClick={() => void confirmWeek(group.response!.id)} disabled={actionLoading === group.response?.id}>
+                  {actionLoading === group.response?.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Подтвердить график по этой точке
+                </Button>
+              ) : null}
+            </OperatorPanel>
+          )
+        })}
 
       {issueDraft ? (
         <div className="fixed inset-0 z-50 flex items-end bg-slate-950/80 p-3 backdrop-blur-sm sm:items-center sm:justify-center">

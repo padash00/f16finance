@@ -104,7 +104,7 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,165,80,0.16),transparent_26%),linear-gradient(180deg,#07101c_0%,#0b1324_48%,#040814_100%)] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col px-3 pb-28 pt-4 sm:px-5 sm:pt-5">
+      <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col px-3 pb-28 pt-3 sm:px-5 sm:pt-5">
         <div className="overflow-hidden rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-4 shadow-[0_30px_90px_rgba(0,0,0,0.34)] backdrop-blur-2xl sm:rounded-[2rem] sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
@@ -118,6 +118,28 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
               <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Раздел</div>
               <div className="mt-1 text-sm font-medium text-white">{activeItem.shortLabel}</div>
             </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {navItems.map((item) => {
+              const active = isActivePath(pathname, item.href)
+              const Icon = item.icon
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition',
+                    active
+                      ? 'border-amber-400/25 bg-amber-400/10 text-amber-200'
+                      : 'border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:text-white',
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {item.label}
+                </Link>
+              )
+            })}
           </div>
         </div>
 
@@ -168,9 +190,7 @@ export function OperatorSectionCard({
       href={href}
       className="group block rounded-[1.6rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_16px_48px_rgba(0,0,0,0.22)] transition hover:border-amber-400/30 hover:bg-white/[0.07]"
     >
-      {eyebrow ? (
-        <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">{eyebrow}</div>
-      ) : null}
+      {eyebrow ? <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">{eyebrow}</div> : null}
       <div className="mt-2 flex items-start justify-between gap-3">
         <div>
           <div className="text-lg font-semibold text-white">{title}</div>
