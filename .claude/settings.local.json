@@ -29,7 +29,20 @@
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(find 'C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance' -type f -name *.json -o -name *.ts -o -name *.tsx -o -name *.css -o -name *.mjs)",
       "Bash(find 'C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance' -type f \\\\\\(-name *salary* -o -name *долг* \\\\\\))",
-      "Bash(find 'C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance/app/admin' -type f -name *.tsx)"
+      "Bash(find 'C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance/app/admin' -type f -name *.tsx)",
+      "Bash(python3 -c \":*)",
+      "Bash(python3:*)",
+      "Bash(npm.cmd run:*)",
+      "Bash(python \"C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance\\\\transform_pages.py\" \"C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance\\\\app\\\\access\\\\page.tsx\")",
+      "Bash(python \"C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance\\\\transform_pages.py\" \"C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance\\\\app\\\\salary\\\\page.tsx\")",
+      "Bash(for dir:*)",
+      "Bash(do)",
+      "Bash(mv \"$dir\" \"\\(main\\)/$dir\")",
+      "Bash(echo \"Moved: $dir\")",
+      "Bash(done)",
+      "Bash(python:*)",
+      "Bash(tail:*)",
+      "Bash(npx next:*)"
     ]
   }
 }

@@ -219,6 +219,9 @@ export default function DevicesPage({ config, session }: Props) {
                   <p className="text-[11px] text-muted-foreground">
                     Chat ID нужен для канала или группы со сменными отчётами. Отдельно можно включить ночную разбивку Kaspi именно для этой точки.
                   </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Сканер долгов в программе открывается только для режимов <span className="font-medium text-foreground">cash-desk</span>, <span className="font-medium text-foreground">universal</span> и <span className="font-medium text-foreground">debts</span>. Для режима <span className="font-medium text-foreground">shift-report</span> главной страницей всегда остаётся калькулятор смены.
+                  </p>
                   <Button
                     size="sm"
                     className="w-full gap-2"
