@@ -10,6 +10,7 @@ export type PointDeviceContext = {
     company_id: string
     name: string
     device_token: string
+    shift_report_chat_id: string | null
     point_mode: string
     feature_flags: Record<string, unknown> | null
     is_active: boolean
@@ -43,7 +44,7 @@ export async function requirePointDevice(request: Request): Promise<
   const supabase = createAdminSupabaseClient()
   const { data, error } = await supabase
     .from('point_devices')
-    .select('id, company_id, name, device_token, point_mode, feature_flags, is_active, notes, company:company_id(id, name, code)')
+    .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, company:company_id(id, name, code)')
     .eq('device_token', token)
     .maybeSingle()
 

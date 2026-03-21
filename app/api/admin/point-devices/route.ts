@@ -17,6 +17,7 @@ type Body =
         company_id: string
         name: string
         point_mode: string
+        shift_report_chat_id?: string | null
         notes?: string | null
         feature_flags?: Partial<PointFeatureFlags> | null
       }
@@ -28,6 +29,7 @@ type Body =
         company_id: string
         name: string
         point_mode: string
+        shift_report_chat_id?: string | null
         notes?: string | null
         feature_flags?: Partial<PointFeatureFlags> | null
       }
@@ -60,6 +62,15 @@ function normalizeFlags(input: Partial<PointFeatureFlags> | null | undefined): P
     income_report: input?.income_report !== false,
     debt_report: input?.debt_report === true,
   }
+}
+
+function normalizeShiftReportChatId(value: string | null | undefined) {
+  const chatId = String(value || '').trim()
+  if (!chatId) return null
+  if (!/^-?\d+$/.test(chatId)) {
+    throw new Error('Неверный формат Telegram chat ID')
+  }
+  return chatId
 }
 
 function mapDeviceRow(row: any) {
@@ -95,7 +106,7 @@ export async function GET(request: Request) {
       supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
       supabase
         .from('point_devices')
-        .select('id, company_id, name, device_token, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
         .order('created_at', { ascending: false }),
     ])
 
@@ -145,13 +156,14 @@ export async function POST(request: Request) {
           {
             company_id: body.payload.company_id,
             name: body.payload.name.trim(),
+            shift_report_chat_id: normalizeShiftReportChatId(body.payload.shift_report_chat_id),
             point_mode: body.payload.point_mode.trim(),
             notes: body.payload.notes?.trim() || null,
             feature_flags: normalizeFlags(body.payload.feature_flags),
             device_token: initialToken,
           },
         ])
-        .select('id, company_id, name, device_token, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
         .single()
 
       if (error) throw error
@@ -164,6 +176,7 @@ export async function POST(request: Request) {
         payload: {
           company_id: data.company_id,
           name: data.name,
+          shift_report_chat_id: data.shift_report_chat_id || null,
           point_mode: data.point_mode,
           feature_flags: normalizeFlags(data.feature_flags),
         },
@@ -184,12 +197,13 @@ export async function POST(request: Request) {
         .update({
           company_id: body.payload.company_id,
           name: body.payload.name.trim(),
+          shift_report_chat_id: normalizeShiftReportChatId(body.payload.shift_report_chat_id),
           point_mode: body.payload.point_mode.trim(),
           notes: body.payload.notes?.trim() || null,
           feature_flags: normalizeFlags(body.payload.feature_flags),
         })
         .eq('id', body.deviceId)
-        .select('id, company_id, name, device_token, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
         .single()
 
       if (error) throw error
@@ -202,6 +216,7 @@ export async function POST(request: Request) {
         payload: {
           company_id: data.company_id,
           name: data.name,
+          shift_report_chat_id: data.shift_report_chat_id || null,
           point_mode: data.point_mode,
           feature_flags: normalizeFlags(data.feature_flags),
         },
@@ -215,7 +230,7 @@ export async function POST(request: Request) {
         .from('point_devices')
         .update({ is_active: body.is_active })
         .eq('id', body.deviceId)
-        .select('id, company_id, name, device_token, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
         .single()
 
       if (error) throw error
@@ -243,7 +258,7 @@ export async function POST(request: Request) {
         .from('point_devices')
         .update({ device_token: nextToken })
         .eq('id', body.deviceId)
-        .select('id, company_id, name, device_token, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
         .single()
 
       if (error) throw error

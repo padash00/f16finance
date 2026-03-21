@@ -13,6 +13,9 @@ function json(data: unknown, status = 200) {
 type Body = {
   email?: string
   password?: string
+  action?: 'updateShiftReportChatId'
+  deviceId?: string
+  shift_report_chat_id?: string | null
 }
 
 function normalizeFlags(input: Record<string, unknown> | null | undefined) {
@@ -21,6 +24,15 @@ function normalizeFlags(input: Record<string, unknown> | null | undefined) {
     income_report: input?.income_report !== false,
     debt_report: input?.debt_report === true,
   }
+}
+
+function normalizeShiftReportChatId(value: string | null | undefined) {
+  const chatId = String(value || '').trim()
+  if (!chatId) return null
+  if (!/^-?\d+$/.test(chatId)) {
+    throw new Error('invalid-shift-report-chat-id')
+  }
+  return chatId
 }
 
 async function requireSuperAdmin(email: string, password: string) {
@@ -67,9 +79,37 @@ export async function POST(request: Request) {
     await requireSuperAdmin(email, password)
 
     const supabase = createAdminSupabaseClient()
+
+    if (body?.action === 'updateShiftReportChatId') {
+      const deviceId = String(body.deviceId || '').trim()
+      if (!deviceId) return json({ error: 'device-id-required' }, 400)
+
+      const { data, error } = await supabase
+        .from('point_devices')
+        .update({
+          shift_report_chat_id: normalizeShiftReportChatId(body.shift_report_chat_id),
+        })
+        .eq('id', deviceId)
+        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+        .single()
+
+      if (error) throw error
+
+      return json({
+        ok: true,
+        data: {
+          device: {
+            ...data,
+            company: Array.isArray((data as any).company) ? (data as any).company[0] || null : (data as any).company || null,
+            feature_flags: normalizeFlags((data as any).feature_flags),
+          },
+        },
+      })
+    }
+
     const { data, error } = await supabase
       .from('point_devices')
-      .select('id, company_id, name, device_token, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+      .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
       .order('created_at', { ascending: false })
 
     if (error) throw error
@@ -93,6 +133,7 @@ export async function POST(request: Request) {
       area: 'point-admin-devices',
       message,
     })
+    if (message === 'invalid-shift-report-chat-id') return json({ error: message }, 400)
     if (message === 'invalid-credentials') return json({ error: message }, 401)
     if (message === 'super-admin-only') return json({ error: message }, 403)
     return json({ error: message || 'Не удалось загрузить устройства для super-admin' }, 500)

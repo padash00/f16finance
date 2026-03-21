@@ -4,7 +4,7 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID
 
 export function isTelegramConfigured(): boolean {
-  return !!(BOT_TOKEN && ADMIN_CHAT_ID)
+  return !!BOT_TOKEN
 }
 
 export async function sendTelegram(
@@ -25,12 +25,14 @@ export async function sendTelegram(
       parse_mode: 'HTML',
     }),
   }).catch(() => {
-    // Не критично — уведомление не обязательно
+    // Уведомление не должно ломать основной сценарий.
   })
 }
 
 export async function notifyShiftReport(params: {
   companyName: string
+  pointName?: string | null
+  reportChatId?: string | null
   operatorName: string | null
   operatorChatId?: string | null
   date: string
@@ -54,22 +56,23 @@ export async function notifyShiftReport(params: {
 
   const lines = [
     `${diffIcon} <b>Смена закрыта</b>`,
-    ``,
+    '',
     `📍 <b>${params.companyName}</b>`,
+    params.pointName ? `🖥 <b>Устройство:</b> ${params.pointName}` : null,
     `👤 ${params.operatorName || '—'} · ${params.date} · ${shiftLabel}`,
-    ``,
+    '',
     params.cashAmount ? `💵 Наличные: ${fmt(params.cashAmount)} ₸` : null,
     params.coins ? `🪙 Мелочь: ${fmt(params.coins)} ₸` : null,
     params.kaspiAmount ? `💳 Kaspi: ${fmt(params.kaspiAmount)} ₸` : null,
     params.onlineAmount ? `🌐 Kaspi Online: ${fmt(params.onlineAmount)} ₸` : null,
     params.debts ? `📋 Тех: ${fmt(params.debts)} ₸` : null,
-    params.startCash ? `➖ Старт: ${fmt(params.startCash)} ₸` : null,
-    params.wipon ? `➖ Вычет: ${fmt(params.wipon)} ₸` : null,
-    ``,
+    params.startCash ? `➡️ Старт: ${fmt(params.startCash)} ₸` : null,
+    params.wipon ? `➡️ Вычет: ${fmt(params.wipon)} ₸` : null,
+    '',
     `<b>ИТОГ: ${diffSign}${fmt(diff)} ₸</b>`,
   ].filter(Boolean).join('\n')
 
-  await sendTelegram(lines)
+  await sendTelegram(lines, params.reportChatId || undefined)
   if (params.operatorChatId) {
     await sendTelegram(lines, params.operatorChatId).catch(() => null)
   }

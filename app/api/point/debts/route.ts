@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 
-import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { sendOperatorDebtTelegramSnapshot } from '@/lib/server/services/salary'
 
 type CreateDebtBody = {
   action: 'createDebt'
@@ -62,7 +63,7 @@ async function resolveOperator(params: {
 }) {
   const { data, error } = await params.supabase
     .from('operators')
-    .select('id, name, short_name, is_active')
+    .select('id, name, short_name, telegram_chat_id, is_active')
     .eq('id', params.operatorId)
     .eq('is_active', true)
     .limit(1)
@@ -340,6 +341,54 @@ export async function POST(request: Request) {
           aggregate_debt_id: aggregateId,
         },
       })
+
+      if (operator?.id && operator?.telegram_chat_id) {
+        try {
+          await sendOperatorDebtTelegramSnapshot(supabase, {
+            operatorId: String(operator.id),
+            operatorName: operator.short_name || operator.name || clientName,
+            operatorChatId: String(operator.telegram_chat_id),
+            weekStart,
+            lastItem: {
+              name: itemName,
+              qty: quantity,
+              total: totalAmount,
+              pointName: device.name,
+              companyName: device.company?.name || null,
+            },
+          })
+
+          await writeNotificationLog(supabase, {
+            channel: 'telegram',
+            recipient: String(operator.telegram_chat_id),
+            status: 'sent',
+            payload: {
+              kind: 'point-debt-notify',
+              operator_id: operator.id,
+              point_device_id: device.id,
+              point_device_name: device.name,
+              company_id: device.company_id,
+              company_name: device.company?.name || null,
+              item_name: itemName,
+              quantity,
+              total_amount: totalAmount,
+              week_start: weekStart,
+            },
+          })
+        } catch (notificationError: any) {
+          await writeNotificationLog(supabase, {
+            channel: 'telegram',
+            recipient: String(operator.telegram_chat_id),
+            status: 'failed',
+            payload: {
+              kind: 'point-debt-notify',
+              operator_id: operator.id,
+              point_device_id: device.id,
+              error: notificationError?.message || 'telegram-send-failed',
+            },
+          })
+        }
+      }
 
       return json({
         ok: true,

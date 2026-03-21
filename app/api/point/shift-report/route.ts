@@ -164,9 +164,10 @@ export async function POST(request: Request) {
       },
     })
 
-    // Уведомление в Telegram при каждой закрытой смене
     notifyShiftReport({
       companyName: device.company?.name || 'Точка',
+      pointName: device.name,
+      reportChatId: device.shift_report_chat_id || null,
       operatorName: operator?.name || null,
       operatorChatId: operator?.telegram_chat_id || null,
       date: payload.date,

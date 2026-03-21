@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Monitor, CheckCircle2, XCircle, RefreshCw, ExternalLink } from 'lucide-react'
+import { Monitor, CheckCircle2, XCircle, RefreshCw, ExternalLink, Save, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import * as api from '@/lib/api'
 import type { AppConfig, AdminSession } from '@/types'
 
@@ -19,20 +20,26 @@ interface Device {
   point_mode: string
   is_active: boolean
   device_token: string
+  shift_report_chat_id: string | null
   last_seen_at: string | null
 }
 
 export default function DevicesPage({ config, session }: Props) {
   const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [chatIds, setChatIds] = useState<Record<string, string>>({})
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
+    setError(null)
     try {
       const data = await api.getAdminDevices(config, session.email, session.password)
-      setDevices((data.data.devices as any[]).map(d => ({
+      const nextDevices = (data.data.devices as any[]).map(d => ({
         id: d.id,
         name: d.name,
         company_id: d.company_id,
@@ -40,10 +47,14 @@ export default function DevicesPage({ config, session }: Props) {
         point_mode: d.point_mode || '—',
         is_active: d.is_active !== false,
         device_token: d.device_token || '',
+        shift_report_chat_id: d.shift_report_chat_id || null,
         last_seen_at: d.last_seen_at || null,
-      })))
+      }))
+      setDevices(nextDevices)
+      setChatIds(Object.fromEntries(nextDevices.map((device: Device) => [device.id, device.shift_report_chat_id || ''])))
     } catch {
       setDevices([])
+      setError('Не удалось загрузить устройства')
     } finally {
       setLoading(false)
     }
@@ -62,13 +73,38 @@ export default function DevicesPage({ config, session }: Props) {
     return d.toLocaleDateString('ru-RU')
   }
 
+  async function saveChatId(deviceId: string) {
+    setSavingId(deviceId)
+    setMessage(null)
+    setError(null)
+    try {
+      await api.updateAdminDeviceShiftReportChat(
+        config,
+        session.email,
+        session.password,
+        deviceId,
+        chatIds[deviceId]?.trim() || null,
+      )
+      setMessage('Telegram chat ID сохранён')
+      await load()
+    } catch (err: any) {
+      setError(
+        err?.message === 'invalid-shift-report-chat-id'
+          ? 'Неверный Telegram chat ID. Используйте числовой ID, например -1001234567890'
+          : err?.message || 'Не удалось сохранить Telegram chat ID',
+      )
+    } finally {
+      setSavingId(null)
+    }
+  }
+
   return (
     <div className="p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold">Устройства</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Для добавления устройства используйте веб-панель
+            Здесь можно задать Telegram chat ID для канала, куда будут уходить сменные отчёты по каждой точке.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -88,6 +124,9 @@ export default function DevicesPage({ config, session }: Props) {
         </div>
       </div>
 
+      {message ? <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">{message}</div> : null}
+      {error ? <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</div> : null}
+
       {loading ? (
         <div className="flex h-40 items-center justify-center">
           <span className="animate-spin h-6 w-6 border-2 border-border border-t-foreground rounded-full" />
@@ -101,7 +140,7 @@ export default function DevicesPage({ config, session }: Props) {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {devices.map(device => (
             <Card key={device.id}>
-              <CardContent className="p-4 space-y-3">
+              <CardContent className="p-4 space-y-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{device.name}</p>
@@ -131,6 +170,30 @@ export default function DevicesPage({ config, session }: Props) {
                       {device.device_token.slice(0, 6)}••••••••
                     </span>
                   </div>
+                </div>
+
+                <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Telegram канал сменных отчётов
+                  </div>
+                  <Input
+                    value={chatIds[device.id] || ''}
+                    onChange={(event) => setChatIds((prev) => ({ ...prev, [device.id]: event.target.value }))}
+                    placeholder="-1001234567890"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Укажи числовой chat ID канала или группы. В отчёте будет видно и точку, и устройство.
+                  </p>
+                  <Button
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={() => saveChatId(device.id)}
+                    disabled={savingId === device.id}
+                  >
+                    <Save className="h-4 w-4" />
+                    {savingId === device.id ? 'Сохраняю...' : 'Сохранить chat ID'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

@@ -257,3 +257,24 @@ export async function getAdminDevices(config: AppConfig, email: string, password
     config, 'POST', '/api/point/admin-devices', { email, password },
   )
 }
+
+export async function updateAdminDeviceShiftReportChat(
+  config: AppConfig,
+  email: string,
+  password: string,
+  deviceId: string,
+  shiftReportChatId: string | null,
+) {
+  return request<{ ok: boolean; data: { device: unknown } }>(
+    config,
+    'POST',
+    '/api/point/admin-devices',
+    {
+      email,
+      password,
+      action: 'updateShiftReportChatId',
+      deviceId,
+      shift_report_chat_id: shiftReportChatId,
+    },
+  )
+}
