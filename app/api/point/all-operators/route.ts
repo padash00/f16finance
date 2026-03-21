@@ -18,21 +18,24 @@ export async function GET(request: Request) {
       .from('operators')
       .select('id, name, short_name, is_active, operator_profiles(full_name)')
       .eq('is_active', true)
-      .order('name')
 
     if (error) throw error
 
-    const operators = ((data || []) as any[]).map((op) => {
-      const profile = Array.isArray(op.operator_profiles)
-        ? op.operator_profiles[0] || null
-        : op.operator_profiles || null
-      return {
-        id: op.id,
-        name: op.name,
-        short_name: op.short_name || null,
-        full_name: profile?.full_name || null,
-      }
-    })
+    const operators = ((data || []) as any[])
+      .map((op) => {
+        if (!op?.id || op.is_active === false) return null
+        const profile = Array.isArray(op.operator_profiles)
+          ? op.operator_profiles[0] || null
+          : op.operator_profiles || null
+        return {
+          id: op.id,
+          name: op.name,
+          short_name: op.short_name || null,
+          full_name: profile?.full_name || null,
+        }
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => String(a.name || '').localeCompare(String(b.name || ''), 'ru'))
 
     return json({ ok: true, operators })
   } catch (error: any) {

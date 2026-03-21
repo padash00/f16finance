@@ -56,16 +56,14 @@ function normalizeMoney(value: unknown) {
   return Math.max(0, Math.round(amount))
 }
 
-async function resolveAssignment(params: {
+async function resolveOperator(params: {
   supabase: any
-  companyId: string
   operatorId: string
 }) {
   const { data, error } = await params.supabase
-    .from('operator_company_assignments')
-    .select('id, role_in_company, is_primary, operator:operator_id(id, name, short_name)')
-    .eq('company_id', params.companyId)
-    .eq('operator_id', params.operatorId)
+    .from('operators')
+    .select('id, name, short_name, is_active')
+    .eq('id', params.operatorId)
     .eq('is_active', true)
     .limit(1)
     .maybeSingle()
@@ -254,17 +252,14 @@ export async function POST(request: Request) {
       if (totalAmount <= 0) return json({ error: 'amount-required' }, 400)
 
       let clientName = payload.client_name?.trim() || null
-      let assignment: any = null
+      let operator: any = null
 
       if (operatorId) {
-        assignment = await resolveAssignment({
+        operator = await resolveOperator({
           supabase,
-          companyId: device.company_id,
           operatorId,
         })
-        if (!assignment) return json({ error: 'operator-not-assigned-to-point' }, 403)
-
-        const operator = Array.isArray(assignment.operator) ? assignment.operator[0] || null : assignment.operator || null
+        if (!operator) return json({ error: 'operator-not-found' }, 404)
         clientName = operator?.name || clientName
       }
 

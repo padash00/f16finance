@@ -193,7 +193,21 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
       setComment('')
       barcodeInputRef.current?.focus()
       api.getDebts(config).then(setDebts).catch(() => {})
-    } catch {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Ошибка отправки долга'
+      const canQueueOffline =
+        message === 'Failed to fetch' ||
+        message.includes('fetch') ||
+        message.includes('NetworkError') ||
+        message.includes('Load failed')
+
+      if (!canQueueOffline) {
+        flash('err', message === 'operator-not-found'
+          ? 'Оператор не найден или неактивен'
+          : message)
+        return
+      }
+
       await queueCreateDebt({
         operator_id: operatorId || null,
         item_name: foundProduct.name,
