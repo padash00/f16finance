@@ -80,6 +80,7 @@ interface IncomeRow {
   kaspi_amount: number | null
   online_amount: number | null
   card_amount: number | null
+  comment: string | null
   created_at?: string
 }
 
@@ -723,7 +724,7 @@ function DrillDownModal({
           amount,
           cash: r.cash_amount ?? 0,
           kaspi: r.kaspi_amount ?? 0,
-          label: [r.zone, r.shift ? SHIFT_LABELS[r.shift] : null].filter(Boolean).join(' · ') || '—',
+          label: [r.zone, r.shift ? SHIFT_LABELS[r.shift] : null, r.comment].filter(Boolean).join(' · ') || '—',
         })
       }
     }
@@ -1182,7 +1183,7 @@ function ReportsContent() {
 
       let incomeQuery = supabase
         .from('incomes')
-        .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,created_at')
+        .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,comment,created_at')
         .gte('date', prevFrom)
         .lte('date', dateTo)
 
