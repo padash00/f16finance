@@ -277,6 +277,14 @@ export function matchesPath(pathname: string, rule: string): boolean {
 }
 
 export function isPublicPath(pathname: string): boolean {
+  if (pathname === '/sitemap.xml' || pathname === '/robots.txt' || pathname === '/manifest.webmanifest') {
+    return true
+  }
+
+  if (pathname === '/icon' || pathname === '/apple-icon' || pathname === '/og-image') {
+    return true
+  }
+
   if (pathname.startsWith('/google') && pathname.endsWith('.html')) {
     return true
   }
