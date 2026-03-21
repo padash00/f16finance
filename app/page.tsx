@@ -2,16 +2,19 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import {
   ArrowRight,
-  BarChart3,
+  BellRing,
   Calculator,
   CheckCircle2,
   CreditCard,
+  LineChart,
   MonitorSmartphone,
-  Network,
+  Send,
   ShieldCheck,
+  Sparkles,
   Target,
   Users,
   Wallet,
+  Workflow,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -21,62 +24,84 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/core/site'
 export const metadata: Metadata = {
   title: 'Система управления клубом, сменами и финансами',
   description:
-    'Orda Control помогает вести доходы и расходы, считать зарплату операторов, контролировать смены, задачи, ОПиУ и EBITDA в одной системе.',
+    'Orda Control объединяет смены, зарплату, доходы, расходы, Telegram-интеграцию, point-программу и управленческий учет в одной системе.',
 }
 
-const metrics = [
-  { value: 'Смены', label: 'дневные и ночные смены, точки и график работы' },
-  { value: 'Финансы', label: 'доходы, расходы, касса, Kaspi и управленческий учет' },
-  { value: 'Команда', label: 'операторы, задачи, долги, зарплата и роли' },
+const highlights = [
+  'Собственная point-программа для точки и кассы',
+  'Интеграция с Telegram для отчетов и уведомлений',
+  'Калькулятор смены для дневных и ночных смен',
+  'ОПиУ и EBITDA по календарным суткам, а не вручную',
 ]
 
-const modules = [
+const advantages = [
   {
-    icon: Wallet,
-    title: 'Доходы и расходы',
-    text: 'Фиксируйте выручку по точкам, контролируйте расходы, собирайте cash flow и сверяйте цифры без ручной каши.',
+    icon: MonitorSmartphone,
+    title: 'Собственная программа для точки',
+    text: 'Не просто веб-форма, а отдельное Electron-приложение: вход по точке, сменный калькулятор, долги, офлайн-очередь и быстрый рабочий интерфейс для сотрудника.',
+  },
+  {
+    icon: Send,
+    title: 'Интеграция с Telegram',
+    text: 'Сменные отчеты уходят в Telegram, долги могут прилетать оператору в личку, а руководитель получает быстрый канал контроля без ручных пересылок.',
   },
   {
     icon: Calculator,
-    title: 'ОПиУ и EBITDA',
-    text: 'Считайте прибыльность по календарным суткам, учитывайте Kaspi, комиссии, фонд оплаты труда и реальные затраты.',
+    title: 'Калькулятор смен и суточный Kaspi',
+    text: 'Для ночных смен можно делить Kaspi до и после полуночи, чтобы суточная выручка, ОПиУ и EBITDA сходились с реальными календарными сутками.',
   },
   {
-    icon: Users,
-    title: 'Зарплата и команда',
-    text: 'Ведите операторов, начисления, авансы, долги, weekly-выплаты и всю структуру команды в одном месте.',
+    icon: Wallet,
+    title: 'Зарплата, авансы и weekly-выплаты',
+    text: 'Операторы, авансы, долги и выплаты собраны в одном контуре. Это позволяет видеть начислено, выплачено и остаток без отдельных таблиц.',
   },
   {
-    icon: Target,
-    title: 'Задачи и KPI',
-    text: 'Ставьте задачи, отслеживайте сроки, планы и фактические показатели, чтобы операционная работа не разваливалась.',
+    icon: Workflow,
+    title: 'Задачи, роли и дисциплина',
+    text: 'Owner, manager, marketer, operator и superadmin работают в одной системе, но видят только свой контур. Плюс задачи, KPI и контроль сроков.',
   },
   {
-    icon: MonitorSmartphone,
-    title: 'Программа для точки',
-    text: 'Electron-приложение для кассы и точки: сменный калькулятор, сканер долгов, офлайн-очередь и Telegram-отчеты.',
-  },
-  {
-    icon: Network,
-    title: 'Роли и контроль доступа',
-    text: 'Разделяйте owner, manager, marketer, operators и superadmin без хаоса в доступах и ручных исключениях.',
+    icon: LineChart,
+    title: 'Управленка на живых данных',
+    text: 'Доходы, расходы, комиссии, зарплата и суточный Kaspi собираются в ОПиУ и EBITDA. Это не просто журнал операций, а рабочая финансовая картина.',
   },
 ]
 
-const useCases = [
-  'Система управления клубом и сетью точек',
-  'Учет смен операторов и графика работы',
-  'Расчет зарплаты операторов и weekly-выплат',
-  'Учет доходов, расходов, ОПиУ и EBITDA',
-  'Кассовая программа и point terminal для точки',
-  'Контроль задач, KPI и операционной дисциплины',
+const productBlocks = [
+  {
+    icon: CreditCard,
+    title: 'Доходы и расходы',
+    text: 'Выручка по точкам, категории расходов, cash flow и ежедневный контроль цифр без ручной каши.',
+  },
+  {
+    icon: Users,
+    title: 'Команда и операторы',
+    text: 'Профили, роли, структура, задачи, долги, weekly-зарплата и понятный операторский контур.',
+  },
+  {
+    icon: Target,
+    title: 'KPI и план-факт',
+    text: 'KPI, weekly-планы, контроль выполнения и управленческие решения по цифрам, а не по ощущениям.',
+  },
+  {
+    icon: BellRing,
+    title: 'Уведомления и Telegram',
+    text: 'Сменные отчеты, уведомления о долгах, каналы по точкам и быстрые сообщения в привычном канале связи.',
+  },
+]
+
+const differentiation = [
+  'Это не шаблонная CRM и не очередная таблица, а система, собранная под реальную сменную работу точки.',
+  'У продукта уже есть собственная desktop-программа для точки, а не только кабинет руководителя.',
+  'Телеграм интегрирован в операционный контур: отчеты, уведомления и связь с командой уже встроены.',
+  'Система учитывает ночные смены, Kaspi, weekly-выплаты, долги и зарплату операторов как реальные бизнес-сценарии, а не как “допишем потом”.',
 ]
 
 const seoPages = [
   {
     href: '/club-management-system',
     title: 'Система управления клубом',
-    text: 'Для запросов про клуб, точки, смены, команду и единый операционный контур.',
+    text: 'Для запросов про клуб, точки, команду, смены и единый рабочий контур.',
   },
   {
     href: '/operator-salary-system',
@@ -117,14 +142,14 @@ const jsonLd = {
 
 export default function MarketingHomePage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.12),transparent_22%),linear-gradient(180deg,#050816_0%,#0a1020_48%,#050816_100%)] text-white">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.12),transparent_20%),linear-gradient(180deg,#050816_0%,#0a1020_48%,#050816_100%)] text-white">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <section className="mx-auto max-w-7xl px-6 pb-10 pt-8 sm:px-8 lg:px-10">
         <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-5 py-4 backdrop-blur">
           <div>
             <div className="text-lg font-semibold">{SITE_NAME}</div>
-            <div className="text-sm text-slate-400">Операционная система для клуба, точки и команды</div>
+            <div className="text-sm text-slate-400">Собственная система для смен, точки, команды и управленки</div>
           </div>
           <div className="flex items-center gap-3">
             <Button asChild variant="ghost" className="hidden sm:inline-flex">
@@ -140,25 +165,34 @@ export default function MarketingHomePage() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-8 px-6 pb-14 sm:px-8 lg:grid-cols-[1.15fr_0.85fr] lg:px-10">
+      <section className="mx-auto grid max-w-7xl gap-8 px-6 pb-14 sm:px-8 lg:grid-cols-[1.1fr_0.9fr] lg:px-10">
         <div className="space-y-8">
           <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.2em] text-amber-200">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Клуб, команда, смены, финансы
+            <Sparkles className="h-3.5 w-3.5" />
+            Собственная разработка под реальные процессы точки
           </div>
 
           <div className="space-y-5">
             <h1 className="max-w-4xl text-4xl font-semibold leading-tight tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl">
-              Понятная система для управления
+              Не просто учет,
               <span className="block bg-gradient-to-r from-amber-300 via-orange-300 to-white bg-clip-text text-transparent">
-                сменами, зарплатой и деньгами
+                а единая рабочая система для клуба и точек
               </span>
             </h1>
             <p className="max-w-3xl text-lg leading-8 text-slate-300">
-              Orda Control объединяет смены, доходы, расходы, долги, задачи, зарплату операторов,
-              ОПиУ, EBITDA и программу для точки в одном рабочем контуре. Вместо десятка таблиц и чатов
-              вы получаете одну систему, где цифры сходятся, а команда понимает, что происходит.
+              Orda Control собирает в одном месте все, что обычно расползается по Excel, чатам и ручным отчетам:
+              смены, доходы, расходы, зарплату операторов, долги, KPI, Telegram-отчеты, point-программу для точки и
+              управленческий учет.
             </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {highlights.map((item) => (
+              <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 text-amber-300" />
+                <div className="text-sm leading-6 text-slate-200">{item}</div>
+              </div>
+            ))}
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -169,85 +203,73 @@ export default function MarketingHomePage() {
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10">
-              <Link href="#modules">Смотреть возможности</Link>
+              <Link href="#advantages">Смотреть преимущества</Link>
             </Button>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            {metrics.map((item) => (
-              <Card key={item.value} className="border-white/10 bg-white/5 p-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
-                <div className="text-lg font-semibold text-amber-200">{item.value}</div>
-                <div className="mt-2 text-sm leading-6 text-slate-300">{item.label}</div>
-              </Card>
-            ))}
           </div>
         </div>
 
         <Card className="overflow-hidden border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 text-white shadow-[0_24px_70px_rgba(0,0,0,0.34)]">
           <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-5">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-slate-400">
-              <span>Орда Контроль</span>
-              <span>Live</span>
+              <span>Почему это цепляет</span>
+              <span>Product</span>
             </div>
             <div className="mt-5 grid gap-4">
               <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
                 <div className="flex items-center gap-2 text-emerald-300">
-                  <BarChart3 className="h-4 w-4" />
-                  Доходы и смены
+                  <MonitorSmartphone className="h-4 w-4" />
+                  Point-программа уже есть
                 </div>
-                <div className="mt-3 text-3xl font-semibold">Kaspi, нал, онлайн</div>
-                <div className="mt-1 text-sm text-slate-300">Суточная сверка, разбор ночных смен и контроль выручки по точкам.</div>
+                <div className="mt-3 text-2xl font-semibold">Смена, долги, офлайн и Telegram</div>
+                <div className="mt-1 text-sm text-slate-300">
+                  Не нужно объяснять сотруднику сложный веб-интерфейс. У точки уже есть отдельный рабочий экран.
+                </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <div className="text-xs uppercase tracking-wide text-slate-400">Команда</div>
-                  <div className="mt-2 text-xl font-semibold">Зарплата, авансы, долги</div>
-                  <div className="mt-1 text-sm text-slate-300">Weekly-выплаты, роли, структура и задачи операторов.</div>
+                  <div className="text-xs uppercase tracking-wide text-slate-400">Telegram</div>
+                  <div className="mt-2 text-xl font-semibold">Отчеты и уведомления</div>
+                  <div className="mt-1 text-sm text-slate-300">Сменные отчеты, долги и события уходят туда, где ими реально пользуются.</div>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <div className="text-xs uppercase tracking-wide text-slate-400">Управленка</div>
-                  <div className="mt-2 text-xl font-semibold">ОПиУ и EBITDA</div>
-                  <div className="mt-1 text-sm text-slate-300">Финансовая картина по точкам, команде и месяцу без ручной магии.</div>
+                  <div className="text-xs uppercase tracking-wide text-slate-400">Финансы</div>
+                  <div className="mt-2 text-xl font-semibold">ОПиУ без ручной магии</div>
+                  <div className="mt-1 text-sm text-slate-300">Kaspi, расходы, зарплата и комиссии собираются в управленческий результат.</div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-amber-300" />
-                  <div className="text-sm leading-6 text-slate-300">
-                    Система подходит для клубов, точек, мини-сетей и команд, которым нужен один рабочий контур:
-                    касса, смены, операторы, расходы, задачи и финансовый результат.
-                  </div>
-                </div>
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-slate-300">
+                Сильная сторона продукта не в “красивом кабинете”, а в том, что в нем уже учтены живые сценарии:
+                дневные и ночные смены, долги по товарам, зарплата операторов, Telegram-отчеты, точки и weekly-выплаты.
               </div>
             </div>
           </div>
         </Card>
       </section>
 
-      <section id="modules" className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
+      <section id="advantages" className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
         <div className="max-w-3xl">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Что делает система</div>
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Преимущества</div>
           <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
-            Всё, что обычно размазано по таблицам, чатам и ручным сводкам
+            Что делает систему интересной уже на первой странице
           </h2>
           <p className="mt-4 text-base leading-7 text-slate-300">
-            Здесь собраны ключевые модули, ради которых люди обычно ищут в Google систему управления клубом,
-            учет смен, расчет зарплаты операторов и управленческий учет по точкам.
+            Здесь важно показать не абстрактные обещания, а то, что в проекте уже реально есть и почему это выгодно
+            руководителю и команде.
           </p>
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {modules.map((module) => {
-            const Icon = module.icon
+          {advantages.map((item) => {
+            const Icon = item.icon
             return (
-              <Card key={module.title} className="border-white/10 bg-white/5 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
+              <Card key={item.title} className="border-white/10 bg-white/5 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-200">
                   <Icon className="h-5 w-5" />
                 </div>
-                <h3 className="mt-5 text-xl font-semibold">{module.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-300">{module.text}</p>
+                <h3 className="mt-5 text-xl font-semibold">{item.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-300">{item.text}</p>
               </Card>
             )
           })}
@@ -258,23 +280,50 @@ export default function MarketingHomePage() {
         <Card className="border-white/10 bg-black/20 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
           <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
             <div>
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Для поисковика и людей</div>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em]">По каким задачам вас должна находить первая страница</h2>
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Что уже есть в продукте</div>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em]">Не концепт, а рабочая экосистема</h2>
               <p className="mt-4 text-base leading-7 text-slate-300">
-                Главная страница должна сразу объяснять, что это не абстрактный сервис, а конкретная система
-                для смен, операторов, доходов, расходов, зарплаты и финансового контроля.
+                На главной должно быть видно, что проект уже закрывает важные процессы: кассу, смены, point-работу,
+                зарплату операторов, задачи, роли и финансовую аналитику.
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              {useCases.map((item) => (
-                <div key={item} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm leading-6 text-slate-200">
-                  {item}
-                </div>
-              ))}
+              {productBlocks.map((item) => {
+                const Icon = item.icon
+                return (
+                  <div key={item.title} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                    <div className="flex items-center gap-2 text-amber-200">
+                      <Icon className="h-4 w-4" />
+                      <span className="text-sm font-semibold">{item.title}</span>
+                    </div>
+                    <div className="mt-2 text-sm leading-6 text-slate-300">{item.text}</div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </Card>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
+        <div className="max-w-3xl">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Чем отличается</div>
+          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
+            Почему это не выглядит как обычный учетный сайт
+          </h2>
+        </div>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-2">
+          {differentiation.map((item) => (
+            <Card key={item} className="border-white/10 bg-white/5 p-5 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 text-amber-300" />
+                <p className="text-sm leading-7 text-slate-300">{item}</p>
+              </div>
+            </Card>
+          ))}
+        </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
@@ -284,7 +333,7 @@ export default function MarketingHomePage() {
             Отдельные страницы под главные поисковые запросы
           </h2>
           <p className="mt-4 text-base leading-7 text-slate-300">
-            Эти страницы уже заточены под конкретные сценарии: управление клубом, зарплата операторов, ОПиУ и программа для точки.
+            Мы уже выделили отдельные страницы под самые важные темы, чтобы сайт находили не только по названию бренда.
           </p>
         </div>
 
@@ -307,8 +356,8 @@ export default function MarketingHomePage() {
             <div className="max-w-3xl">
               <h2 className="text-3xl font-semibold tracking-[-0.03em]">Нужен вход в рабочую систему?</h2>
               <p className="mt-3 text-base leading-7 text-slate-200">
-                Для сотрудников и администраторов вход остаётся по защищенному контуру. Публичная главная теперь объясняет,
-                что это за продукт, а внутренняя часть остаётся рабочей панелью управления.
+                Публичная главная теперь объясняет продукт, а внутренняя часть остается защищенной рабочей системой для
+                команды, точки и руководителя.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
