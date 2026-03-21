@@ -3,14 +3,18 @@ import Link from 'next/link'
 import {
   ArrowRight,
   BellRing,
+  Building2,
   Calculator,
   CheckCircle2,
+  Clock3,
   CreditCard,
+  Crown,
   LineChart,
   MonitorSmartphone,
   Send,
   ShieldCheck,
   Sparkles,
+  Store,
   Target,
   Users,
   Wallet,
@@ -32,6 +36,12 @@ const highlights = [
   'Интеграция с Telegram для отчетов и уведомлений',
   'Калькулятор смены для дневных и ночных смен',
   'ОПиУ и EBITDA по календарным суткам, а не вручную',
+]
+
+const heroStats = [
+  { label: 'Рабочих контуров', value: '8+' },
+  { label: 'Telegram-сценариев', value: 'Live' },
+  { label: 'Форматов смен', value: 'Day / Night' },
 ]
 
 const advantages = [
@@ -118,6 +128,31 @@ const seoPages = [
     title: 'Программа для точки',
     text: 'Для запросов про кассовую программу, сменный калькулятор и point terminal.',
   },
+]
+
+const audiences = [
+  {
+    icon: Crown,
+    title: 'Для владельца',
+    text: 'Видеть выручку, расходы, зарплату, ОПиУ и EBITDA не в конце месяца, а как живую картину по точкам.',
+  },
+  {
+    icon: Building2,
+    title: 'Для руководителя',
+    text: 'Управлять сменами, задачами, точками, дисциплиной и командой в одном рабочем контуре без лишних таблиц.',
+  },
+  {
+    icon: Store,
+    title: 'Для точки',
+    text: 'Работать в отдельной программе с быстрым калькулятором смены, долгами, Telegram-отчетом и офлайн-очередью.',
+  },
+]
+
+const outcomes = [
+  'Меньше ручных пересылок и сверок в конце смены.',
+  'Быстрее видно, кто сколько должен, кому сколько платить и как реально сработала точка.',
+  'Telegram становится частью процесса, а не внешним костылем.',
+  'Управленка собирается из тех же данных, на которых работает точка.',
 ]
 
 const workflowSteps = [
@@ -214,6 +249,15 @@ export default function MarketingHomePage() {
             ))}
           </div>
 
+          <div className="grid gap-3 sm:grid-cols-3">
+            {heroStats.map((item) => (
+              <div key={item.label} className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
+                <div className="text-2xl font-semibold text-amber-200">{item.value}</div>
+                <div className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">{item.label}</div>
+              </div>
+            ))}
+          </div>
+
           <div className="flex flex-wrap gap-3">
             <Button asChild size="lg" className="bg-amber-500 text-slate-950 hover:bg-amber-400">
               <Link href="/login">
@@ -281,6 +325,33 @@ export default function MarketingHomePage() {
 
         <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {advantages.map((item) => {
+            const Icon = item.icon
+            return (
+              <Card key={item.title} className="border-white/10 bg-white/5 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-200">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="mt-5 text-xl font-semibold">{item.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-300">{item.text}</p>
+              </Card>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
+        <div className="max-w-3xl">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-amber-200">Для кого это</div>
+          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">
+            Система интересна тем, у кого бизнес уже перерос таблицы
+          </h2>
+          <p className="mt-4 text-base leading-7 text-slate-300">
+            Чем больше точек, смен, операторов, долгов и ручных согласований, тем сильнее ценность единого контура, а не разрозненных инструментов.
+          </p>
+        </div>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {audiences.map((item) => {
             const Icon = item.icon
             return (
               <Card key={item.title} className="border-white/10 bg-white/5 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)]">
@@ -476,6 +547,32 @@ export default function MarketingHomePage() {
             </Card>
           ))}
         </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
+        <Card className="border-white/10 bg-black/20 p-6 text-white shadow-[0_18px_48px_rgba(0,0,0,0.24)] sm:p-8">
+          <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-200">
+                <Clock3 className="h-3.5 w-3.5" />
+                Что получает бизнес
+              </div>
+              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.03em]">Не просто интерфейс, а меньше операционного шума</h2>
+              <p className="mt-4 text-base leading-7 text-slate-300">
+                Сильный продукт привлекает не только дизайном. Он притягивает тем, что после внедрения становится меньше ручной суеты, спорных цифр и сломанных процессов.
+              </p>
+            </div>
+
+            <div className="grid gap-3">
+              {outcomes.map((item) => (
+                <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-amber-300" />
+                  <div className="text-sm leading-6 text-slate-200">{item}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-14 sm:px-8 lg:px-10">
