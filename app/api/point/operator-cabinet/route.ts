@@ -66,10 +66,10 @@ export async function GET(request: Request) {
         .order('date', { ascending: false })
         .limit(400),
       supabase
-        .from('point_debt_items')
-        .select('id, company_id, operator_id, item_name, quantity, total_amount, comment, week_start, created_at, status')
+        .from('debts')
+        .select('id, company_id, operator_id, amount, comment, week_start, date, status')
         .eq('operator_id', operatorId)
-        .order('created_at', { ascending: false })
+        .order('week_start', { ascending: false })
         .limit(400),
     ])
 
@@ -122,12 +122,12 @@ export async function GET(request: Request) {
     const debts = ((debtsRes.data || []) as any[]).map((row) => ({
       id: String(row.id),
       operator_id: row.operator_id || null,
-      item_name: String(row.item_name || 'Товар'),
-      quantity: Number(row.quantity || 0),
-      total_amount: Number(row.total_amount || 0),
+      item_name: 'Долг недели',
+      quantity: 1,
+      total_amount: Number(row.amount || 0),
       comment: row.comment || null,
       week_start: row.week_start || null,
-      created_at: String(row.created_at),
+      created_at: String(row.date || row.week_start),
       status: String(row.status || 'active'),
       company_id: row.company_id || null,
       company_name: row.company_id ? companyMap.get(String(row.company_id))?.name || null : null,
