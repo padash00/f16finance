@@ -202,8 +202,8 @@ type InventoryView =
 
 const inventoryViewMeta: Record<InventoryView, { title: string; description: string }> = {
   overview: {
-    title: 'Инвентарь и склад',
-    description: 'Общий обзор центрального склада, витрин точек, заявок и последних операций.',
+    title: 'Магазин',
+    description: 'Центр управления магазином: склад, витрины точек, заявки и последние товарные операции.',
   },
   catalog: {
     title: 'Каталог магазина',
@@ -2214,10 +2214,10 @@ function InventoryOverviewCenter({
           <SectionTitle icon={ClipboardCheck} title="Центр магазина" subtitle="Главные действия по магазину: заявки, приемка, остатки и ревизия." />
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <QuickLinkCard href="/inventory/requests" icon={ClipboardCheck} title="Заявки" note={`${pendingRequests.length} новых`} />
-            <QuickLinkCard href="/inventory/receipts" icon={PackagePlus} title="Приемка" note={`${recentReceipts.length} последних документов`} />
-            <QuickLinkCard href="/inventory/analytics" icon={Boxes} title="Остатки точек" note={`${groupedPointBalances.length} витрин`} />
-            <QuickLinkCard href="/inventory/revisions" icon={ScanSearch} title="Ревизия" note={`${stocktakesCount} последних проверок`} />
+            <QuickLinkCard href="/store/requests" icon={ClipboardCheck} title="Заявки" note={`${pendingRequests.length} новых`} />
+            <QuickLinkCard href="/store/receipts" icon={PackagePlus} title="Приемка" note={`${recentReceipts.length} последних документов`} />
+            <QuickLinkCard href="/store/analytics" icon={Boxes} title="Остатки точек" note={`${groupedPointBalances.length} витрин`} />
+            <QuickLinkCard href="/store/revisions" icon={ScanSearch} title="Ревизия" note={`${stocktakesCount} последних проверок`} />
           </div>
 
           <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -2228,7 +2228,7 @@ function InventoryOverviewCenter({
                   <div className="text-xs text-muted-foreground">То, что требует решения прямо сейчас.</div>
                 </div>
                 <Button asChild variant="outline" size="sm">
-                  <Link href="/inventory/requests">Все заявки</Link>
+                  <Link href="/store/requests">Все заявки</Link>
                 </Button>
               </div>
               <div className="space-y-3">
@@ -2263,7 +2263,7 @@ function InventoryOverviewCenter({
                   <div className="text-xs text-muted-foreground">Текущий остаток и насыщенность витрин по точкам.</div>
                 </div>
                 <Button asChild variant="outline" size="sm">
-                  <Link href="/inventory/analytics">Открыть аналитику</Link>
+                  <Link href="/store/analytics">Открыть аналитику</Link>
                 </Button>
               </div>
               <div className="space-y-3">
@@ -2481,3 +2481,4 @@ function PointMetricCard({
 export default function InventoryPage() {
   return <InventoryPageContent />
 }
+

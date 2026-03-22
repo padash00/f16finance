@@ -1,5 +1,5 @@
-import { InventoryPageContent } from '../page'
+import { redirect } from 'next/navigation'
 
 export default function InventoryAnalyticsPage() {
-  return <InventoryPageContent forcedView="analytics" />
+  redirect('/store/analytics')
 }
