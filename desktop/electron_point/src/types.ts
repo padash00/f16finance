@@ -92,9 +92,10 @@ export type AppView =
   | { screen: 'login'; bootstrap: BootstrapData }
   | { screen: 'point-select'; bootstrap: BootstrapData; session: OperatorSession; allCompanies: CompanyOption[] }
   | { screen: 'shift'; bootstrap: BootstrapData; session: OperatorSession }
+  | { screen: 'inventory-sale'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'scanner'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'inventory-request'; bootstrap: BootstrapData; session: OperatorSession }
-  | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'scanner' }
+  | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'sale' | 'scanner' }
   | { screen: 'admin'; session: AdminSession; bootstrap?: BootstrapData }
 
 export interface AppUpdateProgress {
@@ -271,4 +272,54 @@ export interface PointInventoryRequestContext {
   targetLocation: { id: string; name: string; code: string | null; location_type: string }
   items: PointInventoryRequestItem[]
   requests: PointInventoryRequestRow[]
+}
+
+export interface PointInventorySaleItem {
+  id: string
+  name: string
+  barcode: string
+  unit: string
+  sale_price: number
+  display_qty: number
+  category?: { id: string; name: string } | null
+}
+
+export interface PointInventorySaleRow {
+  id: string
+  sale_date: string
+  shift: 'day' | 'night'
+  payment_method: 'cash' | 'kaspi' | 'mixed'
+  cash_amount: number
+  kaspi_amount: number
+  kaspi_before_midnight_amount: number
+  kaspi_after_midnight_amount: number
+  total_amount: number
+  comment: string | null
+  sold_at: string
+  items?: Array<{
+    id: string
+    quantity: number
+    unit_price: number
+    total_price: number
+    item?: { id: string; name: string; barcode: string } | null
+  }>
+}
+
+export interface PointInventorySaleShiftSummary {
+  date: string
+  shift: 'day' | 'night'
+  sale_count: number
+  item_count: number
+  total_amount: number
+  cash_amount: number
+  kaspi_amount: number
+  kaspi_before_midnight_amount: number
+  kaspi_after_midnight_amount: number
+}
+
+export interface PointInventorySaleContext {
+  company: { id: string; name: string; code: string | null }
+  location: { id: string; name: string; code: string | null; location_type: string }
+  items: PointInventorySaleItem[]
+  sales: PointInventorySaleRow[]
 }

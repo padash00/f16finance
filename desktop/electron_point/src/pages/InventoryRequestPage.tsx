@@ -30,6 +30,7 @@ interface Props {
   session: OperatorSession
   onLogout: () => void
   onSwitchToShift: () => void
+  onSwitchToSale?: () => void
   onSwitchToScanner?: () => void
   onOpenCabinet?: () => void
 }
@@ -72,6 +73,7 @@ export default function InventoryRequestPage({
   session,
   onLogout,
   onSwitchToShift,
+  onSwitchToSale,
   onSwitchToScanner,
   onOpenCabinet,
 }: Props) {
@@ -157,9 +159,11 @@ export default function InventoryRequestPage({
         <div className="flex items-center gap-2 no-drag">
           <WorkModeSwitch
             active="request"
+            showSale={!!onSwitchToSale}
             showScanner={!!onSwitchToScanner}
             showRequest
             onShift={onSwitchToShift}
+            onSale={onSwitchToSale}
             onScanner={onSwitchToScanner}
             onCabinet={onOpenCabinet}
           />

@@ -9,7 +9,9 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  CreditCard,
   LogOut,
+  ShoppingBasket,
   ReceiptText,
   RefreshCw,
   Send,
@@ -29,7 +31,14 @@ import { toastSuccess, toastError } from '@/lib/toast'
 import * as api from '@/lib/api'
 import { syncQueue, getPendingCount, queueShiftReport } from '@/lib/offline'
 import QueueViewer from '@/components/QueueViewer'
-import type { AppConfig, BootstrapData, DailyKaspiReport, OperatorSession, ShiftForm } from '@/types'
+import type {
+  AppConfig,
+  BootstrapData,
+  DailyKaspiReport,
+  OperatorSession,
+  PointInventorySaleShiftSummary,
+  ShiftForm,
+} from '@/types'
 
 interface Props {
   config: AppConfig
@@ -37,6 +46,7 @@ interface Props {
   session: OperatorSession
   isOffline?: boolean
   onLogout: () => void
+  onSwitchToSale?: () => void
   onSwitchToScanner?: () => void
   onSwitchToRequest?: () => void
   onOpenCabinet?: () => void
@@ -85,6 +95,7 @@ export default function ShiftPage({
   session,
   isOffline,
   onLogout,
+  onSwitchToSale,
   onSwitchToScanner,
   onSwitchToRequest,
   onOpenCabinet,
@@ -122,8 +133,11 @@ export default function ShiftPage({
   const [dailyLoading, setDailyLoading] = useState(false)
   const [dailyError, setDailyError] = useState<string | null>(null)
   const [dailyReport, setDailyReport] = useState<DailyKaspiReport | null>(null)
+  const [salesSummary, setSalesSummary] = useState<PointInventorySaleShiftSummary | null>(null)
+  const [salesSummaryLoading, setSalesSummaryLoading] = useState(false)
 
   const flags = bootstrap.device.feature_flags
+  const hasInventorySale = !!onSwitchToSale
   const hasScanner = flags.debt_report && onSwitchToScanner
   const hasInventoryRequest = !!onSwitchToRequest
   const kaspiDailySplitEnabled = flags.kaspi_daily_split === true
@@ -215,17 +229,46 @@ export default function ShiftPage({
     }
   }, [dailyDate, kaspiDailySplitEnabled, loadDailyReport, viewMode])
 
+  const loadSalesSummary = useCallback(async (date: string, shift: 'day' | 'night') => {
+    if (!hasInventorySale) {
+      setSalesSummary(null)
+      return
+    }
+
+    setSalesSummaryLoading(true)
+    try {
+      const summary = await api.getPointInventorySaleShiftSummary(config, date, shift)
+      setSalesSummary(summary)
+    } catch {
+      setSalesSummary(null)
+    } finally {
+      setSalesSummaryLoading(false)
+    }
+  }, [config, hasInventorySale])
+
+  useEffect(() => {
+    if (viewMode !== 'shift') return
+    if (form.shift !== 'day' && form.shift !== 'night') return
+    void loadSalesSummary(form.date, form.shift)
+  }, [form.date, form.shift, loadSalesSummary, viewMode])
+
   const vCash = parseMoney(form.cash)
   const vCoins = parseMoney(form.coins)
   const vKaspi = parseMoney(form.kaspi_pos)
   const vKaspiBeforeMidnight = parseMoney(form.kaspi_before_midnight)
-  const vKaspiTotal = isNightKaspiSplit ? vKaspiBeforeMidnight + vKaspi : vKaspi
+  const autoSalesCash = salesSummary?.cash_amount || 0
+  const autoSalesKaspiBeforeMidnight = salesSummary?.kaspi_before_midnight_amount || 0
+  const autoSalesKaspiAfterMidnight = salesSummary?.kaspi_after_midnight_amount || 0
+  const autoSalesKaspiTotal = salesSummary?.kaspi_amount || 0
+  const vKaspiTotal = isNightKaspiSplit
+    ? vKaspiBeforeMidnight + vKaspi + autoSalesKaspiBeforeMidnight + autoSalesKaspiAfterMidnight
+    : vKaspi + autoSalesKaspiTotal
   const vKaspiOnline = parseMoney(form.kaspi_online)
   const vDebts = parseMoney(form.debts)
   const vStart = parseMoney(form.start)
   const vWipon = parseMoney(form.wipon)
 
-  const fact = vCash + vCoins + vKaspiTotal + vDebts - vStart
+  const fact = vCash + autoSalesCash + vCoins + vKaspiTotal + vDebts - vStart
   const itog = fact - vWipon
 
   function setField(key: keyof ShiftForm, value: string) {
@@ -307,7 +350,15 @@ export default function ShiftPage({
       const fullForm: ShiftForm = {
         ...form,
         operator_id: session.operator.operator_id,
-        kaspi_before_midnight: isNightKaspiSplit ? form.kaspi_before_midnight : '',
+        cash: String(vCash + autoSalesCash),
+        kaspi_pos: String(
+          isNightKaspiSplit
+            ? vKaspi + autoSalesKaspiAfterMidnight
+            : vKaspi + autoSalesKaspiTotal,
+        ),
+        kaspi_before_midnight: isNightKaspiSplit
+          ? String(vKaspiBeforeMidnight + autoSalesKaspiBeforeMidnight)
+          : '',
       }
       const sendResult = await sendOne(fullForm)
       setPendingCount(await getPendingCount())
@@ -421,8 +472,10 @@ export default function ShiftPage({
 
           <WorkModeSwitch
             active="shift"
+            showSale={hasInventorySale}
             showScanner={!!hasScanner}
             showRequest={hasInventoryRequest}
+            onSale={onSwitchToSale}
             onScanner={hasScanner ? onSwitchToScanner : undefined}
             onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
@@ -724,6 +777,60 @@ export default function ShiftPage({
                     />
                   </div>
 
+                  {hasInventorySale ? (
+                    <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+                            <ShoppingBasket className="h-4 w-4" />
+                            Товарные продажи этой смены
+                          </div>
+                          <p className="mt-1 text-xs text-emerald-100/80">
+                            Продажи из витрины уже попадут в итог смены автоматически. В поля прихода их повторно добавлять не нужно.
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15"
+                          onClick={onSwitchToSale}
+                        >
+                          Открыть продажи
+                        </Button>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-4">
+                        <TerminalMiniStat
+                          label="Чеков"
+                          value={salesSummaryLoading ? '...' : String(salesSummary?.sale_count || 0)}
+                          tone="success"
+                        />
+                        <TerminalMiniStat
+                          label="Наличными"
+                          value={salesSummaryLoading ? '...' : formatMoney(autoSalesCash)}
+                          tone="success"
+                        />
+                        <TerminalMiniStat
+                          label={isNightKaspiSplit ? 'Kaspi до / после 00:00' : 'Kaspi'}
+                          value={
+                            salesSummaryLoading
+                              ? '...'
+                              : isNightKaspiSplit
+                                ? `${formatMoney(autoSalesKaspiBeforeMidnight)} / ${formatMoney(autoSalesKaspiAfterMidnight)}`
+                                : formatMoney(autoSalesKaspiTotal)
+                          }
+                          tone="info"
+                        />
+                        <TerminalMiniStat
+                          label="Итого"
+                          value={salesSummaryLoading ? '...' : formatMoney(salesSummary?.total_amount || 0)}
+                          tone="warning"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label className="text-xs uppercase tracking-wide text-muted-foreground">Дата</Label>
@@ -916,6 +1023,13 @@ export default function ShiftPage({
                     label={pendingCount > 0 ? `Очередь: ${pendingCount}` : 'Очередь пуста'}
                     onClick={() => setShowQueue(true)}
                   />
+                  {onSwitchToSale ? (
+                    <QuickActionButton
+                      icon={<ShoppingBasket className="h-4 w-4" />}
+                      label="Продажи с витрины"
+                      onClick={onSwitchToSale}
+                    />
+                  ) : null}
                   {hasScanner ? (
                     <QuickActionButton
                       icon={<CreditCard className="h-4 w-4" />}

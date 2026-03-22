@@ -13,6 +13,8 @@ import type {
   DailyKaspiReport,
   ShiftRecord,
   PointInventoryRequestContext,
+  PointInventorySaleContext,
+  PointInventorySaleShiftSummary,
 } from '@/types'
 import { parseMoney } from '@/lib/utils'
 
@@ -385,6 +387,67 @@ export async function createPointInventoryRequest(
     '/api/point/inventory-requests',
     {
       action: 'createRequest',
+      payload,
+    },
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
+export async function getPointInventorySales(
+  config: AppConfig,
+  session: OperatorSession,
+): Promise<PointInventorySaleContext> {
+  const data = await request<{ ok: boolean; data: PointInventorySaleContext }>(
+    config,
+    'GET',
+    '/api/point/inventory-sales',
+    undefined,
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
+export async function getPointInventorySaleShiftSummary(
+  config: AppConfig,
+  date: string,
+  shift: 'day' | 'night',
+): Promise<PointInventorySaleShiftSummary> {
+  const data = await request<{ ok: boolean; data: PointInventorySaleShiftSummary }>(
+    config,
+    'GET',
+    `/api/point/inventory-sales?view=shift-summary&date=${encodeURIComponent(date)}&shift=${encodeURIComponent(shift)}`,
+  )
+  return data.data
+}
+
+export async function createPointInventorySale(
+  config: AppConfig,
+  session: OperatorSession,
+  payload: {
+    sale_date: string
+    shift: 'day' | 'night'
+    payment_method: 'cash' | 'kaspi' | 'mixed'
+    cash_amount?: number | null
+    kaspi_amount?: number | null
+    kaspi_before_midnight_amount?: number | null
+    kaspi_after_midnight_amount?: number | null
+    comment?: string | null
+    local_ref?: string | null
+    items: Array<{
+      item_id: string
+      quantity: number
+      unit_price: number
+      comment?: string | null
+    }>
+  },
+): Promise<{ sale_id: string | null; total_amount: number }> {
+  const data = await request<{ ok: boolean; data: { sale_id: string | null; total_amount: number } }>(
+    config,
+    'POST',
+    '/api/point/inventory-sales',
+    {
+      action: 'createSale',
       payload,
     },
     operatorHeaders(session),

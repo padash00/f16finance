@@ -6,6 +6,7 @@ import { toastInfo } from '@/lib/toast'
 import LoginPage from '@/pages/LoginPage'
 import PointSelectPage from '@/pages/PointSelectPage'
 import ShiftPage from '@/pages/ShiftPage'
+import InventorySalesPage from '@/pages/InventorySalesPage'
 import ScannerPage from '@/pages/ScannerPage'
 import InventoryRequestPage from '@/pages/InventoryRequestPage'
 import OperatorCabinetPage from '@/pages/OperatorCabinetPage'
@@ -68,6 +69,11 @@ function canUseInventoryRequests(bootstrap: BootstrapData) {
   return new Set(['cash-desk', 'universal', 'debts']).has(pointMode)
 }
 
+function canUseInventorySales(bootstrap: BootstrapData) {
+  const pointMode = String(bootstrap.device.point_mode || '').trim().toLowerCase()
+  return new Set(['cash-desk', 'universal', 'debts']).has(pointMode)
+}
+
 function isOperatorAttachedToCurrentPoint(session: OperatorSession, bootstrap: BootstrapData) {
   return session.company.id === bootstrap.company.id
 }
@@ -80,8 +86,18 @@ function canUseInventoryRequestsForSession(session: OperatorSession) {
   return canUseInventoryRequests(session.bootstrap) && isOperatorAttachedToCurrentPoint(session, session.bootstrap)
 }
 
+function canUseInventorySalesForSession(session: OperatorSession) {
+  return canUseInventorySales(session.bootstrap) && isOperatorAttachedToCurrentPoint(session, session.bootstrap)
+}
+
 function getActiveOperatorSession(view: AppView): OperatorSession | null {
-  if (view.screen === 'shift' || view.screen === 'scanner' || view.screen === 'inventory-request' || view.screen === 'operator-cabinet') {
+  if (
+    view.screen === 'shift' ||
+    view.screen === 'inventory-sale' ||
+    view.screen === 'scanner' ||
+    view.screen === 'inventory-request' ||
+    view.screen === 'operator-cabinet'
+  ) {
     return view.session
   }
   return null
@@ -325,12 +341,23 @@ export default function App() {
             })
             notification.onclick = () => {
               const currentView = latestViewRef.current
-              if (currentView.screen === 'shift' || currentView.screen === 'scanner' || currentView.screen === 'inventory-request' || currentView.screen === 'operator-cabinet') {
+              if (
+                currentView.screen === 'shift' ||
+                currentView.screen === 'inventory-sale' ||
+                currentView.screen === 'scanner' ||
+                currentView.screen === 'inventory-request' ||
+                currentView.screen === 'operator-cabinet'
+              ) {
                 setView({
                   screen: 'operator-cabinet',
                   bootstrap: currentView.bootstrap,
                   session: currentView.session,
-                  returnTo: currentView.screen === 'scanner' ? 'scanner' : 'shift',
+                  returnTo:
+                    currentView.screen === 'scanner'
+                      ? 'scanner'
+                      : currentView.screen === 'inventory-sale'
+                        ? 'sale'
+                        : 'shift',
                 })
               }
             }
@@ -493,8 +520,8 @@ export default function App() {
     window.electron.updater.openReleases().catch(() => null)
   }
 
-  function handleOpenOperatorCabinet(returnTo: 'shift' | 'scanner') {
-    if (view.screen !== 'shift' && view.screen !== 'scanner') return
+  function handleOpenOperatorCabinet(returnTo: 'shift' | 'sale' | 'scanner') {
+    if (view.screen !== 'shift' && view.screen !== 'inventory-sale' && view.screen !== 'scanner') return
     setView({ screen: 'operator-cabinet', bootstrap: view.bootstrap, session: view.session, returnTo })
   }
 
@@ -570,9 +597,25 @@ export default function App() {
         session={view.session}
         isOffline={isOffline}
         onLogout={handleLogout}
+        onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
         onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
         onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
         onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
+      />,
+    )
+  }
+
+  if (view.screen === 'inventory-sale') {
+    return withUpdateBanner(
+      <InventorySalesPage
+        config={config!}
+        bootstrap={view.bootstrap}
+        session={view.session}
+        onLogout={handleLogout}
+        onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
+        onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
+        onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
+        onOpenCabinet={() => handleOpenOperatorCabinet('sale')}
       />,
     )
   }
@@ -586,6 +629,7 @@ export default function App() {
         isOffline={isOffline}
         onLogout={handleLogout}
         onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
+        onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
         onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
         onOpenCabinet={() => handleOpenOperatorCabinet('scanner')}
       />,
@@ -600,7 +644,9 @@ export default function App() {
         session={view.session}
         onLogout={handleLogout}
         onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
+        onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
         onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
+        onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
       />,
     )
   }
@@ -612,7 +658,13 @@ export default function App() {
         bootstrap={view.bootstrap}
         session={view.session}
         returnTo={view.returnTo}
-        onBackToWork={() => setView({ screen: view.returnTo, bootstrap: view.bootstrap, session: view.session })}
+        onBackToWork={() =>
+          setView({
+            screen: view.returnTo === 'sale' ? 'inventory-sale' : view.returnTo,
+            bootstrap: view.bootstrap,
+            session: view.session,
+          })
+        }
         onLogout={handleLogout}
       />,
     )

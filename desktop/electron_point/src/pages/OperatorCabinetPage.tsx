@@ -20,7 +20,7 @@ interface Props {
   config: AppConfig
   bootstrap: BootstrapData
   session: OperatorSession
-  returnTo: 'shift' | 'scanner'
+  returnTo: 'shift' | 'sale' | 'scanner'
   onBackToWork: () => void
   onLogout: () => void
 }
