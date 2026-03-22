@@ -47,6 +47,7 @@ interface Props {
   isOffline?: boolean
   onLogout: () => void
   onSwitchToSale?: () => void
+  onSwitchToReturn?: () => void
   onSwitchToScanner?: () => void
   onSwitchToRequest?: () => void
   onOpenCabinet?: () => void
@@ -96,6 +97,7 @@ export default function ShiftPage({
   isOffline,
   onLogout,
   onSwitchToSale,
+  onSwitchToReturn,
   onSwitchToScanner,
   onSwitchToRequest,
   onOpenCabinet,
@@ -781,38 +783,56 @@ export default function ShiftPage({
                     <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-100">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-emerald-100">
                             <ShoppingBasket className="h-4 w-4" />
-                            Товарные продажи этой смены
+                            Товарный контур этой смены
                           </div>
                           <p className="mt-1 text-xs text-emerald-100/80">
-                            Продажи из витрины уже попадут в итог смены автоматически. В поля прихода их повторно добавлять не нужно.
+                            Продажи добавляются в итог автоматически, возвраты уменьшают его автоматически. В поля прихода их повторно вносить не нужно.
                           </p>
                         </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15"
-                          onClick={onSwitchToSale}
-                        >
-                          Открыть продажи
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15"
+                            onClick={onSwitchToSale}
+                          >
+                            Продажи
+                          </Button>
+                          {onSwitchToReturn ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="border-amber-400/30 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15"
+                              onClick={onSwitchToReturn}
+                            >
+                              Возвраты
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
 
-                      <div className="mt-4 grid gap-3 md:grid-cols-4">
+                      <div className="mt-4 grid gap-3 md:grid-cols-5">
                         <TerminalMiniStat
-                          label="Чеков"
+                          label="Продаж"
                           value={salesSummaryLoading ? '...' : String(salesSummary?.sale_count || 0)}
                           tone="success"
                         />
                         <TerminalMiniStat
-                          label="Наличными"
-                          value={salesSummaryLoading ? '...' : formatMoney(autoSalesCash)}
-                          tone="success"
+                          label="Возвратов"
+                          value={salesSummaryLoading ? '...' : String(salesSummary?.return_count || 0)}
+                          tone="warning"
                         />
                         <TerminalMiniStat
-                          label={isNightKaspiSplit ? 'Kaspi до / после 00:00' : 'Kaspi'}
+                          label="Чистый нал"
+                          value={salesSummaryLoading ? '...' : formatMoney(autoSalesCash)}
+                          tone={autoSalesCash >= 0 ? 'success' : 'warning'}
+                        />
+                        <TerminalMiniStat
+                          label={isNightKaspiSplit ? 'Чистый Kaspi до / после 00:00' : 'Чистый Kaspi'}
                           value={
                             salesSummaryLoading
                               ? '...'
@@ -820,12 +840,12 @@ export default function ShiftPage({
                                 ? `${formatMoney(autoSalesKaspiBeforeMidnight)} / ${formatMoney(autoSalesKaspiAfterMidnight)}`
                                 : formatMoney(autoSalesKaspiTotal)
                           }
-                          tone="info"
+                          tone={autoSalesKaspiTotal >= 0 ? 'info' : 'warning'}
                         />
                         <TerminalMiniStat
-                          label="Итого"
+                          label="Чистый итог"
                           value={salesSummaryLoading ? '...' : formatMoney(salesSummary?.total_amount || 0)}
-                          tone="warning"
+                          tone={(salesSummary?.total_amount || 0) >= 0 ? 'warning' : 'destructive'}
                         />
                       </div>
                     </div>
@@ -1028,6 +1048,13 @@ export default function ShiftPage({
                       icon={<ShoppingBasket className="h-4 w-4" />}
                       label="Продажи с витрины"
                       onClick={onSwitchToSale}
+                    />
+                  ) : null}
+                  {onSwitchToReturn ? (
+                    <QuickActionButton
+                      icon={<ReceiptText className="h-4 w-4" />}
+                      label="Возврат товара"
+                      onClick={onSwitchToReturn}
                     />
                   ) : null}
                   {hasScanner ? (
@@ -1289,15 +1316,28 @@ function TerminalMiniStat({
   label,
   value,
   note,
+  tone = 'neutral',
 }: {
   label: string
   value: string
   note?: string
+  tone?: 'neutral' | 'success' | 'warning' | 'info' | 'destructive'
 }) {
+  const valueClass =
+    tone === 'success'
+      ? 'text-emerald-300'
+      : tone === 'warning'
+        ? 'text-amber-300'
+        : tone === 'info'
+          ? 'text-sky-300'
+          : tone === 'destructive'
+            ? 'text-rose-300'
+            : 'text-foreground'
+
   return (
     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 text-sm font-medium">{value}</div>
+      <div className={`mt-1 text-sm font-medium ${valueClass}`}>{value}</div>
       {note ? <div className="mt-1 text-[11px] text-muted-foreground">{note}</div> : null}
     </div>
   )

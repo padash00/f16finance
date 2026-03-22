@@ -93,9 +93,10 @@ export type AppView =
   | { screen: 'point-select'; bootstrap: BootstrapData; session: OperatorSession; allCompanies: CompanyOption[] }
   | { screen: 'shift'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'inventory-sale'; bootstrap: BootstrapData; session: OperatorSession }
+  | { screen: 'inventory-return'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'scanner'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'inventory-request'; bootstrap: BootstrapData; session: OperatorSession }
-  | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'sale' | 'scanner' }
+  | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'sale' | 'return' | 'scanner' }
   | { screen: 'admin'; session: AdminSession; bootstrap?: BootstrapData }
 
 export interface AppUpdateProgress {
@@ -310,16 +311,57 @@ export interface PointInventorySaleShiftSummary {
   shift: 'day' | 'night'
   sale_count: number
   item_count: number
+  return_count: number
+  return_item_count: number
   total_amount: number
   cash_amount: number
   kaspi_amount: number
   kaspi_before_midnight_amount: number
   kaspi_after_midnight_amount: number
+  sale_total_amount: number
+  sale_cash_amount: number
+  sale_kaspi_amount: number
+  sale_kaspi_before_midnight_amount: number
+  sale_kaspi_after_midnight_amount: number
+  return_total_amount: number
+  return_cash_amount: number
+  return_kaspi_amount: number
+  return_kaspi_before_midnight_amount: number
+  return_kaspi_after_midnight_amount: number
 }
 
 export interface PointInventorySaleContext {
   company: { id: string; name: string; code: string | null }
   location: { id: string; name: string; code: string | null; location_type: string }
   items: PointInventorySaleItem[]
+  sales: PointInventorySaleRow[]
+}
+
+export interface PointInventoryReturnRow {
+  id: string
+  return_date: string
+  shift: 'day' | 'night'
+  payment_method: 'cash' | 'kaspi' | 'mixed'
+  cash_amount: number
+  kaspi_amount: number
+  kaspi_before_midnight_amount: number
+  kaspi_after_midnight_amount: number
+  total_amount: number
+  comment: string | null
+  returned_at: string
+  items?: Array<{
+    id: string
+    quantity: number
+    unit_price: number
+    total_price: number
+    item?: { id: string; name: string; barcode: string } | null
+  }>
+}
+
+export interface PointInventoryReturnContext {
+  company: { id: string; name: string; code: string | null }
+  location: { id: string; name: string; code: string | null; location_type: string }
+  items: PointInventorySaleItem[]
+  returns: PointInventoryReturnRow[]
   sales: PointInventorySaleRow[]
 }

@@ -1,16 +1,18 @@
-import { ClipboardList, ReceiptText, ScanBarcode, ShoppingBasket, UserCircle2 } from 'lucide-react'
+import { ClipboardList, ReceiptText, RotateCcw, ScanBarcode, ShoppingBasket, UserCircle2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 
-type WorkMode = 'shift' | 'sale' | 'scanner' | 'request' | 'cabinet'
+type WorkMode = 'shift' | 'sale' | 'return' | 'scanner' | 'request' | 'cabinet'
 
 interface Props {
   active: WorkMode
   showSale?: boolean
+  showReturn?: boolean
   showScanner?: boolean
   showRequest?: boolean
   onShift?: () => void
   onSale?: () => void
+  onReturn?: () => void
   onScanner?: () => void
   onRequest?: () => void
   onCabinet?: () => void
@@ -25,10 +27,12 @@ function itemClass(active: boolean) {
 export default function WorkModeSwitch({
   active,
   showSale,
+  showReturn,
   showScanner,
   showRequest,
   onShift,
   onSale,
+  onReturn,
   onScanner,
   onRequest,
   onCabinet,
@@ -58,6 +62,20 @@ export default function WorkModeSwitch({
         >
           <ShoppingBasket className="h-4 w-4" />
           Продажа
+        </Button>
+      ) : null}
+
+      {showReturn ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onReturn}
+          disabled={!onReturn || active === 'return'}
+          className={`gap-1.5 rounded-lg px-3 ${itemClass(active === 'return')}`}
+        >
+          <RotateCcw className="h-4 w-4" />
+          Возврат
         </Button>
       ) : null}
 

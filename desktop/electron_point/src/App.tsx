@@ -7,6 +7,7 @@ import LoginPage from '@/pages/LoginPage'
 import PointSelectPage from '@/pages/PointSelectPage'
 import ShiftPage from '@/pages/ShiftPage'
 import InventorySalesPage from '@/pages/InventorySalesPage'
+import InventoryReturnsPage from '@/pages/InventoryReturnsPage'
 import ScannerPage from '@/pages/ScannerPage'
 import InventoryRequestPage from '@/pages/InventoryRequestPage'
 import OperatorCabinetPage from '@/pages/OperatorCabinetPage'
@@ -94,6 +95,7 @@ function getActiveOperatorSession(view: AppView): OperatorSession | null {
   if (
     view.screen === 'shift' ||
     view.screen === 'inventory-sale' ||
+    view.screen === 'inventory-return' ||
     view.screen === 'scanner' ||
     view.screen === 'inventory-request' ||
     view.screen === 'operator-cabinet'
@@ -344,6 +346,7 @@ export default function App() {
               if (
                 currentView.screen === 'shift' ||
                 currentView.screen === 'inventory-sale' ||
+                currentView.screen === 'inventory-return' ||
                 currentView.screen === 'scanner' ||
                 currentView.screen === 'inventory-request' ||
                 currentView.screen === 'operator-cabinet'
@@ -355,6 +358,8 @@ export default function App() {
                   returnTo:
                     currentView.screen === 'scanner'
                       ? 'scanner'
+                      : currentView.screen === 'inventory-return'
+                        ? 'return'
                       : currentView.screen === 'inventory-sale'
                         ? 'sale'
                         : 'shift',
@@ -520,8 +525,13 @@ export default function App() {
     window.electron.updater.openReleases().catch(() => null)
   }
 
-  function handleOpenOperatorCabinet(returnTo: 'shift' | 'sale' | 'scanner') {
-    if (view.screen !== 'shift' && view.screen !== 'inventory-sale' && view.screen !== 'scanner') return
+  function handleOpenOperatorCabinet(returnTo: 'shift' | 'sale' | 'return' | 'scanner') {
+    if (
+      view.screen !== 'shift' &&
+      view.screen !== 'inventory-sale' &&
+      view.screen !== 'inventory-return' &&
+      view.screen !== 'scanner'
+    ) return
     setView({ screen: 'operator-cabinet', bootstrap: view.bootstrap, session: view.session, returnTo })
   }
 
@@ -598,6 +608,7 @@ export default function App() {
         isOffline={isOffline}
         onLogout={handleLogout}
         onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
+        onSwitchToReturn={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-return' }) : undefined}
         onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
         onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
         onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
@@ -613,9 +624,26 @@ export default function App() {
         session={view.session}
         onLogout={handleLogout}
         onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
+        onSwitchToReturn={() => setView({ ...view, screen: 'inventory-return' })}
         onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
         onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
         onOpenCabinet={() => handleOpenOperatorCabinet('sale')}
+      />,
+    )
+  }
+
+  if (view.screen === 'inventory-return') {
+    return withUpdateBanner(
+      <InventoryReturnsPage
+        config={config!}
+        bootstrap={view.bootstrap}
+        session={view.session}
+        onLogout={handleLogout}
+        onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
+        onSwitchToSale={() => setView({ ...view, screen: 'inventory-sale' })}
+        onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
+        onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
+        onOpenCabinet={() => handleOpenOperatorCabinet('return')}
       />,
     )
   }
@@ -645,6 +673,7 @@ export default function App() {
         onLogout={handleLogout}
         onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
         onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
+        onSwitchToReturn={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-return' }) : undefined}
         onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
         onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
       />,
@@ -660,7 +689,12 @@ export default function App() {
         returnTo={view.returnTo}
         onBackToWork={() =>
           setView({
-            screen: view.returnTo === 'sale' ? 'inventory-sale' : view.returnTo,
+            screen:
+              view.returnTo === 'sale'
+                ? 'inventory-sale'
+                : view.returnTo === 'return'
+                  ? 'inventory-return'
+                  : view.returnTo,
             bootstrap: view.bootstrap,
             session: view.session,
           })

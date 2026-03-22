@@ -259,6 +259,48 @@ export async function createPointInventorySale(
   return Array.isArray(data) ? data[0] || null : data || null
 }
 
+export async function createPointInventoryReturn(
+  supabase: AnySupabase,
+  payload: {
+    company_id: string
+    location_id: string
+    point_device_id?: string | null
+    operator_id?: string | null
+    return_date: string
+    shift: 'day' | 'night'
+    payment_method: 'cash' | 'kaspi' | 'mixed'
+    cash_amount: number
+    kaspi_amount: number
+    kaspi_before_midnight_amount: number
+    kaspi_after_midnight_amount: number
+    comment?: string | null
+    source?: string | null
+    local_ref?: string | null
+    items: Array<{ item_id: string; quantity: number; unit_price: number; comment?: string | null }>
+  },
+) {
+  const { data, error } = await supabase.rpc('inventory_create_point_return', {
+    p_company_id: payload.company_id,
+    p_location_id: payload.location_id,
+    p_point_device_id: payload.point_device_id || null,
+    p_operator_id: payload.operator_id || null,
+    p_return_date: payload.return_date,
+    p_shift: payload.shift,
+    p_payment_method: payload.payment_method,
+    p_cash_amount: payload.cash_amount,
+    p_kaspi_amount: payload.kaspi_amount,
+    p_kaspi_before_midnight_amount: payload.kaspi_before_midnight_amount,
+    p_kaspi_after_midnight_amount: payload.kaspi_after_midnight_amount,
+    p_comment: payload.comment || null,
+    p_source: payload.source || null,
+    p_local_ref: payload.local_ref || null,
+    p_items: payload.items,
+  })
+
+  if (error) throw error
+  return Array.isArray(data) ? data[0] || null : data || null
+}
+
 function mapNestedRow<T>(row: T): T {
   if (!row || typeof row !== 'object') return row
   const next: any = Array.isArray(row) ? [] : { ...row }

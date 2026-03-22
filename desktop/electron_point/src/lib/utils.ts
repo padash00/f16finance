@@ -12,9 +12,13 @@ export function formatMoney(amount: number | null | undefined): string {
 
 export function parseMoney(value: string | null | undefined): number {
   if (!value) return 0
-  const cleaned = String(value).replace(/[^\d.,]/g, '').replace(',', '.')
+  const raw = String(value).trim()
+  const negative = raw.startsWith('-')
+  const cleaned = raw.replace(/[^\d.,]/g, '').replace(',', '.')
   const n = parseFloat(cleaned)
-  return isNaN(n) ? 0 : Math.round(n)
+  if (isNaN(n)) return 0
+  const rounded = Math.round(n)
+  return negative ? -rounded : rounded
 }
 
 export function formatDate(iso: string): string {

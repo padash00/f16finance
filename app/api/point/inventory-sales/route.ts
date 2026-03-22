@@ -90,7 +90,12 @@ async function fetchShiftSummary(params: {
   saleDate: string
   shift: 'day' | 'night'
 }) {
-  const [{ data: sales, error: salesError }, { data: saleItems, error: saleItemsError }] = await Promise.all([
+  const [
+    { data: sales, error: salesError },
+    { data: saleItems, error: saleItemsError },
+    { data: returns, error: returnsError },
+    { data: returnItems, error: returnItemsError },
+  ] = await Promise.all([
     params.supabase
       .from('point_sales')
       .select('id, total_amount, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount')
@@ -111,28 +116,81 @@ async function fetchShiftSummary(params: {
             .eq('shift', params.shift)
         ).data?.map((row: any) => row.id) || ['00000000-0000-0000-0000-000000000000'],
       ),
+    params.supabase
+      .from('point_returns')
+      .select('id, total_amount, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount')
+      .eq('location_id', params.locationId)
+      .eq('return_date', params.saleDate)
+      .eq('shift', params.shift),
+    params.supabase
+      .from('point_return_items')
+      .select('return_id, quantity')
+      .in(
+        'return_id',
+        (
+          await params.supabase
+            .from('point_returns')
+            .select('id')
+            .eq('location_id', params.locationId)
+            .eq('return_date', params.saleDate)
+            .eq('shift', params.shift)
+        ).data?.map((row: any) => row.id) || ['00000000-0000-0000-0000-000000000000'],
+      ),
   ])
 
   if (salesError) throw salesError
   if (saleItemsError) throw saleItemsError
+  if (returnsError) throw returnsError
+  if (returnItemsError) throw returnItemsError
 
   const list = sales || []
   const items = saleItems || []
+  const returnsList = returns || []
+  const returnRows = returnItems || []
+
+  const saleCashAmount = list.reduce((sum: number, row: any) => sum + normalizeMoney(row.cash_amount), 0)
+  const saleKaspiAmount = list.reduce((sum: number, row: any) => sum + normalizeMoney(row.kaspi_amount), 0)
+  const saleKaspiBeforeMidnightAmount = list.reduce(
+    (sum: number, row: any) => sum + normalizeMoney(row.kaspi_before_midnight_amount),
+    0,
+  )
+  const saleKaspiAfterMidnightAmount = list.reduce(
+    (sum: number, row: any) => sum + normalizeMoney(row.kaspi_after_midnight_amount),
+    0,
+  )
+  const returnCashAmount = returnsList.reduce((sum: number, row: any) => sum + normalizeMoney(row.cash_amount), 0)
+  const returnKaspiAmount = returnsList.reduce((sum: number, row: any) => sum + normalizeMoney(row.kaspi_amount), 0)
+  const returnKaspiBeforeMidnightAmount = returnsList.reduce(
+    (sum: number, row: any) => sum + normalizeMoney(row.kaspi_before_midnight_amount),
+    0,
+  )
+  const returnKaspiAfterMidnightAmount = returnsList.reduce(
+    (sum: number, row: any) => sum + normalizeMoney(row.kaspi_after_midnight_amount),
+    0,
+  )
+  const saleTotalAmount = list.reduce((sum: number, row: any) => sum + normalizeMoney(row.total_amount), 0)
+  const returnTotalAmount = returnsList.reduce((sum: number, row: any) => sum + normalizeMoney(row.total_amount), 0)
 
   return {
     sale_count: list.length,
     item_count: items.reduce((sum: number, row: any) => sum + normalizeQty(row.quantity), 0),
-    total_amount: list.reduce((sum: number, row: any) => sum + normalizeMoney(row.total_amount), 0),
-    cash_amount: list.reduce((sum: number, row: any) => sum + normalizeMoney(row.cash_amount), 0),
-    kaspi_amount: list.reduce((sum: number, row: any) => sum + normalizeMoney(row.kaspi_amount), 0),
-    kaspi_before_midnight_amount: list.reduce(
-      (sum: number, row: any) => sum + normalizeMoney(row.kaspi_before_midnight_amount),
-      0,
-    ),
-    kaspi_after_midnight_amount: list.reduce(
-      (sum: number, row: any) => sum + normalizeMoney(row.kaspi_after_midnight_amount),
-      0,
-    ),
+    return_count: returnsList.length,
+    return_item_count: returnRows.reduce((sum: number, row: any) => sum + normalizeQty(row.quantity), 0),
+    sale_total_amount: saleTotalAmount,
+    return_total_amount: returnTotalAmount,
+    total_amount: saleTotalAmount - returnTotalAmount,
+    cash_amount: saleCashAmount - returnCashAmount,
+    kaspi_amount: saleKaspiAmount - returnKaspiAmount,
+    kaspi_before_midnight_amount: saleKaspiBeforeMidnightAmount - returnKaspiBeforeMidnightAmount,
+    kaspi_after_midnight_amount: saleKaspiAfterMidnightAmount - returnKaspiAfterMidnightAmount,
+    sale_cash_amount: saleCashAmount,
+    sale_kaspi_amount: saleKaspiAmount,
+    sale_kaspi_before_midnight_amount: saleKaspiBeforeMidnightAmount,
+    sale_kaspi_after_midnight_amount: saleKaspiAfterMidnightAmount,
+    return_cash_amount: returnCashAmount,
+    return_kaspi_amount: returnKaspiAmount,
+    return_kaspi_before_midnight_amount: returnKaspiBeforeMidnightAmount,
+    return_kaspi_after_midnight_amount: returnKaspiAfterMidnightAmount,
   }
 }
 

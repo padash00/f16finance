@@ -15,6 +15,7 @@ import type {
   PointInventoryRequestContext,
   PointInventorySaleContext,
   PointInventorySaleShiftSummary,
+  PointInventoryReturnContext,
 } from '@/types'
 import { parseMoney } from '@/lib/utils'
 
@@ -448,6 +449,54 @@ export async function createPointInventorySale(
     '/api/point/inventory-sales',
     {
       action: 'createSale',
+      payload,
+    },
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
+export async function getPointInventoryReturns(
+  config: AppConfig,
+  session: OperatorSession,
+): Promise<PointInventoryReturnContext> {
+  const data = await request<{ ok: boolean; data: PointInventoryReturnContext }>(
+    config,
+    'GET',
+    '/api/point/inventory-returns',
+    undefined,
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
+export async function createPointInventoryReturn(
+  config: AppConfig,
+  session: OperatorSession,
+  payload: {
+    return_date: string
+    shift: 'day' | 'night'
+    payment_method: 'cash' | 'kaspi' | 'mixed'
+    cash_amount?: number | null
+    kaspi_amount?: number | null
+    kaspi_before_midnight_amount?: number | null
+    kaspi_after_midnight_amount?: number | null
+    comment?: string | null
+    local_ref?: string | null
+    items: Array<{
+      item_id: string
+      quantity: number
+      unit_price: number
+      comment?: string | null
+    }>
+  },
+): Promise<{ return_id: string | null; total_amount: number }> {
+  const data = await request<{ ok: boolean; data: { return_id: string | null; total_amount: number } }>(
+    config,
+    'POST',
+    '/api/point/inventory-returns',
+    {
+      action: 'createReturn',
       payload,
     },
     operatorHeaders(session),

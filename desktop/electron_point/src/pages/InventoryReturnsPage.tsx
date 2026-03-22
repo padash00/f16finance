@@ -7,6 +7,7 @@ import {
   Package,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   ShoppingBasket,
   Store,
@@ -27,7 +28,7 @@ import type {
   AppConfig,
   BootstrapData,
   OperatorSession,
-  PointInventorySaleContext,
+  PointInventoryReturnContext,
   PointInventorySaleItem,
 } from '@/types'
 
@@ -37,13 +38,13 @@ interface Props {
   session: OperatorSession
   onLogout: () => void
   onSwitchToShift: () => void
-  onSwitchToReturn?: () => void
+  onSwitchToSale?: () => void
   onSwitchToScanner?: () => void
   onSwitchToRequest?: () => void
   onOpenCabinet?: () => void
 }
 
-type CartLine = {
+type ReturnLine = {
   item_id: string
   quantity: number
   unit_price: number
@@ -59,19 +60,19 @@ function formatShiftLabel(shift: 'day' | 'night') {
   return shift === 'night' ? 'Ночь' : 'День'
 }
 
-export default function InventorySalesPage({
+export default function InventoryReturnsPage({
   config,
   bootstrap,
   session,
   onLogout,
   onSwitchToShift,
-  onSwitchToReturn,
+  onSwitchToSale,
   onSwitchToScanner,
   onSwitchToRequest,
   onOpenCabinet,
 }: Props) {
   const runtimeShift = useMemo(() => resolveRuntimeShift(), [])
-  const [context, setContext] = useState<PointInventorySaleContext | null>(null)
+  const [context, setContext] = useState<PointInventoryReturnContext | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,17 +80,17 @@ export default function InventorySalesPage({
   const [comment, setComment] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
   const [mixedCash, setMixedCash] = useState('')
-  const [cart, setCart] = useState<CartLine[]>([])
+  const [cart, setCart] = useState<ReturnLine[]>([])
 
   async function load() {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.getPointInventorySales(config, session)
+      const data = await api.getPointInventoryReturns(config, session)
       setContext(data)
     } catch (err: any) {
       setContext(null)
-      setError(err?.message || 'Не удалось загрузить витрину точки')
+      setError(err?.message || 'Не удалось загрузить возвраты точки')
     } finally {
       setLoading(false)
     }
@@ -127,18 +128,7 @@ export default function InventorySalesPage({
     [cartDetailed],
   )
 
-  const saleCountToday = useMemo(() => (context?.sales || []).length, [context?.sales])
-
-  function findAvailableQty(itemId: string) {
-    return context?.items.find((item) => item.id === itemId)?.display_qty || 0
-  }
-
   function addToCart(item: PointInventorySaleItem) {
-    if (item.display_qty <= 0) {
-      toastError('На витрине нет остатка по этому товару')
-      return
-    }
-
     setCart((current) => {
       const existing = current.find((line) => line.item_id === item.id)
       if (!existing) {
@@ -152,11 +142,6 @@ export default function InventorySalesPage({
         ]
       }
 
-      if (existing.quantity + 1 > item.display_qty) {
-        toastError('Нельзя продать больше остатка на витрине')
-        return current
-      }
-
       return current.map((line) =>
         line.item_id === item.id
           ? { ...line, quantity: Math.round((line.quantity + 1 + Number.EPSILON) * 1000) / 1000 }
@@ -166,14 +151,8 @@ export default function InventorySalesPage({
   }
 
   function changeQty(itemId: string, nextQty: number) {
-    const available = findAvailableQty(itemId)
     if (nextQty <= 0) {
       setCart((current) => current.filter((line) => line.item_id !== itemId))
-      return
-    }
-
-    if (nextQty > available) {
-      toastError('Количество превышает остаток на витрине')
       return
     }
 
@@ -185,7 +164,7 @@ export default function InventorySalesPage({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     if (cartDetailed.length === 0) {
-      toastError('Добавьте хотя бы один товар в продажу')
+      toastError('Добавьте хотя бы один товар в возврат')
       return
     }
 
@@ -198,15 +177,15 @@ export default function InventorySalesPage({
     const kaspiAmount = paymentMethod === 'kaspi' ? cartTotal : paymentMethod === 'mixed' ? cartTotal - cashAmount : 0
 
     if (paymentMethod === 'mixed' && (cashAmount <= 0 || kaspiAmount <= 0)) {
-      toastError('Для смешанной оплаты укажите часть наличными, а остальное уйдёт в Kaspi')
+      toastError('Для смешанного возврата укажите часть наличными, а остальное уйдёт в Kaspi')
       return
     }
 
     setSaving(true)
     try {
       const isNightAfterMidnight = runtimeShift.shift === 'night' && runtimeShift.afterMidnightNight
-      await api.createPointInventorySale(config, session, {
-        sale_date: runtimeShift.date,
+      await api.createPointInventoryReturn(config, session, {
+        return_date: runtimeShift.date,
         shift: runtimeShift.shift,
         payment_method: paymentMethod,
         cash_amount: cashAmount,
@@ -221,14 +200,14 @@ export default function InventorySalesPage({
           unit_price: line.unit_price,
         })),
       })
-      toastSuccess('Продажа сохранена и добавлена в сменный контур')
+      toastSuccess('Возврат сохранён, выручка смены уменьшена')
       setCart([])
       setComment('')
       setMixedCash('')
       setPaymentMethod('cash')
       await load()
     } catch (err: any) {
-      toastError(err?.message || 'Не удалось провести продажу')
+      toastError(err?.message || 'Не удалось провести возврат')
     } finally {
       setSaving(false)
     }
@@ -253,14 +232,14 @@ export default function InventorySalesPage({
 
         <div className="flex items-center gap-2 no-drag">
           <WorkModeSwitch
-            active="sale"
-            showSale
-            showReturn={!!onSwitchToReturn}
+            active="return"
+            showSale={!!onSwitchToSale}
+            showReturn
             showScanner={!!onSwitchToScanner}
             showRequest={!!onSwitchToRequest}
             onShift={onSwitchToShift}
-            onSale={() => undefined}
-            onReturn={onSwitchToReturn}
+            onSale={onSwitchToSale}
+            onReturn={() => undefined}
             onScanner={onSwitchToScanner}
             onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
@@ -281,11 +260,11 @@ export default function InventorySalesPage({
               <CardContent className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
                 <div>
                   <div className="flex items-center gap-2 text-base font-semibold">
-                    <ShoppingBasket className="h-4 w-4 text-emerald-400" />
-                    Продажи с витрины
+                    <RotateCcw className="h-4 w-4 text-amber-400" />
+                    Возвраты по витрине
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Каждая продажа сразу списывает товар с витрины и автоматически идёт в выручку смены.
+                    Возврат возвращает товар на витрину и автоматически уменьшает выручку текущей смены.
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
@@ -294,20 +273,14 @@ export default function InventorySalesPage({
                   <p className="text-xs text-muted-foreground">{formatDate(runtimeShift.date)}</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
-                  <p className="text-xs text-muted-foreground">Локация</p>
-                  <p className="mt-1 font-semibold">{context?.location?.name || 'Витрина точки'}</p>
-                  <p className="text-xs text-muted-foreground">{saleCountToday} последних продаж</p>
+                  <p className="text-xs text-muted-foreground">Возвратов</p>
+                  <p className="mt-1 font-semibold">{context?.returns?.length || 0}</p>
+                  <p className="text-xs text-muted-foreground">Последние операции точки</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
-                  <p className="text-xs text-muted-foreground">Режим Kaspi</p>
-                  <p className="mt-1 font-semibold">
-                    {runtimeShift.shift === 'night'
-                      ? runtimeShift.afterMidnightNight
-                        ? 'После 00:00'
-                        : 'До 00:00'
-                      : 'Дневная смена'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Для корректной суточной сверки</p>
+                  <p className="text-xs text-muted-foreground">Подсказка</p>
+                  <p className="mt-1 font-semibold">Сначала проверь продажу</p>
+                  <p className="text-xs text-muted-foreground">Недавние чеки видны внизу экрана</p>
                 </div>
               </CardContent>
             </Card>
@@ -316,7 +289,7 @@ export default function InventorySalesPage({
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Store className="h-4 w-4" />
-                  Каталог витрины
+                  Товары для возврата
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -339,42 +312,71 @@ export default function InventorySalesPage({
                 {loading ? (
                   <div className="flex h-56 items-center justify-center text-muted-foreground">
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Загружаем витрину точки...
+                    Загружаем данные по возвратам...
                   </div>
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                    {filteredItems.map((item) => {
-                      const disabled = item.display_qty <= 0
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => addToCart(item)}
-                          disabled={disabled}
-                          className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-emerald-400/40 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-foreground">{item.name}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">{item.barcode}</p>
-                            </div>
-                            <Badge variant={disabled ? 'secondary' : 'success'}>
-                              {item.display_qty} {item.unit}
-                            </Badge>
+                    {filteredItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => addToCart(item)}
+                        className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-amber-400/40 hover:bg-white/[0.05]"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-foreground">{item.name}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{item.barcode}</p>
                           </div>
-                          <div className="mt-4 flex items-center justify-between">
-                            <div>
-                              <p className="text-xs text-muted-foreground">{item.category?.name || 'Без категории'}</p>
-                              <p className="mt-1 text-lg font-semibold text-foreground">{formatMoney(item.sale_price)}</p>
-                            </div>
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
-                              <Plus className="h-5 w-5" />
-                            </div>
+                          <Badge variant="secondary">
+                            {item.display_qty} {item.unit}
+                          </Badge>
+                        </div>
+                        <div className="mt-4 flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-muted-foreground">{item.category?.name || 'Без категории'}</p>
+                            <p className="mt-1 text-lg font-semibold text-foreground">{formatMoney(item.sale_price)}</p>
                           </div>
-                        </button>
-                      )
-                    })}
+                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-300">
+                            <Plus className="h-5 w-5" />
+                          </div>
+                        </div>
+                      </button>
+                    ))}
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShoppingBasket className="h-4 w-4" />
+                  Недавние продажи для сверки
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {(context?.sales || []).length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
+                    Пока продаж нет.
+                  </div>
+                ) : (
+                  (context?.sales || []).map((sale) => (
+                    <div key={sale.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">{paymentBadge(sale.payment_method)}</Badge>
+                            <Badge variant="outline">{formatShiftLabel(sale.shift)}</Badge>
+                          </div>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {formatDate(sale.sale_date)} · {new Date(sale.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <p className="text-lg font-semibold">{formatMoney(sale.total_amount)}</p>
+                      </div>
+                    </div>
+                  ))
                 )}
               </CardContent>
             </Card>
@@ -385,18 +387,18 @@ export default function InventorySalesPage({
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CreditCard className="h-4 w-4" />
-                  Оформление продажи
+                  Оформление возврата
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
-                  Продажи из этого экрана автоматически попадут в выручку смены. В сменной форме их дублировать не нужно.
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                  Возврат уменьшает выручку смены. Если возврат через Kaspi в ночной смене, он тоже учитывается в суточной сверке.
                 </div>
 
                 <div className="space-y-2">
                   {cartDetailed.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                      Выберите товары слева, чтобы собрать продажу.
+                      Выберите товары слева, чтобы оформить возврат.
                     </div>
                   ) : (
                     cartDetailed.map((line) => (
@@ -421,7 +423,7 @@ export default function InventorySalesPage({
                             </Button>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            Остаток после продажи: {Math.max(0, findAvailableQty(line.item_id) - line.quantity)} {line.item?.unit || 'шт'}
+                            На витрину вернётся: {line.quantity} {line.item?.unit || 'шт'}
                           </p>
                         </div>
                       </div>
@@ -437,7 +439,7 @@ export default function InventorySalesPage({
                       onClick={() => setPaymentMethod(method)}
                       className={`rounded-2xl border px-3 py-3 text-sm font-medium transition ${
                         paymentMethod === method
-                          ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
+                          ? 'border-amber-400/40 bg-amber-500/15 text-amber-100'
                           : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
                       }`}
                     >
@@ -465,8 +467,8 @@ export default function InventorySalesPage({
                     value={comment}
                     onChange={(event) => setComment(event.target.value)}
                     rows={3}
-                    placeholder="Например: продали через стойку, заказ в зал, спецкомментарий"
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition focus:border-emerald-400/50"
+                    placeholder="Причина возврата, ошибка в заказе, отмена клиента"
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition focus:border-amber-400/50"
                   />
                 </div>
 
@@ -482,16 +484,16 @@ export default function InventorySalesPage({
                     </div>
                     <div className="mt-4 flex items-end justify-between">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итог продажи</p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итог возврата</p>
                         <p className="mt-1 text-3xl font-semibold text-foreground">{formatMoney(cartTotal)}</p>
                       </div>
-                      <Badge variant="secondary">{paymentBadge(paymentMethod)}</Badge>
+                      <Badge variant="warning">{paymentBadge(paymentMethod)}</Badge>
                     </div>
                   </div>
 
                   <Button type="submit" size="lg" className="w-full" disabled={saving || cartDetailed.length === 0}>
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBasket className="h-4 w-4" />}
-                    Провести продажу
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                    Провести возврат
                   </Button>
                 </form>
               </CardContent>
@@ -501,36 +503,28 @@ export default function InventorySalesPage({
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Package className="h-4 w-4" />
-                  Последние продажи
+                  Последние возвраты
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {(context?.sales || []).length === 0 ? (
+                {(context?.returns || []).length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                    Пока продаж нет. Первая продажа появится здесь сразу после проведения.
+                    Возвратов пока нет.
                   </div>
                 ) : (
-                  (context?.sales || []).map((sale) => (
-                    <div key={sale.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  (context?.returns || []).map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            <Badge variant="secondary">{paymentBadge(sale.payment_method)}</Badge>
-                            <Badge variant="outline">{formatShiftLabel(sale.shift)}</Badge>
+                            <Badge variant="warning">{paymentBadge(item.payment_method)}</Badge>
+                            <Badge variant="outline">{formatShiftLabel(item.shift)}</Badge>
                           </div>
                           <p className="mt-2 text-xs text-muted-foreground">
-                            {formatDate(sale.sale_date)} · {new Date(sale.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                            {formatDate(item.return_date)} · {new Date(item.returned_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
-                        <p className="text-lg font-semibold">{formatMoney(sale.total_amount)}</p>
-                      </div>
-                      <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                        {(sale.items || []).slice(0, 3).map((item) => (
-                          <div key={item.id} className="flex items-center justify-between gap-3">
-                            <span className="truncate">{item.item?.name || 'Товар'}</span>
-                            <span>{item.quantity} × {formatMoney(item.unit_price)}</span>
-                          </div>
-                        ))}
+                        <p className="text-lg font-semibold">{formatMoney(item.total_amount)}</p>
                       </div>
                     </div>
                   ))
