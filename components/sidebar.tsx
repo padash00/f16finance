@@ -647,6 +647,9 @@ export function Sidebar() {
       .map((section) => ({
         ...section,
         items: section.items.filter((item) => {
+          if (section.id === 'finance' && item.href === '/inventory') {
+            return false
+          }
           if (item.href === '/operator-lead' && !isLeadOperator) {
             return false
           }

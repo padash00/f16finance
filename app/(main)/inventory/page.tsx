@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   ArchiveX,
@@ -192,16 +191,40 @@ type InventoryView =
   | 'stocktakes'
   | 'movements'
 
-const inventoryViewLinks: Array<{ href: string; label: string; view: InventoryView }> = [
-  { href: '/inventory', label: 'Обзор', view: 'overview' },
-  { href: '/inventory/catalog', label: 'Каталог', view: 'catalog' },
-  { href: '/inventory/receipts', label: 'Приемка', view: 'receipts' },
-  { href: '/inventory/requests', label: 'Заявки', view: 'requests' },
-  { href: '/inventory/analytics', label: 'Аналитика', view: 'analytics' },
-  { href: '/inventory/writeoffs', label: 'Списания', view: 'writeoffs' },
-  { href: '/inventory/stocktakes', label: 'Инвентаризация', view: 'stocktakes' },
-  { href: '/inventory/movements', label: 'Движения', view: 'movements' },
-]
+const inventoryViewMeta: Record<InventoryView, { title: string; description: string }> = {
+  overview: {
+    title: 'Инвентарь и склад',
+    description: 'Общий обзор центрального склада, витрин точек, заявок и последних операций.',
+  },
+  catalog: {
+    title: 'Каталог магазина',
+    description: 'Товары, категории и поставщики, с которыми дальше работает складской контур.',
+  },
+  receipts: {
+    title: 'Приемка товара',
+    description: 'Оформление прихода на центральный склад: поставщик, цены закупа, количество и сумма.',
+  },
+  requests: {
+    title: 'Заявки точек',
+    description: 'Запросы от кассиров, одобрение руководителем и выдача товара на витрины точек.',
+  },
+  analytics: {
+    title: 'Аналитика по точкам',
+    description: 'Остатки на витринах, поступления, продажи, долги, возвраты и чистое движение по точкам.',
+  },
+  writeoffs: {
+    title: 'Списания',
+    description: 'Брак, потери и служебное потребление по складу и витринам.',
+  },
+  stocktakes: {
+    title: 'Инвентаризация',
+    description: 'Пересчет фактических остатков и корректировка расхождений.',
+  },
+  movements: {
+    title: 'Журнал движений',
+    description: 'Все товарные операции: приемка, выдача на точку, продажа, долг, возврат и корректировки.',
+  },
+}
 
 const emptyReceiptLine = (): ReceiptLine => ({
   item_id: '',
@@ -584,6 +607,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
   const showWriteoffs = inventoryView === 'overview' || inventoryView === 'writeoffs'
   const showStocktakes = inventoryView === 'overview' || inventoryView === 'stocktakes'
   const showMovements = inventoryView === 'overview' || inventoryView === 'movements'
+  const viewMeta = inventoryViewMeta[inventoryView]
 
   function loadStocktakeLinesFromBalances() {
     if (!selectedStocktakeBalances.length) {
@@ -887,32 +911,10 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
 
   return (
     <div className="app-page max-w-[1680px] space-y-6">
-      <Card className="border-border/70 bg-background/60 p-3">
-        <div className="flex flex-wrap gap-2">
-          {inventoryViewLinks.map((link) => {
-            const active = inventoryView === link.view
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`rounded-xl border px-3 py-2 text-sm transition ${
-                  active
-                    ? 'border-blue-500/30 bg-blue-500/10 text-blue-100'
-                    : 'border-border/70 bg-background/50 text-muted-foreground hover:bg-background hover:text-foreground'
-                }`}
-              >
-                {link.label}
-              </Link>
-            )
-          })}
-        </div>
-      </Card>
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Инвентарь и склад</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Центральный склад, витрины точек, приемка, заявки и первое основание под продажи, долги и движение товара.
-          </p>
+          <h1 className="text-3xl font-bold text-foreground">{viewMeta.title}</h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{viewMeta.description}</p>
         </div>
         <Button type="button" variant="outline" className="gap-2" onClick={() => void loadData()} disabled={loading}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -932,7 +934,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
         <SummaryCard icon={ScanSearch} label="Инвентаризаций" value={String(data?.stocktakes.length || 0)} note="Последние пересчеты и корректировки" />
       </div> : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className={inventoryView === 'overview' ? 'grid gap-6 xl:grid-cols-[1.1fr_0.9fr]' : 'grid gap-6 xl:grid-cols-1'}>
         <div className="space-y-6">
           <Card className={`border-border/70 p-5 ${showReceipts ? '' : 'hidden'}`}>
             <div className="mb-4 flex items-center gap-2">
