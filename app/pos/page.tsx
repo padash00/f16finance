@@ -30,6 +30,7 @@ type PosItem = {
   unit: string | null
   category_name: string | null
   total_balance: number
+  location_balances?: Record<string, number>
 }
 type Customer = { id: string; name: string; phone: string | null; card_number: string | null; loyalty_points: number }
 type Discount = {
@@ -66,6 +67,8 @@ type CartItem = {
 }
 type PaymentMethod = 'cash' | 'kaspi' | 'card' | 'online' | 'mixed'
 
+let receiptDateOverride: Date | null = null
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmt(n: number) {
@@ -73,11 +76,22 @@ function fmt(n: number) {
 }
 
 function today() {
-  return new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const value = receiptDateOverride ?? new Date()
+  return value.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function nowTime() {
-  return new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  const value = receiptDateOverride ?? new Date()
+  return value.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+}
+
+function itemLocationBalance(item: PosItem, locationId: string) {
+  if (!locationId) return 0
+  return Number(item.location_balances?.[locationId] || 0)
+}
+
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100
 }
 
 // ─── Receipt Component ───────────────────────────────────────────────────────
@@ -105,6 +119,12 @@ function ReceiptModal({
   onClose,
   onNewSale,
 }: ReceiptProps) {
+  const soldAt = receiptData.sale?.sold_at ? new Date(receiptData.sale.sold_at) : null
+  receiptDateOverride = soldAt
+  const soldDateLabel = soldAt ? soldAt.toLocaleDateString('ru-RU') : today()
+  const soldTimeLabel = soldAt
+    ? soldAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    : nowTime()
   const change =
     receiptData.cash_amount > 0
       ? Math.max(0, receiptData.cash_amount - receiptData.total_amount)
@@ -377,7 +397,8 @@ export default function PosPage() {
     : []
 
   const filteredItems = bootstrapData
-    ? bootstrapData.items.filter((item) => {
+    ? bootstrapData.items
+        .filter((item) => {
         const matchSearch =
           !search ||
           item.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -385,8 +406,12 @@ export default function PosPage() {
         const matchCategory =
           filterCategory === 'all' ||
           (item.category_name || 'Без категории') === filterCategory
-        return matchSearch && matchCategory
-      })
+          return matchSearch && matchCategory
+        })
+        .map((item) => ({
+          ...item,
+          total_balance: itemLocationBalance(item, selectedLocationId),
+        }))
     : []
 
   const subtotal = cart.reduce((sum, ci) => sum + ci.unit_price * ci.quantity, 0)
@@ -439,16 +464,32 @@ export default function PosPage() {
       )
     : []
 
+  useEffect(() => {
+    if (!bootstrapData || !selectedLocationId) return
+    setCart((prev) =>
+      prev
+        .map((ci) => {
+          const item = bootstrapData.items.find((candidate) => candidate.id === ci.item_id)
+          if (!item) return null
+          const maxQty = itemLocationBalance(item, selectedLocationId)
+          if (maxQty <= 0) return null
+          return { ...ci, quantity: Math.min(ci.quantity, maxQty) }
+        })
+        .filter((ci): ci is CartItem => ci !== null),
+    )
+  }, [bootstrapData, selectedLocationId])
+
   // ── Cart actions ───────────────────────────────────────────────────────────
 
   const addToCart = useCallback((item: PosItem) => {
-    if (item.total_balance <= 0) return
+    const maxQty = itemLocationBalance(item, selectedLocationId)
+    if (maxQty <= 0) return
     setCart((prev) => {
       const existing = prev.find((ci) => ci.item_id === item.id)
       if (existing) {
         return prev.map((ci) =>
           ci.item_id === item.id
-            ? { ...ci, quantity: Math.min(ci.quantity + 1, item.total_balance) }
+            ? { ...ci, quantity: Math.min(ci.quantity + 1, maxQty) }
             : ci,
         )
       }
@@ -464,7 +505,7 @@ export default function PosPage() {
         },
       ]
     })
-  }, [])
+  }, [selectedLocationId])
 
   const removeFromCart = useCallback((item_id: string) => {
     setCart((prev) => prev.filter((ci) => ci.item_id !== item_id))
@@ -479,13 +520,13 @@ export default function PosPage() {
             if (ci.item_id !== item_id) return ci
             const newQty = ci.quantity + delta
             if (newQty <= 0) return null
-            const maxQty = item?.total_balance ?? 9999
+            const maxQty = item ? itemLocationBalance(item, selectedLocationId) : 9999
             return { ...ci, quantity: Math.min(newQty, maxQty) }
           })
           .filter((ci): ci is CartItem => ci !== null),
       )
     },
-    [bootstrapData],
+    [bootstrapData, selectedLocationId],
   )
 
   // ── Barcode scanner ────────────────────────────────────────────────────────
@@ -493,7 +534,7 @@ export default function PosPage() {
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && search.length >= 8) {
       const found = bootstrapData?.items.find(
-        (item) => item.barcode && item.barcode === search,
+        (item) => item.barcode && item.barcode === search && itemLocationBalance(item, selectedLocationId) > 0,
       )
       if (found) {
         addToCart(found)
@@ -532,7 +573,12 @@ export default function PosPage() {
     if (paymentMethod === 'online') {
       return { cash: 0, kaspi: 0, card: 0, online: totalAmount }
     }
-    return mixedAmounts
+    return {
+      cash: roundMoney(mixedAmounts.cash || 0),
+      kaspi: roundMoney(mixedAmounts.kaspi || 0),
+      card: roundMoney(mixedAmounts.card || 0),
+      online: roundMoney(mixedAmounts.online || 0),
+    }
   }
 
   // ── Submit sale ────────────────────────────────────────────────────────────
@@ -548,6 +594,21 @@ export default function PosPage() {
     setSubmitting(true)
 
     const amounts = getPaymentAmounts()
+    const paidTotal = roundMoney(amounts.cash + amounts.kaspi + amounts.card + amounts.online)
+
+    if (paymentMethod === 'mixed') {
+      if (paidTotal <= 0) {
+        setSubmitting(false)
+        setSaleError('Укажите суммы для смешанной оплаты')
+        return
+      }
+
+      if (Math.abs(paidTotal - totalAmount) > 0.01) {
+        setSubmitting(false)
+        setSaleError(`Сумма способов оплаты должна совпадать с итогом: ${fmt(totalAmount)} т`)
+        return
+      }
+    }
 
     try {
       const res = await fetch('/api/pos/sale', {
@@ -578,6 +639,12 @@ export default function PosPage() {
       }
 
       const data = json.data
+      const receiptItemsMap = new Map(
+        ((data.receipt_data?.items as Array<{ item_id: string; quantity: number; unit_price: number }> | undefined) || []).map((item) => [
+          item.item_id,
+          item,
+        ]),
+      )
 
       // Capture receipt snapshot
       const company = bootstrapData?.companies.find((c) => c.id === selectedCompanyId) || null
@@ -602,7 +669,14 @@ export default function PosPage() {
         online_amount: amounts.online,
         loyalty_points_earned: data.receipt_data.loyalty_points_earned,
       })
-      setReceiptCartSnapshot([...cart])
+      setReceiptCartSnapshot(
+        cart.map((ci) => {
+          const receiptItem = receiptItemsMap.get(ci.item_id)
+          return receiptItem
+            ? { ...ci, quantity: receiptItem.quantity, unit_price: receiptItem.unit_price }
+            : ci
+        }),
+      )
       setReceiptCompany(company)
       setReceiptLocation(location)
       setReceiptCustomer(selectedCustomer)
@@ -872,7 +946,8 @@ export default function PosPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
                 {filteredItems.map((item) => {
                   const inCart = cart.find((ci) => ci.item_id === item.id)
-                  const outOfStock = item.total_balance <= 0
+                  const locationBalance = itemLocationBalance(item, selectedLocationId)
+                  const outOfStock = locationBalance <= 0
                   return (
                     <button
                       key={item.id}

@@ -53,13 +53,19 @@ export async function GET(request: Request) {
     if (discountsError) throw discountsError
     if (loyaltyConfigError) throw loyaltyConfigError
 
-    // Build balance map: item_id -> total across all point_display locations
+    // Build balance maps for all point displays and for each specific location.
     const balanceMap = new Map<string, number>()
+    const locationBalanceMap = new Map<string, Record<string, number>>()
     const pointDisplayLocationIds = new Set((locations || []).map((l: any) => l.id))
     for (const b of balances || []) {
       if (!pointDisplayLocationIds.has(b.location_id)) continue
       const current = balanceMap.get(b.item_id) || 0
-      balanceMap.set(b.item_id, current + Number(b.quantity || 0))
+      const quantity = Number(b.quantity || 0)
+      balanceMap.set(b.item_id, current + quantity)
+
+      const byLocation = locationBalanceMap.get(b.item_id) || {}
+      byLocation[b.location_id] = quantity
+      locationBalanceMap.set(b.item_id, byLocation)
     }
 
     // Map items with category_name and total_balance
@@ -73,6 +79,7 @@ export async function GET(request: Request) {
         unit: item.unit,
         category_name: category?.name || null,
         total_balance: balanceMap.get(item.id) || 0,
+        location_balances: locationBalanceMap.get(item.id) || {},
       }
     })
 

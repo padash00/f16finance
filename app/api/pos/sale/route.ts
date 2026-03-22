@@ -20,10 +20,44 @@ function normalizeQty(value: unknown): number {
   return Math.round((n + Number.EPSILON) * 1000) / 1000
 }
 
+function getLocalSaleContext(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Qyzylorda',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now)
+
+  const part = (type: string) => parts.find((entry) => entry.type === type)?.value || '00'
+  const saleDate = `${part('year')}-${part('month')}-${part('day')}`
+  const hour = Number(part('hour'))
+  const shift = hour >= 20 || hour < 8 ? 'night' : 'day'
+
+  return { saleDate, hour, shift }
+}
+
+function derivePaymentMethod(amounts: {
+  cash: number
+  kaspi: number
+  card: number
+  online: number
+}): 'cash' | 'kaspi' | 'card' | 'online' | 'mixed' {
+  const positive = Object.entries(amounts).filter(([, value]) => value > 0.009)
+  if (positive.length === 0) {
+    throw new Error('pos-payment-empty')
+  }
+  if (positive.length > 1) return 'mixed'
+  return positive[0][0] as 'cash' | 'kaspi' | 'card' | 'online'
+}
+
 type SaleRequestBody = {
   company_id: string
   location_id: string
-  items: Array<{ item_id: string; quantity: number; unit_price: number }>
+  items: Array<{ item_id: string; quantity: number }>
   cash_amount: number
   kaspi_amount: number
   online_amount: number
@@ -33,6 +67,59 @@ type SaleRequestBody = {
   discount_percent?: number
   loyalty_points_spent?: number
   note?: string | null
+}
+
+type PricedItem = {
+  item_id: string
+  name: string
+  quantity: number
+  unit_price: number
+  total_price: number
+}
+
+async function runLegacyFallback(params: {
+  supabase: ReturnType<typeof createAdminSupabaseClient>
+  companyId: string
+  locationId: string
+  operatorId: string | null
+  saleDate: string
+  shift: string
+  paymentMethod: 'cash' | 'kaspi' | 'mixed'
+  cashAmount: number
+  kaspiAmount: number
+  kaspiBeforeMidnightAmount: number
+  kaspiAfterMidnightAmount: number
+  comment: string | null
+  pricedItems: PricedItem[]
+}) {
+  const { data, error } = await params.supabase.rpc('inventory_create_point_sale', {
+    p_company_id: params.companyId,
+    p_location_id: params.locationId,
+    p_point_device_id: null,
+    p_operator_id: params.operatorId,
+    p_sale_date: params.saleDate,
+    p_shift: params.shift,
+    p_payment_method: params.paymentMethod,
+    p_cash_amount: params.cashAmount,
+    p_kaspi_amount: params.kaspiAmount,
+    p_kaspi_before_midnight_amount: params.kaspiBeforeMidnightAmount,
+    p_kaspi_after_midnight_amount: params.kaspiAfterMidnightAmount,
+    p_comment: params.comment,
+    p_source: 'web-pos',
+    p_local_ref: null,
+    p_items: params.pricedItems.map((item) => ({
+      item_id: item.item_id,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+    })),
+  })
+
+  if (error) throw error
+
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row?.sale_id) throw new Error('pos-sale-fallback-failed')
+
+  return { saleId: row.sale_id as string }
 }
 
 export async function POST(request: Request) {
@@ -48,17 +135,16 @@ export async function POST(request: Request) {
     if (!companyId) return json({ error: 'company_id-required' }, 400)
     if (!locationId) return json({ error: 'location_id-required' }, 400)
 
-    const items = Array.isArray(body.items)
+    const requestedItems = Array.isArray(body.items)
       ? body.items
           .map((item) => ({
             item_id: String(item.item_id || '').trim(),
             quantity: normalizeQty(item.quantity),
-            unit_price: normalizeMoney(item.unit_price),
           }))
           .filter((item) => item.item_id && item.quantity > 0)
       : []
 
-    if (items.length === 0) return json({ error: 'items-required' }, 400)
+    if (requestedItems.length === 0) return json({ error: 'items-required' }, 400)
 
     const cashAmount = normalizeMoney(body.cash_amount)
     const kaspiAmount = normalizeMoney(body.kaspi_amount)
@@ -68,207 +154,246 @@ export async function POST(request: Request) {
     const discountId = body.discount_id?.trim() || null
     const discountPercent = Math.max(0, Math.min(99, Number(body.discount_percent || 0)))
     const loyaltyPointsSpent = Math.max(0, Math.floor(Number(body.loyalty_points_spent || 0)))
+    const comment = body.note?.trim() || null
 
     const supabase = createAdminSupabaseClient()
 
-    // Fetch loyalty config if needed
-    let loyaltyConfig: any = null
-    if (customerId || loyaltyPointsSpent > 0) {
-      const { data } = await supabase.from('loyalty_config').select('*').eq('company_id', companyId).maybeSingle()
-      loyaltyConfig = data
+    const itemIds = [...new Set(requestedItems.map((item) => item.item_id))]
+    const [{ data: locationRow, error: locationError }, { data: itemRows, error: itemError }, { data: balanceRows, error: balanceError }] =
+      await Promise.all([
+        supabase
+          .from('inventory_locations')
+          .select('id, company_id, location_type, name')
+          .eq('id', locationId)
+          .maybeSingle(),
+        supabase
+          .from('inventory_items')
+          .select('id, name, sale_price, is_active')
+          .in('id', itemIds),
+        supabase
+          .from('inventory_balances')
+          .select('item_id, quantity')
+          .eq('location_id', locationId)
+          .in('item_id', itemIds),
+      ])
+
+    if (locationError) throw locationError
+    if (itemError) throw itemError
+    if (balanceError) throw balanceError
+
+    if (!locationRow || locationRow.company_id !== companyId || locationRow.location_type !== 'point_display') {
+      return json({ error: 'invalid-location' }, 400)
     }
 
-    // Fetch discount if discount_id provided
+    const itemMap = new Map((itemRows || []).map((row: any) => [row.id, row]))
+    const balanceMap = new Map((balanceRows || []).map((row: any) => [row.item_id, Number(row.quantity || 0)]))
+
+    const pricedItems: PricedItem[] = []
+    for (const item of requestedItems) {
+      const dbItem = itemMap.get(item.item_id)
+      if (!dbItem || !dbItem.is_active) {
+        return json({ error: `item-not-found:${item.item_id}` }, 400)
+      }
+
+      const available = balanceMap.get(item.item_id) || 0
+      if (item.quantity > available + 0.0001) {
+        return json({ error: `Недостаточно остатка на витрине для товара «${dbItem.name}»` }, 400)
+      }
+
+      const unitPrice = normalizeMoney(dbItem.sale_price)
+      pricedItems.push({
+        item_id: item.item_id,
+        name: dbItem.name,
+        quantity: item.quantity,
+        unit_price: unitPrice,
+        total_price: normalizeMoney(unitPrice * item.quantity),
+      })
+    }
+
+    const subtotal = normalizeMoney(pricedItems.reduce((sum, item) => sum + item.total_price, 0))
+
     let discountRow: any = null
     if (discountId) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('discounts')
         .select('id, name, type, value, min_order_amount')
         .eq('id', discountId)
         .eq('is_active', true)
         .maybeSingle()
+      if (error) throw error
       discountRow = data
+      if (!discountRow) return json({ error: 'discount-not-found' }, 400)
+      if (Number(discountRow.min_order_amount || 0) > subtotal) {
+        return json({ error: 'Минимальная сумма для этой скидки ещё не достигнута' }, 400)
+      }
     }
 
-    // Calculate subtotal from items
-    const subtotal = items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0)
-
-    // Calculate discount amount
     let discountAmount = 0
     if (discountRow) {
       if (discountRow.type === 'percent') {
-        discountAmount = Math.round((subtotal * discountRow.value) / 100 * 100) / 100
+        discountAmount = normalizeMoney((subtotal * Number(discountRow.value || 0)) / 100)
       } else if (discountRow.type === 'fixed') {
         discountAmount = Math.min(subtotal, normalizeMoney(discountRow.value))
       }
     } else if (discountPercent > 0) {
-      discountAmount = Math.round((subtotal * discountPercent) / 100 * 100) / 100
+      discountAmount = normalizeMoney((subtotal * discountPercent) / 100)
     }
 
-    // Calculate loyalty discount
+    let loyaltyConfig: any = null
+    let customerRow: any = null
+    if (customerId || loyaltyPointsSpent > 0) {
+      const [{ data: config, error: configError }, { data: customer, error: customerError }] = await Promise.all([
+        supabase.from('loyalty_config').select('*').eq('company_id', companyId).maybeSingle(),
+        customerId
+          ? supabase.from('customers').select('id, loyalty_points, name').eq('id', customerId).maybeSingle()
+          : Promise.resolve({ data: null, error: null } as any),
+      ])
+      if (configError) throw configError
+      if (customerError) throw customerError
+      loyaltyConfig = config
+      customerRow = customer
+    }
+
+    if (customerId && !customerRow) {
+      return json({ error: 'customer-not-found' }, 400)
+    }
+
     let loyaltyDiscountAmount = 0
     let loyaltyPointsEarned = 0
-    if (loyaltyConfig && loyaltyConfig.is_active) {
+    if (loyaltyConfig?.is_active) {
       const tengePerPoint = Number(loyaltyConfig.tenge_per_point || 0)
       const pointsPer100 = Number(loyaltyConfig.points_per_100_tenge || 0)
+      const maxRedeemPercent = Number(loyaltyConfig.max_redeem_percent || 0)
 
-      if (loyaltyPointsSpent > 0 && tengePerPoint > 0) {
-        loyaltyDiscountAmount = loyaltyPointsSpent * tengePerPoint
-        // Cap at max_redeem_percent of subtotal
-        const maxRedeem = loyaltyConfig.max_redeem_percent
-          ? (subtotal * Number(loyaltyConfig.max_redeem_percent)) / 100
-          : loyaltyDiscountAmount
-        loyaltyDiscountAmount = Math.min(loyaltyDiscountAmount, maxRedeem)
-        loyaltyDiscountAmount = Math.round(loyaltyDiscountAmount * 100) / 100
+      if (loyaltyPointsSpent > 0) {
+        if (!customerRow) return json({ error: 'customer-required-for-loyalty' }, 400)
+        if (loyaltyPointsSpent > Number(customerRow.loyalty_points || 0)) {
+          return json({ error: 'Недостаточно бонусных баллов у клиента' }, 400)
+        }
+
+        loyaltyDiscountAmount = normalizeMoney(loyaltyPointsSpent * tengePerPoint)
+        const maxRedeem = maxRedeemPercent > 0 ? normalizeMoney((subtotal * maxRedeemPercent) / 100) : loyaltyDiscountAmount
+        loyaltyDiscountAmount = Math.min(loyaltyDiscountAmount, maxRedeem, subtotal - discountAmount)
       }
 
       if (pointsPer100 > 0) {
         const afterDiscount = Math.max(0, subtotal - discountAmount - loyaltyDiscountAmount)
         loyaltyPointsEarned = Math.floor((afterDiscount / 100) * pointsPer100)
       }
+    } else if (loyaltyPointsSpent > 0) {
+      return json({ error: 'loyalty-not-active' }, 400)
     }
 
-    const totalAmount = Math.max(0, subtotal - discountAmount - loyaltyDiscountAmount)
-    const saleDate = new Date().toISOString().split('T')[0]
+    const totalAmount = normalizeMoney(Math.max(0, subtotal - discountAmount - loyaltyDiscountAmount))
+    const paymentTotal = normalizeMoney(cashAmount + kaspiAmount + cardAmount + onlineAmount)
+    if (paymentTotal <= 0) {
+      return json({ error: 'payment-required' }, 400)
+    }
+    if (Math.abs(paymentTotal - totalAmount) > 0.01) {
+      return json({ error: 'Сумма способов оплаты должна совпадать с итогом чека' }, 400)
+    }
 
-    // Insert point_sale (with fallback if loyalty/discount columns don't exist yet)
-    let saleRow: { id: string } | null = null
-    let saleError: any = null
+    const { saleDate, hour, shift } = getLocalSaleContext()
+    const paymentMethod = derivePaymentMethod({
+      cash: cashAmount,
+      kaspi: kaspiAmount,
+      card: cardAmount,
+      online: onlineAmount,
+    })
 
-    const fullInsert = await supabase
-      .from('point_sales')
-      .insert({
-        company_id: companyId,
-        location_id: locationId,
-        operator_id: access.staffMember?.id || null,
-        sale_date: saleDate,
-        cash_amount: cashAmount,
-        kaspi_amount: kaspiAmount,
-        online_amount: onlineAmount,
-        card_amount: cardAmount,
-        total_amount: totalAmount,
-        customer_id: customerId,
-        discount_id: discountId,
-        discount_amount: discountAmount,
-        loyalty_points_earned: loyaltyPointsEarned,
-        loyalty_points_spent: loyaltyPointsSpent,
-        loyalty_discount_amount: loyaltyDiscountAmount,
-        note: body.note?.trim() || null,
-        source: 'web-pos',
+    const kaspiBeforeMidnightAmount = shift === 'night' && hour >= 20 ? kaspiAmount : 0
+    const kaspiAfterMidnightAmount = shift === 'night' && hour < 8 ? kaspiAmount : 0
+
+    let saleId = ''
+
+    const rpcResult = await supabase.rpc('inventory_create_pos_sale', {
+      p_company_id: companyId,
+      p_location_id: locationId,
+      p_operator_id: access.staffMember?.id || null,
+      p_sale_date: saleDate,
+      p_shift: shift,
+      p_payment_method: paymentMethod,
+      p_cash_amount: cashAmount,
+      p_kaspi_amount: kaspiAmount,
+      p_kaspi_before_midnight_amount: kaspiBeforeMidnightAmount,
+      p_kaspi_after_midnight_amount: kaspiAfterMidnightAmount,
+      p_card_amount: cardAmount,
+      p_online_amount: onlineAmount,
+      p_customer_id: customerId,
+      p_discount_id: discountId,
+      p_discount_amount: discountAmount,
+      p_loyalty_points_earned: loyaltyPointsEarned,
+      p_loyalty_points_spent: loyaltyPointsSpent,
+      p_loyalty_discount_amount: loyaltyDiscountAmount,
+      p_comment: comment,
+      p_source: 'web-pos',
+      p_items: pricedItems.map((item) => ({
+        item_id: item.item_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+      })),
+    })
+
+    if (rpcResult.error) {
+      const message = String(rpcResult.error.message || '')
+      const rpcMissing =
+        message.includes('inventory_create_pos_sale') ||
+        message.includes('function public.inventory_create_pos_sale') ||
+        rpcResult.error.code === '42883'
+
+      if (!rpcMissing) throw rpcResult.error
+
+      if (
+        cardAmount > 0 ||
+        onlineAmount > 0 ||
+        customerId ||
+        discountId ||
+        discountAmount > 0 ||
+        loyaltyDiscountAmount > 0 ||
+        loyaltyPointsEarned > 0 ||
+        loyaltyPointsSpent > 0
+      ) {
+        return json({ error: 'Для этой кассы нужно применить новую миграцию POS в базе данных' }, 500)
+      }
+
+      if (paymentMethod === 'card' || paymentMethod === 'online') {
+        return json({ error: 'Для оплаты картой и онлайн нужно обновить базу данных POS' }, 500)
+      }
+
+      const fallback = await runLegacyFallback({
+        supabase,
+        companyId,
+        locationId,
+        operatorId: access.staffMember?.id || null,
+        saleDate,
+        shift,
+        paymentMethod: paymentMethod as 'cash' | 'kaspi' | 'mixed',
+        cashAmount,
+        kaspiAmount,
+        kaspiBeforeMidnightAmount,
+        kaspiAfterMidnightAmount,
+        comment,
+        pricedItems,
       })
-      .select('id')
-      .single()
-
-    if (fullInsert.error) {
-      // Fallback: insert without new columns (migrations not yet applied)
-      const minimalInsert = await supabase
-        .from('point_sales')
-        .insert({
-          company_id: companyId,
-          location_id: locationId,
-          operator_id: access.staffMember?.id || null,
-          sale_date: saleDate,
-          cash_amount: cashAmount,
-          kaspi_amount: kaspiAmount,
-          online_amount: onlineAmount,
-          card_amount: cardAmount,
-          total_amount: totalAmount,
-        })
-        .select('id')
-        .single()
-      saleRow = minimalInsert.data
-      saleError = minimalInsert.error
-      // Reset loyalty amounts since they weren't saved
-      loyaltyPointsEarned = 0
+      saleId = fallback.saleId
     } else {
-      saleRow = fullInsert.data
+      const row = Array.isArray(rpcResult.data) ? rpcResult.data[0] : rpcResult.data
+      saleId = String(row?.sale_id || '')
     }
 
-    if (saleError || !saleRow) throw saleError || new Error('Sale insert failed')
-    const saleId = saleRow.id
+    if (!saleId) throw new Error('pos-sale-save-failed')
 
-    // Insert sale items
-    const saleItemRows = items.map((item) => ({
-      sale_id: saleId,
-      item_id: item.item_id,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      total_price: Math.round(item.unit_price * item.quantity * 100) / 100,
-    }))
+    checkAndNotifyLowStock(itemIds, locationId).catch(() => null)
 
-    const { error: itemsError } = await supabase.from('point_sale_items').insert(saleItemRows)
-    if (itemsError) throw itemsError
-
-    // Apply inventory balance delta for each item
-    for (const item of items) {
-      await supabase.rpc('inventory_apply_balance_delta', {
-        p_location_id: locationId,
-        p_item_id: item.item_id,
-        p_delta: -item.quantity,
-      })
-    }
-
-    // Update customer loyalty points and stats
-    if (customerId) {
-      const { error: loyaltyRpcError } = await supabase.rpc('increment_customer_loyalty', {
-        p_customer_id: customerId,
-        p_points_earned: loyaltyPointsEarned,
-        p_points_spent: loyaltyPointsSpent,
-        p_sale_total: totalAmount,
-      })
-
-      if (loyaltyRpcError) {
-        // Fallback: manual update if RPC doesn't exist
-        const { data: customerRow } = await supabase
-          .from('customers')
-          .select('loyalty_points')
-          .eq('id', customerId)
-          .maybeSingle()
-
-        if (customerRow) {
-          const newPoints = Math.max(0, (customerRow.loyalty_points || 0) - loyaltyPointsSpent + loyaltyPointsEarned)
-          await supabase
-            .from('customers')
-            .update({ loyalty_points: newPoints })
-            .eq('id', customerId)
-        }
-      }
-    }
-
-    // Increment discount usage count
-    if (discountId) {
-      // Try using RPC first, fall back to raw SQL increment via update
-      const { error: discountRpcError } = await supabase.rpc('increment_discount_usage', {
-        p_discount_id: discountId,
-      })
-
-      if (discountRpcError) {
-        // Fallback: fetch current count and increment manually
-        const { data: discountRow } = await supabase
-          .from('discounts')
-          .select('usage_count')
-          .eq('id', discountId)
-          .maybeSingle()
-
-        if (discountRow) {
-          await supabase
-            .from('discounts')
-            .update({ usage_count: (discountRow.usage_count || 0) + 1 })
-            .eq('id', discountId)
-        }
-      }
-    }
-
-    // Trigger low stock check in background (don't await)
-    const soldItemIds = items.map((i) => i.item_id)
-    checkAndNotifyLowStock(soldItemIds, locationId).catch(() => null)
-
-    // Fetch full receipt data
-    const { data: receiptSale } = await supabase
+    const { data: receiptSale, error: receiptError } = await supabase
       .from('point_sales')
-      .select('*, items:point_sale_items(id, item_id, quantity, unit_price, total_price)')
+      .select(
+        'id, sold_at, sale_date, shift, payment_method, cash_amount, kaspi_amount, card_amount, online_amount, total_amount, comment, customer_id, discount_id, discount_amount, loyalty_points_earned, loyalty_points_spent, loyalty_discount_amount, items:point_sale_items(id, item_id, quantity, unit_price, total_price)',
+      )
       .eq('id', saleId)
       .maybeSingle()
+
+    if (receiptError) throw receiptError
 
     return json({
       ok: true,
@@ -279,7 +404,7 @@ export async function POST(request: Request) {
           sale_date: saleDate,
           company_id: companyId,
           location_id: locationId,
-          items: saleItemRows,
+          items: pricedItems,
           subtotal,
           discount_amount: discountAmount,
           loyalty_discount_amount: loyaltyDiscountAmount,
@@ -297,6 +422,6 @@ export async function POST(request: Request) {
     })
   } catch (error: any) {
     console.error('[pos/sale]', error)
-    return json({ error: error?.message || 'Не удалось провести продажу' }, 500)
+    return json({ error: error?.message || 'РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕРІРµСЃС‚Рё РїСЂРѕРґР°Р¶Сѓ' }, 500)
   }
 }
