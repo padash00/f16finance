@@ -910,7 +910,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
   }
 
   return (
-    <div className="app-page max-w-[1680px] space-y-6">
+    <div className={inventoryView === 'overview' ? 'app-page max-w-[1680px] space-y-6' : 'app-page max-w-[1180px] space-y-6'}>
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">{viewMeta.title}</h1>
@@ -1813,7 +1813,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
           </div>
         </Card>
 
-        <Card className="border-border/70 p-5">
+        <Card className={`border-border/70 p-5 ${showStocktakes ? '' : 'hidden'}`}>
           <SectionTitle icon={ScanSearch} title="Последние инвентаризации" subtitle="Акты пересчета и количество строк с расхождениями." />
           <div className="space-y-3">
             {(data?.stocktakes || []).map((stocktake) => {
@@ -1836,7 +1836,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
           </div>
         </Card>
 
-        <Card className="border-border/70 p-5">
+        <Card className={`border-border/70 p-5 ${showMovements ? '' : 'hidden'}`}>
           <SectionTitle icon={History} title="Журнал движений" subtitle="Последние операции по складу, витринам и корректировкам." />
           <div className="space-y-3">
             {(data?.movements || []).map((movement) => (
