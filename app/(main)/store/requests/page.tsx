@@ -144,7 +144,7 @@ export default function StoreRequestsPage() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/admin/inventory', { cache: 'no-store' })
+      const response = await fetch('/api/admin/inventory/requests', { cache: 'no-store' })
       const json = (await response.json().catch(() => null)) as InventoryResponse | null
       if (!response.ok || !json?.ok || !json.data) {
         throw new Error(json?.error || 'Не удалось загрузить заявки магазина')
@@ -246,7 +246,7 @@ export default function StoreRequestsPage() {
           }))
         : []
 
-      const response = await fetch('/api/admin/inventory', {
+      const response = await fetch('/api/admin/inventory/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

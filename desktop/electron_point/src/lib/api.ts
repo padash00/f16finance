@@ -438,6 +438,10 @@ export async function createPointInventorySale(
     kaspi_amount?: number | null
     kaspi_before_midnight_amount?: number | null
     kaspi_after_midnight_amount?: number | null
+    customer_id?: string | null
+    loyalty_points_spent?: number | null
+    discount_amount?: number | null
+    loyalty_discount_amount?: number | null
     comment?: string | null
     local_ref?: string | null
     items: Array<{
@@ -447,8 +451,25 @@ export async function createPointInventorySale(
       comment?: string | null
     }>
   },
-): Promise<{ sale_id: string | null; total_amount: number }> {
-  const data = await request<{ ok: boolean; data: { sale_id: string | null; total_amount: number } }>(
+): Promise<{
+  sale_id: string | null
+  total_amount: number
+  sold_at: string | null
+  customer_id: string | null
+  loyalty_points_earned: number
+  loyalty_points_spent: number
+}> {
+  const data = await request<{
+    ok: boolean
+    data: {
+      sale_id: string | null
+      total_amount: number
+      sold_at: string | null
+      customer_id: string | null
+      loyalty_points_earned: number
+      loyalty_points_spent: number
+    }
+  }>(
     config,
     'POST',
     '/api/point/inventory-sales',

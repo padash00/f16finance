@@ -16,6 +16,17 @@ export type InventoryOverview = {
   companies: any[]
 }
 
+export async function fetchInventoryRequests(supabase: AnySupabase) {
+  const { data, error } = await supabase
+    .from('inventory_requests')
+    .select('id, source_location_id, target_location_id, requesting_company_id, status, comment, decision_comment, created_by, approved_by, approved_at, created_at, updated_at, source_location:source_location_id(id, name, code, location_type), target_location:target_location_id(id, name, code, location_type), company:requesting_company_id(id, name, code), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode))')
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  if (error) throw error
+  return mapNestedRows(data || [])
+}
+
 export async function fetchInventoryOverview(supabase: AnySupabase): Promise<InventoryOverview> {
   const [
     { data: categories, error: categoriesError },

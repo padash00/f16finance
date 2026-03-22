@@ -507,6 +507,10 @@ export default function InventorySalesPage({
         kaspi_amount: kaspiAmount,
         kaspi_before_midnight_amount: runtimeShift.shift === 'night' && isNightAfterMidnight ? 0 : kaspiAmount,
         kaspi_after_midnight_amount: runtimeShift.shift === 'night' && isNightAfterMidnight ? kaspiAmount : 0,
+        customer_id: selectedCustomer?.id || null,
+        loyalty_points_spent: loyaltyPointsToSpend,
+        discount_amount: discountAmount,
+        loyalty_discount_amount: loyaltyDiscountAmount,
         comment: comment.trim() || null,
         local_ref: localRef(),
         items: cartDetailed.map((line) => ({
@@ -516,23 +520,12 @@ export default function InventorySalesPage({
         })),
       } as any)
 
-      // Record loyalty if customer selected
-      if (selectedCustomer) {
-        try {
-          await api.recordSaleWithCustomer(config, {
-            customer_id: selectedCustomer.id,
-            sale_total_amount: cartTotal,
-            loyalty_points_spent: loyaltyPointsToSpend,
-          })
-        } catch {
-          // non-critical, don't fail the sale
-        }
-      }
-
       setReceiptPreview({
         saleId: saleResult.sale_id,
         saleDate: formatDate(runtimeShift.date),
-        saleTime: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+        saleTime: saleResult.sold_at
+          ? new Date(saleResult.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+          : new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
         shift: runtimeShift.shift,
         paymentMethod,
         cashAmount,
