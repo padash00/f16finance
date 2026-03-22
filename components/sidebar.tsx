@@ -110,7 +110,6 @@ const navSections: NavSection[] = [
       { href: '/income', label: 'Р”РѕС…РѕРґС‹', icon: TrendingUp, note: 'РћР±РѕСЂРѕС‚ Рё РІС‹СЂСѓС‡РєР°', badge: 'в†‘23%', badgeColor: 'green' },
       { href: '/analytics', label: 'РђРЅР°Р»РёС‚РёРєР° РґРѕС…РѕРґРѕРІ', icon: BarChart3, note: 'РЎСЂР°РІРЅРµРЅРёРµ С‚РѕС‡РµРє Рё С‚СЂРµРЅРґС‹' },
       { href: '/expenses', label: 'Р Р°СЃС…РѕРґС‹', icon: TrendingDown, note: 'РЎРїРёСЃР°РЅРёСЏ Рё СЃС‚Р°С‚СЊРё' },
-      { href: '/inventory', label: 'РЎРєР»Р°Рґ', icon: Boxes, note: 'РџСЂРёРµРјРєР°, Р·Р°СЏРІРєРё Рё РѕСЃС‚Р°С‚РєРё' },
       { href: '/cashflow', label: 'Cash Flow', icon: Wallet, note: 'Р”РІРёР¶РµРЅРёРµ РґРµРЅРµРі Рё Р±Р°Р»Р°РЅСЃ', badge: 'AI', badgeColor: 'blue', isNew: true },
       { href: '/categories', label: 'РљР°С‚РµРіРѕСЂРёРё', icon: Tags, note: 'РЎС‚СЂСѓРєС‚СѓСЂР° СЂР°СЃС…РѕРґРѕРІ' },
       { href: '/tax', label: 'РќР°Р»РѕРіРё', icon: Landmark, note: '3% Рё РєРѕРЅС‚СЂРѕР»СЊ Р±Р°Р·С‹' },
@@ -124,15 +123,15 @@ const navSections: NavSection[] = [
     accentColor: 'emerald',
     icon: Boxes,
     items: [
-      { href: '/inventory', label: 'РћР±Р·РѕСЂ РјР°РіР°Р·РёРЅР°', icon: Boxes, note: 'РћР±С‰Р°СЏ СЃРІРѕРґРєР° РїРѕ СЃРєР»Р°РґСѓ Рё РІРёС‚СЂРёРЅР°Рј' },
-      { href: '/store/catalog', label: 'РљР°С‚Р°Р»РѕРі', icon: Tags, note: 'РўРѕРІР°СЂС‹, РєР°С‚РµРіРѕСЂРёРё Рё РїРѕСЃС‚Р°РІС‰РёРєРё' },
-      { href: '/store/receipts', label: 'РџСЂРёРµРјРєР°', icon: PackagePlus, note: 'Р”РѕРєСѓРјРµРЅС‚С‹ РїСЂРёС…РѕРґР° РЅР° СЃРєР»Р°Рґ' },
-      { href: '/store/requests', label: 'Р—Р°СЏРІРєРё', icon: ClipboardList, note: 'Р—Р°СЏРІРєРё С‚РѕС‡РµРє Рё РѕРґРѕР±СЂРµРЅРёРµ' },
-      { href: '/store/analytics', label: 'РђРЅР°Р»РёС‚РёРєР° С‚РѕС‡РµРє', icon: Store, note: 'РћСЃС‚Р°С‚РєРё Рё РґРІРёР¶РµРЅРёРµ РїРѕ РІРёС‚СЂРёРЅР°Рј' },
-      { href: '/store/consumables', label: 'Р Р°СЃС…РѕРґРЅРёРєРё', icon: Package2, note: 'РќРѕСЂРјС‹ Рё РєРѕРЅС‚СЂРѕР»СЊ РѕСЃС‚Р°С‚РєРѕРІ' },
-      { href: '/store/writeoffs', label: 'РЎРїРёСЃР°РЅРёСЏ', icon: ArchiveX, note: 'Р‘СЂР°Рє Рё СЃР»СѓР¶РµР±РЅС‹Рµ СЂР°СЃС…РѕРґС‹' },
-      { href: '/store/revisions', label: 'РРЅРІРµРЅС‚Р°СЂРёР·Р°С†РёСЏ', icon: ScanSearch, note: 'РџРµСЂРµСЃС‡РµС‚ Рё РєРѕСЂСЂРµРєС‚РёСЂРѕРІРєРё' },
-      { href: '/store/movements', label: 'Р”РІРёР¶РµРЅРёСЏ', icon: History, note: 'Р–СѓСЂРЅР°Р» С‚РѕРІР°СЂРЅС‹С… РѕРїРµСЂР°С†РёР№' },
+      { href: '/store', label: 'Обзор магазина', icon: Boxes, note: 'Общая сводка по складу и витринам' },
+      { href: '/store/catalog', label: 'Каталог', icon: Tags, note: 'Товары, категории и поставщики' },
+      { href: '/store/receipts', label: 'Приемка', icon: PackagePlus, note: 'Документы прихода на склад' },
+      { href: '/store/requests', label: 'Заявки', icon: ClipboardList, note: 'Заявки точек и одобрение' },
+      { href: '/store/analytics', label: 'Аналитика точек', icon: Store, note: 'Остатки и движение по витринам' },
+      { href: '/store/consumables', label: 'Расходники', icon: Package2, note: 'Нормы и контроль остатков' },
+      { href: '/store/writeoffs', label: 'Списания', icon: ArchiveX, note: 'Брак и служебные расходы' },
+      { href: '/store/revisions', label: 'Ревизия', icon: ScanSearch, note: 'Полная проверка склада и витрин' },
+      { href: '/store/movements', label: 'Движения', icon: History, note: 'Журнал товарных операций' },
     ],
   },
   {
@@ -649,43 +648,7 @@ export function Sidebar() {
       .map((section) => ({
         ...section,
         items: section.items
-          .map((item) => {
-            if (section.id === 'store') {
-              const hrefMap: Record<string, string> = {
-                '/inventory': '/store',
-                '/inventory/catalog': '/store/catalog',
-                '/inventory/receipts': '/store/receipts',
-                '/inventory/requests': '/store/requests',
-                '/inventory/analytics': '/store/analytics',
-                '/inventory/consumables': '/store/consumables',
-                '/inventory/writeoffs': '/store/writeoffs',
-                '/inventory/stocktakes': '/store/revisions',
-                '/inventory/movements': '/store/movements',
-                '/inventory/revisions': '/store/revisions',
-              }
-
-              if (item.href === '/inventory/stocktakes' || item.href === '/inventory/revisions') {
-                return {
-                  ...item,
-                  href: '/store/revisions',
-                  label: 'Ревизия',
-                  note: 'Полная проверка склада и витрин',
-                }
-              }
-
-              if (hrefMap[item.href]) {
-                return {
-                  ...item,
-                  href: hrefMap[item.href],
-                }
-              }
-            }
-            return item
-          })
           .filter((item) => {
-            if (section.id === 'finance' && item.href === '/inventory') {
-              return false
-            }
             if (item.href === '/operator-lead' && !isLeadOperator) {
               return false
             }
