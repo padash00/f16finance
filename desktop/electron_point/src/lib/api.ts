@@ -241,6 +241,7 @@ export async function createDebt(
     operator_id?: string | null
     client_name?: string | null
     item_name: string
+    barcode?: string | null
     quantity: number
     unit_price: number
     total_amount: number

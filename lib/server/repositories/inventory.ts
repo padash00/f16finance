@@ -10,6 +10,9 @@ export type InventoryOverview = {
   balances: any[]
   receipts: any[]
   requests: any[]
+  writeoffs: any[]
+  stocktakes: any[]
+  movements: any[]
   companies: any[]
 }
 
@@ -22,6 +25,9 @@ export async function fetchInventoryOverview(supabase: AnySupabase): Promise<Inv
     { data: balances, error: balancesError },
     { data: receipts, error: receiptsError },
     { data: requests, error: requestsError },
+    { data: writeoffs, error: writeoffsError },
+    { data: stocktakes, error: stocktakesError },
+    { data: movements, error: movementsError },
     { data: companies, error: companiesError },
   ] = await Promise.all([
     supabase.from('inventory_categories').select('*').order('name', { ascending: true }),
@@ -49,6 +55,21 @@ export async function fetchInventoryOverview(supabase: AnySupabase): Promise<Inv
       .select('id, source_location_id, target_location_id, requesting_company_id, status, comment, decision_comment, created_by, approved_by, approved_at, created_at, updated_at, source_location:source_location_id(id, name, code, location_type), target_location:target_location_id(id, name, code, location_type), company:requesting_company_id(id, name, code), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode))')
       .order('created_at', { ascending: false })
       .limit(20),
+    supabase
+      .from('inventory_writeoffs')
+      .select('id, location_id, written_at, reason, comment, total_amount, created_by, created_at, location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), items:inventory_writeoff_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode))')
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabase
+      .from('inventory_stocktakes')
+      .select('id, location_id, counted_at, comment, created_by, created_at, location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode))')
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabase
+      .from('inventory_movements')
+      .select('id, item_id, movement_type, from_location_id, to_location_id, quantity, unit_cost, total_amount, reference_type, reference_id, comment, actor_user_id, created_at, item:item_id(id, name, barcode), from_location:from_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .order('created_at', { ascending: false })
+      .limit(300),
     supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
   ])
 
@@ -59,6 +80,9 @@ export async function fetchInventoryOverview(supabase: AnySupabase): Promise<Inv
   if (balancesError) throw balancesError
   if (receiptsError) throw receiptsError
   if (requestsError) throw requestsError
+  if (writeoffsError) throw writeoffsError
+  if (stocktakesError) throw stocktakesError
+  if (movementsError) throw movementsError
   if (companiesError) throw companiesError
 
   return {
@@ -69,6 +93,9 @@ export async function fetchInventoryOverview(supabase: AnySupabase): Promise<Inv
     balances: mapNestedRows(balances || []),
     receipts: mapNestedRows(receipts || []),
     requests: mapNestedRows(requests || []),
+    writeoffs: mapNestedRows(writeoffs || []),
+    stocktakes: mapNestedRows(stocktakes || []),
+    movements: mapNestedRows(movements || []),
     companies: companies || [],
   }
 }
@@ -294,6 +321,52 @@ export async function createPointInventoryReturn(
     p_comment: payload.comment || null,
     p_source: payload.source || null,
     p_local_ref: payload.local_ref || null,
+    p_items: payload.items,
+  })
+
+  if (error) throw error
+  return Array.isArray(data) ? data[0] || null : data || null
+}
+
+export async function postInventoryWriteoff(
+  supabase: AnySupabase,
+  payload: {
+    location_id: string
+    written_at: string
+    reason: string
+    comment?: string | null
+    created_by?: string | null
+    items: Array<{ item_id: string; quantity: number; comment?: string | null }>
+  },
+) {
+  const { data, error } = await supabase.rpc('inventory_post_writeoff', {
+    p_location_id: payload.location_id,
+    p_written_at: payload.written_at,
+    p_reason: payload.reason,
+    p_comment: payload.comment || null,
+    p_created_by: payload.created_by || null,
+    p_items: payload.items,
+  })
+
+  if (error) throw error
+  return Array.isArray(data) ? data[0] || null : data || null
+}
+
+export async function postInventoryStocktake(
+  supabase: AnySupabase,
+  payload: {
+    location_id: string
+    counted_at: string
+    comment?: string | null
+    created_by?: string | null
+    items: Array<{ item_id: string; actual_qty: number; comment?: string | null }>
+  },
+) {
+  const { data, error } = await supabase.rpc('inventory_post_stocktake', {
+    p_location_id: payload.location_id,
+    p_counted_at: payload.counted_at,
+    p_comment: payload.comment || null,
+    p_created_by: payload.created_by || null,
     p_items: payload.items,
   })
 

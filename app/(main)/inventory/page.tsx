@@ -2,13 +2,16 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
+  ArchiveX,
   Boxes,
   Building2,
   ClipboardCheck,
   ClipboardList,
+  History,
   Loader2,
   PackagePlus,
   RefreshCw,
+  ScanSearch,
   Store,
   Tag,
   Truck,
@@ -86,6 +89,49 @@ type InventoryRequest = {
     item?: { id: string; name: string; barcode: string } | null
   }>
 }
+type InventoryWriteoff = {
+  id: string
+  written_at: string
+  reason: string
+  comment: string | null
+  total_amount: number
+  location?: InventoryLocation | null
+  items?: Array<{
+    id: string
+    quantity: number
+    unit_cost: number
+    total_cost: number
+    comment: string | null
+    item?: { id: string; name: string; barcode: string } | null
+  }>
+}
+type InventoryStocktake = {
+  id: string
+  counted_at: string
+  comment: string | null
+  location?: InventoryLocation | null
+  items?: Array<{
+    id: string
+    expected_qty: number
+    actual_qty: number
+    delta_qty: number
+    comment: string | null
+    item?: { id: string; name: string; barcode: string } | null
+  }>
+}
+type InventoryMovement = {
+  id: string
+  movement_type: string
+  quantity: number
+  unit_cost: number | null
+  total_amount: number | null
+  reference_type: string
+  comment: string | null
+  created_at: string
+  item?: { id: string; name: string; barcode: string } | null
+  from_location?: InventoryLocation | null
+  to_location?: InventoryLocation | null
+}
 
 type InventoryResponse = {
   ok: boolean
@@ -97,6 +143,9 @@ type InventoryResponse = {
     balances: InventoryBalance[]
     receipts: InventoryReceipt[]
     requests: InventoryRequest[]
+    writeoffs: InventoryWriteoff[]
+    stocktakes: InventoryStocktake[]
+    movements: InventoryMovement[]
     companies: Array<{ id: string; name: string; code: string | null }>
   }
   error?: string
@@ -115,6 +164,18 @@ type RequestLine = {
   comment: string
 }
 
+type WriteoffLine = {
+  item_id: string
+  quantity: string
+  comment: string
+}
+
+type StocktakeLine = {
+  item_id: string
+  actual_qty: string
+  comment: string
+}
+
 type DecisionDraft = {
   decisionComment: string
   quantities: Record<string, string>
@@ -130,6 +191,18 @@ const emptyReceiptLine = (): ReceiptLine => ({
 const emptyRequestLine = (): RequestLine => ({
   item_id: '',
   requested_qty: '',
+  comment: '',
+})
+
+const emptyWriteoffLine = (): WriteoffLine => ({
+  item_id: '',
+  quantity: '',
+  comment: '',
+})
+
+const emptyStocktakeLine = (): StocktakeLine => ({
+  item_id: '',
+  actual_qty: '',
   comment: '',
 })
 
@@ -167,6 +240,28 @@ function requestStatusClass(status: string) {
   if (status === 'approved_partial') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
   if (status === 'rejected') return 'border-red-500/30 bg-red-500/10 text-red-200'
   return 'border-blue-500/30 bg-blue-500/10 text-blue-200'
+}
+
+function movementTypeLabel(type: string) {
+  if (type === 'receipt') return 'Приемка'
+  if (type === 'transfer_to_point') return 'Выдача на точку'
+  if (type === 'sale') return 'Продажа'
+  if (type === 'debt') return 'Долг'
+  if (type === 'return') return 'Возврат'
+  if (type === 'writeoff') return 'Списание'
+  if (type === 'inventory_adjustment') return 'Корректировка'
+  return type
+}
+
+function movementTypeClass(type: string) {
+  if (type === 'receipt') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+  if (type === 'transfer_to_point') return 'border-blue-500/30 bg-blue-500/10 text-blue-200'
+  if (type === 'sale') return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200'
+  if (type === 'debt') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+  if (type === 'return') return 'border-violet-500/30 bg-violet-500/10 text-violet-200'
+  if (type === 'writeoff') return 'border-red-500/30 bg-red-500/10 text-red-200'
+  if (type === 'inventory_adjustment') return 'border-orange-500/30 bg-orange-500/10 text-orange-200'
+  return 'border-border/70 bg-background/60 text-muted-foreground'
 }
 
 function createDecisionDraft(request: InventoryRequest): DecisionDraft {
@@ -207,6 +302,15 @@ export default function InventoryPage() {
   const [requestSourceLocationId, setRequestSourceLocationId] = useState('')
   const [requestComment, setRequestComment] = useState('')
   const [requestLines, setRequestLines] = useState<RequestLine[]>([emptyRequestLine()])
+  const [writeoffLocationId, setWriteoffLocationId] = useState('')
+  const [writeoffDate, setWriteoffDate] = useState(new Date().toISOString().slice(0, 10))
+  const [writeoffReason, setWriteoffReason] = useState('')
+  const [writeoffComment, setWriteoffComment] = useState('')
+  const [writeoffLines, setWriteoffLines] = useState<WriteoffLine[]>([emptyWriteoffLine()])
+  const [stocktakeLocationId, setStocktakeLocationId] = useState('')
+  const [stocktakeDate, setStocktakeDate] = useState(new Date().toISOString().slice(0, 10))
+  const [stocktakeComment, setStocktakeComment] = useState('')
+  const [stocktakeLines, setStocktakeLines] = useState<StocktakeLine[]>([])
 
   async function loadData() {
     setLoading(true)
@@ -227,6 +331,8 @@ export default function InventoryPage() {
     setData(payload)
     setReceiptLocationId((current) => current || defaultWarehouseId)
     setRequestSourceLocationId((current) => current || defaultWarehouseId)
+    setWriteoffLocationId((current) => current || defaultWarehouseId)
+    setStocktakeLocationId((current) => current || defaultWarehouseId)
 
     const nextDrafts: Record<string, DecisionDraft> = {}
     for (const request of payload.requests || []) {
@@ -293,10 +399,176 @@ export default function InventoryPage() {
     [pointLocations, requestCompanyId],
   )
 
+  const activeLocations = useMemo(
+    () => (data?.locations || []).filter((item) => item.is_active),
+    [data?.locations],
+  )
+
+  const selectedWriteoffLocation = useMemo(
+    () => activeLocations.find((item) => item.id === writeoffLocationId) || null,
+    [activeLocations, writeoffLocationId],
+  )
+
+  const selectedStocktakeLocation = useMemo(
+    () => activeLocations.find((item) => item.id === stocktakeLocationId) || null,
+    [activeLocations, stocktakeLocationId],
+  )
+
+  const balancesByLocation = useMemo(() => {
+    const map = new Map<string, InventoryBalance[]>()
+    for (const balance of data?.balances || []) {
+      if (!map.has(balance.location_id)) map.set(balance.location_id, [])
+      map.get(balance.location_id)!.push(balance)
+    }
+    return map
+  }, [data?.balances])
+
+  const selectedWriteoffBalances = useMemo(
+    () => (writeoffLocationId ? balancesByLocation.get(writeoffLocationId) || [] : []),
+    [balancesByLocation, writeoffLocationId],
+  )
+
+  const selectedStocktakeBalances = useMemo(
+    () => (stocktakeLocationId ? balancesByLocation.get(stocktakeLocationId) || [] : []),
+    [balancesByLocation, stocktakeLocationId],
+  )
+
   const receiptTotal = useMemo(
     () => receiptLines.reduce((sum, line) => sum + parseMoney(line.quantity) * parseMoney(line.unit_cost), 0),
     [receiptLines],
   )
+
+  const writeoffTotal = useMemo(() => {
+    const priceMap = new Map((data?.items || []).map((item) => [item.id, Number(item.default_purchase_price || 0)]))
+    return writeoffLines.reduce((sum, line) => sum + parseMoney(line.quantity) * Number(priceMap.get(line.item_id) || 0), 0)
+  }, [data?.items, writeoffLines])
+
+  const pointMovementAnalytics = useMemo(() => {
+    const summary = new Map<string, {
+      location: InventoryLocation
+      stock_qty: number
+      stock_items: number
+      incoming_qty: number
+      incoming_amount: number
+      sale_qty: number
+      sale_amount: number
+      debt_qty: number
+      debt_amount: number
+      return_qty: number
+      return_amount: number
+      writeoff_qty: number
+      writeoff_amount: number
+      adjustment_in_qty: number
+      adjustment_out_qty: number
+      net_issue_qty: number
+      last_movement_at: string | null
+    }>()
+
+    for (const location of pointLocations) {
+      const balances = balancesByLocation.get(location.id) || []
+      summary.set(location.id, {
+        location,
+        stock_qty: balances.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+        stock_items: balances.filter((item) => Number(item.quantity || 0) > 0).length,
+        incoming_qty: 0,
+        incoming_amount: 0,
+        sale_qty: 0,
+        sale_amount: 0,
+        debt_qty: 0,
+        debt_amount: 0,
+        return_qty: 0,
+        return_amount: 0,
+        writeoff_qty: 0,
+        writeoff_amount: 0,
+        adjustment_in_qty: 0,
+        adjustment_out_qty: 0,
+        net_issue_qty: 0,
+        last_movement_at: null,
+      })
+    }
+
+    for (const movement of data?.movements || []) {
+      const fromPoint = movement.from_location?.location_type === 'point_display' ? summary.get(movement.from_location.id) : null
+      const toPoint = movement.to_location?.location_type === 'point_display' ? summary.get(movement.to_location.id) : null
+      const qty = Number(movement.quantity || 0)
+      const amount = Number(movement.total_amount || 0)
+
+      if (fromPoint) {
+        if (!fromPoint.last_movement_at || new Date(movement.created_at).getTime() > new Date(fromPoint.last_movement_at).getTime()) {
+          fromPoint.last_movement_at = movement.created_at
+        }
+      }
+
+      if (toPoint) {
+        if (!toPoint.last_movement_at || new Date(movement.created_at).getTime() > new Date(toPoint.last_movement_at).getTime()) {
+          toPoint.last_movement_at = movement.created_at
+        }
+      }
+
+      if (movement.movement_type === 'transfer_to_point' && toPoint) {
+        toPoint.incoming_qty += qty
+        toPoint.incoming_amount += amount
+      }
+
+      if (movement.movement_type === 'sale' && fromPoint) {
+        fromPoint.sale_qty += qty
+        fromPoint.sale_amount += amount
+      }
+
+      if (movement.movement_type === 'debt' && fromPoint) {
+        fromPoint.debt_qty += qty
+        fromPoint.debt_amount += amount
+      }
+
+      if (movement.movement_type === 'return' && toPoint) {
+        toPoint.return_qty += qty
+        toPoint.return_amount += amount
+      }
+
+      if (movement.movement_type === 'writeoff' && fromPoint) {
+        fromPoint.writeoff_qty += qty
+        fromPoint.writeoff_amount += amount
+      }
+
+      if (movement.movement_type === 'inventory_adjustment') {
+        if (toPoint) toPoint.adjustment_in_qty += qty
+        if (fromPoint) fromPoint.adjustment_out_qty += qty
+      }
+    }
+
+    return Array.from(summary.values())
+      .map((item) => ({
+        ...item,
+        net_issue_qty:
+          item.sale_qty +
+          item.debt_qty +
+          item.writeoff_qty +
+          item.adjustment_out_qty -
+          item.return_qty -
+          item.adjustment_in_qty,
+      }))
+      .sort((a, b) =>
+        (a.location.company?.name || a.location.name).localeCompare(b.location.company?.name || b.location.name),
+      )
+  }, [balancesByLocation, data?.movements, pointLocations])
+
+  function loadStocktakeLinesFromBalances() {
+    if (!selectedStocktakeBalances.length) {
+      setStocktakeLines([])
+      return
+    }
+
+    setStocktakeLines(
+      selectedStocktakeBalances
+        .filter((item) => Number(item.quantity || 0) > 0)
+        .sort((a, b) => (a.item?.name || '').localeCompare(b.item?.name || ''))
+        .map((item) => ({
+          item_id: item.item_id,
+          actual_qty: formatQty(Number(item.quantity || 0)),
+          comment: '',
+        })),
+    )
+  }
 
   async function mutate(payload: unknown) {
     const response = await fetch('/api/admin/inventory', {
@@ -477,6 +749,83 @@ export default function InventoryPage() {
     }
   }
 
+  async function handleCreateWriteoff() {
+    if (!writeoffLocationId) return setError('Выберите локацию для списания')
+    if (!writeoffReason.trim()) return setError('Укажите причину списания')
+
+    const items = writeoffLines
+      .map((line) => ({
+        item_id: line.item_id,
+        quantity: parseMoney(line.quantity),
+        comment: line.comment.trim() || null,
+      }))
+      .filter((line) => line.item_id && line.quantity > 0)
+
+    if (items.length === 0) return setError('Добавьте хотя бы одну позицию в списание')
+
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await mutate({
+        action: 'createWriteoff',
+        payload: {
+          location_id: writeoffLocationId,
+          written_at: writeoffDate,
+          reason: writeoffReason.trim(),
+          comment: writeoffComment.trim() || null,
+          items,
+        },
+      })
+      setWriteoffReason('')
+      setWriteoffComment('')
+      setWriteoffLines([emptyWriteoffLine()])
+      setSuccess('Списание проведено, остатки обновлены')
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось провести списание')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleCreateStocktake() {
+    if (!stocktakeLocationId) return setError('Выберите локацию для инвентаризации')
+
+    const items = stocktakeLines
+      .map((line) => ({
+        item_id: line.item_id,
+        actual_qty: parseMoney(line.actual_qty),
+        comment: line.comment.trim() || null,
+      }))
+      .filter((line) => line.item_id && line.actual_qty >= 0)
+
+    if (items.length === 0) return setError('Загрузите или добавьте строки инвентаризации')
+
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await mutate({
+        action: 'createStocktake',
+        payload: {
+          location_id: stocktakeLocationId,
+          counted_at: stocktakeDate,
+          comment: stocktakeComment.trim() || null,
+          items,
+        },
+      })
+      setStocktakeComment('')
+      setStocktakeLines([])
+      setSuccess('Инвентаризация проведена, расхождения записаны в движения')
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось провести инвентаризацию')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function handleDecideRequest(request: InventoryRequest, approved: boolean) {
     const draft = decisionDrafts[request.id] || createDecisionDraft(request)
 
@@ -521,11 +870,13 @@ export default function InventoryPage() {
       {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
       {success ? <Card className="border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">{success}</Card> : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <SummaryCard icon={Boxes} label="Товаров" value={String(data?.items.length || 0)} note="Общий каталог склада и точек" />
         <SummaryCard icon={Store} label="Локаций" value={String(data?.locations.length || 0)} note="Склад и витрины по точкам" />
         <SummaryCard icon={ClipboardList} label="Новых заявок" value={String(pendingRequests.length)} note="Ждут решения руководителя" />
         <SummaryCard icon={PackagePlus} label="Приемок" value={String(data?.receipts.length || 0)} note="Последние документы прихода" />
+        <SummaryCard icon={ArchiveX} label="Списаний" value={String(data?.writeoffs.length || 0)} note="Потери, брак и служебные расходы" />
+        <SummaryCard icon={ScanSearch} label="Инвентаризаций" value={String(data?.stocktakes.length || 0)} note="Последние пересчеты и корректировки" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -630,6 +981,191 @@ export default function InventoryPage() {
               <Button type="button" className="gap-2" onClick={handleCreateReceipt} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
                 Провести приемку
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="border-border/70 p-5">
+            <SectionTitle icon={ArchiveX} title="Списание" subtitle="Брак, служебное потребление, потери и любые непригодные остатки по складу или витрине." />
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Локация">
+                <Select value={writeoffLocationId} onValueChange={setWriteoffLocationId}>
+                  <SelectTrigger><SelectValue placeholder="Выберите локацию" /></SelectTrigger>
+                  <SelectContent>
+                    {activeLocations.map((location) => (
+                      <SelectItem key={location.id} value={location.id}>
+                        {location.location_type === 'warehouse' ? 'Склад' : 'Витрина'} · {location.company?.name || location.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Дата списания">
+                <Input type="date" value={writeoffDate} onChange={(event) => setWriteoffDate(event.target.value)} />
+              </Field>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Field label="Причина">
+                <Input value={writeoffReason} onChange={(event) => setWriteoffReason(event.target.value)} placeholder="Брак, просрочка, служебное использование..." />
+              </Field>
+              <Field label="Комментарий">
+                <Textarea value={writeoffComment} onChange={(event) => setWriteoffComment(event.target.value)} placeholder="Подробности по документу" />
+              </Field>
+            </div>
+
+            <div className="mt-3 rounded-2xl border border-border/70 bg-background/40 p-3 text-sm text-muted-foreground">
+              Доступно в локации: <span className="font-medium text-foreground">{selectedWriteoffLocation?.company?.name || selectedWriteoffLocation?.name || '—'}</span>
+              {' · '}
+              {selectedWriteoffBalances.filter((item) => Number(item.quantity || 0) > 0).length} товарных позиций
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {writeoffLines.map((line, index) => (
+                <LineCard key={`writeoff-${index}`}>
+                  <Field label={index === 0 ? 'Товар' : undefined}>
+                    <Select
+                      value={line.item_id || `__empty__writeoff_${index}`}
+                      onValueChange={(value) =>
+                        setWriteoffLines((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, item_id: value.startsWith('__empty__') ? '' : value } : item,
+                          ),
+                        )
+                      }
+                    >
+                      <SelectTrigger><SelectValue placeholder="Выберите товар" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={`__empty__writeoff_${index}`}>Выберите товар</SelectItem>
+                        {selectedWriteoffBalances
+                          .filter((item) => Number(item.quantity || 0) > 0)
+                          .sort((a, b) => (a.item?.name || '').localeCompare(b.item?.name || ''))
+                          .map((item) => (
+                            <SelectItem key={item.item_id} value={item.item_id}>
+                              {item.item?.name || 'Товар'} · {formatQty(item.quantity)}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label={index === 0 ? 'Списать' : undefined}>
+                    <Input value={line.quantity} onChange={(event) => setWriteoffLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: event.target.value } : item))} placeholder="0" />
+                  </Field>
+                  <Field label={index === 0 ? 'Комментарий' : undefined} className="md:col-span-2">
+                    <Input value={line.comment} onChange={(event) => setWriteoffLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, comment: event.target.value } : item))} placeholder="Например, брак или служебный расход" />
+                  </Field>
+                  <div className="flex items-end">
+                    <Button type="button" variant="outline" className="w-full" onClick={() => setWriteoffLines((current) => current.length === 1 ? current : current.filter((_, itemIndex) => itemIndex !== index))}>
+                      Убрать
+                    </Button>
+                  </div>
+                </LineCard>
+              ))}
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <Button type="button" variant="outline" onClick={() => setWriteoffLines((current) => [...current, emptyWriteoffLine()])}>Добавить строку</Button>
+              <div className="text-sm text-muted-foreground">
+                Сумма списания: <span className="font-semibold text-foreground">{formatMoney(writeoffTotal)}</span>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button type="button" className="gap-2" onClick={handleCreateWriteoff} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveX className="h-4 w-4" />}
+                Провести списание
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="border-border/70 p-5">
+            <SectionTitle icon={ScanSearch} title="Инвентаризация" subtitle="Сверка фактического остатка с системой и автоматическая корректировка расхождений." />
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Локация">
+                <Select value={stocktakeLocationId} onValueChange={setStocktakeLocationId}>
+                  <SelectTrigger><SelectValue placeholder="Выберите локацию" /></SelectTrigger>
+                  <SelectContent>
+                    {activeLocations.map((location) => (
+                      <SelectItem key={location.id} value={location.id}>
+                        {location.location_type === 'warehouse' ? 'Склад' : 'Витрина'} · {location.company?.name || location.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Дата пересчета">
+                <Input type="date" value={stocktakeDate} onChange={(event) => setStocktakeDate(event.target.value)} />
+              </Field>
+            </div>
+
+            <Field label="Комментарий" className="mt-4">
+              <Textarea value={stocktakeComment} onChange={(event) => setStocktakeComment(event.target.value)} placeholder="Например, вечерний пересчет витрины" />
+            </Field>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Button type="button" variant="outline" onClick={loadStocktakeLinesFromBalances}>
+                Загрузить текущие остатки
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setStocktakeLines((current) => [...current, emptyStocktakeLine()])}>
+                Добавить строку вручную
+              </Button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {stocktakeLines.map((line, index) => {
+                const expected = selectedStocktakeBalances.find((item) => item.item_id === line.item_id)?.quantity || 0
+                return (
+                  <LineCard key={`stocktake-${index}`}>
+                    <Field label={index === 0 ? 'Товар' : undefined}>
+                      <Select
+                        value={line.item_id || `__empty__stocktake_${index}`}
+                        onValueChange={(value) =>
+                          setStocktakeLines((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, item_id: value.startsWith('__empty__') ? '' : value } : item,
+                            ),
+                          )
+                        }
+                      >
+                        <SelectTrigger><SelectValue placeholder="Выберите товар" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={`__empty__stocktake_${index}`}>Выберите товар</SelectItem>
+                          {(data?.items || []).map((item) => (
+                            <SelectItem key={item.id} value={item.id}>{item.name} · {item.barcode}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <div className="rounded-xl border border-border/60 px-3 py-2 text-sm">
+                      <div className="text-xs text-muted-foreground">По системе</div>
+                      <div className="font-semibold">{formatQty(expected)}</div>
+                    </div>
+                    <Field label={index === 0 ? 'По факту' : undefined}>
+                      <Input value={line.actual_qty} onChange={(event) => setStocktakeLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, actual_qty: event.target.value } : item))} placeholder="0" />
+                    </Field>
+                    <Field label={index === 0 ? 'Комментарий' : undefined} className="md:col-span-2">
+                      <Input value={line.comment} onChange={(event) => setStocktakeLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, comment: event.target.value } : item))} placeholder="Например, нашли лишнюю банку или недостачу" />
+                    </Field>
+                    <div className="flex items-end">
+                      <Button type="button" variant="outline" className="w-full" onClick={() => setStocktakeLines((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                        Убрать
+                      </Button>
+                    </div>
+                  </LineCard>
+                )
+              })}
+            </div>
+
+            {!stocktakeLines.length ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+                Сначала загрузите текущие остатки локации или добавьте строки вручную.
+              </div>
+            ) : null}
+
+            <div className="mt-4">
+              <Button type="button" className="gap-2" onClick={handleCreateStocktake} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
+                Провести инвентаризацию
               </Button>
             </div>
           </Card>
@@ -836,6 +1372,51 @@ export default function InventoryPage() {
           </Card>
 
           <Card className="border-border/70 p-5">
+            <SectionTitle
+              icon={History}
+              title="Глубокая аналитика по точкам"
+              subtitle="Сводка по витринам на основе журнала последних 300 движений: поступления, продажи, долги, возвраты, списания и ручные корректировки."
+            />
+            <div className="space-y-3">
+              {pointMovementAnalytics.map((point) => (
+                <div key={point.location.id} className="rounded-2xl border border-border/70 bg-background/40 p-4">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="text-base font-semibold">{point.location.company?.name || point.location.name}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Текущий остаток: {formatQty(point.stock_qty)} шт. · {point.stock_items} активных позиций
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Последнее движение: {point.last_movement_at ? formatDate(point.last_movement_at) : '—'}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-right">
+                      <div className="text-xs uppercase tracking-[0.18em] text-blue-200">Чистый расход витрины</div>
+                      <div className="mt-1 text-2xl font-bold text-foreground">{formatQty(point.net_issue_qty)}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <PointMetricCard label="Поступило на витрину" qty={point.incoming_qty} amount={point.incoming_amount} tone="emerald" />
+                    <PointMetricCard label="Продано" qty={point.sale_qty} amount={point.sale_amount} tone="cyan" />
+                    <PointMetricCard label="Выдано в долг" qty={point.debt_qty} amount={point.debt_amount} tone="amber" />
+                    <PointMetricCard label="Возвращено" qty={point.return_qty} amount={point.return_amount} tone="violet" />
+                    <PointMetricCard label="Списано" qty={point.writeoff_qty} amount={point.writeoff_amount} tone="red" />
+                    <PointMetricCard label="Корректировка +" qty={point.adjustment_in_qty} tone="orange" />
+                    <PointMetricCard label="Корректировка -" qty={point.adjustment_out_qty} tone="orange" />
+                    <PointMetricCard label="Остаток сейчас" qty={point.stock_qty} tone="slate" />
+                  </div>
+                </div>
+              ))}
+              {!pointMovementAnalytics.length ? (
+                <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+                  Пока нет движений по витринам точек. Они появятся после заявок, продаж, долгов, возвратов и списаний.
+                </div>
+              ) : null}
+            </div>
+          </Card>
+
+          <Card className="border-border/70 p-5">
             <SectionTitle icon={Tag} title="Категории товара" subtitle="Категории создаются на сайте и потом используются в общем каталоге." />
             <div className="space-y-3">
               <Field label="Название категории">
@@ -966,6 +1547,272 @@ export default function InventoryPage() {
           </div>
         </Card>
       </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card className="border-border/70 p-5">
+          <SectionTitle icon={ArchiveX} title="Списание" subtitle="Брак, служебное потребление, потери и любые непригодные остатки по складу или витрине." />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Локация">
+              <Select value={writeoffLocationId} onValueChange={setWriteoffLocationId}>
+                <SelectTrigger><SelectValue placeholder="Выберите локацию" /></SelectTrigger>
+                <SelectContent>
+                  {activeLocations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.location_type === 'warehouse' ? 'Склад' : 'Витрина'} · {location.company?.name || location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Дата списания">
+              <Input type="date" value={writeoffDate} onChange={(event) => setWriteoffDate(event.target.value)} />
+            </Field>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <Field label="Причина">
+              <Input value={writeoffReason} onChange={(event) => setWriteoffReason(event.target.value)} placeholder="Брак, просрочка, служебное использование..." />
+            </Field>
+            <Field label="Комментарий">
+              <Textarea value={writeoffComment} onChange={(event) => setWriteoffComment(event.target.value)} placeholder="Подробности по документу" />
+            </Field>
+          </div>
+
+          <div className="mt-3 rounded-2xl border border-border/70 bg-background/40 p-3 text-sm text-muted-foreground">
+            Доступно в локации: <span className="font-medium text-foreground">{selectedWriteoffLocation?.company?.name || selectedWriteoffLocation?.name || '—'}</span>
+            {' · '}
+            {selectedWriteoffBalances.filter((item) => Number(item.quantity || 0) > 0).length} товарных позиций
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {writeoffLines.map((line, index) => (
+              <LineCard key={`writeoff-${index}`}>
+                <Field label={index === 0 ? 'Товар' : undefined}>
+                  <Select
+                    value={line.item_id || `__empty__writeoff_${index}`}
+                    onValueChange={(value) =>
+                      setWriteoffLines((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, item_id: value.startsWith('__empty__') ? '' : value } : item,
+                        ),
+                      )
+                    }
+                  >
+                    <SelectTrigger><SelectValue placeholder="Выберите товар" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={`__empty__writeoff_${index}`}>Выберите товар</SelectItem>
+                      {selectedWriteoffBalances
+                        .filter((item) => Number(item.quantity || 0) > 0)
+                        .sort((a, b) => (a.item?.name || '').localeCompare(b.item?.name || ''))
+                        .map((item) => (
+                          <SelectItem key={item.item_id} value={item.item_id}>
+                            {item.item?.name || 'Товар'} · {formatQty(item.quantity)}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label={index === 0 ? 'Списать' : undefined}>
+                  <Input value={line.quantity} onChange={(event) => setWriteoffLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: event.target.value } : item))} placeholder="0" />
+                </Field>
+                <Field label={index === 0 ? 'Комментарий' : undefined} className="md:col-span-2">
+                  <Input value={line.comment} onChange={(event) => setWriteoffLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, comment: event.target.value } : item))} placeholder="Например, брак или служебный расход" />
+                </Field>
+                <div className="flex items-end">
+                  <Button type="button" variant="outline" className="w-full" onClick={() => setWriteoffLines((current) => current.length === 1 ? current : current.filter((_, itemIndex) => itemIndex !== index))}>
+                    Убрать
+                  </Button>
+                </div>
+              </LineCard>
+            ))}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <Button type="button" variant="outline" onClick={() => setWriteoffLines((current) => [...current, emptyWriteoffLine()])}>Добавить строку</Button>
+            <div className="text-sm text-muted-foreground">
+              Сумма списания: <span className="font-semibold text-foreground">{formatMoney(writeoffTotal)}</span>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <Button type="button" className="gap-2" onClick={handleCreateWriteoff} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveX className="h-4 w-4" />}
+              Провести списание
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="border-border/70 p-5">
+          <SectionTitle icon={ScanSearch} title="Инвентаризация" subtitle="Сверка фактического остатка с системой и автоматическая корректировка расхождений." />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Локация">
+              <Select value={stocktakeLocationId} onValueChange={setStocktakeLocationId}>
+                <SelectTrigger><SelectValue placeholder="Выберите локацию" /></SelectTrigger>
+                <SelectContent>
+                  {activeLocations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.location_type === 'warehouse' ? 'Склад' : 'Витрина'} · {location.company?.name || location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Дата пересчета">
+              <Input type="date" value={stocktakeDate} onChange={(event) => setStocktakeDate(event.target.value)} />
+            </Field>
+          </div>
+
+          <Field label="Комментарий" className="mt-4">
+            <Textarea value={stocktakeComment} onChange={(event) => setStocktakeComment(event.target.value)} placeholder="Например, вечерний пересчет витрины" />
+          </Field>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button type="button" variant="outline" onClick={loadStocktakeLinesFromBalances}>
+              Загрузить текущие остатки
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setStocktakeLines((current) => [...current, emptyStocktakeLine()])}>
+              Добавить строку вручную
+            </Button>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {stocktakeLines.map((line, index) => {
+              const expected = selectedStocktakeBalances.find((item) => item.item_id === line.item_id)?.quantity || 0
+              return (
+                <LineCard key={`stocktake-${index}`}>
+                  <Field label={index === 0 ? 'Товар' : undefined}>
+                    <Select
+                      value={line.item_id || `__empty__stocktake_${index}`}
+                      onValueChange={(value) =>
+                        setStocktakeLines((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, item_id: value.startsWith('__empty__') ? '' : value } : item,
+                          ),
+                        )
+                      }
+                    >
+                      <SelectTrigger><SelectValue placeholder="Выберите товар" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={`__empty__stocktake_${index}`}>Выберите товар</SelectItem>
+                        {(data?.items || []).map((item) => (
+                          <SelectItem key={item.id} value={item.id}>{item.name} · {item.barcode}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <div className="rounded-xl border border-border/60 px-3 py-2 text-sm">
+                    <div className="text-xs text-muted-foreground">По системе</div>
+                    <div className="font-semibold">{formatQty(expected)}</div>
+                  </div>
+                  <Field label={index === 0 ? 'По факту' : undefined}>
+                    <Input value={line.actual_qty} onChange={(event) => setStocktakeLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, actual_qty: event.target.value } : item))} placeholder="0" />
+                  </Field>
+                  <Field label={index === 0 ? 'Комментарий' : undefined} className="md:col-span-2">
+                    <Input value={line.comment} onChange={(event) => setStocktakeLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, comment: event.target.value } : item))} placeholder="Например, нашли лишнюю банку или недостачу" />
+                  </Field>
+                  <div className="flex items-end">
+                    <Button type="button" variant="outline" className="w-full" onClick={() => setStocktakeLines((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                      Убрать
+                    </Button>
+                  </div>
+                </LineCard>
+              )
+            })}
+          </div>
+
+          {!stocktakeLines.length ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+              Сначала загрузите текущие остатки локации или добавьте строки вручную.
+            </div>
+          ) : null}
+
+          <div className="mt-4">
+            <Button type="button" className="gap-2" onClick={handleCreateStocktake} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
+              Провести инвентаризацию
+            </Button>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Card className="border-border/70 p-5">
+          <SectionTitle icon={ArchiveX} title="Последние списания" subtitle="Что и откуда списали в последних документах." />
+          <div className="space-y-3">
+            {(data?.writeoffs || []).map((writeoff) => (
+              <div key={writeoff.id} className="rounded-2xl border border-border/70 bg-background/40 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">{writeoff.location?.company?.name || writeoff.location?.name || 'Локация'} · {formatDate(writeoff.written_at)}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{writeoff.reason}</div>
+                    {writeoff.comment ? <div className="mt-1 text-xs text-muted-foreground">{writeoff.comment}</div> : null}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-semibold">{formatMoney(writeoff.total_amount || 0)}</div>
+                    <div className="text-xs text-muted-foreground">{writeoff.items?.length || 0} строк</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {!data?.writeoffs?.length ? <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Пока нет списаний.</div> : null}
+          </div>
+        </Card>
+
+        <Card className="border-border/70 p-5">
+          <SectionTitle icon={ScanSearch} title="Последние инвентаризации" subtitle="Акты пересчета и количество строк с расхождениями." />
+          <div className="space-y-3">
+            {(data?.stocktakes || []).map((stocktake) => {
+              const changedCount = (stocktake.items || []).filter((item) => Number(item.delta_qty || 0) !== 0).length
+              return (
+                <div key={stocktake.id} className="rounded-2xl border border-border/70 bg-background/40 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">{stocktake.location?.company?.name || stocktake.location?.name || 'Локация'} · {formatDate(stocktake.counted_at)}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {stocktake.items?.length || 0} строк · {changedCount} корректировок
+                      </div>
+                      {stocktake.comment ? <div className="mt-1 text-xs text-muted-foreground">{stocktake.comment}</div> : null}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {!data?.stocktakes?.length ? <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Пока нет инвентаризаций.</div> : null}
+          </div>
+        </Card>
+
+        <Card className="border-border/70 p-5">
+          <SectionTitle icon={History} title="Журнал движений" subtitle="Последние операции по складу, витринам и корректировкам." />
+          <div className="space-y-3">
+            {(data?.movements || []).map((movement) => (
+              <div key={movement.id} className="rounded-2xl border border-border/70 bg-background/40 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${movementTypeClass(movement.movement_type)}`}>
+                        {movementTypeLabel(movement.movement_type)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{formatDate(movement.created_at)}</span>
+                    </div>
+                    <div className="mt-2 text-sm font-semibold">{movement.item?.name || 'Товар'}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {(movement.from_location?.company?.name || movement.from_location?.name || '—')}
+                      {' → '}
+                      {(movement.to_location?.company?.name || movement.to_location?.name || '—')}
+                    </div>
+                    {movement.comment ? <div className="mt-1 text-xs text-muted-foreground">{movement.comment}</div> : null}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-semibold">{formatQty(movement.quantity)}</div>
+                    <div className="text-xs text-muted-foreground">{movement.total_amount ? formatMoney(movement.total_amount) : movement.reference_type}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {!data?.movements?.length ? <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Пока нет движений.</div> : null}
+          </div>
+        </Card>
+      </div>
     </div>
   )
 }
@@ -1038,6 +1885,43 @@ function LineCard({ children }: { children: ReactNode }) {
   return (
     <div className="grid gap-3 rounded-2xl border border-border/70 bg-background/40 p-3 md:grid-cols-[minmax(0,1.2fr)_120px_140px_minmax(0,1fr)_auto]">
       {children}
+    </div>
+  )
+}
+
+function PointMetricCard({
+  label,
+  qty,
+  amount,
+  tone,
+}: {
+  label: string
+  qty: number
+  amount?: number
+  tone: 'emerald' | 'cyan' | 'amber' | 'violet' | 'red' | 'orange' | 'slate'
+}) {
+  const toneClass =
+    tone === 'emerald'
+      ? 'border-emerald-500/20 bg-emerald-500/10'
+      : tone === 'cyan'
+        ? 'border-cyan-500/20 bg-cyan-500/10'
+        : tone === 'amber'
+          ? 'border-amber-500/20 bg-amber-500/10'
+          : tone === 'violet'
+            ? 'border-violet-500/20 bg-violet-500/10'
+            : tone === 'red'
+              ? 'border-red-500/20 bg-red-500/10'
+              : tone === 'orange'
+                ? 'border-orange-500/20 bg-orange-500/10'
+                : 'border-border/70 bg-background/60'
+
+  return (
+    <div className={`rounded-2xl border p-3 ${toneClass}`}>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-2 text-xl font-semibold text-foreground">{formatQty(qty)} шт.</div>
+      <div className="mt-1 text-xs text-muted-foreground">
+        {typeof amount === 'number' ? formatMoney(amount) : 'Без денежной суммы'}
+      </div>
     </div>
   )
 }

@@ -183,6 +183,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
       await api.createDebt(config, {
         operator_id: operatorId || null,
         item_name: foundProduct.name,
+        barcode: foundProduct.barcode,
         quantity: qty,
         unit_price: foundProduct.price,
         total_amount: total,
@@ -215,6 +216,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
       await queueCreateDebt({
         operator_id: operatorId || null,
         item_name: foundProduct.name,
+        barcode: foundProduct.barcode,
         quantity: qty,
         unit_price: foundProduct.price,
         total_amount: total,

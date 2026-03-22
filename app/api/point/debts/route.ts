@@ -10,6 +10,7 @@ type CreateDebtBody = {
     operator_id?: string | null
     client_name?: string | null
     item_name: string
+    barcode?: string | null
     quantity?: number | null
     unit_price?: number | null
     total_amount?: number | null
@@ -70,6 +71,21 @@ async function resolveOperator(params: {
     .maybeSingle()
 
   if (error) throw error
+  return data
+}
+
+async function resolvePointDebtLocation(supabase: any, companyId: string) {
+  const { data, error } = await supabase
+    .from('inventory_locations')
+    .select('id, name, code, location_type')
+    .eq('company_id', companyId)
+    .eq('location_type', 'point_display')
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data?.id) throw new Error('inventory-debt-location-not-found')
   return data
 }
 
@@ -247,6 +263,7 @@ export async function POST(request: Request) {
       const unitPrice = normalizeMoney(payload.unit_price)
       const totalAmount = normalizeMoney(payload.total_amount) || normalizeMoney(quantity * unitPrice)
       const operatorId = payload.operator_id?.trim() || null
+      const barcode = payload.barcode?.trim() || null
       const weekStart = startOfWeekISO(payload.occurred_at || null)
 
       if (!itemName) return json({ error: 'item-name-required' }, 400)
@@ -265,6 +282,7 @@ export async function POST(request: Request) {
       }
 
       if (!clientName) return json({ error: 'client-name-required' }, 400)
+      const inventoryLocation = await resolvePointDebtLocation(supabase, device.company_id)
 
       if (payload.local_ref?.trim()) {
         const { data: existing, error: existingError } = await supabase
@@ -289,29 +307,37 @@ export async function POST(request: Request) {
 
       const note = payload.comment?.trim() || null
       const commentLine = `${itemName} x${quantity} = ${totalAmount} ₸`
-      const { data: created, error: insertError } = await supabase
-        .from('point_debt_items')
-        .insert([
-          {
-            company_id: device.company_id,
-            operator_id: operatorId,
-            point_device_id: device.id,
-            client_name: clientName,
-            item_name: itemName,
-            quantity,
-            unit_price: unitPrice,
-            total_amount: totalAmount,
-            comment: note,
-            week_start: weekStart,
-            source: 'point-client',
-            local_ref: payload.local_ref?.trim() || null,
-            status: 'active',
-          },
-        ])
-        .select('id, client_name, item_name, quantity, unit_price, total_amount, comment, week_start, created_at, status')
-        .single()
+      const { data: createdRpc, error: insertError } = await supabase.rpc('inventory_create_point_debt', {
+        p_company_id: device.company_id,
+        p_location_id: inventoryLocation.id,
+        p_point_device_id: device.id,
+        p_operator_id: operatorId,
+        p_client_name: clientName,
+        p_item_name: itemName,
+        p_barcode: barcode,
+        p_quantity: quantity,
+        p_unit_price: unitPrice,
+        p_total_amount: totalAmount,
+        p_comment: note,
+        p_week_start: weekStart,
+        p_source: 'point-client',
+        p_local_ref: payload.local_ref?.trim() || null,
+      })
 
       if (insertError) throw insertError
+
+      const createdId = Array.isArray(createdRpc) ? createdRpc[0]?.debt_item_id : createdRpc?.debt_item_id
+      const createdInventoryItemId = Array.isArray(createdRpc)
+        ? createdRpc[0]?.inventory_item_id
+        : createdRpc?.inventory_item_id
+
+      const { data: created, error: createdError } = await supabase
+        .from('point_debt_items')
+        .select('id, client_name, item_name, quantity, unit_price, total_amount, comment, week_start, created_at, status, inventory_item_id')
+        .eq('id', createdId)
+        .single()
+
+      if (createdError) throw createdError
 
       const aggregateId = await upsertAggregateDebt({
         supabase,
@@ -339,6 +365,8 @@ export async function POST(request: Request) {
           total_amount: totalAmount,
           week_start: weekStart,
           aggregate_debt_id: aggregateId,
+          inventory_item_id: createdInventoryItemId || created.inventory_item_id || null,
+          inventory_location_id: inventoryLocation.id,
         },
       })
 
@@ -425,13 +453,9 @@ export async function POST(request: Request) {
       commentLine,
     })
 
-    const { error: updateError } = await supabase
-      .from('point_debt_items')
-      .update({
-        status: 'deleted',
-        deleted_at: new Date().toISOString(),
-      })
-      .eq('id', item.id)
+    const { error: updateError } = await supabase.rpc('inventory_delete_point_debt', {
+      p_debt_item_id: item.id,
+    })
 
     if (updateError) throw updateError
 

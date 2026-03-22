@@ -8,7 +8,9 @@ import {
   createInventorySupplier,
   decideInventoryRequest,
   fetchInventoryOverview,
+  postInventoryStocktake,
   postInventoryReceipt,
+  postInventoryWriteoff,
 } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -87,7 +89,44 @@ type DecideRequestBody = {
   }>
 }
 
-type Body = CategoryBody | SupplierBody | ItemBody | ReceiptBody | RequestBody | DecideRequestBody
+type WriteoffBody = {
+  action: 'createWriteoff'
+  payload: {
+    location_id: string
+    written_at: string
+    reason: string
+    comment?: string | null
+    items: Array<{
+      item_id: string
+      quantity: number
+      comment?: string | null
+    }>
+  }
+}
+
+type StocktakeBody = {
+  action: 'createStocktake'
+  payload: {
+    location_id: string
+    counted_at: string
+    comment?: string | null
+    items: Array<{
+      item_id: string
+      actual_qty: number
+      comment?: string | null
+    }>
+  }
+}
+
+type Body =
+  | CategoryBody
+  | SupplierBody
+  | ItemBody
+  | ReceiptBody
+  | RequestBody
+  | DecideRequestBody
+  | WriteoffBody
+  | StocktakeBody
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -333,6 +372,93 @@ export async function POST(request: Request) {
       })
 
       return json({ ok: true, data: decision })
+    }
+
+    if (body.action === 'createWriteoff') {
+      const locationId = String(body.payload?.location_id || '').trim()
+      const writtenAt = String(body.payload?.written_at || '').trim()
+      const reason = String(body.payload?.reason || '').trim()
+      const items = Array.isArray(body.payload?.items) ? body.payload.items : []
+
+      if (!locationId) return json({ error: 'writeoff-location-required' }, 400)
+      if (!writtenAt) return json({ error: 'writeoff-date-required' }, 400)
+      if (!reason) return json({ error: 'writeoff-reason-required' }, 400)
+      if (items.length === 0) return json({ error: 'writeoff-items-required' }, 400)
+
+      const normalizedItems = items
+        .map((item) => ({
+          item_id: String(item.item_id || '').trim(),
+          quantity: normalizeMoney(item.quantity),
+          comment: item.comment?.trim() || null,
+        }))
+        .filter((item) => item.item_id && item.quantity > 0)
+
+      if (normalizedItems.length === 0) return json({ error: 'writeoff-items-invalid' }, 400)
+
+      const writeoff = await postInventoryWriteoff(supabase as any, {
+        location_id: locationId,
+        written_at: writtenAt,
+        reason,
+        comment: body.payload?.comment || null,
+        created_by: actorUserId,
+        items: normalizedItems,
+      })
+
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'inventory-writeoff',
+        entityId: String(writeoff?.writeoff_id || ''),
+        action: 'create',
+        payload: {
+          writeoff,
+          location_id: locationId,
+          item_count: normalizedItems.length,
+        },
+      })
+
+      return json({ ok: true, data: writeoff })
+    }
+
+    if (body.action === 'createStocktake') {
+      const locationId = String(body.payload?.location_id || '').trim()
+      const countedAt = String(body.payload?.counted_at || '').trim()
+      const items = Array.isArray(body.payload?.items) ? body.payload.items : []
+
+      if (!locationId) return json({ error: 'stocktake-location-required' }, 400)
+      if (!countedAt) return json({ error: 'stocktake-date-required' }, 400)
+      if (items.length === 0) return json({ error: 'stocktake-items-required' }, 400)
+
+      const normalizedItems = items
+        .map((item) => ({
+          item_id: String(item.item_id || '').trim(),
+          actual_qty: normalizeMoney(item.actual_qty),
+          comment: item.comment?.trim() || null,
+        }))
+        .filter((item) => item.item_id && item.actual_qty >= 0)
+
+      if (normalizedItems.length === 0) return json({ error: 'stocktake-items-invalid' }, 400)
+
+      const stocktake = await postInventoryStocktake(supabase as any, {
+        location_id: locationId,
+        counted_at: countedAt,
+        comment: body.payload?.comment || null,
+        created_by: actorUserId,
+        items: normalizedItems,
+      })
+
+      await writeAuditLog(supabase as any, {
+        actorUserId,
+        entityType: 'inventory-stocktake',
+        entityId: String(stocktake?.stocktake_id || ''),
+        action: 'create',
+        payload: {
+          stocktake,
+          location_id: locationId,
+          item_count: normalizedItems.length,
+        },
+      })
+
+      return json({ ok: true, data: stocktake })
     }
 
     return json({ error: 'unsupported-action' }, 400)
