@@ -87,39 +87,39 @@ const SIDEBAR_SECTIONS_KEY = 'f16.sidebar.sections'
 const navSections: NavSection[] = [
   {
     id: 'command',
-    title: 'Р¦РµРЅС‚СЂ СѓРїСЂР°РІР»РµРЅРёСЏ',
-    subtitle: 'Р“Р»Р°РІРЅС‹Рµ СЌРєСЂР°РЅС‹ Рё СЃРІРѕРґРєР°',
+    title: 'Центр управления',
+    subtitle: 'Главные экраны и сводка',
     accentColor: 'amber',
     icon: Gauge,
     items: [
-      { href: '/dashboard', label: 'Р“Р»Р°РІРЅР°СЏ РїР°РЅРµР»СЊ', icon: LayoutDashboard, note: 'РћР±С‰РёР№ СЃС‚Р°С‚СѓСЃ Р±РёР·РЅРµСЃР°' },
-      { href: '/analysis', label: 'AI Р Р°Р·Р±РѕСЂ', icon: BrainCircuit, note: 'Р”РёР°РіРЅРѕСЃС‚РёРєР° Рё РІС‹РІРѕРґС‹', badge: 'AI', badgeColor: 'purple', isNew: true },
-      { href: '/forecast', label: 'AI РџСЂРѕРіРЅРѕР·', icon: Radar, note: 'РџСЂРѕРіРЅРѕР· 30/60/90 РґРЅРµР№', badge: 'AI', badgeColor: 'purple', isNew: true },
-      { href: '/goals', label: 'Р¦РµР»Рё Рё РїР»Р°РЅ', icon: Target, note: 'РџР»Р°РЅРѕРІС‹Рµ РїРѕРєР°Р·Р°С‚РµР»Рё', badge: 'new', badgeColor: 'blue' },
-      { href: '/reports', label: 'РћС‚С‡С‘С‚С‹', icon: BarChart3, note: 'РЎРІРѕРґРЅС‹Рµ РјРµС‚СЂРёРєРё' },
-      { href: '/weekly-report', label: 'РќРµРґРµР»СЊРЅС‹Р№ РѕС‚С‡С‘С‚', icon: CalendarRange, note: 'Р РёС‚Рј РЅРµРґРµР»Рё' },
+      { href: '/dashboard', label: 'Главная панель', icon: LayoutDashboard, note: 'Общий статус бизнеса' },
+      { href: '/analysis', label: 'AI Разбор', icon: BrainCircuit, note: 'Диагностика и выводы', badge: 'AI', badgeColor: 'purple', isNew: true },
+      { href: '/forecast', label: 'AI Прогноз', icon: Radar, note: 'Прогноз 30/60/90 дней', badge: 'AI', badgeColor: 'purple', isNew: true },
+      { href: '/goals', label: 'Цели и план', icon: Target, note: 'Плановые показатели', badge: 'new', badgeColor: 'blue' },
+      { href: '/reports', label: 'Отчеты', icon: BarChart3, note: 'Сводные метрики' },
+      { href: '/weekly-report', label: 'Недельный отчет', icon: CalendarRange, note: 'Ритм недели' },
     ],
   },
   {
     id: 'finance',
-    title: 'Р”РµРЅСЊРіРё',
-    subtitle: 'РџРѕС‚РѕРєРё, СЂР°СЃС…РѕРґС‹ Рё РЅР°Р»РѕРіРё',
+    title: 'Деньги',
+    subtitle: 'Потоки, расходы и налоги',
     accentColor: 'emerald',
     icon: PieChart,
     items: [
-      { href: '/income', label: 'Р”РѕС…РѕРґС‹', icon: TrendingUp, note: 'РћР±РѕСЂРѕС‚ Рё РІС‹СЂСѓС‡РєР°', badge: 'в†‘23%', badgeColor: 'green' },
-      { href: '/analytics', label: 'РђРЅР°Р»РёС‚РёРєР° РґРѕС…РѕРґРѕРІ', icon: BarChart3, note: 'РЎСЂР°РІРЅРµРЅРёРµ С‚РѕС‡РµРє Рё С‚СЂРµРЅРґС‹' },
-      { href: '/expenses', label: 'Р Р°СЃС…РѕРґС‹', icon: TrendingDown, note: 'РЎРїРёСЃР°РЅРёСЏ Рё СЃС‚Р°С‚СЊРё' },
-      { href: '/cashflow', label: 'Cash Flow', icon: Wallet, note: 'Р”РІРёР¶РµРЅРёРµ РґРµРЅРµРі Рё Р±Р°Р»Р°РЅСЃ', badge: 'AI', badgeColor: 'blue', isNew: true },
-      { href: '/categories', label: 'РљР°С‚РµРіРѕСЂРёРё', icon: Tags, note: 'РЎС‚СЂСѓРєС‚СѓСЂР° СЂР°СЃС…РѕРґРѕРІ' },
-      { href: '/tax', label: 'РќР°Р»РѕРіРё', icon: Landmark, note: '3% Рё РєРѕРЅС‚СЂРѕР»СЊ Р±Р°Р·С‹' },
-      { href: '/profitability', label: 'РћРџРёРЈ Рё EBITDA', icon: Calculator, note: 'РџРѕР»РЅР°СЏ РїСЂРёР±С‹Р»СЊ Рё РєРѕРјРёСЃСЃРёРё POS' },
+      { href: '/income', label: 'Доходы', icon: TrendingUp, note: 'Оборот и выручка', badge: '↑23%', badgeColor: 'green' },
+      { href: '/analytics', label: 'Аналитика доходов', icon: BarChart3, note: 'Сравнение точек и тренды' },
+      { href: '/expenses', label: 'Расходы', icon: TrendingDown, note: 'Списания и статьи' },
+      { href: '/cashflow', label: 'Cash Flow', icon: Wallet, note: 'Движение денег и баланс', badge: 'AI', badgeColor: 'blue', isNew: true },
+      { href: '/categories', label: 'Категории', icon: Tags, note: 'Структура расходов' },
+      { href: '/tax', label: 'Налоги', icon: Landmark, note: '3% и контроль базы' },
+      { href: '/profitability', label: 'ОПиУ и EBITDA', icon: Calculator, note: 'Полная прибыль и комиссии POS' },
     ],
   },
   {
     id: 'store',
-    title: 'РњР°РіР°Р·РёРЅ',
-    subtitle: 'РЎРєР»Р°Рґ, РІРёС‚СЂРёРЅС‹ Рё РґРІРёР¶РµРЅРёРµ С‚РѕРІР°СЂР°',
+    title: 'Магазин',
+    subtitle: 'Склад, витрины и движение товара',
     accentColor: 'emerald',
     icon: Boxes,
     items: [
@@ -136,63 +136,63 @@ const navSections: NavSection[] = [
   },
   {
     id: 'team',
-    title: 'РљРѕРјР°РЅРґР° Рё Р·Р°СЂРїР»Р°С‚С‹',
-    subtitle: 'Р›СЋРґРё, СЃС‚СЂСѓРєС‚СѓСЂР° Рё РЅР°С‡РёСЃР»РµРЅРёСЏ',
+    title: 'Команда и зарплаты',
+    subtitle: 'Люди, структура и начисления',
     accentColor: 'yellow',
     icon: Users,
     items: [
-      { href: '/salary', label: 'Р—Р°СЂРїР»Р°С‚Р°', icon: Wallet, note: 'Р Р°СЃС‡С‘С‚С‹ Рё РІС‹РїР»Р°С‚С‹' },
-      { href: '/salary/rules', label: 'РџСЂР°РІРёР»Р° Р·Р°СЂРїР»Р°С‚С‹', icon: ListChecks, note: 'РЎС‚Р°РІРєРё Рё Р±РѕРЅСѓСЃС‹' },
-      { href: '/operators', label: 'РћРїРµСЂР°С‚РѕСЂС‹', icon: Users2, note: 'РџСЂРѕС„РёР»Рё Рё СЃРѕСЃС‚РѕСЏРЅРёРµ', badge: '8', badgeColor: 'blue' },
-      { href: '/structure', label: 'РЎС‚СЂСѓРєС‚СѓСЂР°', icon: Network, note: 'РРµСЂР°СЂС…РёСЏ РєРѕРјР°РЅРґС‹ Рё С‚РѕС‡РµРє' },
-      { href: '/staff', label: 'РЎРѕС‚СЂСѓРґРЅРёРєРё', icon: Users, note: 'РђРґРјРёРЅРєРѕРјР°РЅРґР°' },
-      { href: '/pass', label: 'Р”РѕСЃС‚СѓРїС‹', icon: KeyRound, note: 'РЈС‡С‘С‚РЅС‹Рµ Р·Р°РїРёСЃРё' },
+      { href: '/salary', label: 'Зарплата', icon: Wallet, note: 'Расчеты и выплаты' },
+      { href: '/salary/rules', label: 'Правила зарплаты', icon: ListChecks, note: 'Ставки и бонусы' },
+      { href: '/operators', label: 'Операторы', icon: Users2, note: 'Профили и состояние', badge: '8', badgeColor: 'blue' },
+      { href: '/structure', label: 'Структура', icon: Network, note: 'Иерархия команды и точек' },
+      { href: '/staff', label: 'Сотрудники', icon: Users, note: 'Админкоманда' },
+      { href: '/pass', label: 'Доступы', icon: KeyRound, note: 'Учетные записи' },
     ],
   },
   {
     id: 'ops',
-    title: 'РћРїРµСЂР°С†РёРѕРЅРЅР°СЏ СЂР°Р±РѕС‚Р°',
-    subtitle: 'РџР»Р°РЅС‹, Р·Р°РґР°С‡Рё Рё СЂРёС‚Рј',
+    title: 'Операционная работа',
+    subtitle: 'Планы, задачи и ритм',
     accentColor: 'blue',
     icon: Workflow,
     items: [
-      { href: '/kpi', label: 'KPI', icon: Target, note: 'РљРѕРЅС‚СЂРѕР»СЊ РІС‹РїРѕР»РЅРµРЅРёСЏ' },
-      { href: '/kpi/plans', label: 'РџР»Р°РЅС‹ KPI', icon: Radar, note: 'РџР»Р°РЅ-С„Р°РєС‚', badge: 'new', badgeColor: 'green' },
-      { href: '/tasks', label: 'Р—Р°РґР°С‡Рё', icon: FolderKanban, note: 'РўРµРєСѓС‰Р°СЏ СЂР°Р±РѕС‚Р°', badge: '12', badgeColor: 'red' },
-      { href: '/shifts', label: 'РЎРјРµРЅС‹', icon: CalendarClock, note: 'Р“СЂР°С„РёРє Рё СЃРјРµРЅРЅРѕСЃС‚СЊ' },
-      { href: '/birthdays', label: 'Р”РЅРё СЂРѕР¶РґРµРЅРёСЏ', icon: CalendarDays, note: 'РљС‚Рѕ СЃРєРѕСЂРѕ РѕС‚РјРµС‡Р°РµС‚' },
+      { href: '/kpi', label: 'KPI', icon: Target, note: 'Контроль выполнения' },
+      { href: '/kpi/plans', label: 'Планы KPI', icon: Radar, note: 'План-факт', badge: 'new', badgeColor: 'green' },
+      { href: '/tasks', label: 'Задачи', icon: FolderKanban, note: 'Текущая работа', badge: '12', badgeColor: 'red' },
+      { href: '/shifts', label: 'Смены', icon: CalendarClock, note: 'График и сменность' },
+      { href: '/birthdays', label: 'Дни рождения', icon: CalendarDays, note: 'Кто скоро отмечает' },
     ],
   },
   {
     id: 'operator-space',
-    title: 'РћРїРµСЂР°С‚РѕСЂСЃРєРѕРµ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ',
-    subtitle: 'РљРѕРјРјСѓРЅРёРєР°С†РёСЏ Рё РјРѕС‚РёРІР°С†РёСЏ',
+    title: 'Операторское пространство',
+    subtitle: 'Коммуникация и мотивация',
     accentColor: 'fuchsia',
     icon: Zap,
     items: [
-      { href: '/operator-dashboard', label: 'РњРѕР№ РєР°Р±РёРЅРµС‚', icon: User, note: 'РЎРІРѕРґРєР° РѕРїРµСЂР°С‚РѕСЂР°' },
-      { href: '/operator-lead', label: 'РњРѕСЏ С‚РѕС‡РєР°', icon: Building2, note: 'РљРѕРјР°РЅРґР° Рё СЃРїРѕСЂРЅС‹Рµ СЃРјРµРЅС‹ С‚РѕС‡РєРё', badge: 'lead', badgeColor: 'orange' },
-      { href: '/operator-tasks', label: 'РњРѕРё Р·Р°РґР°С‡Рё', icon: ClipboardCheck, note: 'Р›РёС‡РЅС‹Р№ РєРѕРЅС‚СѓСЂ Р·Р°РґР°С‡', badge: '3', badgeColor: 'orange' },
-      { href: '/ratings', label: 'Р РµР№С‚РёРЅРі РѕРїРµСЂР°С‚РѕСЂРѕРІ', icon: Trophy, note: 'Р›РёРґРµСЂР±РѕСЂРґ РїРѕ РІС‹СЂСѓС‡РєРµ', badge: 'new', badgeColor: 'orange', isNew: true },
-      { href: '/operator-analytics', label: 'РђРЅР°Р»РёС‚РёРєР° РѕРїРµСЂР°С‚РѕСЂРѕРІ', icon: Zap, note: 'Р­С„С„РµРєС‚РёРІРЅРѕСЃС‚СЊ РїРѕ Р»СЋРґСЏРј' },
-      { href: '/operator-chat', label: 'Р§Р°С‚ РѕРїРµСЂР°С‚РѕСЂРѕРІ', icon: MessageSquareText, note: 'РљРѕРјРјСѓРЅРёРєР°С†РёСЏ', badge: 'live', badgeColor: 'green' },
-      { href: '/operator-achievements', label: 'Р”РѕСЃС‚РёР¶РµРЅРёСЏ', icon: Trophy, note: 'РњРѕС‚РёРІР°С†РёСЏ Рё XP', badge: 'XP', badgeColor: 'purple' },
-      { href: '/operator-settings', label: 'РќР°СЃС‚СЂРѕР№РєРё РѕРїРµСЂР°С‚РѕСЂРѕРІ', icon: Briefcase, note: 'РџСЂРѕС„РёР»СЊРЅС‹Р№ РєРѕРЅС‚СѓСЂ' },
+      { href: '/operator-dashboard', label: 'Мой кабинет', icon: User, note: 'Сводка оператора' },
+      { href: '/operator-lead', label: 'Моя точка', icon: Building2, note: 'Команда и спорные смены точки', badge: 'lead', badgeColor: 'orange' },
+      { href: '/operator-tasks', label: 'Мои задачи', icon: ClipboardCheck, note: 'Личный контур задач', badge: '3', badgeColor: 'orange' },
+      { href: '/ratings', label: 'Рейтинг операторов', icon: Trophy, note: 'Лидерборд по выручке', badge: 'new', badgeColor: 'orange', isNew: true },
+      { href: '/operator-analytics', label: 'Аналитика операторов', icon: Zap, note: 'Эффективность по людям' },
+      { href: '/operator-chat', label: 'Чат операторов', icon: MessageSquareText, note: 'Коммуникация', badge: 'live', badgeColor: 'green' },
+      { href: '/operator-achievements', label: 'Достижения', icon: Trophy, note: 'Мотивация и XP', badge: 'XP', badgeColor: 'purple' },
+      { href: '/operator-settings', label: 'Настройки операторов', icon: Briefcase, note: 'Профильный контур' },
     ],
   },
   {
     id: 'system',
-    title: 'РЎРёСЃС‚РµРјР°',
-    subtitle: 'РќР°СЃС‚СЂРѕР№РєР° Рё РѕР±СЃР»СѓР¶РёРІР°РЅРёРµ',
+    title: 'Система',
+    subtitle: 'Настройка и обслуживание',
     accentColor: 'slate',
     icon: Shield,
     items: [
-      { href: '/settings', label: 'РќР°СЃС‚СЂРѕР№РєРё СЃРёСЃС‚РµРјС‹', icon: Settings2, note: 'РљРѕРјРїР°РЅРёРё Рё СЃРїСЂР°РІРѕС‡РЅРёРєРё' },
-      { href: '/access', label: 'РџСЂР°РІР° Рё РїР°СЂРѕР»Рё', icon: Shield, note: 'Р”РѕСЃС‚СѓРї СЂРѕР»РµР№ Рё Р°РєРєР°СѓРЅС‚С‹' },
-      { href: '/telegram', label: 'Telegram Bot', icon: MessageSquareText, note: 'РЈРІРµРґРѕРјР»РµРЅРёСЏ Рё РєРѕРјР°РЅРґС‹', badge: 'new', badgeColor: 'blue' },
-      { href: '/point-devices', label: 'РўРѕС‡РєРё Рё СѓСЃС‚СЂРѕР№СЃС‚РІР°', icon: Building2, note: 'РўРѕРєРµРЅС‹ Рё РїСЂРѕРіСЂР°РјРјС‹ С‚РѕС‡РµРє' },
-      { href: '/logs', label: 'Р›РѕРіРёСЂРѕРІР°РЅРёРµ', icon: Logs, note: 'РђСѓРґРёС‚, СѓРІРµРґРѕРјР»РµРЅРёСЏ Рё СЃРѕР±С‹С‚РёСЏ' },
-      { href: '/debug', label: 'Р”РёР°РіРЅРѕСЃС‚РёРєР°', icon: Wrench, note: 'РџСЂРѕРІРµСЂРєРё Рё РѕС‚Р»Р°РґРєР°' },
+      { href: '/settings', label: 'Настройки системы', icon: Settings2, note: 'Компании и справочники' },
+      { href: '/access', label: 'Права и пароли', icon: Shield, note: 'Доступ ролей и аккаунты' },
+      { href: '/telegram', label: 'Telegram Bot', icon: MessageSquareText, note: 'Уведомления и команды', badge: 'new', badgeColor: 'blue' },
+      { href: '/point-devices', label: 'Точки и устройства', icon: Building2, note: 'Токены и программы точек' },
+      { href: '/logs', label: 'Логирование', icon: Logs, note: 'Аудит, уведомления и события' },
+      { href: '/debug', label: 'Диагностика', icon: Wrench, note: 'Проверки и отладка' },
     ],
   },
 ]
@@ -240,8 +240,8 @@ function buildOwnerNavSections(): NavSection[] {
   if (operatorAnalyticsItem) {
     sections.push({
       id: 'owner-operator-analytics',
-      title: 'РђРЅР°Р»РёС‚РёРєР° РѕРїРµСЂР°С‚РѕСЂРѕРІ',
-      subtitle: 'Р­С„С„РµРєС‚РёРІРЅРѕСЃС‚СЊ, РєР°С‡РµСЃС‚РІРѕ Рё РґРёРЅР°РјРёРєР° РїРѕ Р»СЋРґСЏРј',
+      title: 'Аналитика операторов',
+      subtitle: 'Эффективность, качество и динамика по людям',
       accentColor: 'fuchsia',
       icon: Zap,
       items: [operatorAnalyticsItem],
@@ -478,7 +478,7 @@ function UserCard({
             </div>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">{displayName || 'РџР°РЅРµР»СЊ СѓРїСЂР°РІР»РµРЅРёСЏ'}</p>
+            <p className="truncate text-sm font-semibold text-white">{displayName || 'Панель управления'}</p>
             <p className="truncate text-xs text-slate-500">{email || 'admin@system.local'}</p>
           </div>
         </div>
@@ -501,7 +501,7 @@ function UserCard({
         >
           <span className="flex items-center gap-2 text-sm">
             <LogOut className="h-4 w-4" />
-            Р’С‹Р№С‚Рё
+            Выйти
           </span>
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -528,7 +528,7 @@ function SearchBar({
           ref={inputRef}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="РџРѕРёСЃРє РїРѕ РјРµРЅСЋ..."
+          placeholder="Поиск по меню..."
           className="flex-1 bg-transparent text-sm text-slate-200 placeholder:text-slate-500 outline-none"
         />
         <div className="flex items-center gap-1 rounded-md border border-white/5 bg-slate-700 px-1.5 py-0.5">
@@ -756,7 +756,7 @@ export function Sidebar() {
             ))
           ) : (
             <div className="rounded-2xl border border-white/10 bg-slate-900/50 px-4 py-5 text-sm text-slate-400">
-              РџРѕ Р·Р°РїСЂРѕСЃСѓ РЅРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ.
+              По запросу ничего не найдено.
             </div>
           )}
         </div>
