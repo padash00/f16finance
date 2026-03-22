@@ -34,6 +34,7 @@ import {
   LogOut,
   Menu,
   MessageSquareText,
+  Monitor,
   Network,
   Package2,
   PackagePlus,
@@ -132,6 +133,7 @@ const navSections: NavSection[] = [
       { href: '/store/writeoffs', label: 'Списания', icon: ArchiveX, note: 'Брак и служебные расходы' },
       { href: '/store/revisions', label: 'Ревизия', icon: ScanSearch, note: 'Полная проверка склада и витрин' },
       { href: '/store/movements', label: 'Движения', icon: History, note: 'Журнал товарных операций' },
+      { href: '/pos', label: 'Касса (Web POS)', icon: Monitor, note: 'Веб-касса для планшета и браузера' },
     ],
   },
   {
