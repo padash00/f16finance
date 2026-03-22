@@ -233,6 +233,8 @@ export async function POST(request: Request) {
       for (const row of rows) {
         const categoryId = row.category ? catNameToId[row.category.toLowerCase()] || null : null
         const existingId = existingBarcodeToId[row.barcode]
+        // DB allows only 'product' or 'consumable'; map 'service' → 'product'
+        const itemType = row.item_type === 'consumable' ? 'consumable' : 'product'
 
         if (existingId) {
           toUpdate.push({
@@ -243,7 +245,7 @@ export async function POST(request: Request) {
             sale_price: row.sale_price,
             default_purchase_price: row.purchase_price,
             category_id: categoryId,
-            item_type: row.item_type,
+            item_type: itemType,
           })
         } else {
           toInsert.push({
@@ -253,7 +255,7 @@ export async function POST(request: Request) {
             sale_price: row.sale_price,
             default_purchase_price: row.purchase_price,
             category_id: categoryId,
-            item_type: row.item_type,
+            item_type: itemType,
             notes: row.article || null,
             is_active: true,
           })
