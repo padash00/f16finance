@@ -253,8 +253,18 @@ function ReceiptModal({
       {/* Print-only styles */}
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          #receipt-print { display: block !important; position: fixed; top: 0; left: 0; width: 80mm; }
+          body * { visibility: hidden !important; }
+          #receipt-print, #receipt-print * { visibility: visible !important; }
+          #receipt-print {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 80mm !important;
+            background: white !important;
+            padding: 8px !important;
+            font-size: 12px !important;
+            color: black !important;
+          }
         }
       `}</style>
     </div>
