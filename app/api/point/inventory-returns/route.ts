@@ -62,6 +62,31 @@ async function resolvePointLocation(supabase: any, companyId: string) {
   return data
 }
 
+async function fetchReturnsWithFallback(supabase: any, locationId: string) {
+  const preferred = await supabase
+    .from('point_returns')
+    .select(
+      'id, sale_id, return_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, comment, returned_at, items:point_return_items(id, sale_item_id, quantity, unit_price, total_price, item:item_id(id, name, barcode))',
+    )
+    .eq('location_id', locationId)
+    .order('returned_at', { ascending: false })
+    .limit(20)
+
+  if (!preferred.error) return preferred
+
+  const message = String(preferred.error?.message || '')
+  if (!/sale_id|sale_item_id/i.test(message)) return preferred
+
+  return await supabase
+    .from('point_returns')
+    .select(
+      'id, return_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, comment, returned_at, items:point_return_items(id, quantity, unit_price, total_price, item:item_id(id, name, barcode))',
+    )
+    .eq('location_id', locationId)
+    .order('returned_at', { ascending: false })
+    .limit(20)
+}
+
 async function resolveActor(params: {
   request: Request
   supabase: any
@@ -96,23 +121,20 @@ export async function GET(request: Request) {
     }
 
     const location = await resolvePointLocation(supabase, device.company_id)
-    const [{ data: returns, error: returnsError }, { data: sales, error: salesError }] =
-      await Promise.all([
-        supabase
-          .from('point_returns')
-          .select(
-            'id, sale_id, return_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, comment, returned_at, items:point_return_items(id, sale_item_id, quantity, unit_price, total_price, item:item_id(id, name, barcode))',
-          )
-          .eq('location_id', location.id)
-          .order('returned_at', { ascending: false })
-          .limit(20),
-        supabase
-          .from('point_sales')
-          .select('id, sale_date, shift, payment_method, total_amount, sold_at, items:point_sale_items(id, quantity, unit_price, total_price, item:item_id(id, name, barcode))')
-          .eq('location_id', location.id)
-          .order('sold_at', { ascending: false })
-          .limit(12),
-      ])
+    const [returnsResult, salesResult] = await Promise.all([
+      fetchReturnsWithFallback(supabase, location.id),
+      supabase
+        .from('point_sales')
+        .select('id, sale_date, shift, payment_method, total_amount, sold_at, items:point_sale_items(id, quantity, unit_price, total_price, item:item_id(id, name, barcode))')
+        .eq('location_id', location.id)
+        .order('sold_at', { ascending: false })
+        .limit(12),
+    ])
+
+    const returns = returnsResult.data
+    const returnsError = returnsResult.error
+    const sales = salesResult.data
+    const salesError = salesResult.error
 
     if (returnsError) throw returnsError
     if (salesError) throw salesError

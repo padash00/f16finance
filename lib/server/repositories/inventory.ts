@@ -427,7 +427,7 @@ export async function createPointInventoryReturn(
     items: Array<{ item_id: string; quantity: number; unit_price: number; comment?: string | null }>
   },
 ) {
-  const { data, error } = await supabase.rpc('inventory_create_point_return', {
+  const nextArgs = {
     p_company_id: payload.company_id,
     p_location_id: payload.location_id,
     p_point_device_id: payload.point_device_id || null,
@@ -444,7 +444,32 @@ export async function createPointInventoryReturn(
     p_source: payload.source || null,
     p_local_ref: payload.local_ref || null,
     p_items: payload.items,
-  })
+  }
+
+  let { data, error } = await supabase.rpc('inventory_create_point_return', nextArgs)
+
+  if (error && /function .*inventory_create_point_return.*does not exist/i.test(String(error.message || ''))) {
+    const fallbackArgs = {
+      p_company_id: payload.company_id,
+      p_location_id: payload.location_id,
+      p_point_device_id: payload.point_device_id || null,
+      p_operator_id: payload.operator_id || null,
+      p_return_date: payload.return_date,
+      p_shift: payload.shift,
+      p_payment_method: payload.payment_method,
+      p_cash_amount: payload.cash_amount,
+      p_kaspi_amount: payload.kaspi_amount,
+      p_kaspi_before_midnight_amount: payload.kaspi_before_midnight_amount,
+      p_kaspi_after_midnight_amount: payload.kaspi_after_midnight_amount,
+      p_comment: payload.comment || null,
+      p_source: payload.source || null,
+      p_local_ref: payload.local_ref || null,
+      p_items: payload.items,
+    }
+    const fallbackResult = await supabase.rpc('inventory_create_point_return', fallbackArgs)
+    data = fallbackResult.data
+    error = fallbackResult.error
+  }
 
   if (error) throw error
   return Array.isArray(data) ? data[0] || null : data || null
