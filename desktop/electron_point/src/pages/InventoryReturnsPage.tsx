@@ -5,13 +5,11 @@ import {
   LogOut,
   Minus,
   Package,
-  Plus,
   RefreshCw,
   RotateCcw,
   Search,
   ShoppingBasket,
   Store,
-  UserCircle2,
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
@@ -23,13 +21,12 @@ import { Label } from '@/components/ui/label'
 import * as api from '@/lib/api'
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastError, toastSuccess } from '@/lib/toast'
-import { formatDate, formatMoney, localRef, parseMoney } from '@/lib/utils'
+import { formatDate, formatMoney, localRef } from '@/lib/utils'
 import type {
   AppConfig,
   BootstrapData,
   OperatorSession,
   PointInventoryReturnContext,
-  PointInventorySaleItem,
 } from '@/types'
 
 interface Props {
@@ -60,6 +57,14 @@ function formatShiftLabel(shift: 'day' | 'night') {
   return shift === 'night' ? 'Ночь' : 'День'
 }
 
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100
+}
+
+function roundQty(value: number) {
+  return Math.round((value + Number.EPSILON) * 1000) / 1000
+}
+
 export default function InventoryReturnsPage({
   config,
   bootstrap,
@@ -76,18 +81,23 @@ export default function InventoryReturnsPage({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedSaleId, setSelectedSaleId] = useState<string>('')
   const [search, setSearch] = useState('')
   const [comment, setComment] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
-  const [mixedCash, setMixedCash] = useState('')
   const [cart, setCart] = useState<ReturnLine[]>([])
 
-  async function load() {
+  async function load(preserveSaleId?: string) {
     setLoading(true)
     setError(null)
     try {
       const data = await api.getPointInventoryReturns(config, session)
       setContext(data)
+      const nextSaleId =
+        preserveSaleId && data.sales.some((sale) => sale.id === preserveSaleId)
+          ? preserveSaleId
+          : data.sales[0]?.id || ''
+      setSelectedSaleId(nextSaleId)
+      setCart([])
     } catch (err: any) {
       setContext(null)
       setError(err?.message || 'Не удалось загрузить возвраты точки')
@@ -100,112 +110,187 @@ export default function InventoryReturnsPage({
     void load()
   }, [])
 
-  const filteredItems = useMemo(() => {
+  const selectedSale = useMemo(
+    () => (context?.sales || []).find((sale) => sale.id === selectedSaleId) || null,
+    [context?.sales, selectedSaleId],
+  )
+
+  const saleItems = useMemo(() => {
     const query = search.trim().toLowerCase()
-    const list = context?.items || []
-    if (!query) return list
-    return list.filter(
-      (item) =>
-        item.name.toLowerCase().includes(query) ||
-        item.barcode.toLowerCase().includes(query) ||
-        item.category?.name?.toLowerCase().includes(query),
-    )
-  }, [context?.items, search])
+    const items = Array.isArray(selectedSale?.items) ? selectedSale.items : []
+    if (!query) return items
+    return items.filter((line) => {
+      const name = String(line.item?.name || '').toLowerCase()
+      const barcode = String(line.item?.barcode || '').toLowerCase()
+      return name.includes(query) || barcode.includes(query)
+    })
+  }, [search, selectedSale])
 
   const cartDetailed = useMemo(() => {
-    const itemsById = new Map((context?.items || []).map((item) => [item.id, item]))
+    const saleItemsById = new Map(
+      (Array.isArray(selectedSale?.items) ? selectedSale.items : []).map((line) => [line.id, line]),
+    )
     return cart
-      .map((line) => ({
-        ...line,
-        item: itemsById.get(line.item_id) || null,
-        total: Math.round((line.quantity * line.unit_price + Number.EPSILON) * 100) / 100,
-      }))
-      .filter((line) => line.item)
-  }, [cart, context?.items])
+      .map((line) => {
+        const saleLine = saleItemsById.get(line.item_id)
+        if (!saleLine) return null
+        return {
+          ...line,
+          saleLine,
+          total: roundMoney(line.quantity * line.unit_price),
+        }
+      })
+      .filter((line): line is NonNullable<typeof line> => !!line)
+  }, [cart, selectedSale])
 
   const cartTotal = useMemo(
     () => cartDetailed.reduce((sum, line) => sum + line.total, 0),
     [cartDetailed],
   )
 
-  function addToCart(item: PointInventorySaleItem) {
+  function getReturnableQty(saleLineId: string) {
+    const saleLine = (selectedSale?.items || []).find((line) => line.id === saleLineId)
+    return roundQty(Number(saleLine?.returnable_qty || 0))
+  }
+
+  function addToCart(saleLineId: string) {
+    const saleLine = (selectedSale?.items || []).find((line) => line.id === saleLineId)
+    if (!saleLine) return
+    const maxQty = getReturnableQty(saleLineId)
+    if (maxQty <= 0) {
+      toastError('По этой позиции уже нечего возвращать')
+      return
+    }
+
     setCart((current) => {
-      const existing = current.find((line) => line.item_id === item.id)
+      const existing = current.find((line) => line.item_id === saleLineId)
       if (!existing) {
         return [
           ...current,
           {
-            item_id: item.id,
-            quantity: 1,
-            unit_price: item.sale_price,
+            item_id: saleLineId,
+            quantity: Math.min(1, maxQty),
+            unit_price: Number(saleLine.unit_price || 0),
           },
         ]
       }
 
-      return current.map((line) =>
-        line.item_id === item.id
-          ? { ...line, quantity: Math.round((line.quantity + 1 + Number.EPSILON) * 1000) / 1000 }
-          : line,
-      )
+      const nextQty = Math.min(maxQty, roundQty(existing.quantity + 1))
+      return current.map((line) => (line.item_id === saleLineId ? { ...line, quantity: nextQty } : line))
     })
   }
 
-  function changeQty(itemId: string, nextQty: number) {
+  function changeQty(saleLineId: string, nextQty: number) {
+    const maxQty = getReturnableQty(saleLineId)
     if (nextQty <= 0) {
-      setCart((current) => current.filter((line) => line.item_id !== itemId))
+      setCart((current) => current.filter((line) => line.item_id !== saleLineId))
       return
     }
 
     setCart((current) =>
-      current.map((line) => (line.item_id === itemId ? { ...line, quantity: nextQty } : line)),
+      current.map((line) =>
+        line.item_id === saleLineId
+          ? { ...line, quantity: Math.min(maxQty, roundQty(nextQty)) }
+          : line,
+      ),
     )
+  }
+
+  function buildRefundAmounts() {
+    if (!selectedSale || cartTotal <= 0) {
+      return {
+        paymentMethod: 'cash' as const,
+        cashAmount: 0,
+        kaspiAmount: 0,
+        kaspiBeforeMidnightAmount: 0,
+        kaspiAfterMidnightAmount: 0,
+      }
+    }
+
+    const saleTotal = Number(selectedSale.total_amount || 0)
+    const paymentMethod = selectedSale.payment_method
+
+    if (paymentMethod === 'cash') {
+      return {
+        paymentMethod,
+        cashAmount: roundMoney(cartTotal),
+        kaspiAmount: 0,
+        kaspiBeforeMidnightAmount: 0,
+        kaspiAfterMidnightAmount: 0,
+      }
+    }
+
+    if (paymentMethod === 'kaspi') {
+      const kaspiAmount = roundMoney(cartTotal)
+      const beforeRatio =
+        saleTotal > 0 && Number(selectedSale.kaspi_amount || 0) > 0
+          ? Number(selectedSale.kaspi_before_midnight_amount || 0) / Number(selectedSale.kaspi_amount || 0)
+          : 0
+      const kaspiBeforeMidnightAmount = roundMoney(kaspiAmount * beforeRatio)
+      const kaspiAfterMidnightAmount = roundMoney(kaspiAmount - kaspiBeforeMidnightAmount)
+      return {
+        paymentMethod,
+        cashAmount: 0,
+        kaspiAmount,
+        kaspiBeforeMidnightAmount,
+        kaspiAfterMidnightAmount,
+      }
+    }
+
+    const cashRatio = saleTotal > 0 ? Number(selectedSale.cash_amount || 0) / saleTotal : 0
+    const cashAmount = roundMoney(cartTotal * cashRatio)
+    const kaspiAmount = roundMoney(cartTotal - cashAmount)
+    const beforeRatio =
+      Number(selectedSale.kaspi_amount || 0) > 0
+        ? Number(selectedSale.kaspi_before_midnight_amount || 0) / Number(selectedSale.kaspi_amount || 0)
+        : 0
+    const kaspiBeforeMidnightAmount = roundMoney(kaspiAmount * beforeRatio)
+    const kaspiAfterMidnightAmount = roundMoney(kaspiAmount - kaspiBeforeMidnightAmount)
+
+    return {
+      paymentMethod,
+      cashAmount,
+      kaspiAmount,
+      kaspiBeforeMidnightAmount,
+      kaspiAfterMidnightAmount,
+    }
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
+    if (!selectedSale) {
+      toastError('Сначала выберите продажу')
+      return
+    }
     if (cartDetailed.length === 0) {
-      toastError('Добавьте хотя бы один товар в возврат')
+      toastError('Добавьте хотя бы одну проданную позицию в возврат')
       return
     }
 
-    const cashAmount =
-      paymentMethod === 'cash'
-        ? cartTotal
-        : paymentMethod === 'mixed'
-          ? Math.min(cartTotal, Math.max(0, parseMoney(mixedCash)))
-          : 0
-    const kaspiAmount = paymentMethod === 'kaspi' ? cartTotal : paymentMethod === 'mixed' ? cartTotal - cashAmount : 0
-
-    if (paymentMethod === 'mixed' && (cashAmount <= 0 || kaspiAmount <= 0)) {
-      toastError('Для смешанного возврата укажите часть наличными, а остальное уйдёт в Kaspi')
-      return
-    }
+    const refund = buildRefundAmounts()
 
     setSaving(true)
     try {
-      const isNightAfterMidnight = runtimeShift.shift === 'night' && runtimeShift.afterMidnightNight
       await api.createPointInventoryReturn(config, session, {
+        sale_id: selectedSale.id,
         return_date: runtimeShift.date,
         shift: runtimeShift.shift,
-        payment_method: paymentMethod,
-        cash_amount: cashAmount,
-        kaspi_amount: kaspiAmount,
-        kaspi_before_midnight_amount: runtimeShift.shift === 'night' && isNightAfterMidnight ? 0 : kaspiAmount,
-        kaspi_after_midnight_amount: runtimeShift.shift === 'night' && isNightAfterMidnight ? kaspiAmount : 0,
+        payment_method: refund.paymentMethod,
+        cash_amount: refund.cashAmount,
+        kaspi_amount: refund.kaspiAmount,
+        kaspi_before_midnight_amount: refund.kaspiBeforeMidnightAmount,
+        kaspi_after_midnight_amount: refund.kaspiAfterMidnightAmount,
         comment: comment.trim() || null,
         local_ref: localRef(),
         items: cartDetailed.map((line) => ({
-          item_id: line.item_id,
+          item_id: String(line.saleLine.item?.id || ''),
           quantity: line.quantity,
           unit_price: line.unit_price,
         })),
       })
-      toastSuccess('Возврат сохранён, выручка смены уменьшена')
-      setCart([])
+      toastSuccess('Возврат сохранён по выбранному чеку продажи')
       setComment('')
-      setMixedCash('')
-      setPaymentMethod('cash')
-      await load()
+      await load(selectedSale.id)
     } catch (err: any) {
       toastError(err?.message || 'Не удалось провести возврат')
     } finally {
@@ -214,6 +299,7 @@ export default function InventoryReturnsPage({
   }
 
   const operatorName = session.operator.full_name || session.operator.name || session.operator.username
+  const refund = buildRefundAmounts()
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -244,7 +330,7 @@ export default function InventoryReturnsPage({
             onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
           />
-          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={() => void load(selectedSaleId)} disabled={loading} className="text-muted-foreground">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="ghost" size="sm" onClick={onLogout} className="text-muted-foreground">
@@ -254,33 +340,28 @@ export default function InventoryReturnsPage({
       </header>
 
       <div className="flex-1 overflow-auto p-5">
-        <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[360px_minmax(0,1fr)_400px]">
           <div className="space-y-5">
             <Card className="border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02]">
-              <CardContent className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
-                <div>
-                  <div className="flex items-center gap-2 text-base font-semibold">
-                    <RotateCcw className="h-4 w-4 text-amber-400" />
-                    Возвраты по витрине
+              <CardContent className="grid gap-4 p-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-300">
+                    <RotateCcw className="h-6 w-6" />
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Возврат возвращает товар на витрину и автоматически уменьшает выручку текущей смены.
-                  </p>
+                  <div>
+                    <p className="text-lg font-semibold text-foreground">Возврат по чеку</p>
+                    <p className="text-sm text-muted-foreground">
+                      Возвращаем только то, что реально было продано на точке.
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
-                  <p className="text-xs text-muted-foreground">Текущая смена</p>
-                  <p className="mt-1 font-semibold">{formatShiftLabel(runtimeShift.shift)}</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(runtimeShift.date)}</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
-                  <p className="text-xs text-muted-foreground">Возвратов</p>
-                  <p className="mt-1 font-semibold">{context?.returns?.length || 0}</p>
-                  <p className="text-xs text-muted-foreground">Последние операции точки</p>
-                </div>
+
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
                   <p className="text-xs text-muted-foreground">Подсказка</p>
-                  <p className="mt-1 font-semibold">Сначала проверь продажу</p>
-                  <p className="text-xs text-muted-foreground">Недавние чеки видны внизу экрана</p>
+                  <p className="mt-1 font-semibold">Сначала выберите продажу слева</p>
+                  <p className="text-xs text-muted-foreground">
+                    После этого справа появятся только проданные позиции и доступный остаток для возврата.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -288,21 +369,11 @@ export default function InventoryReturnsPage({
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Store className="h-4 w-4" />
-                  Товары для возврата
+                  <ShoppingBasket className="h-4 w-4" />
+                  Недавние продажи
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Поиск по названию, штрихкоду или категории"
-                    className="pl-10"
-                  />
-                </div>
-
+              <CardContent className="space-y-3">
                 {error ? (
                   <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
                     {error}
@@ -312,190 +383,144 @@ export default function InventoryReturnsPage({
                 {loading ? (
                   <div className="flex h-56 items-center justify-center text-muted-foreground">
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Загружаем данные по возвратам...
+                    Загружаем продажи...
+                  </div>
+                ) : (context?.sales || []).length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
+                    Продаж пока нет.
                   </div>
                 ) : (
-                  <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                    {filteredItems.map((item) => (
+                  (context?.sales || []).map((sale) => {
+                    const saleItems = Array.isArray(sale.items) ? sale.items : []
+                    const remainingQty = saleItems.reduce(
+                      (sum, line) => sum + Number(line.returnable_qty || 0),
+                      0,
+                    )
+                    const isSelected = sale.id === selectedSaleId
+                    return (
                       <button
-                        key={item.id}
+                        key={sale.id}
                         type="button"
-                        onClick={() => addToCart(item)}
-                        className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-amber-400/40 hover:bg-white/[0.05]"
+                        onClick={() => {
+                          setSelectedSaleId(sale.id)
+                          setCart([])
+                          setSearch('')
+                        }}
+                        className={`w-full rounded-2xl border p-4 text-left transition ${
+                          isSelected
+                            ? 'border-amber-400/50 bg-amber-500/10'
+                            : 'border-white/10 bg-white/[0.03] hover:border-white/20'
+                        }`}
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-foreground">{item.name}</p>
-                            <p className="mt-1 text-xs text-muted-foreground">{item.barcode}</p>
-                          </div>
-                          <Badge variant="secondary">
-                            {item.display_qty} {item.unit}
-                          </Badge>
-                        </div>
-                        <div className="mt-4 flex items-center justify-between">
                           <div>
-                            <p className="text-xs text-muted-foreground">{item.category?.name || 'Без категории'}</p>
-                            <p className="mt-1 text-lg font-semibold text-foreground">{formatMoney(item.sale_price)}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={isSelected ? 'warning' : 'secondary'}>
+                                {paymentBadge(sale.payment_method)}
+                              </Badge>
+                              <Badge variant="outline">{formatShiftLabel(sale.shift)}</Badge>
+                            </div>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              {formatDate(sale.sale_date)} ·{' '}
+                              {new Date(sale.sold_at).toLocaleTimeString('ru-RU', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
                           </div>
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-300">
-                            <Plus className="h-5 w-5" />
-                          </div>
+                          <p className="text-lg font-semibold">{formatMoney(sale.total_amount)}</p>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                          <span>Позиций: {saleItems.length}</span>
+                          <span>Можно вернуть: {roundQty(remainingQty)}</span>
                         </div>
                       </button>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <ShoppingBasket className="h-4 w-4" />
-                  Недавние продажи для сверки
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {(context?.sales || []).length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                    Пока продаж нет.
-                  </div>
-                ) : (
-                  (context?.sales || []).map((sale) => (
-                    <div key={sale.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary">{paymentBadge(sale.payment_method)}</Badge>
-                            <Badge variant="outline">{formatShiftLabel(sale.shift)}</Badge>
-                          </div>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {formatDate(sale.sale_date)} · {new Date(sale.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </div>
-                        <p className="text-lg font-semibold">{formatMoney(sale.total_amount)}</p>
-                      </div>
-                    </div>
-                  ))
+                    )
+                  })
                 )}
               </CardContent>
             </Card>
           </div>
 
           <div className="space-y-5">
-            <Card className="sticky top-0">
+            <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <CreditCard className="h-4 w-4" />
-                  Оформление возврата
+                  <Store className="h-4 w-4" />
+                  Проданные позиции
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                  Возврат уменьшает выручку смены. Если возврат через Kaspi в ночной смене, он тоже учитывается в суточной сверке.
-                </div>
-
-                <div className="space-y-2">
-                  {cartDetailed.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                      Выберите товары слева, чтобы оформить возврат.
-                    </div>
-                  ) : (
-                    cartDetailed.map((line) => (
-                      <div key={line.item_id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{line.item?.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatMoney(line.unit_price)} за {line.item?.unit || 'шт'}
-                            </p>
-                          </div>
-                          <p className="font-semibold">{formatMoney(line.total)}</p>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between">
-                          <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-1">
-                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => changeQty(line.item_id, line.quantity - 1)}>
-                              <Minus className="h-4 w-4" />
-                            </Button>
-                            <span className="min-w-[3rem] text-center text-sm font-semibold">{line.quantity}</span>
-                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => changeQty(line.item_id, line.quantity + 1)}>
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            На витрину вернётся: {line.quantity} {line.item?.unit || 'шт'}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {(['cash', 'kaspi', 'mixed'] as const).map((method) => (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => setPaymentMethod(method)}
-                      className={`rounded-2xl border px-3 py-3 text-sm font-medium transition ${
-                        paymentMethod === method
-                          ? 'border-amber-400/40 bg-amber-500/15 text-amber-100'
-                          : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {paymentBadge(method)}
-                    </button>
-                  ))}
-                </div>
-
-                {paymentMethod === 'mixed' ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label>Наличными</Label>
-                      <Input value={mixedCash} onChange={(event) => setMixedCash(event.target.value)} placeholder="0" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Kaspi</Label>
-                      <Input value={String(Math.max(0, cartTotal - Math.max(0, parseMoney(mixedCash))))} readOnly />
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="space-y-1.5">
-                  <Label>Комментарий</Label>
-                  <textarea
-                    value={comment}
-                    onChange={(event) => setComment(event.target.value)}
-                    rows={3}
-                    placeholder="Причина возврата, ошибка в заказе, отмена клиента"
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition focus:border-amber-400/50"
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Поиск по названию или штрихкоду"
+                    className="pl-10"
+                    disabled={!selectedSale}
                   />
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-3">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Позиций</span>
-                      <span>{cartDetailed.length}</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Штук</span>
-                      <span>{cartDetailed.reduce((sum, line) => sum + line.quantity, 0)}</span>
-                    </div>
-                    <div className="mt-4 flex items-end justify-between">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итог возврата</p>
-                        <p className="mt-1 text-3xl font-semibold text-foreground">{formatMoney(cartTotal)}</p>
-                      </div>
-                      <Badge variant="warning">{paymentBadge(paymentMethod)}</Badge>
-                    </div>
+                {!selectedSale ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-muted-foreground">
+                    Выберите продажу слева, чтобы открыть список реально проданных товаров.
                   </div>
+                ) : saleItems.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-muted-foreground">
+                    По выбранному чеку нет позиций для возврата.
+                  </div>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {saleItems.map((line) => {
+                      const returnableQty = roundQty(Number(line.returnable_qty || 0))
+                      const soldQty = roundQty(Number(line.quantity || 0))
+                      const returnedQty = roundQty(Number(line.returned_qty || 0))
+                      const disabled = returnableQty <= 0
+                      return (
+                        <button
+                          key={line.id}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => addToCart(line.id)}
+                          className={`rounded-2xl border p-4 text-left transition ${
+                            disabled
+                              ? 'cursor-not-allowed border-white/5 bg-white/[0.02] opacity-60'
+                              : 'border-white/10 bg-white/[0.03] hover:border-amber-400/40 hover:bg-white/[0.05]'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-foreground">
+                                {line.item?.name || 'Товар'}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {line.item?.barcode || 'Без штрихкода'}
+                              </p>
+                            </div>
+                            <Badge variant={disabled ? 'secondary' : 'outline'}>
+                              {returnableQty} шт
+                            </Badge>
+                          </div>
 
-                  <Button type="submit" size="lg" className="w-full" disabled={saving || cartDetailed.length === 0}>
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                    Провести возврат
-                  </Button>
-                </form>
+                          <div className="mt-4 flex items-center justify-between">
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                Продано: {soldQty} · Уже вернули: {returnedQty}
+                              </p>
+                              <p className="mt-1 text-lg font-semibold text-foreground">
+                                {formatMoney(Number(line.unit_price || 0))}
+                              </p>
+                            </div>
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-300">
+                              <Package className="h-5 w-5" />
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -521,7 +546,11 @@ export default function InventoryReturnsPage({
                             <Badge variant="outline">{formatShiftLabel(item.shift)}</Badge>
                           </div>
                           <p className="mt-2 text-xs text-muted-foreground">
-                            {formatDate(item.return_date)} · {new Date(item.returned_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                            {formatDate(item.return_date)} ·{' '}
+                            {new Date(item.returned_at).toLocaleTimeString('ru-RU', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
                           </p>
                         </div>
                         <p className="text-lg font-semibold">{formatMoney(item.total_amount)}</p>
@@ -529,6 +558,135 @@ export default function InventoryReturnsPage({
                     </div>
                   ))
                 )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-5">
+            <Card className="sticky top-0">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CreditCard className="h-4 w-4" />
+                  Оформление возврата
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                  Возврат уменьшает выручку текущей смены и привязывается к выбранному чеку продажи.
+                </div>
+
+                {selectedSale ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                          Выбранный чек
+                        </p>
+                        <p className="mt-1 font-semibold">
+                          {formatDate(selectedSale.sale_date)} · {paymentBadge(selectedSale.payment_method)}
+                        </p>
+                      </div>
+                      <Badge variant="outline">{formatMoney(selectedSale.total_amount)}</Badge>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  {cartDetailed.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
+                      Выберите проданные позиции, чтобы оформить возврат.
+                    </div>
+                  ) : (
+                    cartDetailed.map((line) => {
+                      const maxQty = getReturnableQty(line.item_id)
+                      return (
+                        <div key={line.item_id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{line.saleLine.item?.name || 'Товар'}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatMoney(line.unit_price)} за шт · максимум к возврату {maxQty}
+                              </p>
+                            </div>
+                            <p className="font-semibold">{formatMoney(line.total)}</p>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between">
+                            <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-1">
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => changeQty(line.item_id, line.quantity - 1)}>
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                              <span className="min-w-[3rem] text-center text-sm font-semibold">{line.quantity}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => changeQty(line.item_id, line.quantity + 1)}
+                                disabled={line.quantity >= maxQty}
+                              >
+                                <Package className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              На витрину вернётся: {line.quantity} шт
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm">
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Способ возврата</span>
+                    <span>{paymentBadge(refund.paymentMethod)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-muted-foreground">
+                    <span>Наличными</span>
+                    <span>{formatMoney(refund.cashAmount)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-muted-foreground">
+                    <span>Kaspi</span>
+                    <span>{formatMoney(refund.kaspiAmount)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Комментарий</Label>
+                  <textarea
+                    value={comment}
+                    onChange={(event) => setComment(event.target.value)}
+                    rows={3}
+                    placeholder="Причина возврата, отмена заказа, ошибка по товару"
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition focus:border-amber-400/50"
+                  />
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-3">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>Позиций</span>
+                      <span>{cartDetailed.length}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
+                      <span>Штук</span>
+                      <span>{cartDetailed.reduce((sum, line) => sum + line.quantity, 0)}</span>
+                    </div>
+                    <div className="mt-4 flex items-end justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итог возврата</p>
+                        <p className="mt-1 text-3xl font-semibold text-foreground">{formatMoney(cartTotal)}</p>
+                      </div>
+                      <Badge variant="warning">{paymentBadge(refund.paymentMethod)}</Badge>
+                    </div>
+                  </div>
+
+                  <Button type="submit" size="lg" className="w-full" disabled={saving || cartDetailed.length === 0 || !selectedSale}>
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                    Провести возврат
+                  </Button>
+                </form>
               </CardContent>
             </Card>
           </div>

@@ -7,6 +7,7 @@ import { requirePointDevice } from '@/lib/server/point-devices'
 type ReturnBody = {
   action: 'createReturn'
   payload: {
+    sale_id: string
     return_date: string
     shift: 'day' | 'night'
     payment_method: 'cash' | 'kaspi' | 'mixed'
@@ -95,21 +96,12 @@ export async function GET(request: Request) {
     }
 
     const location = await resolvePointLocation(supabase, device.company_id)
-    const [{ data: items, error: itemsError }, { data: balances, error: balancesError }, { data: returns, error: returnsError }, { data: sales, error: salesError }] =
+    const [{ data: returns, error: returnsError }, { data: sales, error: salesError }] =
       await Promise.all([
-        supabase
-          .from('inventory_items')
-          .select('id, name, barcode, unit, sale_price, category:category_id(id, name)')
-          .eq('is_active', true)
-          .order('name', { ascending: true }),
-        supabase
-          .from('inventory_balances')
-          .select('item_id, quantity')
-          .eq('location_id', location.id),
         supabase
           .from('point_returns')
           .select(
-            'id, return_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, comment, returned_at, items:point_return_items(id, quantity, unit_price, total_price, item:item_id(id, name, barcode))',
+            'id, sale_id, return_date, shift, payment_method, cash_amount, kaspi_amount, kaspi_before_midnight_amount, kaspi_after_midnight_amount, total_amount, comment, returned_at, items:point_return_items(id, sale_item_id, quantity, unit_price, total_price, item:item_id(id, name, barcode))',
           )
           .eq('location_id', location.id)
           .order('returned_at', { ascending: false })
@@ -122,12 +114,43 @@ export async function GET(request: Request) {
           .limit(12),
       ])
 
-    if (itemsError) throw itemsError
-    if (balancesError) throw balancesError
     if (returnsError) throw returnsError
     if (salesError) throw salesError
+    const returnedBySaleLineKey = new Map<string, number>()
 
-    const balanceMap = new Map<string, number>((balances || []).map((row: any) => [row.item_id, Number(row.quantity || 0)]))
+    for (const pointReturn of returns || []) {
+      const saleId = String((pointReturn as any)?.sale_id || '').trim()
+      if (!saleId) continue
+      const returnItems = Array.isArray((pointReturn as any)?.items) ? (pointReturn as any).items : []
+      for (const line of returnItems) {
+        const itemId = String(line?.item?.id || line?.item_id || '').trim()
+        const unitPrice = normalizeMoney(line?.unit_price)
+        const quantity = normalizeQty(line?.quantity)
+        if (!itemId || quantity <= 0) continue
+        const key = `${saleId}:${itemId}:${unitPrice.toFixed(2)}`
+        returnedBySaleLineKey.set(key, (returnedBySaleLineKey.get(key) || 0) + quantity)
+      }
+    }
+
+    const normalizedSales = (sales || []).map((sale: any) => {
+      const saleId = String(sale?.id || '').trim()
+      const saleItems = Array.isArray(sale?.items) ? sale.items : []
+      return {
+        ...sale,
+        items: saleItems.map((line: any) => {
+          const itemId = String(line?.item?.id || '').trim()
+          const unitPrice = normalizeMoney(line?.unit_price)
+          const soldQty = normalizeQty(line?.quantity)
+          const key = `${saleId}:${itemId}:${unitPrice.toFixed(2)}`
+          const returnedQty = normalizeQty(returnedBySaleLineKey.get(key) || 0)
+          return {
+            ...line,
+            returned_qty: returnedQty,
+            returnable_qty: Math.max(0, soldQty - returnedQty),
+          }
+        }),
+      }
+    })
 
     return json({
       ok: true,
@@ -138,12 +161,8 @@ export async function GET(request: Request) {
           code: device.company?.code || null,
         },
         location,
-        items: (items || []).map((item: any) => ({
-          ...item,
-          display_qty: balanceMap.get(item.id) || 0,
-        })),
         returns: returns || [],
-        sales: sales || [],
+        sales: normalizedSales,
       },
     })
   } catch (error: any) {
@@ -173,7 +192,9 @@ export async function POST(request: Request) {
     const actor = await resolveActor({ request, supabase, companyId: device.company_id })
 
     const returnDate = String(body.payload?.return_date || '').trim()
+    const saleId = String(body.payload?.sale_id || '').trim()
     const shift = body.payload?.shift
+    if (!saleId) return json({ error: 'sale-id-required' }, 400)
     if (!returnDate) return json({ error: 'return-date-required' }, 400)
     if (shift !== 'day' && shift !== 'night') return json({ error: 'return-shift-invalid' }, 400)
 
@@ -205,6 +226,7 @@ export async function POST(request: Request) {
       location_id: location.id,
       point_device_id: device.id,
       operator_id: actor.operatorId,
+      sale_id: saleId,
       return_date: returnDate,
       shift,
       payment_method: paymentMethod,

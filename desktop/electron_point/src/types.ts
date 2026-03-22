@@ -302,6 +302,8 @@ export interface PointInventorySaleRow {
     quantity: number
     unit_price: number
     total_price: number
+    returned_qty?: number
+    returnable_qty?: number
     item?: { id: string; name: string; barcode: string } | null
   }>
 }
@@ -361,7 +363,6 @@ export interface PointInventoryReturnRow {
 export interface PointInventoryReturnContext {
   company: { id: string; name: string; code: string | null }
   location: { id: string; name: string; code: string | null; location_type: string }
-  items: PointInventorySaleItem[]
   returns: PointInventoryReturnRow[]
   sales: PointInventorySaleRow[]
 }

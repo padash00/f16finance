@@ -520,6 +520,7 @@ export async function createPointInventoryReturn(
   config: AppConfig,
   session: OperatorSession,
   payload: {
+    sale_id: string
     return_date: string
     shift: 'day' | 'night'
     payment_method: 'cash' | 'kaspi' | 'mixed'

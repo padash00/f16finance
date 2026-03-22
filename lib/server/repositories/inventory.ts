@@ -413,6 +413,7 @@ export async function createPointInventoryReturn(
     location_id: string
     point_device_id?: string | null
     operator_id?: string | null
+    sale_id: string
     return_date: string
     shift: 'day' | 'night'
     payment_method: 'cash' | 'kaspi' | 'mixed'
@@ -431,6 +432,7 @@ export async function createPointInventoryReturn(
     p_location_id: payload.location_id,
     p_point_device_id: payload.point_device_id || null,
     p_operator_id: payload.operator_id || null,
+    p_sale_id: payload.sale_id,
     p_return_date: payload.return_date,
     p_shift: payload.shift,
     p_payment_method: payload.payment_method,
