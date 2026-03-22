@@ -234,7 +234,7 @@ export async function POST(request: Request) {
         const categoryId = row.category ? catNameToId[row.category.toLowerCase()] || null : null
         const existingId = existingBarcodeToId[row.barcode]
         // DB allows only 'product' or 'consumable'; map 'service' → 'product'
-        const itemType = row.item_type === 'consumable' ? 'consumable' : 'product'
+        const itemType: 'product' | 'consumable' = (row.item_type as string) === 'consumable' ? 'consumable' : 'product'
 
         if (existingId) {
           toUpdate.push({
