@@ -192,10 +192,10 @@ function ItemForm({
       </div>
       <div>
         <Label className="text-xs text-muted-foreground mb-1 block">Категория</Label>
-        <Select value={form.category_id} onValueChange={(v) => f('category_id', v)}>
+        <Select value={form.category_id || '__none__'} onValueChange={(v) => f('category_id', v === '__none__' ? '' : v)}>
           <SelectTrigger><SelectValue placeholder="Без категории" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Без категории</SelectItem>
+            <SelectItem value="__none__">Без категории</SelectItem>
             {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -549,7 +549,7 @@ export default function CatalogPage() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <Select value={filterCategory || 'all'} onValueChange={setFilterCategory}>
                 <SelectTrigger className="h-8 text-sm w-[160px]">
                   <SelectValue placeholder="Категория" />
                 </SelectTrigger>
