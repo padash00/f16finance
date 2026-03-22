@@ -365,3 +365,22 @@ export interface PointInventoryReturnContext {
   returns: PointInventoryReturnRow[]
   sales: PointInventorySaleRow[]
 }
+
+// Customers & Loyalty
+
+export interface Customer {
+  id: string
+  name: string
+  phone: string | null
+  card_number: string | null
+  loyalty_points: number
+  total_spent: number
+}
+
+export interface LoyaltyConfig {
+  points_per_100_tenge: number
+  tenge_per_point: number
+  min_points_to_redeem: number
+  max_redeem_percent: number
+  is_active: boolean
+}

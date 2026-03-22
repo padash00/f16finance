@@ -133,6 +133,8 @@ const navSections: NavSection[] = [
       { href: '/inventory/writeoffs', label: 'Списания', icon: ArchiveX, note: 'Брак и служебные расходы' },
       { href: '/inventory/stocktakes', label: 'Инвентаризация', icon: ScanSearch, note: 'Пересчет и корректировки' },
       { href: '/inventory/movements', label: 'Движения', icon: History, note: 'Журнал товарных операций' },
+      { href: '/customers', label: 'Клиенты', icon: Users, note: 'База клиентов и лояльность' },
+      { href: '/discounts', label: 'Скидки и промо', icon: Tags, note: 'Скидки, промокоды, акции' },
     ],
   },
   {

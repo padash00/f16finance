@@ -42,7 +42,20 @@
       "Bash(done)",
       "Bash(python:*)",
       "Bash(tail:*)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(find '/c/Users/padas/OneDrive/Рабочий стол/f16finance' -name middleware.ts -o -name *auth*page*)",
+      "Bash(grep -rn \"staff\\\\b\" \"C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance\\\\supabase\\\\migrations\"\" --include=\"*.sql\" | grep -i \"policy)",
+      "Bash(rls)",
+      "Bash(enable)",
+      "Bash(select \")",
+      "Bash(head -50 ls \"/c/Users/padas/OneDrive/Рабочий стол/f16finance/app/\\(main\\)/\")",
+      "Bash(wc -l \"/c/Users/padas/OneDrive/Рабочий стол/f16finance/app/\\(main\\)/inventory/page.tsx\" grep -n \"tab\\\\|Tab\\\\|section\\\\|Section\\\\|вкладк\\\\|приём\\\\|Приём\\\\|остат\\\\|Остат\\\\|товар\\\\|Товар\" \"/c/Users/padas/OneDrive/Рабочий стол/f16finance/app/\\(main\\)/inventory/page.tsx\")",
+      "Bash(ls -la \"C:\\\\Users\\\\padas\\\\OneDrive\\\\Рабочий стол\\\\f16finance\\\\app\\\\\\(main\\)\\\\point-terminal\")",
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Read(//c/Users/padas/Downloads/**)",
+      "Bash(node -e \":*)",
+      "Bash(node -e \"const pkg = require\\(''./package.json''\\); console.log\\(''xlsx:'', pkg.dependencies?.xlsx || pkg.devDependencies?.xlsx || ''NOT FOUND''\\); console.log\\(''exceljs:'', pkg.dependencies?.exceljs || ''NOT FOUND''\\)\")"
     ]
   }
 }

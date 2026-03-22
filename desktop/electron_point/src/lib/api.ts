@@ -16,6 +16,8 @@ import type {
   PointInventorySaleContext,
   PointInventorySaleShiftSummary,
   PointInventoryReturnContext,
+  Customer,
+  LoyaltyConfig,
 } from '@/types'
 import { parseMoney } from '@/lib/utils'
 
@@ -467,6 +469,49 @@ export async function getPointInventoryReturns(
     '/api/point/inventory-returns',
     undefined,
     operatorHeaders(session),
+  )
+  return data.data
+}
+
+// ─── Customers & Loyalty ──────────────────────────────────────────────────────
+
+export async function searchCustomers(config: AppConfig, q: string): Promise<{ customers: Customer[]; loyalty_config: LoyaltyConfig | null }> {
+  const data = await request<{ ok: boolean; data: Customer[]; loyalty_config: LoyaltyConfig | null }>(
+    config,
+    'GET',
+    `/api/point/customers?q=${encodeURIComponent(q)}`,
+  )
+  return {
+    customers: data.data || [],
+    loyalty_config: data.loyalty_config || null,
+  }
+}
+
+export async function getLoyaltyConfig(config: AppConfig, companyId: string): Promise<LoyaltyConfig | null> {
+  const data = await request<{ ok: boolean; data: Customer[]; loyalty_config: LoyaltyConfig | null }>(
+    config,
+    'GET',
+    `/api/point/customers?q=&company_id=${encodeURIComponent(companyId)}`,
+  )
+  return data.loyalty_config || null
+}
+
+export async function recordSaleWithCustomer(
+  config: AppConfig,
+  payload: {
+    customer_id: string
+    sale_total_amount: number
+    loyalty_points_spent: number
+  },
+): Promise<{ customer: Customer; points_earned: number; points_spent: number }> {
+  const data = await request<{ ok: boolean; data: { customer: Customer; points_earned: number; points_spent: number } }>(
+    config,
+    'POST',
+    '/api/point/customers',
+    {
+      action: 'recordSaleWithCustomer',
+      ...payload,
+    },
   )
   return data.data
 }
