@@ -1,16 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CreditCard,
   Loader2,
   LogOut,
   Minus,
   Package,
+  Percent,
   Plus,
   RefreshCw,
   Search,
   ShoppingBasket,
+  Star,
   Store,
+  Tag,
   UserCircle2,
+  X,
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
@@ -26,6 +30,8 @@ import { formatDate, formatMoney, localRef, parseMoney } from '@/lib/utils'
 import type {
   AppConfig,
   BootstrapData,
+  Customer,
+  LoyaltyConfig,
   OperatorSession,
   PointInventorySaleContext,
   PointInventorySaleItem,
@@ -81,6 +87,24 @@ export default function InventorySalesPage({
   const [mixedCash, setMixedCash] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
 
+  // Customer search
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerResults, setCustomerResults] = useState<Customer[]>([])
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig | null>(null)
+  const [customerSearching, setCustomerSearching] = useState(false)
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const [loyaltyPointsToSpend, setLoyaltyPointsToSpend] = useState(0)
+  const customerSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Discount
+  const [showDiscountPanel, setShowDiscountPanel] = useState(false)
+  const [manualDiscountPercent, setManualDiscountPercent] = useState('')
+  const [promoCodeInput, setPromoCodeInput] = useState('')
+  const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null)
+  const [promoDiscountPercent, setPromoDiscountPercent] = useState(0)
+  const [promoValidating, setPromoValidating] = useState(false)
+
   async function load() {
     setLoading(true)
     setError(null)
@@ -98,6 +122,32 @@ export default function InventorySalesPage({
   useEffect(() => {
     void load()
   }, [])
+
+  // Customer search with debounce
+  useEffect(() => {
+    if (customerSearchTimeout.current) clearTimeout(customerSearchTimeout.current)
+    if (!customerSearch.trim() || customerSearch.trim().length < 2) {
+      setCustomerResults([])
+      setShowCustomerDropdown(false)
+      return
+    }
+    customerSearchTimeout.current = setTimeout(async () => {
+      setCustomerSearching(true)
+      try {
+        const result = await api.searchCustomers(config, customerSearch.trim())
+        setCustomerResults(result.customers)
+        setLoyaltyConfig(result.loyalty_config)
+        setShowCustomerDropdown(result.customers.length > 0)
+      } catch {
+        setCustomerResults([])
+      } finally {
+        setCustomerSearching(false)
+      }
+    }, 500)
+    return () => {
+      if (customerSearchTimeout.current) clearTimeout(customerSearchTimeout.current)
+    }
+  }, [customerSearch, config])
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -129,8 +179,110 @@ export default function InventorySalesPage({
 
   const saleCountToday = useMemo(() => (context?.sales || []).length, [context?.sales])
 
+  // Discount calculations
+  const effectiveDiscountPercent = useMemo(() => {
+    const manual = parseFloat(manualDiscountPercent) || 0
+    return Math.min(99, Math.max(0, manual > 0 ? manual : promoDiscountPercent))
+  }, [manualDiscountPercent, promoDiscountPercent])
+
+  const discountAmount = useMemo(() => {
+    if (effectiveDiscountPercent <= 0) return 0
+    return Math.round((cartTotal * effectiveDiscountPercent) / 100 * 100) / 100
+  }, [cartTotal, effectiveDiscountPercent])
+
+  const afterDiscountTotal = useMemo(() => Math.max(0, cartTotal - discountAmount), [cartTotal, discountAmount])
+
+  const loyaltyDiscountAmount = useMemo(() => {
+    if (!selectedCustomer || !loyaltyConfig || loyaltyPointsToSpend <= 0) return 0
+    const tengePerPoint = loyaltyConfig.tenge_per_point || 1
+    const maxPercent = loyaltyConfig.max_redeem_percent || 50
+    const maxByPercent = Math.floor(afterDiscountTotal * maxPercent / 100)
+    const maxByPoints = Math.floor(loyaltyPointsToSpend * tengePerPoint)
+    return Math.min(maxByPoints, maxByPercent, afterDiscountTotal)
+  }, [selectedCustomer, loyaltyConfig, loyaltyPointsToSpend, afterDiscountTotal])
+
+  const finalTotal = useMemo(() => Math.max(0, afterDiscountTotal - loyaltyDiscountAmount), [afterDiscountTotal, loyaltyDiscountAmount])
+
+  const maxRedeemablePoints = useMemo(() => {
+    if (!selectedCustomer || !loyaltyConfig) return 0
+    const maxPercent = loyaltyConfig.max_redeem_percent || 50
+    const tengePerPoint = loyaltyConfig.tenge_per_point || 1
+    const maxTenge = Math.floor(afterDiscountTotal * maxPercent / 100)
+    const pointsByTenge = Math.ceil(maxTenge / tengePerPoint)
+    return Math.min(selectedCustomer.loyalty_points, pointsByTenge)
+  }, [selectedCustomer, loyaltyConfig, afterDiscountTotal])
+
   function findAvailableQty(itemId: string) {
     return context?.items.find((item) => item.id === itemId)?.display_qty || 0
+  }
+
+  function selectCustomer(customer: Customer) {
+    setSelectedCustomer(customer)
+    setCustomerSearch(customer.name + (customer.phone ? ` (${customer.phone})` : ''))
+    setShowCustomerDropdown(false)
+    setLoyaltyPointsToSpend(0)
+  }
+
+  function clearCustomer() {
+    setSelectedCustomer(null)
+    setCustomerSearch('')
+    setCustomerResults([])
+    setShowCustomerDropdown(false)
+    setLoyaltyPointsToSpend(0)
+  }
+
+  async function applyPromoCode() {
+    if (!promoCodeInput.trim()) return
+    setPromoValidating(true)
+    try {
+      const res = await fetch(`${config.apiUrl.replace(/\/$/, '')}/api/admin/discounts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-point-device-token': config.deviceToken,
+        },
+        body: JSON.stringify({
+          action: 'validatePromoCode',
+          promo_code: promoCodeInput.trim(),
+          order_amount: cartTotal,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) {
+        toastError(json.error || 'Промокод недействителен')
+        return
+      }
+      setAppliedPromoCode(promoCodeInput.trim())
+      if (json.data.type === 'percent') {
+        setPromoDiscountPercent(json.data.value)
+        setManualDiscountPercent('')
+      } else if (json.data.type === 'fixed') {
+        setPromoDiscountPercent(0)
+        setManualDiscountPercent('0')
+        // Use fixed amount as manual percent approximation
+        const pct = cartTotal > 0 ? (json.data.value / cartTotal) * 100 : 0
+        setManualDiscountPercent(String(Math.round(pct * 10) / 10))
+      }
+      toastSuccess(`Промокод «${promoCodeInput.trim()}» применён`)
+    } catch (err: any) {
+      toastError(err?.message || 'Ошибка проверки промокода')
+    } finally {
+      setPromoValidating(false)
+    }
+  }
+
+  function resetSaleForm() {
+    setCart([])
+    setComment('')
+    setMixedCash('')
+    setPaymentMethod('cash')
+    clearCustomer()
+    setManualDiscountPercent('')
+    setPromoCodeInput('')
+    setAppliedPromoCode(null)
+    setPromoDiscountPercent(0)
+    setShowDiscountPanel(false)
+    setLoyaltyPointsToSpend(0)
   }
 
   function addToCart(item: PointInventorySaleItem) {
@@ -191,11 +343,11 @@ export default function InventorySalesPage({
 
     const cashAmount =
       paymentMethod === 'cash'
-        ? cartTotal
+        ? finalTotal
         : paymentMethod === 'mixed'
-          ? Math.min(cartTotal, Math.max(0, parseMoney(mixedCash)))
+          ? Math.min(finalTotal, Math.max(0, parseMoney(mixedCash)))
           : 0
-    const kaspiAmount = paymentMethod === 'kaspi' ? cartTotal : paymentMethod === 'mixed' ? cartTotal - cashAmount : 0
+    const kaspiAmount = paymentMethod === 'kaspi' ? finalTotal : paymentMethod === 'mixed' ? finalTotal - cashAmount : 0
 
     if (paymentMethod === 'mixed' && (cashAmount <= 0 || kaspiAmount <= 0)) {
       toastError('Для смешанной оплаты укажите часть наличными, а остальное уйдёт в Kaspi')
@@ -220,12 +372,23 @@ export default function InventorySalesPage({
           quantity: line.quantity,
           unit_price: line.unit_price,
         })),
-      })
+      } as any)
+
+      // Record loyalty if customer selected
+      if (selectedCustomer) {
+        try {
+          await api.recordSaleWithCustomer(config, {
+            customer_id: selectedCustomer.id,
+            sale_total_amount: cartTotal,
+            loyalty_points_spent: loyaltyPointsToSpend,
+          })
+        } catch {
+          // non-critical, don't fail the sale
+        }
+      }
+
       toastSuccess('Продажа сохранена и добавлена в сменный контур')
-      setCart([])
-      setComment('')
-      setMixedCash('')
-      setPaymentMethod('cash')
+      resetSaleForm()
       await load()
     } catch (err: any) {
       toastError(err?.message || 'Не удалось провести продажу')
@@ -429,6 +592,152 @@ export default function InventorySalesPage({
                   )}
                 </div>
 
+                {/* Customer Section */}
+                <div className="space-y-2">
+                  <div className="relative">
+                    <UserCircle2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={customerSearch}
+                      onChange={(e) => {
+                        setCustomerSearch(e.target.value)
+                        if (selectedCustomer) clearCustomer()
+                      }}
+                      placeholder="Клиент (телефон или карта)"
+                      className="w-full rounded-xl border border-input bg-background py-2 pl-10 pr-9 text-sm outline-none transition focus:border-emerald-400/50"
+                    />
+                    {(customerSearch || selectedCustomer) && (
+                      <button type="button" onClick={clearCustomer} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                    {customerSearching && (
+                      <Loader2 className="absolute right-9 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+
+                  {showCustomerDropdown && !selectedCustomer && (
+                    <div className="rounded-xl border border-white/10 bg-card shadow-lg">
+                      {customerResults.map((customer) => (
+                        <button
+                          key={customer.id}
+                          type="button"
+                          onClick={() => selectCustomer(customer)}
+                          className="w-full px-3 py-2.5 text-left text-sm hover:bg-white/[0.05] first:rounded-t-xl last:rounded-b-xl"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">{customer.name}</p>
+                              <p className="text-xs text-muted-foreground">{customer.phone || customer.card_number || '—'}</p>
+                            </div>
+                            <div className="text-right text-xs">
+                              <p className="text-amber-400 font-semibold">{customer.loyalty_points} баллов</p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => { setShowCustomerDropdown(false); setCustomerResults([]) }}
+                        className="w-full px-3 py-2 text-center text-xs text-muted-foreground hover:bg-white/[0.05] rounded-b-xl"
+                      >
+                        Без клиента
+                      </button>
+                    </div>
+                  )}
+
+                  {selectedCustomer && (
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium">{selectedCustomer.name}</p>
+                          <p className="text-xs text-muted-foreground">{selectedCustomer.phone || '—'}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Баллы</p>
+                          <p className="text-amber-400 font-bold text-sm">{selectedCustomer.loyalty_points}</p>
+                        </div>
+                      </div>
+
+                      {loyaltyConfig?.is_active && selectedCustomer.loyalty_points >= (loyaltyConfig.min_points_to_redeem || 100) && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <Star className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                          <input
+                            type="number"
+                            value={loyaltyPointsToSpend || ''}
+                            onChange={(e) => {
+                              const val = Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, maxRedeemablePoints))
+                              setLoyaltyPointsToSpend(val)
+                            }}
+                            placeholder={`Баллами (макс. ${maxRedeemablePoints})`}
+                            className="w-full rounded-lg border border-input bg-background px-2 py-1 text-xs outline-none focus:border-amber-400/50"
+                            min="0"
+                            max={maxRedeemablePoints}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Discount Section */}
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDiscountPanel(!showDiscountPanel)}
+                    className="flex w-full items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm hover:bg-white/[0.05]"
+                  >
+                    <Tag className="h-4 w-4 text-blue-400" />
+                    <span className="flex-1 text-left">Скидка</span>
+                    {effectiveDiscountPercent > 0 && (
+                      <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300 font-medium">
+                        -{effectiveDiscountPercent}%
+                      </span>
+                    )}
+                  </button>
+
+                  {showDiscountPanel && (
+                    <div className="rounded-xl border border-white/10 bg-card p-3 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Percent className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <input
+                          type="number"
+                          value={manualDiscountPercent}
+                          onChange={(e) => {
+                            setManualDiscountPercent(e.target.value)
+                            setAppliedPromoCode(null)
+                            setPromoDiscountPercent(0)
+                          }}
+                          placeholder="Скидка вручную, %"
+                          className="w-full rounded-lg border border-input bg-background px-2 py-1 text-sm outline-none focus:border-blue-400/50"
+                          min="0"
+                          max="99"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={promoCodeInput}
+                          onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                          placeholder="Промокод"
+                          className="flex-1 rounded-lg border border-input bg-background px-2 py-1 text-sm font-mono outline-none focus:border-blue-400/50"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void applyPromoCode()}
+                          disabled={promoValidating || !promoCodeInput.trim()}
+                          className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-300 disabled:opacity-50 hover:bg-blue-500/20"
+                        >
+                          {promoValidating ? '...' : 'Применить'}
+                        </button>
+                      </div>
+                      {appliedPromoCode && (
+                        <p className="text-xs text-emerald-400">✓ Промокод «{appliedPromoCode}» применён</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-3 gap-2">
                   {(['cash', 'kaspi', 'mixed'] as const).map((method) => (
                     <button
@@ -454,7 +763,7 @@ export default function InventorySalesPage({
                     </div>
                     <div className="space-y-1.5">
                       <Label>Kaspi</Label>
-                      <Input value={String(Math.max(0, cartTotal - Math.max(0, parseMoney(mixedCash))))} readOnly />
+                      <Input value={String(Math.max(0, finalTotal - Math.max(0, parseMoney(mixedCash))))} readOnly />
                     </div>
                   </div>
                 ) : null}
@@ -480,10 +789,30 @@ export default function InventorySalesPage({
                       <span>Штук</span>
                       <span>{cartDetailed.reduce((sum, line) => sum + line.quantity, 0)}</span>
                     </div>
+                    {(discountAmount > 0 || loyaltyDiscountAmount > 0) && (
+                      <div className="mt-3 space-y-1.5 border-t border-white/10 pt-3">
+                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                          <span>Подытог</span>
+                          <span>{formatMoney(cartTotal)}</span>
+                        </div>
+                        {discountAmount > 0 && (
+                          <div className="flex items-center justify-between text-sm text-blue-300">
+                            <span>Скидка (-{effectiveDiscountPercent}%)</span>
+                            <span>-{formatMoney(discountAmount)}</span>
+                          </div>
+                        )}
+                        {loyaltyDiscountAmount > 0 && (
+                          <div className="flex items-center justify-between text-sm text-amber-300">
+                            <span>Баллами</span>
+                            <span>-{formatMoney(loyaltyDiscountAmount)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="mt-4 flex items-end justify-between">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итог продажи</p>
-                        <p className="mt-1 text-3xl font-semibold text-foreground">{formatMoney(cartTotal)}</p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итого</p>
+                        <p className="mt-1 text-3xl font-semibold text-foreground">{formatMoney(finalTotal)}</p>
                       </div>
                       <Badge variant="secondary">{paymentBadge(paymentMethod)}</Badge>
                     </div>
