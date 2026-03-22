@@ -151,6 +151,7 @@ export async function createInventoryItem(
     unit?: string | null
     notes?: string | null
     item_type?: string
+    low_stock_threshold?: number | null
   },
 ) {
   const { data, error } = await supabase
@@ -165,6 +166,7 @@ export async function createInventoryItem(
         unit: payload.unit?.trim() || 'шт',
         notes: payload.notes?.trim() || null,
         item_type: payload.item_type || 'product',
+        low_stock_threshold: payload.low_stock_threshold ?? null,
       },
     ])
     .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, created_at, updated_at, category:category_id(id, name)')
@@ -270,6 +272,7 @@ export async function updateInventoryItem(
     unit?: string | null
     notes?: string | null
     item_type?: string
+    low_stock_threshold?: number | null
   },
 ) {
   const { data, error } = await supabase
@@ -284,6 +287,7 @@ export async function updateInventoryItem(
       notes: payload.notes?.trim() || null,
       item_type: payload.item_type || 'product',
       updated_at: new Date().toISOString(),
+      low_stock_threshold: payload.low_stock_threshold ?? null,
     })
     .eq('id', id)
     .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, created_at, updated_at, category:category_id(id, name)')

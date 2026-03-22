@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createPointInventorySale } from '@/lib/server/repositories/inventory'
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { checkAndNotifyLowStock } from '@/lib/server/low-stock-notifier'
 
 type SaleBody = {
   action: 'createSale'
@@ -363,6 +364,10 @@ export async function POST(request: Request) {
         item_count: items.length,
       },
     })
+
+    // Trigger low stock check in background (don't await)
+    const soldItemIds = items.map((i) => i.item_id)
+    checkAndNotifyLowStock(soldItemIds, location.id).catch(() => null)
 
     return json({
       ok: true,

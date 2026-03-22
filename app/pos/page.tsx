@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Search,
   ShoppingCart,
+  Sparkles,
   Star,
   Tag,
   User,
@@ -322,6 +323,13 @@ export default function PosPage() {
   const [submitting, setSubmitting] = useState(false)
   const [saleError, setSaleError] = useState<string | null>(null)
 
+  // AI Insights
+  const [showAiHint, setShowAiHint] = useState(false)
+  const [aiHint, setAiHint] = useState<string | null>(null)
+  const [aiHintLoading, setAiHintLoading] = useState(false)
+  const [aiStats, setAiStats] = useState<{ today: number; yesterday: number; change: number } | null>(null)
+  const aiHintFetchedRef = useRef(false)
+
   // ── Bootstrap ──────────────────────────────────────────────────────────────
 
   const loadBootstrap = useCallback(async () => {
@@ -607,6 +615,33 @@ export default function PosPage() {
     }
   }
 
+  const fetchAiHint = async () => {
+    if (!selectedCompanyId) return
+    setAiHintLoading(true)
+    try {
+      const params = new URLSearchParams({ company_id: selectedCompanyId })
+      if (selectedLocationId) params.set('location_id', selectedLocationId)
+      const res = await fetch(`/api/pos/ai-hint?${params.toString()}`)
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Ошибка')
+      setAiHint(j.hint || null)
+      setAiStats({ today: j.today_total, yesterday: j.yesterday_total, change: j.change_percent })
+    } catch {
+      setAiHint('Не удалось получить AI подсказку.')
+    } finally {
+      setAiHintLoading(false)
+    }
+  }
+
+  const handleAiHintToggle = () => {
+    const nextOpen = !showAiHint
+    setShowAiHint(nextOpen)
+    if (nextOpen && !aiHintFetchedRef.current) {
+      aiHintFetchedRef.current = true
+      void fetchAiHint()
+    }
+  }
+
   const handleNewSale = () => {
     setCart([])
     setSelectedCustomer(null)
@@ -715,6 +750,14 @@ export default function PosPage() {
           </select>
 
           <button
+            onClick={handleAiHintToggle}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors ${showAiHint ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30' : 'text-gray-400 hover:bg-white/10 hover:text-white'}`}
+            title="AI подсказки"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span className="hidden sm:inline text-xs">AI</span>
+          </button>
+          <button
             onClick={loadBootstrap}
             className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
             title="Обновить данные"
@@ -723,6 +766,51 @@ export default function PosPage() {
           </button>
         </div>
       </header>
+
+      {/* ── AI Insights Panel ──────────────────────────────────────────────── */}
+      {showAiHint && (
+        <div className="shrink-0 border-b border-amber-500/20 bg-amber-500/5 px-4 py-3">
+          {aiHintLoading ? (
+            <div className="flex items-center gap-2 text-amber-300 text-sm">
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              Получаю AI подсказки...
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+              {aiStats && (
+                <div className="flex items-center gap-4 shrink-0 text-sm">
+                  <div>
+                    <span className="text-gray-400 text-xs">Сегодня</span>
+                    <p className="font-bold text-white">{aiStats.today.toLocaleString('ru-RU')} ₸</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs">Вчера</span>
+                    <p className="font-semibold text-gray-300">{aiStats.yesterday.toLocaleString('ru-RU')} ₸</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs">Изменение</span>
+                    <p className={`font-semibold text-sm ${aiStats.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {aiStats.change >= 0 ? '+' : ''}{aiStats.change}%
+                    </p>
+                  </div>
+                </div>
+              )}
+              {aiHint && (
+                <div className="flex-1 text-xs text-amber-200/80 whitespace-pre-line leading-relaxed">
+                  {aiHint}
+                </div>
+              )}
+              <button
+                onClick={() => { aiHintFetchedRef.current = false; void fetchAiHint() }}
+                className="shrink-0 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs text-amber-300 border border-amber-500/30 hover:bg-amber-500/10 transition-colors"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Обновить
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Main content ────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
