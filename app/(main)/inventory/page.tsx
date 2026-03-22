@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { usePathname } from 'next/navigation'
 import {
   ArchiveX,
   Boxes,
@@ -294,8 +293,7 @@ function createDecisionDraft(request: InventoryRequest): DecisionDraft {
   }
 }
 
-export default function InventoryPage() {
-  const pathname = usePathname()
+export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?: InventoryView }) {
   const [data, setData] = useState<InventoryResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -336,16 +334,7 @@ export default function InventoryPage() {
   const [stocktakeComment, setStocktakeComment] = useState('')
   const [stocktakeLines, setStocktakeLines] = useState<StocktakeLine[]>([])
 
-  const inventoryView = useMemo<InventoryView>(() => {
-    if (pathname.endsWith('/catalog')) return 'catalog'
-    if (pathname.endsWith('/receipts')) return 'receipts'
-    if (pathname.endsWith('/requests')) return 'requests'
-    if (pathname.endsWith('/analytics')) return 'analytics'
-    if (pathname.endsWith('/writeoffs')) return 'writeoffs'
-    if (pathname.endsWith('/stocktakes')) return 'stocktakes'
-    if (pathname.endsWith('/movements')) return 'movements'
-    return 'overview'
-  }, [pathname])
+  const inventoryView = forcedView
 
   async function loadData() {
     setLoading(true)
@@ -1988,4 +1977,8 @@ function PointMetricCard({
       </div>
     </div>
   )
+}
+
+export default function InventoryPage() {
+  return <InventoryPageContent />
 }
