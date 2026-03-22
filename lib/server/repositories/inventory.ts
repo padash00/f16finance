@@ -150,6 +150,7 @@ export async function createInventoryItem(
     default_purchase_price?: number
     unit?: string | null
     notes?: string | null
+    item_type?: string
   },
 ) {
   const { data, error } = await supabase
@@ -163,11 +164,82 @@ export async function createInventoryItem(
         default_purchase_price: payload.default_purchase_price || 0,
         unit: payload.unit?.trim() || 'шт',
         notes: payload.notes?.trim() || null,
+        item_type: payload.item_type || 'product',
       },
     ])
     .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, created_at, updated_at, category:category_id(id, name)')
     .single()
 
+  if (error) throw error
+  return mapNestedRow(data)
+}
+
+export async function updateInventoryCategory(
+  supabase: AnySupabase,
+  id: string,
+  payload: { name: string; description?: string | null },
+) {
+  const { data, error } = await supabase
+    .from('inventory_categories')
+    .update({ name: payload.name.trim(), description: payload.description?.trim() || null, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateInventorySupplier(
+  supabase: AnySupabase,
+  id: string,
+  payload: { name: string; contact_name?: string | null; phone?: string | null; notes?: string | null },
+) {
+  const { data, error } = await supabase
+    .from('inventory_suppliers')
+    .update({
+      name: payload.name.trim(),
+      contact_name: payload.contact_name?.trim() || null,
+      phone: payload.phone?.trim() || null,
+      notes: payload.notes?.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateInventoryItem(
+  supabase: AnySupabase,
+  id: string,
+  payload: {
+    name: string
+    barcode: string
+    category_id?: string | null
+    sale_price: number
+    default_purchase_price?: number
+    unit?: string | null
+    notes?: string | null
+    item_type?: string
+  },
+) {
+  const { data, error } = await supabase
+    .from('inventory_items')
+    .update({
+      name: payload.name.trim(),
+      barcode: payload.barcode.trim(),
+      category_id: payload.category_id || null,
+      sale_price: payload.sale_price,
+      default_purchase_price: payload.default_purchase_price || 0,
+      unit: payload.unit?.trim() || 'шт',
+      notes: payload.notes?.trim() || null,
+      item_type: payload.item_type || 'product',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, created_at, updated_at, category:category_id(id, name)')
+    .single()
   if (error) throw error
   return mapNestedRow(data)
 }
@@ -392,4 +464,146 @@ function mapNestedRow<T>(row: T): T {
 
 function mapNestedRows<T>(rows: T[]): T[] {
   return rows.map((row) => mapNestedRow(row))
+}
+
+export async function fetchConsumableDashboard(supabase: AnySupabase) {
+  const [
+    { data: items, error: itemsError },
+    { data: norms, error: normsError },
+    { data: limits, error: limitsError },
+    { data: balances, error: balancesError },
+    { data: locations, error: locationsError },
+    { data: companies, error: companiesError },
+  ] = await Promise.all([
+    supabase
+      .from('inventory_items')
+      .select('id, name, barcode, unit, category_id, category:category_id(id, name)')
+      .eq('item_type', 'consumable')
+      .eq('is_active', true)
+      .order('name', { ascending: true }),
+    supabase
+      .from('inventory_consumption_norms')
+      .select('id, item_id, location_id, monthly_qty, alert_days'),
+    supabase
+      .from('inventory_point_limits')
+      .select('id, item_id, company_id, monthly_limit_qty'),
+    supabase
+      .from('inventory_balances')
+      .select('location_id, item_id, quantity, item:item_id(id, name), location:location_id(id, name, location_type, company_id)')
+      .gt('quantity', 0),
+    supabase
+      .from('inventory_locations')
+      .select('id, name, location_type, company_id, company:company_id(id, name, code)')
+      .eq('is_active', true),
+    supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
+  ])
+
+  if (itemsError) throw itemsError
+  if (normsError) throw normsError
+  if (limitsError) throw limitsError
+  if (balancesError) throw balancesError
+  if (locationsError) throw locationsError
+  if (companiesError) throw companiesError
+
+  return {
+    items: mapNestedRows(items || []),
+    norms: norms || [],
+    limits: limits || [],
+    balances: mapNestedRows(balances || []),
+    locations: mapNestedRows(locations || []),
+    companies: companies || [],
+  }
+}
+
+export async function upsertConsumptionNorm(
+  supabase: AnySupabase,
+  payload: { item_id: string; location_id: string; monthly_qty: number; alert_days?: number },
+) {
+  const { data, error } = await supabase
+    .from('inventory_consumption_norms')
+    .upsert(
+      [{
+        item_id: payload.item_id,
+        location_id: payload.location_id,
+        monthly_qty: payload.monthly_qty,
+        alert_days: payload.alert_days || 14,
+        updated_at: new Date().toISOString(),
+      }],
+      { onConflict: 'item_id,location_id' },
+    )
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function upsertPointLimit(
+  supabase: AnySupabase,
+  payload: { item_id: string; company_id: string; monthly_limit_qty: number },
+) {
+  const { data, error } = await supabase
+    .from('inventory_point_limits')
+    .upsert(
+      [{
+        item_id: payload.item_id,
+        company_id: payload.company_id,
+        monthly_limit_qty: payload.monthly_limit_qty,
+        updated_at: new Date().toISOString(),
+      }],
+      { onConflict: 'item_id,company_id' },
+    )
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function issueInventoryRequest(
+  supabase: AnySupabase,
+  requestId: string,
+  issuedBy: string | null,
+) {
+  const { data, error } = await supabase
+    .from('inventory_requests')
+    .update({ status: 'issued', issued_at: new Date().toISOString(), issued_by: issuedBy })
+    .eq('id', requestId)
+    .in('status', ['approved_full', 'approved_partial'])
+    .select('id, status')
+    .single()
+  if (error) throw error
+  if (!data) throw new Error('request-not-found-or-wrong-status')
+  return data
+}
+
+export async function receiveInventoryRequest(
+  supabase: AnySupabase,
+  requestId: string,
+  payload: { received_qty_confirmed: number; received_photo_url?: string | null },
+) {
+  const { data: request, error: fetchError } = await supabase
+    .from('inventory_requests')
+    .select('id, status, items:inventory_request_items(id, approved_qty)')
+    .eq('id', requestId)
+    .eq('status', 'issued')
+    .single()
+  if (fetchError) throw fetchError
+  if (!request) throw new Error('request-not-found-or-not-issued')
+
+  const totalApproved = (request.items || []).reduce((sum: number, item: any) => sum + Number(item.approved_qty || 0), 0)
+  const confirmed = Number(payload.received_qty_confirmed || 0)
+  const newStatus = confirmed < totalApproved * 0.95 ? 'disputed' : 'received'
+
+  const { data, error } = await supabase
+    .from('inventory_requests')
+    .update({
+      status: newStatus,
+      received_at: new Date().toISOString(),
+      received_qty_confirmed: confirmed,
+      received_photo_url: payload.received_photo_url || null,
+    })
+    .eq('id', requestId)
+    .select('id, status')
+    .single()
+  if (error) throw error
+  return data
 }

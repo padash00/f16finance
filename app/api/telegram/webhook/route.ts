@@ -4,6 +4,23 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
 import {
+  buildInvoiceConfirmationText,
+  downloadTelegramFileAsBase64,
+  matchInvoiceItems,
+  parseInvoiceWithGPT,
+} from '@/lib/server/invoice-parser'
+import {
+  cancelInvoiceSession,
+  confirmInvoiceSession,
+  createInvoiceSession,
+  fetchFirstWarehouseLocation,
+  fetchInventoryItemsForMatching,
+  fetchInvoiceNameMappings,
+  fetchInvoiceSession,
+  upsertInvoiceNameMappings,
+} from '@/lib/server/repositories/invoice'
+import { postInventoryReceipt } from '@/lib/server/repositories/inventory'
+import {
   confirmShiftPublicationWeekByResponse,
   createShiftIssueDraft,
   parseShiftIssuePayload,
@@ -202,6 +219,9 @@ function buildHelpText(user: BotUser): string {
       '/month — последние 30 дней',
       '/cashflow — баланс и движение денег',
       '/compare — сравнение этой и прошлой недели',
+      '',
+      '<b>📦 Склад:</b>',
+      'Отправьте фото накладной — бот создаст приёмку автоматически',
     )
   }
 
@@ -544,6 +564,14 @@ async function handleCashFlow(chatId: number) {
 type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
 type TaskResponse = 'accept' | 'need_info' | 'blocked' | 'already_done' | 'complete'
 
+type TelegramPhotoSize = {
+  file_id: string
+  file_unique_id: string
+  width: number
+  height: number
+  file_size?: number
+}
+
 type TelegramUpdate = {
   callback_query?: {
     id: string
@@ -553,6 +581,7 @@ type TelegramUpdate = {
   }
   message?: {
     text?: string
+    photo?: TelegramPhotoSize[]
     message_id?: number
     chat?: { id?: number | string }
     from?: { id?: number; first_name?: string; username?: string }
@@ -685,6 +714,195 @@ function parseTextResponse(text: string): { taskNumber: number; response: TaskRe
   return null
 }
 
+// ─── Invoice photo handler ────────────────────────────────────────────────────
+
+async function handleInvoicePhoto(chatId: number, messageId: number, telegramUserId: string, fileId: string) {
+  const supabase = createAdminSupabaseClient()
+  const token = requiredEnv('TELEGRAM_BOT_TOKEN')
+
+  // 1. Acknowledge — let user know we're processing
+  await sendTelegramText(chatId, '⏳ Обрабатываю накладную, подождите...')
+
+  // 2. Get file path from Telegram
+  const fileRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`)
+  const fileData = await fileRes.json()
+  const filePath: string = fileData?.result?.file_path
+  if (!filePath) throw new Error('Не удалось получить файл из Telegram')
+
+  // 3. Download and encode photo
+  const imageDataUrl = await downloadTelegramFileAsBase64(filePath)
+
+  // 4. Fetch inventory items and learned mappings in parallel
+  const [inventoryItems, mappings, warehouse] = await Promise.all([
+    fetchInventoryItemsForMatching(supabase),
+    fetchInvoiceNameMappings(supabase),
+    fetchFirstWarehouseLocation(supabase),
+  ])
+
+  if (!warehouse) {
+    await sendTelegramText(chatId, '⚠️ Нет активных складов в системе. Создайте склад в разделе «Магазин».')
+    return
+  }
+
+  if (inventoryItems.length === 0) {
+    await sendTelegramText(chatId, '⚠️ Каталог товаров пуст. Добавьте товары в разделе «Магазин → Каталог».')
+    return
+  }
+
+  // 5. Parse with GPT-4o
+  const parsed = await parseInvoiceWithGPT(imageDataUrl, inventoryItems)
+
+  if (!parsed.items || parsed.items.length === 0) {
+    await sendTelegramText(chatId, '❌ Не удалось распознать товары на фото. Убедитесь, что фото чёткое и содержит накладную или чек.')
+    return
+  }
+
+  // 6. Match items to inventory
+  const matchedItems = matchInvoiceItems(parsed.items, inventoryItems, mappings)
+  const hasAnyMatch = matchedItems.some((it) => it.matched_item_id)
+
+  // 7. Save session to DB
+  const sessionId = await createInvoiceSession(supabase, {
+    telegram_user_id: telegramUserId,
+    chat_id: String(chatId),
+    message_id: messageId,
+    parsed_data: { invoice: parsed, items: matchedItems },
+    warehouse_location_id: warehouse.id,
+  })
+
+  // 8. Build confirmation message
+  const confirmText = buildInvoiceConfirmationText(matchedItems, parsed, warehouse.name)
+
+  // 9. Send with inline keyboard
+  const keyboard = hasAnyMatch
+    ? {
+        inline_keyboard: [
+          [
+            { text: '✅ Создать приёмку', callback_data: `invoice:${sessionId}:confirm` },
+            { text: '❌ Отмена', callback_data: `invoice:${sessionId}:cancel` },
+          ],
+        ],
+      }
+    : {
+        inline_keyboard: [
+          [{ text: '❌ Отмена', callback_data: `invoice:${sessionId}:cancel` }],
+        ],
+      }
+
+  await callTelegram('sendMessage', {
+    chat_id: String(chatId),
+    text: confirmText,
+    parse_mode: 'HTML',
+    reply_markup: keyboard,
+  })
+}
+
+async function handleInvoiceConfirm(
+  callbackQueryId: string,
+  chatId: string | number,
+  messageId: number | undefined,
+  telegramUserId: string,
+  sessionId: string,
+) {
+  const supabase = createAdminSupabaseClient()
+
+  const session = await fetchInvoiceSession(supabase, sessionId)
+  if (!session) {
+    await answerCallbackQuery(callbackQueryId, 'Сессия не найдена или истекла', true)
+    return
+  }
+
+  if (session.status !== 'pending') {
+    await answerCallbackQuery(callbackQueryId, session.status === 'confirmed' ? 'Приёмка уже создана' : 'Операция отменена', true)
+    return
+  }
+
+  if (session.telegram_user_id !== telegramUserId) {
+    await answerCallbackQuery(callbackQueryId, 'Нет доступа к этой операции', true)
+    return
+  }
+
+  const now = new Date()
+  if (new Date(session.expires_at) < now) {
+    await answerCallbackQuery(callbackQueryId, 'Сессия истекла. Отправьте накладную заново.', true)
+    await cancelInvoiceSession(supabase, sessionId)
+    return
+  }
+
+  if (!session.warehouse_location_id) {
+    await answerCallbackQuery(callbackQueryId, 'Склад не найден', true)
+    return
+  }
+
+  const sessionData = session.parsed_data as { invoice: any; items: any[] }
+  const matchedItems = (sessionData.items || []).filter((it: any) => it.matched_item_id)
+
+  if (matchedItems.length === 0) {
+    await answerCallbackQuery(callbackQueryId, 'Нет сопоставленных товаров для приёмки', true)
+    return
+  }
+
+  await answerCallbackQuery(callbackQueryId, 'Создаю приёмку...')
+
+  const today = todayISO()
+  const receipt = await postInventoryReceipt(supabase, {
+    location_id: session.warehouse_location_id,
+    received_at: sessionData.invoice?.invoice_date || today,
+    supplier_id: null,
+    invoice_number: sessionData.invoice?.invoice_number || null,
+    comment: `Приёмка из Telegram (накладная ${sessionData.invoice?.supplier_name || 'неизв.'})`,
+    created_by: null,
+    items: matchedItems.map((it: any) => ({
+      item_id: it.matched_item_id,
+      quantity: it.quantity,
+      unit_cost: it.unit_cost || 0,
+      comment: it.invoice_name !== it.matched_item_name ? `Из накладной: «${it.invoice_name}»` : null,
+    })),
+  })
+
+  // Save learned name mappings for matched items
+  const newMappings = matchedItems
+    .filter((it: any) => it.match_source !== 'mapping' && it.invoice_name && it.matched_item_id)
+    .map((it: any) => ({ invoice_name: it.invoice_name, item_id: it.matched_item_id }))
+  await upsertInvoiceNameMappings(supabase, newMappings).catch(() => null)
+
+  await confirmInvoiceSession(supabase, sessionId, receipt?.receipt_id || receipt?.id || '')
+
+  // Update the message to remove buttons
+  if (messageId) await clearCallbackButtons(chatId, messageId).catch(() => null)
+
+  const totalAmount = matchedItems.reduce((sum: number, it: any) => sum + (it.total_cost || it.quantity * it.unit_cost), 0)
+  await sendTelegramText(
+    chatId,
+    `<b>✅ Приёмка создана!</b>\n\n` +
+      `Принято товаров: <b>${matchedItems.length}</b>\n` +
+      `Сумма: <b>${totalAmount.toLocaleString('ru-RU')} ₸</b>\n` +
+      `Склад: <b>${session.warehouse_location_id}</b>\n\n` +
+      `<i>Остатки обновлены. Проверьте раздел «Магазин → Приёмки» на сайте.</i>`,
+  )
+}
+
+async function handleInvoiceCancel(
+  callbackQueryId: string,
+  chatId: string | number,
+  messageId: number | undefined,
+  telegramUserId: string,
+  sessionId: string,
+) {
+  const supabase = createAdminSupabaseClient()
+
+  const session = await fetchInvoiceSession(supabase, sessionId)
+  if (session?.telegram_user_id !== telegramUserId) {
+    await answerCallbackQuery(callbackQueryId, 'Нет доступа', true)
+    return
+  }
+
+  await cancelInvoiceSession(supabase, sessionId)
+  await answerCallbackQuery(callbackQueryId, 'Отменено')
+  if (messageId) await clearCallbackButtons(chatId, messageId).catch(() => null)
+  await sendTelegramText(chatId, '❌ Создание приёмки отменено.')
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 export const runtime = 'nodejs'
@@ -744,6 +962,23 @@ export async function POST(req: Request) {
         return json({ ok: true })
       }
 
+      // Invoice confirm / cancel
+      const invoiceMatch = callbackData.match(/^invoice:([0-9a-f-]+):(confirm|cancel)$/i)
+      if (invoiceMatch) {
+        const sessionId = invoiceMatch[1]
+        const action = invoiceMatch[2]
+        try {
+          if (action === 'confirm') {
+            await handleInvoiceConfirm(callbackQueryId, chatId ?? 0, messageId, telegramUserId, sessionId)
+          } else {
+            await handleInvoiceCancel(callbackQueryId, chatId ?? 0, messageId, telegramUserId, sessionId)
+          }
+        } catch (error: any) {
+          if (chatId) await sendTelegramText(chatId, `❌ Ошибка: ${error?.message || 'Не удалось обработать запрос'}`).catch(() => null)
+        }
+        return json({ ok: true })
+      }
+
       const taskMatch = callbackData.match(/^task:([0-9a-f-]+):(accept|need_info|blocked|already_done|complete)$/i)
       if (!taskMatch) {
         await answerCallbackQuery(callbackQueryId, 'Неизвестное действие', true)
@@ -756,6 +991,30 @@ export async function POST(req: Request) {
         if (chatId) await sendTelegramText(chatId, `<b>Ответ по задаче #${result.taskNumber} принят</b>\n\n<b>${result.responseLabel}</b>\nНовый статус: <b>${result.statusLabel}</b>`)
       } catch (error: any) {
         if (chatId) await sendTelegramText(chatId, error?.message || 'Не удалось обработать ответ по задаче.').catch(() => null)
+      }
+      return json({ ok: true })
+    }
+
+    // ── Photo messages (invoice scanning) ──
+    if (update.message?.photo && update.message.chat?.id) {
+      const chatId = update.message.chat.id
+      const telegramUserId = String(update.message.from?.id || chatId)
+      const messageId = update.message.message_id ?? 0
+
+      const botUser = await identifyBotUser(telegramUserId)
+      if (!canUseFinance(botUser.role)) {
+        await sendTelegramText(chatId, '⛔ Приёмка накладных доступна только руководителям и администраторам.')
+        return json({ ok: true })
+      }
+
+      // Take the largest photo (last in array)
+      const photos = update.message.photo
+      const bestPhoto = photos[photos.length - 1]
+
+      try {
+        await handleInvoicePhoto(Number(chatId), messageId, telegramUserId, bestPhoto.file_id)
+      } catch (error: any) {
+        await sendTelegramText(chatId, `❌ Ошибка при обработке накладной: ${error?.message || 'Неизвестная ошибка'}`).catch(() => null)
       }
       return json({ ok: true })
     }

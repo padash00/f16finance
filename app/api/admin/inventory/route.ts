@@ -11,6 +11,9 @@ import {
   postInventoryStocktake,
   postInventoryReceipt,
   postInventoryWriteoff,
+  updateInventoryCategory,
+  updateInventoryItem,
+  updateInventorySupplier,
 } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -43,6 +46,7 @@ type ItemBody = {
     default_purchase_price?: number | null
     unit?: string | null
     notes?: string | null
+    item_type?: string | null
   }
 }
 
@@ -118,6 +122,33 @@ type StocktakeBody = {
   }
 }
 
+type UpdateCategoryBody = {
+  action: 'updateCategory'
+  id: string
+  payload: { name: string; description?: string | null }
+}
+
+type UpdateSupplierBody = {
+  action: 'updateSupplier'
+  id: string
+  payload: { name: string; contact_name?: string | null; phone?: string | null; notes?: string | null }
+}
+
+type UpdateItemBody = {
+  action: 'updateItem'
+  id: string
+  payload: {
+    name: string
+    barcode: string
+    category_id?: string | null
+    sale_price?: number | null
+    default_purchase_price?: number | null
+    unit?: string | null
+    notes?: string | null
+    item_type?: string | null
+  }
+}
+
 type Body =
   | CategoryBody
   | SupplierBody
@@ -127,6 +158,9 @@ type Body =
   | DecideRequestBody
   | WriteoffBody
   | StocktakeBody
+  | UpdateCategoryBody
+  | UpdateSupplierBody
+  | UpdateItemBody
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -237,6 +271,7 @@ export async function POST(request: Request) {
         default_purchase_price: defaultPurchasePrice,
         unit: body.payload?.unit || 'шт',
         notes: body.payload?.notes || null,
+        item_type: String(body.payload?.item_type || 'product') === 'consumable' ? 'consumable' : 'product',
       })
 
       await writeAuditLog(supabase as any, {
@@ -459,6 +494,57 @@ export async function POST(request: Request) {
       })
 
       return json({ ok: true, data: stocktake })
+    }
+
+    if (body.action === 'updateCategory') {
+      const id = String((body as UpdateCategoryBody).id || '').trim()
+      const name = String((body as UpdateCategoryBody).payload?.name || '').trim()
+      if (!id) return json({ error: 'category-id-required' }, 400)
+      if (!name) return json({ error: 'category-name-required' }, 400)
+      const category = await updateInventoryCategory(supabase as any, id, {
+        name,
+        description: (body as UpdateCategoryBody).payload?.description || null,
+      })
+      await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-category', entityId: id, action: 'update', payload: category })
+      return json({ ok: true, data: category })
+    }
+
+    if (body.action === 'updateSupplier') {
+      const id = String((body as UpdateSupplierBody).id || '').trim()
+      const name = String((body as UpdateSupplierBody).payload?.name || '').trim()
+      if (!id) return json({ error: 'supplier-id-required' }, 400)
+      if (!name) return json({ error: 'supplier-name-required' }, 400)
+      const supplier = await updateInventorySupplier(supabase as any, id, {
+        name,
+        contact_name: (body as UpdateSupplierBody).payload?.contact_name || null,
+        phone: (body as UpdateSupplierBody).payload?.phone || null,
+        notes: (body as UpdateSupplierBody).payload?.notes || null,
+      })
+      await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-supplier', entityId: id, action: 'update', payload: supplier })
+      return json({ ok: true, data: supplier })
+    }
+
+    if (body.action === 'updateItem') {
+      const id = String((body as UpdateItemBody).id || '').trim()
+      const name = String((body as UpdateItemBody).payload?.name || '').trim()
+      const barcode = String((body as UpdateItemBody).payload?.barcode || '').trim()
+      const salePrice = normalizeMoney((body as UpdateItemBody).payload?.sale_price)
+      const defaultPurchasePrice = normalizeMoney((body as UpdateItemBody).payload?.default_purchase_price)
+      if (!id) return json({ error: 'item-id-required' }, 400)
+      if (!name) return json({ error: 'item-name-required' }, 400)
+      if (!barcode) return json({ error: 'item-barcode-required' }, 400)
+      const item = await updateInventoryItem(supabase as any, id, {
+        name,
+        barcode,
+        category_id: (body as UpdateItemBody).payload?.category_id || null,
+        sale_price: salePrice,
+        default_purchase_price: defaultPurchasePrice,
+        unit: (body as UpdateItemBody).payload?.unit || 'шт',
+        notes: (body as UpdateItemBody).payload?.notes || null,
+        item_type: String((body as UpdateItemBody).payload?.item_type || 'product') === 'consumable' ? 'consumable' : 'product',
+      })
+      await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-item', entityId: id, action: 'update', payload: item })
+      return json({ ok: true, data: item })
     }
 
     return json({ error: 'unsupported-action' }, 400)

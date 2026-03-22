@@ -5,22 +5,28 @@ import {
   ArchiveX,
   Boxes,
   Building2,
+  Check,
+  ChevronsUpDown,
   ClipboardCheck,
   ClipboardList,
   History,
   Loader2,
   PackagePlus,
+  Pencil,
   RefreshCw,
   ScanSearch,
   Store,
   Tag,
   Truck,
+  X,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { formatMoney } from '@/lib/core/format'
@@ -35,7 +41,9 @@ type InventoryItem = {
   sale_price: number
   default_purchase_price: number
   unit: string
+  notes: string | null
   is_active: boolean
+  item_type: string
   category?: { id: string; name: string } | null
 }
 type InventoryLocation = {
@@ -277,6 +285,9 @@ function requestStatusLabel(status: string) {
   if (status === 'approved_full') return 'Одобрена полностью'
   if (status === 'approved_partial') return 'Одобрена частично'
   if (status === 'rejected') return 'Отклонена'
+  if (status === 'issued') return 'Выдана'
+  if (status === 'received') return 'Получена'
+  if (status === 'disputed') return 'Спор'
   return 'Новая'
 }
 
@@ -284,6 +295,9 @@ function requestStatusClass(status: string) {
   if (status === 'approved_full') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
   if (status === 'approved_partial') return 'border-amber-500/30 bg-amber-500/10 text-amber-200'
   if (status === 'rejected') return 'border-red-500/30 bg-red-500/10 text-red-200'
+  if (status === 'issued') return 'border-purple-500/30 bg-purple-500/10 text-purple-200'
+  if (status === 'received') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+  if (status === 'disputed') return 'border-red-500/30 bg-red-500/10 text-red-200'
   return 'border-blue-500/30 bg-blue-500/10 text-blue-200'
 }
 
@@ -316,6 +330,59 @@ function createDecisionDraft(request: InventoryRequest): DecisionDraft {
   }
 }
 
+function ItemCombobox({
+  items,
+  value,
+  onChange,
+  placeholder = 'Выберите товар',
+}: {
+  items: InventoryItem[]
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const selected = items.find((item) => item.id === value)
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase()
+    if (!q) return items
+    return items.filter((item) => item.name.toLowerCase().includes(q) || item.barcode.includes(q))
+  }, [items, search])
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" className="h-9 w-full justify-between font-normal">
+          <span className="truncate">{selected ? selected.name : placeholder}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Поиск по названию или штрихкоду..." value={search} onValueChange={setSearch} />
+          <CommandList>
+            <CommandEmpty>Товар не найден</CommandEmpty>
+            <CommandGroup>
+              {filtered.map((item) => (
+                <CommandItem
+                  key={item.id}
+                  value={item.id}
+                  onSelect={() => { onChange(item.id); setSearch(''); setOpen(false) }}
+                >
+                  <Check className={`mr-2 h-4 w-4 ${value === item.id ? 'opacity-100' : 'opacity-0'}`} />
+                  <span className="flex-1 truncate">{item.name}</span>
+                  <span className="ml-2 shrink-0 text-xs text-muted-foreground">{item.barcode}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?: InventoryView }) {
   const [data, setData] = useState<InventoryResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
@@ -323,6 +390,18 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [decisionDrafts, setDecisionDrafts] = useState<Record<string, DecisionDraft>>({})
+
+  // Edit state
+  const [editingCategory, setEditingCategory] = useState<InventoryCategory | null>(null)
+  const [editingSupplier, setEditingSupplier] = useState<InventorySupplier | null>(null)
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
+
+  // Pagination
+  const [receiptsPage, setReceiptsPage] = useState(5)
+  const [requestsPage, setRequestsPage] = useState(5)
+  const [writeoffsPage, setWriteoffsPage] = useState(5)
+  const [stocktakesPage, setStocktakesPage] = useState(5)
+  const [movementsPage, setMovementsPage] = useState(20)
 
   const [categoryName, setCategoryName] = useState('')
   const [categoryDescription, setCategoryDescription] = useState('')
@@ -337,6 +416,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
   const [itemPurchasePrice, setItemPurchasePrice] = useState('')
   const [itemUnit, setItemUnit] = useState('шт')
   const [itemNotes, setItemNotes] = useState('')
+  const [itemType, setItemType] = useState<'product' | 'consumable'>('product')
   const [receiptLocationId, setReceiptLocationId] = useState('')
   const [receiptSupplierId, setReceiptSupplierId] = useState('')
   const [receiptDate, setReceiptDate] = useState(new Date().toISOString().slice(0, 10))
@@ -705,6 +785,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
           default_purchase_price: parseMoney(itemPurchasePrice),
           unit: itemUnit.trim() || 'шт',
           notes: itemNotes.trim() || null,
+          item_type: itemType,
         },
       })
       setItemName('')
@@ -714,10 +795,135 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
       setItemPurchasePrice('')
       setItemUnit('шт')
       setItemNotes('')
+      setItemType('product')
       setSuccess('Товар создан')
       await loadData()
     } catch (e: any) {
       setError(e?.message || 'Не удалось создать товар')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function startEditCategory(category: InventoryCategory) {
+    setEditingCategory(category)
+    setCategoryName(category.name)
+    setCategoryDescription(category.description || '')
+  }
+
+  function cancelEditCategory() {
+    setEditingCategory(null)
+    setCategoryName('')
+    setCategoryDescription('')
+  }
+
+  async function handleUpdateCategory() {
+    if (!editingCategory) return
+    if (!categoryName.trim()) return setError('Введите название категории')
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await mutate({ action: 'updateCategory', id: editingCategory.id, payload: { name: categoryName.trim(), description: categoryDescription.trim() || null } })
+      cancelEditCategory()
+      setSuccess('Категория обновлена')
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось обновить категорию')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function startEditSupplier(supplier: InventorySupplier) {
+    setEditingSupplier(supplier)
+    setSupplierName(supplier.name)
+    setSupplierContact(supplier.contact_name || '')
+    setSupplierPhone(supplier.phone || '')
+    setSupplierNotes(supplier.notes || '')
+  }
+
+  function cancelEditSupplier() {
+    setEditingSupplier(null)
+    setSupplierName('')
+    setSupplierContact('')
+    setSupplierPhone('')
+    setSupplierNotes('')
+  }
+
+  async function handleUpdateSupplier() {
+    if (!editingSupplier) return
+    if (!supplierName.trim()) return setError('Введите название поставщика')
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await mutate({
+        action: 'updateSupplier',
+        id: editingSupplier.id,
+        payload: { name: supplierName.trim(), contact_name: supplierContact.trim() || null, phone: supplierPhone.trim() || null, notes: supplierNotes.trim() || null },
+      })
+      cancelEditSupplier()
+      setSuccess('Поставщик обновлён')
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось обновить поставщика')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function startEditItem(item: InventoryItem) {
+    setEditingItem(item)
+    setItemName(item.name)
+    setItemBarcode(item.barcode)
+    setItemCategoryId(item.category_id || '')
+    setItemSalePrice(String(item.sale_price || ''))
+    setItemPurchasePrice(String(item.default_purchase_price || ''))
+    setItemUnit(item.unit || 'шт')
+    setItemNotes(item.notes || '')
+    setItemType((item.item_type as 'product' | 'consumable') || 'product')
+  }
+
+  function cancelEditItem() {
+    setEditingItem(null)
+    setItemName('')
+    setItemBarcode('')
+    setItemCategoryId('')
+    setItemSalePrice('')
+    setItemPurchasePrice('')
+    setItemUnit('шт')
+    setItemNotes('')
+    setItemType('product')
+  }
+
+  async function handleUpdateItem() {
+    if (!editingItem) return
+    if (!itemName.trim()) return setError('Введите название товара')
+    if (!itemBarcode.trim()) return setError('Введите штрихкод')
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await mutate({
+        action: 'updateItem',
+        id: editingItem.id,
+        payload: {
+          name: itemName.trim(),
+          barcode: itemBarcode.trim(),
+          category_id: itemCategoryId || null,
+          sale_price: parseMoney(itemSalePrice),
+          default_purchase_price: parseMoney(itemPurchasePrice),
+          unit: itemUnit.trim() || 'шт',
+          notes: itemNotes.trim() || null,
+          item_type: editingItem?.item_type || 'product',
+        },
+      })
+      cancelEditItem()
+      setSuccess('Товар обновлён')
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось обновить товар')
     } finally {
       setSaving(false)
     }
@@ -988,24 +1194,11 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               {receiptLines.map((line, index) => (
                 <LineCard key={`receipt-${index}`}>
                   <Field label={index === 0 ? 'Товар' : undefined}>
-                    <Select
-                      value={line.item_id || `__empty__${index}`}
-                      onValueChange={(value) =>
-                        setReceiptLines((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, item_id: value.startsWith('__empty__') ? '' : value } : item,
-                          ),
-                        )
-                      }
-                    >
-                      <SelectTrigger><SelectValue placeholder="Выберите товар" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={`__empty__${index}`}>Выберите товар</SelectItem>
-                        {(data?.items || []).map((item) => (
-                          <SelectItem key={item.id} value={item.id}>{item.name} · {item.barcode}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <ItemCombobox
+                      items={data?.items || []}
+                      value={line.item_id}
+                      onChange={(value) => setReceiptLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, item_id: value } : item))}
+                    />
                   </Field>
                   <Field label={index === 0 ? 'Кол-во' : undefined}>
                     <Input value={line.quantity} onChange={(event) => setReceiptLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: event.target.value } : item))} placeholder="0" />
@@ -1271,24 +1464,11 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               {requestLines.map((line, index) => (
                 <LineCard key={`request-${index}`}>
                   <Field label={index === 0 ? 'Товар' : undefined}>
-                    <Select
-                      value={line.item_id || `__empty__request_${index}`}
-                      onValueChange={(value) =>
-                        setRequestLines((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, item_id: value.startsWith('__empty__') ? '' : value } : item,
-                          ),
-                        )
-                      }
-                    >
-                      <SelectTrigger><SelectValue placeholder="Выберите товар" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={`__empty__request_${index}`}>Выберите товар</SelectItem>
-                        {(data?.items || []).map((item) => (
-                          <SelectItem key={item.id} value={item.id}>{item.name} · {item.barcode}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <ItemCombobox
+                      items={data?.items || []}
+                      value={line.item_id}
+                      onChange={(value) => setRequestLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, item_id: value } : item))}
+                    />
                   </Field>
                   <Field label={index === 0 ? 'Нужно' : undefined}>
                     <Input value={line.requested_qty} onChange={(event) => setRequestLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, requested_qty: event.target.value } : item))} placeholder="0" />
@@ -1480,11 +1660,23 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               <Field label="Описание">
                 <Textarea value={categoryDescription} onChange={(event) => setCategoryDescription(event.target.value)} placeholder="Необязательно" />
               </Field>
-              <Button type="button" onClick={handleCreateCategory} disabled={saving}>Создать категорию</Button>
+              <div className="flex gap-2">
+                {editingCategory ? (
+                  <>
+                    <Button type="button" onClick={handleUpdateCategory} disabled={saving}>Сохранить</Button>
+                    <Button type="button" variant="outline" onClick={cancelEditCategory} disabled={saving}><X className="h-4 w-4" /></Button>
+                  </>
+                ) : (
+                  <Button type="button" onClick={handleCreateCategory} disabled={saving}>Создать категорию</Button>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {(data?.categories || []).map((category) => (
-                  <span key={category.id} className="rounded-full border border-border/70 px-3 py-1 text-xs">
+                  <span key={category.id} className={`flex items-center gap-1 rounded-full border px-3 py-1 text-xs ${editingCategory?.id === category.id ? 'border-blue-500/50 bg-blue-500/10' : 'border-border/70'}`}>
                     {category.name}
+                    <button type="button" onClick={() => startEditCategory(category)} className="ml-1 opacity-50 hover:opacity-100">
+                      <Pencil className="h-3 w-3" />
+                    </button>
                   </span>
                 ))}
               </div>
@@ -1506,7 +1698,33 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               <Field label="Комментарий">
                 <Textarea value={supplierNotes} onChange={(event) => setSupplierNotes(event.target.value)} placeholder="Условия поставки, важные заметки" />
               </Field>
-              <Button type="button" onClick={handleCreateSupplier} disabled={saving}>Добавить поставщика</Button>
+              <div className="flex gap-2">
+                {editingSupplier ? (
+                  <>
+                    <Button type="button" onClick={handleUpdateSupplier} disabled={saving}>Сохранить</Button>
+                    <Button type="button" variant="outline" onClick={cancelEditSupplier} disabled={saving}><X className="h-4 w-4" /></Button>
+                  </>
+                ) : (
+                  <Button type="button" onClick={handleCreateSupplier} disabled={saving}>Добавить поставщика</Button>
+                )}
+              </div>
+              {(data?.suppliers || []).length > 0 && (
+                <div className="mt-1 space-y-2">
+                  {(data?.suppliers || []).map((supplier) => (
+                    <div key={supplier.id} className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${editingSupplier?.id === supplier.id ? 'border-blue-500/50 bg-blue-500/10' : 'border-border/70'}`}>
+                      <div>
+                        <div className="font-medium">{supplier.name}</div>
+                        {supplier.contact_name || supplier.phone ? (
+                          <div className="text-xs text-muted-foreground">{[supplier.contact_name, supplier.phone].filter(Boolean).join(' · ')}</div>
+                        ) : null}
+                      </div>
+                      <button type="button" onClick={() => startEditSupplier(supplier)} className="ml-3 opacity-50 hover:opacity-100">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </Card>
 
@@ -1538,13 +1756,51 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
                   <Input value={itemPurchasePrice} onChange={(event) => setItemPurchasePrice(event.target.value)} placeholder="0" />
                 </Field>
               </div>
+              <Field label="Тип">
+                <Select value={itemType} onValueChange={(v) => setItemType(v as 'product' | 'consumable')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="product">Товар (для продажи)</SelectItem>
+                    <SelectItem value="consumable">Расходник (внутреннее использование)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field label="Единица">
                 <Input value={itemUnit} onChange={(event) => setItemUnit(event.target.value)} placeholder="шт" />
               </Field>
               <Field label="Комментарий">
                 <Textarea value={itemNotes} onChange={(event) => setItemNotes(event.target.value)} placeholder="Необязательно" />
               </Field>
-              <Button type="button" onClick={handleCreateItem} disabled={saving}>Создать товар</Button>
+              <div className="flex gap-2">
+                {editingItem ? (
+                  <>
+                    <Button type="button" onClick={handleUpdateItem} disabled={saving}>Сохранить изменения</Button>
+                    <Button type="button" variant="outline" onClick={cancelEditItem} disabled={saving}><X className="h-4 w-4" /></Button>
+                  </>
+                ) : (
+                  <Button type="button" onClick={handleCreateItem} disabled={saving}>Создать товар</Button>
+                )}
+              </div>
+              {(data?.items || []).length > 0 && (
+                <div className="mt-2 space-y-1 border-t border-border/50 pt-3">
+                  <div className="mb-2 text-xs text-muted-foreground">Каталог товаров ({data?.items.length})</div>
+                  {(data?.items || []).map((item) => (
+                    <div key={item.id} className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${editingItem?.id === item.id ? 'border-blue-500/50 bg-blue-500/10' : 'border-border/50 hover:border-border'}`}>
+                      <div className="min-w-0 flex-1">
+                        <span className="font-medium">{item.name}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">{item.barcode}</span>
+                        {item.category?.name ? <span className="ml-2 text-xs text-muted-foreground">· {item.category.name}</span> : null}
+                      </div>
+                      <div className="ml-3 flex items-center gap-3 shrink-0">
+                        <span className="text-xs text-muted-foreground">{formatMoney(item.sale_price)}</span>
+                        <button type="button" onClick={() => startEditItem(item)} className="opacity-50 hover:opacity-100">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </Card>
         </div>
@@ -1554,7 +1810,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
         <Card className={`border-border/70 p-5 ${showReceipts ? '' : 'hidden'}`}>
           <SectionTitle icon={PackagePlus} title="Последние приемки" subtitle="Журнал последних складских приходов." />
           <div className="space-y-3">
-            {(data?.receipts || []).map((receipt) => (
+            {(data?.receipts || []).slice(0, receiptsPage).map((receipt) => (
               <div key={receipt.id} className="rounded-2xl border border-border/70 bg-background/40 p-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
@@ -1572,13 +1828,18 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               </div>
             ))}
             {!data?.receipts?.length ? <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Пока нет приемок.</div> : null}
+            {(data?.receipts || []).length > receiptsPage && (
+              <Button type="button" variant="outline" className="w-full" onClick={() => setReceiptsPage((p) => p + 5)}>
+                Показать ещё ({(data?.receipts || []).length - receiptsPage} осталось)
+              </Button>
+            )}
           </div>
         </Card>
 
         <Card className={`border-border/70 p-5 ${showRequests ? '' : 'hidden'}`}>
           <SectionTitle icon={ClipboardList} title="Последние заявки" subtitle="История заявок точек, включая уже одобренные и отклонённые." />
           <div className="space-y-3">
-            {(data?.requests || []).map((request) => (
+            {(data?.requests || []).slice(0, requestsPage).map((request) => (
               <div key={request.id} className="rounded-2xl border border-border/70 bg-background/40 p-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
@@ -1599,6 +1860,11 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               </div>
             ))}
             {!data?.requests?.length ? <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Пока нет заявок.</div> : null}
+            {(data?.requests || []).length > requestsPage && (
+              <Button type="button" variant="outline" className="w-full" onClick={() => setRequestsPage((p) => p + 5)}>
+                Показать ещё ({(data?.requests || []).length - requestsPage} осталось)
+              </Button>
+            )}
           </div>
         </Card>
       </div>
@@ -1794,7 +2060,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
         <Card className={`border-border/70 p-5 ${showMovements ? '' : 'hidden'}`}>
           <SectionTitle icon={ArchiveX} title="Последние списания" subtitle="Что и откуда списали в последних документах." />
           <div className="space-y-3">
-            {(data?.writeoffs || []).map((writeoff) => (
+            {(data?.writeoffs || []).slice(0, writeoffsPage).map((writeoff) => (
               <div key={writeoff.id} className="rounded-2xl border border-border/70 bg-background/40 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -1810,13 +2076,18 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               </div>
             ))}
             {!data?.writeoffs?.length ? <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Пока нет списаний.</div> : null}
+            {(data?.writeoffs || []).length > writeoffsPage && (
+              <Button type="button" variant="outline" className="w-full" onClick={() => setWriteoffsPage((p) => p + 5)}>
+                Показать ещё ({(data?.writeoffs || []).length - writeoffsPage} осталось)
+              </Button>
+            )}
           </div>
         </Card>
 
         <Card className={`border-border/70 p-5 ${showStocktakes ? '' : 'hidden'}`}>
           <SectionTitle icon={ScanSearch} title="Последние инвентаризации" subtitle="Акты пересчета и количество строк с расхождениями." />
           <div className="space-y-3">
-            {(data?.stocktakes || []).map((stocktake) => {
+            {(data?.stocktakes || []).slice(0, stocktakesPage).map((stocktake) => {
               const changedCount = (stocktake.items || []).filter((item) => Number(item.delta_qty || 0) !== 0).length
               return (
                 <div key={stocktake.id} className="rounded-2xl border border-border/70 bg-background/40 p-4">
@@ -1833,13 +2104,18 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               )
             })}
             {!data?.stocktakes?.length ? <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Пока нет инвентаризаций.</div> : null}
+            {(data?.stocktakes || []).length > stocktakesPage && (
+              <Button type="button" variant="outline" className="w-full" onClick={() => setStocktakesPage((p) => p + 5)}>
+                Показать ещё ({(data?.stocktakes || []).length - stocktakesPage} осталось)
+              </Button>
+            )}
           </div>
         </Card>
 
         <Card className={`border-border/70 p-5 ${showMovements ? '' : 'hidden'}`}>
           <SectionTitle icon={History} title="Журнал движений" subtitle="Последние операции по складу, витринам и корректировкам." />
           <div className="space-y-3">
-            {(data?.movements || []).map((movement) => (
+            {(data?.movements || []).slice(0, movementsPage).map((movement) => (
               <div key={movement.id} className="rounded-2xl border border-border/70 bg-background/40 p-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
@@ -1865,6 +2141,11 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
               </div>
             ))}
             {!data?.movements?.length ? <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Пока нет движений.</div> : null}
+            {(data?.movements || []).length > movementsPage && (
+              <Button type="button" variant="outline" className="w-full" onClick={() => setMovementsPage((p) => p + 20)}>
+                Показать ещё ({(data?.movements || []).length - movementsPage} осталось)
+              </Button>
+            )}
           </div>
         </Card>
       </div>
