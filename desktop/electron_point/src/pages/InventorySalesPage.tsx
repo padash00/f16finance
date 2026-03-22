@@ -7,7 +7,9 @@ import {
   Package,
   Percent,
   Plus,
+  Printer,
   RefreshCw,
+  ReceiptText,
   Search,
   ShoppingBasket,
   Star,
@@ -55,6 +57,35 @@ type CartLine = {
   unit_price: number
 }
 
+type ReceiptLine = {
+  item_id: string
+  name: string
+  quantity: number
+  unit_price: number
+  total: number
+  unit: string | null
+}
+
+type SaleReceiptPreview = {
+  saleId: string | null
+  saleDate: string
+  saleTime: string
+  shift: 'day' | 'night'
+  paymentMethod: 'cash' | 'kaspi' | 'mixed'
+  cashAmount: number
+  kaspiAmount: number
+  totalAmount: number
+  subtotal: number
+  discountAmount: number
+  loyaltyDiscountAmount: number
+  comment: string | null
+  customer: Customer | null
+  companyName: string
+  locationName: string
+  operatorName: string
+  lines: ReceiptLine[]
+}
+
 function paymentBadge(paymentMethod: string) {
   if (paymentMethod === 'cash') return 'Наличные'
   if (paymentMethod === 'kaspi') return 'Kaspi'
@@ -63,6 +94,116 @@ function paymentBadge(paymentMethod: string) {
 
 function formatShiftLabel(shift: 'day' | 'night') {
   return shift === 'night' ? 'Ночь' : 'День'
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function buildReceiptHtml(preview: SaleReceiptPreview) {
+  const linesHtml = preview.lines
+    .map(
+      (line) => `
+        <tr>
+          <td>${escapeHtml(line.name)}</td>
+          <td style="text-align:center;">${line.quantity}</td>
+          <td style="text-align:right;">${escapeHtml(formatMoney(line.unit_price))}</td>
+          <td style="text-align:right;">${escapeHtml(formatMoney(line.total))}</td>
+        </tr>
+      `,
+    )
+    .join('')
+
+  const customerBlock = preview.customer
+    ? `<div style="margin-top:8px;font-size:12px;">Клиент: ${escapeHtml(preview.customer.name)}${preview.customer.phone ? ` (${escapeHtml(preview.customer.phone)})` : ''}</div>`
+    : ''
+
+  const commentBlock = preview.comment
+    ? `<div style="margin-top:8px;font-size:12px;">Комментарий: ${escapeHtml(preview.comment)}</div>`
+    : ''
+
+  const discountRows = [
+    preview.discountAmount > 0
+      ? `<div style="display:flex;justify-content:space-between;"><span>Скидка</span><strong>- ${escapeHtml(formatMoney(preview.discountAmount))}</strong></div>`
+      : '',
+    preview.loyaltyDiscountAmount > 0
+      ? `<div style="display:flex;justify-content:space-between;"><span>Бонусы</span><strong>- ${escapeHtml(formatMoney(preview.loyaltyDiscountAmount))}</strong></div>`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('')
+
+  return `<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Чек ${escapeHtml(preview.saleId?.slice(-6) || '')}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; padding: 16px; color: #111827; }
+      .wrap { max-width: 360px; margin: 0 auto; }
+      .center { text-align: center; }
+      .muted { color: #6b7280; font-size: 12px; }
+      .line { border-top: 1px dashed #9ca3af; margin: 10px 0; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      td { padding: 2px 0; vertical-align: top; }
+      .summary { font-size: 13px; }
+      .total { font-size: 16px; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="center">
+        <div style="font-weight:700;font-size:18px;">ORDA POINT</div>
+        <div class="muted">${escapeHtml(preview.companyName)} · ${escapeHtml(preview.locationName)}</div>
+        <div class="muted">${escapeHtml(preview.saleDate)} ${escapeHtml(preview.saleTime)} · ${escapeHtml(formatShiftLabel(preview.shift))}</div>
+        <div class="muted">Чек #${escapeHtml(preview.saleId?.slice(-6) || 'новый')}</div>
+      </div>
+      <div class="line"></div>
+      <table>
+        <thead>
+          <tr class="muted">
+            <td>Товар</td>
+            <td style="text-align:center;">Кол.</td>
+            <td style="text-align:right;">Цена</td>
+            <td style="text-align:right;">Сумма</td>
+          </tr>
+        </thead>
+        <tbody>${linesHtml}</tbody>
+      </table>
+      <div class="line"></div>
+      <div class="summary" style="display:flex;justify-content:space-between;"><span>Подытог</span><strong>${escapeHtml(formatMoney(preview.subtotal))}</strong></div>
+      ${discountRows}
+      <div class="line"></div>
+      <div class="total" style="display:flex;justify-content:space-between;"><span>Итого</span><span>${escapeHtml(formatMoney(preview.totalAmount))}</span></div>
+      <div class="summary" style="display:flex;justify-content:space-between;margin-top:6px;"><span>${escapeHtml(paymentBadge(preview.paymentMethod))}</span><strong>${escapeHtml(formatMoney(preview.totalAmount))}</strong></div>
+      ${preview.paymentMethod === 'mixed' ? `<div class="muted" style="margin-top:4px;">Наличные: ${escapeHtml(formatMoney(preview.cashAmount))} · Kaspi: ${escapeHtml(formatMoney(preview.kaspiAmount))}</div>` : ''}
+      ${customerBlock}
+      ${commentBlock}
+      <div class="muted" style="margin-top:10px;">Оператор: ${escapeHtml(preview.operatorName)}</div>
+      <div class="center muted" style="margin-top:12px;">Спасибо за покупку</div>
+    </div>
+    <script>
+      window.onload = () => { window.print(); };
+    </script>
+  </body>
+</html>`
+}
+
+function printReceipt(preview: SaleReceiptPreview) {
+  const printWindow = window.open('', '_blank', 'width=420,height=720')
+  if (!printWindow) {
+    toastError('Не удалось открыть окно печати чека')
+    return
+  }
+
+  printWindow.document.open()
+  printWindow.document.write(buildReceiptHtml(preview))
+  printWindow.document.close()
 }
 
 export default function InventorySalesPage({
@@ -86,6 +227,7 @@ export default function InventorySalesPage({
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
   const [mixedCash, setMixedCash] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
+  const [receiptPreview, setReceiptPreview] = useState<SaleReceiptPreview | null>(null)
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState('')
@@ -357,7 +499,7 @@ export default function InventorySalesPage({
     setSaving(true)
     try {
       const isNightAfterMidnight = runtimeShift.shift === 'night' && runtimeShift.afterMidnightNight
-      await api.createPointInventorySale(config, session, {
+      const saleResult = await api.createPointInventorySale(config, session, {
         sale_date: runtimeShift.date,
         shift: runtimeShift.shift,
         payment_method: paymentMethod,
@@ -386,6 +528,33 @@ export default function InventorySalesPage({
           // non-critical, don't fail the sale
         }
       }
+
+      setReceiptPreview({
+        saleId: saleResult.sale_id,
+        saleDate: formatDate(runtimeShift.date),
+        saleTime: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+        shift: runtimeShift.shift,
+        paymentMethod,
+        cashAmount,
+        kaspiAmount,
+        totalAmount: finalTotal,
+        subtotal: cartTotal,
+        discountAmount,
+        loyaltyDiscountAmount,
+        comment: comment.trim() || null,
+        customer: selectedCustomer,
+        companyName: bootstrap.company.name,
+        locationName: context?.location?.name || 'Витрина точки',
+        operatorName,
+        lines: cartDetailed.map((line) => ({
+          item_id: line.item_id,
+          name: line.item?.name || 'Товар',
+          quantity: line.quantity,
+          unit_price: line.unit_price,
+          total: line.total,
+          unit: line.item?.unit || null,
+        })),
+      })
 
       toastSuccess('Продажа сохранена и добавлена в сменный контур')
       resetSaleForm()
@@ -869,6 +1038,118 @@ export default function InventorySalesPage({
           </div>
         </div>
       </div>
+
+      {receiptPreview ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <Card className="w-full max-w-xl border-white/10 bg-slate-950/95 shadow-2xl">
+            <CardHeader className="border-b border-white/10 pb-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <ReceiptText className="h-4 w-4 text-emerald-300" />
+                    Сформированный чек
+                  </CardTitle>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {receiptPreview.companyName} · {receiptPreview.locationName}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {receiptPreview.saleDate} · {receiptPreview.saleTime} · {formatShiftLabel(receiptPreview.shift)}
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setReceiptPreview(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4 p-5">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Чек</span>
+                  <span className="font-semibold">#{receiptPreview.saleId?.slice(-6) || 'новый'}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Оплата</span>
+                  <span>{paymentBadge(receiptPreview.paymentMethod)}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Оператор</span>
+                  <span>{receiptPreview.operatorName}</span>
+                </div>
+              </div>
+
+              <div className="max-h-72 space-y-2 overflow-auto rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                {receiptPreview.lines.map((line) => (
+                  <div key={line.item_id} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-foreground">{line.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {line.quantity} {line.unit || 'шт'} × {formatMoney(line.unit_price)}
+                        </p>
+                      </div>
+                      <p className="font-semibold">{formatMoney(line.total)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Подытог</span>
+                  <span>{formatMoney(receiptPreview.subtotal)}</span>
+                </div>
+                {receiptPreview.discountAmount > 0 ? (
+                  <div className="mt-2 flex items-center justify-between text-sm text-blue-300">
+                    <span>Скидка</span>
+                    <span>-{formatMoney(receiptPreview.discountAmount)}</span>
+                  </div>
+                ) : null}
+                {receiptPreview.loyaltyDiscountAmount > 0 ? (
+                  <div className="mt-2 flex items-center justify-between text-sm text-amber-300">
+                    <span>Бонусы</span>
+                    <span>-{formatMoney(receiptPreview.loyaltyDiscountAmount)}</span>
+                  </div>
+                ) : null}
+                <div className="mt-3 flex items-end justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итого</p>
+                    <p className="mt-1 text-3xl font-semibold text-foreground">{formatMoney(receiptPreview.totalAmount)}</p>
+                  </div>
+                  <Badge variant="secondary">{paymentBadge(receiptPreview.paymentMethod)}</Badge>
+                </div>
+                {receiptPreview.paymentMethod === 'mixed' ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Наличные: {formatMoney(receiptPreview.cashAmount)} · Kaspi: {formatMoney(receiptPreview.kaspiAmount)}
+                  </p>
+                ) : null}
+                {receiptPreview.customer ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Клиент: {receiptPreview.customer.name}
+                    {receiptPreview.customer.phone ? ` (${receiptPreview.customer.phone})` : ''}
+                  </p>
+                ) : null}
+                {receiptPreview.comment ? (
+                  <p className="mt-2 text-xs text-muted-foreground">Комментарий: {receiptPreview.comment}</p>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button className="flex-1 min-w-[180px]" onClick={() => printReceipt(receiptPreview)}>
+                  <Printer className="h-4 w-4" />
+                  Печать чека
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 min-w-[180px]"
+                  onClick={() => setReceiptPreview(null)}
+                >
+                  Закрыть
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
     </div>
   )
 }
