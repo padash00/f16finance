@@ -1,5 +1,6 @@
-'use client'
+﻿'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   ArchiveX,
@@ -516,9 +517,29 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
       .sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0))
   }, [data?.balances, topWarehouse])
 
+  const lowWarehouseBalances = useMemo(() => {
+    return [...warehouseBalances]
+      .sort((a, b) => Number(a.quantity || 0) - Number(b.quantity || 0))
+      .slice(0, 8)
+  }, [warehouseBalances])
+
   const pendingRequests = useMemo(
     () => (data?.requests || []).filter((item) => item.status === 'new'),
     [data?.requests],
+  )
+
+  const recentReceipts = useMemo(() => (data?.receipts || []).slice(0, 5), [data?.receipts])
+  const recentMovements = useMemo(() => (data?.movements || []).slice(0, 8), [data?.movements])
+  const warehouseStockQty = useMemo(
+    () =>
+      (data?.balances || [])
+        .filter((item) => item.location?.location_type === 'warehouse')
+        .reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+    [data?.balances],
+  )
+  const pointStockQty = useMemo(
+    () => groupedPointBalances.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+    [groupedPointBalances],
   )
 
   const selectedTargetLocation = useMemo(
@@ -680,13 +701,13 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
   }, [balancesByLocation, data?.movements, pointLocations])
 
   const showOverview = inventoryView === 'overview'
-  const showCatalog = inventoryView === 'overview' || inventoryView === 'catalog'
-  const showReceipts = inventoryView === 'overview' || inventoryView === 'receipts'
-  const showRequests = inventoryView === 'overview' || inventoryView === 'requests'
-  const showAnalytics = inventoryView === 'overview' || inventoryView === 'analytics'
-  const showWriteoffs = inventoryView === 'overview' || inventoryView === 'writeoffs'
-  const showStocktakes = inventoryView === 'overview' || inventoryView === 'stocktakes'
-  const showMovements = inventoryView === 'overview' || inventoryView === 'movements'
+  const showCatalog = inventoryView === 'catalog'
+  const showReceipts = inventoryView === 'receipts'
+  const showRequests = inventoryView === 'requests'
+  const showAnalytics = inventoryView === 'analytics'
+  const showWriteoffs = inventoryView === 'writeoffs'
+  const showStocktakes = inventoryView === 'stocktakes'
+  const showMovements = inventoryView === 'movements'
   const viewMeta = inventoryViewMeta[inventoryView]
 
   function loadStocktakeLinesFromBalances() {
@@ -1131,14 +1152,19 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
       {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
       {success ? <Card className="border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">{success}</Card> : null}
 
-      {showOverview ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-        <SummaryCard icon={Boxes} label="Товаров" value={String(data?.items.length || 0)} note="Общий каталог склада и точек" />
-        <SummaryCard icon={Store} label="Локаций" value={String(data?.locations.length || 0)} note="Склад и витрины по точкам" />
-        <SummaryCard icon={ClipboardList} label="Новых заявок" value={String(pendingRequests.length)} note="Ждут решения руководителя" />
-        <SummaryCard icon={PackagePlus} label="Приемок" value={String(data?.receipts.length || 0)} note="Последние документы прихода" />
-        <SummaryCard icon={ArchiveX} label="Списаний" value={String(data?.writeoffs.length || 0)} note="Потери, брак и служебные расходы" />
-        <SummaryCard icon={ScanSearch} label="Ревизий" value={String(data?.stocktakes.length || 0)} note="Последние проверки и корректировки" />
-      </div> : null}
+      {showOverview ? (
+        <InventoryOverviewCenter
+          itemsCount={data?.items.length || 0}
+          pendingRequests={pendingRequests}
+          recentReceipts={recentReceipts}
+          recentMovements={recentMovements}
+          groupedPointBalances={groupedPointBalances}
+          lowWarehouseBalances={lowWarehouseBalances}
+          pointStockQty={pointStockQty}
+          warehouseStockQty={warehouseStockQty}
+          stocktakesCount={data?.stocktakes.length || 0}
+        />
+      ) : null}
 
       <div className={inventoryView === 'overview' ? 'grid gap-6 xl:grid-cols-[1.1fr_0.9fr]' : 'grid gap-6 xl:grid-cols-1'}>
         <div className="space-y-6">
@@ -2150,6 +2176,196 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
         </Card>
       </div>
     </div>
+  )
+}
+
+function InventoryOverviewCenter({
+  itemsCount,
+  pendingRequests,
+  recentReceipts,
+  recentMovements,
+  groupedPointBalances,
+  lowWarehouseBalances,
+  pointStockQty,
+  warehouseStockQty,
+  stocktakesCount,
+}: {
+  itemsCount: number
+  pendingRequests: InventoryRequest[]
+  recentReceipts: InventoryReceipt[]
+  recentMovements: InventoryMovement[]
+  groupedPointBalances: Array<{ location: InventoryLocation; quantity: number; itemsCount: number }>
+  lowWarehouseBalances: InventoryBalance[]
+  pointStockQty: number
+  warehouseStockQty: number
+  stocktakesCount: number
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard icon={ClipboardList} label="Новых заявок" value={String(pendingRequests.length)} note="Ждут решения руководителя" />
+        <SummaryCard icon={Boxes} label="Товаров в каталоге" value={String(itemsCount)} note="Весь магазинный каталог" />
+        <SummaryCard icon={Store} label="Товар на витринах" value={formatQty(pointStockQty)} note="Суммарный остаток по точкам" />
+        <SummaryCard icon={PackagePlus} label="Товар на складе" value={formatQty(warehouseStockQty)} note="Суммарный остаток центрального склада" />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card className="border-border/70 p-5">
+          <SectionTitle icon={ClipboardCheck} title="Центр магазина" subtitle="Главные действия по магазину: заявки, приемка, остатки и ревизия." />
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <QuickLinkCard href="/inventory/requests" icon={ClipboardCheck} title="Заявки" note={`${pendingRequests.length} новых`} />
+            <QuickLinkCard href="/inventory/receipts" icon={PackagePlus} title="Приемка" note={`${recentReceipts.length} последних документов`} />
+            <QuickLinkCard href="/inventory/analytics" icon={Boxes} title="Остатки точек" note={`${groupedPointBalances.length} витрин`} />
+            <QuickLinkCard href="/inventory/revisions" icon={ScanSearch} title="Ревизия" note={`${stocktakesCount} последних проверок`} />
+          </div>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-2xl border border-border/70 bg-background/40 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Новые заявки точек</div>
+                  <div className="text-xs text-muted-foreground">То, что требует решения прямо сейчас.</div>
+                </div>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/inventory/requests">Все заявки</Link>
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {pendingRequests.slice(0, 5).map((request) => (
+                  <div key={request.id} className="rounded-xl border border-border/60 px-3 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium">{request.company?.name || request.target_location?.name || 'Точка'}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {request.source_location?.name || 'Склад'} → {request.target_location?.name || 'Витрина'}
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">{request.items?.length || 0} позиций · {formatDate(request.created_at)}</div>
+                      </div>
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${requestStatusClass(request.status)}`}>
+                        {requestStatusLabel(request.status)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {!pendingRequests.length ? (
+                  <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+                    Сейчас нет новых заявок на одобрение.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border/70 bg-background/40 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Витрины точек</div>
+                  <div className="text-xs text-muted-foreground">Текущий остаток и насыщенность витрин по точкам.</div>
+                </div>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/inventory/analytics">Открыть аналитику</Link>
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {groupedPointBalances.slice(0, 6).map((item) => (
+                  <div key={item.location.id} className="flex items-center justify-between rounded-xl border border-border/60 px-3 py-3">
+                    <div>
+                      <div className="text-sm font-medium">{item.location.company?.name || item.location.name}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{item.itemsCount} товарных позиций</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold">{formatQty(item.quantity)}</div>
+                      <div className="text-xs text-muted-foreground">штук в витрине</div>
+                    </div>
+                  </div>
+                ))}
+                {!groupedPointBalances.length ? (
+                  <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+                    Пока нет остатков на витринах. Они появятся после одобренных заявок.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <div className="space-y-6">
+          <Card className="border-border/70 p-5">
+            <SectionTitle icon={Boxes} title="Низкий остаток на складе" subtitle="Позиции, которые скоро закончатся на центральном складе." />
+            <div className="space-y-3">
+              {lowWarehouseBalances.map((balance) => (
+                <div key={`${balance.location_id}:${balance.item_id}`} className="flex items-center justify-between rounded-xl border border-border/60 px-3 py-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{balance.item?.name || 'Товар'}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{balance.item?.barcode || 'Без штрихкода'}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-semibold">{formatQty(balance.quantity)}</div>
+                    <div className="text-xs text-muted-foreground">осталось</div>
+                  </div>
+                </div>
+              ))}
+              {!lowWarehouseBalances.length ? (
+                <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+                  На складе пока нет остатков. Начни с приемки товара.
+                </div>
+              ) : null}
+            </div>
+          </Card>
+
+          <Card className="border-border/70 p-5">
+            <SectionTitle icon={History} title="Последние движения" subtitle="Короткая лента по складу и витринам без лишних форм." />
+            <div className="space-y-3">
+              {recentMovements.map((movement) => (
+                <div key={movement.id} className="rounded-xl border border-border/60 px-3 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${movementTypeClass(movement.movement_type)}`}>
+                      {movementTypeLabel(movement.movement_type)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{formatDate(movement.created_at)}</span>
+                  </div>
+                  <div className="mt-2 text-sm font-medium">{movement.item?.name || 'Товар'}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {(movement.from_location?.company?.name || movement.from_location?.name || '—')} → {(movement.to_location?.company?.name || movement.to_location?.name || '—')}
+                  </div>
+                </div>
+              ))}
+              {!recentMovements.length ? (
+                <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+                  Пока нет движений по складу и витринам.
+                </div>
+              ) : null}
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function QuickLinkCard({
+  href,
+  icon: Icon,
+  title,
+  note,
+}: {
+  href: string
+  icon: typeof Boxes
+  title: string
+  note: string
+}) {
+  return (
+    <Link href={href} className="rounded-2xl border border-border/70 bg-background/40 p-4 transition hover:border-blue-500/40 hover:bg-blue-500/5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-foreground">{title}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{note}</div>
+        </div>
+        <div className="rounded-xl border border-border/70 bg-background/60 p-2">
+          <Icon className="h-4 w-4 text-blue-300" />
+        </div>
+      </div>
+    </Link>
   )
 }
 
