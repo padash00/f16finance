@@ -93,6 +93,7 @@ export type AppView =
   | { screen: 'point-select'; bootstrap: BootstrapData; session: OperatorSession; allCompanies: CompanyOption[] }
   | { screen: 'shift'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'scanner'; bootstrap: BootstrapData; session: OperatorSession }
+  | { screen: 'inventory-request'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'scanner' }
   | { screen: 'admin'; session: AdminSession; bootstrap?: BootstrapData }
 
@@ -236,4 +237,38 @@ export interface OperatorTask {
   created_at: string
   updated_at: string
   completed_at: string | null
+}
+
+export interface PointInventoryRequestItem {
+  id: string
+  name: string
+  barcode: string
+  unit: string
+  sale_price: number
+  warehouse_qty: number
+  category?: { id: string; name: string } | null
+}
+
+export interface PointInventoryRequestRow {
+  id: string
+  status: string
+  comment: string | null
+  decision_comment: string | null
+  created_at: string
+  approved_at: string | null
+  items?: Array<{
+    id: string
+    requested_qty: number
+    approved_qty: number | null
+    comment: string | null
+    item?: { id: string; name: string; barcode: string } | null
+  }>
+}
+
+export interface PointInventoryRequestContext {
+  company: { id: string; name: string; code: string | null }
+  sourceLocation: { id: string; name: string; code: string | null; location_type: string }
+  targetLocation: { id: string; name: string; code: string | null; location_type: string }
+  items: PointInventoryRequestItem[]
+  requests: PointInventoryRequestRow[]
 }

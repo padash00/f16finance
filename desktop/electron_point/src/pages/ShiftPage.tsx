@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import {
   AlertTriangle,
   Building2,
   Calculator,
   CalendarDays,
   CheckCircle2,
+  ClipboardList,
   Clock,
   LogOut,
   ReceiptText,
@@ -37,6 +38,7 @@ interface Props {
   isOffline?: boolean
   onLogout: () => void
   onSwitchToScanner?: () => void
+  onSwitchToRequest?: () => void
   onOpenCabinet?: () => void
 }
 
@@ -84,6 +86,7 @@ export default function ShiftPage({
   isOffline,
   onLogout,
   onSwitchToScanner,
+  onSwitchToRequest,
   onOpenCabinet,
 }: Props) {
   const [form, setForm] = useState<ShiftForm>(() => {
@@ -122,6 +125,7 @@ export default function ShiftPage({
 
   const flags = bootstrap.device.feature_flags
   const hasScanner = flags.debt_report && onSwitchToScanner
+  const hasInventoryRequest = !!onSwitchToRequest
   const kaspiDailySplitEnabled = flags.kaspi_daily_split === true
   const isNightKaspiSplit = kaspiDailySplitEnabled && form.shift === 'night'
 
@@ -379,12 +383,18 @@ export default function ShiftPage({
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <div className="h-9 shrink-0 drag-region" />
 
-      <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b bg-card px-5">
+      <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b bg-card px-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-[0_10px_30px_rgba(255,255,255,0.08)]">
             <span className="text-sm font-bold text-primary-foreground">F</span>
           </div>
-          <div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-border/80 bg-background/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                Рабочий терминал
+              </span>
+              <span className="text-[11px] text-muted-foreground">{bootstrap.device.name || bootstrap.device.point_mode}</span>
+            </div>
             <p className="text-sm font-semibold leading-none">{session.company.name}</p>
             <p className="text-xs text-muted-foreground">{operatorName}</p>
           </div>
@@ -412,7 +422,9 @@ export default function ShiftPage({
           <WorkModeSwitch
             active="shift"
             showScanner={!!hasScanner}
+            showRequest={hasInventoryRequest}
             onScanner={hasScanner ? onSwitchToScanner : undefined}
+            onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
           />
 
@@ -434,7 +446,53 @@ export default function ShiftPage({
 
       <div className="flex flex-1 overflow-auto">
         <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5 p-5">
-          <div className="flex items-center gap-2">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="grid gap-3 md:grid-cols-2">
+              <ModeToggleCard
+                title="Смена"
+                description="Ввод выручки, расчёт ФАКТа и отправка сменного отчёта."
+                active={viewMode === 'shift'}
+                onClick={() => setViewMode('shift')}
+                icon={<ReceiptText className="h-4 w-4" />}
+              />
+              {kaspiDailySplitEnabled ? (
+                <ModeToggleCard
+                  title="Суточный Kaspi"
+                  description="Проверка календарных суток для ночной смены и ОПиУ."
+                  active={viewMode === 'daily'}
+                  onClick={() => setViewMode('daily')}
+                  icon={<CalendarDays className="h-4 w-4" />}
+                />
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border/70 bg-card/40 p-4 text-sm text-muted-foreground">
+                  Суточная сверка Kaspi выключена для этого терминала.
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              <TerminalStatusChip
+                icon={<CalendarDays className="h-4 w-4" />}
+                label="Дата смены"
+                value={form.date}
+              />
+              <TerminalStatusChip
+                icon={<Clock className="h-4 w-4" />}
+                label="Очередь"
+                value={pendingCount > 0 ? `${pendingCount} в очереди` : 'Пусто'}
+                tone={pendingCount > 0 ? 'warning' : 'neutral'}
+                onClick={pendingCount > 0 ? () => setShowQueue(true) : undefined}
+              />
+              <TerminalStatusChip
+                icon={isOffline ? <WifiOff className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                label="Сеть"
+                value={isOffline ? 'Оффлайн' : 'Онлайн'}
+                tone={isOffline ? 'warning' : 'success'}
+              />
+            </div>
+          </div>
+
+          <div className="hidden items-center gap-2">
             <Button
               type="button"
               variant={viewMode === 'shift' ? 'default' : 'outline'}
@@ -632,7 +690,7 @@ export default function ShiftPage({
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="hidden flex-wrap items-center gap-2">
                     <Badge variant="secondary" className="gap-1.5">
                       <CalendarDays className="h-3 w-3" />
                       {form.date}
@@ -653,6 +711,17 @@ export default function ShiftPage({
                         Сеть недоступна
                       </Badge>
                     ) : null}
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <TerminalMiniStat label="Дата" value={form.date} />
+                    <TerminalMiniStat label="Смена" value={`${shiftIcon} ${shiftLabel}`} />
+                    <TerminalMiniStat label="Введено" value={formatMoney(totalEntered)} />
+                    <TerminalMiniStat
+                      label="Режим"
+                      value={isNightKaspiSplit ? 'Kaspi split' : 'Стандартный'}
+                      note={isNightKaspiSplit ? 'до и после 00:00' : 'без суточной разбивки'}
+                    />
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-2">
@@ -833,6 +902,46 @@ export default function ShiftPage({
 
               <Card className="border-white/10 bg-card/90">
                 <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Быстрые действия</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-2 sm:grid-cols-2">
+                  <QuickActionButton
+                    icon={<RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />}
+                    label="Синхронизировать"
+                    onClick={doSync}
+                    disabled={syncing}
+                  />
+                  <QuickActionButton
+                    icon={<Clock className="h-4 w-4" />}
+                    label={pendingCount > 0 ? `Очередь: ${pendingCount}` : 'Очередь пуста'}
+                    onClick={() => setShowQueue(true)}
+                  />
+                  {hasScanner ? (
+                    <QuickActionButton
+                      icon={<CreditCard className="h-4 w-4" />}
+                      label="Открыть сканер"
+                      onClick={onSwitchToScanner}
+                    />
+                  ) : null}
+                  {onSwitchToRequest ? (
+                    <QuickActionButton
+                      icon={<ClipboardList className="h-4 w-4" />}
+                      label="Заявка на склад"
+                      onClick={onSwitchToRequest}
+                    />
+                  ) : null}
+                  {onOpenCabinet ? (
+                    <QuickActionButton
+                      icon={<UserCircle2 className="h-4 w-4" />}
+                      label="Мой кабинет"
+                      onClick={onOpenCabinet}
+                    />
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              <Card className="border-white/10 bg-card/90">
+                <CardHeader className="pb-3">
                   <CardTitle className="text-base">Формула расчёта</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2.5">
@@ -984,6 +1093,118 @@ export default function ShiftPage({
         </div>
       ) : null}
     </div>
+  )
+}
+
+function ModeToggleCard({
+  title,
+  description,
+  active,
+  onClick,
+  icon,
+}: {
+  title: string
+  description: string
+  active: boolean
+  onClick: () => void
+  icon: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group rounded-2xl border p-4 text-left transition-all ${
+        active
+          ? 'border-primary/30 bg-primary/10 shadow-[0_16px_40px_rgba(255,255,255,0.05)]'
+          : 'border-white/10 bg-card/70 hover:border-primary/20 hover:bg-card'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="text-sm font-semibold">{title}</div>
+          <div className="text-xs leading-5 text-muted-foreground">{description}</div>
+        </div>
+        <div
+          className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+            active ? 'bg-primary text-primary-foreground' : 'bg-black/20 text-muted-foreground'
+          }`}
+        >
+          {icon}
+        </div>
+      </div>
+    </button>
+  )
+}
+
+function TerminalStatusChip({
+  icon,
+  label,
+  value,
+  tone = 'neutral',
+  onClick,
+}: {
+  icon: ReactNode
+  label: string
+  value: string
+  tone?: 'neutral' | 'warning' | 'success'
+  onClick?: () => void
+}) {
+  const toneClass =
+    tone === 'warning'
+      ? 'border-amber-500/20 bg-amber-500/10'
+      : tone === 'success'
+        ? 'border-emerald-500/20 bg-emerald-500/10'
+        : 'border-white/10 bg-card/80'
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl border px-4 py-3 text-left ${toneClass} ${onClick ? 'cursor-pointer transition-opacity hover:opacity-90' : 'cursor-default'}`}
+    >
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+        {icon}
+        {label}
+      </div>
+      <div className="mt-2 text-sm font-medium">{value}</div>
+    </button>
+  )
+}
+
+function TerminalMiniStat({
+  label,
+  value,
+  note,
+}: {
+  label: string
+  value: string
+  note?: string
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium">{value}</div>
+      {note ? <div className="mt-1 text-[11px] text-muted-foreground">{note}</div> : null}
+    </div>
+  )
+}
+
+function QuickActionButton({
+  icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: ReactNode
+  label: string
+  onClick?: () => void
+  disabled?: boolean
+}) {
+  return (
+    <Button type="button" variant="outline" className="justify-start gap-2" onClick={onClick} disabled={disabled}>
+      {icon}
+      <span className="truncate">{label}</span>
+    </Button>
   )
 }
 

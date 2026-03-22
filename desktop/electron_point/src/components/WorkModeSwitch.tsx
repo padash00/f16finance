@@ -1,14 +1,16 @@
-import { ReceiptText, ScanBarcode, UserCircle2 } from 'lucide-react'
+import { ClipboardList, ReceiptText, ScanBarcode, UserCircle2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 
-type WorkMode = 'shift' | 'scanner' | 'cabinet'
+type WorkMode = 'shift' | 'scanner' | 'request' | 'cabinet'
 
 interface Props {
   active: WorkMode
   showScanner?: boolean
+  showRequest?: boolean
   onShift?: () => void
   onScanner?: () => void
+  onRequest?: () => void
   onCabinet?: () => void
 }
 
@@ -21,8 +23,10 @@ function itemClass(active: boolean) {
 export default function WorkModeSwitch({
   active,
   showScanner,
+  showRequest,
   onShift,
   onScanner,
+  onRequest,
   onCabinet,
 }: Props) {
   return (
@@ -50,6 +54,20 @@ export default function WorkModeSwitch({
         >
           <ScanBarcode className="h-4 w-4" />
           Сканер
+        </Button>
+      ) : null}
+
+      {showRequest ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onRequest}
+          disabled={!onRequest || active === 'request'}
+          className={`gap-1.5 rounded-lg px-3 ${itemClass(active === 'request')}`}
+        >
+          <ClipboardList className="h-4 w-4" />
+          Заявка
         </Button>
       ) : null}
 

@@ -12,6 +12,7 @@ import type {
   ShiftForm,
   DailyKaspiReport,
   ShiftRecord,
+  PointInventoryRequestContext,
 } from '@/types'
 import { parseMoney } from '@/lib/utils'
 
@@ -354,4 +355,39 @@ export async function getPointOperatorCabinet(
     shifts: data.shifts || [],
     debts: data.debts || [],
   }
+}
+
+export async function getPointInventoryRequests(
+  config: AppConfig,
+  session: OperatorSession,
+): Promise<PointInventoryRequestContext> {
+  const data = await request<{ ok: boolean; data: PointInventoryRequestContext }>(
+    config,
+    'GET',
+    '/api/point/inventory-requests',
+    undefined,
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
+export async function createPointInventoryRequest(
+  config: AppConfig,
+  session: OperatorSession,
+  payload: {
+    comment?: string | null
+    items: Array<{ item_id: string; requested_qty: number; comment?: string | null }>
+  },
+): Promise<{ request_id: string }> {
+  const data = await request<{ ok: boolean; data: { request_id: string } }>(
+    config,
+    'POST',
+    '/api/point/inventory-requests',
+    {
+      action: 'createRequest',
+      payload,
+    },
+    operatorHeaders(session),
+  )
+  return data.data
 }

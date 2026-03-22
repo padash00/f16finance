@@ -26,10 +26,11 @@ interface Props {
   isOffline?: boolean
   onLogout: () => void
   onSwitchToShift: () => void
+  onSwitchToRequest?: () => void
   onOpenCabinet?: () => void
 }
 
-export default function ScannerPage({ config, bootstrap, session, isOffline: initOffline, onLogout, onSwitchToShift, onOpenCabinet }: Props) {
+export default function ScannerPage({ config, bootstrap, session, isOffline: initOffline, onLogout, onSwitchToShift, onSwitchToRequest, onOpenCabinet }: Props) {
   const [products, setProducts] = useState<Product[]>([])
   const [debts, setDebts] = useState<DebtItem[]>([])
   const [allOperators, setAllOperators] = useState<OperatorBasic[]>([])
@@ -290,7 +291,9 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
           <WorkModeSwitch
             active="scanner"
             showScanner
+            showRequest={!!onSwitchToRequest}
             onShift={onSwitchToShift}
+            onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
           />
 
