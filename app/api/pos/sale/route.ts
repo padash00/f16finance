@@ -131,8 +131,11 @@ export async function POST(request: Request) {
     const totalAmount = Math.max(0, subtotal - discountAmount - loyaltyDiscountAmount)
     const saleDate = new Date().toISOString().split('T')[0]
 
-    // Insert point_sale
-    const { data: saleRow, error: saleError } = await supabase
+    // Insert point_sale (with fallback if loyalty/discount columns don't exist yet)
+    let saleRow: { id: string } | null = null
+    let saleError: any = null
+
+    const fullInsert = await supabase
       .from('point_sales')
       .insert({
         company_id: companyId,
@@ -156,7 +159,32 @@ export async function POST(request: Request) {
       .select('id')
       .single()
 
-    if (saleError) throw saleError
+    if (fullInsert.error) {
+      // Fallback: insert without new columns (migrations not yet applied)
+      const minimalInsert = await supabase
+        .from('point_sales')
+        .insert({
+          company_id: companyId,
+          location_id: locationId,
+          operator_id: access.staffMember?.id || null,
+          sale_date: saleDate,
+          cash_amount: cashAmount,
+          kaspi_amount: kaspiAmount,
+          online_amount: onlineAmount,
+          card_amount: cardAmount,
+          total_amount: totalAmount,
+        })
+        .select('id')
+        .single()
+      saleRow = minimalInsert.data
+      saleError = minimalInsert.error
+      // Reset loyalty amounts since they weren't saved
+      loyaltyPointsEarned = 0
+    } else {
+      saleRow = fullInsert.data
+    }
+
+    if (saleError || !saleRow) throw saleError || new Error('Sale insert failed')
     const saleId = saleRow.id
 
     // Insert sale items
