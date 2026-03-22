@@ -19,7 +19,7 @@ import {
   fetchInvoiceSession,
   upsertInvoiceNameMappings,
 } from '@/lib/server/repositories/invoice'
-import { postInventoryReceipt } from '@/lib/server/repositories/inventory'
+import { postInventoryReceipt, decideInventoryRequest } from '@/lib/server/repositories/inventory'
 import {
   confirmShiftPublicationWeekByResponse,
   createShiftIssueDraft,
@@ -975,6 +975,42 @@ export async function POST(req: Request) {
           }
         } catch (error: any) {
           if (chatId) await sendTelegramText(chatId, `❌ Ошибка: ${error?.message || 'Не удалось обработать запрос'}`).catch(() => null)
+        }
+        return json({ ok: true })
+      }
+
+      // Inventory request approve / reject
+      const ireqMatch = callbackData.match(/^ireq:([0-9a-f-]+):(approve|reject)$/i)
+      if (ireqMatch) {
+        const requestId = ireqMatch[1]
+        const action = ireqMatch[2]
+
+        await answerCallbackQuery(callbackQueryId, 'Обрабатываю...').catch(() => null)
+
+        try {
+          // Verify user is owner/manager
+          const botUser = await identifyBotUser(telegramUserId)
+          if (!canUseFinance(botUser.role)) {
+            await answerCallbackQuery(callbackQueryId, '⛔ Нет доступа', true)
+            return json({ ok: true })
+          }
+
+          await decideInventoryRequest(supabase, {
+            request_id: requestId,
+            approved: action === 'approve',
+            decision_comment: action === 'approve' ? 'Одобрено через Telegram' : 'Отклонено через Telegram',
+            actor_user_id: null,
+          })
+
+          if (chatId && messageId) await clearCallbackButtons(chatId, messageId).catch(() => null)
+
+          const resultText = action === 'approve'
+            ? '✅ Заявка одобрена. Товар будет переведён на точку.'
+            : '❌ Заявка отклонена.'
+
+          if (chatId) await sendTelegramText(chatId, resultText)
+        } catch (error: any) {
+          if (chatId) await sendTelegramText(chatId, `❌ Ошибка: ${error?.message || 'Не удалось обработать заявку'}`).catch(() => null)
         }
         return json({ ok: true })
       }

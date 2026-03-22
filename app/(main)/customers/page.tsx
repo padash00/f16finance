@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Users, Plus, Search, Star, TrendingUp, Edit2, Trash2, RefreshCw, ChevronDown, ChevronUp, Download } from 'lucide-react'
+import { Users, Plus, Search, Star, Edit2, Trash2, RefreshCw, Download, Clock } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +34,21 @@ type Customer = {
   created_at: string
   updated_at: string
   company: { id: string; name: string; code: string | null } | null
+}
+
+type SaleHistoryItem = {
+  id: string
+  sale_date: string
+  total_amount: number
+  discount_amount: number
+  cash_amount: number
+  kaspi_amount: number
+  card_amount: number
+  online_amount: number
+  loyalty_points_earned: number
+  loyalty_points_spent: number
+  created_at: string
+  items: Array<{ name: string; quantity: number; unit_price: number; total_price: number }>
 }
 
 type CustomerFormData = {
@@ -78,6 +93,10 @@ export default function CustomersPage() {
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null)
   const [adjustCustomer, setAdjustCustomer] = useState<Customer | null>(null)
   const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null)
+  const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null)
+  const [historyData, setHistoryData] = useState<SaleHistoryItem[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
 
   // Forms
   const [form, setForm] = useState<CustomerFormData>(EMPTY_FORM)
@@ -214,6 +233,23 @@ export default function CustomersPage() {
       company_id: customer.company_id || '',
     })
     setFormError(null)
+  }
+
+  async function openHistory(customer: Customer) {
+    setHistoryCustomer(customer)
+    setHistoryData([])
+    setHistoryError(null)
+    setHistoryLoading(true)
+    try {
+      const res = await fetch(`/api/admin/customers/history?customer_id=${customer.id}`)
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Ошибка')
+      setHistoryData(j.sales || [])
+    } catch (err: any) {
+      setHistoryError(err?.message || 'Не удалось загрузить историю покупок')
+    } finally {
+      setHistoryLoading(false)
+    }
   }
 
   function exportExcel() {
@@ -372,6 +408,15 @@ export default function CustomersPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
+                            title="История покупок"
+                            onClick={() => void openHistory(customer)}
+                          >
+                            <Clock className="h-4 w-4 text-sky-400" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
                             title="Баллы"
                             onClick={() => { setAdjustCustomer(customer); setPointsDelta(''); setPointsReason(''); setFormError(null) }}
                           >
@@ -513,6 +558,67 @@ export default function CustomersPage() {
                 <Button type="submit" disabled={saving}>{saving ? 'Сохранение...' : 'Применить'}</Button>
               </DialogFooter>
             </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* History Dialog */}
+      <Dialog open={!!historyCustomer} onOpenChange={(open) => { if (!open) { setHistoryCustomer(null); setHistoryData([]) } }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>История покупок: {historyCustomer?.name}</DialogTitle>
+          </DialogHeader>
+          {historyLoading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              Загрузка...
+            </div>
+          ) : historyError ? (
+            <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+              {historyError}
+            </div>
+          ) : historyData.length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground text-sm">Нет покупок</div>
+          ) : (
+            <div className="space-y-3">
+              {historyData.map((sale) => {
+                const paymentParts: string[] = []
+                if (sale.cash_amount > 0) paymentParts.push(`Нал: ${formatMoney(sale.cash_amount)}`)
+                if (sale.kaspi_amount > 0) paymentParts.push(`Kaspi: ${formatMoney(sale.kaspi_amount)}`)
+                if (sale.card_amount > 0) paymentParts.push(`Карта: ${formatMoney(sale.card_amount)}`)
+                if (sale.online_amount > 0) paymentParts.push(`Онлайн: ${formatMoney(sale.online_amount)}`)
+                return (
+                  <div key={sale.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">{formatDate(sale.created_at)}</span>
+                      <span className="font-bold text-emerald-400">{formatMoney(sale.total_amount)}</span>
+                    </div>
+                    <div className="space-y-0.5 mb-2">
+                      {sale.items.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span className="truncate flex-1">{item.name}</span>
+                          <span className="ml-4 shrink-0">{item.quantity} × {formatMoney(item.unit_price)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {paymentParts.map((p) => (
+                        <span key={p} className="rounded-full bg-white/10 px-2 py-0.5 text-[11px]">{p}</span>
+                      ))}
+                      {sale.discount_amount > 0 && (
+                        <span className="rounded-full bg-rose-500/20 text-rose-300 px-2 py-0.5 text-[11px]">Скидка: {formatMoney(sale.discount_amount)}</span>
+                      )}
+                      {sale.loyalty_points_earned > 0 && (
+                        <span className="rounded-full bg-amber-500/20 text-amber-300 px-2 py-0.5 text-[11px]">+{sale.loyalty_points_earned} баллов</span>
+                      )}
+                      {sale.loyalty_points_spent > 0 && (
+                        <span className="rounded-full bg-amber-500/10 text-amber-400 px-2 py-0.5 text-[11px]">−{sale.loyalty_points_spent} баллов</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </DialogContent>
       </Dialog>

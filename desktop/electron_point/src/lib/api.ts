@@ -161,6 +161,8 @@ export async function getPointDailyKaspiReport(
 }
 
 // ─── Products ─────────────────────────────────────────────────────────────────
+// @deprecated Products management is now handled through the web inventory catalog.
+// These functions are kept for backward compatibility but are no longer used in the app UI.
 
 export async function getProducts(config: AppConfig): Promise<Product[]> {
   const data = await request<{ ok: boolean; data: { products: Product[] } }>(

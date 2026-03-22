@@ -48,6 +48,7 @@ type ItemBody = {
     unit?: string | null
     notes?: string | null
     item_type?: string | null
+    low_stock_threshold?: number | null
   }
 }
 
@@ -147,6 +148,7 @@ type UpdateItemBody = {
     unit?: string | null
     notes?: string | null
     item_type?: string | null
+    low_stock_threshold?: number | null
   }
 }
 
@@ -165,6 +167,53 @@ type Body =
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+async function notifyManagersAboutRequest(requestId: string, companyName: string, itemCount: number, comment: string | null) {
+  try {
+    const supabase = createAdminSupabaseClient()
+    const { data: staff } = await supabase
+      .from('staff')
+      .select('telegram_chat_id, full_name')
+      .in('role', ['owner', 'manager'])
+      .not('telegram_chat_id', 'is', null)
+
+    if (!staff?.length) return
+
+    const text = [
+      `📦 <b>Новая заявка на товар</b>`,
+      ``,
+      `🏪 Точка: <b>${companyName}</b>`,
+      `📋 Позиций: <b>${itemCount}</b>`,
+      comment ? `💬 Комментарий: ${comment}` : null,
+      ``,
+      `Нажмите кнопку для одобрения:`,
+    ].filter(Boolean).join('\n')
+
+    const keyboard = {
+      inline_keyboard: [[
+        { text: '✅ Одобрить всё', callback_data: `ireq:${requestId}:approve` },
+        { text: '❌ Отклонить', callback_data: `ireq:${requestId}:reject` },
+      ]]
+    }
+
+    const token = process.env.TELEGRAM_BOT_TOKEN
+    if (!token) return
+
+    for (const s of staff) {
+      if (!s.telegram_chat_id) continue
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: String(s.telegram_chat_id),
+          text,
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+        }),
+      }).catch(() => null)
+    }
+  } catch { /* silent */ }
 }
 
 function normalizeMoney(value: unknown) {
@@ -264,6 +313,7 @@ export async function POST(request: Request) {
       if (!barcode) return json({ error: 'item-barcode-required' }, 400)
       if (salePrice < 0) return json({ error: 'item-sale-price-invalid' }, 400)
 
+      const lstCreate = body.payload?.low_stock_threshold
       const item = await createInventoryItem(supabase as any, {
         name,
         barcode,
@@ -273,6 +323,7 @@ export async function POST(request: Request) {
         unit: body.payload?.unit || 'шт',
         notes: body.payload?.notes || null,
         item_type: String(body.payload?.item_type || 'product') === 'consumable' ? 'consumable' : 'product',
+        low_stock_threshold: lstCreate != null && Number.isFinite(Number(lstCreate)) ? Number(lstCreate) : null,
       })
 
       if ((item as any)?.item_type !== 'consumable') {
@@ -383,6 +434,22 @@ export async function POST(request: Request) {
           item_count: normalizedItems.length,
         },
       })
+
+      // Notify managers via Telegram (fire and forget)
+      if (requestId) {
+        const { data: companyRow } = await (supabase as any)
+          .from('companies')
+          .select('name')
+          .eq('id', requestingCompanyId)
+          .maybeSingle()
+        const companyName = companyRow?.name || requestingCompanyId
+        notifyManagersAboutRequest(
+          String(requestId),
+          companyName,
+          normalizedItems.length,
+          body.payload?.comment || null,
+        ).catch(() => null)
+      }
 
       return json({ ok: true, data: { request_id: requestId } })
     }
@@ -543,6 +610,7 @@ export async function POST(request: Request) {
       if (!id) return json({ error: 'item-id-required' }, 400)
       if (!name) return json({ error: 'item-name-required' }, 400)
       if (!barcode) return json({ error: 'item-barcode-required' }, 400)
+      const lstUpdate = (body as UpdateItemBody).payload?.low_stock_threshold
       const item = await updateInventoryItem(supabase as any, id, {
         name,
         barcode,
@@ -552,6 +620,7 @@ export async function POST(request: Request) {
         unit: (body as UpdateItemBody).payload?.unit || 'шт',
         notes: (body as UpdateItemBody).payload?.notes || null,
         item_type: String((body as UpdateItemBody).payload?.item_type || 'product') === 'consumable' ? 'consumable' : 'product',
+        low_stock_threshold: lstUpdate != null && Number.isFinite(Number(lstUpdate)) ? Number(lstUpdate) : null,
       })
 
       if ((item as any)?.item_type !== 'consumable') {

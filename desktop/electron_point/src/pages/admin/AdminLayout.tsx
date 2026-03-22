@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ReceiptText, Package, CreditCard, Settings, LogOut, RefreshCw } from 'lucide-react'
+import { ReceiptText, CreditCard, Settings, LogOut, RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -7,7 +7,6 @@ import { syncQueue } from '@/lib/offline'
 import { toastSuccess, toastError } from '@/lib/toast'
 import ShiftHistoryPage from './ShiftHistoryPage'
 import DebtHistoryPage from './DebtHistoryPage'
-import ProductsPage from './ProductsPage'
 import DevicesPage from './DevicesPage'
 import type { AppConfig, BootstrapData, AdminSession } from '@/types'
 
@@ -18,12 +17,11 @@ interface Props {
   onLogout: () => void
 }
 
-type Tab = 'shifts' | 'debts' | 'products' | 'devices'
+type Tab = 'shifts' | 'debts' | 'devices'
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'shifts', label: 'Смены', icon: ReceiptText },
   { id: 'debts', label: 'Долги', icon: CreditCard },
-  { id: 'products', label: 'Товары', icon: Package },
   { id: 'devices', label: 'Устройства', icon: Settings },
 ]
 
@@ -98,7 +96,6 @@ export default function AdminLayout({ config, session, bootstrap, onLogout }: Pr
         <main className="flex-1 overflow-auto">
           {activeTab === 'shifts' && <ShiftHistoryPage config={config} session={session} bootstrap={bootstrap} />}
           {activeTab === 'debts' && <DebtHistoryPage config={config} session={session} bootstrap={bootstrap} />}
-          {activeTab === 'products' && <ProductsPage config={config} session={session} bootstrap={bootstrap} />}
           {activeTab === 'devices' && <DevicesPage config={config} session={session} />}
         </main>
       </div>

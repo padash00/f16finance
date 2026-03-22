@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { checkAndNotifyLowStock } from '@/lib/server/low-stock-notifier'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -229,6 +230,10 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    // Trigger low stock check in background (don't await)
+    const soldItemIds = items.map((i) => i.item_id)
+    checkAndNotifyLowStock(soldItemIds, locationId).catch(() => null)
 
     // Fetch full receipt data
     const { data: receiptSale } = await supabase

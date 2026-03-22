@@ -26,6 +26,7 @@ type CatalogItem = {
   is_active: boolean
   item_type: string
   total_balance: number
+  low_stock_threshold: number | null
 }
 
 type ImportRow = {
@@ -55,11 +56,12 @@ type ItemFormData = {
   category_id: string
   item_type: string
   notes: string
+  low_stock_threshold: string
 }
 
 const EMPTY_FORM: ItemFormData = {
   name: '', barcode: '', unit: 'шт', sale_price: '0', purchase_price: '0',
-  category_id: '', item_type: 'product', notes: '',
+  category_id: '', item_type: 'product', notes: '', low_stock_threshold: '',
 }
 
 const PAGE_SIZE = 50
@@ -210,6 +212,16 @@ function ItemForm({
           </SelectContent>
         </Select>
       </div>
+      <div>
+        <Label className="text-xs text-muted-foreground mb-1 block">Порог низкого остатка (алерт)</Label>
+        <Input
+          type="number"
+          min={0}
+          value={form.low_stock_threshold}
+          onChange={(e) => f('low_stock_threshold', e.target.value)}
+          placeholder="Не задан"
+        />
+      </div>
       <div className="col-span-2 sm:col-span-3 lg:col-span-4 flex gap-2 pt-1">
         <Button size="sm" onClick={onSave} disabled={loading || !form.name.trim() || !form.barcode.trim()}>
           <Check className="w-3.5 h-3.5 mr-1" />
@@ -309,6 +321,7 @@ export default function CatalogPage() {
       category_id: item.category?.id || '',
       item_type: item.item_type || 'product',
       notes: item.notes || '',
+      low_stock_threshold: item.low_stock_threshold != null ? String(item.low_stock_threshold) : '',
     })
   }
 
@@ -331,6 +344,7 @@ export default function CatalogPage() {
             category_id: editForm.category_id || null,
             item_type: editForm.item_type,
             notes: editForm.notes || null,
+            low_stock_threshold: editForm.low_stock_threshold !== '' ? parseFloat(editForm.low_stock_threshold) || null : null,
           },
         }),
       })
@@ -391,6 +405,7 @@ export default function CatalogPage() {
             category_id: addForm.category_id || null,
             item_type: addForm.item_type,
             notes: addForm.notes || null,
+            low_stock_threshold: addForm.low_stock_threshold !== '' ? parseFloat(addForm.low_stock_threshold) || null : null,
           },
         }),
       })
