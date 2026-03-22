@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { canAccessPath, type StaffRole } from '@/lib/core/access'
 import { cn } from '@/lib/utils'
 import {
+  ArchiveX,
   BarChart3,
   BrainCircuit,
   Briefcase,
@@ -15,10 +16,12 @@ import {
   CalendarClock,
   CalendarDays,
   CalendarRange,
+  History,
   Calculator,
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
+  ClipboardList,
   Command,
   FolderKanban,
   Gauge,
@@ -32,12 +35,15 @@ import {
   Menu,
   MessageSquareText,
   Network,
+  PackagePlus,
   PieChart,
   Radar,
+  ScanSearch,
   Search,
   Settings2,
   Shield,
   Sparkles,
+  Store,
   Target,
   Tags,
   TrendingDown,
@@ -108,6 +114,23 @@ const navSections: NavSection[] = [
       { href: '/categories', label: 'Категории', icon: Tags, note: 'Структура расходов' },
       { href: '/tax', label: 'Налоги', icon: Landmark, note: '3% и контроль базы' },
       { href: '/profitability', label: 'ОПиУ и EBITDA', icon: Calculator, note: 'Полная прибыль и комиссии POS' },
+    ],
+  },
+  {
+    id: 'store',
+    title: 'Магазин',
+    subtitle: 'Склад, витрины и движение товара',
+    accentColor: 'emerald',
+    icon: Boxes,
+    items: [
+      { href: '/inventory', label: 'Обзор магазина', icon: Boxes, note: 'Общая сводка по складу и витринам' },
+      { href: '/inventory/catalog', label: 'Каталог', icon: Tags, note: 'Товары, категории и поставщики' },
+      { href: '/inventory/receipts', label: 'Приемка', icon: PackagePlus, note: 'Документы прихода на склад' },
+      { href: '/inventory/requests', label: 'Заявки', icon: ClipboardList, note: 'Заявки точек и одобрение' },
+      { href: '/inventory/analytics', label: 'Аналитика точек', icon: Store, note: 'Остатки и движение по витринам' },
+      { href: '/inventory/writeoffs', label: 'Списания', icon: ArchiveX, note: 'Брак и служебные расходы' },
+      { href: '/inventory/stocktakes', label: 'Инвентаризация', icon: ScanSearch, note: 'Пересчет и корректировки' },
+      { href: '/inventory/movements', label: 'Движения', icon: History, note: 'Журнал товарных операций' },
     ],
   },
   {
@@ -419,7 +442,7 @@ function SidebarSection({
           </div>
         </button>
 
-        <div className={cn('mt-3 space-y-1 overflow-hidden transition-all duration-300', open ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0')}>
+        <div className={cn('mt-3 space-y-1 overflow-hidden transition-all duration-300', open ? 'max-h-[48rem] opacity-100' : 'max-h-0 opacity-0')}>
           {section.items.map((item) => {
             const active =
               item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/')

@@ -1,6 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { usePathname } from 'next/navigation'
 import {
   ArchiveX,
   Boxes,
@@ -181,6 +183,27 @@ type DecisionDraft = {
   quantities: Record<string, string>
 }
 
+type InventoryView =
+  | 'overview'
+  | 'catalog'
+  | 'receipts'
+  | 'requests'
+  | 'analytics'
+  | 'writeoffs'
+  | 'stocktakes'
+  | 'movements'
+
+const inventoryViewLinks: Array<{ href: string; label: string; view: InventoryView }> = [
+  { href: '/inventory', label: 'Обзор', view: 'overview' },
+  { href: '/inventory/catalog', label: 'Каталог', view: 'catalog' },
+  { href: '/inventory/receipts', label: 'Приемка', view: 'receipts' },
+  { href: '/inventory/requests', label: 'Заявки', view: 'requests' },
+  { href: '/inventory/analytics', label: 'Аналитика', view: 'analytics' },
+  { href: '/inventory/writeoffs', label: 'Списания', view: 'writeoffs' },
+  { href: '/inventory/stocktakes', label: 'Инвентаризация', view: 'stocktakes' },
+  { href: '/inventory/movements', label: 'Движения', view: 'movements' },
+]
+
 const emptyReceiptLine = (): ReceiptLine => ({
   item_id: '',
   quantity: '',
@@ -272,6 +295,7 @@ function createDecisionDraft(request: InventoryRequest): DecisionDraft {
 }
 
 export default function InventoryPage() {
+  const pathname = usePathname()
   const [data, setData] = useState<InventoryResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -311,6 +335,17 @@ export default function InventoryPage() {
   const [stocktakeDate, setStocktakeDate] = useState(new Date().toISOString().slice(0, 10))
   const [stocktakeComment, setStocktakeComment] = useState('')
   const [stocktakeLines, setStocktakeLines] = useState<StocktakeLine[]>([])
+
+  const inventoryView = useMemo<InventoryView>(() => {
+    if (pathname.endsWith('/catalog')) return 'catalog'
+    if (pathname.endsWith('/receipts')) return 'receipts'
+    if (pathname.endsWith('/requests')) return 'requests'
+    if (pathname.endsWith('/analytics')) return 'analytics'
+    if (pathname.endsWith('/writeoffs')) return 'writeoffs'
+    if (pathname.endsWith('/stocktakes')) return 'stocktakes'
+    if (pathname.endsWith('/movements')) return 'movements'
+    return 'overview'
+  }, [pathname])
 
   async function loadData() {
     setLoading(true)
@@ -551,6 +586,15 @@ export default function InventoryPage() {
         (a.location.company?.name || a.location.name).localeCompare(b.location.company?.name || b.location.name),
       )
   }, [balancesByLocation, data?.movements, pointLocations])
+
+  const showOverview = inventoryView === 'overview'
+  const showCatalog = inventoryView === 'overview' || inventoryView === 'catalog'
+  const showReceipts = inventoryView === 'overview' || inventoryView === 'receipts'
+  const showRequests = inventoryView === 'overview' || inventoryView === 'requests'
+  const showAnalytics = inventoryView === 'overview' || inventoryView === 'analytics'
+  const showWriteoffs = inventoryView === 'overview' || inventoryView === 'writeoffs'
+  const showStocktakes = inventoryView === 'overview' || inventoryView === 'stocktakes'
+  const showMovements = inventoryView === 'overview' || inventoryView === 'movements'
 
   function loadStocktakeLinesFromBalances() {
     if (!selectedStocktakeBalances.length) {
@@ -854,6 +898,26 @@ export default function InventoryPage() {
 
   return (
     <div className="app-page max-w-[1680px] space-y-6">
+      <Card className="border-border/70 bg-background/60 p-3">
+        <div className="flex flex-wrap gap-2">
+          {inventoryViewLinks.map((link) => {
+            const active = inventoryView === link.view
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`rounded-xl border px-3 py-2 text-sm transition ${
+                  active
+                    ? 'border-blue-500/30 bg-blue-500/10 text-blue-100'
+                    : 'border-border/70 bg-background/50 text-muted-foreground hover:bg-background hover:text-foreground'
+                }`}
+              >
+                {link.label}
+              </Link>
+            )
+          })}
+        </div>
+      </Card>
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Инвентарь и склад</h1>
@@ -870,18 +934,18 @@ export default function InventoryPage() {
       {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
       {success ? <Card className="border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">{success}</Card> : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+      {showOverview ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <SummaryCard icon={Boxes} label="Товаров" value={String(data?.items.length || 0)} note="Общий каталог склада и точек" />
         <SummaryCard icon={Store} label="Локаций" value={String(data?.locations.length || 0)} note="Склад и витрины по точкам" />
         <SummaryCard icon={ClipboardList} label="Новых заявок" value={String(pendingRequests.length)} note="Ждут решения руководителя" />
         <SummaryCard icon={PackagePlus} label="Приемок" value={String(data?.receipts.length || 0)} note="Последние документы прихода" />
         <SummaryCard icon={ArchiveX} label="Списаний" value={String(data?.writeoffs.length || 0)} note="Потери, брак и служебные расходы" />
         <SummaryCard icon={ScanSearch} label="Инвентаризаций" value={String(data?.stocktakes.length || 0)} note="Последние пересчеты и корректировки" />
-      </div>
+      </div> : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
-          <Card className="border-border/70 p-5">
+          <Card className={`border-border/70 p-5 ${showReceipts ? '' : 'hidden'}`}>
             <div className="mb-4 flex items-center gap-2">
               <PackagePlus className="h-5 w-5 text-emerald-400" />
               <div>
@@ -985,7 +1049,7 @@ export default function InventoryPage() {
             </div>
           </Card>
 
-          <Card className="border-border/70 p-5">
+          <Card className={`border-border/70 p-5 ${showWriteoffs ? '' : 'hidden'}`}>
             <SectionTitle icon={ArchiveX} title="Списание" subtitle="Брак, служебное потребление, потери и любые непригодные остатки по складу или витрине." />
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Локация">
@@ -1078,7 +1142,7 @@ export default function InventoryPage() {
             </div>
           </Card>
 
-          <Card className="border-border/70 p-5">
+          <Card className={`border-border/70 p-5 ${showStocktakes ? '' : 'hidden'}`}>
             <SectionTitle icon={ScanSearch} title="Инвентаризация" subtitle="Сверка фактического остатка с системой и автоматическая корректировка расхождений." />
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Локация">
@@ -1170,7 +1234,7 @@ export default function InventoryPage() {
             </div>
           </Card>
 
-          <Card className="border-border/70 p-5">
+          <Card className={`border-border/70 p-5 ${showRequests ? '' : 'hidden'}`}>
             <div className="mb-4 flex items-center gap-2">
               <ClipboardList className="h-5 w-5 text-blue-400" />
               <div>
@@ -1260,7 +1324,7 @@ export default function InventoryPage() {
           </Card>
         </div>
         <div className="space-y-6">
-          <Card className="border-border/70 p-5">
+          <Card className={`border-border/70 p-5 ${showRequests ? '' : 'hidden'}`}>
             <SectionTitle icon={ClipboardCheck} title="Заявки на одобрение" subtitle="Решение по заявке сразу двигает товар со склада на витрину точки." />
             <div className="space-y-4">
               {pendingRequests.map((request) => {
@@ -1351,7 +1415,7 @@ export default function InventoryPage() {
             </div>
           </Card>
 
-          <Card className="border-border/70 p-5">
+          <Card className={`border-border/70 p-5 ${showAnalytics ? '' : 'hidden'}`}>
             <SectionTitle icon={Boxes} title="Остатки по витринам" subtitle="Сколько товара уже лежит на точках после одобренных заявок." />
             <div className="space-y-2">
               {groupedPointBalances.map((item) => (
@@ -1371,7 +1435,7 @@ export default function InventoryPage() {
             </div>
           </Card>
 
-          <Card className="border-border/70 p-5">
+          <Card className={`border-border/70 p-5 ${showAnalytics ? '' : 'hidden'}`}>
             <SectionTitle
               icon={History}
               title="Глубокая аналитика по точкам"
@@ -1416,7 +1480,7 @@ export default function InventoryPage() {
             </div>
           </Card>
 
-          <Card className="border-border/70 p-5">
+          <Card className={`border-border/70 p-5 ${showCatalog ? '' : 'hidden'}`}>
             <SectionTitle icon={Tag} title="Категории товара" subtitle="Категории создаются на сайте и потом используются в общем каталоге." />
             <div className="space-y-3">
               <Field label="Название категории">
@@ -1436,7 +1500,7 @@ export default function InventoryPage() {
             </div>
           </Card>
 
-          <Card className="border-border/70 p-5">
+          <Card className={`border-border/70 p-5 ${showCatalog ? '' : 'hidden'}`}>
             <SectionTitle icon={Truck} title="Поставщики" subtitle="Поставщики и контактные лица для приемки товара." />
             <div className="grid gap-3">
               <Field label="Название поставщика">
@@ -1455,7 +1519,7 @@ export default function InventoryPage() {
             </div>
           </Card>
 
-          <Card className="border-border/70 p-5">
+          <Card className={`border-border/70 p-5 ${showCatalog ? '' : 'hidden'}`}>
             <SectionTitle icon={Building2} title="Товарная карточка" subtitle="Товар, штрихкод, категория, цена продажи и закупа." />
             <div className="grid gap-3">
               <Field label="Название">
@@ -1496,7 +1560,7 @@ export default function InventoryPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="border-border/70 p-5">
+        <Card className={`border-border/70 p-5 ${showReceipts ? '' : 'hidden'}`}>
           <SectionTitle icon={PackagePlus} title="Последние приемки" subtitle="Журнал последних складских приходов." />
           <div className="space-y-3">
             {(data?.receipts || []).map((receipt) => (
@@ -1520,7 +1584,7 @@ export default function InventoryPage() {
           </div>
         </Card>
 
-        <Card className="border-border/70 p-5">
+        <Card className={`border-border/70 p-5 ${showRequests ? '' : 'hidden'}`}>
           <SectionTitle icon={ClipboardList} title="Последние заявки" subtitle="История заявок точек, включая уже одобренные и отклонённые." />
           <div className="space-y-3">
             {(data?.requests || []).map((request) => (
@@ -1549,7 +1613,7 @@ export default function InventoryPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="border-border/70 p-5">
+        <Card className={`border-border/70 p-5 ${showWriteoffs ? '' : 'hidden'}`}>
           <SectionTitle icon={ArchiveX} title="Списание" subtitle="Брак, служебное потребление, потери и любые непригодные остатки по складу или витрине." />
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Локация">
@@ -1642,7 +1706,7 @@ export default function InventoryPage() {
           </div>
         </Card>
 
-        <Card className="border-border/70 p-5">
+        <Card className={`border-border/70 p-5 ${showStocktakes ? '' : 'hidden'}`}>
           <SectionTitle icon={ScanSearch} title="Инвентаризация" subtitle="Сверка фактического остатка с системой и автоматическая корректировка расхождений." />
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Локация">
@@ -1736,7 +1800,7 @@ export default function InventoryPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
-        <Card className="border-border/70 p-5">
+        <Card className={`border-border/70 p-5 ${showMovements ? '' : 'hidden'}`}>
           <SectionTitle icon={ArchiveX} title="Последние списания" subtitle="Что и откуда списали в последних документах." />
           <div className="space-y-3">
             {(data?.writeoffs || []).map((writeoff) => (
