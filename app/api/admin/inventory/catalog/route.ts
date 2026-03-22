@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { syncInventoryItemToPointProducts } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -275,6 +276,16 @@ export async function POST(request: Request) {
         updated++
       }
 
+      const syncRows = rows.filter((row) => row.item_type !== 'consumable')
+      for (const row of syncRows) {
+        await syncInventoryItemToPointProducts(supabase as any, {
+          name: row.name,
+          barcode: row.barcode,
+          sale_price: row.sale_price,
+          is_active: true,
+        })
+      }
+
       return json({ ok: true, data: { created, updated } })
     }
 
@@ -316,6 +327,15 @@ export async function POST(request: Request) {
 
       const { error: updateError } = await supabase.from('inventory_items').update(fields).eq('id', itemId)
       if (updateError) throw updateError
+
+      if (String(fields.item_type || 'product') !== 'consumable') {
+        await syncInventoryItemToPointProducts(supabase as any, {
+          name: String(fields.name || '').trim(),
+          barcode: String(fields.barcode || '').trim(),
+          sale_price: Number(fields.sale_price || 0),
+          is_active: true,
+        })
+      }
 
       return json({ ok: true })
     }

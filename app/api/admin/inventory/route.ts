@@ -11,6 +11,7 @@ import {
   postInventoryStocktake,
   postInventoryReceipt,
   postInventoryWriteoff,
+  syncInventoryItemToPointProducts,
   updateInventoryCategory,
   updateInventoryItem,
   updateInventorySupplier,
@@ -273,6 +274,15 @@ export async function POST(request: Request) {
         notes: body.payload?.notes || null,
         item_type: String(body.payload?.item_type || 'product') === 'consumable' ? 'consumable' : 'product',
       })
+
+      if ((item as any)?.item_type !== 'consumable') {
+        await syncInventoryItemToPointProducts(supabase as any, {
+          name,
+          barcode,
+          sale_price: salePrice,
+          is_active: true,
+        })
+      }
 
       await writeAuditLog(supabase as any, {
         actorUserId,
@@ -543,6 +553,16 @@ export async function POST(request: Request) {
         notes: (body as UpdateItemBody).payload?.notes || null,
         item_type: String((body as UpdateItemBody).payload?.item_type || 'product') === 'consumable' ? 'consumable' : 'product',
       })
+
+      if ((item as any)?.item_type !== 'consumable') {
+        await syncInventoryItemToPointProducts(supabase as any, {
+          name,
+          barcode,
+          sale_price: salePrice,
+          is_active: true,
+        })
+      }
+
       await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-item', entityId: id, action: 'update', payload: item })
       return json({ ok: true, data: item })
     }

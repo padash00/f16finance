@@ -56,6 +56,45 @@ function normalizeBarcode(value: unknown) {
     .replace(/\s+/g, '')
 }
 
+async function ensureCompanyPointProductsFromInventory(params: {
+  supabase: any
+  companyId: string
+}) {
+  const [{ data: existing, error: existingError }, { data: inventoryItems, error: inventoryError }] = await Promise.all([
+    params.supabase
+      .from('point_products')
+      .select('barcode')
+      .eq('company_id', params.companyId),
+    params.supabase
+      .from('inventory_items')
+      .select('name, barcode, sale_price, is_active, item_type')
+      .eq('is_active', true)
+      .neq('item_type', 'consumable')
+      .order('name', { ascending: true }),
+  ])
+
+  if (existingError) throw existingError
+  if (inventoryError) throw inventoryError
+
+  const existingBarcodes = new Set((existing || []).map((row: any) => normalizeBarcode(row.barcode)))
+  const missingRows = (inventoryItems || [])
+    .map((row: any) => ({
+      company_id: params.companyId,
+      name: String(row.name || '').trim(),
+      barcode: normalizeBarcode(row.barcode),
+      price: normalizeMoney(row.sale_price),
+      is_active: row.is_active !== false,
+    }))
+    .filter((row: any) => row.name && row.barcode && !existingBarcodes.has(row.barcode))
+
+  if (missingRows.length === 0) return
+
+  const { error } = await params.supabase.from('point_products').upsert(missingRows, {
+    onConflict: 'company_id,barcode',
+  })
+  if (error) throw error
+}
+
 async function requireSuperAdmin(email: string, password: string) {
   const authClient = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || requiredEnv('SUPABASE_URL'),
@@ -91,6 +130,7 @@ export async function GET(request: Request) {
     if ('response' in point) return point.response
 
     const { supabase, device } = point
+    await ensureCompanyPointProductsFromInventory({ supabase, companyId: device.company_id })
     const { data, error } = await supabase
       .from('point_products')
       .select('id, company_id, name, barcode, price, is_active, created_at, updated_at')

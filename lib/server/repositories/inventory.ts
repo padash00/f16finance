@@ -174,6 +174,54 @@ export async function createInventoryItem(
   return mapNestedRow(data)
 }
 
+export async function syncInventoryItemToPointProducts(
+  supabase: AnySupabase,
+  payload: {
+    name: string
+    barcode: string
+    sale_price: number
+    is_active?: boolean
+  },
+) {
+  const normalizedBarcode = String(payload.barcode || '').trim()
+  const normalizedName = String(payload.name || '').trim()
+  if (!normalizedBarcode || !normalizedName) return { syncedCompanyIds: [] as string[] }
+
+  const { data: locations, error: locationsError } = await supabase
+    .from('inventory_locations')
+    .select('company_id')
+    .eq('location_type', 'point_display')
+    .eq('is_active', true)
+    .not('company_id', 'is', null)
+
+  if (locationsError) throw locationsError
+
+  const companyIds = Array.from(
+    new Set(
+      (locations || [])
+        .map((row: any) => row.company_id)
+        .filter((value: string | null | undefined): value is string => !!value),
+    ),
+  )
+
+  if (companyIds.length === 0) return { syncedCompanyIds: [] as string[] }
+
+  const rows = companyIds.map((companyId) => ({
+    company_id: companyId,
+    name: normalizedName,
+    barcode: normalizedBarcode,
+    price: Math.max(0, Math.round(Number(payload.sale_price || 0))),
+    is_active: payload.is_active !== false,
+  }))
+
+  const { error } = await supabase.from('point_products').upsert(rows, {
+    onConflict: 'company_id,barcode',
+  })
+
+  if (error) throw error
+  return { syncedCompanyIds: companyIds }
+}
+
 export async function updateInventoryCategory(
   supabase: AnySupabase,
   id: string,
