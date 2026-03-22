@@ -51,6 +51,38 @@ type DecisionDraft = {
   quantities: Record<string, string>
 }
 
+function firstOrSelf<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return (value[0] as T) || null
+  return value ?? null
+}
+
+function asArray<T>(value: T[] | T | null | undefined): T[] {
+  if (Array.isArray(value)) return value
+  if (value == null) return []
+  return [value]
+}
+
+function normalizeRequest(raw: any): InventoryRequest {
+  return {
+    id: String(raw?.id || ''),
+    status: String(raw?.status || 'new'),
+    comment: raw?.comment || null,
+    decision_comment: raw?.decision_comment || null,
+    created_at: raw?.created_at || null,
+    approved_at: raw?.approved_at || null,
+    company: firstOrSelf(raw?.company),
+    source_location: firstOrSelf(raw?.source_location),
+    target_location: firstOrSelf(raw?.target_location),
+    items: asArray(raw?.items).map((item: any) => ({
+      id: String(item?.id || ''),
+      requested_qty: Number(item?.requested_qty || 0),
+      approved_qty: item?.approved_qty == null ? null : Number(item.approved_qty || 0),
+      comment: item?.comment || null,
+      item: firstOrSelf(item?.item),
+    })),
+  }
+}
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—'
   const parsed = new Date(value)
@@ -91,12 +123,12 @@ function requestStatusClass(status: string) {
 function createDecisionDraft(request: InventoryRequest): DecisionDraft {
   return {
     decisionComment: '',
-    quantities: Object.fromEntries((request.items || []).map((item) => [item.id, formatQty(Number(item.requested_qty || 0))])),
+    quantities: Object.fromEntries(asArray(request.items).map((item) => [item.id, formatQty(Number(item.requested_qty || 0))])),
   }
 }
 
 function requestItemsCount(request: InventoryRequest) {
-  return (request.items || []).reduce((sum, item) => sum + Number(item.requested_qty || 0), 0)
+  return asArray(request.items).reduce((sum, item) => sum + Number(item.requested_qty || 0), 0)
 }
 
 export default function StoreRequestsPage() {
@@ -117,10 +149,11 @@ export default function StoreRequestsPage() {
       if (!response.ok || !json?.ok || !json.data) {
         throw new Error(json?.error || 'Не удалось загрузить заявки магазина')
       }
-      setRequests(json.data.requests || [])
+      const normalizedRequests = asArray(json.data.requests).map(normalizeRequest).filter((request) => request.id)
+      setRequests(normalizedRequests)
       setDecisionDrafts((prev) => {
         const next = { ...prev }
-        for (const request of json.data?.requests || []) {
+        for (const request of normalizedRequests) {
           if (!next[request.id]) next[request.id] = createDecisionDraft(request)
         }
         return next
@@ -145,7 +178,7 @@ export default function StoreRequestsPage() {
         request.source_location?.name,
         request.target_location?.name,
         request.comment,
-        ...(request.items || []).flatMap((item) => [item.item?.name, item.item?.barcode, item.comment]),
+        ...asArray(request.items).flatMap((item) => [item.item?.name, item.item?.barcode, item.comment]),
       ]
         .filter(Boolean)
         .join(' ')
@@ -163,7 +196,7 @@ export default function StoreRequestsPage() {
   const stats = useMemo(() => {
     const totalRequested = pendingRequests.reduce((sum, request) => sum + requestItemsCount(request), 0)
     const totalApproved = approvedRequests.reduce(
-      (sum, request) => sum + (request.items || []).reduce((acc, item) => acc + Number(item.approved_qty || 0), 0),
+      (sum, request) => sum + asArray(request.items).reduce((acc, item) => acc + Number(item.approved_qty || 0), 0),
       0,
     )
     return {
@@ -205,7 +238,7 @@ export default function StoreRequestsPage() {
     try {
       const draft = decisionDrafts[request.id] || createDecisionDraft(request)
       const items = approved
-        ? (request.items || []).map((item) => ({
+        ? asArray(request.items).map((item) => ({
             request_item_id: item.id,
             approved_qty: Number(
               fullApprove ? item.requested_qty : String(draft.quantities[item.id] ?? item.requested_qty).replace(',', '.'),
@@ -358,9 +391,9 @@ export default function StoreRequestsPage() {
 
                   <div className="space-y-4 px-5 py-5">
                     <div className="space-y-3">
-                      {(request.items || []).map((item) => (
-                        <div
-                          key={item.id}
+                        {asArray(request.items).map((item) => (
+                          <div
+                            key={item.id}
                           className="grid gap-3 rounded-2xl border border-white/6 bg-slate-900/70 p-4 md:grid-cols-[1.4fr_0.7fr_0.7fr]"
                         >
                           <div className="min-w-0">
@@ -455,7 +488,7 @@ export default function StoreRequestsPage() {
                           {request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'}
                         </div>
                         <div className="mt-1 text-xs text-slate-400">
-                          {request.items?.length || 0} позиций · {formatDateTime(request.approved_at || request.created_at)}
+                          {asArray(request.items).length || 0} позиций · {formatDateTime(request.approved_at || request.created_at)}
                         </div>
                       </div>
                       <span
