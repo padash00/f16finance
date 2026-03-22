@@ -225,8 +225,8 @@ const inventoryViewMeta: Record<InventoryView, { title: string; description: str
     description: 'Брак, потери и служебное потребление по складу и витринам.',
   },
   stocktakes: {
-    title: 'Инвентаризация',
-    description: 'Пересчет фактических остатков и корректировка расхождений.',
+    title: 'Ревизия склада и витрин',
+    description: 'Полная проверка склада или витрины точки с фиксацией расхождений и корректировкой остатков.',
   },
   movements: {
     title: 'Журнал движений',
@@ -1053,7 +1053,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
   }
 
   async function handleCreateStocktake() {
-    if (!stocktakeLocationId) return setError('Выберите локацию для инвентаризации')
+    if (!stocktakeLocationId) return setError('Выберите локацию для ревизии')
 
     const items = stocktakeLines
       .map((line) => ({
@@ -1063,7 +1063,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
       }))
       .filter((line) => line.item_id && line.actual_qty >= 0)
 
-    if (items.length === 0) return setError('Загрузите или добавьте строки инвентаризации')
+    if (items.length === 0) return setError('Загрузите или добавьте строки ревизии')
 
     setSaving(true)
     setError(null)
@@ -1080,10 +1080,10 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
       })
       setStocktakeComment('')
       setStocktakeLines([])
-      setSuccess('Инвентаризация проведена, расхождения записаны в движения')
+      setSuccess('Ревизия проведена, расхождения записаны в движения')
       await loadData()
     } catch (e: any) {
-      setError(e?.message || 'Не удалось провести инвентаризацию')
+      setError(e?.message || 'Не удалось провести ревизию')
     } finally {
       setSaving(false)
     }
@@ -1137,7 +1137,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
         <SummaryCard icon={ClipboardList} label="Новых заявок" value={String(pendingRequests.length)} note="Ждут решения руководителя" />
         <SummaryCard icon={PackagePlus} label="Приемок" value={String(data?.receipts.length || 0)} note="Последние документы прихода" />
         <SummaryCard icon={ArchiveX} label="Списаний" value={String(data?.writeoffs.length || 0)} note="Потери, брак и служебные расходы" />
-        <SummaryCard icon={ScanSearch} label="Инвентаризаций" value={String(data?.stocktakes.length || 0)} note="Последние пересчеты и корректировки" />
+        <SummaryCard icon={ScanSearch} label="Ревизий" value={String(data?.stocktakes.length || 0)} note="Последние проверки и корректировки" />
       </div> : null}
 
       <div className={inventoryView === 'overview' ? 'grid gap-6 xl:grid-cols-[1.1fr_0.9fr]' : 'grid gap-6 xl:grid-cols-1'}>
@@ -1327,7 +1327,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
           </Card>
 
           <Card className={`border-border/70 p-5 ${showStocktakes ? '' : 'hidden'}`}>
-            <SectionTitle icon={ScanSearch} title="Инвентаризация" subtitle="Сверка фактического остатка с системой и автоматическая корректировка расхождений." />
+            <SectionTitle icon={ScanSearch} title="Ревизия" subtitle="Проверка склада или витрины с фиксацией факта и автоматической корректировкой расхождений." />
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Локация">
                 <Select value={stocktakeLocationId} onValueChange={setStocktakeLocationId}>
@@ -1341,13 +1341,13 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Дата пересчета">
+              <Field label="Дата ревизии">
                 <Input type="date" value={stocktakeDate} onChange={(event) => setStocktakeDate(event.target.value)} />
               </Field>
             </div>
 
             <Field label="Комментарий" className="mt-4">
-              <Textarea value={stocktakeComment} onChange={(event) => setStocktakeComment(event.target.value)} placeholder="Например, вечерний пересчет витрины" />
+              <Textarea value={stocktakeComment} onChange={(event) => setStocktakeComment(event.target.value)} placeholder="Например, вечерняя ревизия витрины" />
             </Field>
 
             <div className="mt-4 flex flex-wrap gap-3">
@@ -1413,7 +1413,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
             <div className="mt-4">
               <Button type="button" className="gap-2" onClick={handleCreateStocktake} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
-                Провести инвентаризацию
+                Провести ревизию
               </Button>
             </div>
           </Card>
@@ -1964,7 +1964,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
         </Card>
 
         <Card className={`border-border/70 p-5 ${showStocktakes ? '' : 'hidden'}`}>
-          <SectionTitle icon={ScanSearch} title="Инвентаризация" subtitle="Сверка фактического остатка с системой и автоматическая корректировка расхождений." />
+          <SectionTitle icon={ScanSearch} title="Ревизия" subtitle="Проверка склада или витрины с фиксацией факта и автоматической корректировкой расхождений." />
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Локация">
               <Select value={stocktakeLocationId} onValueChange={setStocktakeLocationId}>
@@ -1978,13 +1978,13 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Дата пересчета">
+            <Field label="Дата ревизии">
               <Input type="date" value={stocktakeDate} onChange={(event) => setStocktakeDate(event.target.value)} />
             </Field>
           </div>
 
           <Field label="Комментарий" className="mt-4">
-            <Textarea value={stocktakeComment} onChange={(event) => setStocktakeComment(event.target.value)} placeholder="Например, вечерний пересчет витрины" />
+            <Textarea value={stocktakeComment} onChange={(event) => setStocktakeComment(event.target.value)} placeholder="Например, вечерняя ревизия витрины" />
           </Field>
 
           <div className="mt-4 flex flex-wrap gap-3">
@@ -2050,7 +2050,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
           <div className="mt-4">
             <Button type="button" className="gap-2" onClick={handleCreateStocktake} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
-              Провести инвентаризацию
+              Провести ревизию
             </Button>
           </div>
         </Card>
@@ -2085,7 +2085,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
         </Card>
 
         <Card className={`border-border/70 p-5 ${showStocktakes ? '' : 'hidden'}`}>
-          <SectionTitle icon={ScanSearch} title="Последние инвентаризации" subtitle="Акты пересчета и количество строк с расхождениями." />
+          <SectionTitle icon={ScanSearch} title="Последние ревизии" subtitle="Акты проверки и количество строк с расхождениями." />
           <div className="space-y-3">
             {(data?.stocktakes || []).slice(0, stocktakesPage).map((stocktake) => {
               const changedCount = (stocktake.items || []).filter((item) => Number(item.delta_qty || 0) !== 0).length
@@ -2103,7 +2103,7 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
                 </div>
               )
             })}
-            {!data?.stocktakes?.length ? <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Пока нет инвентаризаций.</div> : null}
+            {!data?.stocktakes?.length ? <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">Пока нет ревизий.</div> : null}
             {(data?.stocktakes || []).length > stocktakesPage && (
               <Button type="button" variant="outline" className="w-full" onClick={() => setStocktakesPage((p) => p + 5)}>
                 Показать ещё ({(data?.stocktakes || []).length - stocktakesPage} осталось)

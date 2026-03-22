@@ -1,5 +1,5 @@
-import { InventoryPageContent } from '../page'
+import { redirect } from 'next/navigation'
 
 export default function InventoryStocktakesPage() {
-  return <InventoryPageContent forcedView="stocktakes" />
+  redirect('/inventory/revisions')
 }

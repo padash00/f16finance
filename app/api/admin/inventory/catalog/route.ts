@@ -19,7 +19,7 @@ type ImportRow = {
   sale_price: number
   purchase_price: number
   category: string | null
-  item_type: 'product' | 'service'
+  item_type: 'product' | 'service' | 'consumable'
   article: string | null
 }
 

@@ -648,25 +648,38 @@ export function Sidebar() {
     return baseSections
       .map((section) => ({
         ...section,
-        items: section.items.filter((item) => {
-          if (section.id === 'finance' && item.href === '/inventory') {
-            return false
-          }
-          if (item.href === '/operator-lead' && !isLeadOperator) {
-            return false
-          }
-          return canAccessPath({
-            pathname: item.href,
-            isStaff,
-            isOperator,
-            staffRole,
-            isSuperAdmin,
+        items: section.items
+          .map((item) => {
+            if (section.id === 'store' && item.href === '/inventory/stocktakes') {
+              return {
+                ...item,
+                href: '/inventory/revisions',
+                label: 'Ревизия',
+                note: 'Полная проверка склада и витрин',
+              }
+            }
+            return item
           })
-        }).filter((item) => {
-          if (!query) return true
-          const haystack = `${item.label} ${item.note || ''} ${section.title} ${section.subtitle}`.toLowerCase()
-          return haystack.includes(query)
-        }),
+          .filter((item) => {
+            if (section.id === 'finance' && item.href === '/inventory') {
+              return false
+            }
+            if (item.href === '/operator-lead' && !isLeadOperator) {
+              return false
+            }
+            return canAccessPath({
+              pathname: item.href,
+              isStaff,
+              isOperator,
+              staffRole,
+              isSuperAdmin,
+            })
+          })
+          .filter((item) => {
+            if (!query) return true
+            const haystack = `${item.label} ${item.note || ''} ${section.title} ${section.subtitle}`.toLowerCase()
+            return haystack.includes(query)
+          }),
       }))
       .filter((section) => {
         if (section.items.length > 0) return true
