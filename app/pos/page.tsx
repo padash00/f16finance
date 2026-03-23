@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -30,6 +30,7 @@ type PosItem = {
   unit: string | null
   category_name: string | null
   total_balance: number
+  is_active: boolean
   location_balances?: Record<string, number>
 }
 type Customer = { id: string; name: string; phone: string | null; card_number: string | null; loyalty_points: number }
@@ -392,9 +393,23 @@ export default function PosPage() {
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
-  const categories = bootstrapData
-    ? Array.from(new Set(bootstrapData.items.map((i) => i.category_name || 'Без категории'))).sort()
-    : []
+  const categories = useMemo(
+    () =>
+      bootstrapData
+        ? Array.from(new Set(bootstrapData.items.map((i) => i.category_name || 'Без категории'))).sort()
+        : [],
+    [bootstrapData],
+  )
+
+  const barcodeMap = useMemo(
+    () =>
+      new Map(
+        (bootstrapData?.items || [])
+          .filter((i) => i.barcode)
+          .map((i) => [i.barcode!, i]),
+      ),
+    [bootstrapData?.items],
+  )
 
   const filteredItems = bootstrapData
     ? bootstrapData.items
@@ -533,10 +548,8 @@ export default function PosPage() {
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && search.length >= 8) {
-      const found = bootstrapData?.items.find(
-        (item) => item.barcode && item.barcode === search && itemLocationBalance(item, selectedLocationId) > 0,
-      )
-      if (found) {
+      const found = barcodeMap.get(search)
+      if (found && itemLocationBalance(found, selectedLocationId) > 0) {
         addToCart(found)
         setSearch('')
       }
@@ -583,7 +596,7 @@ export default function PosPage() {
 
   // ── Submit sale ────────────────────────────────────────────────────────────
 
-  const handleSubmitSale = async () => {
+  const handleSubmitSale = useCallback(async () => {
     if (cart.length === 0) return
     if (!selectedCompanyId || !selectedLocationId) {
       setSaleError('Выберите компанию и точку продаж')
@@ -687,7 +700,22 @@ export default function PosPage() {
     } finally {
       setSubmitting(false)
     }
-  }
+  }, [
+    cart,
+    selectedCompanyId,
+    selectedLocationId,
+    paymentMethod,
+    mixedAmounts,
+    totalAmount,
+    subtotal,
+    discountAmount,
+    loyaltyDiscountAmount,
+    selectedCustomer,
+    selectedDiscount,
+    manualDiscountPercent,
+    loyaltyPointsToSpend,
+    bootstrapData,
+  ])
 
   const fetchAiHint = async () => {
     if (!selectedCompanyId) return
@@ -717,6 +745,7 @@ export default function PosPage() {
   }
 
   const handleNewSale = () => {
+    localStorage.removeItem('pos_cart')
     setCart([])
     setSelectedCustomer(null)
     setCustomerSearch('')
@@ -735,6 +764,63 @@ export default function PosPage() {
     loadBootstrap()
     setTimeout(() => searchRef.current?.focus(), 100)
   }
+
+  // ── Cart persistence ───────────────────────────────────────────────────────
+
+  // Save cart to localStorage on every change
+  useEffect(() => {
+    localStorage.setItem('pos_cart', JSON.stringify(cart))
+  }, [cart])
+
+  // Restore cart from localStorage after bootstrap loads
+  useEffect(() => {
+    if (!bootstrapData) return
+    const saved = localStorage.getItem('pos_cart')
+    if (!saved || cart.length > 0) return
+    try {
+      const parsed = JSON.parse(saved) as CartItem[]
+      const valid = parsed.filter((ci) => bootstrapData.items.some((i) => i.id === ci.item_id && i.is_active))
+      if (valid.length > 0) setCart(valid)
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootstrapData])
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ctrl+Enter or F9 → submit sale
+      if ((e.ctrlKey && e.key === 'Enter') || e.key === 'F9') {
+        e.preventDefault()
+        if (cart.length > 0 && !submitting) handleSubmitSale()
+      }
+      // Escape → focus search
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        searchRef.current?.focus()
+      }
+      // F3 → toggle customer panel
+      if (e.key === 'F3') {
+        e.preventDefault()
+        setShowCustomerPanel((prev) => !prev)
+      }
+      // F4 → toggle discount panel
+      if (e.key === 'F4') {
+        e.preventDefault()
+        setShowDiscountPanel((prev) => !prev)
+      }
+      // F8 → clear cart
+      if (e.key === 'F8' && cart.length > 0) {
+        e.preventDefault()
+        if (window.confirm('Очистить корзину?')) {
+          setCart([])
+          localStorage.removeItem('pos_cart')
+        }
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [cart, submitting, handleSubmitSale])
 
   // ── Render loading / error ──────────────────────────────────────────────────
 
@@ -1376,6 +1462,15 @@ export default function PosPage() {
                   `✅ ПРОВЕСТИ — ${fmt(totalAmount)} ₸`
                 )}
               </button>
+
+              {/* Keyboard shortcuts hint */}
+              <div className="text-xs text-gray-400 flex gap-3 mt-1 px-1 flex-wrap">
+                <span>F9 — оплатить</span>
+                <span>Esc — поиск</span>
+                <span>F3 — клиент</span>
+                <span>F4 — скидка</span>
+                <span>F8 — очистить</span>
+              </div>
             </div>
           )}
         </div>
