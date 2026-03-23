@@ -91,7 +91,7 @@ const PERIOD_OPTIONS = [
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function AbcAnalysisPage() {
+export function AbcAnalysisPageContent() {
   const [items, setItems] = useState<AbcItem[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -651,4 +651,8 @@ export default function AbcAnalysisPage() {
       </Dialog>
     </div>
   )
+}
+
+export default function AbcAnalysisPage() {
+  return <AbcAnalysisPageContent />
 }

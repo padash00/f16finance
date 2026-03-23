@@ -1,2 +1,5 @@
-import { default as ForecastPage } from '../../inventory/forecast/page'
-export default ForecastPage
+import { InventoryForecastPageContent } from '../../inventory/forecast/page'
+
+export default function StoreForecastPage() {
+  return <InventoryForecastPageContent />
+}

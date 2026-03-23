@@ -237,7 +237,7 @@ function ItemForm({
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
-export default function CatalogPage() {
+export function CatalogPageContent() {
   const [tab, setTab] = useState<'catalog' | 'import'>('catalog')
   const [items, setItems] = useState<CatalogItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -873,4 +873,8 @@ export default function CatalogPage() {
       )}
     </div>
   )
+}
+
+export default function CatalogPage() {
+  return <CatalogPageContent />
 }

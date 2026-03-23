@@ -1,5 +1,5 @@
-import InventoryConsumablesPage from '../../inventory/consumables/page'
+import { ConsumablesPageContent } from '../../inventory/consumables/page'
 
 export default function StoreConsumablesPage() {
-  return <InventoryConsumablesPage />
+  return <ConsumablesPageContent />
 }

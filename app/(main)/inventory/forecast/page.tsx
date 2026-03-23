@@ -74,7 +74,7 @@ function daysLeftColor(daysLeft: number | null) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function InventoryForecastPage() {
+export function InventoryForecastPageContent() {
   const { companies } = useCompanies()
   const [companyId, setCompanyId] = useState('')
   const [locationId, setLocationId] = useState('')
@@ -350,4 +350,8 @@ export default function InventoryForecastPage() {
       </Card>
     </div>
   )
+}
+
+export default function InventoryForecastPage() {
+  return <InventoryForecastPageContent />
 }

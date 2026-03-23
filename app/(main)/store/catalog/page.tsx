@@ -1,5 +1,5 @@
-import InventoryCatalogPage from '../../inventory/catalog/page'
+import { CatalogPageContent } from '../../inventory/catalog/page'
 
 export default function StoreCatalogPage() {
-  return <InventoryCatalogPage />
+  return <CatalogPageContent />
 }
