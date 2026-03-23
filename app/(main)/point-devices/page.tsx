@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
   Building2,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Eye,
   EyeOff,
@@ -34,6 +36,20 @@ type PointFeatureFlags = {
   kaspi_daily_split: boolean
 }
 
+type CompanyAssignment = {
+  company_id: string
+  point_mode: string    // '' = inherit from project
+  feature_flags: {
+    debt_report: boolean | null       // null = inherit
+    kaspi_daily_split: boolean | null // null = inherit
+  }
+}
+
+type ProjectCompany = Company & {
+  point_mode: string | null
+  feature_flags: Partial<PointFeatureFlags> | null
+}
+
 type PointProject = {
   id: string
   name: string
@@ -46,7 +62,7 @@ type PointProject = {
   last_seen_at: string | null
   created_at: string
   updated_at: string
-  companies: Company[]
+  companies: ProjectCompany[]
 }
 
 type ProjectsResponse = {
@@ -61,24 +77,26 @@ type ProjectsResponse = {
 type ProjectForm = {
   name: string
   point_mode: string
-  company_ids: string[]
+  company_assignments: CompanyAssignment[]
   shift_report_chat_id: string
   notes: string
   feature_flags: PointFeatureFlags
 }
 
+const DEFAULT_FLAGS: PointFeatureFlags = {
+  shift_report: true,
+  income_report: true,
+  debt_report: false,
+  kaspi_daily_split: false,
+}
+
 const DEFAULT_FORM: ProjectForm = {
   name: '',
   point_mode: 'shift-report',
-  company_ids: [],
+  company_assignments: [],
   shift_report_chat_id: '',
   notes: '',
-  feature_flags: {
-    shift_report: true,
-    income_report: true,
-    debt_report: false,
-    kaspi_daily_split: false,
-  },
+  feature_flags: { ...DEFAULT_FLAGS },
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -98,43 +116,164 @@ function formatDateTime(value: string | null) {
   })
 }
 
-function CompanySelect({
+function emptyAssignment(company_id: string): CompanyAssignment {
+  return { company_id, point_mode: '', feature_flags: { debt_report: null, kaspi_daily_split: null } }
+}
+
+function CompanyAssignmentEditor({
   allCompanies,
-  selectedIds,
+  assignments,
+  projectMode,
+  projectFlags,
   onChange,
 }: {
   allCompanies: Company[]
-  selectedIds: string[]
-  onChange: (ids: string[]) => void
+  assignments: CompanyAssignment[]
+  projectMode: string
+  projectFlags: PointFeatureFlags
+  onChange: (assignments: CompanyAssignment[]) => void
 }) {
-  function toggle(id: string) {
-    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id])
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+
+  const selectedIds = new Set(assignments.map((a) => a.company_id))
+
+  function toggle(companyId: string) {
+    if (selectedIds.has(companyId)) {
+      onChange(assignments.filter((a) => a.company_id !== companyId))
+    } else {
+      onChange([...assignments, emptyAssignment(companyId)])
+    }
+  }
+
+  function updateAssignment(companyId: string, patch: Partial<CompanyAssignment>) {
+    onChange(assignments.map((a) => a.company_id === companyId ? { ...a, ...patch } : a))
+  }
+
+  function updateFlag(companyId: string, key: 'debt_report' | 'kaspi_daily_split', value: boolean | null) {
+    onChange(assignments.map((a) =>
+      a.company_id === companyId
+        ? { ...a, feature_flags: { ...a.feature_flags, [key]: value } }
+        : a
+    ))
   }
 
   return (
     <div className="space-y-2">
-      <div className="grid gap-2 sm:grid-cols-2">
-        {allCompanies.map((c) => {
-          const selected = selectedIds.includes(c.id)
-          return (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => toggle(c.id)}
-              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm text-left transition ${
-                selected
-                  ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-200'
-                  : 'border-white/10 bg-black/20 text-muted-foreground hover:border-white/20 hover:text-foreground'
-              }`}
-            >
-              <Building2 className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{c.name}{c.code ? ` (${c.code})` : ''}</span>
-              {selected && <X className="ml-auto h-3.5 w-3.5 shrink-0 text-cyan-400" />}
-            </button>
-          )
-        })}
-      </div>
-      {selectedIds.length === 0 && (
+      {allCompanies.map((c) => {
+        const selected = selectedIds.has(c.id)
+        const assignment = assignments.find((a) => a.company_id === c.id)
+        const isExpanded = expanded[c.id] === true
+        const hasOverride = assignment && (
+          (assignment.point_mode && assignment.point_mode !== '') ||
+          assignment.feature_flags.debt_report !== null ||
+          assignment.feature_flags.kaspi_daily_split !== null
+        )
+
+        return (
+          <div
+            key={c.id}
+            className={`rounded-xl border transition ${
+              selected
+                ? 'border-cyan-500/30 bg-cyan-500/5'
+                : 'border-white/10 bg-black/20'
+            }`}
+          >
+            <div className="flex items-center gap-2 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => toggle(c.id)}
+                className={`flex flex-1 items-center gap-2 text-sm text-left ${
+                  selected ? 'text-cyan-200' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Building2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate font-medium">{c.name}{c.code ? ` (${c.code})` : ''}</span>
+                {hasOverride && (
+                  <span className="ml-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
+                    своя настройка
+                  </span>
+                )}
+              </button>
+              {selected && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setExpanded((prev) => ({ ...prev, [c.id]: !prev[c.id] }))}
+                    className="flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    Настройки
+                  </button>
+                  <button type="button" onClick={() => toggle(c.id)}>
+                    <X className="h-3.5 w-3.5 text-cyan-400 hover:text-red-400" />
+                  </button>
+                </>
+              )}
+            </div>
+
+            {selected && isExpanded && assignment && (
+              <div className="border-t border-white/10 px-3 pb-3 pt-2 space-y-3">
+                <div className="text-[11px] text-muted-foreground">
+                  Оставь «Наследовать» чтобы использовать настройки проекта
+                </div>
+
+                <label className="block space-y-1 text-sm">
+                  <span className="text-muted-foreground">Режим точки</span>
+                  <select
+                    value={assignment.point_mode}
+                    onChange={(e) => updateAssignment(c.id, { point_mode: e.target.value })}
+                    className="w-full rounded-xl border border-white/10 bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Наследовать от проекта ({MODE_LABELS[projectMode] || projectMode})</option>
+                    <option value="shift-report">Сменный отчёт</option>
+                    <option value="cash-desk">Кассовое место (магазин)</option>
+                    <option value="universal">Универсальный режим</option>
+                    <option value="debts">Долги и доп. операции</option>
+                  </select>
+                </label>
+
+                <div className="space-y-1.5">
+                  <span className="text-sm text-muted-foreground">Флаги (null = наследовать)</span>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {([
+                      ['debt_report', 'Долги и сканер', projectFlags.debt_report],
+                      ['kaspi_daily_split', 'Суточная сверка Kaspi', projectFlags.kaspi_daily_split],
+                    ] as [keyof typeof assignment.feature_flags, string, boolean][]).map(([key, label, projectDefault]) => {
+                      const val = assignment.feature_flags[key]
+                      return (
+                        <div key={key} className="rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
+                          <div className="mb-1.5 font-medium text-foreground">{label}</div>
+                          <div className="flex gap-2">
+                            {([
+                              [null, `Проект (${projectDefault ? 'вкл' : 'выкл'})`],
+                              [true, 'Включить'],
+                              [false, 'Выключить'],
+                            ] as [boolean | null, string][]).map(([v, lbl]) => (
+                              <button
+                                key={String(v)}
+                                type="button"
+                                onClick={() => updateFlag(c.id, key, v)}
+                                className={`rounded-lg border px-2 py-1 transition ${
+                                  val === v
+                                    ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-200'
+                                    : 'border-white/10 text-muted-foreground hover:border-white/20 hover:text-foreground'
+                                }`}
+                              >
+                                {lbl}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {assignments.length === 0 && (
         <p className="text-xs text-amber-400">Выберите хотя бы одну точку</p>
       )}
     </div>
@@ -174,7 +313,7 @@ function ProjectFormPanel({
         </label>
 
         <label className="space-y-2 text-sm">
-          <span className="text-muted-foreground">Режим</span>
+          <span className="text-muted-foreground">Режим по умолчанию</span>
           <select
             value={form.point_mode}
             onChange={(e) => onChange({ ...form, point_mode: e.target.value })}
@@ -200,10 +339,12 @@ function ProjectFormPanel({
 
       <div className="space-y-2 text-sm">
         <span className="text-muted-foreground">Точки в проекте</span>
-        <CompanySelect
+        <CompanyAssignmentEditor
           allCompanies={allCompanies}
-          selectedIds={form.company_ids}
-          onChange={(ids) => onChange({ ...form, company_ids: ids })}
+          assignments={form.company_assignments}
+          projectMode={form.point_mode}
+          projectFlags={form.feature_flags}
+          onChange={(assignments) => onChange({ ...form, company_assignments: assignments })}
         />
       </div>
 
@@ -211,7 +352,7 @@ function ProjectFormPanel({
         {([
           ['shift_report', 'Сменные отчёты', 'Форма смены: наличные, Kaspi, итоги → Telegram и salary.'],
           ['income_report', 'Доходы', 'Отдельная форма доходов. Зарезервировано.'],
-          ['debt_report', 'Долги и сканер', 'Включает страницу сканера: запись долгов и штрихкодов.'],
+          ['debt_report', 'Долги и сканер', 'По умолчанию для точек без своей настройки.'],
         ] as [string, string, string][]).map(([key, label, hint]) => (
           <label
             key={key}
@@ -280,9 +421,7 @@ export default function PointDevicesPage() {
     setLoading(false)
   }
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [])
 
   async function mutate(payload: unknown) {
     const response = await fetch('/api/admin/point-devices', {
@@ -295,18 +434,41 @@ export default function PointDevicesPage() {
     return data
   }
 
+  function buildApiAssignments(assignments: CompanyAssignment[]) {
+    return assignments.map((a) => {
+      const hasMode = a.point_mode && a.point_mode !== ''
+      const hasFlagDebt = a.feature_flags.debt_report !== null
+      const hasFlagKaspi = a.feature_flags.kaspi_daily_split !== null
+      return {
+        company_id: a.company_id,
+        point_mode: hasMode ? a.point_mode : null,
+        feature_flags: (hasFlagDebt || hasFlagKaspi)
+          ? {
+              shift_report: true,
+              income_report: true,
+              debt_report: a.feature_flags.debt_report ?? false,
+              kaspi_daily_split: a.feature_flags.kaspi_daily_split ?? false,
+            }
+          : null,
+      }
+    })
+  }
+
   async function handleCreate() {
     if (!newProject.name.trim()) { setError('Укажите название проекта'); return }
-    if (newProject.company_ids.length === 0) { setError('Добавьте хотя бы одну точку'); return }
+    if (newProject.company_assignments.length === 0) { setError('Добавьте хотя бы одну точку'); return }
 
     setSaving(true); setError(null); setSuccess(null)
     try {
       await mutate({
         action: 'createProject',
         payload: {
-          ...newProject,
+          name: newProject.name,
+          point_mode: newProject.point_mode,
+          company_assignments: buildApiAssignments(newProject.company_assignments),
           shift_report_chat_id: newProject.shift_report_chat_id || null,
           notes: newProject.notes || null,
+          feature_flags: newProject.feature_flags,
         },
       })
       setNewProject(DEFAULT_FORM)
@@ -324,7 +486,14 @@ export default function PointDevicesPage() {
     setEditingForm({
       name: project.name,
       point_mode: project.point_mode,
-      company_ids: project.companies.map((c) => c.id),
+      company_assignments: project.companies.map((c) => ({
+        company_id: c.id,
+        point_mode: c.point_mode || '',
+        feature_flags: {
+          debt_report: c.feature_flags?.debt_report ?? null,
+          kaspi_daily_split: c.feature_flags?.kaspi_daily_split ?? null,
+        },
+      })),
       shift_report_chat_id: project.shift_report_chat_id || '',
       notes: project.notes || '',
       feature_flags: {
@@ -338,7 +507,7 @@ export default function PointDevicesPage() {
 
   async function handleUpdate(projectId: string) {
     if (!editingForm.name.trim()) { setError('Укажите название проекта'); return }
-    if (editingForm.company_ids.length === 0) { setError('Добавьте хотя бы одну точку'); return }
+    if (editingForm.company_assignments.length === 0) { setError('Добавьте хотя бы одну точку'); return }
 
     setSaving(true); setError(null); setSuccess(null)
     try {
@@ -346,9 +515,12 @@ export default function PointDevicesPage() {
         action: 'updateProject',
         projectId,
         payload: {
-          ...editingForm,
+          name: editingForm.name,
+          point_mode: editingForm.point_mode,
+          company_assignments: buildApiAssignments(editingForm.company_assignments),
           shift_report_chat_id: editingForm.shift_report_chat_id || null,
           notes: editingForm.notes || null,
+          feature_flags: editingForm.feature_flags,
         },
       })
       setEditingId(null)
@@ -421,7 +593,7 @@ export default function PointDevicesPage() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Проекты точек</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Один токен — несколько точек. Оператор выбирает точку при входе.
+              Один токен — несколько точек. Каждой точке можно задать свой режим.
             </p>
           </div>
         </div>
@@ -481,7 +653,6 @@ export default function PointDevicesPage() {
                   />
                 ) : (
                   <>
-                    {/* Header */}
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -537,18 +708,32 @@ export default function PointDevicesPage() {
                       </div>
                     </div>
 
-                    {/* Companies + token + features */}
                     <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1.4fr_1fr]">
                       {/* Companies */}
                       <div className="rounded-xl border border-white/10 bg-background/70 p-3">
                         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                           Точки ({project.companies.length})
                         </p>
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           {project.companies.map((c) => (
-                            <div key={c.id} className="flex items-center gap-2 text-sm text-foreground">
-                              <Building2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
-                              <span className="truncate">{c.name}{c.code ? ` (${c.code})` : ''}</span>
+                            <div key={c.id} className="space-y-0.5">
+                              <div className="flex items-center gap-2 text-sm text-foreground">
+                                <Building2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                                <span className="truncate">{c.name}{c.code ? ` (${c.code})` : ''}</span>
+                              </div>
+                              {c.point_mode && (
+                                <div className="pl-5 text-[11px] text-amber-300">
+                                  режим: {MODE_LABELS[c.point_mode] || c.point_mode}
+                                </div>
+                              )}
+                              {c.feature_flags && (
+                                <div className="pl-5 text-[11px] text-amber-300">
+                                  {[
+                                    c.feature_flags.debt_report === true && 'долги',
+                                    c.feature_flags.kaspi_daily_split === true && 'kaspi-split',
+                                  ].filter(Boolean).join(', ') || null}
+                                </div>
+                              )}
                             </div>
                           ))}
                           {project.companies.length === 0 && (

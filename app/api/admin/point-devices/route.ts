@@ -11,13 +11,19 @@ type PointFeatureFlags = {
   kaspi_daily_split: boolean
 }
 
+type CompanyAssignment = {
+  company_id: string
+  point_mode?: string | null
+  feature_flags?: Partial<PointFeatureFlags> | null
+}
+
 type Body =
   | {
       action: 'createProject'
       payload: {
         name: string
         point_mode: string
-        company_ids: string[]
+        company_assignments: CompanyAssignment[]
         shift_report_chat_id?: string | null
         notes?: string | null
         feature_flags?: Partial<PointFeatureFlags> | null
@@ -29,7 +35,7 @@ type Body =
       payload: {
         name: string
         point_mode: string
-        company_ids: string[]
+        company_assignments: CompanyAssignment[]
         shift_report_chat_id?: string | null
         notes?: string | null
         feature_flags?: Partial<PointFeatureFlags> | null
@@ -79,7 +85,13 @@ function mapProjectRow(row: any) {
   const companies = Array.isArray(row.point_project_companies)
     ? row.point_project_companies.map((c: any) => {
         const co = Array.isArray(c.company) ? c.company[0] || null : c.company || null
-        return { id: c.company_id, name: co?.name || '', code: co?.code || null }
+        return {
+          id: c.company_id,
+          name: co?.name || '',
+          code: co?.code || null,
+          point_mode: c.point_mode || null,
+          feature_flags: c.feature_flags || null,
+        }
       })
     : []
   return {
@@ -98,7 +110,7 @@ function mapProjectRow(row: any) {
   }
 }
 
-const PROJECT_SELECT = 'id, name, project_token, point_mode, feature_flags, shift_report_chat_id, is_active, notes, last_seen_at, created_at, updated_at, point_project_companies(company_id, company:company_id(id, name, code))'
+const PROJECT_SELECT = 'id, name, project_token, point_mode, feature_flags, shift_report_chat_id, is_active, notes, last_seen_at, created_at, updated_at, point_project_companies(company_id, point_mode, feature_flags, company:company_id(id, name, code))'
 
 async function getContext(request: Request) {
   const access = await getRequestAccessContext(request)
@@ -144,7 +156,7 @@ export async function GET(request: Request) {
       area: 'api/admin/point-devices:get',
       message: error?.message || 'Point projects GET error',
     })
-    return json({ error: error?.message || 'Не удалось загрузить проекты точек' }, 500)
+    return json({ error: error?.message || 'Не удалось загрузить проекты' }, 500)
   }
 }
 
@@ -161,9 +173,10 @@ export async function POST(request: Request) {
     if (body.action === 'createProject') {
       if (!body.payload.name?.trim()) return badRequest('Название проекта обязательно')
       if (!body.payload.point_mode?.trim()) return badRequest('Режим точки обязателен')
-      if (!Array.isArray(body.payload.company_ids) || body.payload.company_ids.length === 0) {
-        return badRequest('Нужно добавить хотя бы одну точку в проект')
-      }
+      const assignments: CompanyAssignment[] = Array.isArray(body.payload.company_assignments)
+        ? body.payload.company_assignments
+        : []
+      if (assignments.length === 0) return badRequest('Нужно добавить хотя бы одну точку в проект')
 
       const initialToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
         .map((b) => b.toString(16).padStart(2, '0'))
@@ -184,9 +197,11 @@ export async function POST(request: Request) {
 
       if (projectError) throw projectError
 
-      const companyRows = body.payload.company_ids.map((company_id) => ({
+      const companyRows = assignments.map((a) => ({
         project_id: project.id,
-        company_id,
+        company_id: a.company_id,
+        point_mode: a.point_mode?.trim() || null,
+        feature_flags: a.feature_flags ? normalizeFlags(a.feature_flags) : null,
       }))
       const { error: companiesError } = await supabase
         .from('point_project_companies')
@@ -207,7 +222,7 @@ export async function POST(request: Request) {
         entityType: 'point-project',
         entityId: String(project.id),
         action: 'create',
-        payload: { name: project.name, company_ids: body.payload.company_ids },
+        payload: { name: project.name, company_ids: assignments.map((a) => a.company_id) },
       })
 
       return json({ ok: true, data: mapProjectRow(full) })
@@ -219,9 +234,10 @@ export async function POST(request: Request) {
     if (body.action === 'updateProject') {
       if (!body.payload.name?.trim()) return badRequest('Название проекта обязательно')
       if (!body.payload.point_mode?.trim()) return badRequest('Режим точки обязателен')
-      if (!Array.isArray(body.payload.company_ids) || body.payload.company_ids.length === 0) {
-        return badRequest('Нужно добавить хотя бы одну точку в проект')
-      }
+      const assignments: CompanyAssignment[] = Array.isArray(body.payload.company_assignments)
+        ? body.payload.company_assignments
+        : []
+      if (assignments.length === 0) return badRequest('Нужно добавить хотя бы одну точку в проект')
 
       const { error: updateError } = await supabase
         .from('point_projects')
@@ -237,11 +253,12 @@ export async function POST(request: Request) {
 
       if (updateError) throw updateError
 
-      // Replace company assignments
       await supabase.from('point_project_companies').delete().eq('project_id', projectId)
-      const companyRows = body.payload.company_ids.map((company_id) => ({
+      const companyRows = assignments.map((a) => ({
         project_id: projectId,
-        company_id,
+        company_id: a.company_id,
+        point_mode: a.point_mode?.trim() || null,
+        feature_flags: a.feature_flags ? normalizeFlags(a.feature_flags) : null,
       }))
       const { error: insertError } = await supabase.from('point_project_companies').insert(companyRows)
       if (insertError) throw insertError
@@ -259,7 +276,7 @@ export async function POST(request: Request) {
         entityType: 'point-project',
         entityId: projectId,
         action: 'update',
-        payload: { name: body.payload.name, company_ids: body.payload.company_ids },
+        payload: { name: body.payload.name, company_ids: assignments.map((a) => a.company_id) },
       })
 
       return json({ ok: true, data: mapProjectRow(full) })
@@ -311,7 +328,6 @@ export async function POST(request: Request) {
       return json({ ok: true, data: mapProjectRow(data) })
     }
 
-    // deleteProject
     const { error: deleteError } = await supabase.from('point_projects').delete().eq('id', projectId)
     if (deleteError) throw deleteError
 

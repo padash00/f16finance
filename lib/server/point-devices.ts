@@ -45,7 +45,7 @@ export async function requirePointDevice(request: Request): Promise<
   const supabase = createAdminSupabaseClient()
   const { data, error } = await supabase
     .from('point_projects')
-    .select('id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, point_project_companies(company_id, company:company_id(id, name, code))')
+    .select('id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, point_project_companies(company_id, point_mode, feature_flags, company:company_id(id, name, code))')
     .eq('project_token', token)
     .maybeSingle()
 
@@ -64,23 +64,42 @@ export async function requirePointDevice(request: Request): Promise<
   const requestedCompanyId = request.headers.get('x-point-company-id')?.trim() || ''
   let selectedCompanyId = ''
   let selectedCompany: { id: string; name: string; code: string | null } | null = null
+  let selectedCompanyRow: any = null
 
   if (requestedCompanyId && company_ids.includes(requestedCompanyId)) {
     selectedCompanyId = requestedCompanyId
     const match = projectCompanies.find((c: any) => c.company_id === requestedCompanyId)
-    if (match?.company) {
-      const co = Array.isArray(match.company) ? match.company[0] : match.company
-      selectedCompany = co || null
+    if (match) {
+      selectedCompanyRow = match
+      if (match.company) {
+        const co = Array.isArray(match.company) ? match.company[0] : match.company
+        selectedCompany = co || null
+      }
     }
   } else if (company_ids.length > 0) {
     // Fallback to first company (used by bootstrap before company selection)
     selectedCompanyId = company_ids[0]
+    selectedCompanyRow = projectCompanies[0]
     const first = projectCompanies[0]
     if (first?.company) {
       const co = Array.isArray(first.company) ? first.company[0] : first.company
       selectedCompany = co || null
     }
   }
+
+  // Apply per-company overrides (if set, they take priority over project defaults)
+  const projectFlags: Record<string, unknown> =
+    data.feature_flags && typeof data.feature_flags === 'object'
+      ? (data.feature_flags as Record<string, unknown>)
+      : {}
+
+  const effectivePointMode: string =
+    selectedCompanyRow?.point_mode || data.point_mode
+
+  const effectiveFeatureFlags: Record<string, unknown> =
+    selectedCompanyRow?.feature_flags && typeof selectedCompanyRow.feature_flags === 'object'
+      ? (selectedCompanyRow.feature_flags as Record<string, unknown>)
+      : projectFlags
 
   await supabase.from('point_projects').update({ last_seen_at: new Date().toISOString() }).eq('id', data.id)
 
@@ -93,11 +112,8 @@ export async function requirePointDevice(request: Request): Promise<
       name: data.name,
       device_token: data.project_token,
       shift_report_chat_id: data.shift_report_chat_id || null,
-      point_mode: data.point_mode,
-      feature_flags:
-        data.feature_flags && typeof data.feature_flags === 'object'
-          ? (data.feature_flags as Record<string, unknown>)
-          : {},
+      point_mode: effectivePointMode,
+      feature_flags: effectiveFeatureFlags,
       is_active: data.is_active,
       notes: data.notes || null,
       company: selectedCompany,
