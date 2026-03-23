@@ -52,20 +52,35 @@ async function requireSuperAdmin(email: string, password: string) {
     },
   )
 
-  const { data, error } = await authClient.auth.signInWithPassword({
-    email,
-    password,
-  })
+  const { data, error } = await authClient.auth.signInWithPassword({ email, password })
 
-  if (error || !data.user) {
-    throw new Error('invalid-credentials')
-  }
-
-  if (!isAdminEmail(data.user.email)) {
-    throw new Error('super-admin-only')
-  }
+  if (error || !data.user) throw new Error('invalid-credentials')
+  if (!isAdminEmail(data.user.email)) throw new Error('super-admin-only')
 
   await authClient.auth.signOut().catch(() => null)
+}
+
+const PROJECT_SELECT = 'id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, last_seen_at, created_at, updated_at, point_project_companies(company_id, company:company_id(id, name, code))'
+
+function mapProject(row: any) {
+  const projectCompanies = Array.isArray(row.point_project_companies) ? row.point_project_companies : []
+  const companies = projectCompanies.map((c: any) => {
+    const co = Array.isArray(c.company) ? c.company[0] : c.company
+    return { id: c.company_id, name: co?.name || '', code: co?.code || null }
+  })
+  return {
+    id: row.id,
+    name: row.name,
+    company_id: companies[0]?.id || '',
+    company_name: companies.map((c: any) => c.name).filter(Boolean).join(', ') || '—',
+    companies,
+    point_mode: row.point_mode || '—',
+    is_active: row.is_active !== false,
+    device_token: row.project_token || '',
+    shift_report_chat_id: row.shift_report_chat_id || null,
+    feature_flags: normalizeFlags(row.feature_flags),
+    last_seen_at: row.last_seen_at || null,
+  }
 }
 
 export async function POST(request: Request) {
@@ -90,7 +105,7 @@ export async function POST(request: Request) {
       if (!deviceId) return json({ error: 'device-id-required' }, 400)
 
       const { data: existing, error: existingError } = await supabase
-        .from('point_devices')
+        .from('point_projects')
         .select('feature_flags')
         .eq('id', deviceId)
         .single()
@@ -106,46 +121,33 @@ export async function POST(request: Request) {
       }
 
       const { data, error } = await supabase
-        .from('point_devices')
+        .from('point_projects')
         .update({
           shift_report_chat_id: normalizeShiftReportChatId(body.shift_report_chat_id),
           feature_flags: nextFlags,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', deviceId)
-        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+        .select(PROJECT_SELECT)
         .single()
 
       if (error) throw error
 
-      return json({
-        ok: true,
-        data: {
-          device: {
-            ...data,
-            company: Array.isArray((data as any).company) ? (data as any).company[0] || null : (data as any).company || null,
-            feature_flags: normalizeFlags((data as any).feature_flags),
-          },
-        },
-      })
+      return json({ ok: true, data: { device: mapProject(data) } })
     }
 
+    // GET all projects
     const { data, error } = await supabase
-      .from('point_devices')
-      .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+      .from('point_projects')
+      .select(PROJECT_SELECT)
       .order('created_at', { ascending: false })
 
     if (error) throw error
 
-    const devices = ((data || []) as any[]).map((row) => ({
-      ...row,
-      company: Array.isArray(row.company) ? row.company[0] || null : row.company || null,
-      feature_flags: normalizeFlags(row.feature_flags),
-    }))
-
     return json({
       ok: true,
       data: {
-        devices,
+        devices: ((data || []) as any[]).map(mapProject),
       },
     })
   } catch (error: any) {
@@ -158,6 +160,6 @@ export async function POST(request: Request) {
     if (message === 'invalid-shift-report-chat-id') return json({ error: message }, 400)
     if (message === 'invalid-credentials') return json({ error: message }, 401)
     if (message === 'super-admin-only') return json({ error: message }, 403)
-    return json({ error: message || 'Не удалось загрузить устройства для super-admin' }, 500)
+    return json({ error: message }, 500)
   }
 }

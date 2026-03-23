@@ -16,7 +16,6 @@ interface Props {
 interface Device {
   id: string
   name: string
-  company_id: string
   company_name: string
   point_mode: string
   is_active: boolean
@@ -47,8 +46,7 @@ export default function DevicesPage({ config, session }: Props) {
       const nextDevices = (data.data.devices as any[]).map((d) => ({
         id: d.id,
         name: d.name,
-        company_id: d.company_id,
-        company_name: d.company?.name || '—',
+        company_name: d.company_name || '—',
         point_mode: d.point_mode || '—',
         is_active: d.is_active !== false,
         device_token: d.device_token || '',
