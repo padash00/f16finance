@@ -451,14 +451,25 @@ export default function App() {
   }
 
   // ─── Переход к рабочему экрану после выбора точки ─────────────────────────
-  function proceedToApp(session: OperatorSession) {
-    saveOperatorSession(session).catch(() => null)
-    const bootstrap = session.bootstrap
+  async function proceedToApp(session: OperatorSession) {
+    // Re-fetch bootstrap with the selected company so per-company point_mode
+    // and feature_flags overrides are applied correctly
+    let bootstrap = session.bootstrap
+    if (config && session.company.id) {
+      try {
+        bootstrap = await api.bootstrap(config, session.company.id)
+        await saveBootstrapCache(bootstrap)
+      } catch {
+        // fallback to existing bootstrap on error (e.g. offline)
+      }
+    }
+    const updatedSession = { ...session, bootstrap }
+    saveOperatorSession(updatedSession).catch(() => null)
 
-    if (canUseScannerForSession(session)) {
-      setView({ screen: 'scanner', bootstrap, session })
+    if (canUseScannerForSession(updatedSession)) {
+      setView({ screen: 'scanner', bootstrap, session: updatedSession })
     } else {
-      setView({ screen: 'shift', bootstrap, session })
+      setView({ screen: 'shift', bootstrap, session: updatedSession })
     }
   }
 

@@ -66,8 +66,10 @@ function companyHeader(companyId: string | null | undefined): Record<string, str
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
-export async function bootstrap(config: AppConfig): Promise<BootstrapData> {
-  const data = await request<{ ok: boolean } & BootstrapData>(config, 'GET', '/api/point/bootstrap')
+export async function bootstrap(config: AppConfig, companyId?: string | null): Promise<BootstrapData> {
+  const data = await request<{ ok: boolean } & BootstrapData>(
+    config, 'GET', '/api/point/bootstrap', undefined, companyHeader(companyId),
+  )
   return data
 }
 
