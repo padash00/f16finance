@@ -116,7 +116,7 @@ export default function WorkModeSwitch({
         className={`gap-1.5 rounded-lg px-3 ${itemClass(active === 'cabinet')}`}
       >
         <UserCircle2 className="h-4 w-4" />
-        Мое
+        Профиль
       </Button>
     </div>
   )

@@ -591,7 +591,7 @@ export default function InventorySalesPage({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b bg-card px-5 drag-region">
+      <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b bg-card pl-5 pr-[140px] drag-region">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <span className="text-sm font-bold text-primary-foreground">F</span>

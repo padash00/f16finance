@@ -434,7 +434,7 @@ export default function ShiftPage({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-card px-5 drag-region">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-card pl-5 pr-[140px] drag-region">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-[0_10px_30px_rgba(255,255,255,0.08)]">
             <span className="text-sm font-bold text-primary-foreground">F</span>
@@ -491,8 +491,9 @@ export default function ShiftPage({
             <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
           </Button>
 
-          <Button variant="ghost" size="sm" onClick={onLogout} className="text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={onLogout} className="gap-1.5 text-muted-foreground">
             <LogOut className="h-4 w-4" />
+            Выйти
           </Button>
         </div>
       </header>
@@ -517,7 +518,7 @@ export default function ShiftPage({
                   icon={<CalendarDays className="h-4 w-4" />}
                 />
               ) : (
-                <div className="rounded-2xl border border-dashed border-border/70 bg-card/40 p-4 text-sm text-muted-foreground">
+                <div className="rounded-xl border border-dashed border-border/70 bg-card/40 p-3 text-xs text-muted-foreground">
                   Суточная сверка Kaspi выключена для этого терминала.
                 </div>
               )}
@@ -1252,19 +1253,19 @@ function ModeToggleCard({
     <button
       type="button"
       onClick={onClick}
-      className={`group rounded-2xl border p-4 text-left transition-all ${
+      className={`group rounded-xl border p-3 text-left transition-all ${
         active
           ? 'border-primary/30 bg-primary/10 shadow-[0_16px_40px_rgba(255,255,255,0.05)]'
           : 'border-white/10 bg-card/70 hover:border-primary/20 hover:bg-card'
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
+      <div className="flex items-center justify-between gap-3">
+        <div className="space-y-0.5">
           <div className="text-sm font-semibold">{title}</div>
-          <div className="text-xs leading-5 text-muted-foreground">{description}</div>
+          <div className="text-[11px] leading-4 text-muted-foreground">{description}</div>
         </div>
         <div
-          className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
             active ? 'bg-primary text-primary-foreground' : 'bg-black/20 text-muted-foreground'
           }`}
         >
