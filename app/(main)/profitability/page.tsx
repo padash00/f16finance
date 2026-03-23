@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { supabase } from '@/lib/supabaseClient'
 import { resolveFinancialGroup, type FinancialGroup } from '@/lib/core/financial-groups'
-import { ArrowDown, ArrowUp, Calculator, CalendarDays, CreditCard, Landmark, Save, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { ArrowDown, ArrowUp, BarChart2, Calculator, CalendarDays, CreditCard, Landmark, Save, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 
 type IncomeRow = { date: string; cash_amount: number | null; kaspi_amount: number | null; card_amount: number | null; online_amount: number | null }
 type ExpenseRow = { date: string; category: string | null; cash_amount: number | null; kaspi_amount: number | null }
@@ -661,7 +661,7 @@ export default function ProfitabilityPage() {
                     onClick={() => setShowWhatIf((v) => !v)}
                     className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-white"
                   >
-                    <span>📊 What-if моделирование</span>
+                    <span className="flex items-center gap-2"><BarChart2 className="w-4 h-4" />What-if моделирование</span>
                     <span className="text-slate-400">{showWhatIf ? '▲' : '▼'}</span>
                   </button>
                   {showWhatIf && selected && (

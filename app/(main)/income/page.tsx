@@ -1009,8 +1009,8 @@ export default function IncomePage() {
                         className="w-full bg-gray-800 text-white px-3 py-2.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm"
                       >
                         <option value="all">Все смены</option>
-                        <option value="day">День ☀️</option>
-                        <option value="night">Ночь 🌙</option>
+                        <option value="day">День (утро)</option>
+                        <option value="night">Ночь</option>
                       </select>
                     </div>
 

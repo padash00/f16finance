@@ -5,16 +5,18 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
 import { 
-  Calculator, 
-  CalendarDays, 
-  TrendingDown, 
-  TrendingUp, 
-  Landmark, 
+  Calculator,
+  CalendarDays,
+  TrendingDown,
+  TrendingUp,
+  Landmark,
   AlertCircle,
   Wallet,
   CreditCard,
   Store,
-  Gamepad2
+  Gamepad2,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -235,8 +237,8 @@ export default function TaxPage() {
                       {formatMoney(calculation.totalTaxable)}
                   </div>
                   <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                      <p className="flex items-center gap-1">✅ Kaspi Арены</p>
-                      <p className="flex items-center gap-1">✅ Нал + Kaspi Рамена</p>
+                      <p className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> Kaspi Арены</p>
+                      <p className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> Нал + Kaspi Рамена</p>
                   </div>
               </Card>
 
@@ -250,8 +252,8 @@ export default function TaxPage() {
                       {formatMoney(calculation.totalIgnored)}
                   </div>
                    <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                      <p className="flex items-center gap-1">⛔ Нал Арены</p>
-                      <p className="flex items-center gap-1">⛔ F16 Extra (всё)</p>
+                      <p className="flex items-center gap-1"><XCircle className="w-3 h-3 text-gray-400" /> Нал Арены</p>
+                      <p className="flex items-center gap-1"><XCircle className="w-3 h-3 text-gray-400" /> F16 Extra (всё)</p>
                   </div>
               </Card>
           </div>

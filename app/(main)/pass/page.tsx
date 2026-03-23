@@ -186,7 +186,7 @@ export default function AccessPage() {
       setNewPasswords(prev => ({ ...prev, [operatorId]: newPassword }))
       setShowPasswords(prev => ({ ...prev, [operatorId]: true }))
       
-      setSuccess(`✅ Пароль для ${operator.short_name || operator.name} успешно изменен`)
+      setSuccess(`Пароль для ${operator.short_name || operator.name} успешно изменен`)
       setTimeout(() => setSuccess(null), 5000)
     } catch (err: any) {
       console.error('Ошибка сброса:', err)
@@ -253,7 +253,7 @@ export default function AccessPage() {
       Object.keys(results).forEach(id => { showAll[id] = true })
       setShowPasswords(showAll)
       
-      setSuccess(`✅ Сгенерировано паролей: ${successCount}, ошибок: ${failCount}`)
+      setSuccess(`Сгенерировано паролей: ${successCount}, ошибок: ${failCount}`)
       setTimeout(() => setSuccess(null), 5000)
     } catch (err: any) {
       console.error('Ошибка генерации:', err)

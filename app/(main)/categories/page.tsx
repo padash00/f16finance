@@ -6,15 +6,16 @@ import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
 import { FINANCIAL_GROUP_OPTIONS, getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
 import { 
-  Plus, 
-  Pencil, 
-  Trash2, 
-  Save, 
-  X, 
-  Tag, 
-  Layers, 
+  Plus,
+  Pencil,
+  Trash2,
+  Save,
+  X,
+  Tag,
+  Layers,
   Search,
-  AlertCircle
+  AlertCircle,
+  Banknote
 } from 'lucide-react'
 
 type Category = {
@@ -253,7 +254,7 @@ export default function CategoriesPage() {
                                             {getFinancialGroupLabel(cat.accounting_group)}
                                         </span>
                                         {cat.monthly_budget && cat.monthly_budget > 0 ? (
-                                          <p className="text-xs text-amber-400 mt-1">💰 Бюджет: {cat.monthly_budget.toLocaleString('ru-RU')} ₸/мес</p>
+                                          <p className="text-xs text-amber-400 mt-1 flex items-center gap-1"><Banknote className="w-3 h-3" /> Бюджет: {cat.monthly_budget.toLocaleString('ru-RU')} ₸/мес</p>
                                         ) : null}
                                     </div>
                                     

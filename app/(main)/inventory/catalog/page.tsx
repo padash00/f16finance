@@ -845,7 +845,7 @@ export default function CatalogPage() {
             {importStatus === 'done' && importResult && (
               <div className="mt-4 space-y-4">
                 <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-4">
-                  <p className="font-semibold text-emerald-700 dark:text-emerald-400">✅ Импорт выполнен успешно</p>
+                  <p className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1"><Check className="w-4 h-4" /> Импорт выполнен успешно</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     Добавлено: <strong>{importResult.created}</strong> · Обновлено: <strong>{importResult.updated}</strong>
                   </p>

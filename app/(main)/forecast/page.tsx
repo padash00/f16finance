@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card'
 import type { PageSnapshot } from '@/lib/ai/types'
 import {
   BrainCircuit,
+  BarChart2,
   CalendarDays,
   Loader2,
   Sparkles,
@@ -281,7 +282,7 @@ export default function ForecastPage() {
                           : 'text-gray-500 hover:text-gray-300'
                       }`}
                     >
-                      {s === 'pessimistic' ? '📉 Пессимизм' : s === 'realistic' ? '📊 Реализм' : '📈 Оптимизм'}
+                      {s === 'pessimistic' ? <><TrendingDown className="w-3 h-3 mr-1 inline" />Пессимизм</> : s === 'realistic' ? <><BarChart2 className="w-3 h-3 mr-1 inline" />Реализм</> : <><TrendingUp className="w-3 h-3 mr-1 inline" />Оптимизм</>}
                     </button>
                   ))}
                 </div>

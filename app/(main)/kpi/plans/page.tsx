@@ -817,7 +817,7 @@ export default function KPIStatusAndPayoutPage() {
             </div>
 
             <div className="text-xs text-muted-foreground mt-2">
-              Месячный бонус 20% применяется только к руководителю и маркетологу (сверху), если общий KPI месяца выполнен ✅.
+              Месячный бонус 20% применяется только к руководителю и маркетологу (сверху), если общий KPI месяца выполнен{' '}<CheckCircle2 className="inline w-3 h-3 text-green-500" />.
             </div>
           </Card>
 

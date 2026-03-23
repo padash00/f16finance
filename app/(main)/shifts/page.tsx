@@ -17,6 +17,9 @@ import {
   AlertTriangle,
   Copy,
   Search,
+  Sun,
+  Moon,
+  BarChart2,
 } from 'lucide-react'
 import {
   startOfWeek,
@@ -964,7 +967,7 @@ export default function ShiftsPage() {
 
               <Link href="/shifts/report">
                 <Button variant="outline" size="sm" className="gap-2">
-                  📊 Отчёт по смене
+                  <BarChart2 className="h-4 w-4" /> Отчёт по смене
                 </Button>
               </Link>
             </div>
@@ -1566,7 +1569,7 @@ function ScheduleGrid({
               </thead>
               <tbody>
                 <tr>
-                  <td className="border-r border-border bg-yellow-500/5 p-3 font-semibold text-yellow-500">День ☀️</td>
+                  <td className="border-r border-border bg-yellow-500/5 p-3 font-semibold text-yellow-500"><Sun className="inline w-4 h-4 mr-1" />День</td>
                   {weekDays.map((day) => {
                     const shiftData = shiftsMap[company.id]?.[day.dateISO]?.day
                     return (
@@ -1591,7 +1594,7 @@ function ScheduleGrid({
 
                 {hasNightShift(company) && (
                   <tr>
-                    <td className="border-r border-border bg-blue-500/5 p-3 font-semibold text-blue-400">Ночь 🌙</td>
+                    <td className="border-r border-border bg-blue-500/5 p-3 font-semibold text-blue-400"><Moon className="inline w-4 h-4 mr-1" />Ночь</td>
                     {weekDays.map((day) => {
                       const shiftData = shiftsMap[company.id]?.[day.dateISO]?.night
                       return (
