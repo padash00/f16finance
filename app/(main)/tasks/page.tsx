@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -319,6 +320,7 @@ function TasksContent() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -539,6 +541,31 @@ function TasksContent() {
     () => tasks.reduce((maxNumber, task) => Math.max(maxNumber, task.task_number || 0), 0) + 1,
     [tasks],
   )
+
+  // Сброс выбора при смене вида
+  useEffect(() => {
+    setSelectedTaskIds(new Set())
+  }, [viewMode])
+
+  // Bulk selection helpers
+  const toggleTaskSelection = (id: string) => {
+    setSelectedTaskIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const bulkUpdateStatus = async (status: TaskStatus) => {
+    if (selectedTaskIds.size === 0) return
+    const ids = Array.from(selectedTaskIds)
+    const { error } = await supabase.from('tasks').update({ status, updated_at: new Date().toISOString() }).in('id', ids)
+    if (!error) {
+      setSelectedTaskIds(new Set())
+      await loadData(true)
+    }
+  }
 
   // Обработчики
   const resetFilters = () => {
@@ -964,10 +991,65 @@ function TasksContent() {
           ) : (
             // List View
             <Card className="bg-gray-900/40 backdrop-blur-xl border-white/5 overflow-hidden">
+              {/* Bulk action bar */}
+              {selectedTaskIds.size > 0 && (
+                <div className="flex items-center gap-3 px-4 py-3 bg-violet-500/10 border-b border-violet-500/20">
+                  <span className="text-sm text-violet-300 font-medium">
+                    {selectedTaskIds.size} задач выбрано
+                  </span>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10 hover:text-yellow-200 text-xs"
+                      onClick={() => bulkUpdateStatus('in_progress')}
+                    >
+                      В работу
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10 hover:text-purple-200 text-xs"
+                      onClick={() => bulkUpdateStatus('review')}
+                    >
+                      На проверку
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 hover:text-emerald-200 text-xs"
+                      onClick={() => bulkUpdateStatus('done')}
+                    >
+                      Готово
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-white/10 text-gray-400 hover:bg-white/5 text-xs"
+                      onClick={() => setSelectedTaskIds(new Set())}
+                    >
+                      Снять выбор
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/5 bg-gray-900/50">
+                      <th className="py-3 px-4 text-left text-xs font-medium text-gray-400 w-10">
+                        <Checkbox
+                          checked={filteredTasks.length > 0 && filteredTasks.every(t => selectedTaskIds.has(t.id))}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedTaskIds(new Set(filteredTasks.map(t => t.id)))
+                            } else {
+                              setSelectedTaskIds(new Set())
+                            }
+                          }}
+                          className="border-white/20"
+                        />
+                      </th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">#</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Задача</th>
                       <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Статус</th>
@@ -985,8 +1067,21 @@ function TasksContent() {
                           setSelectedTask(task)
                           setIsTaskModalOpen(true)
                         }}
-                        className="hover:bg-white/5 transition-colors cursor-pointer"
+                        className={cn(
+                          "hover:bg-white/5 transition-colors cursor-pointer",
+                          selectedTaskIds.has(task.id) && "bg-violet-500/5"
+                        )}
                       >
+                        <td
+                          className="py-3 px-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Checkbox
+                            checked={selectedTaskIds.has(task.id)}
+                            onCheckedChange={() => toggleTaskSelection(task.id)}
+                            className="border-white/20"
+                          />
+                        </td>
                         <td className="py-3 px-4 text-sm text-gray-400">#{task.task_number}</td>
                         <td className="py-3 px-4">
                           <span className="text-sm text-white line-clamp-1">{task.title}</span>

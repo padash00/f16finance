@@ -3,7 +3,7 @@
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, Building2, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Wallet } from 'lucide-react'
+import { ArrowLeft, Building2, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Wallet } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -155,6 +155,30 @@ export default function SalaryPage() {
     }
   }
 
+  const downloadSalaryCSV = () => {
+    const header = ['Оператор', 'Начислено', 'Бонус', 'Штраф', 'Долг', 'Аванс', 'К выплате', 'Выплачено', 'Остаток', 'Статус']
+    const csvRows = (data?.operators || []).map(({ operator, week }) => [
+      getOperatorDisplayName(operator),
+      String(Math.round(week.grossAmount)),
+      String(Math.round(week.bonusAmount)),
+      String(Math.round(week.fineAmount)),
+      String(Math.round(week.debtAmount)),
+      String(Math.round(week.advanceAmount)),
+      String(Math.round(week.netAmount)),
+      String(Math.round(week.paidAmount)),
+      String(Math.round(week.remainingAmount)),
+      statusMeta(week.status).label,
+    ].join(';'))
+    const csv = '\uFEFF' + [header.join(';'), ...csvRows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `salary_${weekStart}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <>
         <div className="mx-auto max-w-[1600px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6 xl:px-8">
@@ -179,6 +203,10 @@ export default function SalaryPage() {
                 <Button type="button" onClick={() => setBroadcastConfirm(true)} disabled={loading || broadcastSending || !broadcastTargets.length} className="rounded-xl bg-blue-500 text-white hover:bg-blue-400 disabled:opacity-50">
                   {broadcastSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                   {broadcastSending ? `Рассылка ${broadcastDone}/${broadcastTotal}` : 'Отправить всем'}
+                </Button>
+                <Button type="button" variant="outline" onClick={downloadSalaryCSV} disabled={loading || !data} className="rounded-xl border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 gap-2">
+                  <Download className="h-4 w-4" />
+                  CSV
                 </Button>
                 <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>Прошлая неделя</Button>
                 <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(currentWeek)}>Текущая</Button>

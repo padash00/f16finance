@@ -26,6 +26,7 @@ import {
   Info,
   Check,
   Layers,
+  Download,
 } from 'lucide-react'
 
 import {
@@ -350,6 +351,30 @@ export default function AnalyticsPage() {
     })
   }, [rows, companies])
 
+  const downloadCSV = () => {
+    const header = ['Дата', 'Компания', 'Наличные', 'Kaspi', 'Карта', 'Итого']
+    const csvRows = rows.map(row => {
+      const company = companyMap.get(row.company_id)
+      const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.card_amount || 0)
+      return [
+        row.date,
+        company?.name || row.company_id,
+        String(Math.round(row.cash_amount || 0)),
+        String(Math.round(row.kaspi_amount || 0)),
+        String(Math.round(row.card_amount || 0)),
+        String(Math.round(total)),
+      ].join(';')
+    })
+    const csv = '\uFEFF' + [header.join(';'), ...csvRows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `analytics_${dateFrom}_${dateTo}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <>
         <div className="app-page max-w-7xl space-y-8">
@@ -516,6 +541,11 @@ export default function AnalyticsPage() {
                 title="Обновить"
               >
                 <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} />
+              </Button>
+
+              <Button variant="outline" size="sm" onClick={downloadCSV} disabled={rows.length === 0} className="gap-2 ml-auto">
+                <Download className="h-4 w-4" />
+                CSV
               </Button>
             </div>
           </div>
