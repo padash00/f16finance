@@ -25,10 +25,7 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerLanguages": [
-        "English"
-      ]
+      "allowToChangeInstallationDirectory": true
     },
     "files": [
       "dist/**/*",
