@@ -36,6 +36,7 @@ import {
   MessageSquareText,
   Monitor,
   Network,
+  Receipt,
   Package2,
   PackagePlus,
   PieChart,
@@ -134,6 +135,7 @@ const navSections: NavSection[] = [
       { href: '/store/revisions', label: 'Ревизия', icon: ScanSearch, note: 'Полная проверка склада и витрин' },
       { href: '/store/movements', label: 'Движения', icon: History, note: 'Журнал товарных операций' },
       { href: '/pos', label: 'Касса (Web POS)', icon: Monitor, note: 'Веб-касса для планшета и браузера' },
+      { href: '/pos-receipts', label: 'История чеков', icon: Receipt, note: 'Просмотр и печать чеков POS' },
     ],
   },
   {
