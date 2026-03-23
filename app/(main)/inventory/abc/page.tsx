@@ -555,7 +555,7 @@ export default function AbcAnalysisPage() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end items-center gap-1">
                           <Link
-                            href={`/inventory/requests?item_id=${item.item_id}`}
+                            href={`/store/requests?item_id=${item.item_id}`}
                             title="Создать заявку"
                             className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-sky-400 hover:bg-sky-500/10 transition-colors"
                           >
@@ -570,7 +570,7 @@ export default function AbcAnalysisPage() {
                             Цена
                           </button>
                           <Link
-                            href={`/inventory/writeoffs?item_id=${item.item_id}`}
+                            href={`/store/writeoffs?item_id=${item.item_id}`}
                             title="Списать"
                             className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-rose-400 hover:bg-rose-500/10 transition-colors"
                           >

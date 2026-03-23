@@ -251,7 +251,7 @@ export function ConsumablesPageContent() {
                   </div>
                 )}
                 <div className="px-4 py-3">
-                  <Link href="/inventory/requests">
+                  <Link href="/store/requests">
                     <Button variant="outline" size="sm">Создать заявку</Button>
                   </Link>
                 </div>

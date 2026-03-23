@@ -334,7 +334,7 @@ export default function InventoryForecastPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Link href={`/inventory/requests?item_id=${item.item_id}`}>
+                        <Link href={`/store/requests?item_id=${item.item_id}`}>
                           <Button variant="outline" size="sm" className="text-xs h-7">
                             Заявка
                           </Button>
