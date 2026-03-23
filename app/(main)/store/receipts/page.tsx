@@ -68,6 +68,36 @@ type ReceiptLine = {
   comment: string
 }
 
+function firstOrSelf<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return (value[0] as T) || null
+  return value ?? null
+}
+
+function asArray<T>(value: T[] | T | null | undefined): T[] {
+  if (Array.isArray(value)) return value
+  if (value == null) return []
+  return [value]
+}
+
+function normalizeReceipt(raw: any): InventoryReceipt {
+  return {
+    id: String(raw?.id || ''),
+    received_at: raw?.received_at || '',
+    total_amount: Number(raw?.total_amount || 0),
+    invoice_number: raw?.invoice_number || null,
+    comment: raw?.comment || null,
+    supplier: firstOrSelf(raw?.supplier),
+    location: firstOrSelf(raw?.location),
+    items: asArray(raw?.items).map((item: any) => ({
+      id: String(item?.id || ''),
+      quantity: Number(item?.quantity || 0),
+      unit_cost: Number(item?.unit_cost || 0),
+      total_cost: Number(item?.total_cost || 0),
+      item: firstOrSelf(item?.item),
+    })),
+  }
+}
+
 function parseMoney(value: string) {
   const numeric = Number(String(value).replace(',', '.').trim())
   if (!Number.isFinite(numeric)) return 0
@@ -123,8 +153,14 @@ export default function StoreReceiptsPage() {
       const response = await fetch('/api/admin/store/receipts', { cache: 'no-store' })
       const json = (await response.json().catch(() => null)) as ReceiptsResponse | null
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить приемку')
-      setData(json.data)
-      setLocationId((current) => current || json.data?.locations?.[0]?.id || '')
+      const normalized = {
+        items: asArray(json.data.items),
+        suppliers: asArray(json.data.suppliers),
+        locations: asArray(json.data.locations),
+        receipts: asArray(json.data.receipts).map(normalizeReceipt),
+      }
+      setData(normalized)
+      setLocationId((current) => current || normalized.locations?.[0]?.id || '')
     } catch (err: any) {
       setData(null)
       setError(err?.message || 'Не удалось загрузить приемку')
