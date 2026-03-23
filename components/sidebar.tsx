@@ -135,6 +135,7 @@ const navSections: NavSection[] = [
       { href: '/store/writeoffs', label: 'Списания', icon: ArchiveX, note: 'Брак и служебные расходы' },
       { href: '/store/revisions', label: 'Ревизия', icon: ScanSearch, note: 'Полная проверка склада и витрин' },
       { href: '/store/movements', label: 'Движения', icon: History, note: 'Журнал товарных операций' },
+      { href: '/inventory/abc', label: 'ABC-анализ', icon: PieChart, note: 'Классификация товаров по выручке' },
       { href: '/pos', label: 'Касса (Web POS)', icon: Monitor, note: 'Веб-касса для планшета и браузера' },
       { href: '/pos-receipts', label: 'История чеков', icon: Receipt, note: 'Просмотр и печать чеков POS' },
       { href: '/pos-returns', label: 'Возврат товара', icon: RotateCcw, note: 'Оформление возврата по чеку' },
