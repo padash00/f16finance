@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
@@ -960,6 +961,12 @@ export default function ShiftsPage() {
                 {copyingWeek ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
                 Заполнить по прошлой неделе
               </Button>
+
+              <Link href="/shifts/report">
+                <Button variant="outline" size="sm" className="gap-2">
+                  📊 Отчёт по смене
+                </Button>
+              </Link>
             </div>
           </div>
 
