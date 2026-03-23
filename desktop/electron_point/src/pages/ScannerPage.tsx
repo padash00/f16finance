@@ -82,7 +82,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
     try {
       // Продукты — с фолбеком на кеш
       try {
-        const prods = await api.getProducts(config)
+        const prods = await api.getProducts(config, session.company.id)
         await saveProductsCache(prods)
         setProducts(prods.filter(p => p.is_active))
         setOffline(false)
@@ -108,7 +108,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
       // Долги — только онлайн
       try {
-        const dbt = await api.getDebts(config)
+        const dbt = await api.getDebts(config, session.company.id)
         setDebts(dbt)
       } catch {
         setDebts([])
@@ -189,7 +189,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         total_amount: total,
         comment: comment || null,
         local_ref: ref,
-      })
+      }, session.company.id)
 
       flash('ok', `Долг: ${foundProduct.name} × ${qty} = ${formatMoney(total)}`)
       setFoundProduct(null)
@@ -197,7 +197,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
       setQuantity('1')
       setComment('')
       barcodeInputRef.current?.focus()
-      api.getDebts(config).then(setDebts).catch(() => {})
+      api.getDebts(config, session.company.id).then(setDebts).catch(() => {})
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Ошибка отправки долга'
       const canQueueOffline =
@@ -222,7 +222,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         total_amount: total,
         comment: comment || null,
         local_ref: ref,
-      })
+      }, session.company.id)
       setPendingCount(await getPendingCount())
       flash('ok', `Сохранено в очередь (нет сети)`)
       setFoundProduct(null)
@@ -236,9 +236,9 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
   async function handleDeleteConfirmed(itemId: string) {
     setDeleteConfirm(null)
     try {
-      await api.deleteDebt(config, itemId)
+      await api.deleteDebt(config, itemId, session.company.id)
     } catch {
-      await queueDeleteDebt(itemId)
+      await queueDeleteDebt(itemId, session.company.id)
       setPendingCount(await getPendingCount())
     }
     setDebts(prev => prev.filter(d => d.id !== itemId))
@@ -469,7 +469,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                 </span>
               )}
             </h2>
-            <Button variant="ghost" size="sm" onClick={() => api.getDebts(config).then(setDebts).catch(() => {})} className="text-xs text-muted-foreground">
+            <Button variant="ghost" size="sm" onClick={() => api.getDebts(config, session.company.id).then(setDebts).catch(() => {})} className="text-xs text-muted-foreground">
               <RefreshCw className="h-3.5 w-3.5 mr-1" /> Обновить
             </Button>
           </div>

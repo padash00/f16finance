@@ -8,25 +8,37 @@ const ipc = window.electron
 
 export async function queueShiftReport(
   form: ShiftForm & { local_ref?: string },
+  companyId?: string | null,
 ): Promise<number> {
   const ref = form.local_ref || localRef()
   const result = await ipc.queue.add({
     type: 'shift_report',
-    payload: { ...form, local_ref: ref },
+    payload: { ...form, local_ref: ref, _company_id: companyId || null },
     localRef: ref,
   })
   return result.id
 }
 
-export async function queueCreateDebt(payload: Record<string, unknown>): Promise<number> {
+export async function queueCreateDebt(
+  payload: Record<string, unknown>,
+  companyId?: string | null,
+): Promise<number> {
   const ref = localRef()
-  const result = await ipc.queue.add({ type: 'create_debt', payload: { ...payload, local_ref: ref }, localRef: ref })
+  const result = await ipc.queue.add({
+    type: 'create_debt',
+    payload: { ...payload, local_ref: ref, _company_id: companyId || null },
+    localRef: ref,
+  })
   return result.id
 }
 
-export async function queueDeleteDebt(itemId: string): Promise<number> {
+export async function queueDeleteDebt(itemId: string, companyId?: string | null): Promise<number> {
   const ref = localRef()
-  const result = await ipc.queue.add({ type: 'delete_debt', payload: { itemId }, localRef: ref })
+  const result = await ipc.queue.add({
+    type: 'delete_debt',
+    payload: { itemId, _company_id: companyId || null },
+    localRef: ref,
+  })
   return result.id
 }
 
@@ -69,9 +81,10 @@ export async function syncQueue(config: AppConfig): Promise<{ synced: number; fa
 
 async function processQueueItem(config: AppConfig, item: QueueItem): Promise<void> {
   const p = item.payload as Record<string, unknown>
+  const companyId = (p._company_id as string | null) || null
 
   if (item.type === 'shift_report') {
-    await api.sendShiftReport(config, p as unknown as ShiftForm, String(p.local_ref || ''))
+    await api.sendShiftReport(config, p as unknown as ShiftForm, String(p.local_ref || ''), companyId)
     return
   }
 
@@ -85,12 +98,12 @@ async function processQueueItem(config: AppConfig, item: QueueItem): Promise<voi
       total_amount: Number(p.total_amount || 0),
       comment: p.comment as string | null,
       local_ref: p.local_ref as string | null,
-    })
+    }, companyId)
     return
   }
 
   if (item.type === 'delete_debt') {
-    await api.deleteDebt(config, p.itemId as string)
+    await api.deleteDebt(config, p.itemId as string, companyId)
     return
   }
 }

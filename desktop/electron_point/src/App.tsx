@@ -434,6 +434,7 @@ export default function App() {
         feature_flags: { shift_report: true, income_report: true, debt_report: false, kaspi_daily_split: false },
       },
       company: { id: '', name: '', code: null },
+      companies: [],
       operators: [],
     }
   }

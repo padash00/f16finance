@@ -215,7 +215,7 @@ export default function ShiftPage({
     setDailyLoading(true)
     setDailyError(null)
     try {
-      const data = await api.getPointDailyKaspiReport(config, date)
+      const data = await api.getPointDailyKaspiReport(config, date, session.company.id)
       setDailyReport(data)
     } catch (err: any) {
       setDailyReport(null)
@@ -239,7 +239,7 @@ export default function ShiftPage({
 
     setSalesSummaryLoading(true)
     try {
-      const summary = await api.getPointInventorySaleShiftSummary(config, date, shift)
+      const summary = await api.getPointInventorySaleShiftSummary(config, date, shift, session.company.id)
       setSalesSummary(summary)
     } catch {
       setSalesSummary(null)
@@ -289,10 +289,10 @@ export default function ShiftPage({
   async function sendOne(formToSend: ShiftForm): Promise<'success' | 'queued'> {
     const ref = localRef()
     try {
-      await api.sendShiftReport(config, formToSend, ref)
+      await api.sendShiftReport(config, formToSend, ref, session.company.id)
       return 'success'
     } catch {
-      await queueShiftReport({ ...formToSend, local_ref: ref })
+      await queueShiftReport({ ...formToSend, local_ref: ref }, session.company.id)
       return 'queued'
     }
   }

@@ -60,6 +60,10 @@ function operatorHeaders(session: OperatorSession) {
   }
 }
 
+function companyHeader(companyId: string | null | undefined): Record<string, string> {
+  return companyId ? { 'x-point-company-id': companyId } : {}
+}
+
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 export async function bootstrap(config: AppConfig): Promise<BootstrapData> {
@@ -104,6 +108,7 @@ export async function sendShiftReport(
   config: AppConfig,
   form: ShiftForm,
   localRef: string,
+  companyId?: string | null,
 ): Promise<{ ok: boolean; data: { id: string } }> {
   const cash = parseMoney(form.cash)
   const coins = parseMoney(form.coins)
@@ -146,17 +151,20 @@ export async function sendShiftReport(
         split_mode: form.shift === 'night' && form.kaspi_before_midnight.trim().length > 0,
       },
     },
-  })
+  }, companyHeader(companyId))
 }
 
 export async function getPointDailyKaspiReport(
   config: AppConfig,
   date: string,
+  companyId?: string | null,
 ): Promise<DailyKaspiReport> {
   const data = await request<{ ok: boolean; data: DailyKaspiReport }>(
     config,
     'GET',
     `/api/point/shift-report?date=${encodeURIComponent(date)}&view=daily-kaspi`,
+    undefined,
+    companyHeader(companyId),
   )
   return data.data
 }
@@ -165,9 +173,9 @@ export async function getPointDailyKaspiReport(
 // @deprecated Products management is now handled through the web inventory catalog.
 // These functions are kept for backward compatibility but are no longer used in the app UI.
 
-export async function getProducts(config: AppConfig): Promise<Product[]> {
+export async function getProducts(config: AppConfig, companyId?: string | null): Promise<Product[]> {
   const data = await request<{ ok: boolean; data: { products: Product[] } }>(
-    config, 'GET', '/api/point/products',
+    config, 'GET', '/api/point/products', undefined, companyHeader(companyId),
   )
   return data.data.products
 }
@@ -233,9 +241,9 @@ export async function deleteProduct(
 
 // ─── Debts ────────────────────────────────────────────────────────────────────
 
-export async function getDebts(config: AppConfig): Promise<DebtItem[]> {
+export async function getDebts(config: AppConfig, companyId?: string | null): Promise<DebtItem[]> {
   const data = await request<{ ok: boolean; data: { items: DebtItem[] } }>(
-    config, 'GET', '/api/point/debts',
+    config, 'GET', '/api/point/debts', undefined, companyHeader(companyId),
   )
   return data.data.items
 }
@@ -253,10 +261,12 @@ export async function createDebt(
     comment?: string | null
     local_ref?: string | null
   },
+  companyId?: string | null,
 ): Promise<DebtItem> {
   const data = await request<{ ok: boolean; data: { item: DebtItem } }>(
     config, 'POST', '/api/point/debts',
     { action: 'createDebt', payload },
+    companyHeader(companyId),
   )
   return data.data.item
 }
@@ -264,11 +274,12 @@ export async function createDebt(
 export async function deleteDebt(
   config: AppConfig,
   itemId: string,
+  companyId?: string | null,
 ): Promise<void> {
   await request(config, 'POST', '/api/point/debts', {
     action: 'deleteDebt',
     itemId,
-  })
+  }, companyHeader(companyId))
 }
 
 // ─── Reports ─────────────────────────────────────────────────────────────────
@@ -419,11 +430,14 @@ export async function getPointInventorySaleShiftSummary(
   config: AppConfig,
   date: string,
   shift: 'day' | 'night',
+  companyId?: string | null,
 ): Promise<PointInventorySaleShiftSummary> {
   const data = await request<{ ok: boolean; data: PointInventorySaleShiftSummary }>(
     config,
     'GET',
     `/api/point/inventory-sales?view=shift-summary&date=${encodeURIComponent(date)}&shift=${encodeURIComponent(shift)}`,
+    undefined,
+    companyHeader(companyId),
   )
   return data.data
 }
