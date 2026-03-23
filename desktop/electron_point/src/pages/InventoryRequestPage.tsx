@@ -13,10 +13,16 @@ import {
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
-import { InventoryEmptyState, InventoryHeroPanel, InventoryMetric } from '@/components/inventory-terminal-ui'
+import {
+  InventoryActionChip,
+  InventoryEmptyState,
+  InventoryHeroPanel,
+  InventoryMetric,
+  InventoryNotice,
+  InventorySectionCard,
+} from '@/components/inventory-terminal-ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -163,6 +169,28 @@ export default function InventoryRequestPage({
 
   const operatorName = session.operator.full_name || session.operator.name || session.operator.username
 
+  function addUrgentItem(itemId: string) {
+    setLines((current) => {
+      const existingIndex = current.findIndex((line) => line.item_id === itemId)
+      if (existingIndex >= 0) {
+        return current.map((line, index) =>
+          index === existingIndex
+            ? { ...line, requested_qty: String(Math.max(1, parseQty(line.requested_qty) + 1)) }
+            : line,
+        )
+      }
+
+      const firstEmptyIndex = current.findIndex((line) => !line.item_id && !line.requested_qty && !line.comment)
+      if (firstEmptyIndex >= 0) {
+        return current.map((line, index) =>
+          index === firstEmptyIndex ? { ...line, item_id: itemId, requested_qty: '1' } : line,
+        )
+      }
+
+      return [...current, { item_id: itemId, requested_qty: '1', comment: '' }]
+    })
+  }
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <div className="h-9 shrink-0 drag-region" />
@@ -216,14 +244,11 @@ export default function InventoryRequestPage({
               </div>
             </InventoryHeroPanel>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <ClipboardList className="h-4 w-4" />
-                  Заявка на склад
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            <InventorySectionCard
+              icon={ClipboardList}
+              title="Заявка на склад"
+              description="Соберите запрос по товарам, чтобы руководитель сразу увидел потребность точки."
+            >
                 <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm">
                   <div className="flex items-center gap-2">
                     <Warehouse className="h-4 w-4 text-emerald-400" />
@@ -247,6 +272,10 @@ export default function InventoryRequestPage({
                     {error}
                   </div>
                 ) : null}
+
+                <InventoryNotice tone="blue">
+                  Сначала добавляйте только то, что реально заканчивается на витрине. Так склад быстрее согласует заявку.
+                </InventoryNotice>
 
                 <form onSubmit={handleCreateRequest} className="space-y-3">
                   <div className="space-y-3">
@@ -351,16 +380,14 @@ export default function InventoryRequestPage({
                     Отправить заявку
                   </Button>
                 </form>
-              </CardContent>
-            </Card>
+            </InventorySectionCard>
           </div>
 
           <div className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Сигналы по складу</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            <InventorySectionCard
+              title="Сигналы по складу"
+              description="Быстрое пополнение по товарам, которые чаще всего просят на точке."
+            >
                 {loading ? (
                   <div className="flex h-24 items-center justify-center">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -368,29 +395,24 @@ export default function InventoryRequestPage({
                 ) : urgentItems.length === 0 ? (
                   <InventoryEmptyState title="Каталог пуст" description="Товары склада появятся здесь, когда каталог и остатки будут загружены." compact />
                 ) : (
-                  urgentItems.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
-                          <p className="text-xs text-muted-foreground">{item.barcode}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold text-foreground">{item.warehouse_qty}</p>
-                          <p className="text-xs text-muted-foreground">на складе</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))
+                  <div className="grid gap-2">
+                    {urgentItems.map((item) => (
+                      <InventoryActionChip
+                        key={item.id}
+                        icon={Plus}
+                        label={item.name}
+                        hint={`${item.barcode} · на складе ${item.warehouse_qty}`}
+                        onClick={() => addUrgentItem(item.id)}
+                      />
+                    ))}
+                  </div>
                 )}
-              </CardContent>
-            </Card>
+            </InventorySectionCard>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Последние заявки</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            <InventorySectionCard
+              title="Последние заявки"
+              description="История отправленных запросов по этой точке."
+            >
                 {loading ? (
                   <div className="flex h-32 items-center justify-center">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -441,8 +463,7 @@ export default function InventoryRequestPage({
                     </div>
                   ))
                 )}
-              </CardContent>
-            </Card>
+            </InventorySectionCard>
           </div>
         </div>
       </div>

@@ -13,7 +13,13 @@ import {
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
-import { InventoryEmptyState, InventoryHeroPanel, InventoryMetric } from '@/components/inventory-terminal-ui'
+import {
+  InventoryEmptyState,
+  InventoryHeroPanel,
+  InventoryMetric,
+  InventoryNotice,
+  InventorySectionCard,
+} from '@/components/inventory-terminal-ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -362,14 +368,11 @@ export default function InventoryReturnsPage({
               </div>
             </InventoryHeroPanel>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <ShoppingBasket className="h-4 w-4" />
-                  Недавние продажи
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            <InventorySectionCard
+              icon={ShoppingBasket}
+              title="Недавние продажи"
+              description="Выберите чек, по которому реально есть что вернуть."
+            >
                 {error ? (
                   <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
                     {error}
@@ -432,8 +435,7 @@ export default function InventoryReturnsPage({
                     )
                   })
                 )}
-              </CardContent>
-            </Card>
+            </InventorySectionCard>
           </div>
 
           <div className="space-y-5">
@@ -557,17 +559,15 @@ export default function InventoryReturnsPage({
           </div>
 
           <div className="space-y-5">
-            <Card className="sticky top-0">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <CreditCard className="h-4 w-4" />
-                  Оформление возврата
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <InventorySectionCard
+              icon={CreditCard}
+              title="Оформление возврата"
+              description="Возврат идёт только из выбранного чека и сразу уменьшает выручку смены."
+              sticky
+            >
+                <InventoryNotice tone="amber">
                   Возврат уменьшает выручку текущей смены и привязывается к выбранному чеку продажи.
-                </div>
+                </InventoryNotice>
 
                 <div className="grid grid-cols-2 gap-2">
                   <InventoryMetric label="Наличными" value={formatMoney(refund.cashAmount)} accent="amber" />
@@ -686,8 +686,7 @@ export default function InventoryReturnsPage({
                     Провести возврат
                   </Button>
                 </form>
-              </CardContent>
-            </Card>
+            </InventorySectionCard>
           </div>
         </div>
       </div>

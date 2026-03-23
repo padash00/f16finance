@@ -20,7 +20,13 @@ import {
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
-import { InventoryEmptyState, InventoryHeroPanel, InventoryMetric } from '@/components/inventory-terminal-ui'
+import {
+  InventoryActionChip,
+  InventoryEmptyState,
+  InventoryHeroPanel,
+  InventoryMetric,
+  InventorySectionCard,
+} from '@/components/inventory-terminal-ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -635,29 +641,24 @@ export default function InventorySalesPage({
               </div>
             </InventoryHeroPanel>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Store className="h-4 w-4" />
-                  Каталог витрины
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            <InventorySectionCard
+              icon={Store}
+              title="Каталог витрины"
+              description="Выбирайте товары с остатком на текущей точке и сразу собирайте чек."
+            >
                 {(context?.items || []).slice(0, 8).length > 0 && (
                   <div>
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">Быстрый доступ</p>
-                    <div className="flex flex-wrap gap-2">
+                    <p className="mb-3 text-xs font-medium text-muted-foreground">Быстрый доступ</p>
+                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                       {(context?.items || []).slice(0, 8).map((item) => (
-                        <button
+                        <InventoryActionChip
                           key={item.id}
-                          type="button"
                           onClick={() => addToCart(item)}
                           disabled={item.display_qty <= 0}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-emerald-400/40 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          <Plus className="h-3 w-3" />
-                          {item.name}
-                        </button>
+                          icon={Plus}
+                          label={item.name}
+                          hint={`${item.display_qty} ${item.unit} · ${formatMoney(item.sale_price)}`}
+                        />
                       ))}
                     </div>
                   </div>
@@ -694,16 +695,21 @@ export default function InventorySalesPage({
                           type="button"
                           onClick={() => addToCart(item)}
                           disabled={disabled}
-                          className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:border-emerald-400/40 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:-translate-y-0.5 hover:border-emerald-400/40 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="truncate font-semibold text-foreground">{item.name}</p>
                               <p className="mt-1 text-xs text-muted-foreground">{item.barcode}</p>
                             </div>
-                            <Badge variant={disabled ? 'secondary' : 'success'}>
-                              {item.display_qty} {item.unit}
-                            </Badge>
+                            <div className="flex flex-col items-end gap-2">
+                              <Badge variant={disabled ? 'secondary' : 'success'}>
+                                {item.display_qty} {item.unit}
+                              </Badge>
+                              {item.display_qty > 0 && item.display_qty <= 3 ? (
+                                <Badge variant="warning">Мало</Badge>
+                              ) : null}
+                            </div>
                           </div>
                           <div className="mt-4 flex items-center justify-between">
                             <div>
@@ -719,8 +725,7 @@ export default function InventorySalesPage({
                     })}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+            </InventorySectionCard>
           </div>
 
           <div className="space-y-5">
