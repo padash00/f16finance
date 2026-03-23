@@ -17,20 +17,21 @@ export default function StoreOverviewPage() {
   const [lowStock, setLowStock] = useState<LowStockItem[]>([])
 
   useEffect(() => {
-    supabase
-      .from('inventory_items')
-      .select('id, name, total_balance, low_stock_threshold')
-      .eq('is_active', true)
-      .not('low_stock_threshold', 'is', null)
-      .order('name')
-      .then(({ data }: { data: LowStockItem[] | null }) => {
-        if (data) {
-          const low = data.filter(
-            item => item.low_stock_threshold !== null && item.total_balance <= item.low_stock_threshold
-          )
-          setLowStock(low.slice(0, 10))
-        }
-      })
+    async function load() {
+      const { data } = await supabase
+        .from('inventory_items')
+        .select('id, name, total_balance, low_stock_threshold')
+        .eq('is_active', true)
+        .not('low_stock_threshold', 'is', null)
+        .order('name')
+      if (data) {
+        const low = (data as LowStockItem[]).filter(
+          item => item.low_stock_threshold !== null && item.total_balance <= item.low_stock_threshold
+        )
+        setLowStock(low.slice(0, 10))
+      }
+    }
+    load()
   }, [])
 
   return (
