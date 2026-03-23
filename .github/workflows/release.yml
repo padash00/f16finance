@@ -8,6 +8,8 @@ on:
 jobs:
   release:
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     defaults:
       run:
@@ -29,5 +31,5 @@ jobs:
 
       - name: Build & publish
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run release
