@@ -230,6 +230,7 @@ export default function InventorySalesPage({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [catalogView, setCatalogView] = useState<'all' | 'low' | 'cart'>('all')
   const [comment, setComment] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
   const [mixedCash, setMixedCash] = useState('')
@@ -301,14 +302,21 @@ export default function InventorySalesPage({
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase()
     const list = context?.items || []
-    if (!query) return list
-    return list.filter(
+    const cartIds = new Set(cart.map((line) => line.item_id))
+    const scoped =
+      catalogView === 'low'
+        ? list.filter((item) => Number(item.display_qty || 0) > 0 && Number(item.display_qty || 0) <= 3)
+        : catalogView === 'cart'
+          ? list.filter((item) => cartIds.has(item.id))
+          : list
+    if (!query) return scoped
+    return scoped.filter(
       (item) =>
         item.name.toLowerCase().includes(query) ||
         item.barcode.toLowerCase().includes(query) ||
         item.category?.name?.toLowerCase().includes(query),
     )
-  }, [context?.items, search])
+  }, [catalogView, cart, context?.items, search])
 
   const cartDetailed = useMemo(() => {
     const itemsById = new Map((context?.items || []).map((item) => [item.id, item]))
@@ -435,6 +443,7 @@ export default function InventorySalesPage({
   function resetSaleForm() {
     setCart([])
     setComment('')
+    setCatalogView('all')
     setMixedCash('')
     setPaymentMethod('cash')
     clearCustomer()
@@ -674,6 +683,27 @@ export default function InventorySalesPage({
                   />
                 </div>
 
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: 'all' as const, label: 'Все товары' },
+                    { key: 'low' as const, label: 'Низкий остаток' },
+                    { key: 'cart' as const, label: 'В корзине' },
+                  ].map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => setCatalogView(option.key)}
+                      className={`rounded-2xl border px-3 py-2 text-xs font-medium transition ${
+                        catalogView === option.key
+                          ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
+                          : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
                 {error ? (
                   <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
                     {error}
@@ -750,6 +780,18 @@ export default function InventorySalesPage({
                     accent="emerald"
                   />
                 </div>
+
+                {cartDetailed.length > 0 ? (
+                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+                    <div>
+                      <p className="font-medium text-foreground">Быстрое действие</p>
+                      <p className="text-xs text-muted-foreground">Можно очистить чек и начать заново</p>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={resetSaleForm}>
+                      Очистить
+                    </Button>
+                  </div>
+                ) : null}
 
                 <div className="space-y-2">
                   {cartDetailed.length === 0 ? (
@@ -941,13 +983,16 @@ export default function InventorySalesPage({
                       key={method}
                       type="button"
                       onClick={() => setPaymentMethod(method)}
-                      className={`rounded-2xl border px-3 py-3 text-sm font-medium transition ${
+                      className={`rounded-2xl border px-3 py-3 text-left text-sm font-medium transition ${
                         paymentMethod === method
                           ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
                           : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      {paymentBadge(method)}
+                      <div>{paymentBadge(method)}</div>
+                      <div className="mt-1 text-[11px] text-muted-foreground">
+                        {method === 'cash' ? 'Сразу наличными' : method === 'kaspi' ? 'Полностью безнал' : 'Делим оплату'}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -962,6 +1007,12 @@ export default function InventorySalesPage({
                       <Label>Kaspi</Label>
                       <Input value={String(Math.max(0, finalTotal - Math.max(0, parseMoney(mixedCash))))} readOnly />
                     </div>
+                  </div>
+                ) : null}
+
+                {paymentMethod === 'mixed' ? (
+                  <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs text-blue-200">
+                    Наличные закрывают первую часть чека, остаток автоматически уйдёт в Kaspi.
                   </div>
                 ) : null}
 
