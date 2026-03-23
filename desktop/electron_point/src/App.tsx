@@ -1,19 +1,20 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { loadConfig, saveConfig } from '@/lib/config'
 import { getCachedBootstrap, saveBootstrapCache, saveOperatorSession, loadOperatorSession, clearOperatorSession } from '@/lib/cache'
 import * as api from '@/lib/api'
 import { toastInfo } from '@/lib/toast'
-import LoginPage from '@/pages/LoginPage'
-import PointSelectPage from '@/pages/PointSelectPage'
-import ShiftPage from '@/pages/ShiftPage'
-import InventorySalesPage from '@/pages/InventorySalesPage'
-import InventoryReturnsPage from '@/pages/InventoryReturnsPage'
-import ScannerPage from '@/pages/ScannerPage'
-import InventoryRequestPage from '@/pages/InventoryRequestPage'
-import OperatorCabinetPage from '@/pages/OperatorCabinetPage'
-import SetupPage from '@/pages/SetupPage'
-import AdminLayout from '@/pages/admin/AdminLayout'
 import type { AppConfig, AppView, CompanyOption, OperatorSession, AdminSession, BootstrapData, AppUpdateState } from '@/types'
+
+const LoginPage = lazy(() => import('@/pages/LoginPage'))
+const PointSelectPage = lazy(() => import('@/pages/PointSelectPage'))
+const ShiftPage = lazy(() => import('@/pages/ShiftPage'))
+const InventorySalesPage = lazy(() => import('@/pages/InventorySalesPage'))
+const InventoryReturnsPage = lazy(() => import('@/pages/InventoryReturnsPage'))
+const ScannerPage = lazy(() => import('@/pages/ScannerPage'))
+const InventoryRequestPage = lazy(() => import('@/pages/InventoryRequestPage'))
+const OperatorCabinetPage = lazy(() => import('@/pages/OperatorCabinetPage'))
+const SetupPage = lazy(() => import('@/pages/SetupPage'))
+const AdminLayout = lazy(() => import('@/pages/admin/AdminLayout'))
 
 // Типизируем window.electron (из preload.cjs)
 declare global {
@@ -403,12 +404,14 @@ export default function App() {
 
     setView({ screen: 'booting' })
     try {
-      const bootstrap = await api.bootstrap(cfg)
-      await saveBootstrapCache(bootstrap)
+      // Fetch bootstrap and restore session in parallel
+      const [bootstrap, cachedSession] = await Promise.all([
+        api.bootstrap(cfg),
+        loadOperatorSession(),
+      ])
+      saveBootstrapCache(bootstrap).catch(() => null) // fire and forget
       setIsOffline(false)
 
-      // Восстанавливаем сессию оператора если не истекла (10 часов)
-      const cachedSession = await loadOperatorSession()
       if (cachedSession) {
         const session: typeof cachedSession = { ...cachedSession, bootstrap }
         setView(canUseScannerForSession(session)
@@ -419,9 +422,10 @@ export default function App() {
 
       setView({ screen: 'login', bootstrap })
     } catch {
-      const cached = await getCachedBootstrap()
+      const [cached] = await Promise.allSettled([getCachedBootstrap()])
+      const cachedBootstrap = cached.status === 'fulfilled' ? cached.value : null
       setIsOffline(true)
-      setView(cached ? { screen: 'login', bootstrap: cached } : { screen: 'setup' })
+      setView(cachedBootstrap ? { screen: 'login', bootstrap: cachedBootstrap } : { screen: 'setup' })
     }
   }
 
@@ -554,7 +558,7 @@ export default function App() {
   function withUpdateBanner(content: ReactNode) {
     return (
       <>
-        {content}
+        <Suspense fallback={null}>{content}</Suspense>
         <UpdateBanner
           state={updateState}
           onCheck={handleCheckForUpdates}

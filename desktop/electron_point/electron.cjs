@@ -293,22 +293,25 @@ ipcMain.handle('config:set', (_, config) => {
 
 const queuePath = () => path.join(app.getPath('userData'), 'queue.json')
 let _nextId = 1
+let _queueCache = null // in-memory cache — loaded once, persisted async
 
 function readQueue() {
+  if (_queueCache !== null) return _queueCache
   try {
     const data = JSON.parse(fs.readFileSync(queuePath(), 'utf-8'))
-    // Восстанавливаем счётчик ID
-    if (data.length > 0) {
-      _nextId = Math.max(...data.map((i) => i.id)) + 1
-    }
+    if (data.length > 0) _nextId = Math.max(...data.map((i) => i.id)) + 1
+    _queueCache = data
     return data
   } catch {
+    _queueCache = []
     return []
   }
 }
 
 function writeQueue(items) {
-  fs.writeFileSync(queuePath(), JSON.stringify(items, null, 2), 'utf-8')
+  _queueCache = items
+  // persist asynchronously — doesn't block IPC handlers
+  fs.writeFile(queuePath(), JSON.stringify(items, null, 2), 'utf-8', () => {})
 }
 
 ipcMain.handle('queue:add', (_, { type, payload, localRef }) => {

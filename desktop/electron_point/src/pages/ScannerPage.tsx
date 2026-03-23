@@ -80,40 +80,31 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
   async function loadAll() {
     setLoading(true)
     try {
-      // Продукты — с фолбеком на кеш
-      try {
-        const prods = await api.getProducts(config, session.company.id)
-        await saveProductsCache(prods)
-        setProducts(prods.filter(p => p.is_active))
+      const [prodsResult, opsResult, debtsResult] = await Promise.allSettled([
+        api.getProducts(config, session.company.id),
+        api.getAllOperators(config),
+        api.getDebts(config, session.company.id),
+      ])
+
+      if (prodsResult.status === 'fulfilled') {
+        saveProductsCache(prodsResult.value).catch(() => null)
+        setProducts(prodsResult.value.filter(p => p.is_active))
         setOffline(false)
-      } catch {
+      } else {
         const cached = await getCachedProducts()
         setProducts(cached.filter(p => p.is_active))
         setOffline(true)
       }
 
-      // Все операторы системы (для записи долга)
-      try {
-        const ops = await api.getAllOperators(config)
-        setAllOperators(ops)
-      } catch {
-        // Фолбек — только операторы устройства из bootstrap
+      if (opsResult.status === 'fulfilled') {
+        setAllOperators(opsResult.value)
+      } else {
         setAllOperators(bootstrap.operators.map(o => ({
-          id: o.id,
-          name: o.name,
-          short_name: o.short_name,
-          full_name: o.full_name,
+          id: o.id, name: o.name, short_name: o.short_name, full_name: o.full_name,
         })))
       }
 
-      // Долги — только онлайн
-      try {
-        const dbt = await api.getDebts(config, session.company.id)
-        setDebts(dbt)
-      } catch {
-        setDebts([])
-      }
-
+      setDebts(debtsResult.status === 'fulfilled' ? debtsResult.value : [])
       setPendingCount(await getPendingCount())
     } finally {
       setLoading(false)

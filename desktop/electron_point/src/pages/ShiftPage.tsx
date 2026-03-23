@@ -251,7 +251,8 @@ export default function ShiftPage({
   useEffect(() => {
     if (viewMode !== 'shift') return
     if (form.shift !== 'day' && form.shift !== 'night') return
-    void loadSalesSummary(form.date, form.shift)
+    const timer = setTimeout(() => void loadSalesSummary(form.date, form.shift), 600)
+    return () => clearTimeout(timer)
   }, [form.date, form.shift, loadSalesSummary, viewMode])
 
   const vCash = parseMoney(form.cash)
