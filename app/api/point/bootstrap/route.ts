@@ -24,22 +24,27 @@ export async function GET(request: Request) {
     const { supabase, device } = point
     const featureFlags = normalizeFlags(device.feature_flags || {})
 
+    // Fetch operators for ALL companies in the project
     const { data: assignments, error: assignmentsError } = await supabase
       .from('operator_company_assignments')
       .select(
         'id, operator_id, company_id, role_in_company, is_primary, is_active, operator:operator_id(id, name, short_name, telegram_chat_id, is_active, operator_profiles(*))',
       )
-      .eq('company_id', device.company_id)
+      .in('company_id', device.company_ids.length > 0 ? device.company_ids : ['__none__'])
       .eq('is_active', true)
       .order('is_primary', { ascending: false })
       .order('created_at', { ascending: true })
 
     if (assignmentsError) throw assignmentsError
 
+    // Deduplicate operators across companies (keep first occurrence which is primary-first)
+    const seenOperatorIds = new Set<string>()
     const operators = ((assignments || []) as any[])
       .map((row) => {
         const operator = Array.isArray(row.operator) ? row.operator[0] || null : row.operator || null
         if (!operator?.id) return null
+        if (seenOperatorIds.has(operator.id)) return null
+        seenOperatorIds.add(operator.id)
         const profile = Array.isArray(operator.operator_profiles) ? operator.operator_profiles[0] || null : null
 
         return {
@@ -55,16 +60,31 @@ export async function GET(request: Request) {
       })
       .filter(Boolean)
 
+    // Fetch company info for all project companies
+    const { data: companiesData } = await supabase
+      .from('companies')
+      .select('id, name, code')
+      .in('id', device.company_ids.length > 0 ? device.company_ids : ['__none__'])
+
+    const companies = (companiesData || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      code: c.code || null,
+    }))
+
     await writeAuditLog(supabase, {
       entityType: 'point-device',
       entityId: device.id,
       action: 'bootstrap',
       payload: {
-        company_id: device.company_id,
+        company_ids: device.company_ids,
         operator_count: operators.length,
         point_mode: device.point_mode,
       },
     })
+
+    // company field: selected company or first in list (for backward compat)
+    const primaryCompany = device.company || companies[0] || { id: '', name: device.name, code: null }
 
     return json({
       ok: true,
@@ -74,11 +94,8 @@ export async function GET(request: Request) {
         point_mode: device.point_mode,
         feature_flags: featureFlags,
       },
-      company: {
-        id: device.company_id,
-        name: device.company?.name || 'Точка',
-        code: device.company?.code || null,
-      },
+      company: primaryCompany,
+      companies,
       operators,
       sync: {
         mode: 'server-api',

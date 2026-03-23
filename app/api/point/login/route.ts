@@ -99,13 +99,21 @@ export async function POST(request: Request) {
       : (operatorAuth as any).operator || null
     const profile = Array.isArray(operator?.operator_profiles) ? operator.operator_profiles[0] || null : null
 
-    const primaryAssignment =
-      assignments.find((a: any) => a.company_id === device.company_id && a.is_primary) ||
-      assignments.find((a: any) => a.company_id === device.company_id) ||
-      assignments.find((a: any) => a.is_primary) ||
-      assignments[0]
+    // Filter operator's companies to only those in the project
+    const projectCompanyIds = new Set(device.company_ids)
+    const projectAssignments = projectCompanyIds.size > 0
+      ? assignments.filter((a: any) => projectCompanyIds.has(a.company_id))
+      : assignments
 
-    const allCompanies = assignments.map((a: any) => {
+    if (projectAssignments.length === 0) {
+      return json({ error: 'operator-not-assigned-to-any-point' }, 403)
+    }
+
+    const primaryAssignment =
+      projectAssignments.find((a: any) => a.is_primary) ||
+      projectAssignments[0]
+
+    const allCompanies = projectAssignments.map((a: any) => {
       const co = companyMap[a.company_id]
       return {
         id: a.company_id,
@@ -122,7 +130,7 @@ export async function POST(request: Request) {
       payload: {
         point_device_id: device.id,
         point_device_name: device.name,
-        company_id: device.company_id,
+        company_ids: device.company_ids,
         operator_id: operatorAuth.operator_id,
         username: operatorAuth.username || username,
         entered_username: username,
@@ -136,8 +144,8 @@ export async function POST(request: Request) {
     const primaryCo = companyMap[primaryAssignment.company_id]
     const primaryCompany = {
       id: primaryAssignment.company_id,
-      name: primaryCo?.name || device.company?.name || 'Точка',
-      code: primaryCo?.code ?? device.company?.code ?? null,
+      name: primaryCo?.name || 'Точка',
+      code: primaryCo?.code ?? null,
     }
 
     return json({

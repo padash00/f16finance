@@ -324,7 +324,7 @@ export default function InventoryReturnsPage({
             <span className="text-sm font-bold text-primary-foreground">F</span>
           </div>
           <div>
-            <p className="text-sm font-semibold leading-none">{bootstrap.company.name}</p>
+            <p className="text-sm font-semibold leading-none">{session.company.name}</p>
             <p className="text-xs text-muted-foreground">{operatorName}</p>
           </div>
         </div>

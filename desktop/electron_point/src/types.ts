@@ -37,6 +37,7 @@ export interface BootstrapData {
     name: string
     code: string | null
   }
+  companies: Array<{ id: string; name: string; code: string | null }>
   operators: BootstrapOperator[]
 }
 

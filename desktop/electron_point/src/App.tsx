@@ -76,6 +76,10 @@ function canUseInventorySales(bootstrap: BootstrapData) {
 }
 
 function isOperatorAttachedToCurrentPoint(session: OperatorSession, bootstrap: BootstrapData) {
+  // In project mode: check if selected company is one of the project's companies
+  if (bootstrap.companies && bootstrap.companies.length > 0) {
+    return bootstrap.companies.some((c) => c.id === session.company.id)
+  }
   return session.company.id === bootstrap.company.id
 }
 

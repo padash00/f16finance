@@ -564,7 +564,7 @@ export default function InventorySalesPage({
         loyaltyDiscountAmount,
         comment: comment.trim() || null,
         customer: selectedCustomer,
-        companyName: bootstrap.company.name,
+        companyName: session.company.name,
         locationName: context?.location?.name || 'Витрина точки',
         operatorName,
         lines: cartDetailed.map((line) => ({
@@ -599,7 +599,7 @@ export default function InventorySalesPage({
             <span className="text-sm font-bold text-primary-foreground">F</span>
           </div>
           <div>
-            <p className="text-sm font-semibold leading-none">{bootstrap.company.name}</p>
+            <p className="text-sm font-semibold leading-none">{session.company.name}</p>
             <p className="text-xs text-muted-foreground">{operatorName}</p>
           </div>
         </div>

@@ -201,7 +201,7 @@ export default function InventoryRequestPage({
             <span className="text-sm font-bold text-primary-foreground">F</span>
           </div>
           <div>
-            <p className="text-sm font-semibold leading-none">{bootstrap.company.name}</p>
+            <p className="text-sm font-semibold leading-none">{session.company.name}</p>
             <p className="text-xs text-muted-foreground">{operatorName}</p>
           </div>
         </div>
@@ -258,7 +258,7 @@ export default function InventoryRequestPage({
                   <div className="flex items-center gap-2">
                     <Store className="h-4 w-4 text-blue-400" />
                     <span className="text-muted-foreground">Витрина:</span>
-                    <span className="font-medium text-foreground">{context?.targetLocation?.name || bootstrap.company.name}</span>
+                    <span className="font-medium text-foreground">{context?.targetLocation?.name || session.company.name}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Package className="h-4 w-4 text-amber-400" />

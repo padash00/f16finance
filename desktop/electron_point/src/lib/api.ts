@@ -56,6 +56,7 @@ function operatorHeaders(session: OperatorSession) {
   return {
     'x-point-operator-id': session.operator.operator_id,
     'x-point-operator-auth-id': session.operator.auth_id,
+    'x-point-company-id': session.company.id,
   }
 }
 

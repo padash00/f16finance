@@ -8,6 +8,7 @@ export type PointDeviceContext = {
   device: {
     id: string
     company_id: string
+    company_ids: string[]
     name: string
     device_token: string
     shift_report_chat_id: string | null
@@ -43,9 +44,9 @@ export async function requirePointDevice(request: Request): Promise<
 
   const supabase = createAdminSupabaseClient()
   const { data, error } = await supabase
-    .from('point_devices')
-    .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, company:company_id(id, name, code)')
-    .eq('device_token', token)
+    .from('point_projects')
+    .select('id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, point_project_companies(company_id, company:company_id(id, name, code))')
+    .eq('project_token', token)
     .maybeSingle()
 
   if (error || !data || !data.is_active) {
@@ -54,17 +55,52 @@ export async function requirePointDevice(request: Request): Promise<
     }
   }
 
-  await supabase.from('point_devices').update({ last_seen_at: new Date().toISOString() }).eq('id', data.id)
+  const projectCompanies = Array.isArray(data.point_project_companies)
+    ? (data.point_project_companies as any[])
+    : []
+  const company_ids: string[] = projectCompanies.map((c: any) => c.company_id).filter(Boolean)
+
+  // Determine which company to use for this request
+  const requestedCompanyId = request.headers.get('x-point-company-id')?.trim() || ''
+  let selectedCompanyId = ''
+  let selectedCompany: { id: string; name: string; code: string | null } | null = null
+
+  if (requestedCompanyId && company_ids.includes(requestedCompanyId)) {
+    selectedCompanyId = requestedCompanyId
+    const match = projectCompanies.find((c: any) => c.company_id === requestedCompanyId)
+    if (match?.company) {
+      const co = Array.isArray(match.company) ? match.company[0] : match.company
+      selectedCompany = co || null
+    }
+  } else if (company_ids.length > 0) {
+    // Fallback to first company (used by bootstrap before company selection)
+    selectedCompanyId = company_ids[0]
+    const first = projectCompanies[0]
+    if (first?.company) {
+      const co = Array.isArray(first.company) ? first.company[0] : first.company
+      selectedCompany = co || null
+    }
+  }
+
+  await supabase.from('point_projects').update({ last_seen_at: new Date().toISOString() }).eq('id', data.id)
 
   return {
     supabase,
     device: {
-      ...data,
+      id: data.id,
+      company_id: selectedCompanyId,
+      company_ids,
+      name: data.name,
+      device_token: data.project_token,
+      shift_report_chat_id: data.shift_report_chat_id || null,
+      point_mode: data.point_mode,
       feature_flags:
         data.feature_flags && typeof data.feature_flags === 'object'
           ? (data.feature_flags as Record<string, unknown>)
           : {},
-      company: Array.isArray(data.company) ? data.company[0] || null : data.company || null,
+      is_active: data.is_active,
+      notes: data.notes || null,
+      company: selectedCompany,
     },
   }
 }

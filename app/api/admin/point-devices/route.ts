@@ -13,40 +13,40 @@ type PointFeatureFlags = {
 
 type Body =
   | {
-      action: 'createDevice'
+      action: 'createProject'
       payload: {
-        company_id: string
         name: string
         point_mode: string
+        company_ids: string[]
         shift_report_chat_id?: string | null
         notes?: string | null
         feature_flags?: Partial<PointFeatureFlags> | null
       }
     }
   | {
-      action: 'updateDevice'
-      deviceId: string
+      action: 'updateProject'
+      projectId: string
       payload: {
-        company_id: string
         name: string
         point_mode: string
+        company_ids: string[]
         shift_report_chat_id?: string | null
         notes?: string | null
         feature_flags?: Partial<PointFeatureFlags> | null
       }
     }
   | {
-      action: 'toggleDeviceActive'
-      deviceId: string
+      action: 'toggleProjectActive'
+      projectId: string
       is_active: boolean
     }
   | {
-      action: 'rotateDeviceToken'
-      deviceId: string
+      action: 'rotateProjectToken'
+      projectId: string
     }
   | {
-      action: 'deleteDevice'
-      deviceId: string
+      action: 'deleteProject'
+      projectId: string
     }
 
 function json(data: unknown, status = 200) {
@@ -75,14 +75,30 @@ function normalizeShiftReportChatId(value: string | null | undefined) {
   return chatId
 }
 
-function mapDeviceRow(row: any) {
-  const company = Array.isArray(row.company) ? row.company[0] || null : row.company || null
+function mapProjectRow(row: any) {
+  const companies = Array.isArray(row.point_project_companies)
+    ? row.point_project_companies.map((c: any) => {
+        const co = Array.isArray(c.company) ? c.company[0] || null : c.company || null
+        return { id: c.company_id, name: co?.name || '', code: co?.code || null }
+      })
+    : []
   return {
-    ...row,
-    company,
+    id: row.id,
+    name: row.name,
+    project_token: row.project_token,
+    point_mode: row.point_mode,
     feature_flags: normalizeFlags(row.feature_flags),
+    shift_report_chat_id: row.shift_report_chat_id || null,
+    is_active: row.is_active,
+    notes: row.notes || null,
+    last_seen_at: row.last_seen_at || null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    companies,
   }
 }
+
+const PROJECT_SELECT = 'id, name, project_token, point_mode, feature_flags, shift_report_chat_id, is_active, notes, last_seen_at, created_at, updated_at, point_project_companies(company_id, company:company_id(id, name, code))'
 
 async function getContext(request: Request) {
   const access = await getRequestAccessContext(request)
@@ -104,31 +120,31 @@ export async function GET(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
-    const [{ data: companies, error: companiesError }, { data: devices, error: devicesError }] = await Promise.all([
+    const [{ data: companies, error: companiesError }, { data: projects, error: projectsError }] = await Promise.all([
       supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
       supabase
-        .from('point_devices')
-        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+        .from('point_projects')
+        .select(PROJECT_SELECT)
         .order('created_at', { ascending: false }),
     ])
 
     if (companiesError) throw companiesError
-    if (devicesError) throw devicesError
+    if (projectsError) throw projectsError
 
     return json({
       ok: true,
       data: {
         companies: companies || [],
-        devices: ((devices || []) as any[]).map(mapDeviceRow),
+        projects: ((projects || []) as any[]).map(mapProjectRow),
       },
     })
   } catch (error: any) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/point-devices:get',
-      message: error?.message || 'Point devices GET error',
+      message: error?.message || 'Point projects GET error',
     })
-    return json({ error: error?.message || 'Не удалось загрузить устройства точек' }, 500)
+    return json({ error: error?.message || 'Не удалось загрузить проекты точек' }, 500)
   }
 }
 
@@ -142,150 +158,167 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as Body | null
     if (!body?.action) return badRequest('Неверный формат запроса')
 
-    if (body.action === 'createDevice') {
-      if (!body.payload.company_id?.trim()) return badRequest('Нужно выбрать точку')
-      if (!body.payload.name?.trim()) return badRequest('Название устройства обязательно')
+    if (body.action === 'createProject') {
+      if (!body.payload.name?.trim()) return badRequest('Название проекта обязательно')
       if (!body.payload.point_mode?.trim()) return badRequest('Режим точки обязателен')
+      if (!Array.isArray(body.payload.company_ids) || body.payload.company_ids.length === 0) {
+        return badRequest('Нужно добавить хотя бы одну точку в проект')
+      }
 
-      // Генерируем токен с 256 бит энтропии на сервере
       const initialToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('')
 
-      const { data, error } = await supabase
-        .from('point_devices')
-        .insert([
-          {
-            company_id: body.payload.company_id,
-            name: body.payload.name.trim(),
-            shift_report_chat_id: normalizeShiftReportChatId(body.payload.shift_report_chat_id),
-            point_mode: body.payload.point_mode.trim(),
-            notes: body.payload.notes?.trim() || null,
-            feature_flags: normalizeFlags(body.payload.feature_flags),
-            device_token: initialToken,
-          },
-        ])
-        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
-        .single()
-
-      if (error) throw error
-
-      await writeAuditLog(supabase, {
-        actorUserId,
-        entityType: 'point-device',
-        entityId: String(data.id),
-        action: 'create',
-        payload: {
-          company_id: data.company_id,
-          name: data.name,
-          shift_report_chat_id: data.shift_report_chat_id || null,
-          point_mode: data.point_mode,
-          feature_flags: normalizeFlags(data.feature_flags),
-        },
-      })
-
-      return json({ ok: true, data: mapDeviceRow(data) })
-    }
-
-    if (!body.deviceId?.trim()) return badRequest('deviceId обязателен')
-
-    if (body.action === 'updateDevice') {
-      if (!body.payload.company_id?.trim()) return badRequest('Нужно выбрать точку')
-      if (!body.payload.name?.trim()) return badRequest('Название устройства обязательно')
-      if (!body.payload.point_mode?.trim()) return badRequest('Режим точки обязателен')
-
-      const { data, error } = await supabase
-        .from('point_devices')
-        .update({
-          company_id: body.payload.company_id,
+      const { data: project, error: projectError } = await supabase
+        .from('point_projects')
+        .insert([{
           name: body.payload.name.trim(),
-          shift_report_chat_id: normalizeShiftReportChatId(body.payload.shift_report_chat_id),
+          project_token: initialToken,
           point_mode: body.payload.point_mode.trim(),
+          shift_report_chat_id: normalizeShiftReportChatId(body.payload.shift_report_chat_id),
           notes: body.payload.notes?.trim() || null,
           feature_flags: normalizeFlags(body.payload.feature_flags),
+        }])
+        .select('id, name')
+        .single()
+
+      if (projectError) throw projectError
+
+      const companyRows = body.payload.company_ids.map((company_id) => ({
+        project_id: project.id,
+        company_id,
+      }))
+      const { error: companiesError } = await supabase
+        .from('point_project_companies')
+        .insert(companyRows)
+
+      if (companiesError) throw companiesError
+
+      const { data: full, error: fullError } = await supabase
+        .from('point_projects')
+        .select(PROJECT_SELECT)
+        .eq('id', project.id)
+        .single()
+
+      if (fullError) throw fullError
+
+      await writeAuditLog(supabase, {
+        actorUserId,
+        entityType: 'point-project',
+        entityId: String(project.id),
+        action: 'create',
+        payload: { name: project.name, company_ids: body.payload.company_ids },
+      })
+
+      return json({ ok: true, data: mapProjectRow(full) })
+    }
+
+    if (!('projectId' in body) || !body.projectId?.trim()) return badRequest('projectId обязателен')
+    const projectId = body.projectId
+
+    if (body.action === 'updateProject') {
+      if (!body.payload.name?.trim()) return badRequest('Название проекта обязательно')
+      if (!body.payload.point_mode?.trim()) return badRequest('Режим точки обязателен')
+      if (!Array.isArray(body.payload.company_ids) || body.payload.company_ids.length === 0) {
+        return badRequest('Нужно добавить хотя бы одну точку в проект')
+      }
+
+      const { error: updateError } = await supabase
+        .from('point_projects')
+        .update({
+          name: body.payload.name.trim(),
+          point_mode: body.payload.point_mode.trim(),
+          shift_report_chat_id: normalizeShiftReportChatId(body.payload.shift_report_chat_id),
+          notes: body.payload.notes?.trim() || null,
+          feature_flags: normalizeFlags(body.payload.feature_flags),
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', body.deviceId)
-        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+        .eq('id', projectId)
+
+      if (updateError) throw updateError
+
+      // Replace company assignments
+      await supabase.from('point_project_companies').delete().eq('project_id', projectId)
+      const companyRows = body.payload.company_ids.map((company_id) => ({
+        project_id: projectId,
+        company_id,
+      }))
+      const { error: insertError } = await supabase.from('point_project_companies').insert(companyRows)
+      if (insertError) throw insertError
+
+      const { data: full, error: fullError } = await supabase
+        .from('point_projects')
+        .select(PROJECT_SELECT)
+        .eq('id', projectId)
         .single()
 
-      if (error) throw error
+      if (fullError) throw fullError
 
       await writeAuditLog(supabase, {
         actorUserId,
-        entityType: 'point-device',
-        entityId: String(data.id),
+        entityType: 'point-project',
+        entityId: projectId,
         action: 'update',
-        payload: {
-          company_id: data.company_id,
-          name: data.name,
-          shift_report_chat_id: data.shift_report_chat_id || null,
-          point_mode: data.point_mode,
-          feature_flags: normalizeFlags(data.feature_flags),
-        },
+        payload: { name: body.payload.name, company_ids: body.payload.company_ids },
       })
 
-      return json({ ok: true, data: mapDeviceRow(data) })
+      return json({ ok: true, data: mapProjectRow(full) })
     }
 
-    if (body.action === 'toggleDeviceActive') {
+    if (body.action === 'toggleProjectActive') {
       const { data, error } = await supabase
-        .from('point_devices')
-        .update({ is_active: body.is_active })
-        .eq('id', body.deviceId)
-        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+        .from('point_projects')
+        .update({ is_active: body.is_active, updated_at: new Date().toISOString() })
+        .eq('id', projectId)
+        .select(PROJECT_SELECT)
         .single()
 
       if (error) throw error
 
       await writeAuditLog(supabase, {
         actorUserId,
-        entityType: 'point-device',
-        entityId: String(data.id),
+        entityType: 'point-project',
+        entityId: projectId,
         action: body.is_active ? 'activate' : 'deactivate',
-        payload: {
-          name: data.name,
-          company_id: data.company_id,
-        },
+        payload: { name: data.name },
       })
 
-      return json({ ok: true, data: mapDeviceRow(data) })
+      return json({ ok: true, data: mapProjectRow(data) })
     }
 
-    if (body.action === 'rotateDeviceToken') {
-      // 256 бит энтропии вместо ~122 бит UUID v4
+    if (body.action === 'rotateProjectToken') {
       const nextToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('')
+
       const { data, error } = await supabase
-        .from('point_devices')
-        .update({ device_token: nextToken })
-        .eq('id', body.deviceId)
-        .select('id, company_id, name, device_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, last_seen_at, created_at, updated_at, company:company_id(id, name, code)')
+        .from('point_projects')
+        .update({ project_token: nextToken, updated_at: new Date().toISOString() })
+        .eq('id', projectId)
+        .select(PROJECT_SELECT)
         .single()
 
       if (error) throw error
 
       await writeAuditLog(supabase, {
         actorUserId,
-        entityType: 'point-device',
-        entityId: String(data.id),
+        entityType: 'point-project',
+        entityId: projectId,
         action: 'rotate-token',
-        payload: {
-          name: data.name,
-          company_id: data.company_id,
-        },
+        payload: { name: data.name },
       })
 
-      return json({ ok: true, data: mapDeviceRow(data) })
+      return json({ ok: true, data: mapProjectRow(data) })
     }
 
-    const { error } = await supabase.from('point_devices').delete().eq('id', body.deviceId)
-    if (error) throw error
+    // deleteProject
+    const { error: deleteError } = await supabase.from('point_projects').delete().eq('id', projectId)
+    if (deleteError) throw deleteError
 
     await writeAuditLog(supabase, {
       actorUserId,
-      entityType: 'point-device',
-      entityId: body.deviceId,
+      entityType: 'point-project',
+      entityId: projectId,
       action: 'delete',
     })
 
@@ -294,8 +327,8 @@ export async function POST(request: Request) {
     await writeSystemErrorLogSafe({
       scope: 'server',
       area: 'api/admin/point-devices:post',
-      message: error?.message || 'Point devices POST error',
+      message: error?.message || 'Point projects POST error',
     })
-    return json({ error: error?.message || 'Не удалось сохранить устройство точки' }, 500)
+    return json({ error: error?.message || 'Не удалось сохранить проект точки' }, 500)
   }
 }
