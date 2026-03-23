@@ -10,7 +10,7 @@ type LowStockItem = {
   id: string
   name: string
   total_balance: number
-  low_stock_threshold: number
+  low_stock_threshold: number | null
 }
 
 export default function StoreOverviewPage() {
@@ -18,20 +18,22 @@ export default function StoreOverviewPage() {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('inventory_items')
         .select('id, name, total_balance, low_stock_threshold')
         .eq('is_active', true)
         .not('low_stock_threshold', 'is', null)
         .order('name')
+      if (error) return
       if (data) {
-        const low = (data as LowStockItem[]).filter(
-          item => item.low_stock_threshold !== null && item.total_balance <= item.low_stock_threshold
+        const typedData = data as LowStockItem[]
+        const low = typedData.filter(
+          (item) => item.low_stock_threshold !== null && item.total_balance <= item.low_stock_threshold,
         )
         setLowStock(low.slice(0, 10))
       }
     }
-    load()
+    void load()
   }, [])
 
   return (
