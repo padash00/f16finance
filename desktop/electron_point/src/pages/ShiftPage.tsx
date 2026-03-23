@@ -434,9 +434,7 @@ export default function ShiftPage({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <div className="h-9 shrink-0 drag-region" />
-
-      <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b bg-card px-5">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-card px-5 drag-region">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-[0_10px_30px_rgba(255,255,255,0.08)]">
             <span className="text-sm font-bold text-primary-foreground">F</span>

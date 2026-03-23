@@ -256,7 +256,7 @@ app.whenReady().then(() => {
         ...details.responseHeaders,
         'Access-Control-Allow-Origin': ['*'],
         'Access-Control-Allow-Methods': ['GET, POST, PUT, DELETE, OPTIONS'],
-        'Access-Control-Allow-Headers': ['content-type, x-point-device-token'],
+        'Access-Control-Allow-Headers': ['content-type, x-point-device-token, x-point-company-id, x-point-operator-id, x-point-operator-auth-id'],
       },
     })
   })

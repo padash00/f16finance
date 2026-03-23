@@ -180,9 +180,7 @@ export default function OperatorCabinetPage({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <div className="h-9 shrink-0 drag-region" />
-
-      <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b bg-card px-5">
+      <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b bg-card px-5 drag-region">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <span className="text-sm font-bold text-primary-foreground">F</span>

@@ -261,10 +261,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
   return (
     <div className="flex h-screen flex-col bg-background overflow-hidden">
-      {/* Drag region for Windows title bar controls */}
-      <div className="h-9 drag-region shrink-0" />
-      {/* Header */}
-      <header className="flex h-12 items-center justify-between border-b bg-card px-5 gap-4 shrink-0">
+      <header className="flex h-12 items-center justify-between border-b bg-card px-5 gap-4 shrink-0 drag-region">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <span className="text-sm font-bold text-primary-foreground">F</span>

@@ -64,7 +64,9 @@ export default function SetupPage({ initialConfig, onDone, onCancel }: Props) {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-background p-6">
+    <div className="flex h-screen flex-col bg-background">
+      <div className="h-9 shrink-0 drag-region" />
+    <div className="flex flex-1 items-center justify-center p-6">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary">
@@ -146,6 +148,7 @@ export default function SetupPage({ initialConfig, onDone, onCancel }: Props) {
           {appVersion ? `Orda Point v${appVersion}` : 'Orda Point'}
         </p>
       </div>
+    </div>
     </div>
   )
 }
