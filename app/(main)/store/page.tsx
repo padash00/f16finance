@@ -23,9 +23,9 @@ export default function StoreOverviewPage() {
       .eq('is_active', true)
       .not('low_stock_threshold', 'is', null)
       .order('name')
-      .then(({ data }) => {
+      .then(({ data }: { data: LowStockItem[] | null }) => {
         if (data) {
-          const low = (data as LowStockItem[]).filter(
+          const low = data.filter(
             item => item.low_stock_threshold !== null && item.total_balance <= item.low_stock_threshold
           )
           setLowStock(low.slice(0, 10))
