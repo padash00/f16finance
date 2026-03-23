@@ -43,6 +43,20 @@ export type StoreMovementsData = {
   locations: any[]
 }
 
+export type StoreWriteoffsData = {
+  items: any[]
+  locations: any[]
+  balances: any[]
+  writeoffs: any[]
+}
+
+export type StoreRevisionsData = {
+  items: any[]
+  locations: any[]
+  balances: any[]
+  stocktakes: any[]
+}
+
 export async function fetchInventoryRequests(supabase: AnySupabase) {
   const { data, error } = await supabase
     .from('inventory_requests')
@@ -208,6 +222,91 @@ export async function fetchStoreMovements(supabase: AnySupabase): Promise<StoreM
   return {
     movements: mapNestedRows(movements || []),
     locations: mapNestedRows(locations || []),
+  }
+}
+
+export async function fetchStoreWriteoffs(supabase: AnySupabase): Promise<StoreWriteoffsData> {
+  const [
+    { data: items, error: itemsError },
+    { data: locations, error: locationsError },
+    { data: balances, error: balancesError },
+    { data: writeoffs, error: writeoffsError },
+  ] = await Promise.all([
+    supabase
+      .from('inventory_items')
+      .select('id, name, barcode, unit, item_type, is_active, category:category_id(id, name)')
+      .eq('is_active', true)
+      .order('name', { ascending: true }),
+    supabase
+      .from('inventory_locations')
+      .select('id, company_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+      .eq('is_active', true)
+      .order('location_type', { ascending: true })
+      .order('name', { ascending: true }),
+    supabase
+      .from('inventory_balances')
+      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .gt('quantity', 0)
+      .order('updated_at', { ascending: false }),
+    supabase
+      .from('inventory_writeoffs')
+      .select('id, location_id, written_at, reason, comment, total_amount, created_at, location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), items:inventory_writeoff_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode, unit))')
+      .order('created_at', { ascending: false })
+      .limit(80),
+  ])
+
+  if (itemsError) throw itemsError
+  if (locationsError) throw locationsError
+  if (balancesError) throw balancesError
+  if (writeoffsError) throw writeoffsError
+
+  return {
+    items: mapNestedRows(items || []),
+    locations: mapNestedRows(locations || []),
+    balances: mapNestedRows(balances || []),
+    writeoffs: mapNestedRows(writeoffs || []),
+  }
+}
+
+export async function fetchStoreRevisions(supabase: AnySupabase): Promise<StoreRevisionsData> {
+  const [
+    { data: items, error: itemsError },
+    { data: locations, error: locationsError },
+    { data: balances, error: balancesError },
+    { data: stocktakes, error: stocktakesError },
+  ] = await Promise.all([
+    supabase
+      .from('inventory_items')
+      .select('id, name, barcode, unit, item_type, is_active, category:category_id(id, name)')
+      .eq('is_active', true)
+      .order('name', { ascending: true }),
+    supabase
+      .from('inventory_locations')
+      .select('id, company_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+      .eq('is_active', true)
+      .order('location_type', { ascending: true })
+      .order('name', { ascending: true }),
+    supabase
+      .from('inventory_balances')
+      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .order('updated_at', { ascending: false }),
+    supabase
+      .from('inventory_stocktakes')
+      .select('id, location_id, counted_at, comment, created_at, location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode, unit))')
+      .order('created_at', { ascending: false })
+      .limit(80),
+  ])
+
+  if (itemsError) throw itemsError
+  if (locationsError) throw locationsError
+  if (balancesError) throw balancesError
+  if (stocktakesError) throw stocktakesError
+
+  return {
+    items: mapNestedRows(items || []),
+    locations: mapNestedRows(locations || []),
+    balances: mapNestedRows(balances || []),
+    stocktakes: mapNestedRows(stocktakes || []),
   }
 }
 
