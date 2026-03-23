@@ -643,6 +643,26 @@ export default function InventorySalesPage({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {(context?.items || []).slice(0, 8).length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">Быстрый доступ</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(context?.items || []).slice(0, 8).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => addToCart(item)}
+                          disabled={item.display_qty <= 0}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-emerald-400/40 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <Plus className="h-3 w-3" />
+                          {item.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input

@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { History, RefreshCw, Search } from 'lucide-react'
+import { ArchiveX, History, RefreshCw, Search } from 'lucide-react'
+import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -161,10 +162,18 @@ export default function StoreMovementsPage() {
             </p>
           </div>
 
-          <Button variant="outline" onClick={() => void load()} disabled={loading} className="rounded-2xl">
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link href="/store/writeoffs">
+              <Button variant="outline" className="rounded-2xl gap-2">
+                <ArchiveX className="h-4 w-4" />
+                Создать списание
+              </Button>
+            </Link>
+            <Button variant="outline" onClick={() => void load()} disabled={loading} className="rounded-2xl">
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Обновить
+            </Button>
+          </div>
         </div>
       </Card>
 

@@ -120,6 +120,22 @@ function requestStatusClass(status: string) {
   return 'border-violet-500/30 bg-violet-500/10 text-violet-200'
 }
 
+function RequestStatusBadge({ status }: { status: string }) {
+  const label = requestStatusLabel(status)
+  const cls = requestStatusClass(status)
+  const icon = status === 'approved_full' ? <CheckCircle2 className="h-3 w-3" />
+    : status === 'approved_partial' ? <CheckCircle2 className="h-3 w-3" />
+    : status === 'issued' ? <PackageCheck className="h-3 w-3" />
+    : status === 'received' ? <PackageCheck className="h-3 w-3" />
+    : status === 'rejected' ? <XCircle className="h-3 w-3" />
+    : <AlertCircle className="h-3 w-3" />
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${cls}`}>
+      {icon}{label}
+    </span>
+  )
+}
+
 function createDecisionDraft(request: InventoryRequest): DecisionDraft {
   return {
     decisionComment: '',
@@ -312,6 +328,13 @@ export default function StoreRequestsPage() {
         </div>
       ) : null}
 
+      {stats.pending > 0 && (
+        <div className="flex items-center gap-3 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-5 py-3">
+          <AlertCircle className="h-5 w-5 text-violet-300 shrink-0" />
+          <span className="text-sm font-semibold text-violet-200">{stats.pending} {stats.pending === 1 ? 'новая заявка ждёт' : 'новых заявки ждут'} решения</span>
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Card className="border-violet-500/20 bg-slate-950/70 p-4">
           <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Новые заявки</p>
@@ -372,11 +395,7 @@ export default function StoreRequestsPage() {
                           <span className="text-base font-semibold text-white">
                             {request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'}
                           </span>
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${requestStatusClass(request.status)}`}
-                          >
-                            {requestStatusLabel(request.status)}
-                          </span>
+                          <RequestStatusBadge status={request.status} />
                         </div>
                         <div className="flex flex-wrap gap-3 text-xs text-slate-400">
                           <span>Создана: {formatDateTime(request.created_at)}</span>
@@ -491,11 +510,7 @@ export default function StoreRequestsPage() {
                           {asArray(request.items).length || 0} позиций · {formatDateTime(request.approved_at || request.created_at)}
                         </div>
                       </div>
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${requestStatusClass(request.status)}`}
-                      >
-                        {requestStatusLabel(request.status)}
-                      </span>
+                      <RequestStatusBadge status={request.status} />
                     </div>
                   </div>
                 ))
@@ -524,11 +539,7 @@ export default function StoreRequestsPage() {
                           <div className="mt-2 line-clamp-2 text-xs text-slate-500">{request.decision_comment}</div>
                         ) : null}
                       </div>
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${requestStatusClass(request.status)}`}
-                      >
-                        {requestStatusLabel(request.status)}
-                      </span>
+                      <RequestStatusBadge status={request.status} />
                     </div>
                   </div>
                 ))
