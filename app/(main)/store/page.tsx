@@ -57,7 +57,7 @@ export default function StoreOverviewPage() {
               )}
             </div>
           </div>
-          <Link href="/inventory/forecast" className="shrink-0 text-xs text-amber-400 underline hover:text-amber-300">
+          <Link href="/store/forecast" className="shrink-0 text-xs text-amber-400 underline hover:text-amber-300">
             Прогноз →
           </Link>
         </div>

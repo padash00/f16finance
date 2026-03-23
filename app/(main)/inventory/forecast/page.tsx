@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCompanies } from '@/hooks/use-companies'
+import { InventoryLegacyRedirect } from '../legacy-redirect'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -353,5 +354,5 @@ export function InventoryForecastPageContent() {
 }
 
 export default function InventoryForecastPage() {
-  return <InventoryForecastPageContent />
+  return <InventoryLegacyRedirect href="/store/forecast" />
 }

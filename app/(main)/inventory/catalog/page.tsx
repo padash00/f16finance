@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { InventoryLegacyRedirect } from '../legacy-redirect'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -876,5 +877,5 @@ export function CatalogPageContent() {
 }
 
 export default function CatalogPage() {
-  return <CatalogPageContent />
+  return <InventoryLegacyRedirect href="/store/catalog" />
 }

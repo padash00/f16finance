@@ -31,6 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { formatMoney } from '@/lib/core/format'
+import { InventoryLegacyRedirect } from './legacy-redirect'
 
 type InventoryCategory = { id: string; name: string; description: string | null; is_active: boolean }
 type InventorySupplier = { id: string; name: string; contact_name: string | null; phone: string | null; notes: string | null }
@@ -2479,6 +2480,6 @@ function PointMetricCard({
 }
 
 export default function InventoryPage() {
-  return <InventoryPageContent />
+  return <InventoryLegacyRedirect href="/store" />
 }
 

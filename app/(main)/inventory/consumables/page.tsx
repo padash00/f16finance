@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { InventoryLegacyRedirect } from '../legacy-redirect'
 
 type ConsumableItem = { id: string; name: string; barcode: string; unit: string; category?: { id: string; name: string } | null }
 type ConsumptionNorm = { id: string; item_id: string; location_id: string; monthly_qty: number; alert_days: number }
@@ -354,5 +355,5 @@ export function ConsumablesPageContent() {
 }
 
 export default function ConsumablesPage() {
-  return <ConsumablesPageContent />
+  return <InventoryLegacyRedirect href="/store/consumables" />
 }

@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { InventoryLegacyRedirect } from '../legacy-redirect'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -654,5 +655,5 @@ export function AbcAnalysisPageContent() {
 }
 
 export default function AbcAnalysisPage() {
-  return <AbcAnalysisPageContent />
+  return <InventoryLegacyRedirect href="/store/abc" />
 }
