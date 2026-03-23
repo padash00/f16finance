@@ -40,6 +40,7 @@ import {
   PackagePlus,
   PieChart,
   Radar,
+  RotateCcw,
   ScanSearch,
   Search,
   Settings2,
@@ -134,6 +135,7 @@ const navSections: NavSection[] = [
       { href: '/store/revisions', label: 'Ревизия', icon: ScanSearch, note: 'Полная проверка склада и витрин' },
       { href: '/store/movements', label: 'Движения', icon: History, note: 'Журнал товарных операций' },
       { href: '/pos', label: 'Касса (Web POS)', icon: Monitor, note: 'Веб-касса для планшета и браузера' },
+      { href: '/pos-returns', label: 'Возврат товара', icon: RotateCcw, note: 'Оформление возврата по чеку' },
     ],
   },
   {
