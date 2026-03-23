@@ -168,6 +168,15 @@ function buildCompanyDistribution(params: {
   }))
 }
 
+async function safeDeleteExpenses(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  expenseIds: string[],
+) {
+  if (!expenseIds.length) return
+  const { error } = await supabase.from('expenses').delete().in('id', expenseIds)
+  if (error) throw error
+}
+
 async function ensureSalaryWeekSnapshot(params: {
   supabase: ReturnType<typeof createAdminSupabaseClient>
   operatorId: string
@@ -336,7 +345,8 @@ export async function GET(req: Request) {
 
       const [
         references,
-        { data: operators, error: operatorsError },
+        { data: activeOperators, error: activeOperatorsError },
+        { data: existingWeeks, error: existingWeeksError },
         { data: documents, error: documentsError },
       ] = await Promise.all([
         referencesPromise,
@@ -345,11 +355,38 @@ export async function GET(req: Request) {
           .select('id,name,short_name,is_active,telegram_chat_id,operator_profiles(*)')
           .eq('is_active', true)
           .order('name'),
+        supabase
+          .from('operator_salary_weeks')
+          .select('operator_id,remaining_amount,paid_amount,net_amount,status')
+          .eq('week_start', weekStart),
         supabase.from('operator_documents').select('operator_id,expiry_date'),
       ])
 
-      if (operatorsError) throw operatorsError
+      if (activeOperatorsError) throw activeOperatorsError
+      if (existingWeeksError) throw existingWeeksError
       if (documentsError) throw documentsError
+
+      const activeOperatorIds = new Set(((activeOperators || []) as any[]).map((row) => String(row.id)))
+      const persistedOperatorIds = Array.from(
+        new Set(
+          ((existingWeeks || []) as any[])
+            .map((row) => String(row.operator_id || ''))
+            .filter(Boolean),
+        ),
+      )
+      const missingOperatorIds = persistedOperatorIds.filter((id) => !activeOperatorIds.has(id))
+
+      let inactiveOperators: any[] = []
+      if (missingOperatorIds.length > 0) {
+        const { data, error } = await supabase
+          .from('operators')
+          .select('id,name,short_name,is_active,telegram_chat_id,operator_profiles(*)')
+          .in('id', missingOperatorIds)
+          .order('name')
+
+        if (error) throw error
+        inactiveOperators = (data || []) as any[]
+      }
 
       const today = new Date()
       const expiringThreshold = new Date(today)
@@ -372,7 +409,7 @@ export async function GET(req: Request) {
         documentStats.set(operatorId, current)
       }
 
-      const operatorRows = ((operators || []) as any[]).map((row) => {
+      const operatorRows = ([...((activeOperators || []) as any[]), ...inactiveOperators] as any[]).map((row) => {
         const profile = Array.isArray(row.operator_profiles) ? row.operator_profiles[0] : row.operator_profiles
         const docs = documentStats.get(String(row.id)) || { documents_count: 0, expiring_documents: 0 }
 
@@ -889,7 +926,10 @@ export async function POST(req: Request) {
         body.payload.comment?.trim() ||
         `Аванс по зарплате за неделю ${weekStart} - ${weekBeforeAdvance.weekEnd}`
 
-      const { data: expense, error: expenseError } = await supabase
+      let expense: any = null
+      let adjustment: any = null
+      try {
+        const expenseResult = await supabase
         .from('expenses')
         .insert([
           {
@@ -908,9 +948,10 @@ export async function POST(req: Request) {
         .select('id,date,company_id,operator_id,category,cash_amount,kaspi_amount,comment')
         .single()
 
-      if (expenseError) throw expenseError
+      if (expenseResult.error) throw expenseResult.error
+      expense = expenseResult.data
 
-      const { data: adjustment, error: adjustmentError } = await supabase
+      const adjustmentResult = await supabase
         .from('operator_salary_adjustments')
         .insert([
           {
@@ -929,19 +970,23 @@ export async function POST(req: Request) {
         .select('id,operator_id,date,amount,kind,comment,company_id,salary_week_id,linked_expense_id')
         .single()
 
-      if (adjustmentError) throw adjustmentError
+      if (adjustmentResult.error) throw adjustmentResult.error
+      adjustment = adjustmentResult.data
 
-      await supabase
+      const updateExpenseResult = await supabase
         .from('expenses')
         .update({ source_id: String(adjustment.id) })
         .eq('id', expense.id)
-
-      const weekAfterAdvance = await ensureSalaryWeekSnapshot({
-        supabase,
-        operatorId: body.payload.operator_id,
-        weekStart,
-        actorUserId: user?.id || null,
-      })
+      if (updateExpenseResult.error) throw updateExpenseResult.error
+      } catch (transactionError) {
+        if (adjustment?.id) {
+          await supabase.from('operator_salary_adjustments').delete().eq('id', String(adjustment.id))
+        }
+        if (expense?.id) {
+          await safeDeleteExpenses(supabase, [String(expense.id)])
+        }
+        throw transactionError
+      }
 
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
@@ -976,7 +1021,6 @@ export async function POST(req: Request) {
         data: {
           expense,
           adjustment,
-          week: weekAfterAdvance,
         },
       })
     }
@@ -1018,7 +1062,7 @@ export async function POST(req: Request) {
         body.payload.comment?.trim() ||
         `Зарплата за неделю ${weekStart} - ${weekBeforePayment.weekEnd}`
 
-      const { data: payment, error: paymentError } = await supabase
+      const paymentResult = await supabase
         .from('operator_salary_week_payments')
         .insert([
           {
@@ -1035,7 +1079,8 @@ export async function POST(req: Request) {
         .select('id,salary_week_id,operator_id,payment_date,cash_amount,kaspi_amount,total_amount,comment,status')
         .single()
 
-      if (paymentError) throw paymentError
+      if (paymentResult.error) throw paymentResult.error
+      const payment = paymentResult.data
 
       const distribution = buildCompanyDistribution({
         cashAmount: split.cashAmount,
@@ -1054,6 +1099,7 @@ export async function POST(req: Request) {
         comment: string | null
       }> = []
 
+      try {
       for (const item of distribution) {
         const allocationMeta = positiveAllocations.find((allocation) => allocation.companyId === item.companyId)
         const comment = allocationMeta?.companyName
@@ -1098,6 +1144,17 @@ export async function POST(req: Request) {
           )
 
         if (linksError) throw linksError
+      }
+      } catch (transactionError) {
+        await supabase.from('operator_salary_week_payment_expenses').delete().eq('payment_id', String(payment.id))
+        if (expenseRows.length > 0) {
+          await safeDeleteExpenses(
+            supabase,
+            expenseRows.map((expense) => String(expense.id)),
+          )
+        }
+        await supabase.from('operator_salary_week_payments').delete().eq('id', String(payment.id))
+        throw transactionError
       }
 
       const weekAfterPayment = await ensureSalaryWeekSnapshot({
@@ -1159,13 +1216,22 @@ export async function POST(req: Request) {
       const expenseIds = (expenseLinks || []).map((row: any) => String(row.expense_id))
 
       if (expenseIds.length > 0) {
-        const { error: deleteExpError } = await supabase.from('expenses').delete().in('id', expenseIds)
-        if (deleteExpError) throw deleteExpError
-        const { error: deleteLinksError } = await supabase.from('operator_salary_week_payment_expenses').delete().eq('payment_id', body.paymentId)
+        const { error: deleteLinksError } = await supabase
+          .from('operator_salary_week_payment_expenses')
+          .delete()
+          .eq('payment_id', body.paymentId)
         if (deleteLinksError) throw deleteLinksError
+        await safeDeleteExpenses(supabase, expenseIds)
       }
 
-      const { error: voidPayError } = await supabase.from('operator_salary_week_payments').update({ status: 'voided' }).eq('id', body.paymentId)
+      const { error: voidPayError } = await supabase
+        .from('operator_salary_week_payments')
+        .update({
+          status: 'voided',
+          voided_at: new Date().toISOString(),
+          voided_by: user?.id || null,
+        })
+        .eq('id', body.paymentId)
       if (voidPayError) throw voidPayError
 
       const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null })
@@ -1203,7 +1269,14 @@ export async function POST(req: Request) {
         if (deleteExpError) throw deleteExpError
       }
 
-      const { error: voidAdjError } = await supabase.from('operator_salary_adjustments').update({ status: 'voided' }).eq('id', body.adjustmentId)
+      const { error: voidAdjError } = await supabase
+        .from('operator_salary_adjustments')
+        .update({
+          status: 'voided',
+          voided_at: new Date().toISOString(),
+          voided_by: user?.id || null,
+        })
+        .eq('id', body.adjustmentId)
       if (voidAdjError) throw voidAdjError
 
       const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null })

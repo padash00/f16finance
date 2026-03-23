@@ -13,7 +13,16 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 
 type CompanyOption = { id: string; code: string | null; name: string | null }
 type Allocation = { companyId: string; companyCode: string | null; companyName: string | null; accruedAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; shareRatio: number }
-type Payment = { id: string; payment_date: string; cash_amount: number; kaspi_amount: number; total_amount: number; comment: string | null; status: string }
+type Payment = {
+  id: string
+  payment_date: string
+  cash_amount: number
+  kaspi_amount: number
+  total_amount: number
+  comment: string | null
+  status: string
+  created_at?: string | null
+}
 type WeeklyOperator = {
   operator: { id: string; name: string; short_name: string | null; full_name: string | null; is_active: boolean; telegram_chat_id: string | null; photo_url: string | null; position: string | null; documents_count: number; expiring_documents: number }
   week: { id: string; weekStart: string; weekEnd: string; grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid'; companyAllocations: Allocation[]; payments: Payment[] }
@@ -62,6 +71,7 @@ export default function SalaryPage() {
   const [payKaspi, setPayKaspi] = useState('')
   const [payComment, setPayComment] = useState('')
   const [paySaving, setPaySaving] = useState(false)
+  const [voidingPaymentId, setVoidingPaymentId] = useState<string | null>(null)
 
   const [chatTarget, setChatTarget] = useState<WeeklyOperator | null>(null)
   const [chatValue, setChatValue] = useState('')
@@ -123,6 +133,27 @@ export default function SalaryPage() {
   const saveChatId = async (e: FormEvent) => { e.preventDefault(); if (!chatTarget) return; const trimmed = chatValue.trim(); if (trimmed && !/^-?\d+$/.test(trimmed)) return setError('telegram_chat_id должен быть числом'); setChatSaving(true); setError(null); try { await post({ action: 'updateOperatorChatId', operatorId: chatTarget.operator.id, telegram_chat_id: trimmed || null }); setChatTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить Telegram chat_id') } finally { setChatSaving(false) } }
   const sendOne = async (operatorId: string) => { setSendingId(operatorId); setError(null); try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) throw new Error(json?.error || `Ошибка отправки (${res.status})`) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось отправить расчёт в Telegram') } finally { setSendingId(null) } }
   const sendAll = async () => { if (loading || broadcastSending || !broadcastTargets.length) return; setBroadcastSending(true); setBroadcastDone(0); setBroadcastTotal(broadcastTargets.length); setBroadcastErrors([]); setError(null); try { for (let i = 0; i < broadcastTargets.length; i += 1) { const item = broadcastTargets[i]; try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId: item.operator.id, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${json?.error || `HTTP ${res.status}`}`]) } catch (e: any) { setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${e?.message || 'ошибка'}`]) } setBroadcastDone(i + 1); await new Promise((r) => setTimeout(r, 250)) } } finally { setBroadcastSending(false) } }
+  const voidPayment = async (item: WeeklyOperator, payment: Payment) => {
+    if (payment.status === 'voided' || voidingPaymentId) return
+    const confirmed = window.confirm(`Аннулировать выплату ${money(payment.total_amount)} для ${getOperatorDisplayName(item.operator)}?`)
+    if (!confirmed) return
+    setVoidingPaymentId(payment.id)
+    setError(null)
+    try {
+      await post({
+        action: 'voidPayment',
+        paymentId: payment.id,
+        weekStart,
+        operatorId: item.operator.id,
+      })
+      await load(true)
+    } catch (e: any) {
+      console.error(e)
+      setError(e?.message || 'Не удалось аннулировать выплату')
+    } finally {
+      setVoidingPaymentId(null)
+    }
+  }
 
   return (
     <>
@@ -230,6 +261,7 @@ export default function SalaryPage() {
                                   <div className="truncate font-medium text-white">{title}</div>
                                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                                     {item.operator.position ? <span>{item.operator.position}</span> : null}
+                                    {!item.operator.is_active ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300">неактивен</span> : null}
                                     <span>{item.operator.documents_count} док.</span>
                                     {item.operator.expiring_documents > 0 ? <span className="text-amber-300">{item.operator.expiring_documents} скоро истекут</span> : null}
                                   </div>
@@ -248,7 +280,7 @@ export default function SalaryPage() {
                           <td className="px-4 py-4"><div className="flex flex-wrap items-center justify-center gap-2"><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setAdvanceTarget(item)}><Plus className="mr-2 h-4 w-4" />Аванс</Button><Button type="button" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-50" disabled={!canPay} onClick={() => setPayTarget(item)}><Wallet className="mr-2 h-4 w-4" />Выплатить</Button><Link href={`/salary/${item.operator.id}?weekStart=${weekStart}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-slate-200 transition hover:bg-white/10">Детали</Link></div></td>
                           <td className="px-4 py-4"><div className="flex flex-col items-center gap-2"><div className="flex items-center gap-2"><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setChatTarget(item)}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 disabled:opacity-50" disabled={!hasChat || sendingId === item.operator.id || broadcastSending} onClick={() => void sendOne(item.operator.id)}>{sendingId === item.operator.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}</Button></div>{item.operator.telegram_chat_id ? <div className="max-w-[140px] truncate text-center text-[11px] text-emerald-300/70">{item.operator.telegram_chat_id}</div> : <div className="text-[11px] text-slate-500">нет chat_id</div>}</div></td>
                         </tr>
-                        {open ? <tr className="border-t border-white/5 bg-slate-950/30"><td colSpan={11} className="px-4 py-5"><div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]"><Card className="border-white/10 bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-white"><Building2 className="h-4 w-4 text-emerald-300" />Разбивка по компаниям</div><div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Компания</th><th className="pb-3 text-right font-medium">Начислено</th><th className="pb-3 text-right font-medium">Бонусы</th><th className="pb-3 text-right font-medium">Штрафы</th><th className="pb-3 text-right font-medium">Долги</th><th className="pb-3 text-right font-medium">Аванс</th><th className="pb-3 text-right font-medium">К выплате</th></tr></thead><tbody>{item.week.companyAllocations.map((a) => <tr key={a.companyId} className="border-t border-white/5 text-slate-200"><td className="py-3 pr-3"><div className="font-medium text-white">{a.companyName || a.companyCode || a.companyId}</div><div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div></td><td className="py-3 text-right">{money(a.accruedAmount)}</td><td className="py-3 text-right text-emerald-300">{money(a.bonusAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.fineAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.debtAmount)}</td><td className="py-3 text-right text-amber-300">{money(a.advanceAmount)}</td><td className="py-3 text-right font-medium text-white">{money(a.netAmount)}</td></tr>)}</tbody></table></div></Card><Card className="border-white/10 bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">Платежи недели</div>{item.week.payments.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-400">По этой неделе ещё нет платежей.</div> : <div className="space-y-3">{item.week.payments.map((p) => <div key={p.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-white">{formatRuDate(p.payment_date)}</div><div className="mt-1 text-xs text-slate-400">Нал: {money(p.cash_amount)} • Kaspi: {money(p.kaspi_amount)}</div></div><div className="text-right"><div className="text-sm font-semibold text-emerald-300">{money(p.total_amount)}</div><div className="text-[11px] text-slate-500">{p.status}</div></div></div>{p.comment ? <div className="mt-2 text-xs text-slate-400">{p.comment}</div> : null}</div>)}</div>}</Card></div></td></tr> : null}
+                        {open ? <tr className="border-t border-white/5 bg-slate-950/30"><td colSpan={11} className="px-4 py-5"><div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]"><Card className="border-white/10 bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-white"><Building2 className="h-4 w-4 text-emerald-300" />Разбивка по компаниям</div><div className="overflow-x-auto"><table className="min-w-full text-xs"><thead className="text-slate-500"><tr><th className="pb-3 text-left font-medium">Компания</th><th className="pb-3 text-right font-medium">Начислено</th><th className="pb-3 text-right font-medium">Бонусы</th><th className="pb-3 text-right font-medium">Штрафы</th><th className="pb-3 text-right font-medium">Долги</th><th className="pb-3 text-right font-medium">Аванс</th><th className="pb-3 text-right font-medium">К выплате</th></tr></thead><tbody>{item.week.companyAllocations.map((a) => <tr key={a.companyId} className="border-t border-white/5 text-slate-200"><td className="py-3 pr-3"><div className="font-medium text-white">{a.companyName || a.companyCode || a.companyId}</div><div className="text-[11px] text-slate-500">Доля: {(a.shareRatio * 100).toFixed(1)}%</div></td><td className="py-3 text-right">{money(a.accruedAmount)}</td><td className="py-3 text-right text-emerald-300">{money(a.bonusAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.fineAmount)}</td><td className="py-3 text-right text-rose-300">{money(a.debtAmount)}</td><td className="py-3 text-right text-amber-300">{money(a.advanceAmount)}</td><td className="py-3 text-right font-medium text-white">{money(a.netAmount)}</td></tr>)}</tbody></table></div></Card><Card className="border-white/10 bg-white/[0.03] p-4"><div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">Платежи недели</div>{item.week.payments.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-400">По этой неделе ещё нет платежей.</div> : <div className="space-y-3">{item.week.payments.map((p) => <div key={p.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-white">{formatRuDate(p.payment_date)}</div><div className="mt-1 text-xs text-slate-400">Нал: {money(p.cash_amount)} • Kaspi: {money(p.kaspi_amount)}</div></div><div className="text-right"><div className="text-sm font-semibold text-emerald-300">{money(p.total_amount)}</div><div className="text-[11px] text-slate-500">{p.status === 'voided' ? 'аннулировано' : 'активно'}</div></div></div>{p.comment ? <div className="mt-2 text-xs text-slate-400">{p.comment}</div> : null}<div className="mt-3 flex justify-end">{p.status === 'voided' ? <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-3 py-1 text-[11px] text-slate-400">Уже аннулировано</span> : <Button type="button" variant="outline" className="rounded-xl border-red-500/20 bg-red-500/10 text-red-200 hover:bg-red-500/20 disabled:opacity-50" disabled={voidingPaymentId === p.id} onClick={() => void voidPayment(item, p)}>{voidingPaymentId === p.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Аннулировать</Button>}</div></div>)}</div>}</Card></div></td></tr> : null}
                       </Fragment>
                     )
                   }) : null}
