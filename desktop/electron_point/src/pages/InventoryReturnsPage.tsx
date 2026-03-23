@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
+import { InventoryEmptyState, InventoryHeroPanel, InventoryMetric } from '@/components/inventory-terminal-ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -300,6 +301,12 @@ export default function InventoryReturnsPage({
 
   const operatorName = session.operator.full_name || session.operator.name || session.operator.username
   const refund = buildRefundAmounts()
+  const salesCount = useMemo(() => (context?.sales || []).length, [context?.sales])
+  const returnsCount = useMemo(() => (context?.returns || []).length, [context?.returns])
+  const selectedSaleReturnableQty = useMemo(
+    () => saleItems.reduce((sum, line) => sum + Number(line.returnable_qty || 0), 0),
+    [saleItems],
+  )
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -342,29 +349,18 @@ export default function InventoryReturnsPage({
       <div className="flex-1 overflow-auto p-5">
         <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[360px_minmax(0,1fr)_400px]">
           <div className="space-y-5">
-            <Card className="border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02]">
-              <CardContent className="grid gap-4 p-5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-300">
-                    <RotateCcw className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold text-foreground">Возврат по чеку</p>
-                    <p className="text-sm text-muted-foreground">
-                      Возвращаем только то, что реально было продано на точке.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
-                  <p className="text-xs text-muted-foreground">Подсказка</p>
-                  <p className="mt-1 font-semibold">Сначала выберите продажу слева</p>
-                  <p className="text-xs text-muted-foreground">
-                    После этого справа появятся только проданные позиции и доступный остаток для возврата.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+            <InventoryHeroPanel
+              icon={RotateCcw}
+              accent="amber"
+              title="Возврат по чеку"
+              description="Возврат идёт только по реально проданным позициям. Товар возвращается на витрину, а сумма автоматически вычитается из смены."
+            >
+              <div className="grid gap-3 md:grid-cols-3">
+                <InventoryMetric label="Продаж доступно" value={salesCount} hint="Чеки для возврата" accent="blue" />
+                <InventoryMetric label="Можно вернуть" value={selectedSaleReturnableQty} hint="Штук по выбранному чеку" accent="amber" />
+                <InventoryMetric label="Возвратов за смену" value={returnsCount} hint="Уже оформленные возвраты" accent="violet" />
+              </div>
+            </InventoryHeroPanel>
 
             <Card>
               <CardHeader className="pb-3">
@@ -386,9 +382,7 @@ export default function InventoryReturnsPage({
                     Загружаем продажи...
                   </div>
                 ) : (context?.sales || []).length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                    Продаж пока нет.
-                  </div>
+                  <InventoryEmptyState title="Продаж пока нет" description="Сначала должна появиться хотя бы одна продажа, которую можно вернуть." compact />
                 ) : (
                   (context?.sales || []).map((sale) => {
                     const saleItems = Array.isArray(sale.items) ? sale.items : []
@@ -463,13 +457,15 @@ export default function InventoryReturnsPage({
                 </div>
 
                 {!selectedSale ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-muted-foreground">
-                    Выберите продажу слева, чтобы открыть список реально проданных товаров.
-                  </div>
+                  <InventoryEmptyState
+                    title="Сначала выберите чек"
+                    description="Слева выберите продажу, после этого здесь откроются только реально проданные позиции."
+                  />
                 ) : saleItems.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-muted-foreground">
-                    По выбранному чеку нет позиций для возврата.
-                  </div>
+                  <InventoryEmptyState
+                    title="По чеку нечего возвращать"
+                    description="Все позиции уже возвращены или в продаже не осталось строк для возврата."
+                  />
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2">
                     {saleItems.map((line) => {
@@ -533,9 +529,7 @@ export default function InventoryReturnsPage({
               </CardHeader>
               <CardContent className="space-y-3">
                 {(context?.returns || []).length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                    Возвратов пока нет.
-                  </div>
+                  <InventoryEmptyState title="Возвратов пока нет" description="Оформленные возвраты появятся здесь для быстрого контроля." compact />
                 ) : (
                   (context?.returns || []).map((item) => (
                     <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
@@ -573,6 +567,11 @@ export default function InventoryReturnsPage({
               <CardContent className="space-y-4">
                 <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                   Возврат уменьшает выручку текущей смены и привязывается к выбранному чеку продажи.
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <InventoryMetric label="Наличными" value={formatMoney(refund.cashAmount)} accent="amber" />
+                  <InventoryMetric label="Kaspi" value={formatMoney(refund.kaspiAmount)} accent="blue" />
                 </div>
 
                 {selectedSale ? (

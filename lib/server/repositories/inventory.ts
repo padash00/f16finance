@@ -16,6 +16,15 @@ export type InventoryOverview = {
   companies: any[]
 }
 
+export type StoreOverview = {
+  items: any[]
+  locations: any[]
+  balances: any[]
+  requests: any[]
+  receipts: any[]
+  movements: any[]
+}
+
 export async function fetchInventoryRequests(supabase: AnySupabase) {
   const { data, error } = await supabase
     .from('inventory_requests')
@@ -25,6 +34,65 @@ export async function fetchInventoryRequests(supabase: AnySupabase) {
 
   if (error) throw error
   return mapNestedRows(data || [])
+}
+
+export async function fetchStoreOverview(supabase: AnySupabase): Promise<StoreOverview> {
+  const [
+    { data: items, error: itemsError },
+    { data: locations, error: locationsError },
+    { data: balances, error: balancesError },
+    { data: requests, error: requestsError },
+    { data: receipts, error: receiptsError },
+    { data: movements, error: movementsError },
+  ] = await Promise.all([
+    supabase
+      .from('inventory_items')
+      .select('id, name, barcode, sale_price, unit, item_type, low_stock_threshold, is_active, category:category_id(id, name)')
+      .eq('is_active', true)
+      .order('name', { ascending: true }),
+    supabase
+      .from('inventory_locations')
+      .select('id, company_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+      .eq('is_active', true)
+      .order('location_type', { ascending: true })
+      .order('name', { ascending: true }),
+    supabase
+      .from('inventory_balances')
+      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .gt('quantity', 0)
+      .order('updated_at', { ascending: false }),
+    supabase
+      .from('inventory_requests')
+      .select('id, status, comment, decision_comment, created_at, approved_at, company:requesting_company_id(id, name, code), source_location:source_location_id(id, name, code, location_type), target_location:target_location_id(id, name, code, location_type), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode, unit))')
+      .order('created_at', { ascending: false })
+      .limit(24),
+    supabase
+      .from('inventory_receipts')
+      .select('id, received_at, total_amount, invoice_number, comment, location:location_id(id, name, code, location_type), supplier:supplier_id(id, name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, item:item_id(id, name, barcode, unit))')
+      .order('created_at', { ascending: false })
+      .limit(10),
+    supabase
+      .from('inventory_movements')
+      .select('id, movement_type, quantity, unit_cost, total_amount, reference_type, comment, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .order('created_at', { ascending: false })
+      .limit(16),
+  ])
+
+  if (itemsError) throw itemsError
+  if (locationsError) throw locationsError
+  if (balancesError) throw balancesError
+  if (requestsError) throw requestsError
+  if (receiptsError) throw receiptsError
+  if (movementsError) throw movementsError
+
+  return {
+    items: mapNestedRows(items || []),
+    locations: mapNestedRows(locations || []),
+    balances: mapNestedRows(balances || []),
+    requests: mapNestedRows(requests || []),
+    receipts: mapNestedRows(receipts || []),
+    movements: mapNestedRows(movements || []),
+  }
 }
 
 export async function fetchInventoryOverview(supabase: AnySupabase): Promise<InventoryOverview> {

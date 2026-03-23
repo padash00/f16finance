@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
+import { InventoryEmptyState, InventoryHeroPanel, InventoryMetric } from '@/components/inventory-terminal-ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -320,6 +321,18 @@ export default function InventorySalesPage({
   )
 
   const saleCountToday = useMemo(() => (context?.sales || []).length, [context?.sales])
+  const availableItemsCount = useMemo(
+    () => (context?.items || []).filter((item) => Number(item.display_qty || 0) > 0).length,
+    [context?.items],
+  )
+  const lowStockItemsCount = useMemo(
+    () => (context?.items || []).filter((item) => Number(item.display_qty || 0) > 0 && Number(item.display_qty || 0) <= 3).length,
+    [context?.items],
+  )
+  const cartUnits = useMemo(
+    () => cartDetailed.reduce((sum, line) => sum + Number(line.quantity || 0), 0),
+    [cartDetailed],
+  )
 
   // Discount calculations
   const effectiveDiscountPercent = useMemo(() => {
@@ -602,40 +615,25 @@ export default function InventorySalesPage({
       <div className="flex-1 overflow-auto p-5">
         <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
           <div className="space-y-5">
-            <Card className="border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02]">
-              <CardContent className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
-                <div>
-                  <div className="flex items-center gap-2 text-base font-semibold">
-                    <ShoppingBasket className="h-4 w-4 text-emerald-400" />
-                    Продажи с витрины
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Каждая продажа сразу списывает товар с витрины и автоматически идёт в выручку смены.
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
-                  <p className="text-xs text-muted-foreground">Текущая смена</p>
-                  <p className="mt-1 font-semibold">{formatShiftLabel(runtimeShift.shift)}</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(runtimeShift.date)}</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
-                  <p className="text-xs text-muted-foreground">Локация</p>
-                  <p className="mt-1 font-semibold">{context?.location?.name || 'Витрина точки'}</p>
-                  <p className="text-xs text-muted-foreground">{saleCountToday} последних продаж</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
-                  <p className="text-xs text-muted-foreground">Режим Kaspi</p>
-                  <p className="mt-1 font-semibold">
-                    {runtimeShift.shift === 'night'
-                      ? runtimeShift.afterMidnightNight
-                        ? 'После 00:00'
-                        : 'До 00:00'
-                      : 'Дневная смена'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Для корректной суточной сверки</p>
-                </div>
-              </CardContent>
-            </Card>
+            <InventoryHeroPanel
+              icon={ShoppingBasket}
+              accent="emerald"
+              title="Продажи с витрины"
+              description="Кассир собирает чек из товаров витрины, а программа сама списывает остаток и относит деньги в сменную выручку."
+            >
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <InventoryMetric label="Смена" value={formatShiftLabel(runtimeShift.shift)} hint={formatDate(runtimeShift.date)} />
+                <InventoryMetric label="Локация" value={context?.location?.name || 'Витрина точки'} hint={`${saleCountToday} продаж за смену`} accent="blue" />
+                <InventoryMetric label="Доступно SKU" value={availableItemsCount} hint="Товар можно продавать сразу" accent="emerald" />
+                <InventoryMetric label="В корзине" value={cartUnits} hint={`${cartDetailed.length} позиций`} accent="violet" />
+                <InventoryMetric
+                  label="Низкий остаток"
+                  value={lowStockItemsCount}
+                  hint="SKU с остатком 3 и меньше"
+                  accent={lowStockItemsCount > 0 ? 'amber' : 'blue'}
+                />
+              </div>
+            </InventoryHeroPanel>
 
             <Card>
               <CardHeader className="pb-3">
@@ -718,11 +716,23 @@ export default function InventorySalesPage({
                   Продажи из этого экрана автоматически попадут в выручку смены. В сменной форме их дублировать не нужно.
                 </div>
 
+                <div className="grid grid-cols-2 gap-2">
+                  <InventoryMetric label="Подытог" value={formatMoney(cartTotal)} accent="blue" />
+                  <InventoryMetric
+                    label="К оплате"
+                    value={formatMoney(finalTotal)}
+                    hint={selectedCustomer ? 'С клиентом и бонусами' : 'Без клиента'}
+                    accent="emerald"
+                  />
+                </div>
+
                 <div className="space-y-2">
                   {cartDetailed.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                      Выберите товары слева, чтобы собрать продажу.
-                    </div>
+                    <InventoryEmptyState
+                      title="Корзина пока пустая"
+                      description="Нажмите на товары слева, чтобы быстро собрать продажу."
+                      compact
+                    />
                   ) : (
                     cartDetailed.map((line) => (
                       <div key={line.item_id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">

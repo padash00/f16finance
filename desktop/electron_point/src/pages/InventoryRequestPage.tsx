@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
+import { InventoryEmptyState, InventoryHeroPanel, InventoryMetric } from '@/components/inventory-terminal-ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -106,6 +107,27 @@ export default function InventoryRequestPage({
     () => (context?.requests || []).filter((item) => item.status === 'new').length,
     [context?.requests],
   )
+  const draftItems = useMemo(
+    () =>
+      lines
+        .map((line) => ({
+          item_id: line.item_id,
+          requested_qty: parseQty(line.requested_qty),
+        }))
+        .filter((line) => line.item_id && line.requested_qty > 0),
+    [lines],
+  )
+  const draftRequestedQty = useMemo(
+    () => draftItems.reduce((sum, line) => sum + Number(line.requested_qty || 0), 0),
+    [draftItems],
+  )
+  const urgentItems = useMemo(
+    () =>
+      [...(context?.items || [])]
+        .sort((a, b) => Number(a.warehouse_qty || 0) - Number(b.warehouse_qty || 0))
+        .slice(0, 6),
+    [context?.items],
+  )
 
   async function handleCreateRequest(e: React.FormEvent) {
     e.preventDefault()
@@ -181,6 +203,19 @@ export default function InventoryRequestPage({
       <div className="flex-1 overflow-auto p-5">
         <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
           <div className="space-y-4">
+            <InventoryHeroPanel
+              icon={ClipboardList}
+              accent="blue"
+              title="Заявка на склад"
+              description="Кассир быстро собирает запрос для своей точки, а руководитель дальше видит его в очереди согласования."
+            >
+              <div className="grid gap-3 md:grid-cols-3">
+                <InventoryMetric label="Новых заявок" value={pendingCount} hint="Ждут решения на сайте" accent="violet" />
+                <InventoryMetric label="В черновике" value={draftItems.length} hint={`${draftRequestedQty} единиц в текущей заявке`} accent="blue" />
+                <InventoryMetric label="SKU на складе" value={(context?.items || []).length} hint={context?.sourceLocation?.name || 'Центральный склад'} accent="emerald" />
+              </div>
+            </InventoryHeroPanel>
+
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -323,6 +358,36 @@ export default function InventoryRequestPage({
           <div className="space-y-4">
             <Card>
               <CardHeader className="pb-3">
+                <CardTitle className="text-base">Сигналы по складу</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {loading ? (
+                  <div className="flex h-24 items-center justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : urgentItems.length === 0 ? (
+                  <InventoryEmptyState title="Каталог пуст" description="Товары склада появятся здесь, когда каталог и остатки будут загружены." compact />
+                ) : (
+                  urgentItems.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
+                          <p className="text-xs text-muted-foreground">{item.barcode}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-foreground">{item.warehouse_qty}</p>
+                          <p className="text-xs text-muted-foreground">на складе</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
                 <CardTitle className="text-base">Последние заявки</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -331,9 +396,7 @@ export default function InventoryRequestPage({
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : (context?.requests || []).length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 p-5 text-sm text-muted-foreground">
-                    Пока нет заявок по этой точке.
-                  </div>
+                  <InventoryEmptyState title="История пока пустая" description="Как только точка отправит первую заявку, она появится здесь." compact />
                 ) : (
                   (context?.requests || []).map((request) => (
                     <div key={request.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
