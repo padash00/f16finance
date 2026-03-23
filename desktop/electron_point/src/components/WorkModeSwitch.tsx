@@ -43,12 +43,12 @@ export default function WorkModeSwitch({
         type="button"
         variant="ghost"
         size="sm"
+        title="Смена"
         onClick={onShift}
         disabled={!onShift || active === 'shift'}
-        className={`gap-1.5 rounded-lg px-3 ${itemClass(active === 'shift')}`}
+        className={`rounded-lg px-2.5 ${itemClass(active === 'shift')}`}
       >
         <ReceiptText className="h-4 w-4" />
-        Смена
       </Button>
 
       {showSale ? (
@@ -56,12 +56,12 @@ export default function WorkModeSwitch({
           type="button"
           variant="ghost"
           size="sm"
+          title="Продажа"
           onClick={onSale}
           disabled={!onSale || active === 'sale'}
-          className={`gap-1.5 rounded-lg px-3 ${itemClass(active === 'sale')}`}
+          className={`rounded-lg px-2.5 ${itemClass(active === 'sale')}`}
         >
           <ShoppingBasket className="h-4 w-4" />
-          Продажа
         </Button>
       ) : null}
 
@@ -70,12 +70,12 @@ export default function WorkModeSwitch({
           type="button"
           variant="ghost"
           size="sm"
+          title="Возврат"
           onClick={onReturn}
           disabled={!onReturn || active === 'return'}
-          className={`gap-1.5 rounded-lg px-3 ${itemClass(active === 'return')}`}
+          className={`rounded-lg px-2.5 ${itemClass(active === 'return')}`}
         >
           <RotateCcw className="h-4 w-4" />
-          Возврат
         </Button>
       ) : null}
 
@@ -84,12 +84,12 @@ export default function WorkModeSwitch({
           type="button"
           variant="ghost"
           size="sm"
+          title="Сканер / Долги"
           onClick={onScanner}
           disabled={!onScanner || active === 'scanner'}
-          className={`gap-1.5 rounded-lg px-3 ${itemClass(active === 'scanner')}`}
+          className={`rounded-lg px-2.5 ${itemClass(active === 'scanner')}`}
         >
           <ScanBarcode className="h-4 w-4" />
-          Сканер
         </Button>
       ) : null}
 
@@ -98,12 +98,12 @@ export default function WorkModeSwitch({
           type="button"
           variant="ghost"
           size="sm"
+          title="Заявка на склад"
           onClick={onRequest}
           disabled={!onRequest || active === 'request'}
-          className={`gap-1.5 rounded-lg px-3 ${itemClass(active === 'request')}`}
+          className={`rounded-lg px-2.5 ${itemClass(active === 'request')}`}
         >
           <ClipboardList className="h-4 w-4" />
-          Заявка
         </Button>
       ) : null}
 
@@ -111,12 +111,12 @@ export default function WorkModeSwitch({
         type="button"
         variant="ghost"
         size="sm"
+        title="Мой профиль"
         onClick={onCabinet}
         disabled={!onCabinet || active === 'cabinet'}
-        className={`gap-1.5 rounded-lg px-3 ${itemClass(active === 'cabinet')}`}
+        className={`rounded-lg px-2.5 ${itemClass(active === 'cabinet')}`}
       >
         <UserCircle2 className="h-4 w-4" />
-        Профиль
       </Button>
     </div>
   )
