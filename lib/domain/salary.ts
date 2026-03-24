@@ -147,6 +147,9 @@ export type SalaryWeekSummary = {
   advanceAmount: number
   netAmount: number
   companyAllocations: SalaryWeekCompanyAllocation[]
+  shiftsCount: number
+  autoBonusTotal: number
+  shifts: SalaryShiftBreakdown[]
 }
 
 type AggregatedShift = {
@@ -648,6 +651,8 @@ export function calculateOperatorWeekSummary(params: {
     })
     .sort((left, right) => (right.accruedAmount - left.accruedAmount) || left.companyName?.localeCompare(right.companyName || '', 'ru') || 0)
 
+  const autoBonusTotal = roundMoney(shifts.reduce((sum, s) => sum + s.autoBonus, 0))
+
   return {
     operatorId: params.operatorId,
     grossAmount: roundMoney(grossAmount),
@@ -659,6 +664,9 @@ export function calculateOperatorWeekSummary(params: {
       grossAmount + bonusAmount - fineAmount - debtAmount - advanceAmount,
     ),
     companyAllocations: allocations,
+    shiftsCount: shifts.length,
+    autoBonusTotal,
+    shifts,
   }
 }
 

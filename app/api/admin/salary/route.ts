@@ -547,6 +547,9 @@ export async function GET(req: Request) {
               status: snapshot.status,
               companyAllocations: weekAllocations,
               payments: weekPayments,
+              shiftsCount: snapshot.summary.shiftsCount,
+              autoBonusTotal: snapshot.summary.autoBonusTotal,
+              shifts: snapshot.summary.shifts,
             },
             hasActivity,
           }
