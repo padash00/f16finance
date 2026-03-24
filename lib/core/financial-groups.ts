@@ -1,4 +1,5 @@
 export type FinancialGroup =
+  | 'cogs'
   | 'operating'
   | 'payroll'
   | 'payroll_advance'
@@ -14,6 +15,7 @@ export const FINANCIAL_GROUP_OPTIONS: Array<{
   label: string
   description: string
 }> = [
+  { value: 'cogs',                label: 'COGS (Себестоимость)',  description: 'Прямые затраты на производство/закупку товаров и услуг. Вычитаются из выручки до Валовой прибыли.' },
   { value: 'operating',           label: 'Операционные',         description: 'Аренда, электроэнергия, интернет, реклама, ремонт, упаковка, списание.' },
   { value: 'payroll',             label: 'ФОТ',                  description: 'Основная зарплата персонала за месяц.' },
   { value: 'payroll_advance',     label: 'Аванс по зарплате',    description: 'Авансовые выплаты в счёт зарплаты, входят в общий ФОТ.' },
@@ -31,7 +33,9 @@ export type PLChainNode =
   | { kind: 'subtotal'; label: string; key: string }
 
 export const PL_CHAIN: PLChainNode[] = [
-  { kind: 'subtotal', label: 'Выручка',       key: 'revenue' },
+  { kind: 'subtotal', label: 'Выручка',          key: 'revenue' },
+  { kind: 'group',    group: 'cogs' },
+  { kind: 'subtotal', label: 'Валовая прибыль',  key: 'gross_profit' },
   { kind: 'group',    group: 'operating' },
   { kind: 'group',    group: 'payroll' },
   { kind: 'group',    group: 'payroll_advance' },
@@ -58,6 +62,13 @@ export function inferFinancialGroup(categoryName: string | null | undefined): Fi
 
   if (!normalized) return 'operating'
 
+  if (
+    normalized.includes('себестоим') ||
+    normalized.includes('cogs') ||
+    normalized.includes('закупка товар') ||
+    normalized.includes('стоимость товар') ||
+    normalized.includes('прямые затрат')
+  ) return 'cogs'
   if (normalized.includes('аванс')) return 'payroll_advance'
   if (
     normalized.includes('осмс') ||

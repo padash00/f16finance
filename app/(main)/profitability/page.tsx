@@ -159,7 +159,8 @@ export default function ProfitabilityPage() {
       const group = resolveFinancialGroup(row.category, expenseCategories[normalizedCategory] || null)
 
       acc.total += amount
-      if (group === 'payroll' || group === 'payroll_advance') acc.payroll += amount
+      if (group === 'cogs') acc.cogs += amount
+      else if (group === 'payroll' || group === 'payroll_advance') acc.payroll += amount
       else if (group === 'payroll_tax') acc.payrollTaxes += amount
       else if (group === 'income_tax') acc.incomeTax += amount
       else if (group === 'non_operating' || group === 'financial_expenses') acc.nonOperating += amount
@@ -168,7 +169,7 @@ export default function ProfitabilityPage() {
       else acc.operating += amount
 
       return acc
-    }, { total: 0, operating: 0, payroll: 0, payrollTaxes: 0, incomeTax: 0, nonOperating: 0, depreciation: 0, capex: 0 })
+    }, { total: 0, cogs: 0, operating: 0, payroll: 0, payrollTaxes: 0, incomeTax: 0, nonOperating: 0, depreciation: 0, capex: 0 })
     const manual = inputs[month]
     const correctedKaspi = Number(kaspiDailyMonthly[month] ?? income.rawKaspi)
     const journalRevenue = income.cash + correctedKaspi + income.card + income.online
@@ -212,9 +213,11 @@ export default function ProfitabilityPage() {
     const payroll = payrollManual > 0 ? payrollManual : journalSplit.payroll
     const payrollTaxes = payrollTaxesManual > 0 ? payrollTaxesManual : journalSplit.payrollTaxes
     const incomeTax = incomeTaxManual > 0 ? incomeTaxManual : journalSplit.incomeTax
+    const cogs = journalSplit.cogs
+    const grossProfit = revenue - cogs
     const journalOperatingExpenses = journalSplit.operating
     const nonOperatingJournalExpenses = journalSplit.nonOperating
-    const ebitda = revenue - journalOperatingExpenses - posCommission - payroll - payrollTaxes - otherOperating
+    const ebitda = grossProfit - journalOperatingExpenses - posCommission - payroll - payrollTaxes - otherOperating
     const operatingProfit = ebitda - depreciation - amortization
     const netProfit = operatingProfit - nonOperatingJournalExpenses - incomeTax
     return {
@@ -237,7 +240,10 @@ export default function ProfitabilityPage() {
       cashRevenueOverride,
       posRevenueOverride,
       hasRevenueOverride,
+      cogs,
+      grossProfit,
       journalExpenses: journalSplit.total,
+      journalCogs: journalSplit.cogs,
       journalOperatingExpenses,
       journalPayrollExpenses: journalSplit.payroll,
       journalPayrollTaxes: journalSplit.payrollTaxes,
@@ -283,7 +289,7 @@ export default function ProfitabilityPage() {
   }), [expenseCategories, expenses, incomes, inputs, kaspiDailyMonthly, kaspiDailyWarningsByMonth, months])
 
   const selected = useMemo(() => rows.find((row) => row.month === selectedMonth) || rows[rows.length - 1] || null, [rows, selectedMonth])
-  const totals = useMemo(() => rows.reduce((acc, row) => ({ revenue: acc.revenue + row.revenue, ebitda: acc.ebitda + row.ebitda, operatingProfit: acc.operatingProfit + row.operatingProfit, netProfit: acc.netProfit + row.netProfit }), { revenue: 0, ebitda: 0, operatingProfit: 0, netProfit: 0 }), [rows])
+  const totals = useMemo(() => rows.reduce((acc, row) => ({ revenue: acc.revenue + row.revenue, cogs: acc.cogs + row.cogs, grossProfit: acc.grossProfit + row.grossProfit, ebitda: acc.ebitda + row.ebitda, operatingProfit: acc.operatingProfit + row.operatingProfit, netProfit: acc.netProfit + row.netProfit }), { revenue: 0, cogs: 0, grossProfit: 0, ebitda: 0, operatingProfit: 0, netProfit: 0 }), [rows])
   const periodLabel = `${monthStart(monthFrom)} - ${monthEnd(monthTo)}`
   const draftPreview = useMemo(() => {
     if (!selected) return null
@@ -320,12 +326,16 @@ export default function ProfitabilityPage() {
     const payroll = payrollManual > 0 ? payrollManual : selected.journalPayrollExpenses
     const payrollTaxes = payrollTaxesManual > 0 ? payrollTaxesManual : selected.journalPayrollTaxes
     const incomeTax = incomeTaxManual > 0 ? incomeTaxManual : selected.journalIncomeTax
-    const ebitda = revenue - selected.journalOperatingExpenses - posCommission - payroll - payrollTaxes - otherOperating
+    const cogs = selected.cogs
+    const grossProfit = revenue - cogs
+    const ebitda = grossProfit - selected.journalOperatingExpenses - posCommission - payroll - payrollTaxes - otherOperating
     const operatingProfit = ebitda - depreciation - amortization
     const netProfit = operatingProfit - selected.nonOperatingJournalExpenses - incomeTax
 
     return {
       revenue,
+      cogs,
+      grossProfit,
       cashRevenue: hasRevenueOverride ? cashRevenueOverride : selected.journalCashRevenue,
       posRevenue: hasRevenueOverride ? posRevenueOverride : selected.journalCashlessRevenue,
       hasRevenueOverride,
@@ -457,6 +467,7 @@ export default function ProfitabilityPage() {
                     <table className="w-full text-sm"><tbody>
                       {[
                         ['Выручка', selected.revenue],
+                        ...(selected.cogs > 0 ? [['COGS (Себестоимость)', -selected.cogs], ['Валовая прибыль', selected.grossProfit]] : []),
                         ['Операционные расходы из журнала', -selected.journalOperatingExpenses],
                         ['Комиссия Kaspi POS', -selected.posCommission],
                         ['Фонд оплаты труда', -selected.payroll],
@@ -724,17 +735,19 @@ export default function ProfitabilityPage() {
             <div className="mb-4"><h2 className="text-xl font-semibold text-white">Помесячная таблица прибыли</h2><p className="text-sm text-slate-400">Факт из системы объединён с ручными месячными вводами по комиссиям и корректировкам.</p></div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1050px] text-sm">
-                <thead><tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-slate-400"><th className="px-3 py-3">Месяц</th><th className="px-3 py-3 text-right">Выручка</th><th className="px-3 py-3 text-right">Опер. журнал</th><th className="px-3 py-3 text-right">POS</th><th className="px-3 py-3 text-right">EBITDA</th><th className="px-3 py-3 text-right">Опер. прибыль</th><th className="px-3 py-3 text-right">Чистая прибыль</th><th className="px-3 py-3 text-right text-slate-500">vs пред. месяц</th></tr></thead>
+                <thead><tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-slate-400"><th className="px-3 py-3">Месяц</th><th className="px-3 py-3 text-right">Выручка</th>{rows.some(r => r.cogs > 0) && <><th className="px-3 py-3 text-right text-orange-400">COGS</th><th className="px-3 py-3 text-right text-orange-300">Вал. прибыль</th></>}<th className="px-3 py-3 text-right">Опер. журнал</th><th className="px-3 py-3 text-right">POS</th><th className="px-3 py-3 text-right">EBITDA</th><th className="px-3 py-3 text-right">Опер. прибыль</th><th className="px-3 py-3 text-right">Чистая прибыль</th><th className="px-3 py-3 text-right text-slate-500">vs пред. месяц</th></tr></thead>
                 <tbody>{rows.map((row) => {
                   const prevMonth = shiftMonth(row.month, -1)
                   const prevRow = rows.find((r) => r.month === prevMonth)
                   const deltaNetProfit = prevRow ? row.netProfit - prevRow.netProfit : null
                   const deltaEbitda = prevRow ? row.ebitda - prevRow.ebitda : null
                   const deltaPct = (prevRow && prevRow.netProfit !== 0) ? ((row.netProfit - prevRow.netProfit) / Math.abs(prevRow.netProfit)) * 100 : null
+                  const hasCogs = rows.some(r => r.cogs > 0)
                   return (
                     <tr key={row.month} onClick={() => setSelectedMonth(row.month)} className={`cursor-pointer border-b border-white/5 text-slate-200 transition hover:bg-white/[0.05] ${row.month === selectedMonth ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/20' : ''}`}>
                       <td className="px-3 py-3 font-medium">{row.label}{row.month === selectedMonth ? <span className="ml-2 rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-300">выбран</span> : null}</td>
                       <td className="px-3 py-3 text-right">{money(row.revenue)}</td>
+                      {hasCogs && <><td className="px-3 py-3 text-right text-orange-300">{row.cogs > 0 ? money(row.cogs) : '—'}</td><td className={`px-3 py-3 text-right font-medium ${row.grossProfit >= 0 ? 'text-orange-200' : 'text-rose-300'}`}>{money(row.grossProfit)}</td></>}
                       <td className="px-3 py-3 text-right">{money(row.journalOperatingExpenses)}</td>
                       <td className="px-3 py-3 text-right">{money(row.posCommission)}</td>
                       <td className={`px-3 py-3 text-right font-medium ${row.ebitda >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{money(row.ebitda)}</td>
