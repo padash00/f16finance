@@ -626,9 +626,9 @@ export default function InventorySalesPage({
         </div>
       </header>
 
-      <div className="flex-1 overflow-hidden p-5">
-        <div className="mx-auto grid h-full max-w-7xl gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
-          <div className="space-y-5 overflow-y-auto pr-1">
+      <div className="flex-1 overflow-y-auto p-5 xl:overflow-hidden">
+        <div className="mx-auto grid max-w-7xl gap-5 xl:h-full xl:grid-cols-[minmax(0,1fr)_400px]">
+          <div className="space-y-5 xl:overflow-y-auto xl:pr-1">
             <InventoryHeroPanel
               icon={ShoppingBasket}
               accent="emerald"
@@ -798,16 +798,16 @@ export default function InventorySalesPage({
             </Card>
           </div>
 
-          <div className="flex h-full flex-col">
-            <Card className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex flex-col xl:h-full">
+            <Card className="flex flex-col overflow-hidden xl:flex-1">
               <CardHeader className="shrink-0 pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CreditCard className="h-4 w-4" />
                   Оформление продажи
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-1 flex-col overflow-hidden p-0">
-                <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
+              <CardContent className="flex flex-col overflow-hidden p-0 xl:flex-1">
+                <div className="space-y-4 px-6 py-4 xl:flex-1 xl:overflow-y-auto">
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
                   Продажи из этого экрана автоматически попадут в выручку смены. В сменной форме их дублировать не нужно.
                 </div>
