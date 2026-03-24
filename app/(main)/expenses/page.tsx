@@ -329,9 +329,12 @@ export default function ExpensesPage() {
   }, [])
 
   const [categoryBudgets, setCategoryBudgets] = useState<{id:string,name:string,monthly_budget:number}[]>([])
+  const [allCategories, setAllCategories] = useState<{id:string,name:string}[]>([])
   useEffect(() => {
     supabase.from('expense_categories').select('id,name,monthly_budget').gt('monthly_budget', 0)
       .then(({data}: {data: {id:string,name:string,monthly_budget:number}[] | null}) => setCategoryBudgets(data ?? []))
+    supabase.from('expense_categories').select('id,name').order('name')
+      .then(({data}: {data: {id:string,name:string}[] | null}) => setAllCategories(data ?? []))
   }, [])
 
   // Data hooks
@@ -1273,12 +1276,16 @@ export default function ExpensesPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Категория</label>
-                <input
+                <select
                   value={editExpenseCategory}
                   onChange={(e) => setEditExpenseCategory(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50"
-                  placeholder="Категория"
-                />
+                  className="h-11 w-full rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-red-500/50 [color-scheme:dark]"
+                >
+                  <option value="">— Без категории —</option>
+                  {allCategories.map((c) => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-[0.18em] text-slate-500">Наличные</label>
