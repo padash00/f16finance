@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  CreditCard,
   Loader2,
   LogOut,
   Minus,
-  Package,
   Percent,
   Plus,
   Printer,
@@ -13,25 +11,16 @@ import {
   Search,
   ShoppingBasket,
   Star,
-  Store,
   Tag,
   UserCircle2,
   X,
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
-import {
-  InventoryActionChip,
-  InventoryEmptyState,
-  InventoryHeroPanel,
-  InventoryMetric,
-  InventorySectionCard,
-} from '@/components/inventory-terminal-ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import * as api from '@/lib/api'
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastError, toastSuccess } from '@/lib/toast'
@@ -247,6 +236,9 @@ export default function InventorySalesPage({
   const [loyaltyPointsToSpend, setLoyaltyPointsToSpend] = useState(0)
   const customerSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Extras panel
+  const [showExtras, setShowExtras] = useState(false)
+
   // Discount
   const [showDiscountPanel, setShowDiscountPanel] = useState(false)
   const [manualDiscountPercent, setManualDiscountPercent] = useState('')
@@ -334,7 +326,6 @@ export default function InventorySalesPage({
     [cartDetailed],
   )
 
-  const saleCountToday = useMemo(() => (context?.sales || []).length, [context?.sales])
   const availableItemsCount = useMemo(
     () => (context?.items || []).filter((item) => Number(item.display_qty || 0) > 0).length,
     [context?.items],
@@ -592,18 +583,17 @@ export default function InventorySalesPage({
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <div className="h-9 shrink-0 drag-region bg-card" />
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <span className="text-sm font-bold text-primary-foreground">F</span>
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b bg-card px-4 pb-2 no-drag">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+            <span className="text-xs font-bold text-primary-foreground">F</span>
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">{session.company.name}</p>
-            <p className="text-xs text-muted-foreground">{operatorName}</p>
+            <p className="text-[10px] text-muted-foreground">{operatorName}</p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2 no-drag">
+        <div className="flex items-center gap-1.5 no-drag">
           <WorkModeSwitch
             active="sale"
             showSale
@@ -617,506 +607,398 @@ export default function InventorySalesPage({
             onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
           />
-          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="text-muted-foreground">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="h-7 w-7 p-0 text-muted-foreground">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button variant="ghost" size="sm" onClick={onLogout} className="text-muted-foreground">
-            <LogOut className="h-4 w-4" />
+          <Button variant="ghost" size="sm" onClick={onLogout} className="h-7 w-7 p-0 text-muted-foreground">
+            <LogOut className="h-3.5 w-3.5" />
           </Button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-5 xl:overflow-hidden">
-        <div className="mx-auto grid max-w-7xl gap-5 xl:h-full xl:grid-cols-[minmax(0,1fr)_400px]">
-          <div className="space-y-5 xl:overflow-y-auto xl:pr-1">
-            <InventoryHeroPanel
-              icon={ShoppingBasket}
-              accent="emerald"
-              title="Продажи с витрины"
-              description="Кассир собирает чек из товаров витрины, а программа сама списывает остаток и относит деньги в сменную выручку."
-            >
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <InventoryMetric label="Смена" value={formatShiftLabel(runtimeShift.shift)} hint={formatDate(runtimeShift.date)} />
-                <InventoryMetric label="Локация" value={context?.location?.name || 'Витрина точки'} hint={`${saleCountToday} продаж за смену`} accent="blue" />
-                <InventoryMetric label="Доступно SKU" value={availableItemsCount} hint="Товар можно продавать сразу" accent="emerald" />
-                <InventoryMetric label="В корзине" value={cartUnits} hint={`${cartDetailed.length} позиций`} accent="violet" />
-                <InventoryMetric
-                  label="Низкий остаток"
-                  value={lowStockItemsCount}
-                  hint="SKU с остатком 3 и меньше"
-                  accent={lowStockItemsCount > 0 ? 'amber' : 'blue'}
-                />
-              </div>
-            </InventoryHeroPanel>
-
-            <InventorySectionCard
-              icon={Store}
-              title="Каталог витрины"
-              description="Выбирайте товары с остатком на текущей точке и сразу собирайте чек."
-            >
-                {(context?.items || []).slice(0, 8).length > 0 && (
-                  <div>
-                    <p className="mb-3 text-xs font-medium text-muted-foreground">Быстрый доступ</p>
-                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                      {(context?.items || []).slice(0, 8).map((item) => (
-                        <InventoryActionChip
-                          key={item.id}
-                          onClick={() => addToCart(item)}
-                          disabled={item.display_qty <= 0}
-                          icon={Plus}
-                          label={item.name}
-                          hint={`${item.display_qty} ${item.unit} · ${formatMoney(item.sale_price)}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Поиск по названию, штрихкоду или категории"
-                    className="pl-10"
-                  />
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { key: 'all' as const, label: 'Все товары' },
-                    { key: 'low' as const, label: 'Низкий остаток' },
-                    { key: 'cart' as const, label: 'В корзине' },
-                  ].map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      onClick={() => setCatalogView(option.key)}
-                      className={`rounded-2xl border px-3 py-2 text-xs font-medium transition ${
-                        catalogView === option.key
-                          ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
-                          : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-
-                {error ? (
-                  <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
-                    {error}
-                  </div>
-                ) : null}
-
-                {loading ? (
-                  <div className="flex h-56 items-center justify-center text-muted-foreground">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Загружаем витрину точки...
-                  </div>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                    {filteredItems.map((item) => {
-                      const disabled = item.display_qty <= 0
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => addToCart(item)}
-                          disabled={disabled}
-                          className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 text-left transition hover:-translate-y-0.5 hover:border-emerald-400/40 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-foreground">{item.name}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">{item.barcode}</p>
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <Badge variant={disabled ? 'secondary' : 'success'}>
-                                {item.display_qty} {item.unit}
-                              </Badge>
-                              {item.display_qty > 0 && item.display_qty <= 3 ? (
-                                <Badge variant="warning">Мало</Badge>
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="mt-4 flex items-center justify-between">
-                            <div>
-                              <p className="text-xs text-muted-foreground">{item.category?.name || 'Без категории'}</p>
-                              <p className="mt-1 text-lg font-semibold text-foreground">{formatMoney(item.sale_price)}</p>
-                            </div>
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
-                              <Plus className="h-5 w-5" />
-                            </div>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-            </InventorySectionCard>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Package className="h-4 w-4" />
-                  Последние продажи
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {(context?.sales || []).length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                    Пока продаж нет. Первая продажа появится здесь сразу после проведения.
-                  </div>
-                ) : (
-                  (context?.sales || []).map((sale) => (
-                    <div key={sale.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary">{paymentBadge(sale.payment_method)}</Badge>
-                            <Badge variant="outline">{formatShiftLabel(sale.shift)}</Badge>
-                          </div>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {formatDate(sale.sale_date)} · {new Date(sale.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </div>
-                        <p className="text-lg font-semibold">{formatMoney(sale.total_amount)}</p>
-                      </div>
-                      <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                        {(sale.items || []).slice(0, 3).map((item) => (
-                          <div key={item.id} className="flex items-center justify-between gap-3">
-                            <span className="truncate">{item.item?.name || 'Товар'}</span>
-                            <span>{item.quantity} × {formatMoney(item.unit_price)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
+      <div className="flex flex-1 overflow-hidden">
+        {/* LEFT: product catalog */}
+        <div className="flex flex-1 flex-col overflow-hidden border-r border-white/10">
+          {/* Status bar */}
+          <div className="flex shrink-0 items-center gap-2 border-b border-white/10 bg-card px-4 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{context?.location?.name || 'Витрина'}</span>
+            <span>·</span>
+            <span>{formatShiftLabel(runtimeShift.shift)}</span>
+            <span>·</span>
+            <span>{availableItemsCount} SKU</span>
+            {lowStockItemsCount > 0 && (
+              <>
+                <span>·</span>
+                <span className="text-amber-400">{lowStockItemsCount} мало</span>
+              </>
+            )}
+            {cartUnits > 0 && (
+              <>
+                <span>·</span>
+                <span className="text-emerald-400">{cartUnits} в корзине</span>
+              </>
+            )}
           </div>
 
-          <div className="flex flex-col xl:h-full">
-            <Card className="flex flex-col overflow-hidden xl:flex-1">
-              <CardHeader className="shrink-0 pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <CreditCard className="h-4 w-4" />
-                  Оформление продажи
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col overflow-hidden p-0 xl:flex-1">
-                <div className="space-y-4 px-6 py-4 xl:flex-1 xl:overflow-y-auto">
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
-                  Продажи из этого экрана автоматически попадут в выручку смены. В сменной форме их дублировать не нужно.
-                </div>
+          {/* Search + filter */}
+          <div className="shrink-0 space-y-2 border-b border-white/10 px-3 py-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Поиск по названию, штрихкоду или категории"
+                className="w-full rounded-lg border border-input bg-background py-1.5 pl-9 pr-3 text-sm outline-none focus:border-emerald-400/50"
+              />
+            </div>
+            <div className="flex gap-1.5">
+              {[
+                { key: 'all' as const, label: 'Все' },
+                { key: 'low' as const, label: 'Мало' },
+                { key: 'cart' as const, label: 'В корзине' },
+              ].map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setCatalogView(option.key)}
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                    catalogView === option.key
+                      ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
+                      : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <InventoryMetric label="Подытог" value={formatMoney(cartTotal)} accent="blue" />
-                  <InventoryMetric
-                    label="К оплате"
-                    value={formatMoney(finalTotal)}
-                    hint={selectedCustomer ? 'С клиентом и бонусами' : 'Без клиента'}
-                    accent="emerald"
-                  />
-                </div>
-
-                {cartDetailed.length > 0 ? (
-                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
-                    <div>
-                      <p className="font-medium text-foreground">Быстрое действие</p>
-                      <p className="text-xs text-muted-foreground">Можно очистить чек и начать заново</p>
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={resetSaleForm}>
-                      Очистить
-                    </Button>
-                  </div>
-                ) : null}
-
-                <div className="space-y-2">
-                  {cartDetailed.length === 0 ? (
-                    <InventoryEmptyState
-                      title="Корзина пока пустая"
-                      description="Нажмите на товары слева, чтобы быстро собрать продажу."
-                      compact
-                    />
-                  ) : (
-                    cartDetailed.map((line) => (
-                      <div key={line.item_id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{line.item?.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatMoney(line.unit_price)} за {line.item?.unit || 'шт'}
-                            </p>
-                          </div>
-                          <p className="font-semibold">{formatMoney(line.total)}</p>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between">
-                          <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-1">
-                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => changeQty(line.item_id, line.quantity - 1)}>
-                              <Minus className="h-4 w-4" />
-                            </Button>
-                            <span className="min-w-[3rem] text-center text-sm font-semibold">{line.quantity}</span>
-                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => changeQty(line.item_id, line.quantity + 1)}>
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Остаток после продажи: {Math.max(0, findAvailableQty(line.item_id) - line.quantity)} {line.item?.unit || 'шт'}
-                          </p>
+          {/* Product grid */}
+          <div className="flex-1 overflow-y-auto p-3">
+            {error ? (
+              <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</div>
+            ) : loading ? (
+              <div className="flex h-40 items-center justify-center text-muted-foreground">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Загружаем витрину...
+              </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">Нет товаров</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 2xl:grid-cols-3">
+                {filteredItems.map((item) => {
+                  const disabled = item.display_qty <= 0
+                  const inCart = cart.some((l) => l.item_id === item.id)
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => addToCart(item)}
+                      disabled={disabled}
+                      className={`rounded-2xl border p-3 text-left transition hover:border-emerald-400/40 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50 ${
+                        inCart ? 'border-emerald-400/30 bg-emerald-500/10' : 'border-white/10 bg-white/[0.03]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-sm font-semibold leading-tight text-foreground">{item.name}</p>
+                        <Badge variant={disabled ? 'secondary' : 'success'} className="shrink-0 text-[10px]">
+                          {item.display_qty}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between">
+                        <p className="text-base font-semibold text-foreground">{formatMoney(item.sale_price)}</p>
+                        <div className={`flex h-7 w-7 items-center justify-center rounded-xl ${inCart ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-500/15 text-emerald-300'}`}>
+                          <Plus className="h-4 w-4" />
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Customer Section */}
-                <div className="space-y-2">
-                  <div className="relative">
-                    <UserCircle2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={customerSearch}
-                      onChange={(e) => {
-                        setCustomerSearch(e.target.value)
-                        if (selectedCustomer) clearCustomer()
-                      }}
-                      placeholder="Клиент (телефон или карта)"
-                      className="w-full rounded-xl border border-input bg-background py-2 pl-10 pr-9 text-sm outline-none transition focus:border-emerald-400/50"
-                    />
-                    {(customerSearch || selectedCustomer) && (
-                      <button type="button" onClick={clearCustomer} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                    {customerSearching && (
-                      <Loader2 className="absolute right-9 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-                    )}
-                  </div>
-
-                  {showCustomerDropdown && !selectedCustomer && (
-                    <div className="rounded-xl border border-white/10 bg-card shadow-lg">
-                      {customerResults.map((customer) => (
-                        <button
-                          key={customer.id}
-                          type="button"
-                          onClick={() => selectCustomer(customer)}
-                          className="w-full px-3 py-2.5 text-left text-sm hover:bg-white/[0.05] first:rounded-t-xl last:rounded-b-xl"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium">{customer.name}</p>
-                              <p className="text-xs text-muted-foreground">{customer.phone || customer.card_number || '—'}</p>
-                            </div>
-                            <div className="text-right text-xs">
-                              <p className="text-amber-400 font-semibold">{customer.loyalty_points} баллов</p>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => { setShowCustomerDropdown(false); setCustomerResults([]) }}
-                        className="w-full px-3 py-2 text-center text-xs text-muted-foreground hover:bg-white/[0.05] rounded-b-xl"
-                      >
-                        Без клиента
-                      </button>
-                    </div>
-                  )}
-
-                  {selectedCustomer && (
-                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-medium">{selectedCustomer.name}</p>
-                          <p className="text-xs text-muted-foreground">{selectedCustomer.phone || '—'}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">Баллы</p>
-                          <p className="text-amber-400 font-bold text-sm">{selectedCustomer.loyalty_points}</p>
-                        </div>
-                      </div>
-
-                      {loyaltyConfig?.is_active && selectedCustomer.loyalty_points >= (loyaltyConfig.min_points_to_redeem || 100) && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <Star className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                          <input
-                            type="number"
-                            value={loyaltyPointsToSpend || ''}
-                            onChange={(e) => {
-                              const val = Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, maxRedeemablePoints))
-                              setLoyaltyPointsToSpend(val)
-                            }}
-                            placeholder={`Баллами (макс. ${maxRedeemablePoints})`}
-                            className="w-full rounded-lg border border-input bg-background px-2 py-1 text-xs outline-none focus:border-amber-400/50"
-                            min="0"
-                            max={maxRedeemablePoints}
-                          />
-                        </div>
+                      {item.display_qty > 0 && item.display_qty <= 3 && (
+                        <Badge variant="warning" className="mt-1.5 text-[10px]">Мало</Badge>
                       )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT: cart + checkout */}
+        <div className="flex w-[300px] shrink-0 flex-col overflow-hidden">
+          {/* Cart header */}
+          <div className="shrink-0 border-b border-white/10 px-3 py-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Корзина{cartDetailed.length > 0 ? ` (${cartDetailed.length})` : ''}
+              </p>
+              {cartDetailed.length > 0 && (
+                <button type="button" onClick={resetSaleForm} className="text-xs text-muted-foreground transition hover:text-foreground">
+                  Очистить
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Cart items */}
+          <div className="flex-1 space-y-2 overflow-y-auto p-3">
+            {cartDetailed.length === 0 ? (
+              <div className="flex h-24 items-center justify-center px-4 text-center text-xs text-muted-foreground">
+                Добавьте товары из каталога
+              </div>
+            ) : (
+              cartDetailed.map((line) => (
+                <div key={line.item_id} className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate text-xs font-medium leading-tight">{line.item?.name}</p>
+                    <p className="shrink-0 text-xs font-semibold">{formatMoney(line.total)}</p>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-black/20 p-0.5">
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => changeQty(line.item_id, line.quantity - 1)}>
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <span className="min-w-[2rem] text-center text-xs font-semibold">{line.quantity}</span>
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => changeQty(line.item_id, line.quantity + 1)}>
+                        <Plus className="h-3 w-3" />
+                      </Button>
                     </div>
+                    <p className="text-[10px] text-muted-foreground">{formatMoney(line.unit_price)} / {line.item?.unit || 'шт'}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Extras (collapsible) */}
+          <div className="shrink-0 border-t border-white/10">
+            <button
+              type="button"
+              onClick={() => setShowExtras(!showExtras)}
+              className="flex w-full items-center justify-between px-3 py-2 text-xs text-muted-foreground transition hover:text-foreground"
+            >
+              <span>Дополнительно</span>
+              <div className="flex items-center gap-2">
+                {selectedCustomer && <span className="text-emerald-400 truncate max-w-[80px]">{selectedCustomer.name}</span>}
+                {effectiveDiscountPercent > 0 && <span className="text-blue-400">-{effectiveDiscountPercent}%</span>}
+                <span>{showExtras ? '▲' : '▼'}</span>
+              </div>
+            </button>
+
+            {showExtras && (
+              <div className="max-h-64 space-y-2 overflow-y-auto border-t border-white/10 p-3">
+                {/* Customer search */}
+                <div className="relative">
+                  <UserCircle2 className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={customerSearch}
+                    onChange={(e) => {
+                      setCustomerSearch(e.target.value)
+                      if (selectedCustomer) clearCustomer()
+                    }}
+                    placeholder="Клиент (телефон или карта)"
+                    className="w-full rounded-lg border border-input bg-background py-1.5 pl-9 pr-8 text-xs outline-none focus:border-emerald-400/50"
+                  />
+                  {(customerSearch || selectedCustomer) && (
+                    <button type="button" onClick={clearCustomer} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {customerSearching && (
+                    <Loader2 className="absolute right-8 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
                   )}
                 </div>
 
-                {/* Discount Section */}
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowDiscountPanel(!showDiscountPanel)}
-                    className="flex w-full items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm hover:bg-white/[0.05]"
-                  >
-                    <Tag className="h-4 w-4 text-blue-400" />
-                    <span className="flex-1 text-left">Скидка</span>
-                    {effectiveDiscountPercent > 0 && (
-                      <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300 font-medium">
-                        -{effectiveDiscountPercent}%
-                      </span>
-                    )}
-                  </button>
+                {showCustomerDropdown && !selectedCustomer && (
+                  <div className="rounded-lg border border-white/10 bg-card shadow-lg">
+                    {customerResults.map((customer) => (
+                      <button
+                        key={customer.id}
+                        type="button"
+                        onClick={() => selectCustomer(customer)}
+                        className="w-full px-3 py-2 text-left text-xs hover:bg-white/[0.05] first:rounded-t-lg last:rounded-b-lg"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">{customer.name}</p>
+                            <p className="text-muted-foreground">{customer.phone || customer.card_number || '—'}</p>
+                          </div>
+                          <p className="text-amber-400 font-semibold">{customer.loyalty_points} б.</p>
+                        </div>
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => { setShowCustomerDropdown(false); setCustomerResults([]) }}
+                      className="w-full rounded-b-lg px-3 py-2 text-center text-xs text-muted-foreground hover:bg-white/[0.05]"
+                    >
+                      Без клиента
+                    </button>
+                  </div>
+                )}
 
-                  {showDiscountPanel && (
-                    <div className="rounded-xl border border-white/10 bg-card p-3 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Percent className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                {selectedCustomer && (
+                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-xs font-medium">{selectedCustomer.name}</p>
+                      <p className="shrink-0 text-xs font-bold text-amber-400">{selectedCustomer.loyalty_points} б.</p>
+                    </div>
+                    {loyaltyConfig?.is_active && selectedCustomer.loyalty_points >= (loyaltyConfig.min_points_to_redeem || 100) && (
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <Star className="h-3 w-3 shrink-0 text-amber-400" />
                         <input
                           type="number"
-                          value={manualDiscountPercent}
+                          value={loyaltyPointsToSpend || ''}
                           onChange={(e) => {
-                            setManualDiscountPercent(e.target.value)
-                            setAppliedPromoCode(null)
-                            setPromoDiscountPercent(0)
+                            const val = Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, maxRedeemablePoints))
+                            setLoyaltyPointsToSpend(val)
                           }}
-                          placeholder="Скидка вручную, %"
-                          className="w-full rounded-lg border border-input bg-background px-2 py-1 text-sm outline-none focus:border-blue-400/50"
+                          placeholder={`Баллы (макс. ${maxRedeemablePoints})`}
+                          className="w-full rounded border border-input bg-background px-2 py-0.5 text-xs outline-none focus:border-amber-400/50"
                           min="0"
-                          max="99"
+                          max={maxRedeemablePoints}
                         />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={promoCodeInput}
-                          onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
-                          placeholder="Промокод"
-                          className="flex-1 rounded-lg border border-input bg-background px-2 py-1 text-sm font-mono outline-none focus:border-blue-400/50"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void applyPromoCode()}
-                          disabled={promoValidating || !promoCodeInput.trim()}
-                          className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-300 disabled:opacity-50 hover:bg-blue-500/20"
-                        >
-                          {promoValidating ? '...' : 'Применить'}
-                        </button>
-                      </div>
-                      {appliedPromoCode && (
-                        <p className="text-xs text-emerald-400">✓ Промокод «{appliedPromoCode}» применён</p>
-                      )}
+                    )}
+                  </div>
+                )}
+
+                {/* Discount */}
+                <button
+                  type="button"
+                  onClick={() => setShowDiscountPanel(!showDiscountPanel)}
+                  className="flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2 text-xs hover:bg-white/[0.05]"
+                >
+                  <Tag className="h-3.5 w-3.5 text-blue-400" />
+                  <span className="flex-1 text-left">Скидка</span>
+                  {effectiveDiscountPercent > 0 && (
+                    <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-medium text-blue-300">
+                      -{effectiveDiscountPercent}%
+                    </span>
+                  )}
+                </button>
+
+                {showDiscountPanel && (
+                  <div className="space-y-2 rounded-lg border border-white/10 bg-card p-2.5">
+                    <div className="flex items-center gap-2">
+                      <Percent className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <input
+                        type="number"
+                        value={manualDiscountPercent}
+                        onChange={(e) => {
+                          setManualDiscountPercent(e.target.value)
+                          setAppliedPromoCode(null)
+                          setPromoDiscountPercent(0)
+                        }}
+                        placeholder="Скидка вручную, %"
+                        className="w-full rounded border border-input bg-background px-2 py-1 text-xs outline-none focus:border-blue-400/50"
+                        min="0"
+                        max="99"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={promoCodeInput}
+                        onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                        placeholder="Промокод"
+                        className="flex-1 rounded border border-input bg-background px-2 py-1 font-mono text-xs outline-none focus:border-blue-400/50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void applyPromoCode()}
+                        disabled={promoValidating || !promoCodeInput.trim()}
+                        className="rounded border border-blue-400/30 bg-blue-500/10 px-2 py-1 text-[10px] font-medium text-blue-300 disabled:opacity-50 hover:bg-blue-500/20"
+                      >
+                        {promoValidating ? '...' : 'OK'}
+                      </button>
+                    </div>
+                    {appliedPromoCode && (
+                      <p className="text-[10px] text-emerald-400">✓ «{appliedPromoCode}» применён</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Comment */}
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  rows={2}
+                  placeholder="Комментарий к продаже"
+                  className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs outline-none focus:border-emerald-400/50"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Checkout form */}
+          <form onSubmit={handleSubmit} className="shrink-0 space-y-2.5 border-t border-white/10 p-3">
+            {/* Payment method */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['cash', 'kaspi', 'mixed'] as const).map((method) => (
+                <button
+                  key={method}
+                  type="button"
+                  onClick={() => setPaymentMethod(method)}
+                  className={`rounded-xl border px-2 py-2 text-center text-xs font-medium transition ${
+                    paymentMethod === method
+                      ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
+                      : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {paymentBadge(method)}
+                </button>
+              ))}
+            </div>
+
+            {paymentMethod === 'mixed' && (
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <p className="mb-1 text-[10px] text-muted-foreground">Наличными</p>
+                  <Input value={mixedCash} onChange={(e) => setMixedCash(e.target.value)} placeholder="0" className="h-8 text-xs" />
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] text-muted-foreground">Kaspi</p>
+                  <Input value={String(Math.max(0, finalTotal - Math.max(0, parseMoney(mixedCash))))} readOnly className="h-8 text-xs" />
+                </div>
+              </div>
+            )}
+
+            {/* Total */}
+            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+              {(discountAmount > 0 || loyaltyDiscountAmount > 0) && (
+                <div className="mb-2 space-y-1 border-b border-white/10 pb-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Подытог</span><span>{formatMoney(cartTotal)}</span>
+                  </div>
+                  {discountAmount > 0 && (
+                    <div className="flex items-center justify-between text-xs text-blue-300">
+                      <span>Скидка -{effectiveDiscountPercent}%</span><span>-{formatMoney(discountAmount)}</span>
+                    </div>
+                  )}
+                  {loyaltyDiscountAmount > 0 && (
+                    <div className="flex items-center justify-between text-xs text-amber-300">
+                      <span>Баллами</span><span>-{formatMoney(loyaltyDiscountAmount)}</span>
                     </div>
                   )}
                 </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {(['cash', 'kaspi', 'mixed'] as const).map((method) => (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => setPaymentMethod(method)}
-                      className={`rounded-2xl border px-3 py-3 text-left text-sm font-medium transition ${
-                        paymentMethod === method
-                          ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-100'
-                          : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      <div>{paymentBadge(method)}</div>
-                      <div className="mt-1 text-[11px] text-muted-foreground">
-                        {method === 'cash' ? 'Сразу наличными' : method === 'kaspi' ? 'Полностью безнал' : 'Делим оплату'}
-                      </div>
-                    </button>
-                  ))}
+              )}
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Итого</p>
+                  <p className="text-2xl font-bold text-foreground">{formatMoney(finalTotal)}</p>
                 </div>
-
-                {paymentMethod === 'mixed' ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label>Наличными</Label>
-                      <Input value={mixedCash} onChange={(event) => setMixedCash(event.target.value)} placeholder="0" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Kaspi</Label>
-                      <Input value={String(Math.max(0, finalTotal - Math.max(0, parseMoney(mixedCash))))} readOnly />
-                    </div>
-                  </div>
-                ) : null}
-
-                {paymentMethod === 'mixed' ? (
-                  <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs text-blue-200">
-                    Наличные закрывают первую часть чека, остаток автоматически уйдёт в Kaspi.
-                  </div>
-                ) : null}
-
-                <div className="space-y-1.5">
-                  <Label>Комментарий</Label>
-                  <textarea
-                    value={comment}
-                    onChange={(event) => setComment(event.target.value)}
-                    rows={3}
-                    placeholder="Например: продали через стойку, заказ в зал, спецкомментарий"
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition focus:border-emerald-400/50"
-                  />
+                <div className="text-right text-xs text-muted-foreground">
+                  <p>{cartDetailed.length} поз.</p>
+                  <p>{cartDetailed.reduce((sum, l) => sum + l.quantity, 0)} шт.</p>
                 </div>
+              </div>
+            </div>
 
-                </div>
-                <form onSubmit={handleSubmit} className="shrink-0 space-y-3 border-t border-white/10 px-6 py-4">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Позиций</span>
-                      <span>{cartDetailed.length}</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Штук</span>
-                      <span>{cartDetailed.reduce((sum, line) => sum + line.quantity, 0)}</span>
-                    </div>
-                    {(discountAmount > 0 || loyaltyDiscountAmount > 0) && (
-                      <div className="mt-3 space-y-1.5 border-t border-white/10 pt-3">
-                        <div className="flex items-center justify-between text-sm text-muted-foreground">
-                          <span>Подытог</span>
-                          <span>{formatMoney(cartTotal)}</span>
-                        </div>
-                        {discountAmount > 0 && (
-                          <div className="flex items-center justify-between text-sm text-blue-300">
-                            <span>Скидка (-{effectiveDiscountPercent}%)</span>
-                            <span>-{formatMoney(discountAmount)}</span>
-                          </div>
-                        )}
-                        {loyaltyDiscountAmount > 0 && (
-                          <div className="flex items-center justify-between text-sm text-amber-300">
-                            <span>Баллами</span>
-                            <span>-{formatMoney(loyaltyDiscountAmount)}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div className="mt-4 flex items-end justify-between">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итого</p>
-                        <p className="mt-1 text-3xl font-semibold text-foreground">{formatMoney(finalTotal)}</p>
-                      </div>
-                      <Badge variant="secondary">{paymentBadge(paymentMethod)}</Badge>
-                    </div>
-                  </div>
-
-                  <Button type="submit" size="lg" className="w-full" disabled={saving || cartDetailed.length === 0}>
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBasket className="h-4 w-4" />}
-                    Провести продажу
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-          </div>
+            <Button type="submit" size="lg" className="h-12 w-full text-base font-semibold" disabled={saving || cartDetailed.length === 0}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBasket className="h-5 w-5" />}
+              Провести продажу
+            </Button>
+          </form>
         </div>
       </div>
 
