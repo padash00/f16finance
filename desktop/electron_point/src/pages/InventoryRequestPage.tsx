@@ -193,7 +193,8 @@ export default function InventoryRequestPage({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
-      <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b bg-card pl-5 drag-region" style={{ paddingRight: 'max(20px, calc(100% - env(titlebar-area-x, 100%) - env(titlebar-area-width, 0px)))' }}>
+      <div className="h-9 shrink-0 drag-region bg-card" />
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <span className="text-sm font-bold text-primary-foreground">F</span>

@@ -252,7 +252,8 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
   return (
     <div className="flex h-screen flex-col bg-background overflow-hidden">
-      <header className="flex h-12 items-center justify-between border-b bg-card pl-5 gap-4 shrink-0 drag-region" style={{ paddingRight: 'max(20px, calc(100% - env(titlebar-area-x, 100%) - env(titlebar-area-width, 0px)))' }}>
+      <div className="h-9 shrink-0 drag-region bg-card" />
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <span className="text-sm font-bold text-primary-foreground">F</span>
