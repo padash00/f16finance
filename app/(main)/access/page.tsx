@@ -636,16 +636,14 @@ export default function AccessPage() {
                                     </button>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-xs text-gray-500">{s.email || 'нет email'}</span>
-                                    <button
-                                      onClick={() => { setEditingEmailId(s.id); setEditingEmailValue(s.email || '') }}
-                                      className="text-gray-700 hover:text-gray-400 transition-colors"
-                                      title="Изменить логин"
-                                    >
-                                      <Pencil className="w-3 h-3" />
-                                    </button>
-                                  </div>
+                                  <button
+                                    onClick={() => { setEditingEmailId(s.id); setEditingEmailValue(s.email || '') }}
+                                    className="flex items-center gap-1.5 px-2 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
+                                    title="Изменить логин"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                    {s.email || 'нет email'}
+                                  </button>
                                 )}
                                 {s.role && (
                                   <span className="text-xs px-1.5 py-0.5 bg-gray-800 rounded text-gray-400">
