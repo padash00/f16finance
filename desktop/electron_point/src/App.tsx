@@ -504,8 +504,8 @@ export default function App() {
   }
 
   // ─── Выход ────────────────────────────────────────────────────────────────
-  function handleLogout() {
-    clearOperatorSession().catch(() => null)
+  async function handleLogout() {
+    await clearOperatorSession().catch(() => null)
     showLogin(config)
   }
 
