@@ -1,30 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  CreditCard,
   Loader2,
   LogOut,
   Minus,
-  Package,
+  Plus,
   RefreshCw,
   RotateCcw,
   Search,
-  ShoppingBasket,
-  Store,
 } from 'lucide-react'
 
 import WorkModeSwitch from '@/components/WorkModeSwitch'
-import {
-  InventoryEmptyState,
-  InventoryHeroPanel,
-  InventoryMetric,
-  InventoryNotice,
-  InventorySectionCard,
-} from '@/components/inventory-terminal-ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import * as api from '@/lib/api'
 import { resolveRuntimeShift } from '@/lib/shift-runtime'
 import { toastError, toastSuccess } from '@/lib/toast'
@@ -308,27 +295,21 @@ export default function InventoryReturnsPage({
   const operatorName = session.operator.full_name || session.operator.name || session.operator.username
   const refund = buildRefundAmounts()
   const salesCount = useMemo(() => (context?.sales || []).length, [context?.sales])
-  const returnsCount = useMemo(() => (context?.returns || []).length, [context?.returns])
-  const selectedSaleReturnableQty = useMemo(
-    () => saleItems.reduce((sum, line) => sum + Number(line.returnable_qty || 0), 0),
-    [saleItems],
-  )
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <div className="h-9 shrink-0 drag-region bg-card" />
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <span className="text-sm font-bold text-primary-foreground">F</span>
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b bg-card px-4 pb-2 no-drag">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+            <span className="text-xs font-bold text-primary-foreground">F</span>
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">{session.company.name}</p>
-            <p className="text-xs text-muted-foreground">{operatorName}</p>
+            <p className="text-[10px] text-muted-foreground">{operatorName}</p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2 no-drag">
+        <div className="flex items-center gap-1.5 no-drag">
           <WorkModeSwitch
             active="return"
             showSale={!!onSwitchToSale}
@@ -342,351 +323,212 @@ export default function InventoryReturnsPage({
             onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
           />
-          <Button variant="ghost" size="sm" onClick={() => void load(selectedSaleId)} disabled={loading} className="text-muted-foreground">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <Button variant="ghost" size="sm" onClick={() => void load(selectedSaleId)} disabled={loading} className="h-7 w-7 p-0 text-muted-foreground">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button variant="ghost" size="sm" onClick={onLogout} className="text-muted-foreground">
-            <LogOut className="h-4 w-4" />
+          <Button variant="ghost" size="sm" onClick={onLogout} className="h-7 w-7 p-0 text-muted-foreground">
+            <LogOut className="h-3.5 w-3.5" />
           </Button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto p-5">
-        <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[360px_minmax(0,1fr)_400px]">
-          <div className="space-y-5">
-            <InventoryHeroPanel
-              icon={RotateCcw}
-              accent="amber"
-              title="Возврат по чеку"
-              description="Возврат идёт только по реально проданным позициям. Товар возвращается на витрину, а сумма автоматически вычитается из смены."
-            >
-              <div className="grid gap-3 md:grid-cols-3">
-                <InventoryMetric label="Продаж доступно" value={salesCount} hint="Чеки для возврата" accent="blue" />
-                <InventoryMetric label="Можно вернуть" value={selectedSaleReturnableQty} hint="Штук по выбранному чеку" accent="amber" />
-                <InventoryMetric label="Возвратов за смену" value={returnsCount} hint="Уже оформленные возвраты" accent="violet" />
+      <div className="flex flex-1 overflow-hidden">
+        {/* LEFT: sales list */}
+        <div className="flex w-52 shrink-0 flex-col overflow-hidden border-r border-white/10">
+          <div className="shrink-0 border-b border-white/10 px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Чеки{salesCount > 0 ? ` (${salesCount})` : ''}
+            </p>
+          </div>
+          <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
+            {error && (
+              <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-2 py-1.5 text-[10px] text-rose-300">{error}</div>
+            )}
+            {loading ? (
+              <div className="flex h-24 items-center justify-center">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
-            </InventoryHeroPanel>
+            ) : (context?.sales || []).length === 0 ? (
+              <p className="px-2 py-4 text-center text-xs text-muted-foreground">Нет продаж для возврата</p>
+            ) : (
+              (context?.sales || []).map((sale) => {
+                const saleItemsList = Array.isArray(sale.items) ? sale.items : []
+                const remainingQty = saleItemsList.reduce((sum, line) => sum + Number(line.returnable_qty || 0), 0)
+                const isSelected = sale.id === selectedSaleId
+                return (
+                  <button
+                    key={sale.id}
+                    type="button"
+                    onClick={() => { setSelectedSaleId(sale.id); setCart([]); setSearch('') }}
+                    className={`w-full rounded-xl border p-2.5 text-left transition ${
+                      isSelected
+                        ? 'border-amber-400/50 bg-amber-500/10'
+                        : 'border-white/10 bg-white/[0.03] hover:border-white/20'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <Badge variant={isSelected ? 'warning' : 'secondary'} className="text-[10px]">
+                        {paymentBadge(sale.payment_method)}
+                      </Badge>
+                      <p className="text-xs font-semibold">{formatMoney(sale.total_amount)}</p>
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-muted-foreground">
+                      {formatDate(sale.sale_date)} · {new Date(sale.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">Вернуть: {roundQty(remainingQty)}</p>
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </div>
 
-            <InventorySectionCard
-              icon={ShoppingBasket}
-              title="Недавние продажи"
-              description="Выберите чек, по которому реально есть что вернуть."
-            >
-                {error ? (
-                  <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
-                    {error}
-                  </div>
-                ) : null}
+        {/* MIDDLE: sale items */}
+        <div className="flex flex-1 flex-col overflow-hidden border-r border-white/10">
+          <div className="shrink-0 space-y-2 border-b border-white/10 px-3 py-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Позиции чека</p>
+              {selectedSale && (
+                <Badge variant="warning" className="text-[10px]">{formatMoney(selectedSale.total_amount)}</Badge>
+              )}
+            </div>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Поиск по названию"
+                disabled={!selectedSale}
+                className="w-full rounded-lg border border-input bg-background py-1.5 pl-8 pr-3 text-xs outline-none focus:border-amber-400/50 disabled:opacity-50"
+              />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3">
+            {!selectedSale ? (
+              <div className="flex h-32 items-center justify-center text-center text-xs text-muted-foreground px-4">
+                Выберите чек слева
+              </div>
+            ) : saleItems.length === 0 ? (
+              <div className="flex h-32 items-center justify-center text-center text-xs text-muted-foreground px-4">
+                По чеку нечего возвращать
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {saleItems.map((line) => {
+                  const returnableQty = roundQty(Number(line.returnable_qty || 0))
+                  const soldQty = roundQty(Number(line.quantity || 0))
+                  const disabled = returnableQty <= 0
+                  return (
+                    <button
+                      key={line.id}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => addToCart(line.id)}
+                      className={`rounded-xl border p-3 text-left transition ${
+                        disabled
+                          ? 'cursor-not-allowed border-white/5 bg-white/[0.02] opacity-50'
+                          : 'border-white/10 bg-white/[0.03] hover:border-amber-400/40 hover:bg-white/[0.05]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-1.5">
+                        <p className="truncate text-xs font-semibold leading-tight text-foreground">{line.item?.name || 'Товар'}</p>
+                        <Badge variant={disabled ? 'secondary' : 'outline'} className="shrink-0 text-[10px]">
+                          {returnableQty}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-foreground">{formatMoney(Number(line.unit_price || 0))}</p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">Продано: {soldQty}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
 
-                {loading ? (
-                  <div className="flex h-56 items-center justify-center text-muted-foreground">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Загружаем продажи...
-                  </div>
-                ) : (context?.sales || []).length === 0 ? (
-                  <InventoryEmptyState title="Продаж пока нет" description="Сначала должна появиться хотя бы одна продажа, которую можно вернуть." compact />
-                ) : (
-                  (context?.sales || []).map((sale) => {
-                    const saleItems = Array.isArray(sale.items) ? sale.items : []
-                    const remainingQty = saleItems.reduce(
-                      (sum, line) => sum + Number(line.returnable_qty || 0),
-                      0,
-                    )
-                    const isSelected = sale.id === selectedSaleId
-                    return (
-                      <button
-                        key={sale.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedSaleId(sale.id)
-                          setCart([])
-                          setSearch('')
-                        }}
-                        className={`w-full rounded-2xl border p-4 text-left transition ${
-                          isSelected
-                            ? 'border-amber-400/50 bg-amber-500/10'
-                            : 'border-white/10 bg-white/[0.03] hover:border-white/20'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <Badge variant={isSelected ? 'warning' : 'secondary'}>
-                                {paymentBadge(sale.payment_method)}
-                              </Badge>
-                              <Badge variant="outline">{formatShiftLabel(sale.shift)}</Badge>
-                            </div>
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              {formatDate(sale.sale_date)} ·{' '}
-                              {new Date(sale.sold_at).toLocaleTimeString('ru-RU', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </p>
-                          </div>
-                          <p className="text-lg font-semibold">{formatMoney(sale.total_amount)}</p>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                          <span>Позиций: {saleItems.length}</span>
-                          <span>Можно вернуть: {roundQty(remainingQty)}</span>
-                        </div>
-                      </button>
-                    )
-                  })
-                )}
-            </InventorySectionCard>
+        {/* RIGHT: return cart + form */}
+        <div className="flex w-72 shrink-0 flex-col overflow-hidden">
+          <div className="shrink-0 border-b border-white/10 px-3 py-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Возврат{cartDetailed.length > 0 ? ` (${cartDetailed.length})` : ''}
+              </p>
+              {cartDetailed.length > 0 && (
+                <button type="button" onClick={() => setCart([])} className="text-xs text-muted-foreground transition hover:text-foreground">
+                  Очистить
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="space-y-5">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Store className="h-4 w-4" />
-                  Проданные позиции
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Поиск по названию или штрихкоду"
-                    className="pl-10"
-                    disabled={!selectedSale}
-                  />
-                </div>
-
-                {!selectedSale ? (
-                  <InventoryEmptyState
-                    title="Сначала выберите чек"
-                    description="Слева выберите продажу, после этого здесь откроются только реально проданные позиции."
-                  />
-                ) : saleItems.length === 0 ? (
-                  <InventoryEmptyState
-                    title="По чеку нечего возвращать"
-                    description="Все позиции уже возвращены или в продаже не осталось строк для возврата."
-                  />
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {saleItems.map((line) => {
-                      const returnableQty = roundQty(Number(line.returnable_qty || 0))
-                      const soldQty = roundQty(Number(line.quantity || 0))
-                      const returnedQty = roundQty(Number(line.returned_qty || 0))
-                      const disabled = returnableQty <= 0
-                      return (
-                        <button
-                          key={line.id}
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => addToCart(line.id)}
-                          className={`rounded-2xl border p-4 text-left transition ${
-                            disabled
-                              ? 'cursor-not-allowed border-white/5 bg-white/[0.02] opacity-60'
-                              : 'border-white/10 bg-white/[0.03] hover:border-amber-400/40 hover:bg-white/[0.05]'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-foreground">
-                                {line.item?.name || 'Товар'}
-                              </p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {line.item?.barcode || 'Без штрихкода'}
-                              </p>
-                            </div>
-                            <Badge variant={disabled ? 'secondary' : 'outline'}>
-                              {returnableQty} шт
-                            </Badge>
-                          </div>
-
-                          <div className="mt-4 flex items-center justify-between">
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                Продано: {soldQty} · Уже вернули: {returnedQty}
-                              </p>
-                              <p className="mt-1 text-lg font-semibold text-foreground">
-                                {formatMoney(Number(line.unit_price || 0))}
-                              </p>
-                            </div>
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-300">
-                              <Package className="h-5 w-5" />
-                            </div>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Package className="h-4 w-4" />
-                  Последние возвраты
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {(context?.returns || []).length === 0 ? (
-                  <InventoryEmptyState title="Возвратов пока нет" description="Оформленные возвраты появятся здесь для быстрого контроля." compact />
-                ) : (
-                  (context?.returns || []).map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="warning">{paymentBadge(item.payment_method)}</Badge>
-                            <Badge variant="outline">{formatShiftLabel(item.shift)}</Badge>
-                          </div>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {formatDate(item.return_date)} ·{' '}
-                            {new Date(item.returned_at).toLocaleTimeString('ru-RU', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </p>
-                        </div>
-                        <p className="text-lg font-semibold">{formatMoney(item.total_amount)}</p>
-                      </div>
+          <div className="flex-1 space-y-2 overflow-y-auto p-3">
+            {cartDetailed.length === 0 ? (
+              <div className="flex h-20 items-center justify-center px-4 text-center text-xs text-muted-foreground">
+                Выберите позиции из чека
+              </div>
+            ) : (
+              cartDetailed.map((line) => {
+                const maxQty = getReturnableQty(line.item_id)
+                return (
+                  <div key={line.item_id} className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate text-xs font-medium leading-tight">{line.saleLine.item?.name || 'Товар'}</p>
+                      <p className="shrink-0 text-xs font-semibold">{formatMoney(line.total)}</p>
                     </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
+                    <div className="mt-2 flex items-center justify-between">
+                      <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-black/20 p-0.5">
+                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => changeQty(line.item_id, line.quantity - 1)}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="min-w-[2rem] text-center text-xs font-semibold">{line.quantity}</span>
+                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => changeQty(line.item_id, line.quantity + 1)} disabled={line.quantity >= maxQty}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">макс. {maxQty}</p>
+                    </div>
+                  </div>
+                )
+              })
+            )}
           </div>
 
-          <div className="space-y-5">
-            <InventorySectionCard
-              icon={CreditCard}
-              title="Оформление возврата"
-              description="Возврат идёт только из выбранного чека и сразу уменьшает выручку смены."
-              sticky
-            >
-                <InventoryNotice tone="amber">
-                  Возврат уменьшает выручку текущей смены и привязывается к выбранному чеку продажи.
-                </InventoryNotice>
+          <form onSubmit={handleSubmit} className="shrink-0 space-y-2.5 border-t border-white/10 p-3">
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={2}
+              placeholder="Причина возврата"
+              className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs outline-none focus:border-amber-400/50"
+            />
 
-                <div className="grid grid-cols-2 gap-2">
-                  <InventoryMetric label="Наличными" value={formatMoney(refund.cashAmount)} accent="amber" />
-                  <InventoryMetric label="Kaspi" value={formatMoney(refund.kaspiAmount)} accent="blue" />
+            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+              <div className="space-y-1 text-xs text-muted-foreground">
+                {refund.cashAmount > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span>Наличными</span><span>{formatMoney(refund.cashAmount)}</span>
+                  </div>
+                )}
+                {refund.kaspiAmount > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span>Kaspi</span><span>{formatMoney(refund.kaspiAmount)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="mt-2 flex items-end justify-between">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Итого</p>
+                  <p className="text-2xl font-bold text-foreground">{formatMoney(cartTotal)}</p>
                 </div>
+                <Badge variant="warning">{paymentBadge(refund.paymentMethod)}</Badge>
+              </div>
+            </div>
 
-                {selectedSale ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                          Выбранный чек
-                        </p>
-                        <p className="mt-1 font-semibold">
-                          {formatDate(selectedSale.sale_date)} · {paymentBadge(selectedSale.payment_method)}
-                        </p>
-                      </div>
-                      <Badge variant="outline">{formatMoney(selectedSale.total_amount)}</Badge>
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="space-y-2">
-                  {cartDetailed.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                      Выберите проданные позиции, чтобы оформить возврат.
-                    </div>
-                  ) : (
-                    cartDetailed.map((line) => {
-                      const maxQty = getReturnableQty(line.item_id)
-                      return (
-                        <div key={line.item_id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">{line.saleLine.item?.name || 'Товар'}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatMoney(line.unit_price)} за шт · максимум к возврату {maxQty}
-                              </p>
-                            </div>
-                            <p className="font-semibold">{formatMoney(line.total)}</p>
-                          </div>
-                          <div className="mt-3 flex items-center justify-between">
-                            <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-1">
-                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => changeQty(line.item_id, line.quantity - 1)}>
-                                <Minus className="h-4 w-4" />
-                              </Button>
-                              <span className="min-w-[3rem] text-center text-sm font-semibold">{line.quantity}</span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => changeQty(line.item_id, line.quantity + 1)}
-                                disabled={line.quantity >= maxQty}
-                              >
-                                <Package className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              На витрину вернётся: {line.quantity} шт
-                            </p>
-                          </div>
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm">
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span>Способ возврата</span>
-                    <span>{paymentBadge(refund.paymentMethod)}</span>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-muted-foreground">
-                    <span>Наличными</span>
-                    <span>{formatMoney(refund.cashAmount)}</span>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-muted-foreground">
-                    <span>Kaspi</span>
-                    <span>{formatMoney(refund.kaspiAmount)}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>Комментарий</Label>
-                  <textarea
-                    value={comment}
-                    onChange={(event) => setComment(event.target.value)}
-                    rows={3}
-                    placeholder="Причина возврата, отмена заказа, ошибка по товару"
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition focus:border-amber-400/50"
-                  />
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-3">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Позиций</span>
-                      <span>{cartDetailed.length}</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Штук</span>
-                      <span>{cartDetailed.reduce((sum, line) => sum + line.quantity, 0)}</span>
-                    </div>
-                    <div className="mt-4 flex items-end justify-between">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Итог возврата</p>
-                        <p className="mt-1 text-3xl font-semibold text-foreground">{formatMoney(cartTotal)}</p>
-                      </div>
-                      <Badge variant="warning">{paymentBadge(refund.paymentMethod)}</Badge>
-                    </div>
-                  </div>
-
-                  <Button type="submit" size="lg" className="w-full" disabled={saving || cartDetailed.length === 0 || !selectedSale}>
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                    Провести возврат
-                  </Button>
-                </form>
-            </InventorySectionCard>
-          </div>
+            <Button type="submit" size="lg" className="h-12 w-full text-base font-semibold" disabled={saving || cartDetailed.length === 0 || !selectedSale}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-5 w-5" />}
+              Провести возврат
+            </Button>
+          </form>
         </div>
       </div>
     </div>
