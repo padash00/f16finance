@@ -17,10 +17,12 @@ import {
   Eye,
   EyeOff,
   Phone,
+  Pencil,
   User,
   Shield,
   Sparkles,
   FileText,
+  X,
 } from 'lucide-react'
 import Image from 'next/image'
 
@@ -49,6 +51,9 @@ export default function AccessPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [newPasswords, setNewPasswords] = useState<Record<string, string>>({})
+  const [editingLoginId, setEditingLoginId] = useState<string | null>(null)
+  const [editingLoginValue, setEditingLoginValue] = useState('')
+  const [savingLoginId, setSavingLoginId] = useState<string | null>(null)
 
   // Загрузка операторов
   useEffect(() => {
@@ -339,6 +344,33 @@ export default function AccessPage() {
     setTimeout(() => setSuccess(null), 3000)
   }
 
+  const saveLogin = async (operatorId: string) => {
+    const newUsername = editingLoginValue.trim().toLowerCase()
+    if (!newUsername) return
+    setSavingLoginId(operatorId)
+    try {
+      const res = await fetch('/api/admin/update-operator-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operatorId, username: newUsername }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setOperators(prev => prev.map(op => op.id === operatorId ? { ...op, username: data.username } : op))
+        setEditingLoginId(null)
+        setSuccess('Логин успешно изменён')
+        setTimeout(() => setSuccess(null), 3000)
+      } else {
+        setError(data.error || 'Ошибка')
+        setTimeout(() => setError(null), 4000)
+      }
+    } catch {
+      setError('Ошибка сети')
+      setTimeout(() => setError(null), 4000)
+    }
+    setSavingLoginId(null)
+  }
+
   if (loading) {
     return (
       <>
@@ -518,8 +550,37 @@ export default function AccessPage() {
                           </div>
                         </td>
 
-                        <td className="py-4 px-4 font-mono text-sm text-gray-300">
-                          {op.username}
+                        <td className="py-4 px-4">
+                          {editingLoginId === op.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editingLoginValue}
+                                onChange={e => setEditingLoginValue(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') saveLogin(op.id); if (e.key === 'Escape') setEditingLoginId(null) }}
+                                className="font-mono text-sm bg-gray-800 border border-gray-600 rounded-lg px-2 py-1 text-white w-36 focus:outline-none focus:border-blue-500"
+                              />
+                              <button
+                                onClick={() => saveLogin(op.id)}
+                                disabled={savingLoginId === op.id}
+                                className="px-2 py-1 text-xs bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 rounded-lg text-blue-300 transition-colors disabled:opacity-50"
+                              >
+                                {savingLoginId === op.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Сохранить'}
+                              </button>
+                              <button onClick={() => setEditingLoginId(null)} className="text-gray-600 hover:text-gray-400">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setEditingLoginId(op.id); setEditingLoginValue(op.username || '') }}
+                              className="flex items-center gap-1.5 font-mono text-sm text-gray-300 hover:text-white group"
+                            >
+                              {op.username}
+                              <Pencil className="w-3 h-3 text-gray-600 group-hover:text-gray-400 transition-colors" />
+                            </button>
+                          )}
                         </td>
 
                         <td className="py-4 px-4">
