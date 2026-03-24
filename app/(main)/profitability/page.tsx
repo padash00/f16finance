@@ -162,11 +162,13 @@ export default function ProfitabilityPage() {
       if (group === 'payroll' || group === 'payroll_advance') acc.payroll += amount
       else if (group === 'payroll_tax') acc.payrollTaxes += amount
       else if (group === 'income_tax') acc.incomeTax += amount
-      else if (group === 'non_operating') acc.nonOperating += amount
+      else if (group === 'non_operating' || group === 'financial_expenses') acc.nonOperating += amount
+      else if (group === 'depreciation') acc.depreciation += amount
+      else if (group === 'capex') acc.capex += amount  // не входит в P&L, только справочно
       else acc.operating += amount
 
       return acc
-    }, { total: 0, operating: 0, payroll: 0, payrollTaxes: 0, incomeTax: 0, nonOperating: 0 })
+    }, { total: 0, operating: 0, payroll: 0, payrollTaxes: 0, incomeTax: 0, nonOperating: 0, depreciation: 0, capex: 0 })
     const manual = inputs[month]
     const correctedKaspi = Number(kaspiDailyMonthly[month] ?? income.rawKaspi)
     const journalRevenue = income.cash + correctedKaspi + income.card + income.online
@@ -204,8 +206,9 @@ export default function ProfitabilityPage() {
     const payrollTaxesManual = Number(manual?.payroll_taxes_amount || 0)
     const incomeTaxManual = Number(manual?.income_tax_amount || 0)
     const otherOperating = Number(manual?.other_operating_amount || 0)
-    const depreciation = Number(manual?.depreciation_amount || 0)
+    const depreciationManual = Number(manual?.depreciation_amount || 0)
     const amortization = Number(manual?.amortization_amount || 0)
+    const depreciation = depreciationManual > 0 ? depreciationManual : journalSplit.depreciation
     const payroll = payrollManual > 0 ? payrollManual : journalSplit.payroll
     const payrollTaxes = payrollTaxesManual > 0 ? payrollTaxesManual : journalSplit.payrollTaxes
     const incomeTax = incomeTaxManual > 0 ? incomeTaxManual : journalSplit.incomeTax
@@ -239,6 +242,9 @@ export default function ProfitabilityPage() {
       journalPayrollExpenses: journalSplit.payroll,
       journalPayrollTaxes: journalSplit.payrollTaxes,
       journalIncomeTax: journalSplit.incomeTax,
+      journalDepreciation: journalSplit.depreciation,
+      journalCapex: journalSplit.capex,
+      depreciationManual,
       nonOperatingJournalExpenses,
       posTurnover,
       posCommission,
@@ -299,7 +305,8 @@ export default function ProfitabilityPage() {
     const payrollManual = toNumber(draft.payroll_amount || '')
     const payrollTaxesManual = toNumber(draft.payroll_taxes_amount || '')
     const incomeTaxManual = toNumber(draft.income_tax_amount || '')
-    const depreciation = toNumber(draft.depreciation_amount || '')
+    const depreciationManual = toNumber(draft.depreciation_amount || '')
+    const depreciation = depreciationManual > 0 ? depreciationManual : selected.journalDepreciation
     const amortization = toNumber(draft.amortization_amount || '')
     const otherOperating = toNumber(draft.other_operating_amount || '')
 
@@ -487,7 +494,9 @@ export default function ProfitabilityPage() {
                         <div className="flex justify-between"><span>ФОТ</span><span>{money(selected.journalPayrollExpenses)}</span></div>
                         <div className="flex justify-between"><span>Налоги на зарплату</span><span>{money(selected.journalPayrollTaxes)}</span></div>
                         <div className="flex justify-between"><span>Налог 3% / прибыль</span><span>{money(selected.journalIncomeTax)}</span></div>
-                        <div className="flex justify-between"><span>Неоперационные</span><span>{money(selected.nonOperatingJournalExpenses)}</span></div>
+                        <div className="flex justify-between"><span>Финансовые расходы</span><span>{money(selected.nonOperatingJournalExpenses)}</span></div>
+                        {selected.journalDepreciation > 0 ? <div className="flex justify-between"><span>Амортизация (авто){selected.depreciationManual > 0 ? <span className="ml-1 text-xs text-amber-300">перекрыто вручную</span> : null}</span><span>{money(selected.journalDepreciation)}</span></div> : null}
+                        {selected.journalCapex > 0 ? <div className="flex justify-between text-slate-400"><span>CAPEX (справочно, не в P&L)</span><span>{money(selected.journalCapex)}</span></div> : null}
                         <div className="border-t border-white/10 pt-2 text-xs text-slate-400">
                           Общая сумма журнала: {money(selected.journalExpenses)}
                         </div>
@@ -723,8 +732,8 @@ export default function ProfitabilityPage() {
                   const deltaEbitda = prevRow ? row.ebitda - prevRow.ebitda : null
                   const deltaPct = (prevRow && prevRow.netProfit !== 0) ? ((row.netProfit - prevRow.netProfit) / Math.abs(prevRow.netProfit)) * 100 : null
                   return (
-                    <tr key={row.month} className="border-b border-white/5 text-slate-200 hover:bg-white/[0.03]">
-                      <td className="px-3 py-3 font-medium">{row.label}</td>
+                    <tr key={row.month} onClick={() => setSelectedMonth(row.month)} className={`cursor-pointer border-b border-white/5 text-slate-200 transition hover:bg-white/[0.05] ${row.month === selectedMonth ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/20' : ''}`}>
+                      <td className="px-3 py-3 font-medium">{row.label}{row.month === selectedMonth ? <span className="ml-2 rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-300">выбран</span> : null}</td>
                       <td className="px-3 py-3 text-right">{money(row.revenue)}</td>
                       <td className="px-3 py-3 text-right">{money(row.journalOperatingExpenses)}</td>
                       <td className="px-3 py-3 text-right">{money(row.posCommission)}</td>
