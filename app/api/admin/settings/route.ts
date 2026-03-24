@@ -37,6 +37,22 @@ type MutationBody =
       action: 'delete'
       id: string
     }
+  | {
+      entity: 'expense_category'
+      action: 'create'
+      payload: { name: string; monthly_budget?: number | null; accounting_group?: string | null }
+    }
+  | {
+      entity: 'expense_category'
+      action: 'update'
+      id: string
+      payload: { name: string; monthly_budget?: number | null; accounting_group?: string | null }
+    }
+  | {
+      entity: 'expense_category'
+      action: 'delete'
+      id: string
+    }
 
 function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
@@ -113,62 +129,123 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true })
     }
 
-    if (body.action === 'create') {
-      if (!body.payload.name?.trim()) return badRequest('Имя сотрудника обязательно')
-      const { data, error } = await supabase.from('staff').insert([
-        {
-          full_name: body.payload.name.trim(),
-          phone: body.payload.phone?.trim() || null,
-          email: body.payload.email?.trim() || null,
-          role: body.payload.role?.trim() || 'operator',
-        },
-      ]).select('id,full_name,email,role').single()
-      if (error) throw error
-      await writeAuditLog(supabase, {
-        actorUserId,
-        entityType: 'staff',
-        entityId: String(data.id),
-        action: 'create',
-        payload: { full_name: data.full_name, email: data.email, role: data.role },
-      })
-      return NextResponse.json({ ok: true })
-    }
-
-    if (!body.id) return badRequest('id обязателен')
-
-    if (body.action === 'update') {
-      if (!body.payload.name?.trim()) return badRequest('Имя сотрудника обязательно')
-      const { data, error } = await supabase
-        .from('staff')
-        .update({
-          full_name: body.payload.name.trim(),
-          phone: body.payload.phone?.trim() || null,
-          email: body.payload.email?.trim() || null,
-          role: body.payload.role?.trim() || 'operator',
+    if (body.entity === 'staff') {
+      if (body.action === 'create') {
+        if (!body.payload.name?.trim()) return badRequest('Имя сотрудника обязательно')
+        const { data, error } = await supabase.from('staff').insert([
+          {
+            full_name: body.payload.name.trim(),
+            phone: body.payload.phone?.trim() || null,
+            email: body.payload.email?.trim() || null,
+            role: body.payload.role?.trim() || 'operator',
+          },
+        ]).select('id,full_name,email,role').single()
+        if (error) throw error
+        await writeAuditLog(supabase, {
+          actorUserId,
+          entityType: 'staff',
+          entityId: String(data.id),
+          action: 'create',
+          payload: { full_name: data.full_name, email: data.email, role: data.role },
         })
-        .eq('id', body.id)
-        .select('id,full_name,email,role')
-        .single()
+        return NextResponse.json({ ok: true })
+      }
+
+      if (!body.id) return badRequest('id обязателен')
+
+      if (body.action === 'update') {
+        if (!body.payload.name?.trim()) return badRequest('Имя сотрудника обязательно')
+        const { data, error } = await supabase
+          .from('staff')
+          .update({
+            full_name: body.payload.name.trim(),
+            phone: body.payload.phone?.trim() || null,
+            email: body.payload.email?.trim() || null,
+            role: body.payload.role?.trim() || 'operator',
+          })
+          .eq('id', body.id)
+          .select('id,full_name,email,role')
+          .single()
+        if (error) throw error
+        await writeAuditLog(supabase, {
+          actorUserId,
+          entityType: 'staff',
+          entityId: String(data.id),
+          action: 'update',
+          payload: { full_name: data.full_name, email: data.email, role: data.role },
+        })
+        return NextResponse.json({ ok: true })
+      }
+
+      const { error } = await supabase.from('staff').delete().eq('id', body.id)
       if (error) throw error
       await writeAuditLog(supabase, {
         actorUserId,
         entityType: 'staff',
-        entityId: String(data.id),
-        action: 'update',
-        payload: { full_name: data.full_name, email: data.email, role: data.role },
+        entityId: body.id,
+        action: 'delete',
       })
       return NextResponse.json({ ok: true })
     }
 
-    const { error } = await supabase.from('staff').delete().eq('id', body.id)
-    if (error) throw error
-    await writeAuditLog(supabase, {
-      actorUserId,
-      entityType: 'staff',
-      entityId: body.id,
-      action: 'delete',
-    })
-    return NextResponse.json({ ok: true })
+    if (body.entity === 'expense_category') {
+      if (body.action === 'create') {
+        if (!body.payload.name?.trim()) return badRequest('Название категории обязательно')
+        const { data, error } = await supabase.from('expense_categories').insert([
+          {
+            name: body.payload.name.trim(),
+            monthly_budget: body.payload.monthly_budget ?? null,
+            accounting_group: body.payload.accounting_group || null,
+          },
+        ]).select('id,name,monthly_budget,accounting_group').single()
+        if (error) throw error
+        await writeAuditLog(supabase, {
+          actorUserId,
+          entityType: 'expense_category',
+          entityId: String(data.id),
+          action: 'create',
+          payload: { name: data.name, monthly_budget: data.monthly_budget, accounting_group: data.accounting_group },
+        })
+        return NextResponse.json({ ok: true })
+      }
+
+      if (!body.id) return badRequest('id обязателен')
+
+      if (body.action === 'update') {
+        if (!body.payload.name?.trim()) return badRequest('Название категории обязательно')
+        const { data, error } = await supabase
+          .from('expense_categories')
+          .update({
+            name: body.payload.name.trim(),
+            monthly_budget: body.payload.monthly_budget ?? null,
+            accounting_group: body.payload.accounting_group || null,
+          })
+          .eq('id', body.id)
+          .select('id,name,monthly_budget,accounting_group')
+          .single()
+        if (error) throw error
+        await writeAuditLog(supabase, {
+          actorUserId,
+          entityType: 'expense_category',
+          entityId: String(data.id),
+          action: 'update',
+          payload: { name: data.name, monthly_budget: data.monthly_budget, accounting_group: data.accounting_group },
+        })
+        return NextResponse.json({ ok: true })
+      }
+
+      const { error } = await supabase.from('expense_categories').delete().eq('id', body.id)
+      if (error) throw error
+      await writeAuditLog(supabase, {
+        actorUserId,
+        entityType: 'expense_category',
+        entityId: body.id,
+        action: 'delete',
+      })
+      return NextResponse.json({ ok: true })
+    }
+
+    return NextResponse.json({ error: 'Неизвестный entity' }, { status: 400 })
   } catch (error: any) {
     console.error('Admin settings mutation error', error)
     await writeSystemErrorLogSafe({

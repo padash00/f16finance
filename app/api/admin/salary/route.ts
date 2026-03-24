@@ -1061,9 +1061,18 @@ export async function POST(req: Request) {
         return json({ error: 'Нет положительных начислений по компаниям для выплаты' }, 400)
       }
 
+      const { data: operatorRow } = await supabase
+        .from('operators')
+        .select('name')
+        .eq('id', body.payload.operator_id)
+        .single()
+      const operatorName = operatorRow?.name || null
+
       const paymentComment =
         body.payload.comment?.trim() ||
-        `Зарплата за неделю ${weekStart} - ${weekBeforePayment.weekEnd}`
+        (operatorName
+          ? `Зарплата: ${operatorName} за неделю ${weekStart} - ${weekBeforePayment.weekEnd}`
+          : `Зарплата за неделю ${weekStart} - ${weekBeforePayment.weekEnd}`)
 
       const paymentResult = await supabase
         .from('operator_salary_week_payments')

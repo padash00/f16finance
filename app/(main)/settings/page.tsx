@@ -4,21 +4,23 @@ import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
-import { 
-  Plus, 
-  Pencil, 
-  Trash2, 
-  Save, 
-  X, 
-  Building2, 
-  Users, 
-  Search, 
-  Shield, 
-  User, 
-  Phone, 
-  Mail, 
-  Settings
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Save,
+  X,
+  Building2,
+  Users,
+  Search,
+  Shield,
+  User,
+  Phone,
+  Mail,
+  Settings,
+  Tag,
 } from 'lucide-react'
+import { FINANCIAL_GROUP_OPTIONS, type FinancialGroup } from '@/lib/core/financial-groups'
 
 // --- Типы ---
 type Company = {
@@ -38,19 +40,29 @@ type Staff = {
   created_at?: string
 }
 
+type ExpenseCategory = {
+  id: string
+  name: string
+  monthly_budget: number | null
+  accounting_group: FinancialGroup | null
+}
+
 export default function SettingsPage() {
   // Данные
   const [companies, setCompanies] = useState<Company[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
+  const [categories, setCategories] = useState<ExpenseCategory[]>([])
   const [loading, setLoading] = useState(true)
 
   // Поиск
   const [searchCompany, setSearchCompany] = useState('')
   const [searchStaff, setSearchStaff] = useState('')
+  const [searchCategory, setSearchCategory] = useState('')
 
   // Формы создания
   const [newComp, setNewComp] = useState({ name: '', code: '', show_in_structure: true })
   const [newStaff, setNewStaff] = useState({ name: '', phone: '', email: '', role: 'other' })
+  const [newCat, setNewCat] = useState({ name: '', monthly_budget: '', accounting_group: '' as FinancialGroup | '' })
 
   // Редактирование
   const [editCompId, setEditCompId] = useState<string | null>(null)
@@ -58,6 +70,9 @@ export default function SettingsPage() {
 
   const [editStaffId, setEditStaffId] = useState<string | null>(null)
   const [editStaffData, setEditStaffData] = useState({ name: '', phone: '', email: '', role: 'other' })
+
+  const [editCatId, setEditCatId] = useState<string | null>(null)
+  const [editCatData, setEditCatData] = useState({ name: '', monthly_budget: '', accounting_group: '' as FinancialGroup | '' })
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -78,9 +93,10 @@ export default function SettingsPage() {
   // --- ЗАГРУЗКА ---
   const fetchData = async () => {
     setLoading(true)
-    const [compRes, staffRes] = await Promise.all([
+    const [compRes, staffRes, catRes] = await Promise.all([
         supabase.from('companies').select('id, name, code, show_in_structure').order('name'),
-        supabase.from('staff').select('id, full_name, phone, email, role').order('full_name')
+        supabase.from('staff').select('id, full_name, phone, email, role').order('full_name'),
+        supabase.from('expense_categories').select('id, name, monthly_budget, accounting_group').order('name'),
     ])
 
     if (compRes.error || staffRes.error) {
@@ -88,6 +104,7 @@ export default function SettingsPage() {
     } else {
         setCompanies((compRes.data || []) as Company[])
         setStaff((staffRes.data || []) as Staff[])
+        setCategories((catRes.data || []) as ExpenseCategory[])
     }
     setLoading(false)
   }
@@ -95,6 +112,10 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchData()
   }, [])
+
+  const filteredCategories = useMemo(() => {
+    return categories.filter(c => c.name.toLowerCase().includes(searchCategory.toLowerCase()))
+  }, [categories, searchCategory])
 
   // --- ФИЛЬТРАЦИЯ ---
   const filteredCompanies = useMemo(() => {
@@ -228,6 +249,60 @@ export default function SettingsPage() {
       }
   }
 
+  // --- ЛОГИКА КАТЕГОРИЙ ---
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newCat.name.trim()) return
+    setSaving(true)
+    try {
+      await mutateSettings({
+        entity: 'expense_category',
+        action: 'create',
+        payload: {
+          name: newCat.name,
+          monthly_budget: newCat.monthly_budget ? Number(newCat.monthly_budget) : null,
+          accounting_group: newCat.accounting_group || null,
+        },
+      })
+      setNewCat({ name: '', monthly_budget: '', accounting_group: '' })
+      fetchData()
+    } catch (err: any) {
+      alert(err.message)
+    }
+    setSaving(false)
+  }
+
+  const handleSaveCategory = async () => {
+    if (!editCatId) return
+    setSaving(true)
+    try {
+      await mutateSettings({
+        entity: 'expense_category',
+        action: 'update',
+        id: editCatId,
+        payload: {
+          name: editCatData.name,
+          monthly_budget: editCatData.monthly_budget ? Number(editCatData.monthly_budget) : null,
+          accounting_group: editCatData.accounting_group || null,
+        },
+      })
+      setEditCatId(null)
+      fetchData()
+    } catch (err: any) {
+      alert(err.message)
+    }
+    setSaving(false)
+  }
+
+  const handleDeleteCategory = async (id: string) => {
+    if (!confirm('Удалить категорию? Расходы с этой категорией останутся, но потеряют привязку к финансовой группе.')) return
+    try {
+      await mutateSettings({ entity: 'expense_category', action: 'delete', id })
+      fetchData()
+    } catch (err: any) {
+      alert(err.message)
+    }
+  }
 
   return (
     <>
@@ -519,6 +594,155 @@ export default function SettingsPage() {
             </div>
 
           </div>
+
+          {/* 🏷️ КАТЕГОРИИ РАСХОДОВ */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Tag className="w-5 h-5 text-amber-400" /> Категории расходов
+              </h2>
+              <span className="text-xs bg-card border border-border px-2 py-1 rounded-full text-muted-foreground">
+                {categories.length} категорий
+              </span>
+            </div>
+
+            <Card className="p-4 border-border bg-card neon-glow flex flex-col" style={{ minHeight: 400 }}>
+              {/* Поиск */}
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  placeholder="Поиск категории..."
+                  value={searchCategory}
+                  onChange={e => setSearchCategory(e.target.value)}
+                  className="w-full bg-input/50 border border-border rounded-lg py-2 pl-9 pr-4 text-sm focus:border-amber-500 transition-colors"
+                />
+              </div>
+
+              {/* Список */}
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[480px]">
+                {loading && <p className="text-center text-sm text-muted-foreground py-10">Загрузка...</p>}
+                {!loading && filteredCategories.map(cat => {
+                  const groupOption = FINANCIAL_GROUP_OPTIONS.find(g => g.value === cat.accounting_group)
+                  return (
+                    <div key={cat.id} className="group p-3 rounded-lg border border-border/50 bg-black/20 hover:bg-white/5 transition-all flex items-center justify-between gap-2">
+                      {editCatId === cat.id ? (
+                        <div className="flex-1 flex flex-wrap items-center gap-2">
+                          <input
+                            value={editCatData.name}
+                            onChange={e => setEditCatData({ ...editCatData, name: e.target.value })}
+                            className="bg-input border border-border rounded px-2 py-1 text-sm flex-1 min-w-32"
+                            autoFocus
+                          />
+                          <select
+                            value={editCatData.accounting_group}
+                            onChange={e => setEditCatData({ ...editCatData, accounting_group: e.target.value as FinancialGroup | '' })}
+                            className="bg-input border border-border rounded px-2 py-1 text-sm [color-scheme:dark]"
+                          >
+                            <option value="">— Авто —</option>
+                            {FINANCIAL_GROUP_OPTIONS.map(g => (
+                              <option key={g.value} value={g.value}>{g.label}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            value={editCatData.monthly_budget}
+                            onChange={e => setEditCatData({ ...editCatData, monthly_budget: e.target.value })}
+                            placeholder="Бюджет/мес"
+                            className="bg-input border border-border rounded px-2 py-1 text-sm w-28"
+                          />
+                          <Button size="icon" className="h-7 w-7 bg-green-600 hover:bg-green-700" onClick={handleSaveCategory}>
+                            <Save className="w-3 h-3" />
+                          </Button>
+                          <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setEditCatId(null)}>
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="w-8 h-8 shrink-0 rounded bg-amber-500/10 flex items-center justify-center text-amber-400">
+                              <Tag className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">{cat.name}</p>
+                              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                {groupOption ? (
+                                  <span className="text-[10px] px-1.5 rounded border text-amber-300 border-amber-500/30 bg-amber-500/10">
+                                    {groupOption.label}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] px-1.5 rounded border text-muted-foreground border-white/10 bg-white/5">
+                                    Авто
+                                  </span>
+                                )}
+                                {cat.monthly_budget ? (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    бюджет {cat.monthly_budget.toLocaleString('ru')} ₸/мес
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-amber-400" onClick={() => {
+                              setEditCatId(cat.id)
+                              setEditCatData({
+                                name: cat.name,
+                                monthly_budget: cat.monthly_budget ? String(cat.monthly_budget) : '',
+                                accounting_group: cat.accounting_group || '',
+                              })
+                            }}>
+                              <Pencil className="w-3 h-3" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-red-400" onClick={() => handleDeleteCategory(cat.id)}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Добавление */}
+              <div className="pt-4 mt-2 border-t border-border">
+                <form onSubmit={handleAddCategory} className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      value={newCat.name}
+                      onChange={e => setNewCat({ ...newCat, name: e.target.value })}
+                      placeholder="Название категории..."
+                      className="flex-1 bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-amber-500"
+                    />
+                    <input
+                      type="number"
+                      value={newCat.monthly_budget}
+                      onChange={e => setNewCat({ ...newCat, monthly_budget: e.target.value })}
+                      placeholder="Бюджет ₸"
+                      className="w-28 bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-amber-500"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={newCat.accounting_group}
+                      onChange={e => setNewCat({ ...newCat, accounting_group: e.target.value as FinancialGroup | '' })}
+                      className="flex-1 bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-amber-500 [color-scheme:dark]"
+                    >
+                      <option value="">— Финансовая группа (Авто) —</option>
+                      {FINANCIAL_GROUP_OPTIONS.map(g => (
+                        <option key={g.value} value={g.value}>{g.label} — {g.description}</option>
+                      ))}
+                    </select>
+                    <Button type="submit" disabled={!newCat.name.trim() || saving} className="bg-amber-600 hover:bg-amber-700">
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </Card>
+          </div>
+
         </div>
     </>
   )
