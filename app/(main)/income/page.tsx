@@ -76,6 +76,7 @@ type IncomeRow = {
   zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
+  kaspi_before_midnight: number | null
   online_amount: number | null
   card_amount: number | null
   comment: string | null
@@ -316,6 +317,7 @@ export default function IncomePage() {
   const [editIncomeOperatorId, setEditIncomeOperatorId] = useState<string>('none')
   const [editCashDraft, setEditCashDraft] = useState('')
   const [editKaspiDraft, setEditKaspiDraft] = useState('')
+  const [editKaspiBeforeMidnightDraft, setEditKaspiBeforeMidnightDraft] = useState('')
   const [editOnlineDraft, setEditOnlineDraft] = useState('')
   const [editCardDraft, setEditCardDraft] = useState('')
   const [editCommentDraft, setEditCommentDraft] = useState('')
@@ -445,6 +447,7 @@ export default function IncomePage() {
           kaspi_amount: kaspi,
           online_amount: online,
           card_amount: card,
+          kaspi_before_midnight: null,
           comment: cmt || null,
         }
         const comments = new Set<string>()
@@ -615,6 +618,7 @@ export default function IncomePage() {
     setEditIncomeOperatorId(row.operator_id || 'none')
     setEditCashDraft(String(row.cash_amount ?? 0))
     setEditKaspiDraft(String(row.kaspi_amount ?? 0))
+    setEditKaspiBeforeMidnightDraft(row.kaspi_before_midnight != null ? String(row.kaspi_before_midnight) : '')
     setEditOnlineDraft(String(row.online_amount ?? 0))
     setEditCardDraft(String(row.card_amount ?? 0))
     setEditCommentDraft(row.comment || '')
@@ -626,6 +630,7 @@ export default function IncomePage() {
     setEditIncomeOperatorId('none')
     setEditCashDraft('')
     setEditKaspiDraft('')
+    setEditKaspiBeforeMidnightDraft('')
     setEditOnlineDraft('')
     setEditCardDraft('')
     setEditCommentDraft('')
@@ -636,11 +641,15 @@ export default function IncomePage() {
 
     setSavingIncomeEdit(true)
     try {
+      const kaspiBeforeMidnight = editingIncome?.shift === 'night' && editKaspiBeforeMidnightDraft.trim() !== ''
+        ? (parseMoneyInput(editKaspiBeforeMidnightDraft) ?? null)
+        : null
       const payload = {
         date: editIncomeDate,
         operator_id: editIncomeOperatorId === 'none' ? null : editIncomeOperatorId,
         cash_amount: parseMoneyInput(editCashDraft) ?? 0,
         kaspi_amount: parseMoneyInput(editKaspiDraft) ?? 0,
+        kaspi_before_midnight: kaspiBeforeMidnight,
         online_amount: parseMoneyInput(editOnlineDraft) ?? 0,
         card_amount: parseMoneyInput(editCardDraft) ?? 0,
         comment: editCommentDraft.trim() || null,
@@ -673,6 +682,7 @@ export default function IncomePage() {
     editIncomeDate,
     editIncomeOperatorId,
     editKaspiDraft,
+    editKaspiBeforeMidnightDraft,
     editOnlineDraft,
     editingIncome,
   ])
@@ -1222,6 +1232,22 @@ export default function IncomePage() {
                     <span>Kaspi POS</span>
                     <input value={editKaspiDraft} onChange={(e) => setEditKaspiDraft(e.target.value)} className="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white outline-none focus:border-purple-500/40" />
                   </label>
+
+                  {editingIncome?.shift === 'night' && (
+                    <label className="space-y-2 text-sm text-gray-300 md:col-span-2">
+                      <span className="flex items-center gap-2">
+                        Kaspi до 00:00
+                        <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] text-blue-300">только для ночных смен</span>
+                      </span>
+                      <input
+                        value={editKaspiBeforeMidnightDraft}
+                        onChange={(e) => setEditKaspiBeforeMidnightDraft(e.target.value)}
+                        placeholder="Из кабинета Kaspi for Business — сколько Kaspi пришло до полуночи"
+                        className="w-full rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2 text-white outline-none focus:border-blue-500/40"
+                      />
+                      <p className="text-xs text-slate-400">Нужно для точного суточного расчёта в ОПиУ. Если не знаете — оставьте пустым.</p>
+                    </label>
+                  )}
 
                   <label className="space-y-2 text-sm text-gray-300">
                     <span>Online</span>

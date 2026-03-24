@@ -50,6 +50,7 @@ type Body =
         operator_id: string | null
         cash_amount: number | null
         kaspi_amount: number | null
+        kaspi_before_midnight: number | null
         online_amount: number | null
         card_amount: number | null
         comment: string | null
@@ -112,7 +113,7 @@ export async function GET(req: Request) {
 
     let query = supabase
       .from('incomes')
-      .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment')
+      .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, comment')
       .order('date', { ascending: false })
       .limit(2000)
 
@@ -280,6 +281,7 @@ export async function POST(req: Request) {
         operator_id: body.payload.operator_id || null,
         cash_amount: body.payload.cash_amount ?? 0,
         kaspi_amount: body.payload.kaspi_amount ?? 0,
+        kaspi_before_midnight: body.payload.kaspi_before_midnight ?? null,
         online_amount: body.payload.online_amount ?? 0,
         card_amount: body.payload.card_amount ?? 0,
         comment: body.payload.comment?.trim() || null,

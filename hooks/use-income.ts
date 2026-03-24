@@ -11,6 +11,7 @@ export type IncomeRow = {
   zone: string | null
   cash_amount: number | null
   kaspi_amount: number | null
+  kaspi_before_midnight: number | null
   online_amount: number | null
   card_amount: number | null
   comment: string | null
