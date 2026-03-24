@@ -246,7 +246,7 @@ export async function POST(request: Request) {
     const pointReturn = await createPointInventoryReturn(supabase, {
       company_id: device.company_id,
       location_id: location.id,
-      point_device_id: device.id,
+      point_device_id: null,
       operator_id: actor.operatorId,
       sale_id: saleId,
       return_date: returnDate,

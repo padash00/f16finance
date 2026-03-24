@@ -563,7 +563,7 @@ export async function POST(request: Request) {
     const sale = await createPointInventorySale(supabase, {
       company_id: device.company_id,
       location_id: location.id,
-      point_device_id: device.id,
+      point_device_id: null,
       operator_id: actor.operatorId,
       sale_date: saleDate,
       shift,
