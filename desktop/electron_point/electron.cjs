@@ -133,7 +133,7 @@ function installAppUpdate() {
 function initAutoUpdater() {
   if (!ensureUpdaterReady()) return
 
-  autoUpdater.autoDownload = false
+  autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
 
   autoUpdater.on('checking-for-update', () => {
@@ -203,7 +203,7 @@ function initAutoUpdater() {
   })
 
   setTimeout(() => {
-    void checkForAppUpdates({ silent: true })
+    void checkForAppUpdates({ silent: false })
   }, 3000)
 }
 
