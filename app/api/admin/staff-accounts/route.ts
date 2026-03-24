@@ -14,6 +14,11 @@ type PostBody =
       action: 'sendPasswordReset'
       staffId: string
     }
+  | {
+      action: 'changeEmail'
+      staffId: string
+      newEmail: string
+    }
 
 type ResolvedStaffAccount = {
   staff: any
@@ -223,7 +228,7 @@ export async function POST(req: Request) {
 
     const body = (await req.json().catch(() => null)) as PostBody | null
     requestBody = body
-    if (!body?.staffId || (body.action !== 'inviteStaffAccount' && body.action !== 'sendPasswordReset')) {
+    if (!body?.staffId || !['inviteStaffAccount', 'sendPasswordReset', 'changeEmail'].includes(body.action)) {
       return json({ error: 'Неверный формат запроса' }, 400)
     }
 
@@ -326,6 +331,42 @@ export async function POST(req: Request) {
         accountState: mapUserState(existingUser, true),
         message: `Письмо отправлено на ${email}. По ссылке сотрудник сможет задать новый пароль и войти в систему.`,
       })
+    }
+
+    if (body.action === 'changeEmail') {
+      const newEmail = body.newEmail?.trim()?.toLowerCase()
+      if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+        return json({ error: 'Некорректный email' }, 400)
+      }
+
+      // Update staff table
+      const { error: updateStaffError } = await supabase
+        .from('staff')
+        .update({ email: newEmail })
+        .eq('id', body.staffId)
+      if (updateStaffError) throw updateStaffError
+
+      // Update auth user if exists
+      const { data: usersDataCE, error: usersErrorCE } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
+      if (usersErrorCE) throw usersErrorCE
+
+      const existingUserCE = usersDataCE.users.find((u) => u.email?.toLowerCase() === resolved.email) || null
+      if (existingUserCE) {
+        const { error: updateAuthError } = await supabase.auth.admin.updateUserById(existingUserCE.id, {
+          email: newEmail,
+        })
+        if (updateAuthError) throw updateAuthError
+      }
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'staff-account',
+        entityId: String(resolved.staff.id),
+        action: 'change-email',
+        payload: { old_email: resolved.email, new_email: newEmail },
+      })
+
+      return json({ ok: true, email: newEmail, message: `Логин изменён на ${newEmail}` })
     }
 
     if (!existingUser) {

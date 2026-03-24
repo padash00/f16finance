@@ -625,9 +625,9 @@ export default function InventorySalesPage({
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto p-5">
-        <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
-          <div className="space-y-5">
+      <div className="flex-1 overflow-hidden p-5">
+        <div className="mx-auto grid h-full max-w-7xl gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+          <div className="space-y-5 overflow-y-auto pr-1">
             <InventoryHeroPanel
               icon={ShoppingBasket}
               accent="emerald"
@@ -754,17 +754,59 @@ export default function InventorySalesPage({
                   </div>
                 )}
             </InventorySectionCard>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Package className="h-4 w-4" />
+                  Последние продажи
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {(context?.sales || []).length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
+                    Пока продаж нет. Первая продажа появится здесь сразу после проведения.
+                  </div>
+                ) : (
+                  (context?.sales || []).map((sale) => (
+                    <div key={sale.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">{paymentBadge(sale.payment_method)}</Badge>
+                            <Badge variant="outline">{formatShiftLabel(sale.shift)}</Badge>
+                          </div>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {formatDate(sale.sale_date)} · {new Date(sale.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <p className="text-lg font-semibold">{formatMoney(sale.total_amount)}</p>
+                      </div>
+                      <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                        {(sale.items || []).slice(0, 3).map((item) => (
+                          <div key={item.id} className="flex items-center justify-between gap-3">
+                            <span className="truncate">{item.item?.name || 'Товар'}</span>
+                            <span>{item.quantity} × {formatMoney(item.unit_price)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
           </div>
 
-          <div className="space-y-5">
-            <Card className="sticky top-0">
-              <CardHeader className="pb-3">
+          <div className="flex h-full flex-col">
+            <Card className="flex flex-1 flex-col overflow-hidden">
+              <CardHeader className="shrink-0 pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CreditCard className="h-4 w-4" />
                   Оформление продажи
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="flex flex-1 flex-col overflow-hidden p-0">
+                <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
                   Продажи из этого экрана автоматически попадут в выручку смены. В сменной форме их дублировать не нужно.
                 </div>
@@ -1025,7 +1067,8 @@ export default function InventorySalesPage({
                   />
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-3">
+                </div>
+                <form onSubmit={handleSubmit} className="shrink-0 space-y-3 border-t border-white/10 px-6 py-4">
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
                       <span>Позиций</span>
@@ -1072,46 +1115,6 @@ export default function InventorySalesPage({
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Package className="h-4 w-4" />
-                  Последние продажи
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {(context?.sales || []).length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                    Пока продаж нет. Первая продажа появится здесь сразу после проведения.
-                  </div>
-                ) : (
-                  (context?.sales || []).map((sale) => (
-                    <div key={sale.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary">{paymentBadge(sale.payment_method)}</Badge>
-                            <Badge variant="outline">{formatShiftLabel(sale.shift)}</Badge>
-                          </div>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            {formatDate(sale.sale_date)} · {new Date(sale.sold_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </div>
-                        <p className="text-lg font-semibold">{formatMoney(sale.total_amount)}</p>
-                      </div>
-                      <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                        {(sale.items || []).slice(0, 3).map((item) => (
-                          <div key={item.id} className="flex items-center justify-between gap-3">
-                            <span className="truncate">{item.item?.name || 'Товар'}</span>
-                            <span>{item.quantity} × {formatMoney(item.unit_price)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>

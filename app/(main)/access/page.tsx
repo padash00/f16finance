@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
 import {
   CheckCircle2, Copy, Eye, EyeOff, KeyRound, Loader2,
-  Lock, LockOpen, RefreshCw, Shield, Users, X,
+  Lock, LockOpen, Pencil, RefreshCw, Shield, Users, X,
 } from 'lucide-react'
 
 // ==================== TYPES ====================
@@ -199,6 +199,9 @@ export default function AccessPage() {
   const [generatingId, setGeneratingId] = useState<string | null>(null)
   const [sendingInviteId, setSendingInviteId] = useState<string | null>(null)
   const [inviteMessage, setInviteMessage] = useState<{ staffId: string; text: string; ok: boolean } | null>(null)
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null)
+  const [editingEmailValue, setEditingEmailValue] = useState('')
+  const [savingEmailId, setSavingEmailId] = useState<string | null>(null)
 
   // ---- Load permissions ----
   useEffect(() => {
@@ -327,6 +330,29 @@ export default function AccessPage() {
     } catch {}
     setGeneratingId(null)
   }, [])
+
+  // ---- Change email ----
+  const saveEmail = useCallback(async (staffId: string) => {
+    const newEmail = editingEmailValue.trim().toLowerCase()
+    if (!newEmail) return
+    setSavingEmailId(staffId)
+    try {
+      const res = await fetch('/api/admin/staff-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'changeEmail', staffId, newEmail }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setStaff(prev => prev.map(s => s.id === staffId ? { ...s, email: data.email } : s))
+        setEditingEmailId(null)
+        loadAccounts()
+      } else {
+        alert(data.error || 'Ошибка')
+      }
+    } catch { alert('Ошибка сети') }
+    setSavingEmailId(null)
+  }, [editingEmailValue, loadAccounts])
 
   // ---- Invite ----
   const sendInvite = useCallback(async (staffId: string) => {
@@ -588,7 +614,39 @@ export default function AccessPage() {
                             <div className="min-w-0">
                               <p className="text-sm font-semibold text-white truncate">{s.full_name || 'Без имени'}</p>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs text-gray-500">{s.email || 'нет email'}</span>
+                                {editingEmailId === s.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="email"
+                                      autoFocus
+                                      value={editingEmailValue}
+                                      onChange={e => setEditingEmailValue(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Enter') saveEmail(s.id); if (e.key === 'Escape') setEditingEmailId(null) }}
+                                      className="text-xs bg-gray-800 border border-gray-600 rounded-lg px-2 py-1 text-white w-48 focus:outline-none focus:border-blue-500"
+                                    />
+                                    <button
+                                      onClick={() => saveEmail(s.id)}
+                                      disabled={savingEmailId === s.id}
+                                      className="px-2 py-1 text-xs bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 rounded-lg text-blue-300 transition-colors disabled:opacity-50"
+                                    >
+                                      {savingEmailId === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Сохранить'}
+                                    </button>
+                                    <button onClick={() => setEditingEmailId(null)} className="text-gray-600 hover:text-gray-400">
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-xs text-gray-500">{s.email || 'нет email'}</span>
+                                    <button
+                                      onClick={() => { setEditingEmailId(s.id); setEditingEmailValue(s.email || '') }}
+                                      className="text-gray-700 hover:text-gray-400 transition-colors"
+                                      title="Изменить логин"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )}
                                 {s.role && (
                                   <span className="text-xs px-1.5 py-0.5 bg-gray-800 rounded text-gray-400">
                                     {ROLE_LABELS[s.role as RoleKey] ?? s.role}
