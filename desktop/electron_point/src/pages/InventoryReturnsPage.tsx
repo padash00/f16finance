@@ -86,10 +86,13 @@ export default function InventoryReturnsPage({
     try {
       const data = await api.getPointInventoryReturns(config, session)
       setContext(data)
+      const shiftSales = data.sales.filter(
+        (sale) => sale.sale_date === runtimeShift.date && sale.shift === runtimeShift.shift,
+      )
       const nextSaleId =
-        preserveSaleId && data.sales.some((sale) => sale.id === preserveSaleId)
+        preserveSaleId && shiftSales.some((sale) => sale.id === preserveSaleId)
           ? preserveSaleId
-          : data.sales[0]?.id || ''
+          : shiftSales[0]?.id || ''
       setSelectedSaleId(nextSaleId)
       setCart([])
     } catch (err: any) {
@@ -104,9 +107,17 @@ export default function InventoryReturnsPage({
     void load()
   }, [])
 
+  // Показываем только продажи текущей смены — другой оператор не может делать возврат чужой смены
+  const currentShiftSales = useMemo(
+    () => (context?.sales || []).filter(
+      (sale) => sale.sale_date === runtimeShift.date && sale.shift === runtimeShift.shift,
+    ),
+    [context?.sales, runtimeShift],
+  )
+
   const selectedSale = useMemo(
-    () => (context?.sales || []).find((sale) => sale.id === selectedSaleId) || null,
-    [context?.sales, selectedSaleId],
+    () => currentShiftSales.find((sale) => sale.id === selectedSaleId) || null,
+    [currentShiftSales, selectedSaleId],
   )
 
   const saleItems = useMemo(() => {
@@ -294,7 +305,7 @@ export default function InventoryReturnsPage({
 
   const operatorName = session.operator.full_name || session.operator.name || session.operator.username
   const refund = buildRefundAmounts()
-  const salesCount = useMemo(() => (context?.sales || []).length, [context?.sales])
+  const salesCount = useMemo(() => currentShiftSales.length, [currentShiftSales])
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -348,10 +359,10 @@ export default function InventoryReturnsPage({
               <div className="flex h-24 items-center justify-center">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
-            ) : (context?.sales || []).length === 0 ? (
-              <p className="px-2 py-4 text-center text-xs text-muted-foreground">Нет продаж для возврата</p>
+            ) : currentShiftSales.length === 0 ? (
+              <p className="px-2 py-4 text-center text-xs text-muted-foreground">Нет продаж в этой смене</p>
             ) : (
-              (context?.sales || []).map((sale) => {
+              currentShiftSales.map((sale) => {
                 const saleItemsList = Array.isArray(sale.items) ? sale.items : []
                 const remainingQty = saleItemsList.reduce((sum, line) => sum + Number(line.returnable_qty || 0), 0)
                 const isSelected = sale.id === selectedSaleId

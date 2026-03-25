@@ -490,14 +490,18 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                     <span className="text-sm font-semibold tabular-nums text-destructive-foreground">
                       {formatMoney(debt.total_amount)}
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive-foreground"
-                      onClick={() => setDeleteConfirm(debt.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {debt.operator_id === session.operator.operator_id ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive-foreground"
+                        onClick={() => setDeleteConfirm(debt.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <div className="h-7 w-7" />
+                    )}
                   </div>
                 </div>
               ))}
