@@ -129,6 +129,8 @@ export default function ShiftPage({
 
   const [confirmDialog, setConfirmDialog] = useState(false)
   const [splitDialog, setSplitDialog] = useState(false)
+  const [startCashDialog, setStartCashDialog] = useState(false)
+  const [startCashInput, setStartCashInput] = useState('')
   const [splitAfter, setSplitAfter] = useState({ cash: '', kaspi_pos: '', kaspi_online: '' })
   const [viewMode, setViewMode] = useState<'shift' | 'daily'>('shift')
   const [dailyDate, setDailyDate] = useState(todayISO())
@@ -158,8 +160,12 @@ export default function ShiftPage({
         ...current,
         shift: hour >= 8 && hour < 20 ? 'day' : 'night',
       }))
+      // Показываем запрос мелочи только при свежей смене (нет черновика)
+      if (flags.start_cash_prompt) {
+        setStartCashDialog(true)
+      }
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const timeout = setTimeout(() => localStorage.setItem(DRAFT_KEY, JSON.stringify(form)), 500)
@@ -364,9 +370,13 @@ export default function ShiftPage({
           : '',
       }
       const sendResult = await sendOne(fullForm)
-      setPendingCount(await getPendingCount())
-      setResult(sendResult)
-      if (sendResult === 'success' || sendResult === 'queued') resetForm()
+      if (sendResult === 'success' || sendResult === 'queued') {
+        resetForm()
+        onLogout()
+      } else {
+        setPendingCount(await getPendingCount())
+        setResult(sendResult)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -402,9 +412,12 @@ export default function ShiftPage({
       ]
 
       const sendResult = await sendSplit(fullForm, entries)
-      setPendingCount(await getPendingCount())
-      setResult(sendResult)
       resetForm()
+      onLogout()
+      if (sendResult !== 'success' && sendResult !== 'queued') {
+        setPendingCount(await getPendingCount())
+        setResult(sendResult)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -420,9 +433,12 @@ export default function ShiftPage({
         kaspi_before_midnight: '',
       }
       const sendResult = await sendOne(fullForm)
-      setPendingCount(await getPendingCount())
-      setResult(sendResult)
       resetForm()
+      onLogout()
+      if (sendResult !== 'success' && sendResult !== 'queued') {
+        setPendingCount(await getPendingCount())
+        setResult(sendResult)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -1130,6 +1146,50 @@ export default function ShiftPage({
           </div>
         </div>
       </div>
+
+      {startCashDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <Card className="mx-4 w-full max-w-sm border-primary/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Calculator className="h-4 w-4 text-primary" />
+                Мелочь на начало смены
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Сколько мелочи (разменных монет) находится в кассе на старте смены? Значение подставится в поле «Старт кассы».
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <MoneyInput
+                label="Сумма мелочи"
+                value={startCashInput}
+                onChange={setStartCashInput}
+                labelWidth="w-32"
+              />
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setStartCashDialog(false)}
+                >
+                  Пропустить
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={() => {
+                    if (startCashInput.trim()) {
+                      setField('start', startCashInput)
+                    }
+                    setStartCashDialog(false)
+                  }}
+                >
+                  Подтвердить
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       {confirmDialog ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">

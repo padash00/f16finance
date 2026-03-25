@@ -24,6 +24,7 @@ interface Device {
   feature_flags: {
     kaspi_daily_split: boolean
     debt_report: boolean
+    start_cash_prompt: boolean
   }
   last_seen_at: string | null
 }
@@ -37,6 +38,7 @@ export default function DevicesPage({ config, session }: Props) {
   const [chatIds, setChatIds] = useState<Record<string, string>>({})
   const [kaspiSplitFlags, setKaspiSplitFlags] = useState<Record<string, boolean>>({})
   const [debtScannerFlags, setDebtScannerFlags] = useState<Record<string, boolean>>({})
+  const [startCashPromptFlags, setStartCashPromptFlags] = useState<Record<string, boolean>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -54,6 +56,7 @@ export default function DevicesPage({ config, session }: Props) {
         feature_flags: {
           kaspi_daily_split: d.feature_flags?.kaspi_daily_split === true,
           debt_report: d.feature_flags?.debt_report === true,
+          start_cash_prompt: d.feature_flags?.start_cash_prompt === true,
         },
         last_seen_at: d.last_seen_at || null,
       }))
@@ -62,6 +65,7 @@ export default function DevicesPage({ config, session }: Props) {
       setChatIds(Object.fromEntries(nextDevices.map((device: Device) => [device.id, device.shift_report_chat_id || ''])))
       setKaspiSplitFlags(Object.fromEntries(nextDevices.map((device: Device) => [device.id, device.feature_flags.kaspi_daily_split === true])))
       setDebtScannerFlags(Object.fromEntries(nextDevices.map((device: Device) => [device.id, device.feature_flags.debt_report === true])))
+      setStartCashPromptFlags(Object.fromEntries(nextDevices.map((device: Device) => [device.id, device.feature_flags.start_cash_prompt === true])))
     } catch {
       setDevices([])
       setError('Не удалось загрузить устройства')
@@ -101,6 +105,7 @@ export default function DevicesPage({ config, session }: Props) {
         {
           kaspi_daily_split: kaspiSplitFlags[deviceId] === true,
           debt_report: debtScannerFlags[deviceId] === true,
+          start_cash_prompt: startCashPromptFlags[deviceId] === true,
         },
       )
       setMessage('Настройки устройства сохранены')
@@ -237,6 +242,24 @@ export default function DevicesPage({ config, session }: Props) {
                     <span>
                       Включить сканер долгов для этой точки.
                       Он работает только для режимов <span className="font-medium text-foreground">cash-desk</span>, <span className="font-medium text-foreground">universal</span> и <span className="font-medium text-foreground">debts</span>.
+                    </span>
+                  </label>
+
+                  <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={startCashPromptFlags[device.id] === true}
+                      onChange={(event) =>
+                        setStartCashPromptFlags((prev) => ({
+                          ...prev,
+                          [device.id]: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span>
+                      Запрашивать мелочь на начало смены.
+                      При входе оператора программа покажет диалог «Сколько мелочи в кассе?» и подставит значение в поле <span className="font-medium text-foreground">Старт кассы</span>.
                     </span>
                   </label>
 

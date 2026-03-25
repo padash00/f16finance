@@ -12,6 +12,7 @@ export interface FeatureFlags {
   income_report: boolean
   debt_report: boolean
   kaspi_daily_split: boolean
+  start_cash_prompt: boolean
 }
 
 export interface BootstrapOperator {

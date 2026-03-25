@@ -341,7 +341,7 @@ export async function updateAdminDeviceShiftReportChat(
   password: string,
   deviceId: string,
   shiftReportChatId: string | null,
-  featureFlags?: { kaspi_daily_split?: boolean; debt_report?: boolean },
+  featureFlags?: { kaspi_daily_split?: boolean; debt_report?: boolean; start_cash_prompt?: boolean },
 ) {
   return request<{ ok: boolean; data: { device: unknown } }>(
     config,
