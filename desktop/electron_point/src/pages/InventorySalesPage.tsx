@@ -395,37 +395,20 @@ export default function InventorySalesPage({
     if (!promoCodeInput.trim()) return
     setPromoValidating(true)
     try {
-      const res = await fetch(`${config.apiUrl.replace(/\/$/, '')}/api/admin/discounts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-point-device-token': config.deviceToken,
-        },
-        body: JSON.stringify({
-          action: 'validatePromoCode',
-          promo_code: promoCodeInput.trim(),
-          order_amount: cartTotal,
-        }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json.ok) {
-        toastError(json.error || 'Промокод недействителен')
-        return
-      }
+      const result = await api.validatePromoCode(config, promoCodeInput.trim(), cartTotal)
       setAppliedPromoCode(promoCodeInput.trim())
-      if (json.data.type === 'percent') {
-        setPromoDiscountPercent(json.data.value)
+      if (result.type === 'percent') {
+        setPromoDiscountPercent(result.value)
         setManualDiscountPercent('')
-      } else if (json.data.type === 'fixed') {
+      } else if (result.type === 'fixed') {
         setPromoDiscountPercent(0)
-        setManualDiscountPercent('0')
         // Use fixed amount as manual percent approximation
-        const pct = cartTotal > 0 ? (json.data.value / cartTotal) * 100 : 0
+        const pct = cartTotal > 0 ? (result.value / cartTotal) * 100 : 0
         setManualDiscountPercent(String(Math.round(pct * 10) / 10))
       }
       toastSuccess(`Промокод «${promoCodeInput.trim()}» применён`)
     } catch (err: any) {
-      toastError(err?.message || 'Ошибка проверки промокода')
+      toastError(err?.message || 'Промокод недействителен')
     } finally {
       setPromoValidating(false)
     }

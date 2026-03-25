@@ -229,7 +229,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      webSecurity: false,
+      webSecurity: true,
     },
   })
 
@@ -311,7 +311,9 @@ function readQueue() {
 function writeQueue(items) {
   _queueCache = items
   // persist asynchronously — doesn't block IPC handlers
-  fs.writeFile(queuePath(), JSON.stringify(items, null, 2), 'utf-8', () => {})
+  fs.writeFile(queuePath(), JSON.stringify(items, null, 2), 'utf-8', (err) => {
+    if (err) console.error('[queue] Failed to persist queue:', err.message)
+  })
 }
 
 ipcMain.handle('queue:add', (_, { type, payload, localRef }) => {
@@ -371,7 +373,11 @@ ipcMain.handle('dialog:openFile', async (_, opts = {}) => {
 })
 
 ipcMain.handle('file:readBuffer', (_, filePath) => {
-  return fs.readFileSync(filePath)
+  try {
+    return fs.readFileSync(filePath)
+  } catch (err) {
+    throw new Error(`Не удалось прочитать файл: ${err?.message || String(err)}`)
+  }
 })
 
 // ─── Cache (bootstrap + products для офлайн-режима) ──────────────────────────

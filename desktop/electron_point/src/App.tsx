@@ -278,6 +278,21 @@ export default function App() {
     latestViewRef.current = view
   }, [view])
 
+  // Auto-logout when API returns 401 (session expired)
+  useEffect(() => {
+    function handleUnauthorized() {
+      const current = latestViewRef.current
+      const isInApp = current.screen !== 'booting' && current.screen !== 'setup' && current.screen !== 'login'
+      if (isInApp) {
+        void clearOperatorSession().catch(() => null)
+        showLogin(config)
+      }
+    }
+    window.addEventListener('orda:unauthorized', handleUnauthorized)
+    return () => window.removeEventListener('orda:unauthorized', handleUnauthorized)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config])
+
   useEffect(() => { init() }, [])
 
   useEffect(() => {

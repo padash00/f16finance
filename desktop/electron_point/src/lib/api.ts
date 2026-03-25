@@ -23,6 +23,8 @@ import { parseMoney } from '@/lib/utils'
 
 // ─── Client ───────────────────────────────────────────────────────────────────
 
+const REQUEST_TIMEOUT_MS = 30_000
+
 async function request<T>(
   config: AppConfig,
   method: string,
@@ -37,13 +39,32 @@ async function request<T>(
     ...extraHeaders,
   }
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    })
+  } catch (err: unknown) {
+    clearTimeout(timeoutId)
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Превышено время ожидания (30 с). Проверьте соединение.')
+    }
+    throw err
+  }
+  clearTimeout(timeoutId)
 
   const json = await res.json().catch(() => ({ error: 'Ошибка ответа сервера' }))
+
+  if (res.status === 401) {
+    // Session expired — notify app to re-show login
+    try { window.dispatchEvent(new CustomEvent('orda:unauthorized')) } catch {}
+  }
 
   if (!res.ok) {
     throw new Error(json.error || `HTTP ${res.status}`)
@@ -551,6 +572,24 @@ export async function recordSaleWithCustomer(
     {
       action: 'recordSaleWithCustomer',
       ...payload,
+    },
+  )
+  return data.data
+}
+
+export async function validatePromoCode(
+  config: AppConfig,
+  promoCode: string,
+  orderAmount: number,
+): Promise<{ type: 'percent' | 'fixed'; value: number }> {
+  const data = await request<{ ok: boolean; data: { type: 'percent' | 'fixed'; value: number } }>(
+    config,
+    'POST',
+    '/api/admin/discounts',
+    {
+      action: 'validatePromoCode',
+      promo_code: promoCode,
+      order_amount: orderAmount,
     },
   )
   return data.data
