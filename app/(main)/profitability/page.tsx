@@ -458,10 +458,11 @@ export default function ProfitabilityPage() {
               </div>
               {loading ? <div className="text-sm text-slate-400">Загружаем расчёт прибыли...</div> : selected ? (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     <Card className="border border-white/10 bg-slate-950/60 p-4"><div className="text-xs uppercase tracking-wide text-slate-500">EBITDA</div><div className="mt-2 text-xl font-semibold text-white">{money(selected.ebitda)}</div><div className="mt-1 text-xs text-slate-400">{pct(ebitdaMargin)}</div></Card>
                     <Card className="border border-white/10 bg-slate-950/60 p-4"><div className="text-xs uppercase tracking-wide text-slate-500">Опер. прибыль</div><div className="mt-2 text-xl font-semibold text-white">{money(selected.operatingProfit)}</div><div className="mt-1 text-xs text-slate-400">{selected.label}</div></Card>
                     <Card className="border border-white/10 bg-slate-950/60 p-4"><div className="text-xs uppercase tracking-wide text-slate-500">Чистая прибыль</div><div className="mt-2 text-xl font-semibold text-white">{money(selected.netProfit)}</div><div className="mt-1 text-xs text-slate-400">{pct(netMargin)}</div></Card>
+                    {selected.journalCapex > 0 && <Card className="border border-amber-500/20 bg-amber-500/5 p-4"><div className="text-xs uppercase tracking-wide text-amber-500">FCF (после CAPEX)</div><div className={`mt-2 text-xl font-semibold ${(selected.netProfit - selected.journalCapex) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>{money(selected.netProfit - selected.journalCapex)}</div><div className="mt-1 text-xs text-amber-600">CAPEX {money(selected.journalCapex)}</div></Card>}
                   </div>
                   <div className="overflow-hidden rounded-2xl border border-white/10">
                     <table className="w-full text-sm"><tbody>
@@ -481,6 +482,11 @@ export default function ProfitabilityPage() {
                         ['Налог на прибыль / 3%', -selected.incomeTax],
                         ['Чистая прибыль', selected.netProfit],
                       ].map(([label, value]) => <tr key={String(label)} className="border-b border-white/5 last:border-b-0"><td className="px-4 py-3 text-slate-300">{label}</td><td className={`px-4 py-3 text-right font-medium ${(Number(value) >= 0) ? 'text-emerald-300' : 'text-rose-300'}`}>{money(Number(value))}</td></tr>)}
+                      {selected.journalCapex > 0 && <>
+                        <tr className="border-t-2 border-amber-500/20"><td colSpan={2} className="px-4 py-2 text-xs uppercase tracking-wide text-amber-500/70">Справочно — инвестиции (не в P&L)</td></tr>
+                        <tr className="border-b border-white/5"><td className="px-4 py-3 text-slate-400">CAPEX (покупка активов)</td><td className="px-4 py-3 text-right font-medium text-amber-400">−{money(selected.journalCapex)}</td></tr>
+                        <tr><td className="px-4 py-3 text-slate-300">FCF (свободный денежный поток)</td><td className={`px-4 py-3 text-right font-semibold ${(selected.netProfit - selected.journalCapex) >= 0 ? 'text-amber-300' : 'text-rose-300'}`}>{money(selected.netProfit - selected.journalCapex)}</td></tr>
+                      </>}
                     </tbody></table>
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
