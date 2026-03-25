@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Activity, BellRing, CircleAlert, Download, Loader2, RefreshCw,
+  Activity, BellRing, CircleAlert, Download, Eye, Loader2, RefreshCw,
   Search, ShieldCheck, TrendingUp, TrendingDown, User, Building2,
   Tag, Wallet, CreditCard, Settings, ChevronDown, ChevronUp,
   AlertTriangle, CheckCircle, LogIn, Trash2, Pencil, Plus, FileText,
@@ -69,6 +69,8 @@ const ENTITY_LABELS: Record<string, string> = {
   'operator-company-assignment': 'Назначение в компанию',
   'operator-career': 'Карьера оператора',
   'salary_payment': 'Выплата зарплаты',
+  'visit': 'Посещение',
+  'page-view': 'Просмотр страницы',
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -81,6 +83,8 @@ const ACTION_LABELS: Record<string, string> = {
   login: 'вошёл в систему',
   logout: 'вышел из системы',
   failed: 'неудачная попытка входа',
+  'page-view': 'просмотрел страницу',
+  visit: 'посетил сайт',
 }
 
 function actorName(email: string | null): string {
@@ -96,6 +100,20 @@ function entityLabel(type: string | null): string {
 function actionLabel(action: string | null): string {
   if (!action) return 'действие'
   return ACTION_LABELS[action] || action
+}
+
+const PAGE_LABELS: Record<string, string> = {
+  '': 'Главная',
+  'income': 'Доходы',
+  'expenses': 'Расходы',
+  'reports': 'Отчёты',
+  'profitability': 'Рентабельность',
+  'settings': 'Настройки',
+  'logs': 'Логи',
+  'operators': 'Операторы',
+  'kaspi-terminal': 'Kaspi терминал',
+  'salary': 'Зарплата',
+  'tasks': 'Задачи',
 }
 
 // ─── Human-readable title ────────────────────────────────────────────────────
@@ -208,8 +226,15 @@ function humanTitle(item: LogItem): string {
     if (act === 'delete') return `${who} удалил смену${date ? ` (${date})` : ''}`
   }
 
-  // fallback
-  return `${who} — ${entityLabel(item.entityType)}: ${actionLabel(item.action)}`
+  if (et === 'visit' || et === 'page-view' || act === 'page-view' || act === 'visit') {
+    const rawPage = String(p.path || p.page || p.url || '')
+    const page = rawPage.replace(/^\//, '').split('?')[0]
+    const pageLabel = PAGE_LABELS[page] || (page ? `/${page}` : 'сайт')
+    return `${who} открыл страницу: ${pageLabel}`
+  }
+
+  // fallback — показываем читаемо, без сырых ключей
+  return `${who} — ${entityLabel(item.entityType)}${item.action ? ` (${actionLabel(item.action)})` : ''}`
 }
 
 // ─── Payload summary ─────────────────────────────────────────────────────────
@@ -337,6 +362,7 @@ function entityIcon(entityType: string | null, action: string | null) {
   if (et === 'system-error') return { Icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-500/10' }
   if (et === 'auth-attempt') return { Icon: LogIn, color: 'text-sky-400', bg: 'bg-sky-500/10' }
   if (et === 'task') return { Icon: CheckCircle, color: 'text-indigo-400', bg: 'bg-indigo-500/10' }
+  if (et === 'visit' || et === 'page-view' || act === 'page-view' || act === 'visit') return { Icon: Eye, color: 'text-slate-400', bg: 'bg-slate-500/10' }
   if (act === 'create') return { Icon: Plus, color: 'text-emerald-400', bg: 'bg-emerald-500/10' }
   if (act === 'update') return { Icon: Pencil, color: 'text-amber-400', bg: 'bg-amber-500/10' }
   if (act === 'delete') return { Icon: Trash2, color: 'text-rose-400', bg: 'bg-rose-500/10' }
@@ -364,6 +390,8 @@ const ACTION_BADGE_LABELS: Record<string, string> = {
   logout: 'Выход',
   failed: 'Ошибка',
   error: 'Ошибка',
+  'page-view': 'Просмотр',
+  visit: 'Посещение',
 }
 
 function relativeTime(dateStr: string): string {
