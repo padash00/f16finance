@@ -13,6 +13,7 @@ import {
   Briefcase,
   Building2,
   Boxes,
+  CreditCard,
   CalendarClock,
   CalendarDays,
   CalendarRange,
@@ -114,6 +115,7 @@ const navSections: NavSection[] = [
     icon: PieChart,
     items: [
       { href: '/income', label: 'Доходы', icon: TrendingUp, note: 'Оборот и выручка', badge: '↑23%', badgeColor: 'green' },
+      { href: '/kaspi-terminal', label: 'Kaspi терминал', icon: CreditCard, note: 'Суточные итоги с POS' },
       { href: '/analytics', label: 'Аналитика доходов', icon: BarChart3, note: 'Сравнение точек и тренды' },
       { href: '/expenses', label: 'Расходы', icon: TrendingDown, note: 'Списания и статьи' },
       { href: '/cashflow', label: 'Cash Flow', icon: Wallet, note: 'Движение денег и баланс', badge: 'AI', badgeColor: 'blue', isNew: true },
