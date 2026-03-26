@@ -13,6 +13,7 @@ function normalizeFlags(input: Record<string, unknown> | null | undefined) {
     income_report: input?.income_report !== false,
     debt_report: input?.debt_report === true,
     kaspi_daily_split: input?.kaspi_daily_split === true,
+    start_cash_prompt: input?.start_cash_prompt === true,
   }
 }
 

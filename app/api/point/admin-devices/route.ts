@@ -19,6 +19,7 @@ type Body = {
   feature_flags?: {
     kaspi_daily_split?: boolean
     debt_report?: boolean
+    start_cash_prompt?: boolean
   } | null
 }
 
@@ -28,6 +29,7 @@ function normalizeFlags(input: Record<string, unknown> | null | undefined) {
     income_report: input?.income_report !== false,
     debt_report: input?.debt_report === true,
     kaspi_daily_split: input?.kaspi_daily_split === true,
+    start_cash_prompt: input?.start_cash_prompt === true,
   }
 }
 
@@ -118,6 +120,9 @@ export async function POST(request: Request) {
       }
       if (body.feature_flags && typeof body.feature_flags.debt_report === 'boolean') {
         nextFlags.debt_report = body.feature_flags.debt_report === true
+      }
+      if (body.feature_flags && typeof body.feature_flags.start_cash_prompt === 'boolean') {
+        nextFlags.start_cash_prompt = body.feature_flags.start_cash_prompt === true
       }
 
       const { data, error } = await supabase
