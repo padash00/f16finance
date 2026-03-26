@@ -23,6 +23,7 @@ import {
   Sparkles,
   FileText,
   X,
+  Send,
 } from 'lucide-react'
 import Image from 'next/image'
 
@@ -54,6 +55,8 @@ export default function AccessPage() {
   const [editingLoginId, setEditingLoginId] = useState<string | null>(null)
   const [editingLoginValue, setEditingLoginValue] = useState('')
   const [savingLoginId, setSavingLoginId] = useState<string | null>(null)
+  const [sendingTgId, setSendingTgId] = useState<string | null>(null)
+  const [sentTgIds, setSentTgIds] = useState<Record<string, boolean>>({})
 
   // Загрузка операторов
   useEffect(() => {
@@ -344,6 +347,68 @@ export default function AccessPage() {
     setTimeout(() => setSuccess(null), 3000)
   }
 
+  const sendToTelegram = async (op: Operator, password: string) => {
+    if (!op.telegram_chat_id) {
+      setError(`У ${op.short_name || op.name} не указан Telegram ID`)
+      setTimeout(() => setError(null), 4000)
+      return
+    }
+    setSendingTgId(op.id)
+    try {
+      const res = await fetch('/api/admin/send-operator-credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: op.telegram_chat_id,
+          username: op.username,
+          password,
+          name: op.short_name || op.name,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Ошибка')
+      setSentTgIds(prev => ({ ...prev, [op.id]: true }))
+      setSuccess(`Данные отправлены ${op.short_name || op.name} в Telegram`)
+      setTimeout(() => setSuccess(null), 4000)
+    } catch (err: any) {
+      setError(err.message || 'Не удалось отправить')
+      setTimeout(() => setError(null), 4000)
+    } finally {
+      setSendingTgId(null)
+    }
+  }
+
+  const sendAllToTelegram = async () => {
+    const withPassAndTg = operators.filter(op => newPasswords[op.id] && op.telegram_chat_id)
+    if (withPassAndTg.length === 0) {
+      setError('Сначала сгенерируйте пароли. У операторов без Telegram ID отправка недоступна.')
+      setTimeout(() => setError(null), 5000)
+      return
+    }
+    if (!confirm(`Отправить данные для входа ${withPassAndTg.length} операторам в Telegram?`)) return
+
+    setSendingTgId('all')
+    let ok = 0, fail = 0
+    for (const op of withPassAndTg) {
+      const res = await fetch('/api/admin/send-operator-credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: op.telegram_chat_id,
+          username: op.username,
+          password: newPasswords[op.id],
+          name: op.short_name || op.name,
+        }),
+      })
+      if (res.ok) { ok++; setSentTgIds(prev => ({ ...prev, [op.id]: true })) }
+      else fail++
+      await new Promise(r => setTimeout(r, 300))
+    }
+    setSendingTgId(null)
+    setSuccess(`Отправлено: ${ok}, ошибок: ${fail}`)
+    setTimeout(() => setSuccess(null), 5000)
+  }
+
   const saveLogin = async (operatorId: string) => {
     const newUsername = editingLoginValue.trim().toLowerCase()
     if (!newUsername) return
@@ -453,6 +518,19 @@ export default function AccessPage() {
                 >
                   <Download className="w-4 h-4 mr-2" />
                   Скачать CSV
+                </Button>
+
+                <Button
+                  onClick={sendAllToTelegram}
+                  disabled={sendingTgId === 'all'}
+                  className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-0 shadow-lg shadow-blue-500/25"
+                >
+                  {sendingTgId === 'all' ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4 mr-2" />
+                  )}
+                  Отправить всем в Telegram
                 </Button>
 
                 <Button
@@ -590,9 +668,9 @@ export default function AccessPage() {
                                 {showPasswords[op.id] ? newPassword : '••••••••'}
                               </span>
                               <button
-                                onClick={() => setShowPasswords(prev => ({ 
-                                  ...prev, 
-                                  [op.id]: !prev[op.id] 
+                                onClick={() => setShowPasswords(prev => ({
+                                  ...prev,
+                                  [op.id]: !prev[op.id]
                                 }))}
                                 className="p-1 hover:bg-white/10 rounded-lg transition-colors"
                               >
@@ -600,6 +678,20 @@ export default function AccessPage() {
                                   <EyeOff className="w-4 h-4 text-gray-400" />
                                 ) : (
                                   <Eye className="w-4 h-4 text-gray-400" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => sendToTelegram(op, newPassword)}
+                                disabled={sendingTgId === op.id || !op.telegram_chat_id}
+                                title={op.telegram_chat_id ? 'Отправить в Telegram' : 'Telegram ID не указан'}
+                                className="p-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-40"
+                              >
+                                {sendingTgId === op.id ? (
+                                  <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                                ) : sentTgIds[op.id] ? (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                ) : (
+                                  <Send className="w-4 h-4 text-blue-400" />
                                 )}
                               </button>
                             </div>
