@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requireAdminRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
+import { toOperatorAuthEmail } from '@/lib/core/auth'
 
 export async function POST(request: Request) {
   try {
@@ -34,6 +35,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Такой логин уже занят другим оператором' }, { status: 409 })
     }
 
+    // Получаем user_id из operator_auth чтобы обновить email в Supabase Auth
+    const { data: authRow, error: fetchError } = await supabaseAdmin
+      .from('operator_auth')
+      .select('user_id')
+      .eq('operator_id', operatorId)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+    if (!authRow?.user_id) {
+      return NextResponse.json({ error: 'Аккаунт оператора не найден' }, { status: 404 })
+    }
+
+    // Обновляем email в Supabase Auth (логин → email формат)
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(authRow.user_id, {
+      email: toOperatorAuthEmail(trimmed),
+    })
+    if (authError) throw authError
+
+    // Обновляем username в таблице operator_auth
     const { error } = await supabaseAdmin
       .from('operator_auth')
       .update({ username: trimmed })
