@@ -45,6 +45,12 @@ export async function POST(request: Request) {
       )
     }
 
+    // Помечаем пароль как временный — оператор должен сменить при входе
+    await supabaseAdmin
+      .from('operator_auth')
+      .update({ must_change_password: true })
+      .eq('user_id', userId)
+
     await writeAuditLog(supabaseAdmin, {
       actorUserId: null,
       entityType: 'auth-user',

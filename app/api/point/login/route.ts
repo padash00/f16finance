@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
     const { data: operatorAuth, error: operatorAuthError } = await supabase
       .from('operator_auth')
-      .select('id, user_id, operator_id, username, role, is_active, operator:operator_id(id, name, short_name, telegram_chat_id, is_active, operator_profiles(*))')
+      .select('id, user_id, operator_id, username, role, is_active, must_change_password, operator:operator_id(id, name, short_name, telegram_chat_id, is_active, operator_profiles(*))')
       .eq('user_id', authData.user.id)
       .eq('is_active', true)
       .maybeSingle()
@@ -150,6 +150,7 @@ export async function POST(request: Request) {
 
     return json({
       ok: true,
+      must_change_password: operatorAuth.must_change_password === true,
       operator: {
         auth_id: operatorAuth.id,
         operator_id: operatorAuth.operator_id,
