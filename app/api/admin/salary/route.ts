@@ -61,6 +61,11 @@ type MutationBody =
       weekStart: string
       operatorId: string
     }
+  | {
+      action: 'markDebtsPaid'
+      operatorId: string
+      weekStart: string
+    }
 
 type PaymentSplit = {
   cashAmount: number
@@ -1302,6 +1307,48 @@ export async function POST(req: Request) {
       })
 
       return json({ ok: true, data: { week: weekAfterVoid } })
+    }
+
+    if (body.action === 'markDebtsPaid') {
+      const weekStart2 = normalizeIsoDate(body.weekStart)
+      if (!body.operatorId || !weekStart2) {
+        return json({ error: 'operatorId и weekStart обязательны' }, 400)
+      }
+
+      const { data: activeDebts, error: fetchError } = await supabase
+        .from('debts')
+        .select('id, amount')
+        .eq('operator_id', body.operatorId)
+        .eq('week_start', weekStart2)
+        .eq('status', 'active')
+
+      if (fetchError) throw fetchError
+      if (!activeDebts || activeDebts.length === 0) {
+        return json({ ok: true, data: { marked: 0 } })
+      }
+
+      const ids = activeDebts.map((d: any) => d.id)
+      const { error: updateError } = await supabase
+        .from('debts')
+        .update({ status: 'paid' })
+        .in('id', ids)
+
+      if (updateError) throw updateError
+
+      await writeAuditLog(supabase, {
+        actorUserId: user?.id || null,
+        entityType: 'debt',
+        entityId: ids[0],
+        action: 'mark-paid-bulk',
+        payload: {
+          operator_id: body.operatorId,
+          week_start: weekStart2,
+          count: ids.length,
+          total: activeDebts.reduce((s: number, d: any) => s + Number(d.amount || 0), 0),
+        },
+      })
+
+      return json({ ok: true, data: { marked: ids.length } })
     }
 
     if (!body.operatorId) {

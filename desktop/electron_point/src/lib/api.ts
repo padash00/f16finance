@@ -414,6 +414,21 @@ export async function getPointOperatorCabinet(
   }
 }
 
+export async function markPointDebtPaid(
+  config: AppConfig,
+  session: OperatorSession,
+  debtId: string,
+  adminToken: string,
+): Promise<{ ok: boolean }> {
+  return request(
+    config,
+    'POST',
+    '/api/point/operator-cabinet',
+    { action: 'markDebtPaid', debtId, token: adminToken },
+    operatorHeaders(session),
+  )
+}
+
 export async function getPointInventoryRequests(
   config: AppConfig,
   session: OperatorSession,

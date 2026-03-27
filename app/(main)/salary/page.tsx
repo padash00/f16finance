@@ -134,6 +134,26 @@ export default function SalaryPage() {
   const saveChatId = async (e: FormEvent) => { e.preventDefault(); if (!chatTarget) return; const trimmed = chatValue.trim(); if (trimmed && !/^-?\d+$/.test(trimmed)) return setError('telegram_chat_id должен быть числом'); setChatSaving(true); setError(null); try { await post({ action: 'updateOperatorChatId', operatorId: chatTarget.operator.id, telegram_chat_id: trimmed || null }); setChatTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить Telegram chat_id') } finally { setChatSaving(false) } }
   const sendOne = async (operatorId: string) => { setSendingId(operatorId); setError(null); try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) throw new Error(json?.error || `Ошибка отправки (${res.status})`) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось отправить расчёт в Telegram') } finally { setSendingId(null) } }
   const sendAll = async () => { if (loading || broadcastSending || !broadcastTargets.length) return; setBroadcastSending(true); setBroadcastDone(0); setBroadcastTotal(broadcastTargets.length); setBroadcastErrors([]); setError(null); try { for (let i = 0; i < broadcastTargets.length; i += 1) { const item = broadcastTargets[i]; try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId: item.operator.id, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${json?.error || `HTTP ${res.status}`}`]) } catch (e: any) { setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${e?.message || 'ошибка'}`]) } setBroadcastDone(i + 1); await new Promise((r) => setTimeout(r, 250)) } } finally { setBroadcastSending(false) } }
+  const [markDebtId, setMarkDebtId] = useState<string | null>(null)
+  const [markDebtSaving, setMarkDebtSaving] = useState(false)
+
+  const markDebtsPaid = async (item: WeeklyOperator) => {
+    if (!window.confirm(`Отметить долг ${money(item.week.debtAmount)} оператора ${getOperatorDisplayName(item.operator)} как оплаченный?`)) return
+    setMarkDebtId(item.operator.id)
+    setMarkDebtSaving(true)
+    setError(null)
+    try {
+      await post({ action: 'markDebtsPaid', operatorId: item.operator.id, weekStart })
+      await load(true)
+    } catch (e: any) {
+      console.error(e)
+      setError(e?.message || 'Не удалось отметить долг как оплаченный')
+    } finally {
+      setMarkDebtId(null)
+      setMarkDebtSaving(false)
+    }
+  }
+
   const voidPayment = async (item: WeeklyOperator, payment: Payment) => {
     if (payment.status === 'voided' || voidingPaymentId) return
     const confirmed = window.confirm(`Аннулировать выплату ${money(payment.total_amount)} для ${getOperatorDisplayName(item.operator)}?`)
@@ -307,7 +327,21 @@ export default function SalaryPage() {
                           <td className="px-4 py-4 text-right text-violet-300">{item.week.autoBonusTotal > 0 ? money(item.week.autoBonusTotal) : <span className="text-slate-600">—</span>}</td>
                           <td className="px-4 py-4 text-right text-emerald-300">{money(item.week.bonusAmount)}</td>
                           <td className="px-4 py-4 text-right text-rose-300">{money(item.week.fineAmount)}</td>
-                          <td className="px-4 py-4 text-right text-rose-300">{money(item.week.debtAmount)}</td>
+                          <td className="px-4 py-4 text-right text-rose-300">
+                            <div className="flex flex-col items-end gap-1">
+                              <span>{money(item.week.debtAmount)}</span>
+                              {item.week.debtAmount > 0 ? (
+                                <button
+                                  type="button"
+                                  disabled={markDebtSaving && markDebtId === item.operator.id}
+                                  onClick={() => void markDebtsPaid(item)}
+                                  className="text-[10px] rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50 whitespace-nowrap"
+                                >
+                                  {markDebtSaving && markDebtId === item.operator.id ? '...' : 'Оплатил долг'}
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
                           <td className="px-4 py-4 text-right text-amber-300">{money(item.week.advanceAmount)}</td>
                           <td className="px-4 py-4 text-right text-sky-300">{money(item.week.paidAmount)}</td>
                           <td className="px-4 py-4 text-right text-lg font-semibold text-white">{money(item.week.remainingAmount)}</td>

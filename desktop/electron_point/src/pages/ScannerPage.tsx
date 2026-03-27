@@ -97,12 +97,24 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         setOffline(true)
       }
 
+      const sessionOpEntry = {
+        id: session.operator.operator_id,
+        name: session.operator.name || session.operator.username,
+        short_name: session.operator.short_name || null,
+        full_name: session.operator.full_name || null,
+      }
       if (opsResult.status === 'fulfilled') {
-        setAllOperators(opsResult.value)
+        const ops = opsResult.value
+        const alreadyIn = ops.some(o => o.id === sessionOpEntry.id)
+        setAllOperators(alreadyIn ? ops : [sessionOpEntry, ...ops])
       } else {
-        setAllOperators(bootstrap.operators.map(o => ({
+        const fallback = bootstrap.operators.map(o => ({
           id: o.id, name: o.name, short_name: o.short_name, full_name: o.full_name,
-        })))
+        }))
+        if (!fallback.some(o => o.id === sessionOpEntry.id)) {
+          fallback.unshift(sessionOpEntry)
+        }
+        setAllOperators(fallback)
       }
 
       setDebts(debtsResult.status === 'fulfilled' ? debtsResult.value : [])

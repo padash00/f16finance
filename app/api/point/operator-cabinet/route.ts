@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { requirePointDevice } from '@/lib/server/point-devices'
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { validateAdminToken } from '@/lib/server/admin-tokens'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -150,6 +151,67 @@ export async function GET(request: Request) {
       scope: 'server',
       area: 'api/point/operator-cabinet:get',
       message: error?.message || 'Point operator cabinet GET error',
+    })
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const context = await requirePointOperator(request)
+    if ('response' in context) return context.response
+
+    const { supabase, operator } = context
+    const body = await request.json().catch(() => null)
+    if (!body?.action) return json({ error: 'invalid-action' }, 400)
+
+    const token = String(body.token || '').trim()
+    if (!validateAdminToken(token)) return json({ error: 'admin-token-required' }, 403)
+
+    if (body.action === 'markDebtPaid') {
+      const debtId = String(body.debtId || '').trim()
+      if (!debtId) return json({ error: 'debtId-required' }, 400)
+
+      const { data: debt, error: fetchError } = await supabase
+        .from('debts')
+        .select('id, operator_id, amount, week_start, status')
+        .eq('id', debtId)
+        .eq('operator_id', String(operator.id))
+        .maybeSingle()
+
+      if (fetchError) throw fetchError
+      if (!debt) return json({ error: 'debt-not-found' }, 404)
+      if (debt.status === 'paid') return json({ ok: true, already: true })
+
+      const { error: updateError } = await supabase
+        .from('debts')
+        .update({ status: 'paid' })
+        .eq('id', debtId)
+
+      if (updateError) throw updateError
+
+      await writeAuditLog(supabase, {
+        entityType: 'debt',
+        entityId: debtId,
+        action: 'mark-paid',
+        payload: {
+          operator_id: String(operator.id),
+          week_start: debt.week_start,
+          amount: debt.amount,
+          source: 'point-cabinet',
+          admin_token: token.slice(0, 8) + '…',
+        },
+      })
+
+      return json({ ok: true })
+    }
+
+    return json({ error: 'unknown-action' }, 400)
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/point/operator-cabinet:post',
+      message: error?.message || 'Point operator cabinet POST error',
     })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
