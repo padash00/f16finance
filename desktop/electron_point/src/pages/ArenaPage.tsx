@@ -58,14 +58,9 @@ function StartSessionModal({
   onCancel: () => void
   loading: boolean
 }) {
-  // Show tariffs from same zone first, then others
-  const sorted = [...tariffs].sort((a, b) => {
-    const aMatch = a.zone_id === zoneId
-    const bMatch = b.zone_id === zoneId
-    if (aMatch && !bMatch) return -1
-    if (!aMatch && bMatch) return 1
-    return a.price - b.price
-  })
+  const sorted = tariffs
+    .filter(t => t.zone_id === zoneId)
+    .sort((a, b) => a.price - b.price)
 
   const [selected, setSelected] = useState<string>(sorted[0]?.id ?? '')
 
@@ -106,13 +101,18 @@ function StartSessionModal({
               </span>
             </button>
           ))}
+          {sorted.length === 0 && (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              Нет тарифов для этой зоны. Добавьте тарифы на сайте Orda.
+            </p>
+          )}
         </div>
 
         <div className="flex gap-2">
           <Button
             type="button"
             onClick={() => selected && onConfirm(selected)}
-            disabled={!selected || loading}
+            disabled={!selected || loading || sorted.length === 0}
             className="flex-1"
           >
             {loading ? 'Запускаем...' : 'Запустить'}
@@ -149,13 +149,9 @@ function ManageSessionModal({
 }) {
   const [mode, setMode] = useState<'view' | 'extend'>('view')
 
-  const sorted = [...tariffs].sort((a, b) => {
-    const aMatch = a.zone_id === zoneId
-    const bMatch = b.zone_id === zoneId
-    if (aMatch && !bMatch) return -1
-    if (!aMatch && bMatch) return 1
-    return a.price - b.price
-  })
+  const sorted = tariffs
+    .filter(t => t.zone_id === zoneId)
+    .sort((a, b) => a.price - b.price)
 
   const [selected, setSelected] = useState<string>(sorted[0]?.id ?? '')
   const remainingMs = getRemainingMs(arenaSession.ends_at)
@@ -226,12 +222,17 @@ function ManageSessionModal({
                   </span>
                 </button>
               ))}
+              {sorted.length === 0 && (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  Нет тарифов для этой зоны. Добавьте тарифы на сайте Orda.
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
               <Button
                 type="button"
                 onClick={() => selected && onExtend(selected)}
-                disabled={!selected || loading}
+                disabled={!selected || loading || sorted.length === 0}
                 className="flex-1"
               >
                 {loading ? 'Продлеваем...' : 'Подтвердить'}
@@ -264,72 +265,104 @@ function StationCard({
   onManage: () => void
   tick: number
 }) {
+  void tick
   const occupied = !!activeSession
   const tariff = activeSession?.tariff_id ? tariffs.find((t) => t.id === activeSession.tariff_id) : null
   const remainingMs = activeSession ? getRemainingMs(activeSession.ends_at) : 0
+  const totalMs = tariff ? tariff.duration_minutes * 60_000 : 0
+  const progressPct = occupied && totalMs > 0
+    ? Math.max(0, Math.min(100, (remainingMs / totalMs) * 100))
+    : 0
   const isExpired = occupied && remainingMs <= 0
   const isWarning = occupied && !isExpired && remainingMs < 5 * 60_000
 
-  // Reference tick to force re-render on each second tick
-  void tick
+  const endTime = activeSession
+    ? new Date(activeSession.ends_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    : null
 
   return (
     <div
-      className={`flex flex-col gap-3 rounded-2xl border p-4 transition-all ${
+      className={`relative flex flex-col overflow-hidden rounded-2xl border transition-all duration-300 ${
         !occupied
-          ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/60'
+          ? 'border-emerald-500/20 bg-gradient-to-b from-emerald-500/5 to-transparent hover:border-emerald-500/40 hover:from-emerald-500/10'
           : isExpired
-            ? 'border-destructive/50 bg-destructive/10'
+            ? 'border-destructive/40 bg-gradient-to-b from-destructive/10 to-transparent'
             : isWarning
-              ? 'border-amber-500/50 bg-amber-500/10'
-              : 'border-red-500/40 bg-red-500/8'
+              ? 'border-amber-500/40 bg-gradient-to-b from-amber-500/10 to-transparent'
+              : 'border-red-500/25 bg-gradient-to-b from-red-500/8 to-transparent'
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-semibold text-sm leading-tight">{station.name}</p>
-        {occupied ? (
-          <Badge
-            variant={isExpired ? 'destructive' : isWarning ? 'outline' : 'secondary'}
-            className={`shrink-0 text-xs ${isWarning ? 'border-amber-500 text-amber-500' : ''}`}
-          >
-            {isExpired ? 'Истекло' : isWarning ? '⚠ Скоро' : 'Занято'}
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="shrink-0 border-emerald-500 text-emerald-500 text-xs">
-            Свободно
-          </Badge>
-        )}
-      </div>
-
-      {occupied && activeSession && (
-        <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-          {tariff && <span className="font-medium text-foreground">{tariff.name}</span>}
-          <div className="flex items-center justify-between">
-            <span>
-              до {new Date(activeSession.ends_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-            <span
-              className={`font-bold text-sm tabular-nums ${
-                isExpired ? 'text-destructive' : isWarning ? 'text-amber-500' : 'text-foreground'
-              }`}
-            >
-              {isExpired ? '—' : formatRemaining(remainingMs)}
-            </span>
-          </div>
+      {/* Progress bar at top */}
+      {occupied && totalMs > 0 && (
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/10">
+          <div
+            className={`h-full transition-all duration-1000 ${
+              isWarning ? 'bg-amber-500' : isExpired ? 'bg-destructive' : 'bg-emerald-500'
+            }`}
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
       )}
 
-      <Button
-        type="button"
-        size="sm"
-        variant={occupied ? 'outline' : 'default'}
-        className={`mt-auto w-full ${
-          !occupied ? 'bg-emerald-500 text-white hover:bg-emerald-400 border-none' : ''
-        }`}
-        onClick={occupied ? onManage : onStart}
-      >
-        {occupied ? 'Управление' : 'Запустить'}
-      </Button>
+      <div className="p-4">
+        {/* Station name + status */}
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <p className="font-semibold text-sm leading-snug">{station.name}</p>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              !occupied
+                ? 'bg-emerald-500/15 text-emerald-400'
+                : isExpired
+                  ? 'bg-destructive/20 text-destructive'
+                  : isWarning
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : 'bg-red-500/15 text-red-400'
+            }`}
+          >
+            {!occupied ? 'Свободно' : isExpired ? 'Истекло' : isWarning ? '⚠ Скоро' : 'Занято'}
+          </span>
+        </div>
+
+        {/* Session info */}
+        {occupied && activeSession ? (
+          <div className="mb-4 space-y-2">
+            {tariff && (
+              <p className="text-xs font-medium text-muted-foreground">{tariff.name}</p>
+            )}
+            {/* Big countdown */}
+            <div
+              className={`text-3xl font-bold tabular-nums tracking-tight ${
+                isExpired ? 'text-destructive' : isWarning ? 'text-amber-400' : 'text-foreground'
+              }`}
+            >
+              {isExpired ? '—:——' : formatRemaining(remainingMs)}
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>до {endTime}</span>
+              <span className="font-medium text-foreground">{formatMoney(activeSession.amount)}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-4 h-[72px] flex items-center justify-center">
+            <div className="text-muted-foreground/30">
+              <Monitor className="h-8 w-8" />
+            </div>
+          </div>
+        )}
+
+        {/* Action button */}
+        <button
+          type="button"
+          onClick={occupied ? onManage : onStart}
+          className={`w-full rounded-xl py-2 text-sm font-semibold transition-all ${
+            !occupied
+              ? 'bg-emerald-500 text-white hover:bg-emerald-400 active:scale-95'
+              : 'border border-white/15 bg-white/5 text-foreground hover:bg-white/10 active:scale-95'
+          }`}
+        >
+          {occupied ? 'Управление' : 'Запустить'}
+        </button>
+      </div>
     </div>
   )
 }

@@ -276,18 +276,19 @@ export default function StationsPage() {
   )
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="app-page max-w-5xl space-y-6">
       {/* Header */}
-      <div className="border-b bg-card px-6 py-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/point-devices" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-4 w-4" /> Устройства
+          <Link href="/point-devices" className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground hover:text-foreground transition">
+            <ArrowLeft className="h-5 w-5" />
           </Link>
-          <span className="text-muted-foreground">/</span>
-          <div className="flex items-center gap-2">
-            <Monitor className="h-4 w-4 text-primary" />
-            <span className="font-semibold">{projectName}</span>
-            <span className="text-muted-foreground">— Управление станциями</span>
+          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-3">
+            <Monitor className="h-7 w-7 text-cyan-300" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">{projectName || '...'}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Управление станциями и тарифами</p>
           </div>
         </div>
       </div>
@@ -301,24 +302,22 @@ export default function StationsPage() {
       )}
 
       {/* Tabs */}
-      <div className="border-b bg-card px-6">
-        <div className="flex gap-0">
-          {[
-            { id: 'manage', label: 'Управление', icon: Settings },
-            { id: 'analytics', label: 'Аналитика', icon: BarChart3 },
-          ].map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id as any)}
-              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${activeTab === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-            >
-              <Icon className="h-4 w-4" />{label}
-            </button>
-          ))}
-        </div>
+      <div className="flex gap-0 border-b border-white/10">
+        {[
+          { id: 'manage', label: 'Управление', icon: Settings },
+          { id: 'analytics', label: 'Аналитика', icon: BarChart3 },
+        ].map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id as any)}
+            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${activeTab === id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          >
+            <Icon className="h-4 w-4" />{label}
+          </button>
+        ))}
       </div>
 
-      <div className="p-6 max-w-5xl">
+      <div className="space-y-4">
         {activeTab === 'manage' && (
           <div className="space-y-4">
             {/* Add zone button */}
