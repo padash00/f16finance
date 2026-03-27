@@ -1181,6 +1181,16 @@ export async function POST(req: Request) {
         actorUserId: user?.id || null,
       })
 
+      // Если неделя закрыта полностью — долг уже вычтен из зарплаты, помечаем как оплаченный
+      if (weekAfterPayment.remainingAmount < 0.01) {
+        await supabase
+          .from('debts')
+          .update({ status: 'paid' })
+          .eq('operator_id', body.payload.operator_id)
+          .eq('week_start', weekStart)
+          .eq('status', 'active')
+      }
+
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
         entityType: 'operator-salary-week-payment',
