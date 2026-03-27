@@ -533,10 +533,10 @@ export default function ArenaPage({
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       {/* Drag region */}
-      <div className="h-9 drag-region absolute inset-x-0 top-0 z-10" />
+      <div className="h-9 shrink-0 drag-region bg-card" />
 
       {/* Header */}
-      <header className="relative z-20 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border/60 px-4 pt-9">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
         <div className="flex items-center gap-2 min-w-0">
           <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className="truncate text-sm font-semibold">{bootstrap.device.name}</span>
