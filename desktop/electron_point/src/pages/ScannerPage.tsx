@@ -28,10 +28,11 @@ interface Props {
   onSwitchToShift: () => void
   onSwitchToSale?: () => void
   onSwitchToRequest?: () => void
+  onSwitchToArena?: () => void
   onOpenCabinet?: () => void
 }
 
-export default function ScannerPage({ config, bootstrap, session, isOffline: initOffline, onLogout, onSwitchToShift, onSwitchToSale, onSwitchToRequest, onOpenCabinet }: Props) {
+export default function ScannerPage({ config, bootstrap, session, isOffline: initOffline, onLogout, onSwitchToShift, onSwitchToSale, onSwitchToRequest, onSwitchToArena, onOpenCabinet }: Props) {
   const [products, setProducts] = useState<Product[]>([])
   const [debts, setDebts] = useState<DebtItem[]>([])
   const [allOperators, setAllOperators] = useState<OperatorBasic[]>([])
@@ -227,7 +228,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
   async function handleDeleteConfirmed(itemId: string) {
     setDeleteConfirm(null)
     try {
-      await api.deleteDebt(config, itemId, session.company.id)
+      await api.deleteDebt(config, itemId, session.company.id, session.operator.operator_id)
     } catch {
       await queueDeleteDebt(itemId, session.company.id)
       setPendingCount(await getPendingCount())
@@ -285,9 +286,11 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
             showSale={!!onSwitchToSale}
             showScanner
             showRequest={!!onSwitchToRequest}
+            showArena={!!onSwitchToArena}
             onShift={onSwitchToShift}
             onSale={onSwitchToSale}
             onRequest={onSwitchToRequest}
+            onArena={onSwitchToArena}
             onCabinet={onOpenCabinet}
           />
 

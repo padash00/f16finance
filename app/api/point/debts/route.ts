@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { sendOperatorDebtTelegramSnapshot } from '@/lib/server/services/salary'
 
 type CreateDebtBody = {
@@ -23,6 +24,7 @@ type CreateDebtBody = {
 type DeleteDebtBody = {
   action: 'deleteDebt'
   itemId: string
+  operatorId?: string | null
 }
 
 type Body = CreateDebtBody | DeleteDebtBody
@@ -245,6 +247,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    // Rate limit: 60 debt operations per device per minute
+    const ip = getClientIp(request)
+    const rl = checkRateLimit(`point-debts:${ip}`, 60, 60_000)
+    if (!rl.allowed) {
+      return json({ error: 'too-many-requests' }, 429)
+    }
+
     const point = await requirePointDevice(request)
     if ('response' in point) return point.response
 
@@ -440,6 +449,12 @@ export async function POST(request: Request) {
     if (itemError) throw itemError
     if (!item) return json({ error: 'debt-item-not-found' }, 404)
     if (item.status !== 'active') return json({ error: 'debt-item-already-deleted' }, 409)
+
+    // Проверяем что оператор удаляет только свой долг (если долг привязан к оператору)
+    const requestingOperatorId = (body as DeleteDebtBody).operatorId?.trim() || null
+    if (item.operator_id && requestingOperatorId && item.operator_id !== requestingOperatorId) {
+      return json({ error: 'debt-belongs-to-another-operator' }, 403)
+    }
 
     const commentLine = `[Удалено] ${item.item_name} x${item.quantity} = ${normalizeMoney(item.total_amount)} ₸`
 

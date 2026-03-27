@@ -13,6 +13,7 @@ const InventoryReturnsPage = lazy(() => import('@/pages/InventoryReturnsPage'))
 const ScannerPage = lazy(() => import('@/pages/ScannerPage'))
 const InventoryRequestPage = lazy(() => import('@/pages/InventoryRequestPage'))
 const OperatorCabinetPage = lazy(() => import('@/pages/OperatorCabinetPage'))
+const ArenaPage = lazy(() => import('@/pages/ArenaPage'))
 const SetupPage = lazy(() => import('@/pages/SetupPage'))
 const AdminLayout = lazy(() => import('@/pages/admin/AdminLayout'))
 
@@ -59,6 +60,14 @@ declare global {
   }
 }
 
+function canUseArena(bootstrap: BootstrapData) {
+  return bootstrap.device.feature_flags?.arena_enabled === true
+}
+
+function canUseArenaForSession(session: OperatorSession) {
+  return canUseArena(session.bootstrap)
+}
+
 function canUseScanner(bootstrap: BootstrapData) {
   const flags = bootstrap.device.feature_flags
   const pointMode = String(bootstrap.device.point_mode || '').trim().toLowerCase()
@@ -103,6 +112,7 @@ function getActiveOperatorSession(view: AppView): OperatorSession | null {
     view.screen === 'inventory-return' ||
     view.screen === 'scanner' ||
     view.screen === 'inventory-request' ||
+    view.screen === 'arena' ||
     view.screen === 'operator-cabinet'
   ) {
     return view.session
@@ -280,11 +290,11 @@ export default function App() {
 
   // Auto-logout when API returns 401 (session expired)
   useEffect(() => {
-    function handleUnauthorized() {
+    async function handleUnauthorized() {
       const current = latestViewRef.current
       const isInApp = current.screen !== 'booting' && current.screen !== 'setup' && current.screen !== 'login'
       if (isInApp) {
-        void clearOperatorSession().catch(() => null)
+        await clearOperatorSession().catch(() => null)
         showLogin(config)
       }
     }
@@ -450,7 +460,7 @@ export default function App() {
         id: '',
         name: 'Не настроено',
         point_mode: 'unknown',
-        feature_flags: { shift_report: true, income_report: true, debt_report: false, kaspi_daily_split: false },
+        feature_flags: { shift_report: true, income_report: true, debt_report: false, kaspi_daily_split: false, start_cash_prompt: false, arena_enabled: false },
       },
       company: { id: '', name: '', code: null },
       companies: [],
@@ -521,6 +531,13 @@ export default function App() {
   // ─── Выход ────────────────────────────────────────────────────────────────
   async function handleLogout() {
     await clearOperatorSession().catch(() => null)
+    showLogin(config)
+  }
+
+  async function handleAdminLogout() {
+    if (view.screen === 'admin' && config) {
+      await api.logoutAdmin(config, view.session.token).catch(() => null)
+    }
     showLogin(config)
   }
 
@@ -646,6 +663,7 @@ export default function App() {
         onSwitchToReturn={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-return' }) : undefined}
         onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
         onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
+        onSwitchToArena={canUseArenaForSession(view.session) ? () => setView({ ...view, screen: 'arena' }) : undefined}
         onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
       />,
     )
@@ -694,7 +712,24 @@ export default function App() {
         onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
         onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
         onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
+        onSwitchToArena={canUseArenaForSession(view.session) ? () => setView({ ...view, screen: 'arena' }) : undefined}
         onOpenCabinet={() => handleOpenOperatorCabinet('scanner')}
+      />,
+    )
+  }
+
+  if (view.screen === 'arena') {
+    return withUpdateBanner(
+      <ArenaPage
+        config={config!}
+        bootstrap={view.bootstrap}
+        session={view.session}
+        onLogout={handleLogout}
+        onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
+        onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
+        onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
+        onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
+        onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
       />,
     )
   }
@@ -745,7 +780,7 @@ export default function App() {
         config={config!}
         session={view.session}
         bootstrap={view.bootstrap}
-        onLogout={handleLogout}
+        onLogout={handleAdminLogout}
       />,
     )
   }

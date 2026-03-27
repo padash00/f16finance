@@ -18,6 +18,10 @@ import type {
   PointInventoryReturnContext,
   Customer,
   LoyaltyConfig,
+  ArenaZone,
+  ArenaStation,
+  ArenaTariff,
+  ArenaSession,
 } from '@/types'
 import { parseMoney } from '@/lib/utils'
 
@@ -100,14 +104,28 @@ export async function loginOperator(
   config: AppConfig,
   username: string,
   password: string,
-): Promise<{ operator: OperatorInfo; company: { id: string; name: string; code: string | null }; allCompanies: CompanyOption[] }> {
+): Promise<{ operator: OperatorInfo; company: { id: string; name: string; code: string | null }; allCompanies: CompanyOption[]; must_change_password: boolean }> {
   const data = await request<{
     ok: boolean
+    must_change_password?: boolean
     operator: OperatorInfo
     company: { id: string; name: string; code: string | null }
     allCompanies: CompanyOption[]
   }>(config, 'POST', '/api/point/login', { username, password })
-  return { ...data, allCompanies: data.allCompanies ?? [] }
+  return { ...data, allCompanies: data.allCompanies ?? [], must_change_password: data.must_change_password === true }
+}
+
+export async function changeOperatorPassword(
+  config: AppConfig,
+  username: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await request(config, 'POST', '/api/point/change-password', {
+    username,
+    current_password: currentPassword,
+    new_password: newPassword,
+  })
 }
 
 export async function getAllOperators(config: AppConfig): Promise<OperatorBasic[]> {
@@ -121,8 +139,12 @@ export async function loginAdmin(
   config: AppConfig,
   email: string,
   password: string,
-): Promise<{ ok: boolean; admin: { email: string } }> {
+): Promise<{ ok: boolean; token: string; admin: { email: string } }> {
   return request(config, 'POST', '/api/point/admin-login', { email, password })
+}
+
+export async function logoutAdmin(config: AppConfig, token: string): Promise<void> {
+  await request(config, 'POST', '/api/point/admin-logout', { token }).catch(() => null)
 }
 
 // ─── Shift report ─────────────────────────────────────────────────────────────
@@ -205,14 +227,12 @@ export async function getProducts(config: AppConfig, companyId?: string | null):
 
 export async function createProduct(
   config: AppConfig,
-  email: string,
-  password: string,
+  token: string,
   payload: { name: string; barcode: string; price: number },
 ): Promise<Product> {
   const data = await request<{ ok: boolean; data: Product }>(config, 'POST', '/api/point/products', {
     action: 'createProduct',
-    email,
-    password,
+    token,
     payload,
   })
   return data.data
@@ -220,28 +240,25 @@ export async function createProduct(
 
 export async function importProducts(
   config: AppConfig,
-  email: string,
-  password: string,
+  token: string,
   products: { name: string; barcode: string; price: number }[],
 ): Promise<{ imported: number; skipped: number; failed: number }> {
   const data = await request<{ ok: boolean; data: { imported: number; skipped: number; failed: number } }>(
     config, 'POST', '/api/point/products',
-    { action: 'importProducts', email, password, products },
+    { action: 'importProducts', token, products },
   )
   return data.data
 }
 
 export async function updateProduct(
   config: AppConfig,
-  email: string,
-  password: string,
+  token: string,
   productId: string,
   payload: { name: string; barcode: string; price: number; is_active: boolean },
 ): Promise<Product> {
   const data = await request<{ ok: boolean; data: Product }>(config, 'POST', '/api/point/products', {
     action: 'updateProduct',
-    email,
-    password,
+    token,
     productId,
     payload,
   })
@@ -250,14 +267,12 @@ export async function updateProduct(
 
 export async function deleteProduct(
   config: AppConfig,
-  email: string,
-  password: string,
+  token: string,
   productId: string,
 ): Promise<void> {
   await request(config, 'POST', '/api/point/products', {
     action: 'deleteProduct',
-    email,
-    password,
+    token,
     productId,
   })
 }
@@ -298,21 +313,22 @@ export async function deleteDebt(
   config: AppConfig,
   itemId: string,
   companyId?: string | null,
+  operatorId?: string | null,
 ): Promise<void> {
   await request(config, 'POST', '/api/point/debts', {
     action: 'deleteDebt',
     itemId,
+    operatorId: operatorId || null,
   }, companyHeader(companyId))
 }
 
 // ─── Reports ─────────────────────────────────────────────────────────────────
 // API возвращает все данные устройства без фильтрации — фильтруем на клиенте
 
-export async function getReports(config: AppConfig, adminCredentials?: { email: string; password: string }) {
+export async function getReports(config: AppConfig, adminToken?: string) {
   const extraHeaders: Record<string, string> = {}
-  if (adminCredentials) {
-    extraHeaders['x-admin-email'] = adminCredentials.email
-    extraHeaders['x-admin-password'] = adminCredentials.password
+  if (adminToken) {
+    extraHeaders['x-admin-token'] = adminToken
   }
   return request<{
     ok: boolean
@@ -329,16 +345,15 @@ export async function getReports(config: AppConfig, adminCredentials?: { email: 
 // ─── Admin devices ────────────────────────────────────────────────────────────
 // Требует POST с email + password (super admin credentials)
 
-export async function getAdminDevices(config: AppConfig, email: string, password: string) {
+export async function getAdminDevices(config: AppConfig, token: string) {
   return request<{ ok: boolean; data: { devices: unknown[] } }>(
-    config, 'POST', '/api/point/admin-devices', { email, password },
+    config, 'POST', '/api/point/admin-devices', { token },
   )
 }
 
 export async function updateAdminDeviceShiftReportChat(
   config: AppConfig,
-  email: string,
-  password: string,
+  token: string,
   deviceId: string,
   shiftReportChatId: string | null,
   featureFlags?: { kaspi_daily_split?: boolean; debt_report?: boolean; start_cash_prompt?: boolean },
@@ -348,8 +363,7 @@ export async function updateAdminDeviceShiftReportChat(
     'POST',
     '/api/point/admin-devices',
     {
-      email,
-      password,
+      token,
       action: 'updateDeviceSettings',
       deviceId,
       shift_report_chat_id: shiftReportChatId,
@@ -593,6 +607,79 @@ export async function validatePromoCode(
     },
   )
   return data.data
+}
+
+// ─── Arena ────────────────────────────────────────────────────────────────────
+
+export async function getArena(
+  config: AppConfig,
+  session: OperatorSession,
+): Promise<{ zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[] }> {
+  const data = await request<{
+    ok: boolean
+    data: { zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[] }
+  }>(config, 'GET', '/api/point/arena', undefined, operatorHeaders(session))
+  return data.data
+}
+
+export async function startArenaSession(
+  config: AppConfig,
+  session: OperatorSession,
+  payload: { stationId: string; tariffId: string; operatorId?: string | null },
+): Promise<ArenaSession> {
+  const data = await request<{ ok: boolean; data: ArenaSession }>(
+    config,
+    'POST',
+    '/api/point/arena',
+    { action: 'startSession', ...payload },
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
+export async function endArenaSession(
+  config: AppConfig,
+  session: OperatorSession,
+  sessionId: string,
+): Promise<ArenaSession> {
+  const data = await request<{ ok: boolean; data: ArenaSession }>(
+    config,
+    'POST',
+    '/api/point/arena',
+    { action: 'endSession', sessionId },
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
+export async function extendArenaSession(
+  config: AppConfig,
+  session: OperatorSession,
+  sessionId: string,
+  tariffId: string,
+): Promise<ArenaSession> {
+  const data = await request<{ ok: boolean; data: ArenaSession }>(
+    config,
+    'POST',
+    '/api/point/arena',
+    { action: 'extendSession', sessionId, tariffId },
+    operatorHeaders(session),
+  )
+  return data.data
+}
+
+export async function notifyArena5min(
+  config: AppConfig,
+  session: OperatorSession,
+  sessionId: string,
+): Promise<void> {
+  await request(
+    config,
+    'POST',
+    '/api/point/arena',
+    { action: 'notify5min', sessionId, operatorId: session.operator.operator_id },
+    operatorHeaders(session),
+  ).catch(() => null)
 }
 
 export async function createPointInventoryReturn(

@@ -40,8 +40,7 @@ export default function DebtHistoryPage({ config, session }: Props) {
   async function load() {
     setLoading(true)
     try {
-      const adminCreds = session ? { email: session.email, password: session.password } : undefined
-      const data = await api.getReports(config, adminCreds)
+      const data = await api.getReports(config, session?.token)
       const debts = (data.data.debt_history as any[] || []).map(r => ({
         id: r.id || String(Math.random()),
         debtor_name: r.debtor_name || '—',

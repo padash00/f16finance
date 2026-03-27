@@ -13,6 +13,7 @@ import {
   EyeOff,
   FolderOpen,
   Loader2,
+  Monitor,
   Pencil,
   Plus,
   Power,
@@ -34,6 +35,7 @@ type PointFeatureFlags = {
   income_report: boolean
   debt_report: boolean
   kaspi_daily_split: boolean
+  arena_enabled: boolean
 }
 
 type CompanyAssignment = {
@@ -88,6 +90,7 @@ const DEFAULT_FLAGS: PointFeatureFlags = {
   income_report: true,
   debt_report: false,
   kaspi_daily_split: false,
+  arena_enabled: false,
 }
 
 const DEFAULT_FORM: ProjectForm = {
@@ -353,6 +356,7 @@ function ProjectFormPanel({
           ['shift_report', 'Сменные отчёты', 'Форма смены: наличные, Kaspi, итоги → Telegram и salary.'],
           ['income_report', 'Доходы', 'Отдельная форма доходов. Зарезервировано.'],
           ['debt_report', 'Долги и сканер', 'По умолчанию для точек без своей настройки.'],
+          ['arena_enabled', 'Арена / Станции', 'Управление игровыми станциями, тарифами и таймером сессий.'],
         ] as [string, string, string][]).map(([key, label, hint]) => (
           <label
             key={key}
@@ -501,6 +505,7 @@ export default function PointDevicesPage() {
         income_report: project.feature_flags.income_report !== false,
         debt_report: project.feature_flags.debt_report === true,
         kaspi_daily_split: project.feature_flags.kaspi_daily_split === true,
+        arena_enabled: project.feature_flags.arena_enabled === true,
       },
     })
   }
@@ -688,6 +693,14 @@ export default function PointDevicesPage() {
                           <Pencil className="h-4 w-4" />
                           Изменить
                         </Button>
+                        {project.feature_flags.arena_enabled ? (
+                          <Button size="sm" variant="outline" asChild className="gap-2">
+                            <a href={`/stations/${project.id}`}>
+                              <Monitor className="h-4 w-4" />
+                              Станции
+                            </a>
+                          </Button>
+                        ) : null}
                         <Button size="sm" variant="outline" onClick={() => handleRotate(project.id)} className="gap-2">
                           <RefreshCw className="h-4 w-4" />
                           Новый token

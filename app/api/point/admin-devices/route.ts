@@ -1,8 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-import { isAdminEmail } from '@/lib/server/admin'
-import { requiredEnv } from '@/lib/server/env'
+import { validateAdminToken } from '@/lib/server/admin-tokens'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -11,8 +9,7 @@ function json(data: unknown, status = 200) {
 }
 
 type Body = {
-  email?: string
-  password?: string
+  token?: string
   action?: 'updateShiftReportChatId' | 'updateDeviceSettings'
   deviceId?: string
   shift_report_chat_id?: string | null
@@ -42,24 +39,9 @@ function normalizeShiftReportChatId(value: string | null | undefined) {
   return chatId
 }
 
-async function requireSuperAdmin(email: string, password: string) {
-  const authClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || requiredEnv('SUPABASE_URL'),
-    requiredEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    },
-  )
-
-  const { data, error } = await authClient.auth.signInWithPassword({ email, password })
-
-  if (error || !data.user) throw new Error('invalid-credentials')
-  if (!isAdminEmail(data.user.email)) throw new Error('super-admin-only')
-
-  await authClient.auth.signOut().catch(() => null)
+function requireSuperAdmin(token: string): void {
+  const email = validateAdminToken(token)
+  if (!email) throw new Error('invalid-or-expired-token')
 }
 
 const PROJECT_SELECT = 'id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, last_seen_at, created_at, updated_at, point_project_companies(company_id, company:company_id(id, name, code))'
@@ -92,13 +74,11 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json().catch(() => null)) as Body | null
-    const email = String(body?.email || '').trim().toLowerCase()
-    const password = String(body?.password || '').trim()
+    const token = String(body?.token || '').trim()
 
-    if (!email) return json({ error: 'email-required' }, 400)
-    if (!password) return json({ error: 'password-required' }, 400)
+    if (!token) return json({ error: 'token-required' }, 400)
 
-    await requireSuperAdmin(email, password)
+    requireSuperAdmin(token)
 
     const supabase = createAdminSupabaseClient()
 

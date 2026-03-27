@@ -44,7 +44,7 @@ export default function DevicesPage({ config, session }: Props) {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.getAdminDevices(config, session.email, session.password)
+      const data = await api.getAdminDevices(config, session.token)
       const nextDevices = (data.data.devices as any[]).map((d) => ({
         id: d.id,
         name: d.name,
@@ -72,7 +72,7 @@ export default function DevicesPage({ config, session }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [config, session.email, session.password])
+  }, [config, session.token])
 
   useEffect(() => {
     void load()
@@ -98,8 +98,7 @@ export default function DevicesPage({ config, session }: Props) {
     try {
       await api.updateAdminDeviceShiftReportChat(
         config,
-        session.email,
-        session.password,
+        session.token,
         deviceId,
         chatIds[deviceId]?.trim() || null,
         {

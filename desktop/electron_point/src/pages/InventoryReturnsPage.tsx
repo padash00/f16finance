@@ -370,7 +370,10 @@ export default function InventoryReturnsPage({
                   <button
                     key={sale.id}
                     type="button"
-                    onClick={() => { setSelectedSaleId(sale.id); setCart([]); setSearch('') }}
+                    onClick={() => {
+                      if (cart.length > 0 && !window.confirm('В корзине есть товары для возврата. Переключить продажу и очистить корзину?')) return
+                      setSelectedSaleId(sale.id); setCart([]); setSearch('')
+                    }}
                     className={`w-full rounded-xl border p-2.5 text-left transition ${
                       isSelected
                         ? 'border-amber-400/50 bg-amber-500/10'

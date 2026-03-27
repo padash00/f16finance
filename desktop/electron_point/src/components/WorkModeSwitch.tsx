@@ -1,8 +1,8 @@
-import { ClipboardList, ReceiptText, RotateCcw, ScanBarcode, ShoppingBasket, UserCircle2 } from 'lucide-react'
+import { ClipboardList, Monitor, ReceiptText, RotateCcw, ScanBarcode, ShoppingBasket, UserCircle2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 
-type WorkMode = 'shift' | 'sale' | 'return' | 'scanner' | 'request' | 'cabinet'
+type WorkMode = 'shift' | 'sale' | 'return' | 'scanner' | 'request' | 'cabinet' | 'arena'
 
 interface Props {
   active: WorkMode
@@ -10,12 +10,14 @@ interface Props {
   showReturn?: boolean
   showScanner?: boolean
   showRequest?: boolean
+  showArena?: boolean
   onShift?: () => void
   onSale?: () => void
   onReturn?: () => void
   onScanner?: () => void
   onRequest?: () => void
   onCabinet?: () => void
+  onArena?: () => void
 }
 
 function itemClass(active: boolean) {
@@ -30,12 +32,14 @@ export default function WorkModeSwitch({
   showReturn,
   showScanner,
   showRequest,
+  showArena,
   onShift,
   onSale,
   onReturn,
   onScanner,
   onRequest,
   onCabinet,
+  onArena,
 }: Props) {
   return (
     <div className="inline-flex items-center rounded-xl border border-white/10 bg-muted/40 p-1 no-drag">
@@ -104,6 +108,20 @@ export default function WorkModeSwitch({
           className={`rounded-lg px-2.5 ${itemClass(active === 'request')}`}
         >
           <ClipboardList className="h-4 w-4" />
+        </Button>
+      ) : null}
+
+      {showArena ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          title="Зал"
+          onClick={onArena}
+          disabled={!onArena || active === 'arena'}
+          className={`rounded-lg px-2.5 ${itemClass(active === 'arena')}`}
+        >
+          <Monitor className="h-4 w-4" />
         </Button>
       ) : null}
 

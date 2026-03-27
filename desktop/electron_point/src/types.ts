@@ -13,6 +13,7 @@ export interface FeatureFlags {
   debt_report: boolean
   kaspi_daily_split: boolean
   start_cash_prompt: boolean
+  arena_enabled: boolean
 }
 
 export interface BootstrapOperator {
@@ -66,7 +67,7 @@ export interface OperatorSession {
 export interface AdminSession {
   type: 'admin'
   email: string
-  password: string
+  token: string
   bootstrap?: BootstrapData
 }
 
@@ -98,6 +99,7 @@ export type AppView =
   | { screen: 'inventory-return'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'scanner'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'inventory-request'; bootstrap: BootstrapData; session: OperatorSession }
+  | { screen: 'arena'; bootstrap: BootstrapData; session: OperatorSession }
   | { screen: 'operator-cabinet'; bootstrap: BootstrapData; session: OperatorSession; returnTo: 'shift' | 'sale' | 'return' | 'scanner' }
   | { screen: 'admin'; session: AdminSession; bootstrap?: BootstrapData }
 
@@ -386,4 +388,45 @@ export interface LoyaltyConfig {
   min_points_to_redeem: number
   max_redeem_percent: number
   is_active: boolean
+}
+
+// Arena
+
+export interface ArenaZone {
+  id: string
+  point_project_id: string
+  name: string
+  is_active: boolean
+}
+
+export interface ArenaStation {
+  id: string
+  point_project_id: string
+  zone_id: string | null
+  name: string
+  order_index: number
+  is_active: boolean
+}
+
+export interface ArenaTariff {
+  id: string
+  point_project_id: string
+  zone_id: string | null
+  name: string
+  duration_minutes: number
+  price: number
+  is_active: boolean
+}
+
+export interface ArenaSession {
+  id: string
+  point_project_id: string
+  station_id: string
+  tariff_id: string | null
+  operator_id: string | null
+  started_at: string
+  ends_at: string
+  ended_at: string | null
+  amount: number
+  status: 'active' | 'completed'
 }

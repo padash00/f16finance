@@ -9,6 +9,7 @@ type PointFeatureFlags = {
   income_report: boolean
   debt_report: boolean
   kaspi_daily_split: boolean
+  arena_enabled: boolean
 }
 
 type CompanyAssignment = {
@@ -69,6 +70,7 @@ function normalizeFlags(input: Partial<PointFeatureFlags> | null | undefined): P
     income_report: input?.income_report !== false,
     debt_report: input?.debt_report === true,
     kaspi_daily_split: input?.kaspi_daily_split === true,
+    arena_enabled: input?.arena_enabled === true,
   }
 }
 

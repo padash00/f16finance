@@ -46,7 +46,7 @@ export default function ProductsPage({ config, session }: Props) {
   async function handleDelete(product: Product) {
     if (!confirm(`Удалить товар "${product.name}"?`)) return
     try {
-      await api.deleteProduct(config, session.email, session.password, product.id)
+      await api.deleteProduct(config, session.token, product.id)
       setProducts(prev => prev.filter(p => p.id !== product.id))
       showFlash('ok', 'Товар удалён')
     } catch (err: unknown) {
@@ -95,7 +95,7 @@ export default function ProductsPage({ config, session }: Props) {
       // Пробуем batch-импорт (один auth на всё)
       try {
         setImportStatus(`Отправляю ${products.length} товаров...`)
-        const result = await api.importProducts(config, session.email, session.password, products)
+        const result = await api.importProducts(config, session.token, products)
         const parts = [`Добавлено: ${result.imported}`]
         if (result.skipped > 0) parts.push(`дублей пропущено: ${result.skipped}`)
         if (result.failed > 0) parts.push(`ошибок: ${result.failed}`)
@@ -107,7 +107,7 @@ export default function ProductsPage({ config, session }: Props) {
           const p = products[i]
           setImportStatus(`Загружаю ${i + 1} / ${products.length}...`)
           try {
-            await api.createProduct(config, session.email, session.password, p)
+            await api.createProduct(config, session.token, p)
             imported++
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : ''
@@ -293,11 +293,11 @@ function ProductDialog({
     setSaving(true)
     try {
       if (product) {
-        await api.updateProduct(config, session.email, session.password, product.id, {
+        await api.updateProduct(config, session.token, product.id, {
           name: name.trim(), barcode: barcode.trim(), price: priceNum, is_active: isActive,
         })
       } else {
-        await api.createProduct(config, session.email, session.password, {
+        await api.createProduct(config, session.token, {
           name: name.trim(), barcode: barcode.trim(), price: priceNum,
         })
       }

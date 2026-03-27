@@ -50,6 +50,14 @@ export default function LoginPage({
   const [setupLoading, setSetupLoading] = useState(false)
   const [setupError, setSetupError] = useState<string | null>(null)
 
+  // Смена временного пароля
+  const [changePassData, setChangePassData] = useState<{ operator: any; company: any; allCompanies: any[]; username: string; tempPassword: string } | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [newPassword2, setNewPassword2] = useState('')
+  const [showNewPass, setShowNewPass] = useState(false)
+  const [changingPass, setChangingPass] = useState(false)
+  const [changePassError, setChangePassError] = useState<string | null>(null)
+
   useEffect(() => {
     window.electron.app.version().then(setAppVersion).catch(() => {})
   }, [])
@@ -80,7 +88,11 @@ export default function LoginPage({
           return
         }
 
-        const { operator, company, allCompanies } = await api.loginOperator(config, username.trim(), password)
+        const { operator, company, allCompanies, must_change_password } = await api.loginOperator(config, username.trim(), password)
+        if (must_change_password) {
+          setChangePassData({ operator, company, allCompanies, username: username.trim(), tempPassword: password })
+          return
+        }
         onOperatorLogin({ type: 'operator', operator, company, bootstrap }, allCompanies)
         return
       }
@@ -97,8 +109,8 @@ export default function LoginPage({
         return
       }
 
-      await api.loginAdmin(config, email.trim(), password)
-      onAdminLogin({ type: 'admin', email: email.trim(), password, bootstrap })
+      const adminResult = await api.loginAdmin(config, email.trim(), password)
+      onAdminLogin({ type: 'admin', email: email.trim(), token: adminResult.token, bootstrap })
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Ошибка входа.'
       setError(errorMessages[message] || message)
@@ -139,6 +151,84 @@ export default function LoginPage({
     } finally {
       setSetupLoading(false)
     }
+  }
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (!changePassData) return
+    setChangePassError(null)
+    if (newPassword.length < 6) { setChangePassError('Пароль должен быть не менее 6 символов'); return }
+    if (newPassword !== newPassword2) { setChangePassError('Пароли не совпадают'); return }
+    setChangingPass(true)
+    try {
+      await api.changeOperatorPassword(config, changePassData.username, changePassData.tempPassword, newPassword)
+      const { operator, company, allCompanies } = changePassData
+      onOperatorLogin({ type: 'operator', operator, company, bootstrap }, allCompanies)
+    } catch (err: unknown) {
+      setChangePassError(err instanceof Error ? err.message : 'Ошибка смены пароля')
+    } finally {
+      setChangingPass(false)
+    }
+  }
+
+  if (changePassData) {
+    return (
+      <div className="flex h-screen flex-col bg-background">
+        <div className="h-9 drag-region" />
+        <div className="flex flex-1 items-center justify-center p-6">
+          <div className="w-full max-w-sm space-y-6">
+            <div className="space-y-2 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500">
+                <KeyRound className="h-6 w-6 text-white" />
+              </div>
+              <h1 className="mt-3 text-xl font-bold">Смена пароля</h1>
+              <p className="text-xs text-muted-foreground">
+                Вы вошли с временным паролем. Придумайте постоянный пароль.
+              </p>
+            </div>
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              {changePassError && (
+                <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-400">
+                  {changePassError}
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Новый пароль</Label>
+                <div className="relative">
+                  <Input
+                    type={showNewPass ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="Минимум 6 символов"
+                    disabled={changingPass}
+                    autoFocus
+                    className="no-drag pr-10"
+                  />
+                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowNewPass(v => !v)}>
+                    {showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Повторите пароль</Label>
+                <Input
+                  type={showNewPass ? 'text' : 'password'}
+                  value={newPassword2}
+                  onChange={e => setNewPassword2(e.target.value)}
+                  placeholder="Повторите новый пароль"
+                  disabled={changingPass}
+                  className="no-drag"
+                />
+              </div>
+              <Button type="submit" className="w-full gap-2 no-drag" disabled={changingPass}>
+                {changingPass ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" /> : <Shield className="h-4 w-4" />}
+                Сохранить пароль и войти
+              </Button>
+            </form>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

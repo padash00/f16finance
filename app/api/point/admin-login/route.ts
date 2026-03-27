@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 import { isAdminEmail } from '@/lib/server/admin'
+import { createAdminToken } from '@/lib/server/admin-tokens'
 import { requiredEnv } from '@/lib/server/env'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
@@ -58,8 +59,11 @@ export async function POST(request: Request) {
 
     await authClient.auth.signOut().catch(() => null)
 
+    const token = createAdminToken(email)
+
     return json({
       ok: true,
+      token,
       admin: {
         email,
       },

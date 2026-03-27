@@ -1,8 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-import { isAdminEmail } from '@/lib/server/admin'
-import { requiredEnv } from '@/lib/server/env'
+import { validateAdminToken } from '@/lib/server/admin-tokens'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -11,21 +9,8 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-async function checkSuperAdmin(email: string, password: string): Promise<boolean> {
-  try {
-    const authClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || requiredEnv('SUPABASE_URL'),
-      requiredEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
-      { auth: { autoRefreshToken: false, persistSession: false } },
-    )
-    const { data, error } = await authClient.auth.signInWithPassword({ email, password })
-    if (error || !data.user) return false
-    const ok = isAdminEmail(data.user.email)
-    await authClient.auth.signOut().catch(() => null)
-    return ok
-  } catch {
-    return false
-  }
+function checkSuperAdmin(token: string): boolean {
+  return validateAdminToken(token) !== null
 }
 
 function extractBarcode(comment: string | null | undefined) {
@@ -42,12 +27,9 @@ export async function GET(request: Request) {
 
     const { supabase: deviceSupabase, device } = point
 
-    // Суперадмин может передать credentials через заголовки для получения данных ВСЕХ точек
-    const adminEmail = request.headers.get('x-admin-email') || ''
-    const adminPassword = request.headers.get('x-admin-password') || ''
-    const isSuperAdmin = adminEmail && adminPassword
-      ? await checkSuperAdmin(adminEmail, adminPassword)
-      : false
+    // Суперадмин может передать токен через заголовок для получения данных ВСЕХ точек
+    const adminToken = request.headers.get('x-admin-token') || ''
+    const isSuperAdmin = adminToken ? checkSuperAdmin(adminToken) : false
 
     const supabase = isSuperAdmin ? createAdminSupabaseClient() : deviceSupabase
 

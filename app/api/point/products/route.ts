@@ -1,9 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { isAdminEmail } from '@/lib/server/admin'
-import { requiredEnv } from '@/lib/server/env'
+import { validateAdminToken } from '@/lib/server/admin-tokens'
 import { requirePointDevice } from '@/lib/server/point-devices'
 
 type ProductPayload = {
@@ -16,27 +14,23 @@ type ProductPayload = {
 type Body =
   | {
       action: 'createProduct'
-      email?: string
-      password?: string
+      token?: string
       payload?: ProductPayload | null
     }
   | {
       action: 'updateProduct'
-      email?: string
-      password?: string
+      token?: string
       productId?: string
       payload?: ProductPayload | null
     }
   | {
       action: 'deleteProduct'
-      email?: string
-      password?: string
+      token?: string
       productId?: string
     }
   | {
       action: 'importProducts'
-      email?: string
-      password?: string
+      token?: string
       products?: ProductPayload[]
     }
 
@@ -95,33 +89,9 @@ async function ensureCompanyPointProductsFromInventory(params: {
   if (error) throw error
 }
 
-async function requireSuperAdmin(email: string, password: string) {
-  const authClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || requiredEnv('SUPABASE_URL'),
-    requiredEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    },
-  )
-
-  const { data, error } = await authClient.auth.signInWithPassword({
-    email,
-    password,
-  })
-
-  if (error || !data.user) {
-    throw new Error('invalid-credentials')
-  }
-
-  if (!isAdminEmail(data.user.email)) {
-    await authClient.auth.signOut().catch(() => null)
-    throw new Error('super-admin-only')
-  }
-
-  await authClient.auth.signOut().catch(() => null)
+function requireSuperAdmin(token: string): void {
+  const email = validateAdminToken(token)
+  if (!email) throw new Error('invalid-or-expired-token')
 }
 
 export async function GET(request: Request) {
@@ -168,14 +138,10 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as Body | null
     if (!body?.action) return json({ error: 'invalid-action' }, 400)
 
-    const email = String((body as any).email || '')
-      .trim()
-      .toLowerCase()
-    const password = String((body as any).password || '').trim()
-    if (!email) return json({ error: 'email-required' }, 400)
-    if (!password) return json({ error: 'password-required' }, 400)
+    const token = String((body as any).token || '').trim()
+    if (!token) return json({ error: 'token-required' }, 400)
 
-    await requireSuperAdmin(email, password)
+    requireSuperAdmin(token)
 
     if (body.action === 'createProduct') {
       const name = String(body.payload?.name || '').trim()

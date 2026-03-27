@@ -50,6 +50,7 @@ interface Props {
   onSwitchToReturn?: () => void
   onSwitchToScanner?: () => void
   onSwitchToRequest?: () => void
+  onSwitchToArena?: () => void
   onOpenCabinet?: () => void
 }
 
@@ -100,8 +101,10 @@ export default function ShiftPage({
   onSwitchToReturn,
   onSwitchToScanner,
   onSwitchToRequest,
+  onSwitchToArena,
   onOpenCabinet,
 }: Props) {
+  const [draftLost, setDraftLost] = useState(false)
   const [form, setForm] = useState<ShiftForm>(() => {
     try {
       const saved = localStorage.getItem(DRAFT_KEY)
@@ -115,7 +118,11 @@ export default function ShiftPage({
           }
         }
       }
-    } catch {}
+    } catch {
+      // Черновик повреждён — удаляем, покажем предупреждение через useEffect
+      localStorage.removeItem(DRAFT_KEY)
+      setTimeout(() => setDraftLost(true), 0)
+    }
     localStorage.removeItem(DRAFT_KEY)
     return emptyForm()
   })
@@ -129,7 +136,23 @@ export default function ShiftPage({
 
   const [confirmDialog, setConfirmDialog] = useState(false)
   const [splitDialog, setSplitDialog] = useState(false)
-  const [startCashDialog, setStartCashDialog] = useState(false)
+  const startCashSessionKey = `start_cash_prompted_${session.operator.operator_id}`
+  const [startCashDialog, setStartCashDialog] = useState(() => {
+    if (!bootstrap.device.feature_flags?.start_cash_prompt) return false
+    // Already dismissed this session (skip or confirm)
+    if (sessionStorage.getItem(`start_cash_prompted_${session.operator.operator_id}`)) return false
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if ('kaspi_online' in parsed) {
+          const hasMeaningful = !!(parsed.cash || parsed.coins || parsed.kaspi_pos || parsed.kaspi_online || parsed.debts || parsed.start || parsed.wipon || parsed.comment)
+          return !hasMeaningful
+        }
+      }
+    } catch {}
+    return true
+  })
   const [startCashInput, setStartCashInput] = useState('')
   const [splitAfter, setSplitAfter] = useState({ cash: '', kaspi_pos: '', kaspi_online: '' })
   const [viewMode, setViewMode] = useState<'shift' | 'daily'>('shift')
@@ -153,17 +176,17 @@ export default function ShiftPage({
   const kaspiLabel = isArena ? 'Kaspi POS' : 'Kaspi'
 
   useEffect(() => {
-    const hasDraft = !!localStorage.getItem(DRAFT_KEY)
-    if (!hasDraft) {
+    // Устанавливаем время смены только при свежей форме (нет значимого черновика)
+    const hasMeaningfulDraft = !!(
+      form.cash || form.coins || form.kaspi_pos || form.kaspi_online ||
+      form.debts || form.start || form.wipon || form.comment
+    )
+    if (!hasMeaningfulDraft) {
       const hour = new Date().getHours()
       setForm((current) => ({
         ...current,
         shift: hour >= 8 && hour < 20 ? 'day' : 'night',
       }))
-      // Показываем запрос мелочи только при свежей смене (нет черновика)
-      if (flags.start_cash_prompt) {
-        setStartCashDialog(true)
-      }
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -286,8 +309,14 @@ export default function ShiftPage({
     setError(null)
   }
 
+  function dismissStartCashDialog() {
+    sessionStorage.setItem(startCashSessionKey, '1')
+    setStartCashDialog(false)
+  }
+
   function resetForm() {
     localStorage.removeItem(DRAFT_KEY)
+    sessionStorage.removeItem(startCashSessionKey)
     setForm(emptyForm())
     setResult(null)
     setError(null)
@@ -470,6 +499,12 @@ export default function ShiftPage({
         </div>
 
         <div className="flex items-center gap-2 no-drag">
+          {draftLost ? (
+            <Badge variant="destructive" className="cursor-pointer gap-1" onClick={() => setDraftLost(false)}>
+              <AlertTriangle className="h-3 w-3" />
+              Черновик повреждён, данные сброшены
+            </Badge>
+          ) : null}
           {isOffline ? (
             <Badge variant="warning" className="gap-1">
               <WifiOff className="h-3 w-3" />
@@ -493,9 +528,11 @@ export default function ShiftPage({
             showSale={hasInventorySale}
             showScanner={!!hasScanner}
             showRequest={hasInventoryRequest}
+            showArena={!!onSwitchToArena}
             onSale={onSwitchToSale}
             onScanner={hasScanner ? onSwitchToScanner : undefined}
             onRequest={onSwitchToRequest}
+            onArena={onSwitchToArena}
             onCabinet={onOpenCabinet}
           />
 
@@ -1170,7 +1207,7 @@ export default function ShiftPage({
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={() => setStartCashDialog(false)}
+                  onClick={dismissStartCashDialog}
                 >
                   Пропустить
                 </Button>
@@ -1180,7 +1217,7 @@ export default function ShiftPage({
                     if (startCashInput.trim()) {
                       setField('start', startCashInput)
                     }
-                    setStartCashDialog(false)
+                    dismissStartCashDialog()
                   }}
                 >
                   Подтвердить
