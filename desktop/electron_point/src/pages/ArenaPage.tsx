@@ -256,19 +256,24 @@ function StationCard({
   tariffs,
   onStart,
   onManage,
-  tick,
 }: {
   station: ArenaStation
   activeSession: ArenaSession | undefined
   tariffs: ArenaTariff[]
   onStart: () => void
   onManage: () => void
-  tick: number
 }) {
-  void tick
+  const [now, setNow] = useState(Date.now())
+
+  useEffect(() => {
+    if (!activeSession) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [activeSession?.id, activeSession?.ends_at])
+
   const occupied = !!activeSession
   const tariff = activeSession?.tariff_id ? tariffs.find((t) => t.id === activeSession.tariff_id) : null
-  const remainingMs = activeSession ? getRemainingMs(activeSession.ends_at) : 0
+  const remainingMs = activeSession ? new Date(activeSession.ends_at).getTime() - now : 0
   const totalMs = tariff ? tariff.duration_minutes * 60_000 : 0
   const progressPct = occupied && totalMs > 0
     ? Math.max(0, Math.min(100, (remainingMs / totalMs) * 100))
@@ -386,7 +391,6 @@ export default function ArenaPage({
   const [sessions, setSessions] = useState<ArenaSession[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
-  const [tick, setTick] = useState(0)
 
   // Modal state
   const [startTarget, setStartTarget] = useState<ArenaStation | null>(null)
@@ -413,20 +417,16 @@ export default function ArenaPage({
 
   useEffect(() => {
     void loadArena()
-    const interval = window.setInterval(() => {
-      void loadArena()
-    }, 60_000)
-    return () => window.clearInterval(interval)
+    // Poll every 20s to catch external session changes quickly
+    const interval = window.setInterval(() => void loadArena(), 20_000)
+    // Also reload when tab becomes visible (user returns to app)
+    const handleVisibility = () => { if (document.visibilityState === 'visible') void loadArena() }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
   }, [loadArena])
-
-  // ─── Second-tick for countdowns ──────────────────────────────────────────────
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setTick((n) => n + 1)
-    }, 1000)
-    return () => window.clearInterval(interval)
-  }, [])
 
   // ─── 5-min notification check ────────────────────────────────────────────────
 
@@ -609,7 +609,6 @@ export default function ArenaPage({
                       station={st}
                       activeSession={sessionsByStation.get(st.id)}
                       tariffs={tariffs}
-                      tick={tick}
                       onStart={() => setStartTarget(st)}
                       onManage={() => {
                         const s = sessionsByStation.get(st.id)
@@ -636,7 +635,6 @@ export default function ArenaPage({
                       station={st}
                       activeSession={sessionsByStation.get(st.id)}
                       tariffs={tariffs}
-                      tick={tick}
                       onStart={() => setStartTarget(st)}
                       onManage={() => {
                         const s = sessionsByStation.get(st.id)

@@ -283,6 +283,7 @@ export default function App() {
   const [updateState, setUpdateState] = useState<AppUpdateState | null>(null)
   const seenTaskIdsRef = useRef<Set<string> | null>(null)
   const latestViewRef = useRef<AppView>({ screen: 'booting' })
+  const bootstrapNonce = useRef(0)
 
   useEffect(() => {
     latestViewRef.current = view
@@ -485,8 +486,12 @@ export default function App() {
     // and feature_flags overrides are applied correctly
     let bootstrap = session.bootstrap
     if (config && session.company.id) {
+      const nonce = ++bootstrapNonce.current
       try {
-        bootstrap = await api.bootstrap(config, session.company.id)
+        const freshBootstrap = await api.bootstrap(config, session.company.id)
+        // Ignore stale responses if another proceedToApp call started after this one
+        if (nonce !== bootstrapNonce.current) return
+        bootstrap = freshBootstrap
         await saveBootstrapCache(bootstrap)
       } catch {
         // fallback to existing bootstrap on error (e.g. offline)

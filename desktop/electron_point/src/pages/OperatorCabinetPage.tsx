@@ -95,9 +95,12 @@ export default function OperatorCabinetPage({
   onBackToWork,
   onLogout,
 }: Props) {
+  const CACHE_KEY = `cabinet_cache_${session.operator.operator_id}`
+
   const [activeTab, setActiveTab] = useState<CabinetTab>('shifts')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isOffline, setIsOffline] = useState(false)
 
   // Оплата долга (admin-only)
   const [payDebtId, setPayDebtId] = useState<string | null>(null)
@@ -143,12 +146,23 @@ export default function OperatorCabinetPage({
           total: Number(row.total || cash + kaspi + kaspiOnline),
         }
       })
-
       setShifts(ownShifts)
       setDebts(cabinetResult.value.debts || [])
+      setIsOffline(false)
     } else {
-      setShifts([])
-      setDebts([])
+      // Try to load from cache
+      try {
+        const cached = localStorage.getItem(CACHE_KEY)
+        if (cached) {
+          const { shifts: cs, debts: cd } = JSON.parse(cached)
+          setShifts(cs || [])
+          setDebts(cd || [])
+          setIsOffline(true)
+        } else {
+          setShifts([])
+          setDebts([])
+        }
+      } catch { setShifts([]); setDebts([]) }
       const message = cabinetResult.reason instanceof Error ? cabinetResult.reason.message : 'Не удалось загрузить данные кабинета'
       nextErrors.shifts = message
       nextErrors.debts = message
@@ -157,8 +171,24 @@ export default function OperatorCabinetPage({
     if (tasksResult.status === 'fulfilled') {
       setTasks(tasksResult.value.tasks || [])
     } else {
-      setTasks([])
+      try {
+        const cached = localStorage.getItem(CACHE_KEY)
+        if (cached) setTasks(JSON.parse(cached).tasks || [])
+        else setTasks([])
+      } catch { setTasks([]) }
       nextErrors.tasks = tasksResult.reason instanceof Error ? tasksResult.reason.message : 'Не удалось загрузить задачи'
+    }
+
+    // Save to cache if both succeeded
+    if (cabinetResult.status === 'fulfilled' && tasksResult.status === 'fulfilled') {
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+          shifts: cabinetResult.value.shifts || [],
+          debts: cabinetResult.value.debts || [],
+          tasks: tasksResult.value.tasks || [],
+          savedAt: Date.now(),
+        }))
+      } catch { /* storage full */ }
     }
 
     setSectionErrors(nextErrors)
@@ -199,6 +229,16 @@ export default function OperatorCabinetPage({
     [debts, from, to],
   )
 
+  const debtsByWeek = useMemo(() => {
+    const map = new Map<string, DebtItem[]>()
+    for (const item of filteredDebts) {
+      const week = item.week_start || item.created_at.slice(0, 10)
+      if (!map.has(week)) map.set(week, [])
+      map.get(week)!.push(item)
+    }
+    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  }, [filteredDebts])
+
   const totalShiftRevenue = filteredShifts.reduce((sum, row) => sum + row.total, 0)
   const totalDebt = filteredDebts.filter((item) => item.status === 'active').reduce((sum, row) => sum + row.total_amount, 0)
   const activeTasks = tasks.filter((task) => !['done', 'archived'].includes(task.status)).length
@@ -213,7 +253,7 @@ export default function OperatorCabinetPage({
             <span className="text-sm font-bold text-primary-foreground">F</span>
           </div>
           <div>
-            <p className="text-sm font-semibold leading-none">Личный кабинет</p>
+            <p className="text-sm font-semibold leading-none">Личный кабинет{isOffline ? ' (кеш)' : ''}</p>
             <p className="text-xs text-muted-foreground">{profileName}</p>
           </div>
         </div>
@@ -377,10 +417,20 @@ export default function OperatorCabinetPage({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <SectionError message={sectionErrors.debts} />
-                  {filteredDebts.length === 0 ? (
+                  {debtsByWeek.length === 0 ? (
                     <div className="text-sm text-muted-foreground">За выбранный период долгов нет.</div>
                   ) : (
-                    filteredDebts.map((item) => (
+                    debtsByWeek.map(([week, items]) => (
+                      <div key={week} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                            Неделя с {formatDate(week)}
+                          </p>
+                          <p className="text-xs tabular-nums text-muted-foreground">
+                            {formatMoney(items.filter(i => i.status === 'active').reduce((s, i) => s + i.total_amount, 0))}
+                          </p>
+                        </div>
+                        {items.map((item) => (
                       <div key={item.id} className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -433,6 +483,8 @@ export default function OperatorCabinetPage({
                             </Button>
                           )
                         ) : null}
+                      </div>
+                        ))}
                       </div>
                     ))
                   )}

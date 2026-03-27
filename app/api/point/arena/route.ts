@@ -7,8 +7,18 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-// In-memory set to avoid duplicate 5-min Telegram notifications within a server lifetime
-const notified5minSet = new Set<string>()
+// In-memory map: sessionId → notifiedAt timestamp (for 5-min Telegram dedup)
+const notified5minMap = new Map<string, number>()
+
+// Cleanup entries older than 3 hours every hour
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const cutoff = Date.now() - 3 * 60 * 60_000
+    for (const [id, ts] of notified5minMap) {
+      if (ts < cutoff) notified5minMap.delete(id)
+    }
+  }, 60 * 60_000)
+}
 
 // ─── GET: fetch zones, stations, tariffs, active sessions ─────────────────────
 
@@ -146,7 +156,7 @@ export async function POST(request: Request) {
         .single()
 
       if (updateError) throw updateError
-      notified5minSet.delete(sessionId)
+      notified5minMap.delete(sessionId)
       return json({ ok: true, data: session })
     }
 
@@ -187,7 +197,7 @@ export async function POST(request: Request) {
 
       if (updateError) throw updateError
       // Reset notification flag so the new end time gets a fresh notification
-      notified5minSet.delete(sessionId)
+      notified5minMap.delete(sessionId)
       return json({ ok: true, data: session })
     }
 
@@ -197,7 +207,7 @@ export async function POST(request: Request) {
       if (!sessionId) return json({ error: 'sessionId required' }, 400)
 
       // In-memory dedup
-      if (notified5minSet.has(sessionId)) {
+      if (notified5minMap.has(sessionId)) {
         return json({ ok: true, skipped: 'already-notified' })
       }
 
@@ -216,8 +226,8 @@ export async function POST(request: Request) {
       const remaining = endsAt.getTime() - Date.now()
       if (remaining > 5 * 60_000 + 30_000) return json({ ok: true, skipped: 'too-early' })
 
-      // Mark notified
-      notified5minSet.add(sessionId)
+      // Mark notified with timestamp for TTL cleanup
+      notified5minMap.set(sessionId, Date.now())
 
       // Send Telegram if operator has chat_id
       if (operatorId) {

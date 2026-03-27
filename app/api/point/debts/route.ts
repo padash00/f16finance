@@ -104,7 +104,6 @@ async function findAggregateDebt(params: {
     .eq('company_id', params.companyId)
     .eq('week_start', params.weekStart)
     .eq('status', 'active')
-    .limit(1)
 
   if (params.operatorId) {
     query = query.eq('operator_id', params.operatorId)
@@ -112,9 +111,22 @@ async function findAggregateDebt(params: {
     query = query.is('operator_id', null).eq('client_name', params.clientName)
   }
 
-  const { data, error } = await query.maybeSingle()
+  const { data, error } = await query
   if (error) throw error
-  return data
+
+  if (!data || data.length === 0) return null
+
+  // If duplicates exist (race condition) — merge them into the first record
+  if (data.length > 1) {
+    const [keep, ...extras] = data as any[]
+    const mergedAmount = data.reduce((sum: number, r: any) => sum + normalizeMoney(r.amount), 0)
+    await params.supabase.from('debts').update({ amount: mergedAmount }).eq('id', keep.id)
+    const extraIds = extras.map((r: any) => r.id)
+    await params.supabase.from('debts').delete().in('id', extraIds)
+    return { ...keep, amount: mergedAmount }
+  }
+
+  return data[0]
 }
 
 async function upsertAggregateDebt(params: {
