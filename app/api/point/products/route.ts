@@ -142,6 +142,7 @@ export async function POST(request: Request) {
     if (!token) return json({ error: 'token-required' }, 400)
 
     requireSuperAdmin(token)
+    const email = validateAdminToken(token) || 'unknown'
 
     if (body.action === 'createProduct') {
       const name = String(body.payload?.name || '').trim()
