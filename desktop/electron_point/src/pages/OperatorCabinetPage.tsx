@@ -386,7 +386,8 @@ export default function OperatorCabinetPage({
                           <div>
                             <div className="text-sm font-medium">{item.item_name}</div>
                             <div className="text-xs text-muted-foreground">
-                              {formatDate(item.created_at.slice(0, 10))} · {item.quantity} шт.
+                              {formatDate(item.created_at.slice(0, 10))} · {item.quantity} шт. × {formatMoney(item.unit_price)}
+                              {item.company_name ? ` · ${item.company_name}` : null}
                             </div>
                             {item.comment ? <div className="pt-1 text-sm text-muted-foreground">{item.comment}</div> : null}
                           </div>

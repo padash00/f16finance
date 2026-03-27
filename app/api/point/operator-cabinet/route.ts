@@ -67,10 +67,10 @@ export async function GET(request: Request) {
         .order('date', { ascending: false })
         .limit(400),
       supabase
-        .from('debts')
-        .select('id, company_id, operator_id, amount, comment, week_start, date, status')
+        .from('point_debt_items')
+        .select('id, company_id, operator_id, item_name, barcode, quantity, unit_price, total_amount, comment, week_start, created_at, status')
         .eq('operator_id', operatorId)
-        .order('week_start', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(400),
     ])
 
@@ -123,12 +123,14 @@ export async function GET(request: Request) {
     const debts = ((debtsRes.data || []) as any[]).map((row) => ({
       id: String(row.id),
       operator_id: row.operator_id || null,
-      item_name: 'Долг недели',
-      quantity: 1,
-      total_amount: Number(row.amount || 0),
+      item_name: String(row.item_name || 'Товар'),
+      barcode: row.barcode || null,
+      quantity: Number(row.quantity || 1),
+      unit_price: Number(row.unit_price || 0),
+      total_amount: Number(row.total_amount || 0),
       comment: row.comment || null,
       week_start: row.week_start || null,
-      created_at: String(row.date || row.week_start),
+      created_at: String(row.created_at),
       status: String(row.status || 'active'),
       company_id: row.company_id || null,
       company_name: row.company_id ? companyMap.get(String(row.company_id))?.name || null : null,
@@ -169,35 +171,57 @@ export async function POST(request: Request) {
     if (!validateAdminToken(token)) return json({ error: 'admin-token-required' }, 403)
 
     if (body.action === 'markDebtPaid') {
-      const debtId = String(body.debtId || '').trim()
-      if (!debtId) return json({ error: 'debtId-required' }, 400)
+      // debtId здесь — это id из point_debt_items
+      const debtItemId = String(body.debtId || '').trim()
+      if (!debtItemId) return json({ error: 'debtId-required' }, 400)
 
-      const { data: debt, error: fetchError } = await supabase
-        .from('debts')
-        .select('id, operator_id, amount, week_start, status')
-        .eq('id', debtId)
+      const { data: item, error: fetchError } = await supabase
+        .from('point_debt_items')
+        .select('id, operator_id, total_amount, week_start, status, company_id')
+        .eq('id', debtItemId)
         .eq('operator_id', String(operator.id))
         .maybeSingle()
 
       if (fetchError) throw fetchError
-      if (!debt) return json({ error: 'debt-not-found' }, 404)
-      if (debt.status === 'paid') return json({ ok: true, already: true })
+      if (!item) return json({ error: 'debt-not-found' }, 404)
+      if (item.status !== 'active') return json({ ok: true, already: true })
 
-      const { error: updateError } = await supabase
+      const paidAt = new Date().toISOString()
+
+      // Убираем из сканера — инвентарь НЕ возвращаем (оплата деньгами, товар потреблён)
+      const { error: itemUpdateError } = await supabase
+        .from('point_debt_items')
+        .update({ status: 'deleted', deleted_at: paidAt })
+        .eq('id', debtItemId)
+
+      if (itemUpdateError) throw itemUpdateError
+
+      // Уменьшаем агрегат в debts
+      const { data: aggDebt } = await supabase
         .from('debts')
-        .update({ status: 'paid' })
-        .eq('id', debtId)
+        .select('id, amount')
+        .eq('operator_id', String(operator.id))
+        .eq('week_start', item.week_start)
+        .eq('status', 'active')
+        .maybeSingle()
 
-      if (updateError) throw updateError
+      if (aggDebt) {
+        const nextAmount = Math.max(0, Number(aggDebt.amount || 0) - Number(item.total_amount || 0))
+        if (nextAmount <= 0) {
+          await supabase.from('debts').update({ status: 'paid' }).eq('id', aggDebt.id)
+        } else {
+          await supabase.from('debts').update({ amount: nextAmount }).eq('id', aggDebt.id)
+        }
+      }
 
       await writeAuditLog(supabase, {
-        entityType: 'debt',
-        entityId: debtId,
+        entityType: 'point-debt-item',
+        entityId: debtItemId,
         action: 'mark-paid',
         payload: {
           operator_id: String(operator.id),
-          week_start: debt.week_start,
-          amount: debt.amount,
+          week_start: item.week_start,
+          total_amount: item.total_amount,
           source: 'point-cabinet',
           admin_token: token.slice(0, 8) + '…',
         },

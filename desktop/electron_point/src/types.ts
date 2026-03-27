@@ -141,14 +141,16 @@ export interface DebtItem {
   client_name: string | null
   debtor_name: string
   item_name: string
+  barcode?: string | null
   quantity: number
   unit_price: number
   total_amount: number
   comment: string | null
   week_start: string
   created_at: string
-  source: string
+  source?: string
   status: string
+  company_name?: string | null
 }
 
 // Queue

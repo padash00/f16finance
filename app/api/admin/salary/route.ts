@@ -1183,12 +1183,22 @@ export async function POST(req: Request) {
 
       // Если неделя закрыта полностью — долг уже вычтен из зарплаты, помечаем как оплаченный
       if (weekAfterPayment.remainingAmount < 0.01) {
-        await supabase
-          .from('debts')
-          .update({ status: 'paid' })
-          .eq('operator_id', body.payload.operator_id)
-          .eq('week_start', weekStart)
-          .eq('status', 'active')
+        const paidAt = new Date().toISOString()
+        await Promise.all([
+          supabase
+            .from('debts')
+            .update({ status: 'paid' })
+            .eq('operator_id', body.payload.operator_id)
+            .eq('week_start', weekStart)
+            .eq('status', 'active'),
+          // Убираем из сканера — инвентарь НЕ возвращаем (оператор оплатил деньгами, товар потреблён)
+          supabase
+            .from('point_debt_items')
+            .update({ status: 'deleted', deleted_at: paidAt })
+            .eq('operator_id', body.payload.operator_id)
+            .eq('week_start', weekStart)
+            .eq('status', 'active'),
+        ])
       }
 
       await writeAuditLog(supabase, {
@@ -1338,10 +1348,17 @@ export async function POST(req: Request) {
       }
 
       const ids = activeDebts.map((d: any) => d.id)
-      const { error: updateError } = await supabase
-        .from('debts')
-        .update({ status: 'paid' })
-        .in('id', ids)
+      const paidAt = new Date().toISOString()
+      const [{ error: updateError }] = await Promise.all([
+        supabase.from('debts').update({ status: 'paid' }).in('id', ids),
+        // Убираем из сканера — инвентарь НЕ возвращаем (оператор оплатил деньгами)
+        supabase
+          .from('point_debt_items')
+          .update({ status: 'deleted', deleted_at: paidAt })
+          .eq('operator_id', body.operatorId)
+          .eq('week_start', weekStart2)
+          .eq('status', 'active'),
+      ])
 
       if (updateError) throw updateError
 
