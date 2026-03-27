@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   ScanBarcode, Plus, Trash2, RefreshCw, LogOut, Clock,
   CheckCircle2, AlertTriangle, ReceiptText, Package, WifiOff
@@ -48,6 +48,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
   // Подтверждение удаления
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [debtFilterOpId, setDebtFilterOpId] = useState<string>('all')
 
   // Сканер
   const [scannedBarcode, setScannedBarcode] = useState('')
@@ -163,8 +164,10 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         setQuantity('1')
         setComment('')
         flash('ok', `Найден: ${product.name} — ${formatMoney(product.price)}`)
+        playBeep('success')
       } else {
         flash('err', `Штрихкод не найден: ${code}`)
+        playBeep('error')
       }
     }
   }
@@ -193,9 +196,11 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         total_amount: total,
         comment: comment || null,
         local_ref: ref,
+        created_by_operator_id: session.operator.operator_id,
       }, session.company.id)
 
       flash('ok', `Долг: ${foundProduct.name} × ${qty} = ${formatMoney(total)}`)
+      playBeep('success')
       setFoundProduct(null)
       setScannedBarcode('')
       setQuantity('1')
@@ -211,9 +216,15 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         message.includes('Load failed')
 
       if (!canQueueOffline) {
-        flash('err', message === 'operator-not-found'
-          ? 'Оператор не найден или неактивен'
-          : message)
+        const errorMap: Record<string, string> = {
+          'inventory-debt-item-not-found': 'Товар не найден в инвентаре — добавьте его на сайте Orda',
+          'inventory-debt-quantity-invalid': 'Неверное количество',
+          'inventory-debt-location-not-found': 'Склад точки не настроен — обратитесь к администратору',
+          'operator-not-found': 'Оператор не найден или неактивен',
+          'debt-delete-window-expired': 'Удалить можно только в течение 15 минут',
+        }
+        const friendlyMsg = errorMap[message] || message
+        flash('err', friendlyMsg)
         return
       }
 
@@ -226,6 +237,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         total_amount: total,
         comment: comment || null,
         local_ref: ref,
+        created_by_operator_id: session.operator.operator_id,
       }, session.company.id)
       setPendingCount(await getPendingCount())
       flash('ok', `Сохранено в очередь (нет сети)`)
@@ -250,6 +262,18 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
   const totalDebt = debts.reduce((s, d) => s + d.total_amount, 0)
 
+  const debtOperators = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const d of debts) {
+      if (d.operator_id && d.debtor_name) map.set(d.operator_id, d.debtor_name)
+    }
+    return [...map.entries()]
+  }, [debts])
+
+  const filteredDebts = debtFilterOpId === 'all'
+    ? debts
+    : debts.filter(d => d.operator_id === debtFilterOpId)
+
   const nameSearchResults = nameSearch.trim().length >= 2
     ? products.filter(p => p.name.toLowerCase().includes(nameSearch.toLowerCase())).slice(0, 8)
     : []
@@ -261,6 +285,31 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
     setNameSearch('')
     setShowNameSearch(false)
     flash('ok', `Найден: ${product.name} — ${formatMoney(product.price)}`)
+    playBeep('success')
+  }
+
+  function playBeep(type: 'success' | 'error') {
+    try {
+      const ctx = new AudioContext()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      if (type === 'success') {
+        osc.frequency.value = 880
+        gain.gain.setValueAtTime(0.2, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12)
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + 0.12)
+      } else {
+        osc.type = 'sawtooth'
+        osc.frequency.value = 180
+        gain.gain.setValueAtTime(0.3, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + 0.4)
+      }
+    } catch { /* ignore */ }
   }
 
   return (
@@ -469,7 +518,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <Package className="h-4 w-4 text-muted-foreground" />
               Долги за неделю
-              <Badge variant="secondary">{debts.length}</Badge>
+              <Badge variant="secondary">{filteredDebts.length}</Badge>
               {totalDebt > 0 && (
                 <span className="text-xs font-normal text-destructive-foreground tabular-nums">
                   · {formatMoney(totalDebt)}
@@ -480,6 +529,21 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
               <RefreshCw className="h-3.5 w-3.5 mr-1" /> Обновить
             </Button>
           </div>
+
+          {debtOperators.length > 1 && (
+            <div className="mb-2">
+              <select
+                value={debtFilterOpId}
+                onChange={e => setDebtFilterOpId(e.target.value)}
+                className="w-full rounded-md border bg-background px-3 py-1.5 text-xs text-foreground"
+              >
+                <option value="all">Все операторы ({debts.length})</option>
+                {debtOperators.map(([id, name]) => (
+                  <option key={id} value={id}>{name} ({debts.filter(d => d.operator_id === id).length})</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {loading ? (
             <div className="flex flex-1 items-center justify-center">
@@ -492,7 +556,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
             </div>
           ) : (
             <div className="flex-1 overflow-auto space-y-2">
-              {debts.map(debt => (
+              {filteredDebts.map(debt => (
                 <div key={debt.id} className="flex items-start justify-between rounded-lg border bg-card px-4 py-3 gap-4">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{debt.item_name}</p>
@@ -505,7 +569,12 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                     <span className="text-sm font-semibold tabular-nums text-destructive-foreground">
                       {formatMoney(debt.total_amount)}
                     </span>
-                    {debt.operator_id === session.operator.operator_id ? (
+                    {(() => {
+                      const isDebtor = debt.operator_id === session.operator.operator_id
+                      const isCreator = debt.created_by_operator_id === session.operator.operator_id
+                      const withinWindow = Date.now() - new Date(debt.created_at).getTime() < 15 * 60_000
+                      return isDebtor || (isCreator && withinWindow)
+                    })() ? (
                       <Button
                         variant="ghost"
                         size="icon"

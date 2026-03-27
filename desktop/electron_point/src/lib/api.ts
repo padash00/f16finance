@@ -298,6 +298,7 @@ export async function createDebt(
     total_amount: number
     comment?: string | null
     local_ref?: string | null
+    created_by_operator_id?: string | null
   },
   companyId?: string | null,
 ): Promise<DebtItem> {

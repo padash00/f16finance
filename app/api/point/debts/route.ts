@@ -18,6 +18,7 @@ type CreateDebtBody = {
     comment?: string | null
     local_ref?: string | null
     occurred_at?: string | null
+    created_by_operator_id?: string | null
   }
 }
 
@@ -213,7 +214,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from('point_debt_items')
       .select(
-        'id, company_id, operator_id, point_device_id, client_name, item_name, quantity, unit_price, total_amount, comment, week_start, source, local_ref, status, created_at, deleted_at, operator:operator_id(id, name, short_name)',
+        'id, company_id, operator_id, created_by_operator_id, point_device_id, client_name, item_name, quantity, unit_price, total_amount, comment, week_start, source, local_ref, status, created_at, deleted_at, operator:operator_id(id, name, short_name)',
       )
       .eq('company_id', device.company_id)
       .eq('status', 'active')
@@ -227,6 +228,7 @@ export async function GET(request: Request) {
       return {
         id: row.id,
         operator_id: row.operator_id || null,
+        created_by_operator_id: row.created_by_operator_id || null,
         client_name: row.client_name || null,
         debtor_name: operator?.name || row.client_name || 'Должник',
         item_name: row.item_name,
@@ -286,6 +288,7 @@ export async function POST(request: Request) {
       const operatorId = payload.operator_id?.trim() || null
       const barcode = payload.barcode?.trim() || null
       const weekStart = startOfWeekISO(payload.occurred_at || null)
+      const createdByOperatorId = payload.created_by_operator_id?.trim() || null
 
       if (!itemName) return json({ error: 'item-name-required' }, 400)
       if (totalAmount <= 0) return json({ error: 'amount-required' }, 400)
@@ -343,6 +346,7 @@ export async function POST(request: Request) {
         p_week_start: weekStart,
         p_source: 'point-client',
         p_local_ref: payload.local_ref?.trim() || null,
+        p_created_by_operator_id: createdByOperatorId,
       })
 
       if (insertError) throw insertError
@@ -452,7 +456,7 @@ export async function POST(request: Request) {
 
     const { data: item, error: itemError } = await supabase
       .from('point_debt_items')
-      .select('id, company_id, operator_id, client_name, item_name, quantity, unit_price, total_amount, comment, week_start, status')
+      .select('id, company_id, operator_id, created_by_operator_id, client_name, item_name, quantity, unit_price, total_amount, comment, week_start, status, created_at')
       .eq('id', itemId)
       .eq('company_id', device.company_id)
       .limit(1)
@@ -462,10 +466,20 @@ export async function POST(request: Request) {
     if (!item) return json({ error: 'debt-item-not-found' }, 404)
     if (item.status !== 'active') return json({ error: 'debt-item-already-deleted' }, 409)
 
-    // Проверяем что оператор удаляет только свой долг (если долг привязан к оператору)
+    // Разрешаем удаление: либо сам должник, либо тот кто добавил долг
     const requestingOperatorId = (body as DeleteDebtBody).operatorId?.trim() || null
-    if (item.operator_id && requestingOperatorId && item.operator_id !== requestingOperatorId) {
+    const isDebtor = item.operator_id && requestingOperatorId && item.operator_id === requestingOperatorId
+    const isCreator = item.created_by_operator_id && requestingOperatorId && item.created_by_operator_id === requestingOperatorId
+    if (item.operator_id && requestingOperatorId && !isDebtor && !isCreator) {
       return json({ error: 'debt-belongs-to-another-operator' }, 403)
+    }
+
+    // Creator (not the debtor) can only delete within 15 minutes
+    if (isCreator && !isDebtor) {
+      const createdAt = new Date((item as any).created_at).getTime()
+      if (Date.now() - createdAt > 15 * 60_000) {
+        return json({ error: 'debt-delete-window-expired' }, 403)
+      }
     }
 
     const commentLine = `[Удалено] ${item.item_name} x${item.quantity} = ${normalizeMoney(item.total_amount)} ₸`

@@ -138,6 +138,7 @@ export interface Product {
 export interface DebtItem {
   id: string
   operator_id: string | null
+  created_by_operator_id?: string | null
   client_name: string | null
   debtor_name: string
   item_name: string

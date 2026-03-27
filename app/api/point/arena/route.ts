@@ -66,13 +66,26 @@ export async function GET(request: Request) {
     if (tariffsError) throw tariffsError
     if (sessionsError) throw sessionsError
 
+    // Auto-complete sessions overdue by more than 2 hours
+    const nowTs = new Date()
+    const autoCutoff = new Date(nowTs.getTime() - 2 * 60 * 60_000).toISOString()
+    const staleSessions = (sessions || []).filter((s: any) => s.ends_at < autoCutoff)
+    if (staleSessions.length > 0) {
+      await supabase
+        .from('arena_sessions')
+        .update({ status: 'completed', ended_at: nowTs.toISOString() })
+        .in('id', staleSessions.map((s: any) => s.id))
+        .eq('status', 'active')
+    }
+    const activeSessions = (sessions || []).filter((s: any) => s.ends_at >= autoCutoff)
+
     return json({
       ok: true,
       data: {
         zones: zones || [],
         stations: stations || [],
         tariffs: tariffs || [],
-        sessions: sessions || [],
+        sessions: activeSessions,
       },
     })
   } catch (error: any) {

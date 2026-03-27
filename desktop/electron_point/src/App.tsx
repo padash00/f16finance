@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { loadConfig, saveConfig } from '@/lib/config'
 import { getCachedBootstrap, saveBootstrapCache, saveOperatorSession, loadOperatorSession, clearOperatorSession } from '@/lib/cache'
 import * as api from '@/lib/api'
@@ -708,34 +709,38 @@ export default function App() {
 
   if (view.screen === 'scanner') {
     return withUpdateBanner(
-      <ScannerPage
-        config={config!}
-        bootstrap={view.bootstrap}
-        session={view.session}
-        isOffline={isOffline}
-        onLogout={handleLogout}
-        onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
-        onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
-        onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
-        onSwitchToArena={canUseArenaForSession(view.session) ? () => setView({ ...view, screen: 'arena' }) : undefined}
-        onOpenCabinet={() => handleOpenOperatorCabinet('scanner')}
-      />,
+      <ErrorBoundary pageName="scanner">
+        <ScannerPage
+          config={config!}
+          bootstrap={view.bootstrap}
+          session={view.session}
+          isOffline={isOffline}
+          onLogout={handleLogout}
+          onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
+          onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
+          onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
+          onSwitchToArena={canUseArenaForSession(view.session) ? () => setView({ ...view, screen: 'arena' }) : undefined}
+          onOpenCabinet={() => handleOpenOperatorCabinet('scanner')}
+        />
+      </ErrorBoundary>,
     )
   }
 
   if (view.screen === 'arena') {
     return withUpdateBanner(
-      <ArenaPage
-        config={config!}
-        bootstrap={view.bootstrap}
-        session={view.session}
-        onLogout={handleLogout}
-        onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
-        onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
-        onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
-        onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
-        onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
-      />,
+      <ErrorBoundary pageName="arena">
+        <ArenaPage
+          config={config!}
+          bootstrap={view.bootstrap}
+          session={view.session}
+          onLogout={handleLogout}
+          onSwitchToShift={() => setView({ ...view, screen: 'shift' })}
+          onSwitchToSale={canUseInventorySalesForSession(view.session) ? () => setView({ ...view, screen: 'inventory-sale' }) : undefined}
+          onSwitchToScanner={canUseScannerForSession(view.session) ? () => setView({ ...view, screen: 'scanner' }) : undefined}
+          onSwitchToRequest={canUseInventoryRequestsForSession(view.session) ? () => setView({ ...view, screen: 'inventory-request' }) : undefined}
+          onOpenCabinet={() => handleOpenOperatorCabinet('shift')}
+        />
+      </ErrorBoundary>,
     )
   }
 
@@ -757,25 +762,27 @@ export default function App() {
 
   if (view.screen === 'operator-cabinet') {
     return withUpdateBanner(
-      <OperatorCabinetPage
-        config={config!}
-        bootstrap={view.bootstrap}
-        session={view.session}
-        returnTo={view.returnTo}
-        onBackToWork={() =>
-          setView({
-            screen:
-              view.returnTo === 'sale'
-                ? 'inventory-sale'
-                : view.returnTo === 'return'
-                  ? 'inventory-return'
-                  : view.returnTo,
-            bootstrap: view.bootstrap,
-            session: view.session,
-          })
-        }
-        onLogout={handleLogout}
-      />,
+      <ErrorBoundary pageName="cabinet">
+        <OperatorCabinetPage
+          config={config!}
+          bootstrap={view.bootstrap}
+          session={view.session}
+          returnTo={view.returnTo}
+          onBackToWork={() =>
+            setView({
+              screen:
+                view.returnTo === 'sale'
+                  ? 'inventory-sale'
+                  : view.returnTo === 'return'
+                    ? 'inventory-return'
+                    : view.returnTo,
+              bootstrap: view.bootstrap,
+              session: view.session,
+            })
+          }
+          onLogout={handleLogout}
+        />
+      </ErrorBoundary>,
     )
   }
 

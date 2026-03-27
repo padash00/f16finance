@@ -4,6 +4,7 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { validateAdminToken } from '@/lib/server/admin-tokens'
+import { sendTelegramMessage } from '@/lib/telegram/send'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -177,7 +178,7 @@ export async function POST(request: Request) {
 
       const { data: item, error: fetchError } = await supabase
         .from('point_debt_items')
-        .select('id, operator_id, total_amount, week_start, status, company_id')
+        .select('id, operator_id, total_amount, week_start, status, company_id, item_name')
         .eq('id', debtItemId)
         .eq('operator_id', String(operator.id))
         .maybeSingle()
@@ -226,6 +227,13 @@ export async function POST(request: Request) {
           admin_token: token.slice(0, 8) + '…',
         },
       })
+
+      // Notify operator via Telegram that their debt was marked as paid
+      if (operator.telegram_chat_id) {
+        const item_name_for_tg = (item as any).item_name || 'Товар'
+        const text = `✅ <b>Долг погашен</b>\n${item_name_for_tg} — ${Number(item.total_amount).toLocaleString('ru-RU')} ₸`
+        await sendTelegramMessage(String(operator.telegram_chat_id), text).catch(() => null)
+      }
 
       return json({ ok: true })
     }

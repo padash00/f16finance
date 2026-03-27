@@ -415,18 +415,26 @@ export default function ArenaPage({
     }
   }, [config, session])
 
+  const pollIntervalRef = useRef<number | null>(null)
+
   useEffect(() => {
     void loadArena()
-    // Poll every 20s to catch external session changes quickly
-    const interval = window.setInterval(() => void loadArena(), 20_000)
-    // Also reload when tab becomes visible (user returns to app)
     const handleVisibility = () => { if (document.visibilityState === 'visible') void loadArena() }
     document.addEventListener('visibilitychange', handleVisibility)
     return () => {
-      window.clearInterval(interval)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [loadArena])
+
+  // Adaptive polling: 5s with active sessions, 20s when idle
+  useEffect(() => {
+    if (pollIntervalRef.current !== null) window.clearInterval(pollIntervalRef.current)
+    const ms = sessions.length > 0 ? 5_000 : 20_000
+    pollIntervalRef.current = window.setInterval(() => void loadArena(), ms)
+    return () => {
+      if (pollIntervalRef.current !== null) window.clearInterval(pollIntervalRef.current)
+    }
+  }, [sessions.length, loadArena])
 
   // ─── 5-min notification check ────────────────────────────────────────────────
 
