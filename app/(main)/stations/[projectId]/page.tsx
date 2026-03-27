@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
-  BarChart3, Settings, Loader2, CheckCircle2,
+  BarChart3, Settings, Loader2, CheckCircle2, ChevronDown,
   AlertTriangle, RefreshCw, TrendingUp, Calendar, Map,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -67,7 +67,6 @@ function InlineEdit({ value, onSave, onCancel, placeholder }: { value: string; o
 // ─── Map Editor ──────────────────────────────────────────────────────────────
 
 const GRID = 20
-const CELL = 70
 
 const ZONE_COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -92,11 +91,12 @@ interface MapEditorProps {
   zones: Zone[]
   stations: Station[]
   decorations: Decoration[]
+  cellSize: number
   onSaved: (zones: Zone[], stations: Station[], decorations: Decoration[]) => void
   showFlash: (type: 'ok' | 'err', msg: string) => void
 }
 
-function MapEditor({ projectId, zones, stations, decorations, onSaved, showFlash }: MapEditorProps) {
+function MapEditor({ projectId, zones, stations, decorations, cellSize: CELL, onSaved, showFlash }: MapEditorProps) {
   // Local mutable state for positions
   const [localZones, setLocalZones] = useState<Zone[]>(zones)
   const [localStations, setLocalStations] = useState<Station[]>(stations)
@@ -618,9 +618,11 @@ function MapEditor({ projectId, zones, stations, decorations, onSaved, showFlash
 
 export default function StationsPage() {
   const params = useParams()
+  const router = useRouter()
   const projectId = params.projectId as string
 
   const [projectName, setProjectName] = useState('')
+  const [allProjects, setAllProjects] = useState<{ id: string; name: string }[]>([])
   const [zones, setZones] = useState<Zone[]>([])
   const [stations, setStations] = useState<Station[]>([])
   const [tariffs, setTariffs] = useState<Tariff[]>([])
@@ -628,6 +630,10 @@ export default function StationsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics'>('manage')
+
+  // Dynamic cell size for map
+  const [cellSize, setCellSize] = useState(56)
+  const mapContainerRef = useRef<HTMLDivElement>(null)
 
   // Analytics
   const [sessions, setSessions] = useState<Session[]>([])
@@ -681,6 +687,32 @@ export default function StationsPage() {
   }, [projectId])
 
   useEffect(() => { void load() }, [load])
+
+  // Load all projects for the selector (once)
+  useEffect(() => {
+    fetch('/api/admin/arena')
+      .then(r => r.json())
+      .then(d => { if (d.ok) setAllProjects(d.data.projects || []) })
+      .catch(() => null)
+  }, [])
+
+  // Dynamic cell size: fill the map container without scrolling
+  useLayoutEffect(() => {
+    if (activeTab !== 'map') return
+    function compute() {
+      if (!mapContainerRef.current) return
+      const { width, height } = mapContainerRef.current.getBoundingClientRect()
+      const sidebarW = 216 // right sidebar width + gap
+      const availW = width - sidebarW - 16
+      const availH = height - 48 // subtract instructions row
+      const cs = Math.max(32, Math.floor(Math.min(availW, availH) / GRID))
+      setCellSize(cs)
+    }
+    compute()
+    const obs = new ResizeObserver(compute)
+    if (mapContainerRef.current) obs.observe(mapContainerRef.current)
+    return () => obs.disconnect()
+  }, [activeTab])
 
   const loadAnalytics = useCallback(async () => {
     setAnalyticsLoading(true)
@@ -837,21 +869,32 @@ export default function StationsPage() {
   )
 
   return (
-    <div className="app-page max-w-5xl space-y-6">
+    <div className={activeTab === 'map' ? 'app-page app-page-wide space-y-4' : 'app-page max-w-5xl space-y-6'}>
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/point-devices" className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground hover:text-foreground transition">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-3">
-            <Monitor className="h-7 w-7 text-cyan-300" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">{projectName || '...'}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Управление станциями и тарифами</p>
-          </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Link href="/point-devices" className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground hover:text-foreground transition">
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-2.5">
+          <Monitor className="h-6 w-6 text-cyan-300" />
         </div>
+        {/* Project selector */}
+        <div className="relative">
+          <select
+            value={projectId}
+            onChange={e => router.push(`/stations/${e.target.value}`)}
+            className="appearance-none rounded-xl border border-white/10 bg-card px-4 py-2 pr-8 text-lg font-bold text-foreground focus:outline-none focus:border-primary cursor-pointer"
+          >
+            {allProjects.length === 0 && (
+              <option value={projectId}>{projectName || '...'}</option>
+            )}
+            {allProjects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        </div>
+        <p className="text-sm text-muted-foreground">Станции и тарифы</p>
       </div>
 
       {/* Flash */}
@@ -1050,23 +1093,29 @@ export default function StationsPage() {
         )}
 
         {activeTab === 'map' && (
-          <div>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Расставьте зоны и станции на карте. Зоны — прямоугольники, станции — квадраты.
-              Перетаскивайте элементы мышью. Нажмите на пустое место чтобы добавить декор.
+          <div
+            ref={mapContainerRef}
+            className="flex flex-col"
+            style={{ height: 'calc(100vh - 240px)' }}
+          >
+            <p className="mb-2 shrink-0 text-xs text-muted-foreground">
+              Перетаскивайте зоны и станции мышью. Клик по пустой ячейке — добавить декор. Ячейка: {cellSize}px
             </p>
-            <MapEditor
-              projectId={projectId}
-              zones={zones}
-              stations={stations}
-              decorations={decorations}
-              onSaved={(updatedZones, updatedStations, updatedDecos) => {
-                setZones(updatedZones)
-                setStations(updatedStations)
-                setDecorations(updatedDecos)
-              }}
-              showFlash={showFlash}
-            />
+            <div className="flex-1 min-h-0">
+              <MapEditor
+                projectId={projectId}
+                zones={zones}
+                stations={stations}
+                decorations={decorations}
+                cellSize={cellSize}
+                onSaved={(updatedZones, updatedStations, updatedDecos) => {
+                  setZones(updatedZones)
+                  setStations(updatedStations)
+                  setDecorations(updatedDecos)
+                }}
+                showFlash={showFlash}
+              />
+            </div>
           </div>
         )}
 

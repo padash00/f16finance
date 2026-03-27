@@ -25,7 +25,15 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
-    if (!projectId) return json({ error: 'projectId required' }, 400)
+
+    // List mode — return all point projects for the project selector
+    if (!projectId) {
+      const { data: projects } = await supabase
+        .from('point_projects')
+        .select('id, name')
+        .order('name')
+      return json({ ok: true, data: { projects: projects || [] } })
+    }
 
     // Get project name
     const { data: project } = await supabase
