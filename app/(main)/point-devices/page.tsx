@@ -35,7 +35,6 @@ type PointFeatureFlags = {
   income_report: boolean
   debt_report: boolean
   kaspi_daily_split: boolean
-  arena_enabled: boolean
 }
 
 type CompanyAssignment = {
@@ -44,6 +43,7 @@ type CompanyAssignment = {
   feature_flags: {
     debt_report: boolean | null       // null = inherit
     kaspi_daily_split: boolean | null // null = inherit
+    arena_enabled: boolean | null     // null = inherit
   }
 }
 
@@ -90,7 +90,6 @@ const DEFAULT_FLAGS: PointFeatureFlags = {
   income_report: true,
   debt_report: false,
   kaspi_daily_split: false,
-  arena_enabled: false,
 }
 
 const DEFAULT_FORM: ProjectForm = {
@@ -120,7 +119,7 @@ function formatDateTime(value: string | null) {
 }
 
 function emptyAssignment(company_id: string): CompanyAssignment {
-  return { company_id, point_mode: '', feature_flags: { debt_report: null, kaspi_daily_split: null } }
+  return { company_id, point_mode: '', feature_flags: { debt_report: null, kaspi_daily_split: null, arena_enabled: null } }
 }
 
 function CompanyAssignmentEditor({
@@ -152,7 +151,7 @@ function CompanyAssignmentEditor({
     onChange(assignments.map((a) => a.company_id === companyId ? { ...a, ...patch } : a))
   }
 
-  function updateFlag(companyId: string, key: 'debt_report' | 'kaspi_daily_split', value: boolean | null) {
+  function updateFlag(companyId: string, key: 'debt_report' | 'kaspi_daily_split' | 'arena_enabled', value: boolean | null) {
     onChange(assignments.map((a) =>
       a.company_id === companyId
         ? { ...a, feature_flags: { ...a.feature_flags, [key]: value } }
@@ -241,6 +240,7 @@ function CompanyAssignmentEditor({
                     {([
                       ['debt_report', 'Долги и сканер', projectFlags.debt_report],
                       ['kaspi_daily_split', 'Суточная сверка Kaspi', projectFlags.kaspi_daily_split],
+                      ['arena_enabled', 'Арена / Станции', false],
                     ] as [keyof typeof assignment.feature_flags, string, boolean][]).map(([key, label, projectDefault]) => {
                       const val = assignment.feature_flags[key]
                       return (
@@ -356,7 +356,6 @@ function ProjectFormPanel({
           ['shift_report', 'Сменные отчёты', 'Форма смены: наличные, Kaspi, итоги → Telegram и salary.'],
           ['income_report', 'Доходы', 'Отдельная форма доходов. Зарезервировано.'],
           ['debt_report', 'Долги и сканер', 'По умолчанию для точек без своей настройки.'],
-          ['arena_enabled', 'Арена / Станции', 'Управление игровыми станциями, тарифами и таймером сессий.'],
         ] as [string, string, string][]).map(([key, label, hint]) => (
           <label
             key={key}
@@ -443,15 +442,17 @@ export default function PointDevicesPage() {
       const hasMode = a.point_mode && a.point_mode !== ''
       const hasFlagDebt = a.feature_flags.debt_report !== null
       const hasFlagKaspi = a.feature_flags.kaspi_daily_split !== null
+      const hasFlagArena = a.feature_flags.arena_enabled !== null
       return {
         company_id: a.company_id,
         point_mode: hasMode ? a.point_mode : null,
-        feature_flags: (hasFlagDebt || hasFlagKaspi)
+        feature_flags: (hasFlagDebt || hasFlagKaspi || hasFlagArena)
           ? {
               shift_report: true,
               income_report: true,
               debt_report: a.feature_flags.debt_report ?? false,
               kaspi_daily_split: a.feature_flags.kaspi_daily_split ?? false,
+              arena_enabled: a.feature_flags.arena_enabled ?? false,
             }
           : null,
       }
@@ -496,6 +497,7 @@ export default function PointDevicesPage() {
         feature_flags: {
           debt_report: c.feature_flags?.debt_report ?? null,
           kaspi_daily_split: c.feature_flags?.kaspi_daily_split ?? null,
+          arena_enabled: (c.feature_flags as any)?.arena_enabled ?? null,
         },
       })),
       shift_report_chat_id: project.shift_report_chat_id || '',
@@ -505,7 +507,6 @@ export default function PointDevicesPage() {
         income_report: project.feature_flags.income_report !== false,
         debt_report: project.feature_flags.debt_report === true,
         kaspi_daily_split: project.feature_flags.kaspi_daily_split === true,
-        arena_enabled: project.feature_flags.arena_enabled === true,
       },
     })
   }
@@ -693,7 +694,7 @@ export default function PointDevicesPage() {
                           <Pencil className="h-4 w-4" />
                           Изменить
                         </Button>
-                        {project.feature_flags.arena_enabled ? (
+                        {project.companies.some((c) => (c.feature_flags as any)?.arena_enabled === true) ? (
                           <Button size="sm" variant="outline" asChild className="gap-2">
                             <a href={`/stations/${project.id}`}>
                               <Monitor className="h-4 w-4" />

@@ -9,7 +9,7 @@ type PointFeatureFlags = {
   income_report: boolean
   debt_report: boolean
   kaspi_daily_split: boolean
-  arena_enabled: boolean
+  arena_enabled?: boolean
 }
 
 type CompanyAssignment = {
@@ -65,13 +65,17 @@ function badRequest(message: string) {
 }
 
 function normalizeFlags(input: Partial<PointFeatureFlags> | null | undefined): PointFeatureFlags {
-  return {
+  const flags: PointFeatureFlags = {
     shift_report: input?.shift_report !== false,
     income_report: input?.income_report !== false,
     debt_report: input?.debt_report === true,
     kaspi_daily_split: input?.kaspi_daily_split === true,
-    arena_enabled: input?.arena_enabled === true,
   }
+  // arena_enabled is a per-point flag, store only if explicitly provided
+  if (input?.arena_enabled !== undefined) {
+    flags.arena_enabled = input.arena_enabled === true
+  }
+  return flags
 }
 
 function normalizeShiftReportChatId(value: string | null | undefined) {
