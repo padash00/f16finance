@@ -373,7 +373,7 @@ function StationCard({
 
 // ─── Arena Map View ────────────────────────────────────────────────────────────
 
-const MAP_CELL = 32
+const MAP_CELL = 70
 const MAP_GRID = 20
 
 function decoEmoji(type: string) {
@@ -477,7 +477,7 @@ function ArenaMapView({
               top: deco.grid_y * MAP_CELL,
               width: MAP_CELL,
               height: MAP_CELL,
-              fontSize: 14,
+              fontSize: 28,
               transform: deco.rotation ? `rotate(${deco.rotation}deg)` : undefined,
               opacity: 0.7,
             }}
@@ -529,27 +529,29 @@ function ArenaMapView({
             >
               <Monitor
                 style={{
-                  width: 8, height: 8,
+                  width: 18, height: 18,
                   color: !occupied ? '#10b981' : isExpired ? '#ef4444' : isWarning ? '#f59e0b' : '#f87171',
                 }}
               />
               <span
-                className="truncate text-center leading-tight mt-0.5"
-                style={{ fontSize: 6, maxWidth: MAP_CELL - 4, color: 'rgba(255,255,255,0.7)' }}
+                className="truncate text-center leading-tight mt-1 font-semibold"
+                style={{ fontSize: 11, maxWidth: MAP_CELL - 6, color: 'rgba(255,255,255,0.85)' }}
               >
                 {station.name}
               </span>
               {occupied && !isExpired && (
                 <span
-                  className="leading-none tabular-nums"
+                  className="leading-none tabular-nums font-bold mt-0.5"
                   style={{
-                    fontSize: 6,
+                    fontSize: 12,
                     color: isWarning ? '#f59e0b' : '#10b981',
-                    marginTop: 1,
                   }}
                 >
                   {formatRemaining(remainingMs)}
                 </span>
+              )}
+              {isExpired && (
+                <span className="text-[10px] font-semibold text-destructive mt-0.5">Истекло</span>
               )}
             </button>
           )

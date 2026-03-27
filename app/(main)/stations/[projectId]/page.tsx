@@ -67,7 +67,7 @@ function InlineEdit({ value, onSave, onCancel, placeholder }: { value: string; o
 // ─── Map Editor ──────────────────────────────────────────────────────────────
 
 const GRID = 20
-const CELL = 34
+const CELL = 70
 
 const ZONE_COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -407,7 +407,7 @@ function MapEditor({ projectId, zones, stations, decorations, onSaved, showFlash
               key={deco.id}
               draggable
               onDragStart={e => { e.stopPropagation(); handleDragStart(e, 'deco', deco.id, deco.grid_x, deco.grid_y) }}
-              className="absolute flex items-center justify-center text-sm select-none group"
+              className="absolute flex items-center justify-center text-2xl select-none group"
               style={{
                 left: deco.grid_x * CELL,
                 top: deco.grid_y * CELL,
@@ -449,12 +449,12 @@ function MapEditor({ projectId, zones, stations, decorations, onSaved, showFlash
                   cursor: 'grab',
                   backgroundColor: 'rgba(99,102,241,0.2)',
                   borderColor: 'rgba(99,102,241,0.6)',
-                  fontSize: 8,
+                  fontSize: 11,
                 }}
                 title={station.name}
               >
-                <Monitor style={{ width: 9, height: 9, opacity: 0.8 }} />
-                <span className="truncate leading-tight mt-0.5" style={{ maxWidth: CELL - 6, fontSize: 7 }}>
+                <Monitor style={{ width: 18, height: 18, opacity: 0.8 }} />
+                <span className="truncate leading-tight mt-1 font-semibold" style={{ maxWidth: CELL - 8, fontSize: 11 }}>
                   {station.name}
                 </span>
               </div>
