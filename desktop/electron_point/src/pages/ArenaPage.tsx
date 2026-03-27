@@ -1,13 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Clock, LogOut, Monitor, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, List, LogOut, Map as MapIcon, Monitor, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { toastError, toastInfo } from '@/lib/toast'
 import * as api from '@/lib/api'
-import type { AppConfig, ArenaSession, ArenaStation, ArenaTariff, ArenaZone, BootstrapData, OperatorSession } from '@/types'
+import type { AppConfig, ArenaMapDecoration, ArenaSession, ArenaStation, ArenaTariff, ArenaZone, BootstrapData, OperatorSession } from '@/types'
 
 interface Props {
   config: AppConfig
@@ -248,7 +247,7 @@ function ManageSessionModal({
   )
 }
 
-// ─── Station Card ─────────────────────────────────────────────────────────────
+// ─── Station Card (list view) ──────────────────────────────────────────────────
 
 function StationCard({
   station,
@@ -372,6 +371,194 @@ function StationCard({
   )
 }
 
+// ─── Arena Map View ────────────────────────────────────────────────────────────
+
+const MAP_CELL = 32
+const MAP_GRID = 20
+
+function decoEmoji(type: string) {
+  const map: Record<string, string> = {
+    sofa: '🛋', entrance: '🚪', wall: '🧱', desk: '🖥', arrow: '➡️', label: '🏷',
+  }
+  return map[type] ?? '❓'
+}
+
+function ArenaMapView({
+  zones,
+  stations,
+  decorations,
+  sessions,
+  tariffs,
+  onStationClick,
+}: {
+  zones: ArenaZone[]
+  stations: ArenaStation[]
+  decorations: ArenaMapDecoration[]
+  sessions: ArenaSession[]
+  tariffs: ArenaTariff[]
+  onStationClick: (station: ArenaStation) => void
+}) {
+  const [now, setNow] = useState(Date.now())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const sessionsByStation = new Map(sessions.map(s => [s.station_id, s]))
+  const stationsOnMap = stations.filter(s => s.grid_x != null && s.grid_y != null)
+  const zonesOnMap = zones.filter(z => z.grid_x != null)
+
+  if (stationsOnMap.length === 0) {
+    return (
+      <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
+        <MapIcon className="h-8 w-8 opacity-30" />
+        <p className="text-sm">Карта не настроена. Настройте расположение станций на сайте Orda.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="overflow-auto">
+      <div
+        className="relative border border-white/10 rounded-lg bg-zinc-900/50"
+        style={{ width: MAP_GRID * MAP_CELL, height: MAP_GRID * MAP_CELL, minWidth: MAP_GRID * MAP_CELL }}
+      >
+        {/* Grid lines */}
+        <svg
+          className="absolute inset-0 pointer-events-none"
+          width={MAP_GRID * MAP_CELL} height={MAP_GRID * MAP_CELL}
+        >
+          {Array.from({ length: MAP_GRID + 1 }, (_, i) => (
+            <g key={i}>
+              <line x1={i * MAP_CELL} y1={0} x2={i * MAP_CELL} y2={MAP_GRID * MAP_CELL} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+              <line x1={0} y1={i * MAP_CELL} x2={MAP_GRID * MAP_CELL} y2={i * MAP_CELL} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+            </g>
+          ))}
+        </svg>
+
+        {/* Zones */}
+        {zonesOnMap.map(zone => {
+          const x = zone.grid_x!
+          const y = zone.grid_y!
+          const w = zone.grid_w ?? 4
+          const h = zone.grid_h ?? 4
+          const color = zone.color ?? '#3b82f6'
+          return (
+            <div
+              key={zone.id}
+              className="absolute rounded pointer-events-none"
+              style={{
+                left: x * MAP_CELL + 1,
+                top: y * MAP_CELL + 1,
+                width: w * MAP_CELL - 2,
+                height: h * MAP_CELL - 2,
+                backgroundColor: color + '18',
+                border: `1px solid ${color}44`,
+              }}
+            >
+              <div
+                className="absolute top-0 left-0 right-0 truncate rounded-tl rounded-tr px-1.5 text-[9px] font-semibold"
+                style={{ backgroundColor: color + '30', color: color }}
+              >
+                {zone.name}
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Decorations */}
+        {decorations.map(deco => (
+          <div
+            key={deco.id}
+            className="absolute flex items-center justify-center pointer-events-none select-none"
+            style={{
+              left: deco.grid_x * MAP_CELL,
+              top: deco.grid_y * MAP_CELL,
+              width: MAP_CELL,
+              height: MAP_CELL,
+              fontSize: 14,
+              transform: deco.rotation ? `rotate(${deco.rotation}deg)` : undefined,
+              opacity: 0.7,
+            }}
+          >
+            {deco.type === 'label' && deco.label
+              ? <span className="text-[9px] text-white/50 text-center leading-tight">{deco.label}</span>
+              : decoEmoji(deco.type)
+            }
+          </div>
+        ))}
+
+        {/* Stations */}
+        {stationsOnMap.map(station => {
+          const x = station.grid_x!
+          const y = station.grid_y!
+          const activeSession = sessionsByStation.get(station.id)
+          const occupied = !!activeSession
+          const tariff = activeSession?.tariff_id ? tariffs.find(t => t.id === activeSession.tariff_id) : null
+          const remainingMs = activeSession ? new Date(activeSession.ends_at).getTime() - now : 0
+          const isExpired = occupied && remainingMs <= 0
+          const isWarning = occupied && !isExpired && remainingMs < 5 * 60_000
+
+          return (
+            <button
+              key={station.id}
+              type="button"
+              onClick={() => onStationClick(station)}
+              className="absolute flex flex-col items-center justify-center rounded transition-all active:scale-95"
+              style={{
+                left: x * MAP_CELL + 1,
+                top: y * MAP_CELL + 1,
+                width: MAP_CELL - 2,
+                height: MAP_CELL - 2,
+                zIndex: 4,
+                backgroundColor: !occupied
+                  ? 'rgba(16,185,129,0.2)'
+                  : isExpired
+                    ? 'rgba(239,68,68,0.3)'
+                    : isWarning
+                      ? 'rgba(245,158,11,0.25)'
+                      : 'rgba(239,68,68,0.2)',
+                border: `1px solid ${
+                  !occupied ? 'rgba(16,185,129,0.5)'
+                  : isExpired ? 'rgba(239,68,68,0.6)'
+                  : isWarning ? 'rgba(245,158,11,0.5)'
+                  : 'rgba(239,68,68,0.4)'
+                }`,
+              }}
+            >
+              <Monitor
+                style={{
+                  width: 8, height: 8,
+                  color: !occupied ? '#10b981' : isExpired ? '#ef4444' : isWarning ? '#f59e0b' : '#f87171',
+                }}
+              />
+              <span
+                className="truncate text-center leading-tight mt-0.5"
+                style={{ fontSize: 6, maxWidth: MAP_CELL - 4, color: 'rgba(255,255,255,0.7)' }}
+              >
+                {station.name}
+              </span>
+              {occupied && !isExpired && (
+                <span
+                  className="leading-none tabular-nums"
+                  style={{
+                    fontSize: 6,
+                    color: isWarning ? '#f59e0b' : '#10b981',
+                    marginTop: 1,
+                  }}
+                >
+                  {formatRemaining(remainingMs)}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ArenaPage({
@@ -389,8 +576,10 @@ export default function ArenaPage({
   const [stations, setStations] = useState<ArenaStation[]>([])
   const [tariffs, setTariffs] = useState<ArenaTariff[]>([])
   const [sessions, setSessions] = useState<ArenaSession[]>([])
+  const [decorations, setDecorations] = useState<ArenaMapDecoration[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list')
 
   // Modal state
   const [startTarget, setStartTarget] = useState<ArenaStation | null>(null)
@@ -408,6 +597,7 @@ export default function ArenaPage({
       setStations(data.stations)
       setTariffs(data.tariffs)
       setSessions(data.sessions)
+      setDecorations(data.decorations ?? [])
     } catch (err: any) {
       toastError(err?.message || 'Не удалось загрузить зал')
     } finally {
@@ -447,7 +637,6 @@ export default function ArenaPage({
         void api.notifyArena5min(config, session, s.id)
         const st = stations.find((x) => x.id === s.station_id)
         toastInfo(`⏰ ${st?.name ?? 'Станция'}: осталось менее 5 мин`, 8000)
-        // Play beep via Web Audio
         try {
           const ctx = new AudioContext()
           const osc = ctx.createOscillator()
@@ -526,7 +715,16 @@ export default function ArenaPage({
     }
   }
 
-  // ─── Group stations by zone ──────────────────────────────────────────────────
+  function handleStationClick(station: ArenaStation) {
+    const activeSession = sessions.find(s => s.station_id === station.id)
+    if (activeSession) {
+      setManageTarget({ station, session: activeSession })
+    } else {
+      setStartTarget(station)
+    }
+  }
+
+  // ─── Group stations by zone (list view) ──────────────────────────────────────
 
   const sessionsByStation = new Map(sessions.map((s) => [s.station_id, s]))
 
@@ -535,6 +733,8 @@ export default function ArenaPage({
     zone: z,
     stations: stations.filter((s) => s.zone_id === z.id),
   })).filter((g) => g.stations.length > 0)
+
+  const hasMapData = stations.some(s => s.grid_x != null)
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -553,6 +753,28 @@ export default function ArenaPage({
         </div>
 
         <div className="flex shrink-0 items-center gap-2 no-drag">
+          {/* Map/List toggle */}
+          {hasMapData && (
+            <div className="flex rounded-lg border border-border overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`px-2 py-1.5 text-xs transition ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                title="Список"
+              >
+                <List className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('map')}
+                className={`px-2 py-1.5 text-xs transition ${viewMode === 'map' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                title="Карта"
+              >
+                <MapIcon className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
           <Button
             type="button"
             variant="ghost"
@@ -601,6 +823,31 @@ export default function ArenaPage({
           <div className="flex h-32 flex-col items-center justify-center gap-2 text-muted-foreground">
             <Monitor className="h-8 w-8 opacity-30" />
             <p className="text-sm">Нет станций. Добавьте их на сайте Orda.</p>
+          </div>
+        ) : viewMode === 'map' ? (
+          <div className="flex flex-col gap-4">
+            <ArenaMapView
+              zones={zones}
+              stations={stations}
+              decorations={decorations}
+              sessions={sessions}
+              tariffs={tariffs}
+              onStationClick={handleStationClick}
+            />
+            {/* Mini summary under map */}
+            <div className="flex items-center gap-4 rounded-xl bg-muted/30 px-4 py-3 text-sm">
+              <span className="flex items-center gap-1.5 text-emerald-500">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {stations.length - sessions.length} свободно
+              </span>
+              <span className="flex items-center gap-1.5 text-red-400">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {sessions.length} занято
+              </span>
+              <span className="ml-auto text-muted-foreground">
+                {sessions.reduce((sum, s) => sum + (s.amount || 0), 0).toLocaleString('ru-RU')} ₸
+              </span>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-6">

@@ -400,6 +400,11 @@ export interface ArenaZone {
   point_project_id: string
   name: string
   is_active: boolean
+  grid_x: number | null
+  grid_y: number | null
+  grid_w: number | null
+  grid_h: number | null
+  color: string | null
 }
 
 export interface ArenaStation {
@@ -409,6 +414,21 @@ export interface ArenaStation {
   name: string
   order_index: number
   is_active: boolean
+  grid_x: number | null
+  grid_y: number | null
+}
+
+export interface ArenaMapDecoration {
+  id: string
+  point_project_id: string
+  type: string
+  grid_x: number
+  grid_y: number
+  grid_w: number
+  grid_h: number
+  label: string | null
+  rotation: number
+  created_at: string
 }
 
 export interface ArenaTariff {

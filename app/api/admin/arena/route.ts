@@ -38,17 +38,20 @@ export async function GET(request: Request) {
       { data: zones, error: zonesError },
       { data: stations, error: stationsError },
       { data: tariffs, error: tariffsError },
+      { data: decorations, error: decorationsError },
     ] = await Promise.all([
       supabase.from('arena_zones').select('*').eq('point_project_id', projectId).order('name'),
       supabase.from('arena_stations').select('*').eq('point_project_id', projectId).order('order_index').order('name'),
       supabase.from('arena_tariffs').select('*').eq('point_project_id', projectId).order('price'),
+      supabase.from('arena_map_decorations').select('*').eq('point_project_id', projectId).order('created_at'),
     ])
 
     if (zonesError) throw zonesError
     if (stationsError) throw stationsError
     if (tariffsError) throw tariffsError
+    if (decorationsError) throw decorationsError
 
-    return json({ ok: true, data: { project, zones: zones || [], stations: stations || [], tariffs: tariffs || [] } })
+    return json({ ok: true, data: { project, zones: zones || [], stations: stations || [], tariffs: tariffs || [], decorations: decorations || [] } })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/arena:get', message: error?.message || 'Arena GET error' })
     return json({ error: error?.message || 'Ошибка загрузки' }, 500)
@@ -160,6 +163,71 @@ export async function POST(request: Request) {
       const { tariffId } = body
       if (!tariffId) return json({ error: 'tariffId required' }, 400)
       const { error } = await supabase.from('arena_tariffs').delete().eq('id', tariffId)
+      if (error) throw error
+      return json({ ok: true })
+    }
+
+    // ─── MAP LAYOUT ──────────────────────────────────────────────────
+    if (body.action === 'updateMapLayout') {
+      const { stations: stationUpdates, zones: zoneUpdates } = body
+      if (Array.isArray(stationUpdates)) {
+        for (const u of stationUpdates) {
+          if (!u.id) continue
+          await supabase.from('arena_stations').update({ grid_x: u.grid_x, grid_y: u.grid_y }).eq('id', u.id)
+        }
+      }
+      if (Array.isArray(zoneUpdates)) {
+        for (const u of zoneUpdates) {
+          if (!u.id) continue
+          const upd: any = {}
+          if (u.grid_x !== undefined) upd.grid_x = u.grid_x
+          if (u.grid_y !== undefined) upd.grid_y = u.grid_y
+          if (u.grid_w !== undefined) upd.grid_w = u.grid_w
+          if (u.grid_h !== undefined) upd.grid_h = u.grid_h
+          if (u.color !== undefined) upd.color = u.color
+          if (Object.keys(upd).length > 0) await supabase.from('arena_zones').update(upd).eq('id', u.id)
+        }
+      }
+      return json({ ok: true })
+    }
+
+    if (body.action === 'createDecoration') {
+      const { projectId, type, grid_x, grid_y, grid_w, grid_h, label, rotation } = body
+      if (!projectId) return json({ error: 'projectId required' }, 400)
+      const { data, error } = await supabase.from('arena_map_decorations').insert({
+        point_project_id: projectId,
+        type: type || 'label',
+        grid_x: grid_x ?? 0,
+        grid_y: grid_y ?? 0,
+        grid_w: grid_w ?? 1,
+        grid_h: grid_h ?? 1,
+        label: label || null,
+        rotation: rotation ?? 0,
+      }).select().single()
+      if (error) throw error
+      return json({ ok: true, data })
+    }
+
+    if (body.action === 'updateDecoration') {
+      const { decorationId, grid_x, grid_y, grid_w, grid_h, label, rotation, type } = body
+      if (!decorationId) return json({ error: 'decorationId required' }, 400)
+      const upd: any = {}
+      if (grid_x !== undefined) upd.grid_x = grid_x
+      if (grid_y !== undefined) upd.grid_y = grid_y
+      if (grid_w !== undefined) upd.grid_w = grid_w
+      if (grid_h !== undefined) upd.grid_h = grid_h
+      if (label !== undefined) upd.label = label
+      if (rotation !== undefined) upd.rotation = rotation
+      if (type !== undefined) upd.type = type
+      const { data, error } = await supabase.from('arena_map_decorations').update(upd).eq('id', decorationId).select().single()
+      if (error) throw error
+      return json({ ok: true, data })
+    }
+
+    if (body.action === 'deleteDecoration') {
+      const { decorationId } = body
+      if (!decorationId) return json({ error: 'decorationId required' }, 400)
+      const { error } = await supabase.from('arena_map_decorations').delete().eq('id', decorationId)
       if (error) throw error
       return json({ ok: true })
     }

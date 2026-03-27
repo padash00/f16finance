@@ -1,19 +1,29 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
-  BarChart3, Settings, ChevronDown, ChevronUp, Loader2, CheckCircle2,
-  AlertTriangle, RefreshCw, TrendingUp, Calendar,
+  BarChart3, Settings, Loader2, CheckCircle2,
+  AlertTriangle, RefreshCw, TrendingUp, Calendar, Map,
 } from 'lucide-react'
 import Link from 'next/link'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Zone = { id: string; name: string; is_active: boolean }
-type Station = { id: string; zone_id: string | null; name: string; order_index: number; is_active: boolean }
+type Zone = {
+  id: string; name: string; is_active: boolean
+  grid_x: number | null; grid_y: number | null; grid_w: number; grid_h: number; color: string | null
+}
+type Station = {
+  id: string; zone_id: string | null; name: string; order_index: number; is_active: boolean
+  grid_x: number | null; grid_y: number | null
+}
 type Tariff = { id: string; zone_id: string; name: string; duration_minutes: number; price: number; is_active: boolean }
+type Decoration = {
+  id: string; type: string; grid_x: number; grid_y: number; grid_w: number; grid_h: number
+  label: string | null; rotation: number
+}
 type Session = {
   id: string; station_id: string; tariff_id: string; started_at: string; ends_at: string
   ended_at: string | null; amount: number; status: string
@@ -54,6 +64,556 @@ function InlineEdit({ value, onSave, onCancel, placeholder }: { value: string; o
   )
 }
 
+// ─── Map Editor ──────────────────────────────────────────────────────────────
+
+const GRID = 20
+const CELL = 34
+
+const ZONE_COLORS = [
+  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#a78bfa',
+]
+
+const DECORATION_TYPES = [
+  { type: 'sofa', emoji: '🛋', label: 'Диван' },
+  { type: 'entrance', emoji: '🚪', label: 'Вход/выход' },
+  { type: 'wall', emoji: '🧱', label: 'Стена' },
+  { type: 'label', emoji: 'Aa', label: 'Надпись' },
+  { type: 'desk', emoji: '🖥', label: 'Стол' },
+  { type: 'arrow', emoji: '➡️', label: 'Стрелка' },
+]
+
+function decoEmoji(type: string) {
+  return DECORATION_TYPES.find(d => d.type === type)?.emoji ?? '❓'
+}
+
+interface MapEditorProps {
+  projectId: string
+  zones: Zone[]
+  stations: Station[]
+  decorations: Decoration[]
+  onSaved: (zones: Zone[], stations: Station[], decorations: Decoration[]) => void
+  showFlash: (type: 'ok' | 'err', msg: string) => void
+}
+
+function MapEditor({ projectId, zones, stations, decorations, onSaved, showFlash }: MapEditorProps) {
+  // Local mutable state for positions
+  const [localZones, setLocalZones] = useState<Zone[]>(zones)
+  const [localStations, setLocalStations] = useState<Station[]>(stations)
+  const [localDecos, setLocalDecos] = useState<Decoration[]>(decorations)
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  // Drag state
+  const dragRef = useRef<{
+    type: 'station' | 'zone' | 'deco'
+    id: string
+    // offset within element in cells
+    ox: number
+    oy: number
+  } | null>(null)
+
+  // Selected zone for color editing
+  const [colorPicker, setColorPicker] = useState<string | null>(null)
+
+  // New decoration modal
+  const [addDecoCell, setAddDecoCell] = useState<{ x: number; y: number } | null>(null)
+  const [newDecoType, setNewDecoType] = useState('sofa')
+  const [newDecoLabel, setNewDecoLabel] = useState('')
+
+  // Sync when parent data changes
+  useEffect(() => { setLocalZones(zones) }, [zones])
+  useEffect(() => { setLocalStations(stations) }, [stations])
+  useEffect(() => { setLocalDecos(decorations) }, [decorations])
+
+  function markDirty() {
+    setDirty(true)
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => void autoSave(), 1000)
+  }
+
+  async function autoSave() {
+    setSaving(true)
+    try {
+      await fetch('/api/admin/arena', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateMapLayout',
+          stations: localStations.map(s => ({ id: s.id, grid_x: s.grid_x, grid_y: s.grid_y })),
+          zones: localZones.map(z => ({ id: z.id, grid_x: z.grid_x, grid_y: z.grid_y, grid_w: z.grid_w, grid_h: z.grid_h, color: z.color })),
+        }),
+      })
+      setDirty(false)
+      onSaved(localZones, localStations, localDecos)
+    } catch {
+      showFlash('err', 'Не удалось сохранить карту')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function getCellFromEvent(e: React.DragEvent): { x: number; y: number } | null {
+    if (!gridRef.current) return null
+    const rect = gridRef.current.getBoundingClientRect()
+    const x = Math.floor((e.clientX - rect.left) / CELL)
+    const y = Math.floor((e.clientY - rect.top) / CELL)
+    if (x < 0 || y < 0 || x >= GRID || y >= GRID) return null
+    return { x, y }
+  }
+
+  function handleDragStart(e: React.DragEvent, type: 'station' | 'zone' | 'deco', id: string, itemX: number, itemY: number) {
+    if (!gridRef.current) return
+    const rect = gridRef.current.getBoundingClientRect()
+    const ox = Math.floor((e.clientX - rect.left) / CELL) - itemX
+    const oy = Math.floor((e.clientY - rect.top) / CELL) - itemY
+    dragRef.current = { type, id, ox, oy }
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    const cell = getCellFromEvent(e)
+    if (!cell || !dragRef.current) return
+    const { type, id, ox, oy } = dragRef.current
+    let nx = Math.max(0, cell.x - ox)
+    let ny = Math.max(0, cell.y - oy)
+
+    if (type === 'station') {
+      nx = Math.min(nx, GRID - 1)
+      ny = Math.min(ny, GRID - 1)
+      setLocalStations(prev => prev.map(s => s.id === id ? { ...s, grid_x: nx, grid_y: ny } : s))
+      markDirty()
+    } else if (type === 'zone') {
+      const zone = localZones.find(z => z.id === id)
+      if (!zone) return
+      nx = Math.min(nx, GRID - (zone.grid_w ?? 4))
+      ny = Math.min(ny, GRID - (zone.grid_h ?? 4))
+      setLocalZones(prev => prev.map(z => z.id === id ? { ...z, grid_x: nx, grid_y: ny } : z))
+      markDirty()
+    } else if (type === 'deco') {
+      nx = Math.min(nx, GRID - 1)
+      ny = Math.min(ny, GRID - 1)
+      setLocalDecos(prev => prev.map(d => d.id === id ? { ...d, grid_x: nx, grid_y: ny } : d))
+      // Save decoration position directly
+      void fetch('/api/admin/arena', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateDecoration', decorationId: id, grid_x: nx, grid_y: ny }),
+      })
+    }
+    dragRef.current = null
+  }
+
+  function handleGridClick(e: React.MouseEvent) {
+    if (!gridRef.current) return
+    const rect = gridRef.current.getBoundingClientRect()
+    const x = Math.floor((e.clientX - rect.left) / CELL)
+    const y = Math.floor((e.clientY - rect.top) / CELL)
+    if (x < 0 || y < 0 || x >= GRID || y >= GRID) return
+    setAddDecoCell({ x, y })
+    setNewDecoType('sofa')
+    setNewDecoLabel('')
+  }
+
+  async function handleAddDecoration() {
+    if (!addDecoCell) return
+    try {
+      const res = await fetch('/api/admin/arena', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createDecoration',
+          projectId,
+          type: newDecoType,
+          grid_x: addDecoCell.x,
+          grid_y: addDecoCell.y,
+          grid_w: 1, grid_h: 1,
+          label: newDecoLabel || null,
+          rotation: 0,
+        }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error)
+      setLocalDecos(prev => [...prev, data.data])
+      onSaved(localZones, localStations, [...localDecos, data.data])
+      setAddDecoCell(null)
+    } catch (e: any) {
+      showFlash('err', e.message)
+    }
+  }
+
+  async function handleDeleteDeco(id: string) {
+    try {
+      await fetch('/api/admin/arena', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteDecoration', decorationId: id }),
+      })
+      setLocalDecos(prev => prev.filter(d => d.id !== id))
+      onSaved(localZones, localStations, localDecos.filter(d => d.id !== id))
+    } catch (e: any) {
+      showFlash('err', e.message)
+    }
+  }
+
+  async function handleZoneColor(zoneId: string, color: string) {
+    setLocalZones(prev => prev.map(z => z.id === zoneId ? { ...z, color } : z))
+    setColorPicker(null)
+    await fetch('/api/admin/arena', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateMapLayout', zones: [{ id: zoneId, color }], stations: [] }),
+    })
+    onSaved(localZones.map(z => z.id === zoneId ? { ...z, color } : z), localStations, localDecos)
+  }
+
+  async function handleZoneResize(zoneId: string, dw: number, dh: number) {
+    setLocalZones(prev => prev.map(z => {
+      if (z.id !== zoneId) return z
+      const nw = Math.max(2, Math.min(GRID - (z.grid_x ?? 0), (z.grid_w ?? 4) + dw))
+      const nh = Math.max(2, Math.min(GRID - (z.grid_y ?? 0), (z.grid_h ?? 4) + dh))
+      return { ...z, grid_w: nw, grid_h: nh }
+    }))
+    markDirty()
+  }
+
+  const stationsOnMap = localStations.filter(s => s.grid_x != null && s.grid_y != null)
+  const stationsOff = localStations.filter(s => s.grid_x == null || s.grid_y == null)
+
+  return (
+    <div className="flex gap-4">
+      {/* Left: grid */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span>Перетащите элементы на сетку. Правая кнопка на ячейке — добавить декор.</span>
+          {dirty && <span className="text-amber-400 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Сохранение...</span>}
+          {!dirty && !saving && <span className="text-emerald-400 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Сохранено</span>}
+        </div>
+
+        {/* Grid */}
+        <div
+          ref={gridRef}
+          className="relative border border-white/10 rounded-lg overflow-hidden bg-zinc-900 cursor-crosshair"
+          style={{ width: GRID * CELL, height: GRID * CELL }}
+          onDragOver={e => e.preventDefault()}
+          onDrop={handleDrop}
+          onClick={handleGridClick}
+        >
+          {/* Grid lines */}
+          <svg
+            className="absolute inset-0 pointer-events-none"
+            width={GRID * CELL} height={GRID * CELL}
+            style={{ zIndex: 0 }}
+          >
+            {Array.from({ length: GRID + 1 }, (_, i) => (
+              <g key={i}>
+                <line x1={i * CELL} y1={0} x2={i * CELL} y2={GRID * CELL} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                <line x1={0} y1={i * CELL} x2={GRID * CELL} y2={i * CELL} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+              </g>
+            ))}
+          </svg>
+
+          {/* Zones */}
+          {localZones.filter(z => z.grid_x != null).map(zone => {
+            const x = zone.grid_x!
+            const y = zone.grid_y!
+            const w = zone.grid_w ?? 4
+            const h = zone.grid_h ?? 4
+            const color = zone.color ?? '#3b82f6'
+            return (
+              <div
+                key={zone.id}
+                draggable
+                onDragStart={e => {
+                  e.stopPropagation()
+                  handleDragStart(e, 'zone', zone.id, x, y)
+                }}
+                onClick={e => { e.stopPropagation(); setColorPicker(colorPicker === zone.id ? null : zone.id) }}
+                className="absolute rounded select-none group"
+                style={{
+                  left: x * CELL + 1,
+                  top: y * CELL + 1,
+                  width: w * CELL - 2,
+                  height: h * CELL - 2,
+                  backgroundColor: color + '22',
+                  border: `2px solid ${color}55`,
+                  zIndex: 1,
+                  cursor: 'grab',
+                }}
+              >
+                <div
+                  className="absolute top-0 left-0 right-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-tl rounded-tr truncate"
+                  style={{ backgroundColor: color + '40', color: color }}
+                >
+                  {zone.name}
+                </div>
+                {/* Resize handle */}
+                <div
+                  className="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize opacity-0 group-hover:opacity-100"
+                  style={{ background: color }}
+                  onMouseDown={e => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    const startX = e.clientX
+                    const startY = e.clientY
+                    const startW = w
+                    const startH = h
+                    function onMove(me: MouseEvent) {
+                      const dw = Math.round((me.clientX - startX) / CELL)
+                      const dh = Math.round((me.clientY - startY) / CELL)
+                      setLocalZones(prev => prev.map(z => {
+                        if (z.id !== zone.id) return z
+                        const nw = Math.max(2, Math.min(GRID - (z.grid_x ?? 0), startW + dw))
+                        const nh = Math.max(2, Math.min(GRID - (z.grid_y ?? 0), startH + dh))
+                        return { ...z, grid_w: nw, grid_h: nh }
+                      }))
+                    }
+                    function onUp() {
+                      markDirty()
+                      document.removeEventListener('mousemove', onMove)
+                      document.removeEventListener('mouseup', onUp)
+                    }
+                    document.addEventListener('mousemove', onMove)
+                    document.addEventListener('mouseup', onUp)
+                  }}
+                />
+                {/* Color picker popover */}
+                {colorPicker === zone.id && (
+                  <div
+                    className="absolute z-50 top-6 left-0 flex flex-wrap gap-1 rounded-lg border border-white/20 bg-zinc-900 p-2 shadow-xl"
+                    style={{ width: 120 }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {ZONE_COLORS.map(c => (
+                      <button
+                        key={c}
+                        className="h-5 w-5 rounded-full border-2 hover:scale-110 transition-transform"
+                        style={{ backgroundColor: c, borderColor: color === c ? 'white' : 'transparent' }}
+                        onClick={() => handleZoneColor(zone.id, c)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* Decorations */}
+          {localDecos.map(deco => (
+            <div
+              key={deco.id}
+              draggable
+              onDragStart={e => { e.stopPropagation(); handleDragStart(e, 'deco', deco.id, deco.grid_x, deco.grid_y) }}
+              className="absolute flex items-center justify-center text-sm select-none group"
+              style={{
+                left: deco.grid_x * CELL,
+                top: deco.grid_y * CELL,
+                width: CELL,
+                height: CELL,
+                zIndex: 2,
+                cursor: 'grab',
+                transform: deco.rotation ? `rotate(${deco.rotation}deg)` : undefined,
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <span title={deco.label ?? deco.type}>{decoEmoji(deco.type)}{deco.label && deco.type === 'label' ? '' : ''}</span>
+              {deco.type === 'label' && deco.label && (
+                <span className="absolute top-full left-0 text-[9px] text-white/60 whitespace-nowrap">{deco.label}</span>
+              )}
+              <button
+                className="absolute -top-1 -right-1 hidden group-hover:flex h-3.5 w-3.5 items-center justify-center rounded-full bg-destructive text-[9px] text-white"
+                onClick={e => { e.stopPropagation(); void handleDeleteDeco(deco.id) }}
+              >×</button>
+            </div>
+          ))}
+
+          {/* Stations on map */}
+          {stationsOnMap.map(station => {
+            const x = station.grid_x!
+            const y = station.grid_y!
+            return (
+              <div
+                key={station.id}
+                draggable
+                onDragStart={e => { e.stopPropagation(); handleDragStart(e, 'station', station.id, x, y) }}
+                className="absolute flex flex-col items-center justify-center rounded border text-center select-none"
+                style={{
+                  left: x * CELL + 2,
+                  top: y * CELL + 2,
+                  width: CELL - 4,
+                  height: CELL - 4,
+                  zIndex: 3,
+                  cursor: 'grab',
+                  backgroundColor: 'rgba(99,102,241,0.2)',
+                  borderColor: 'rgba(99,102,241,0.6)',
+                  fontSize: 8,
+                }}
+                title={station.name}
+              >
+                <Monitor style={{ width: 9, height: 9, opacity: 0.8 }} />
+                <span className="truncate leading-tight mt-0.5" style={{ maxWidth: CELL - 6, fontSize: 7 }}>
+                  {station.name}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Add decoration modal */}
+        {addDecoCell && (
+          <div
+            className="flex flex-col gap-3 rounded-xl border border-white/10 bg-zinc-900 p-3"
+            style={{ width: GRID * CELL }}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Добавить декор ({addDecoCell.x}, {addDecoCell.y})</span>
+              <button onClick={() => setAddDecoCell(null)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {DECORATION_TYPES.map(d => (
+                <button
+                  key={d.type}
+                  onClick={() => setNewDecoType(d.type)}
+                  className={`flex flex-col items-center gap-0.5 rounded-lg border px-2 py-1.5 text-xs transition ${newDecoType === d.type ? 'border-primary bg-primary/10' : 'border-white/10 bg-white/5 hover:border-white/20'}`}
+                >
+                  <span className="text-base">{d.emoji}</span>
+                  <span className="text-muted-foreground">{d.label}</span>
+                </button>
+              ))}
+            </div>
+            {newDecoType === 'label' && (
+              <input
+                value={newDecoLabel}
+                onChange={e => setNewDecoLabel(e.target.value)}
+                placeholder="Текст надписи"
+                className="rounded border border-white/20 bg-background px-2 py-1 text-sm"
+              />
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => void handleAddDecoration()}
+                className="flex-1 rounded-lg bg-primary py-1.5 text-sm font-medium text-primary-foreground"
+              >
+                Добавить
+              </button>
+              <button onClick={() => setAddDecoCell(null)} className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-muted-foreground">
+                Отмена
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Right: sidebar - zones on/off map, unplaced stations */}
+      <div className="flex w-48 flex-col gap-4">
+        {/* Zones placement */}
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Зоны</p>
+          <div className="space-y-1.5">
+            {localZones.map(zone => {
+              const onMap = zone.grid_x != null
+              const color = zone.color ?? '#3b82f6'
+              return (
+                <div key={zone.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs">
+                  <span className="flex items-center gap-1.5 truncate">
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
+                    <span className="truncate">{zone.name}</span>
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (onMap) {
+                        setLocalZones(prev => prev.map(z => z.id === zone.id ? { ...z, grid_x: null, grid_y: null } : z))
+                      } else {
+                        setLocalZones(prev => prev.map(z => z.id === zone.id ? { ...z, grid_x: 0, grid_y: 0 } : z))
+                      }
+                      markDirty()
+                    }}
+                    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium transition ${onMap ? 'bg-destructive/20 text-destructive hover:bg-destructive/30' : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'}`}
+                  >
+                    {onMap ? 'Убрать' : 'На карту'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Unplaced stations */}
+        {stationsOff.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Станции вне карты</p>
+            <p className="mb-2 text-[10px] text-muted-foreground">Перетащите на карту или нажмите кнопку</p>
+            <div className="space-y-1">
+              {stationsOff.map(st => (
+                <div
+                  key={st.id}
+                  draggable
+                  onDragStart={e => handleDragStart(e, 'station', st.id, 0, 0)}
+                  className="flex cursor-grab items-center justify-between rounded border border-white/10 bg-white/5 px-2 py-1 text-xs"
+                >
+                  <span className="flex items-center gap-1 truncate">
+                    <Monitor className="h-3 w-3 shrink-0 text-indigo-400" />
+                    <span className="truncate">{st.name}</span>
+                  </span>
+                  <button
+                    onClick={() => {
+                      // Find first free cell
+                      const used = new Set(localStations.filter(s => s.grid_x != null).map(s => `${s.grid_x},${s.grid_y}`))
+                      let placed = false
+                      for (let y = 0; y < GRID && !placed; y++) {
+                        for (let x = 0; x < GRID && !placed; x++) {
+                          if (!used.has(`${x},${y}`)) {
+                            setLocalStations(prev => prev.map(s => s.id === st.id ? { ...s, grid_x: x, grid_y: y } : s))
+                            used.add(`${x},${y}`)
+                            placed = true
+                          }
+                        }
+                      }
+                      markDirty()
+                    }}
+                    className="shrink-0 rounded bg-emerald-500/20 px-1 py-0.5 text-[10px] text-emerald-400 hover:bg-emerald-500/30"
+                  >
+                    +
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Placed stations */}
+        {stationsOnMap.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">На карте</p>
+            <div className="space-y-1">
+              {stationsOnMap.map(st => (
+                <div key={st.id} className="flex items-center justify-between rounded border border-white/10 bg-white/5 px-2 py-1 text-xs">
+                  <span className="flex items-center gap-1 truncate">
+                    <Monitor className="h-3 w-3 shrink-0 text-indigo-400" />
+                    <span className="truncate">{st.name}</span>
+                  </span>
+                  <button
+                    onClick={() => {
+                      setLocalStations(prev => prev.map(s => s.id === st.id ? { ...s, grid_x: null, grid_y: null } : s))
+                      markDirty()
+                    }}
+                    className="shrink-0 rounded bg-destructive/20 px-1 py-0.5 text-[10px] text-destructive hover:bg-destructive/30"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function StationsPage() {
@@ -64,9 +624,10 @@ export default function StationsPage() {
   const [zones, setZones] = useState<Zone[]>([])
   const [stations, setStations] = useState<Station[]>([])
   const [tariffs, setTariffs] = useState<Tariff[]>([])
+  const [decorations, setDecorations] = useState<Decoration[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'manage' | 'analytics'>('manage')
+  const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics'>('manage')
 
   // Analytics
   const [sessions, setSessions] = useState<Session[]>([])
@@ -111,6 +672,7 @@ export default function StationsPage() {
       setZones(data.data.zones)
       setStations(data.data.stations)
       setTariffs(data.data.tariffs)
+      setDecorations(data.data.decorations || [])
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -253,7 +815,6 @@ export default function StationsPage() {
     return { tariff: t, count: tSessions.length, revenue: tSessions.reduce((s, x) => s + Number(x.amount), 0) }
   }).filter(x => x.count > 0).sort((a, b) => b.revenue - a.revenue)
 
-  // Hours distribution
   const hourBuckets = Array.from({ length: 24 }, (_, i) => ({ hour: i, count: 0 }))
   completedSessions.forEach(s => {
     const h = new Date(s.started_at).getHours()
@@ -305,6 +866,7 @@ export default function StationsPage() {
       <div className="flex gap-0 border-b border-white/10">
         {[
           { id: 'manage', label: 'Управление', icon: Settings },
+          { id: 'map', label: 'Карта', icon: Map },
           { id: 'analytics', label: 'Аналитика', icon: BarChart3 },
         ].map(({ id, label, icon: Icon }) => (
           <button
@@ -484,6 +1046,27 @@ export default function StationsPage() {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {activeTab === 'map' && (
+          <div>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Расставьте зоны и станции на карте. Зоны — прямоугольники, станции — квадраты.
+              Перетаскивайте элементы мышью. Нажмите на пустое место чтобы добавить декор.
+            </p>
+            <MapEditor
+              projectId={projectId}
+              zones={zones}
+              stations={stations}
+              decorations={decorations}
+              onSaved={(updatedZones, updatedStations, updatedDecos) => {
+                setZones(updatedZones)
+                setStations(updatedStations)
+                setDecorations(updatedDecos)
+              }}
+              showFlash={showFlash}
+            />
           </div>
         )}
 

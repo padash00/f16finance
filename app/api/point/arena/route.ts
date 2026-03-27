@@ -34,6 +34,7 @@ export async function GET(request: Request) {
       { data: stations, error: stationsError },
       { data: tariffs, error: tariffsError },
       { data: sessions, error: sessionsError },
+      { data: decorations },
     ] = await Promise.all([
       supabase
         .from('arena_zones')
@@ -59,6 +60,11 @@ export async function GET(request: Request) {
         .select('*')
         .eq('point_project_id', projectId)
         .eq('status', 'active'),
+      supabase
+        .from('arena_map_decorations')
+        .select('*')
+        .eq('point_project_id', projectId)
+        .order('created_at'),
     ])
 
     if (zonesError) throw zonesError
@@ -86,6 +92,7 @@ export async function GET(request: Request) {
         stations: stations || [],
         tariffs: tariffs || [],
         sessions: activeSessions,
+        decorations: decorations || [],
       },
     })
   } catch (error: any) {

@@ -22,6 +22,7 @@ import type {
   ArenaStation,
   ArenaTariff,
   ArenaSession,
+  ArenaMapDecoration,
 } from '@/types'
 import { parseMoney } from '@/lib/utils'
 
@@ -645,10 +646,10 @@ export async function validatePromoCode(
 export async function getArena(
   config: AppConfig,
   session: OperatorSession,
-): Promise<{ zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[] }> {
+): Promise<{ zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[]; decorations: ArenaMapDecoration[] }> {
   const data = await request<{
     ok: boolean
-    data: { zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[] }
+    data: { zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[]; decorations: ArenaMapDecoration[] }
   }>(config, 'GET', '/api/point/arena', undefined, operatorHeaders(session))
   return data.data
 }
