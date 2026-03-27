@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   ScanBarcode, Plus, Trash2, RefreshCw, LogOut, Clock,
-  CheckCircle2, AlertTriangle, ReceiptText, Package, WifiOff
+  CheckCircle2, AlertTriangle, ReceiptText, Package, WifiOff, KeyRound
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,6 +49,12 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
   // Подтверждение удаления
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [debtFilterOpId, setDebtFilterOpId] = useState<string>('all')
+
+  // Админ-модал
+  const [adminTarget, setAdminTarget] = useState<{ id: string; item_name: string; total_amount: number } | null>(null)
+  const [adminToken, setAdminTokenInput] = useState('')
+  const [adminLoading, setAdminLoading] = useState(false)
+  const [adminError, setAdminError] = useState<string | null>(null)
 
   // Сканер
   const [scannedBarcode, setScannedBarcode] = useState('')
@@ -258,6 +264,40 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
       setPendingCount(await getPendingCount())
     }
     setDebts(prev => prev.filter(d => d.id !== itemId))
+  }
+
+  async function handleAdminDelete() {
+    if (!adminTarget) return
+    setAdminLoading(true)
+    setAdminError(null)
+    try {
+      await api.deleteDebt(config, adminTarget.id, session.company.id, null, adminToken)
+      setDebts(prev => prev.filter(d => d.id !== adminTarget.id))
+      setAdminTarget(null)
+      setAdminTokenInput('')
+      toastSuccess('Долг удалён (инвентарь возвращён)')
+    } catch (err: any) {
+      setAdminError(err?.message === 'admin-token-required' ? 'Неверный токен' : (err?.message || 'Ошибка'))
+    } finally {
+      setAdminLoading(false)
+    }
+  }
+
+  async function handleAdminPay() {
+    if (!adminTarget) return
+    setAdminLoading(true)
+    setAdminError(null)
+    try {
+      await api.adminPayDebt(config, adminTarget.id, adminToken, session.company.id)
+      setDebts(prev => prev.filter(d => d.id !== adminTarget.id))
+      setAdminTarget(null)
+      setAdminTokenInput('')
+      toastSuccess('Долг отмечен оплаченным')
+    } catch (err: any) {
+      setAdminError(err?.message === 'admin-token-required' ? 'Неверный токен' : (err?.message || 'Ошибка'))
+    } finally {
+      setAdminLoading(false)
+    }
   }
 
   const totalDebt = debts.reduce((s, d) => s + d.total_amount, 0)
@@ -565,7 +605,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                       {debt.comment && <> · {debt.comment}</>}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <span className="text-sm font-semibold tabular-nums text-destructive-foreground">
                       {formatMoney(debt.total_amount)}
                     </span>
@@ -582,6 +622,15 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                     ) : (
                       <div className="h-7 w-7" />
                     )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground/40 hover:text-amber-500"
+                      title="Админ: удалить или оплатить"
+                      onClick={() => { setAdminTarget({ id: debt.id, item_name: debt.item_name, total_amount: debt.total_amount }); setAdminTokenInput(''); setAdminError(null) }}
+                    >
+                      <KeyRound className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -591,6 +640,56 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
       </div>
 
       <QueueViewer open={showQueue} onClose={() => setShowQueue(false)} />
+
+      {/* ─── Админ-модал ─── */}
+      {adminTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <Card className="w-full max-w-xs mx-4">
+            <CardContent className="pt-5 space-y-4">
+              <p className="text-sm font-semibold flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-amber-500" /> Действие администратора
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {adminTarget.item_name} — <span className="font-medium">{formatMoney(adminTarget.total_amount)}</span>
+              </p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Admin Token</Label>
+                <Input
+                  type="password"
+                  value={adminToken}
+                  onChange={e => { setAdminTokenInput(e.target.value); setAdminError(null) }}
+                  placeholder="Введите токен..."
+                  autoFocus
+                />
+                {adminError && <p className="text-xs text-destructive">{adminError}</p>}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="destructive"
+                  className="w-full gap-2"
+                  disabled={!adminToken || adminLoading}
+                  onClick={handleAdminDelete}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Удалить (вернуть инвентарь)
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 border-emerald-500/30 text-emerald-400 hover:text-emerald-300"
+                  disabled={!adminToken || adminLoading}
+                  onClick={handleAdminPay}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Оплатил долг (без возврата)
+                </Button>
+                <Button variant="ghost" className="w-full" disabled={adminLoading} onClick={() => setAdminTarget(null)}>
+                  Отмена
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ─── Диалог подтверждения удаления ─── */}
       {deleteConfirm && (() => {

@@ -315,11 +315,26 @@ export async function deleteDebt(
   itemId: string,
   companyId?: string | null,
   operatorId?: string | null,
+  adminToken?: string | null,
 ): Promise<void> {
   await request(config, 'POST', '/api/point/debts', {
     action: 'deleteDebt',
     itemId,
     operatorId: operatorId || null,
+    adminToken: adminToken || null,
+  }, companyHeader(companyId))
+}
+
+export async function adminPayDebt(
+  config: AppConfig,
+  itemId: string,
+  adminToken: string,
+  companyId?: string | null,
+): Promise<void> {
+  await request(config, 'POST', '/api/point/debts', {
+    action: 'adminPayDebt',
+    itemId,
+    adminToken,
   }, companyHeader(companyId))
 }
 

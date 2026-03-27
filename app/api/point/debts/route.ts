@@ -4,6 +4,7 @@ import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { sendOperatorDebtTelegramSnapshot } from '@/lib/server/services/salary'
+import { validateAdminToken } from '@/lib/server/admin-tokens'
 
 type CreateDebtBody = {
   action: 'createDebt'
@@ -26,9 +27,16 @@ type DeleteDebtBody = {
   action: 'deleteDebt'
   itemId: string
   operatorId?: string | null
+  adminToken?: string | null
 }
 
-type Body = CreateDebtBody | DeleteDebtBody
+type AdminPayDebtBody = {
+  action: 'adminPayDebt'
+  itemId: string
+  adminToken: string
+}
+
+type Body = CreateDebtBody | DeleteDebtBody | AdminPayDebtBody
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -451,6 +459,62 @@ export async function POST(request: Request) {
       })
     }
 
+    // ─── ADMIN PAY DEBT (mark paid, no inventory restore) ─────────────────────
+    if (body.action === 'adminPayDebt') {
+      const adminTok = (body as AdminPayDebtBody).adminToken?.trim()
+      if (!adminTok || !validateAdminToken(adminTok)) {
+        return json({ error: 'admin-token-required' }, 403)
+      }
+
+      const payItemId = (body as AdminPayDebtBody).itemId?.trim()
+      if (!payItemId) return json({ error: 'item-id-required' }, 400)
+
+      const { data: payItem, error: payItemError } = await supabase
+        .from('point_debt_items')
+        .select('id, operator_id, total_amount, week_start, status, item_name, client_name')
+        .eq('id', payItemId)
+        .eq('company_id', device.company_id)
+        .maybeSingle()
+
+      if (payItemError) throw payItemError
+      if (!payItem) return json({ error: 'debt-item-not-found' }, 404)
+      if (payItem.status !== 'active') return json({ ok: true, already: true })
+
+      const { error: payUpdateError } = await supabase
+        .from('point_debt_items')
+        .update({ status: 'deleted', deleted_at: new Date().toISOString() })
+        .eq('id', payItemId)
+
+      if (payUpdateError) throw payUpdateError
+
+      if (payItem.operator_id) {
+        const aggDebt = await findAggregateDebt({
+          supabase,
+          companyId: device.company_id,
+          operatorId: payItem.operator_id,
+          clientName: payItem.client_name || '',
+          weekStart: payItem.week_start,
+        })
+        if (aggDebt) {
+          const next = Math.max(0, normalizeMoney(aggDebt.amount) - normalizeMoney(payItem.total_amount))
+          if (next <= 0) {
+            await supabase.from('debts').update({ status: 'paid' }).eq('id', aggDebt.id)
+          } else {
+            await supabase.from('debts').update({ amount: next }).eq('id', aggDebt.id)
+          }
+        }
+      }
+
+      await writeAuditLog(supabase, {
+        entityType: 'point-debt-item',
+        entityId: payItemId,
+        action: 'admin-mark-paid',
+        payload: { point_device_id: device.id, item_name: payItem.item_name, total_amount: payItem.total_amount },
+      })
+
+      return json({ ok: true, data: { id: payItemId, paid: true } })
+    }
+
     const itemId = body.itemId?.trim()
     if (!itemId) return json({ error: 'item-id-required' }, 400)
 
@@ -466,19 +530,24 @@ export async function POST(request: Request) {
     if (!item) return json({ error: 'debt-item-not-found' }, 404)
     if (item.status !== 'active') return json({ error: 'debt-item-already-deleted' }, 409)
 
-    // Разрешаем удаление: либо сам должник, либо тот кто добавил долг
-    const requestingOperatorId = (body as DeleteDebtBody).operatorId?.trim() || null
-    const isDebtor = item.operator_id && requestingOperatorId && item.operator_id === requestingOperatorId
-    const isCreator = item.created_by_operator_id && requestingOperatorId && item.created_by_operator_id === requestingOperatorId
-    if (item.operator_id && requestingOperatorId && !isDebtor && !isCreator) {
-      return json({ error: 'debt-belongs-to-another-operator' }, 403)
-    }
+    // Admin token bypasses all operator/time checks
+    const adminToken = (body as DeleteDebtBody).adminToken?.trim() || null
+    const isAdmin = adminToken ? validateAdminToken(adminToken) : false
 
-    // Creator (not the debtor) can only delete within 15 minutes
-    if (isCreator && !isDebtor) {
-      const createdAt = new Date((item as any).created_at).getTime()
-      if (Date.now() - createdAt > 15 * 60_000) {
-        return json({ error: 'debt-delete-window-expired' }, 403)
+    if (!isAdmin) {
+      // Разрешаем удаление: либо сам должник, либо тот кто добавил долг
+      const requestingOperatorId = (body as DeleteDebtBody).operatorId?.trim() || null
+      const isDebtor = item.operator_id && requestingOperatorId && item.operator_id === requestingOperatorId
+      const isCreator = item.created_by_operator_id && requestingOperatorId && item.created_by_operator_id === requestingOperatorId
+      if (item.operator_id && requestingOperatorId && !isDebtor && !isCreator) {
+        return json({ error: 'debt-belongs-to-another-operator' }, 403)
+      }
+      // Creator (not the debtor) can only delete within 15 minutes
+      if (isCreator && !isDebtor) {
+        const createdAt = new Date((item as any).created_at).getTime()
+        if (Date.now() - createdAt > 15 * 60_000) {
+          return json({ error: 'debt-delete-window-expired' }, 403)
+        }
       }
     }
 
@@ -518,13 +587,7 @@ export async function POST(request: Request) {
       },
     })
 
-    return json({
-      ok: true,
-      data: {
-        id: item.id,
-        deleted: true,
-      },
-    })
+    return json({ ok: true, data: { id: item.id, deleted: true } })
   } catch (error: any) {
     await writeSystemErrorLogSafe({
       scope: 'server',
