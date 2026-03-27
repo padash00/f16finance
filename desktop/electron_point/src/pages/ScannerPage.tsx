@@ -569,12 +569,8 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                     <span className="text-sm font-semibold tabular-nums text-destructive-foreground">
                       {formatMoney(debt.total_amount)}
                     </span>
-                    {(() => {
-                      const isDebtor = debt.operator_id === session.operator.operator_id
-                      const isCreator = debt.created_by_operator_id === session.operator.operator_id
-                      const withinWindow = Date.now() - new Date(debt.created_at).getTime() < 15 * 60_000
-                      return isDebtor || (isCreator && withinWindow)
-                    })() ? (
+                    {(debt.operator_id === session.operator.operator_id ||
+                      debt.created_by_operator_id === session.operator.operator_id) ? (
                       <Button
                         variant="ghost"
                         size="icon"
