@@ -395,8 +395,6 @@ export default function ArenaPage({
   // Track which sessions we've already alerted/notified
   const notifiedRef = useRef<Set<string>>(new Set())
 
-  const flags = bootstrap.device.feature_flags
-
   // ─── Load data ──────────────────────────────────────────────────────────────
 
   const loadArena = useCallback(async () => {
@@ -532,9 +530,6 @@ export default function ArenaPage({
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
-  const canUseSale = flags.shift_report
-  const canUseScanner = flags.debt_report
-
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       {/* Drag region */}
@@ -563,12 +558,13 @@ export default function ArenaPage({
 
           <WorkModeSwitch
             active="arena"
-            showSale={canUseSale}
-            showScanner={canUseScanner}
+            showSale={!!onSwitchToSale}
+            showScanner={!!onSwitchToScanner}
+            showRequest={!!onSwitchToRequest}
             showArena
             onShift={onSwitchToShift}
-            onSale={canUseSale ? onSwitchToSale : undefined}
-            onScanner={canUseScanner ? onSwitchToScanner : undefined}
+            onSale={onSwitchToSale}
+            onScanner={onSwitchToScanner}
             onRequest={onSwitchToRequest}
             onCabinet={onOpenCabinet}
           />
