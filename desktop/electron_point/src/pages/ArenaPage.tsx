@@ -767,10 +767,16 @@ function ArenaMapView({
   }
 
   return (
-    <div className="overflow-auto">
+    <div className="overflow-auto rounded-xl">
       <div
-        className="relative border border-white/10 rounded-lg bg-zinc-900/50"
-        style={{ width: MAP_GRID_W * MAP_CELL, height: MAP_GRID_H * MAP_CELL, minWidth: MAP_GRID_W * MAP_CELL }}
+        className="relative rounded-xl bg-zinc-950"
+        style={{
+          width: MAP_GRID_W * MAP_CELL,
+          height: MAP_GRID_H * MAP_CELL,
+          minWidth: MAP_GRID_W * MAP_CELL,
+          backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.015) 0%, transparent 80%)',
+          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.07)',
+        }}
       >
         {/* Grid lines */}
         <svg
@@ -778,10 +784,10 @@ function ArenaMapView({
           width={MAP_GRID_W * MAP_CELL} height={MAP_GRID_H * MAP_CELL}
         >
           {Array.from({ length: MAP_GRID_W + 1 }, (_, i) => (
-            <line key={`v${i}`} x1={i * MAP_CELL} y1={0} x2={i * MAP_CELL} y2={MAP_GRID_H * MAP_CELL} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+            <line key={`v${i}`} x1={i * MAP_CELL} y1={0} x2={i * MAP_CELL} y2={MAP_GRID_H * MAP_CELL} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
           ))}
           {Array.from({ length: MAP_GRID_H + 1 }, (_, i) => (
-            <line key={`h${i}`} x1={0} y1={i * MAP_CELL} x2={MAP_GRID_W * MAP_CELL} y2={i * MAP_CELL} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+            <line key={`h${i}`} x1={0} y1={i * MAP_CELL} x2={MAP_GRID_W * MAP_CELL} y2={i * MAP_CELL} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
           ))}
         </svg>
 
@@ -795,19 +801,20 @@ function ArenaMapView({
           return (
             <div
               key={zone.id}
-              className="absolute rounded pointer-events-none"
+              className="absolute rounded-lg pointer-events-none"
               style={{
                 left: x * MAP_CELL + 1,
                 top: y * MAP_CELL + 1,
                 width: w * MAP_CELL - 2,
                 height: h * MAP_CELL - 2,
-                backgroundColor: color + '18',
-                border: `1px solid ${color}44`,
+                backgroundColor: color + '15',
+                border: `1.5px solid ${color}55`,
+                boxShadow: `inset 0 0 20px ${color}08`,
               }}
             >
               <div
-                className="absolute top-0 left-0 right-0 truncate rounded-tl rounded-tr px-1.5 text-[9px] font-semibold"
-                style={{ backgroundColor: color + '30', color: color }}
+                className="absolute top-0 left-0 right-0 px-2 py-0.5 text-[10px] font-bold tracking-wide truncate rounded-tl-lg rounded-tr-lg"
+                style={{ backgroundColor: color + '35', color: color }}
               >
                 {zone.name}
               </div>
@@ -843,78 +850,61 @@ function ArenaMapView({
           const isExpired = occupied && remainingMs <= 0
           const isWarning = occupied && !isExpired && remainingMs < 5 * 60_000
 
+          const stColor = !occupied ? '#10b981' : isExpired ? '#ef4444' : isWarning ? '#f59e0b' : '#f87171'
+          const stBg = !occupied
+            ? 'rgba(16,185,129,0.13)'
+            : isExpired ? 'rgba(239,68,68,0.22)' : isWarning ? 'rgba(245,158,11,0.18)' : 'rgba(239,68,68,0.16)'
+          const stBorder = !occupied
+            ? 'rgba(16,185,129,0.45)' : isExpired ? 'rgba(239,68,68,0.65)' : isWarning ? 'rgba(245,158,11,0.55)' : 'rgba(239,68,68,0.35)'
+
           return (
             <button
               key={station.id}
               type="button"
               onClick={() => onStationClick(station)}
-              className="absolute flex flex-col items-center justify-center rounded transition-all active:scale-95"
+              className="absolute flex flex-col items-center justify-center rounded-lg transition-all active:scale-95 hover:brightness-125"
               style={{
-                left: x * MAP_CELL + 1,
-                top: y * MAP_CELL + 1,
-                width: MAP_CELL - 2,
-                height: MAP_CELL - 2,
+                left: x * MAP_CELL + 2,
+                top: y * MAP_CELL + 2,
+                width: MAP_CELL - 4,
+                height: MAP_CELL - 4,
                 zIndex: 4,
-                backgroundColor: !occupied
-                  ? 'rgba(16,185,129,0.2)'
-                  : isExpired
-                    ? 'rgba(239,68,68,0.3)'
-                    : isWarning
-                      ? 'rgba(245,158,11,0.25)'
-                      : 'rgba(239,68,68,0.2)',
-                border: `1px solid ${
-                  !occupied ? 'rgba(16,185,129,0.5)'
-                  : isExpired ? 'rgba(239,68,68,0.6)'
-                  : isWarning ? 'rgba(245,158,11,0.5)'
-                  : 'rgba(239,68,68,0.4)'
-                }`,
+                backgroundColor: stBg,
+                border: `1.5px solid ${stBorder}`,
+                boxShadow: isWarning ? `0 0 10px ${stColor}55` : isExpired ? `0 0 8px rgba(239,68,68,0.4)` : 'none',
+                gap: 1,
               }}
             >
-              <Monitor
-                style={{
-                  width: 18, height: 18,
-                  color: !occupied ? '#10b981' : isExpired ? '#ef4444' : isWarning ? '#f59e0b' : '#f87171',
-                }}
-              />
+              <Monitor style={{ width: 16, height: 16, color: stColor, flexShrink: 0 }} />
               <span
-                className="truncate text-center leading-tight mt-1 font-semibold"
-                style={{ fontSize: 11, maxWidth: MAP_CELL - 6, color: 'rgba(255,255,255,0.85)' }}
+                className="truncate text-center font-semibold leading-none"
+                style={{ fontSize: 10, maxWidth: MAP_CELL - 8, color: 'rgba(255,255,255,0.9)' }}
               >
                 {station.name}
               </span>
+              {!occupied && (
+                <span style={{ fontSize: 9, color: '#10b981', opacity: 0.7 }}>свободно</span>
+              )}
               {occupied && !isExpired && (
                 <span
-                  className="leading-none tabular-nums font-bold mt-0.5"
-                  style={{
-                    fontSize: 12,
-                    color: isWarning ? '#f59e0b' : '#10b981',
-                  }}
+                  className="tabular-nums font-bold leading-none"
+                  style={{ fontSize: 13, color: isWarning ? '#f59e0b' : '#34d399' }}
                 >
                   {formatRemaining(remainingMs)}
                 </span>
               )}
               {isExpired && (
-                <span className="text-[10px] font-semibold text-destructive mt-0.5">Истекло</span>
+                <span className="font-semibold leading-none" style={{ fontSize: 9, color: '#ef4444' }}>Истекло</span>
               )}
               {occupied && activeSession && (() => {
                 const op = activeSession.operator_id ? operators.find(o => o.id === activeSession.operator_id) : null
                 return (
-                  <>
-                    {op && (
-                      <span
-                        className="truncate text-center leading-tight mt-0.5"
-                        style={{ fontSize: 9, maxWidth: MAP_CELL - 6, color: 'rgba(255,255,255,0.45)' }}
-                      >
-                        {op.short_name || op.name}
-                      </span>
-                    )}
-                    <span
-                      className="leading-none tabular-nums mt-0.5"
-                      style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)' }}
-                    >
-                      {formatMoney(activeSession.amount)}
-                    </span>
-                  </>
+                  <span
+                    className="truncate text-center leading-none"
+                    style={{ fontSize: 9, maxWidth: MAP_CELL - 8, color: 'rgba(255,255,255,0.4)' }}
+                  >
+                    {op ? (op.short_name || op.name) : ''}{op ? ' · ' : ''}{formatMoney(activeSession.amount)}
+                  </span>
                 )
               })()}
             </button>
@@ -1120,20 +1110,20 @@ export default function ArenaPage({
       s.is_active &&
       !sessions.find(sess => sess.station_id === s.id)
     )
+    if (freeStations.length === 0) return
     setActionLoading(true)
-    for (const st of freeStations) {
-      try {
-        await api.startArenaSession(config, session, {
-          stationId: st.id,
-          tariffId,
-          operatorId: session.operator.operator_id,
-          payment_method: payMethod,
-          cash_amount: cashAmt,
-          kaspi_amount: kaspiAmt,
-          discount_percent: 0,
-        })
-      } catch { /* continue with next */ }
-    }
+    // Launch all free stations simultaneously
+    await Promise.allSettled(freeStations.map(st =>
+      api.startArenaSession(config, session, {
+        stationId: st.id,
+        tariffId,
+        operatorId: session.operator.operator_id,
+        payment_method: payMethod,
+        cash_amount: cashAmt,
+        kaspi_amount: kaspiAmt,
+        discount_percent: 0,
+      })
+    ))
     await loadArena()
     setActionLoading(false)
     setMassStartTarget(null)
