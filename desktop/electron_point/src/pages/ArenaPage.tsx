@@ -729,6 +729,48 @@ function DecoIcon({ type, width, height, label, rotation }: { type: string; widt
   return <div style={{ ...style, fontSize: Math.min(width, height) * 0.5, opacity: 0.6 }}>?</div>
 }
 
+// ─── Today Income Bar ─────────────────────────────────────────────────────────
+
+function TodayIncomeBar({ todayIncome }: { todayIncome: { cash: number; kaspi: number; rows: { cash_amount: number; kaspi_amount: number; comment: string | null }[] } }) {
+  const total = todayIncome.cash + todayIncome.kaspi
+  if (total === 0 && todayIncome.rows.length === 0) return null
+  return (
+    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">Касса арены сегодня</span>
+        <span className="text-sm font-bold text-emerald-400">{total.toLocaleString('ru-RU')} ₸</span>
+      </div>
+      <div className="flex gap-4 text-sm">
+        {todayIncome.cash > 0 && (
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <span className="text-xs">💵</span> Нал: <span className="font-semibold text-foreground">{todayIncome.cash.toLocaleString('ru-RU')} ₸</span>
+          </span>
+        )}
+        {todayIncome.kaspi > 0 && (
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <span className="text-xs">📱</span> Каспи: <span className="font-semibold text-foreground">{todayIncome.kaspi.toLocaleString('ru-RU')} ₸</span>
+          </span>
+        )}
+      </div>
+      {todayIncome.rows.length > 0 && (
+        <div className="mt-2 flex flex-col gap-0.5">
+          {todayIncome.rows.slice(-5).map((r, i) => (
+            <div key={i} className="flex items-center justify-between text-xs text-muted-foreground">
+              <span className="truncate">{r.comment || 'Арена'}</span>
+              <span className="ml-2 shrink-0 font-medium text-foreground">
+                {(Number(r.cash_amount) + Number(r.kaspi_amount)).toLocaleString('ru-RU')} ₸
+              </span>
+            </div>
+          ))}
+          {todayIncome.rows.length > 5 && (
+            <span className="text-xs text-muted-foreground">...ещё {todayIncome.rows.length - 5} записей</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ArenaMapView({
   zones,
   stations,
@@ -933,6 +975,7 @@ export default function ArenaPage({
   const [tariffs, setTariffs] = useState<ArenaTariff[]>([])
   const [sessions, setSessions] = useState<ArenaSession[]>([])
   const [decorations, setDecorations] = useState<ArenaMapDecoration[]>([])
+  const [todayIncome, setTodayIncome] = useState<{ cash: number; kaspi: number; rows: { cash_amount: number; kaspi_amount: number; comment: string | null }[] }>({ cash: 0, kaspi: 0, rows: [] })
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list')
@@ -979,6 +1022,7 @@ export default function ArenaPage({
       prevSessionIdsRef.current = newIds
       setSessions(newSessions)
       setDecorations(data.decorations ?? [])
+      if (data.today_income) setTodayIncome(data.today_income)
     } catch (err: any) {
       toastError(err?.message || 'Не удалось загрузить зал')
     } finally {
@@ -1263,6 +1307,7 @@ export default function ArenaPage({
                 {sessions.reduce((sum, s) => sum + (s.amount || 0), 0).toLocaleString('ru-RU')} ₸
               </span>
             </div>
+            <TodayIncomeBar todayIncome={todayIncome} />
           </div>
         ) : (
           <div className="flex flex-col gap-6">
@@ -1344,6 +1389,7 @@ export default function ArenaPage({
                 {sessions.reduce((sum, s) => sum + (s.amount || 0), 0).toLocaleString('ru-RU')} ₸ за сессии
               </span>
             </div>
+            <TodayIncomeBar todayIncome={todayIncome} />
           </div>
         )}
       </main>

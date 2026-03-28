@@ -646,10 +646,10 @@ export async function validatePromoCode(
 export async function getArena(
   config: AppConfig,
   session: OperatorSession,
-): Promise<{ zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[]; decorations: ArenaMapDecoration[] }> {
+): Promise<{ zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[]; decorations: ArenaMapDecoration[]; today_income: { cash: number; kaspi: number; rows: { cash_amount: number; kaspi_amount: number; comment: string | null }[] } }> {
   const data = await request<{
     ok: boolean
-    data: { zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[]; decorations: ArenaMapDecoration[] }
+    data: { zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[]; decorations: ArenaMapDecoration[]; today_income: { cash: number; kaspi: number; rows: { cash_amount: number; kaspi_amount: number; comment: string | null }[] } }
   }>(config, 'GET', '/api/point/arena', undefined, operatorHeaders(session))
   return data.data
 }

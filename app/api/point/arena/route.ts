@@ -40,18 +40,22 @@ export async function GET(request: Request) {
       return (q as any).eq('company_id', companyId) as T
     }
 
+    const todayDate = new Date().toISOString().slice(0, 10)
+
     const [
       { data: zones, error: zonesError },
       { data: stations, error: stationsError },
       { data: tariffs, error: tariffsError },
       { data: sessions, error: sessionsError },
       { data: decorations },
+      { data: todayIncomes },
     ] = await Promise.all([
       withCo(supabase.from('arena_zones').select('*').eq('point_project_id', projectId).eq('is_active', true)).order('name'),
       withCo(supabase.from('arena_stations').select('*').eq('point_project_id', projectId).eq('is_active', true)).order('order_index').order('name'),
       withCo(supabase.from('arena_tariffs').select('*').eq('point_project_id', projectId).eq('is_active', true)).order('price'),
       withCo(supabase.from('arena_sessions').select('*').eq('point_project_id', projectId).eq('status', 'active')),
       withCo(supabase.from('arena_map_decorations').select('*').eq('point_project_id', projectId)).order('created_at'),
+      withCo(supabase.from('incomes').select('cash_amount,kaspi_amount,comment,created_at').eq('source', 'arena-session').eq('date', todayDate)),
     ])
 
     if (zonesError) throw zonesError
@@ -72,6 +76,10 @@ export async function GET(request: Request) {
     }
     const activeSessions = (sessions || []).filter((s: any) => s.ends_at >= autoCutoff)
 
+    const incomeRows = todayIncomes || []
+    const todayCash = incomeRows.reduce((s: number, r: any) => s + Number(r.cash_amount || 0), 0)
+    const todayKaspi = incomeRows.reduce((s: number, r: any) => s + Number(r.kaspi_amount || 0), 0)
+
     return json({
       ok: true,
       data: {
@@ -80,6 +88,7 @@ export async function GET(request: Request) {
         tariffs: tariffs || [],
         sessions: activeSessions,
         decorations: decorations || [],
+        today_income: { cash: todayCash, kaspi: todayKaspi, rows: incomeRows },
       },
     })
   } catch (error: any) {
