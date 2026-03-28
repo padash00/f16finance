@@ -25,13 +25,13 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
+    const companyId = searchParams.get('companyId') || null
 
-    // List mode — return only arena-enabled point projects (точки)
+    // List mode — return arena-enabled point projects with their arena-enabled companies
     if (!projectId) {
-      // Fetch projects with their company assignments to filter by arena_enabled
       const { data: allProjects } = await supabase
         .from('point_projects')
-        .select('id, name, feature_flags, point_project_companies(feature_flags)')
+        .select('id, name, feature_flags, point_project_companies(company_id, feature_flags, company:company_id(id, name))')
         .order('name')
 
       const arenaProjects = (allProjects || [])
@@ -41,7 +41,15 @@ export async function GET(request: Request) {
             p.point_project_companies.some((c: any) => c.feature_flags?.arena_enabled === true)
           return projEnabled || compEnabled
         })
-        .map((p: any) => ({ id: p.id, name: p.name }))
+        .map((p: any) => {
+          const enabledCompanies = (Array.isArray(p.point_project_companies) ? p.point_project_companies : [])
+            .filter((c: any) => c.feature_flags?.arena_enabled === true || p.feature_flags?.arena_enabled === true)
+            .map((c: any) => {
+              const co = Array.isArray(c.company) ? c.company[0] : c.company
+              return { id: c.company_id, name: co?.name || c.company_id }
+            })
+          return { id: p.id, name: p.name, companies: enabledCompanies }
+        })
 
       return json({ ok: true, data: { projects: arenaProjects } })
     }
@@ -53,16 +61,21 @@ export async function GET(request: Request) {
       .eq('id', projectId)
       .single()
 
+    function withCompany<T>(q: T): T {
+      if (!companyId) return q
+      return (q as any).eq('company_id', companyId) as T
+    }
+
     const [
       { data: zones, error: zonesError },
       { data: stations, error: stationsError },
       { data: tariffs, error: tariffsError },
       { data: decorations, error: decorationsError },
     ] = await Promise.all([
-      supabase.from('arena_zones').select('*').eq('point_project_id', projectId).order('name'),
-      supabase.from('arena_stations').select('*').eq('point_project_id', projectId).order('order_index').order('name'),
-      supabase.from('arena_tariffs').select('*').eq('point_project_id', projectId).order('price'),
-      supabase.from('arena_map_decorations').select('*').eq('point_project_id', projectId).order('created_at'),
+      withCompany(supabase.from('arena_zones').select('*').eq('point_project_id', projectId)).order('name'),
+      withCompany(supabase.from('arena_stations').select('*').eq('point_project_id', projectId)).order('order_index').order('name'),
+      withCompany(supabase.from('arena_tariffs').select('*').eq('point_project_id', projectId)).order('price'),
+      withCompany(supabase.from('arena_map_decorations').select('*').eq('point_project_id', projectId)).order('created_at'),
     ])
 
     if (zonesError) throw zonesError
@@ -87,11 +100,13 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'action required' }, 400)
 
+    const bodyCompanyId: string | null = body.companyId || null
+
     // ─── ZONES ───────────────────────────────────────────────────────
     if (body.action === 'createZone') {
       const { projectId, name } = body
       if (!projectId || !name?.trim()) return json({ error: 'projectId and name required' }, 400)
-      const { data, error } = await supabase.from('arena_zones').insert({ point_project_id: projectId, name: name.trim() }).select().single()
+      const { data, error } = await supabase.from('arena_zones').insert({ point_project_id: projectId, company_id: bodyCompanyId, name: name.trim() }).select().single()
       if (error) throw error
       return json({ ok: true, data })
     }
@@ -121,6 +136,7 @@ export async function POST(request: Request) {
       if (!projectId || !name?.trim()) return json({ error: 'projectId and name required' }, 400)
       const { data, error } = await supabase.from('arena_stations').insert({
         point_project_id: projectId,
+        company_id: bodyCompanyId,
         zone_id: zoneId || null,
         name: name.trim(),
         order_index: order_index ?? 0,
@@ -156,6 +172,7 @@ export async function POST(request: Request) {
       if (!projectId || !zoneId || !name?.trim()) return json({ error: 'projectId, zoneId and name required' }, 400)
       const { data, error } = await supabase.from('arena_tariffs').insert({
         point_project_id: projectId,
+        company_id: bodyCompanyId,
         zone_id: zoneId,
         name: name.trim(),
         duration_minutes: Number(duration_minutes) || 60,
@@ -215,6 +232,7 @@ export async function POST(request: Request) {
       if (!projectId) return json({ error: 'projectId required' }, 400)
       const { data, error } = await supabase.from('arena_map_decorations').insert({
         point_project_id: projectId,
+        company_id: bodyCompanyId,
         type: type || 'label',
         grid_x: grid_x ?? 0,
         grid_y: grid_y ?? 0,
@@ -253,7 +271,7 @@ export async function POST(request: Request) {
 
     // ─── ANALYTICS ───────────────────────────────────────────────────
     if (body.action === 'getAnalytics') {
-      const { projectId, from, to } = body
+      const { projectId, from, to, companyId: analyticsCompanyId } = body
       if (!projectId) return json({ error: 'projectId required' }, 400)
 
       let query = supabase
@@ -264,6 +282,7 @@ export async function POST(request: Request) {
         .order('started_at', { ascending: false })
         .limit(1000)
 
+      if (analyticsCompanyId) query = query.eq('company_id', analyticsCompanyId)
       if (from) query = query.gte('started_at', from)
       if (to) query = query.lte('started_at', to)
 

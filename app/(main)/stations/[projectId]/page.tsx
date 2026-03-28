@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
   BarChart3, Settings, Loader2, CheckCircle2, ChevronDown,
@@ -88,6 +88,7 @@ function decoEmoji(type: string) {
 
 interface MapEditorProps {
   projectId: string
+  companyId: string | null
   zones: Zone[]
   stations: Station[]
   decorations: Decoration[]
@@ -96,7 +97,7 @@ interface MapEditorProps {
   showFlash: (type: 'ok' | 'err', msg: string) => void
 }
 
-function MapEditor({ projectId, zones, stations, decorations, cellSize: CELL, onSaved, showFlash }: MapEditorProps) {
+function MapEditor({ projectId, companyId, zones, stations, decorations, cellSize: CELL, onSaved, showFlash }: MapEditorProps) {
   // Local mutable state for positions
   const [localZones, setLocalZones] = useState<Zone[]>(zones)
   const [localStations, setLocalStations] = useState<Station[]>(stations)
@@ -227,6 +228,7 @@ function MapEditor({ projectId, zones, stations, decorations, cellSize: CELL, on
         body: JSON.stringify({
           action: 'createDecoration',
           projectId,
+          companyId,
           type: newDecoType,
           grid_x: addDecoCell.x,
           grid_y: addDecoCell.y,
@@ -619,10 +621,12 @@ function MapEditor({ projectId, zones, stations, decorations, cellSize: CELL, on
 export default function StationsPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const projectId = params.projectId as string
+  const companyId = searchParams.get('company') || null
 
   const [projectName, setProjectName] = useState('')
-  const [allProjects, setAllProjects] = useState<{ id: string; name: string }[]>([])
+  const [allProjects, setAllProjects] = useState<{ id: string; name: string; companies: { id: string; name: string }[] }[]>([])
   const [zones, setZones] = useState<Zone[]>([])
   const [stations, setStations] = useState<Station[]>([])
   const [tariffs, setTariffs] = useState<Tariff[]>([])
@@ -671,7 +675,10 @@ export default function StationsPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/admin/arena?projectId=${projectId}`)
+      const url = companyId
+        ? `/api/admin/arena?projectId=${projectId}&companyId=${companyId}`
+        : `/api/admin/arena?projectId=${projectId}`
+      const res = await fetch(url)
       const data = await res.json()
       if (!data.ok) throw new Error(data.error)
       setProjectName(data.data.project?.name || '')
@@ -684,17 +691,29 @@ export default function StationsPage() {
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [projectId, companyId])
 
   useEffect(() => { void load() }, [load])
 
-  // Load all projects for the selector (once)
+  // Load all projects with companies for the selector (once)
   useEffect(() => {
     fetch('/api/admin/arena')
       .then(r => r.json())
-      .then(d => { if (d.ok) setAllProjects(d.data.projects || []) })
+      .then(d => {
+        if (!d.ok) return
+        const projects = d.data.projects || []
+        setAllProjects(projects)
+        // Auto-select first company if none selected yet
+        if (!companyId) {
+          const current = projects.find((p: any) => p.id === projectId)
+          if (current?.companies?.length > 0) {
+            router.replace(`/stations/${projectId}?company=${current.companies[0].id}`)
+          }
+        }
+      })
       .catch(() => null)
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
 
   // Dynamic cell size: fill the map container without scrolling
   useLayoutEffect(() => {
@@ -720,7 +739,7 @@ export default function StationsPage() {
       const res = await fetch('/api/admin/arena', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'getAnalytics', projectId, from: analyticsFrom, to: analyticsTo + 'T23:59:59' }),
+        body: JSON.stringify({ action: 'getAnalytics', projectId, companyId, from: analyticsFrom, to: analyticsTo + 'T23:59:59' }),
       })
       const data = await res.json()
       if (!data.ok) throw new Error(data.error)
@@ -730,7 +749,7 @@ export default function StationsPage() {
     } finally {
       setAnalyticsLoading(false)
     }
-  }, [projectId, analyticsFrom, analyticsTo])
+  }, [projectId, companyId, analyticsFrom, analyticsTo])
 
   useEffect(() => {
     if (activeTab === 'analytics') void loadAnalytics()
@@ -752,7 +771,7 @@ export default function StationsPage() {
     if (!newZoneName.trim()) return
     setSaving(true)
     try {
-      await apiPost({ action: 'createZone', projectId, name: newZoneName })
+      await apiPost({ action: 'createZone', projectId, companyId, name: newZoneName })
       setNewZoneName(''); setAddingZone(false)
       await load(); showFlash('ok', 'Зона создана')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
@@ -780,7 +799,7 @@ export default function StationsPage() {
     if (!newStationName.trim()) return
     setSaving(true)
     try {
-      await apiPost({ action: 'createStation', projectId, zoneId, name: newStationName })
+      await apiPost({ action: 'createStation', projectId, companyId, zoneId, name: newStationName })
       setNewStationName(''); setAddingStationZone(null)
       await load(); showFlash('ok', 'Станция добавлена')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
@@ -808,7 +827,7 @@ export default function StationsPage() {
     if (!newTariff.name.trim() || !newTariff.price) return
     setSaving(true)
     try {
-      await apiPost({ action: 'createTariff', projectId, zoneId, name: newTariff.name, duration_minutes: Number(newTariff.duration_minutes), price: Number(newTariff.price) })
+      await apiPost({ action: 'createTariff', projectId, companyId, zoneId, name: newTariff.name, duration_minutes: Number(newTariff.duration_minutes), price: Number(newTariff.price) })
       setNewTariff({ name: '', duration_minutes: '60', price: '' }); setAddingTariffZone(null)
       await load(); showFlash('ok', 'Тариф добавлен')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
@@ -878,25 +897,50 @@ export default function StationsPage() {
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-2.5">
           <Monitor className="h-6 w-6 text-cyan-300" />
         </div>
-        {/* Точка selector */}
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Точка</span>
-          <div className="relative">
-            <select
-              value={projectId}
-              onChange={e => router.push(`/stations/${e.target.value}`)}
-              className="appearance-none rounded-xl border border-white/10 bg-card px-4 py-2 pr-8 text-lg font-bold text-foreground focus:outline-none focus:border-primary cursor-pointer"
-            >
-              {allProjects.length === 0 && (
-                <option value={projectId}>{projectName || '...'}</option>
-              )}
-              {allProjects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          </div>
-        </div>
+        {/* Точка selector — shows individual companies within arena-enabled projects */}
+        {(() => {
+          // Flat list of (projectId, projectName, companyId, companyName)
+          const options: { pId: string; pName: string; cId: string; cName: string }[] = []
+          for (const p of allProjects) {
+            if (p.companies.length > 0) {
+              for (const c of p.companies) {
+                options.push({ pId: p.id, pName: p.name, cId: c.id, cName: c.name })
+              }
+            } else {
+              options.push({ pId: p.id, pName: p.name, cId: '', cName: p.name })
+            }
+          }
+          const currentValue = companyId ? `${projectId}|${companyId}` : (options.find(o => o.pId === projectId)?.cId ? `${projectId}|${options.find(o => o.pId === projectId)!.cId}` : projectId)
+          const currentLabel = options.find(o => o.pId === projectId && (companyId ? o.cId === companyId : true))?.cName || projectName || '...'
+          const showProject = allProjects.length > 1
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Точка</span>
+              <div className="relative">
+                {options.length === 0 ? (
+                  <span className="rounded-xl border border-white/10 bg-card px-4 py-2 text-lg font-bold text-foreground">{currentLabel}</span>
+                ) : (
+                  <select
+                    value={currentValue}
+                    onChange={e => {
+                      const [pId, cId] = e.target.value.split('|')
+                      if (cId) router.push(`/stations/${pId}?company=${cId}`)
+                      else router.push(`/stations/${pId}`)
+                    }}
+                    className="appearance-none rounded-xl border border-white/10 bg-card px-4 py-2 pr-8 text-lg font-bold text-foreground focus:outline-none focus:border-primary cursor-pointer"
+                  >
+                    {options.map(o => (
+                      <option key={`${o.pId}|${o.cId}`} value={o.cId ? `${o.pId}|${o.cId}` : o.pId}>
+                        {showProject ? `${o.pName} / ${o.cName}` : o.cName}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {options.length > 0 && <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />}
+              </div>
+            </div>
+          )
+        })()}
         <div className="flex flex-col gap-0.5">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Станций</span>
           <span className="text-lg font-bold">{stations.length}</span>
@@ -1110,6 +1154,7 @@ export default function StationsPage() {
             <div className="flex-1 min-h-0">
               <MapEditor
                 projectId={projectId}
+                companyId={companyId}
                 zones={zones}
                 stations={stations}
                 decorations={decorations}

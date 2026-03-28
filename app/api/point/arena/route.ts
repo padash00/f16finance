@@ -28,6 +28,12 @@ export async function GET(request: Request) {
     if ('response' in point) return point.response
     const { supabase, device } = point
     const projectId = device.id
+    const companyId = device.company_id || null
+
+    function withCo<T>(q: T): T {
+      if (!companyId) return q
+      return (q as any).eq('company_id', companyId) as T
+    }
 
     const [
       { data: zones, error: zonesError },
@@ -36,35 +42,11 @@ export async function GET(request: Request) {
       { data: sessions, error: sessionsError },
       { data: decorations },
     ] = await Promise.all([
-      supabase
-        .from('arena_zones')
-        .select('*')
-        .eq('point_project_id', projectId)
-        .eq('is_active', true)
-        .order('name'),
-      supabase
-        .from('arena_stations')
-        .select('*')
-        .eq('point_project_id', projectId)
-        .eq('is_active', true)
-        .order('order_index')
-        .order('name'),
-      supabase
-        .from('arena_tariffs')
-        .select('*')
-        .eq('point_project_id', projectId)
-        .eq('is_active', true)
-        .order('price'),
-      supabase
-        .from('arena_sessions')
-        .select('*')
-        .eq('point_project_id', projectId)
-        .eq('status', 'active'),
-      supabase
-        .from('arena_map_decorations')
-        .select('*')
-        .eq('point_project_id', projectId)
-        .order('created_at'),
+      withCo(supabase.from('arena_zones').select('*').eq('point_project_id', projectId).eq('is_active', true)).order('name'),
+      withCo(supabase.from('arena_stations').select('*').eq('point_project_id', projectId).eq('is_active', true)).order('order_index').order('name'),
+      withCo(supabase.from('arena_tariffs').select('*').eq('point_project_id', projectId).eq('is_active', true)).order('price'),
+      withCo(supabase.from('arena_sessions').select('*').eq('point_project_id', projectId).eq('status', 'active')),
+      withCo(supabase.from('arena_map_decorations').select('*').eq('point_project_id', projectId)).order('created_at'),
     ])
 
     if (zonesError) throw zonesError
@@ -113,6 +95,7 @@ export async function POST(request: Request) {
     if ('response' in point) return point.response
     const { supabase, device } = point
     const projectId = device.id
+    const companyId = device.company_id || null
 
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'action required' }, 400)
@@ -147,6 +130,7 @@ export async function POST(request: Request) {
         .from('arena_sessions')
         .insert({
           point_project_id: projectId,
+          company_id: companyId,
           station_id: stationId,
           tariff_id: tariffId,
           operator_id: operatorId || null,
