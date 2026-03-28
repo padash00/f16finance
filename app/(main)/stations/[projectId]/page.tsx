@@ -66,7 +66,8 @@ function InlineEdit({ value, onSave, onCancel, placeholder }: { value: string; o
 
 // ─── Map Editor ──────────────────────────────────────────────────────────────
 
-const GRID = 20
+const GRID_W = 24
+const GRID_H = 14
 
 const ZONE_COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -161,7 +162,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
     const rect = gridRef.current.getBoundingClientRect()
     const x = Math.floor((e.clientX - rect.left) / CELL)
     const y = Math.floor((e.clientY - rect.top) / CELL)
-    if (x < 0 || y < 0 || x >= GRID || y >= GRID) return null
+    if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) return null
     return { x, y }
   }
 
@@ -183,20 +184,20 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
     let ny = Math.max(0, cell.y - oy)
 
     if (type === 'station') {
-      nx = Math.min(nx, GRID - 1)
-      ny = Math.min(ny, GRID - 1)
+      nx = Math.min(nx, GRID_W - 1)
+      ny = Math.min(ny, GRID_H - 1)
       setLocalStations(prev => prev.map(s => s.id === id ? { ...s, grid_x: nx, grid_y: ny } : s))
       markDirty()
     } else if (type === 'zone') {
       const zone = localZones.find(z => z.id === id)
       if (!zone) return
-      nx = Math.min(nx, GRID - (zone.grid_w ?? 4))
-      ny = Math.min(ny, GRID - (zone.grid_h ?? 4))
+      nx = Math.min(nx, GRID_W - (zone.grid_w ?? 4))
+      ny = Math.min(ny, GRID_H - (zone.grid_h ?? 4))
       setLocalZones(prev => prev.map(z => z.id === id ? { ...z, grid_x: nx, grid_y: ny } : z))
       markDirty()
     } else if (type === 'deco') {
-      nx = Math.min(nx, GRID - 1)
-      ny = Math.min(ny, GRID - 1)
+      nx = Math.min(nx, GRID_W - 1)
+      ny = Math.min(ny, GRID_H - 1)
       setLocalDecos(prev => prev.map(d => d.id === id ? { ...d, grid_x: nx, grid_y: ny } : d))
       // Save decoration position directly
       void fetch('/api/admin/arena', {
@@ -213,7 +214,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
     const rect = gridRef.current.getBoundingClientRect()
     const x = Math.floor((e.clientX - rect.left) / CELL)
     const y = Math.floor((e.clientY - rect.top) / CELL)
-    if (x < 0 || y < 0 || x >= GRID || y >= GRID) return
+    if (x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) return
     setAddDecoCell({ x, y })
     setNewDecoType('sofa')
     setNewDecoLabel('')
@@ -275,8 +276,8 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
   async function handleZoneResize(zoneId: string, dw: number, dh: number) {
     setLocalZones(prev => prev.map(z => {
       if (z.id !== zoneId) return z
-      const nw = Math.max(2, Math.min(GRID - (z.grid_x ?? 0), (z.grid_w ?? 4) + dw))
-      const nh = Math.max(2, Math.min(GRID - (z.grid_y ?? 0), (z.grid_h ?? 4) + dh))
+      const nw = Math.max(2, Math.min(GRID_W - (z.grid_x ?? 0), (z.grid_w ?? 4) + dw))
+      const nh = Math.max(2, Math.min(GRID_H - (z.grid_y ?? 0), (z.grid_h ?? 4) + dh))
       return { ...z, grid_w: nw, grid_h: nh }
     }))
     markDirty()
@@ -299,7 +300,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
         <div
           ref={gridRef}
           className="relative border border-white/10 rounded-lg overflow-hidden bg-zinc-900 cursor-crosshair"
-          style={{ width: GRID * CELL, height: GRID * CELL }}
+          style={{ width: GRID_W * CELL, height: GRID_H * CELL }}
           onDragOver={e => e.preventDefault()}
           onDrop={handleDrop}
           onClick={handleGridClick}
@@ -307,14 +308,14 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
           {/* Grid lines */}
           <svg
             className="absolute inset-0 pointer-events-none"
-            width={GRID * CELL} height={GRID * CELL}
+            width={GRID_W * CELL} height={GRID_H * CELL}
             style={{ zIndex: 0 }}
           >
-            {Array.from({ length: GRID + 1 }, (_, i) => (
-              <g key={i}>
-                <line x1={i * CELL} y1={0} x2={i * CELL} y2={GRID * CELL} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                <line x1={0} y1={i * CELL} x2={GRID * CELL} y2={i * CELL} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-              </g>
+            {Array.from({ length: GRID_W + 1 }, (_, i) => (
+              <line key={`v${i}`} x1={i * CELL} y1={0} x2={i * CELL} y2={GRID_H * CELL} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+            ))}
+            {Array.from({ length: GRID_H + 1 }, (_, i) => (
+              <line key={`h${i}`} x1={0} y1={i * CELL} x2={GRID_W * CELL} y2={i * CELL} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
             ))}
           </svg>
 
@@ -368,8 +369,8 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                       const dh = Math.round((me.clientY - startY) / CELL)
                       setLocalZones(prev => prev.map(z => {
                         if (z.id !== zone.id) return z
-                        const nw = Math.max(2, Math.min(GRID - (z.grid_x ?? 0), startW + dw))
-                        const nh = Math.max(2, Math.min(GRID - (z.grid_y ?? 0), startH + dh))
+                        const nw = Math.max(2, Math.min(GRID_W - (z.grid_x ?? 0), startW + dw))
+                        const nh = Math.max(2, Math.min(GRID_H - (z.grid_y ?? 0), startH + dh))
                         return { ...z, grid_w: nw, grid_h: nh }
                       }))
                     }
@@ -468,7 +469,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
         {addDecoCell && (
           <div
             className="flex flex-col gap-3 rounded-xl border border-white/10 bg-zinc-900 p-3"
-            style={{ width: GRID * CELL }}
+            style={{ width: GRID_W * CELL }}
           >
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Добавить декор ({addDecoCell.x}, {addDecoCell.y})</span>
@@ -565,8 +566,8 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                       // Find first free cell
                       const used = new Set(localStations.filter(s => s.grid_x != null).map(s => `${s.grid_x},${s.grid_y}`))
                       let placed = false
-                      for (let y = 0; y < GRID && !placed; y++) {
-                        for (let x = 0; x < GRID && !placed; x++) {
+                      for (let y = 0; y < GRID_H && !placed; y++) {
+                        for (let x = 0; x < GRID_W && !placed; x++) {
                           if (!used.has(`${x},${y}`)) {
                             setLocalStations(prev => prev.map(s => s.id === st.id ? { ...s, grid_x: x, grid_y: y } : s))
                             used.add(`${x},${y}`)

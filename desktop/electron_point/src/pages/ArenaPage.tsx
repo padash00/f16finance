@@ -374,7 +374,8 @@ function StationCard({
 // ─── Arena Map View ────────────────────────────────────────────────────────────
 
 const MAP_CELL = 70
-const MAP_GRID = 20
+const MAP_GRID_W = 24
+const MAP_GRID_H = 14
 
 function decoEmoji(type: string) {
   const map: Record<string, string> = {
@@ -422,18 +423,18 @@ function ArenaMapView({
     <div className="overflow-auto">
       <div
         className="relative border border-white/10 rounded-lg bg-zinc-900/50"
-        style={{ width: MAP_GRID * MAP_CELL, height: MAP_GRID * MAP_CELL, minWidth: MAP_GRID * MAP_CELL }}
+        style={{ width: MAP_GRID_W * MAP_CELL, height: MAP_GRID_H * MAP_CELL, minWidth: MAP_GRID_W * MAP_CELL }}
       >
         {/* Grid lines */}
         <svg
           className="absolute inset-0 pointer-events-none"
-          width={MAP_GRID * MAP_CELL} height={MAP_GRID * MAP_CELL}
+          width={MAP_GRID_W * MAP_CELL} height={MAP_GRID_H * MAP_CELL}
         >
-          {Array.from({ length: MAP_GRID + 1 }, (_, i) => (
-            <g key={i}>
-              <line x1={i * MAP_CELL} y1={0} x2={i * MAP_CELL} y2={MAP_GRID * MAP_CELL} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-              <line x1={0} y1={i * MAP_CELL} x2={MAP_GRID * MAP_CELL} y2={i * MAP_CELL} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-            </g>
+          {Array.from({ length: MAP_GRID_W + 1 }, (_, i) => (
+            <line key={`v${i}`} x1={i * MAP_CELL} y1={0} x2={i * MAP_CELL} y2={MAP_GRID_H * MAP_CELL} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+          ))}
+          {Array.from({ length: MAP_GRID_H + 1 }, (_, i) => (
+            <line key={`h${i}`} x1={0} y1={i * MAP_CELL} x2={MAP_GRID_W * MAP_CELL} y2={i * MAP_CELL} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
           ))}
         </svg>
 
