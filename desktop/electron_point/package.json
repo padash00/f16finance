@@ -1,6 +1,6 @@
 {
   "name": "orda-point-client",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "description": "Orda Control Point — десктопный терминал",
   "main": "electron.cjs",
   "type": "commonjs",
