@@ -895,25 +895,122 @@ export default function ShiftPage({
             </div>
           )}
 
-          {/* Arena close confirm */}
-          {arenaCloseConfirm && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-              <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-2xl">
-                <h2 className="mb-2 text-lg font-semibold">Закрыть смену?</h2>
-                <p className="mb-5 text-sm text-muted-foreground">
-                  Все платежи уже записаны. После закрытия вы выйдете из аккаунта.
-                </p>
-                <div className="flex gap-2">
-                  <Button type="button" className="flex-1" onClick={() => { setArenaCloseConfirm(false); onLogout() }}>
-                    Да, закрыть
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setArenaCloseConfirm(false)}>
-                    Отмена
-                  </Button>
+          {/* Arena close shift dialog */}
+          {arenaCloseConfirm && (() => {
+            const totalCash = arenaIncomeRows.reduce((s, r) => s + Number(r.cash_amount || 0), 0)
+            const totalKaspi = arenaIncomeRows.reduce((s, r) => s + Number(r.kaspi_amount || 0), 0)
+            const totalDebts = arenaTechRows.reduce((s, r) => s + Number(r.amount || 0), 0)
+            const closeShift = form.shift
+            const closeDate = form.date
+            const isNight = closeShift === 'night'
+            const doSplit = isNight && kaspiDailySplitEnabled
+
+            // Auto-split kaspi by midnight using created_at
+            let kaspiBeforeMidnight = 0
+            let kaspiAfterMidnight = 0
+            if (doSplit) {
+              for (const row of arenaIncomeRows) {
+                const rowDate = row.created_at ? row.created_at.slice(0, 10) : closeDate
+                if (rowDate === closeDate) {
+                  kaspiBeforeMidnight += Number(row.kaspi_amount || 0)
+                } else {
+                  kaspiAfterMidnight += Number(row.kaspi_amount || 0)
+                }
+              }
+            }
+
+            async function handleArenaClose() {
+              setSubmitting(true)
+              try {
+                const fullForm: ShiftForm = {
+                  ...form,
+                  operator_id: session.operator.operator_id || '',
+                  cash: String(totalCash),
+                  coins: '0',
+                  kaspi_pos: doSplit ? String(kaspiAfterMidnight) : String(totalKaspi),
+                  kaspi_before_midnight: doSplit ? String(kaspiBeforeMidnight) : '',
+                  kaspi_online: '0',
+                  debts: String(totalDebts),
+                  start: '0',
+                  wipon: '0',
+                  comment: form.comment || 'Арена',
+                }
+                await sendOne(fullForm)
+                setArenaCloseConfirm(false)
+                onLogout()
+              } finally {
+                setSubmitting(false)
+              }
+            }
+
+            return (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-2xl space-y-4">
+                  <h2 className="text-lg font-semibold">Закрыть смену</h2>
+
+                  {/* Shift selector */}
+                  <div className="flex gap-2">
+                    {(['day', 'night'] as const).map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setField('shift', s)}
+                        className={`flex-1 rounded-lg border py-2 text-sm font-medium transition ${
+                          closeShift === s ? 'bg-primary text-primary-foreground border-primary' : 'border-white/10 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {s === 'day' ? '☀️ День' : '🌙 Ночь'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Totals */}
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">💵 Наличка</span>
+                      <span className="font-semibold">{totalCash.toLocaleString('ru-RU')} ₸</span>
+                    </div>
+                    {doSplit ? (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">📱 Каспи до 00:00</span>
+                          <span className="font-semibold">{kaspiBeforeMidnight.toLocaleString('ru-RU')} ₸</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">📱 Каспи после 00:00</span>
+                          <span className="font-semibold">{kaspiAfterMidnight.toLocaleString('ru-RU')} ₸</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">📱 Каспи</span>
+                        <span className="font-semibold">{totalKaspi.toLocaleString('ru-RU')} ₸</span>
+                      </div>
+                    )}
+                    {totalDebts > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">🔧 Тех. компенс.</span>
+                        <span className="font-semibold text-amber-400">−{totalDebts.toLocaleString('ru-RU')} ₸</span>
+                      </div>
+                    )}
+                    <div className="border-t border-white/10 pt-2 flex justify-between text-sm font-bold">
+                      <span>Итого</span>
+                      <span className="text-emerald-400">{(totalCash + totalKaspi).toLocaleString('ru-RU')} ₸</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button type="button" className="flex-1" disabled={submitting} onClick={handleArenaClose}>
+                      {submitting ? 'Отправляем...' : 'Отправить и закрыть'}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setArenaCloseConfirm(false)} disabled={submitting}>
+                      Отмена
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           <div className={!isArena && viewMode === 'shift' ? 'grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]' : 'hidden'}>
             <form id="shift-report-form" onSubmit={handleSubmit} className="space-y-4 no-drag">
