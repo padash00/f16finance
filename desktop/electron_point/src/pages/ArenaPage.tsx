@@ -1,6 +1,24 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
+
+// ─── Shared AudioContext singleton (created once, reused) ──────────────────────
+let _audioCtx: AudioContext | null = null
+function playBeep(freq: number, delay = 0) {
+  try {
+    if (!_audioCtx || _audioCtx.state === 'closed') _audioCtx = new AudioContext()
+    const ctx = _audioCtx
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.frequency.value = freq
+    gain.gain.setValueAtTime(0.3, ctx.currentTime + delay)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3)
+    osc.start(ctx.currentTime + delay)
+    osc.stop(ctx.currentTime + delay + 0.3)
+  } catch { /* ignore */ }
+}
 import { AlertTriangle, CheckCircle2, Clock, List, LogOut, Map as MapIcon, Monitor, RefreshCw, Wrench, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import WorkModeSwitch from '@/components/WorkModeSwitch'
@@ -583,27 +601,21 @@ function MassZoneStartModal({
 
 // ─── Station Card (list view) ──────────────────────────────────────────────────
 
-function StationCard({
+const StationCard = memo(function StationCard({
   station,
   activeSession,
   tariffs,
+  now,
   onStart,
   onManage,
 }: {
   station: ArenaStation
   activeSession: ArenaSession | undefined
   tariffs: ArenaTariff[]
+  now: number
   onStart: () => void
   onManage: () => void
 }) {
-  const [now, setNow] = useState(Date.now())
-
-  useEffect(() => {
-    if (!activeSession) return
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [activeSession?.id, activeSession?.ends_at])
-
   const occupied = !!activeSession
   const tariff = activeSession?.tariff_id ? tariffs.find((t) => t.id === activeSession.tariff_id) : null
   const remainingMs = activeSession ? new Date(activeSession.ends_at).getTime() - now : 0
@@ -703,7 +715,7 @@ function StationCard({
       </div>
     </div>
   )
-}
+})
 
 // ─── Arena Map View ────────────────────────────────────────────────────────────
 
@@ -867,6 +879,7 @@ function ArenaMapView({
   decorations,
   sessions,
   tariffs,
+  now,
   operators,
   onStationClick,
 }: {
@@ -875,16 +888,10 @@ function ArenaMapView({
   decorations: ArenaMapDecoration[]
   sessions: ArenaSession[]
   tariffs: ArenaTariff[]
+  now: number
   operators: import('@/types').BootstrapOperator[]
   onStationClick: (station: ArenaStation) => void
 }) {
-  const [now, setNow] = useState(Date.now())
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [])
-
   const sessionsByStation = new Map(sessions.map(s => [s.station_id, s]))
   const stationsOnMap = stations.filter(s => s.grid_x != null && s.grid_y != null)
   const zonesOnMap = zones.filter(z => z.grid_x != null)
@@ -1070,6 +1077,13 @@ export default function ArenaPage({
   const [actionLoading, setActionLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list')
 
+  // Single global countdown — passed down to all cards/map (no per-card intervals)
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
   // Modal state
   const [startTarget, setStartTarget] = useState<ArenaStation | null>(null)
   const [manageTarget, setManageTarget] = useState<{ station: ArenaStation; session: ArenaSession } | null>(null)
@@ -1082,9 +1096,14 @@ export default function ArenaPage({
   // Track previous session IDs to detect ended sessions
   const prevSessionIdsRef = useRef<Set<string>>(new Set())
 
+  // Deduplication: skip new fetch if previous is still in flight
+  const fetchInFlightRef = useRef(false)
+
   // ─── Load data ──────────────────────────────────────────────────────────────
 
   const loadArena = useCallback(async () => {
+    if (fetchInFlightRef.current) return  // skip if previous request still in flight
+    fetchInFlightRef.current = true
     try {
       const data = await api.getArena(config, session)
       setZones(data.zones)
@@ -1092,23 +1111,10 @@ export default function ArenaPage({
       setTariffs(data.tariffs)
       const newSessions: ArenaSession[] = data.sessions
       const newIds = new Set(newSessions.map((s: ArenaSession) => s.id))
-      // Detect ended sessions (were in prev, not in current)
+      // Play a beep for each session that ended since last poll
       const endedCount = [...prevSessionIdsRef.current].filter(id => !newIds.has(id)).length
       if (endedCount > 0 && prevSessionIdsRef.current.size > 0) {
-        for (let i = 0; i < endedCount; i++) {
-          try {
-            const ctx = new AudioContext()
-            const osc = ctx.createOscillator()
-            const gain = ctx.createGain()
-            osc.connect(gain)
-            gain.connect(ctx.destination)
-            osc.frequency.value = 440
-            gain.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.15)
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.3)
-            osc.start(ctx.currentTime + i * 0.15)
-            osc.stop(ctx.currentTime + i * 0.15 + 0.3)
-          } catch { /* ignore */ }
-        }
+        for (let i = 0; i < endedCount; i++) playBeep(440, i * 0.15)
       }
       prevSessionIdsRef.current = newIds
       setSessions(newSessions)
@@ -1117,6 +1123,7 @@ export default function ArenaPage({
     } catch (err: any) {
       toastError(err?.message || 'Не удалось загрузить зал')
     } finally {
+      fetchInFlightRef.current = false
       setLoading(false)
     }
   }, [config, session])
@@ -1153,18 +1160,7 @@ export default function ArenaPage({
         void api.notifyArena5min(config, session, s.id)
         const st = stations.find((x) => x.id === s.station_id)
         toastInfo(`⏰ ${st?.name ?? 'Станция'}: осталось менее 5 мин`, 8000)
-        try {
-          const ctx = new AudioContext()
-          const osc = ctx.createOscillator()
-          const gain = ctx.createGain()
-          osc.connect(gain)
-          gain.connect(ctx.destination)
-          osc.frequency.value = 880
-          gain.gain.setValueAtTime(0.3, ctx.currentTime)
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
-          osc.start(ctx.currentTime)
-          osc.stop(ctx.currentTime + 0.5)
-        } catch { /* ignore */ }
+        playBeep(880)
       }
     }
   }, [sessions, stations, config, session])
@@ -1401,6 +1397,7 @@ export default function ArenaPage({
               decorations={decorations}
               sessions={sessions}
               tariffs={tariffs}
+              now={now}
               operators={bootstrap.operators}
               onStationClick={handleStationClick}
             />
@@ -1448,6 +1445,7 @@ export default function ArenaPage({
                         station={st}
                         activeSession={sessionsByStation.get(st.id)}
                         tariffs={tariffs}
+                        now={now}
                         onStart={() => setStartTarget(st)}
                         onManage={() => {
                           const s = sessionsByStation.get(st.id)
@@ -1475,6 +1473,7 @@ export default function ArenaPage({
                       station={st}
                       activeSession={sessionsByStation.get(st.id)}
                       tariffs={tariffs}
+                      now={now}
                       onStart={() => setStartTarget(st)}
                       onManage={() => {
                         const s = sessionsByStation.get(st.id)
