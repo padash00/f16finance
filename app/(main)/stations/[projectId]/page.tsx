@@ -114,6 +114,14 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
 
+  // Refs to always hold latest state for async save (avoids stale closure in setTimeout)
+  const latestStationsRef = useRef(localStations)
+  const latestZonesRef = useRef(localZones)
+  const latestDecosRef = useRef(localDecos)
+  useEffect(() => { latestStationsRef.current = localStations }, [localStations])
+  useEffect(() => { latestZonesRef.current = localZones }, [localZones])
+  useEffect(() => { latestDecosRef.current = localDecos }, [localDecos])
+
   // Drag state
   const dragRef = useRef<{
     type: 'station' | 'zone' | 'deco'
@@ -145,6 +153,10 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
   }
 
   async function autoSave() {
+    // Read from refs to get latest state, not stale closure values
+    const stationsSnap = latestStationsRef.current
+    const zonesSnap = latestZonesRef.current
+    const decosSnap = latestDecosRef.current
     setSaving(true)
     try {
       await fetch('/api/admin/arena', {
@@ -152,12 +164,12 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'updateMapLayout',
-          stations: localStations.map(s => ({ id: s.id, grid_x: s.grid_x, grid_y: s.grid_y })),
-          zones: localZones.map(z => ({ id: z.id, grid_x: z.grid_x, grid_y: z.grid_y, grid_w: z.grid_w, grid_h: z.grid_h, color: z.color })),
+          stations: stationsSnap.map(s => ({ id: s.id, grid_x: s.grid_x, grid_y: s.grid_y })),
+          zones: zonesSnap.map(z => ({ id: z.id, grid_x: z.grid_x, grid_y: z.grid_y, grid_w: z.grid_w, grid_h: z.grid_h, color: z.color })),
         }),
       })
       setDirty(false)
-      onSaved(localZones, localStations, localDecos)
+      onSaved(zonesSnap, stationsSnap, decosSnap)
     } catch {
       showFlash('err', 'Не удалось сохранить карту')
     } finally {
