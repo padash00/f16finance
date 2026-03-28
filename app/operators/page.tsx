@@ -21,8 +21,6 @@ import {
   Calendar,
   Briefcase,
   MoreVertical,
-  ChevronDown,
-  Filter,
   Download,
   RefreshCw,
   AlertCircle,
@@ -96,7 +94,6 @@ export default function OperatorsPage() {
   // Поиск и фильтры
   const [search, setSearch] = useState('')
   const [showInactive, setShowInactive] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
   const [selectedOperators, setSelectedOperators] = useState<Set<string>>(new Set())
   const [selectAll, setSelectAll] = useState(false)
 
@@ -649,24 +646,23 @@ export default function OperatorsPage() {
                 )}
               </div>
 
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-1 px-3 py-2 rounded-lg bg-gray-800/50 border border-white/10 text-sm hover:bg-gray-700/50 transition-colors"
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowInactive((prev) => !prev)}
+                className={`rounded-lg border-white/10 ${
+                  showInactive
+                    ? 'bg-violet-500/15 text-violet-200 hover:bg-violet-500/20'
+                    : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50'
+                }`}
               >
-                <Filter className="w-4 h-4" />
-                Фильтры
-                <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-              </button>
-
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showInactive}
-                  onChange={(e) => setShowInactive(e.target.checked)}
-                  className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
-                />
-                <span className="text-sm text-gray-400">Показывать неактивных</span>
-              </label>
+                {showInactive ? (
+                  <ToggleRight className="w-4 h-4 mr-2 text-violet-300" />
+                ) : (
+                  <ToggleLeft className="w-4 h-4 mr-2 text-gray-400" />
+                )}
+                {showInactive ? 'Скрыть неактивных' : 'Показать неактивных'}
+              </Button>
 
               {canManageOperators && selectedOperators.size > 0 && (
                 <Button
