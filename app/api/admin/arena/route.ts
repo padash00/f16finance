@@ -280,7 +280,7 @@ export async function POST(request: Request) {
 
       let query = supabase
         .from('arena_sessions')
-        .select('id, station_id, tariff_id, started_at, ends_at, ended_at, amount, status, station:station_id(name, zone_id), tariff:tariff_id(name, duration_minutes, price)')
+        .select('id, station_id, tariff_id, started_at, ends_at, ended_at, amount, status, payment_method, cash_amount, kaspi_amount, discount_percent, station:station_id(name, zone_id), tariff:tariff_id(name, duration_minutes, price)')
         .eq('point_project_id', projectId)
         .in('status', ['completed', 'active'])
         .order('started_at', { ascending: false })

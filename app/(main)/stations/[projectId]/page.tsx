@@ -25,8 +25,9 @@ type Decoration = {
   label: string | null; rotation: number
 }
 type Session = {
-  id: string; station_id: string; tariff_id: string; started_at: string; ends_at: string
+  id: string; station_id: string; tariff_id: string | null; started_at: string; ends_at: string
   ended_at: string | null; amount: number; status: string
+  payment_method: string; cash_amount: number; kaspi_amount: number; discount_percent: number
   station: { name: string; zone_id: string | null } | null
   tariff: { name: string; duration_minutes: number; price: number } | null
 }
@@ -892,21 +893,81 @@ export default function StationsPage() {
   const completedSessions = sessions.filter(s => s.status === 'completed')
   const totalRevenue = completedSessions.reduce((s, x) => s + Number(x.amount), 0)
   const totalSessions = completedSessions.length
+  const totalCash = completedSessions.reduce((s, x) => s + Number(x.cash_amount || 0), 0)
+  const totalKaspi = completedSessions.reduce((s, x) => s + Number(x.kaspi_amount || 0), 0)
+  const totalDiscount = completedSessions.reduce((s, x) => {
+    const orig = x.tariff ? x.tariff.price : 0
+    const disc = Number(x.discount_percent || 0)
+    return s + (orig * disc / 100)
+  }, 0)
+
+  // By station with occupancy
+  const totalMinutes = completedSessions.reduce((s, x) => {
+    const tariff = x.tariff
+    return s + (tariff ? tariff.duration_minutes : 0)
+  }, 0)
 
   const byStation = stations.map(st => {
     const stSessions = completedSessions.filter(s => s.station_id === st.id)
-    return { station: st, count: stSessions.length, revenue: stSessions.reduce((s, x) => s + Number(x.amount), 0) }
+    const stMinutes = stSessions.reduce((s, x) => s + (x.tariff?.duration_minutes || 0), 0)
+    // period in minutes
+    const from = new Date(analyticsFrom)
+    const to = new Date(analyticsTo)
+    const periodDays = Math.max(1, Math.round((to.getTime() - from.getTime()) / 86400000) + 1)
+    const periodMinutes = periodDays * 24 * 60
+    const occupancy = Math.min(100, Math.round((stMinutes / periodMinutes) * 100))
+    return {
+      station: st,
+      count: stSessions.length,
+      revenue: stSessions.reduce((s, x) => s + Number(x.amount), 0),
+      occupancy,
+    }
   }).filter(x => x.count > 0).sort((a, b) => b.revenue - a.revenue)
 
+  // By zone
+  const byZone = zones.map(z => {
+    const zStations = stations.filter(s => s.zone_id === z.id)
+    const zSessions = completedSessions.filter(s => zStations.some(st => st.id === s.station_id))
+    return {
+      zone: z,
+      count: zSessions.length,
+      revenue: zSessions.reduce((s, x) => s + Number(x.amount), 0),
+      cash: zSessions.reduce((s, x) => s + Number(x.cash_amount || 0), 0),
+      kaspi: zSessions.reduce((s, x) => s + Number(x.kaspi_amount || 0), 0),
+    }
+  }).filter(x => x.count > 0).sort((a, b) => b.revenue - a.revenue)
+
+  // By tariff
   const byTariff = tariffs.map(t => {
     const tSessions = completedSessions.filter(s => s.tariff_id === t.id)
     return { tariff: t, count: tSessions.length, revenue: tSessions.reduce((s, x) => s + Number(x.amount), 0) }
   }).filter(x => x.count > 0).sort((a, b) => b.revenue - a.revenue)
 
-  const hourBuckets = Array.from({ length: 24 }, (_, i) => ({ hour: i, count: 0 }))
+  // By payment method
+  const paymentBreakdown = {
+    cash: completedSessions.filter(s => s.payment_method === 'cash').reduce((s, x) => s + Number(x.amount), 0),
+    kaspi: completedSessions.filter(s => s.payment_method === 'kaspi').reduce((s, x) => s + Number(x.amount), 0),
+    mixed: completedSessions.filter(s => s.payment_method === 'mixed').reduce((s, x) => s + Number(x.amount), 0),
+  }
+
+  // Daily revenue (last N days)
+  const dailyMap = new Map<string, { revenue: number; count: number }>()
+  completedSessions.forEach(s => {
+    const day = s.started_at.slice(0, 10)
+    const prev = dailyMap.get(day) || { revenue: 0, count: 0 }
+    dailyMap.set(day, { revenue: prev.revenue + Number(s.amount), count: prev.count + 1 })
+  })
+  const dailyData = Array.from(dailyMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, d]) => ({ date, ...d }))
+  const maxDailyRevenue = Math.max(...dailyData.map(d => d.revenue), 1)
+
+  // Hour buckets
+  const hourBuckets = Array.from({ length: 24 }, (_, i) => ({ hour: i, count: 0, revenue: 0 }))
   completedSessions.forEach(s => {
     const h = new Date(s.started_at).getHours()
     hourBuckets[h].count++
+    hourBuckets[h].revenue += Number(s.amount)
   })
   const maxHourCount = Math.max(...hourBuckets.map(b => b.count), 1)
 
@@ -1236,7 +1297,7 @@ export default function StationsPage() {
         {activeTab === 'analytics' && (
           <div className="space-y-6">
             {/* Date filter */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <input type="date" value={analyticsFrom} onChange={e => setAnalyticsFrom(e.target.value)} className="rounded-lg border border-white/10 bg-card px-3 py-1.5 text-sm" />
               <span className="text-muted-foreground">—</span>
@@ -1247,36 +1308,119 @@ export default function StationsPage() {
             </div>
 
             {analyticsLoading ? (
-              <div className="flex h-32 items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Загрузка аналитики...</div>
+              <div className="flex h-32 items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Загрузка...</div>
+            ) : completedSessions.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-muted-foreground text-sm">
+                За выбранный период нет завершённых сессий
+              </div>
             ) : (
               <>
-                {/* Summary cards */}
-                <div className="grid grid-cols-3 gap-4">
+                {/* Summary cards — row of 5 */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                   {[
-                    { label: 'Выручка', value: formatPrice(totalRevenue), icon: Banknote },
-                    { label: 'Сессий завершено', value: totalSessions.toString(), icon: CheckCircle2 },
-                    { label: 'Средний чек', value: totalSessions > 0 ? formatPrice(Math.round(totalRevenue / totalSessions)) : '—', icon: TrendingUp },
-                  ].map(({ label, value, icon: Icon }) => (
+                    { label: 'Выручка', value: formatPrice(totalRevenue), icon: Banknote, color: 'text-emerald-400' },
+                    { label: 'Сессий', value: totalSessions.toString(), icon: CheckCircle2, color: 'text-blue-400' },
+                    { label: 'Средний чек', value: totalSessions > 0 ? formatPrice(Math.round(totalRevenue / totalSessions)) : '—', icon: TrendingUp, color: 'text-violet-400' },
+                    { label: 'Наличка', value: formatPrice(totalCash), icon: Banknote, color: 'text-amber-400' },
+                    { label: 'Каспи', value: formatPrice(totalKaspi), icon: Banknote, color: 'text-cyan-400' },
+                  ].map(({ label, value, icon: Icon, color }) => (
                     <div key={label} className="rounded-xl border border-white/10 bg-card p-4">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Icon className="h-3.5 w-3.5" />{label}</div>
-                      <p className="text-xl font-bold">{value}</p>
+                      <div className={`flex items-center gap-1.5 text-xs mb-1 ${color}`}><Icon className="h-3.5 w-3.5" />{label}</div>
+                      <p className="text-lg font-bold">{value}</p>
                     </div>
                   ))}
                 </div>
 
-                {/* By station */}
+                {/* Payment method breakdown */}
+                <div className="rounded-xl border border-white/10 bg-card p-4">
+                  <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><Banknote className="h-4 w-4 text-amber-400" /> По способу оплаты</h3>
+                  <div className="flex gap-4">
+                    {[
+                      { label: 'Наличка', amount: paymentBreakdown.cash, color: '#f59e0b' },
+                      { label: 'Каспи', amount: paymentBreakdown.kaspi, color: '#06b6d4' },
+                      { label: 'Смешанный', amount: paymentBreakdown.mixed, color: '#8b5cf6' },
+                    ].filter(p => p.amount > 0).map(p => (
+                      <div key={p.label} className="flex-1">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-xs text-muted-foreground">{p.label}</span>
+                          <span className="text-xs font-semibold">{formatPrice(p.amount)}</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${(p.amount / totalRevenue) * 100}%`, background: p.color }} />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">{Math.round((p.amount / totalRevenue) * 100)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Daily revenue chart */}
+                {dailyData.length > 1 && (
+                  <div className="rounded-xl border border-white/10 bg-card p-4">
+                    <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-400" /> Динамика по дням</h3>
+                    <div className="flex items-end gap-1" style={{ height: 80 }}>
+                      {dailyData.map(d => (
+                        <div key={d.date} className="flex flex-col items-center gap-1 flex-1 min-w-0" title={`${d.date}: ${formatPrice(d.revenue)} (${d.count} сес.)`}>
+                          <div className="w-full rounded-t bg-emerald-500/70 hover:bg-emerald-500 transition-colors cursor-default"
+                            style={{ height: `${Math.max(2, (d.revenue / maxDailyRevenue) * 64)}px` }} />
+                          {dailyData.length <= 14 && (
+                            <span className="text-[8px] text-muted-foreground truncate w-full text-center">
+                              {d.date.slice(5)}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* By zone */}
+                {byZone.length > 0 && (
+                  <div className="rounded-xl border border-white/10 bg-card p-4">
+                    <h3 className="mb-3 text-sm font-semibold flex items-center gap-2">
+                      <span className="h-3.5 w-3.5 rounded-full bg-primary inline-block" /> По зонам
+                    </h3>
+                    <div className="space-y-3">
+                      {byZone.map(({ zone, count, revenue, cash, kaspi }) => {
+                        const color = zone.color ?? '#3b82f6'
+                        return (
+                          <div key={zone.id}>
+                            <div className="flex items-center gap-3 mb-1">
+                              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
+                              <span className="text-sm font-medium flex-1">{zone.name}</span>
+                              <span className="text-sm font-bold">{formatPrice(revenue)}</span>
+                              <span className="text-xs text-muted-foreground w-16 text-right">{count} сес.</span>
+                            </div>
+                            <div className="flex gap-1 ml-4">
+                              <div className="h-1.5 rounded-full" style={{ width: `${(revenue / (byZone[0]?.revenue || 1)) * 100}%`, background: color + 'aa' }} />
+                            </div>
+                            <div className="ml-4 mt-1 flex gap-3 text-[10px] text-muted-foreground">
+                              {cash > 0 && <span>💵 {formatPrice(cash)}</span>}
+                              {kaspi > 0 && <span>📱 {formatPrice(kaspi)}</span>}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* By station with occupancy */}
                 {byStation.length > 0 && (
                   <div className="rounded-xl border border-white/10 bg-card p-4">
                     <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><Monitor className="h-4 w-4 text-primary" /> По станциям</h3>
                     <div className="space-y-2">
-                      {byStation.map(({ station, count, revenue }) => (
+                      {byStation.map(({ station, count, revenue, occupancy }) => (
                         <div key={station.id} className="flex items-center gap-3">
-                          <span className="w-28 text-sm truncate">{station.name}</span>
+                          <span className="w-24 text-sm truncate shrink-0">{station.name}</span>
                           <div className="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
                             <div className="h-full rounded-full bg-primary" style={{ width: `${(revenue / (byStation[0]?.revenue || 1)) * 100}%` }} />
                           </div>
-                          <span className="text-sm font-medium w-28 text-right">{formatPrice(revenue)}</span>
-                          <span className="text-xs text-muted-foreground w-16 text-right">{count} сес.</span>
+                          <span className="text-sm font-medium w-24 text-right shrink-0">{formatPrice(revenue)}</span>
+                          <span className="text-xs text-muted-foreground w-12 text-right shrink-0">{count} сес.</span>
+                          <span className={`text-xs w-12 text-right shrink-0 font-medium ${occupancy >= 50 ? 'text-emerald-400' : occupancy >= 20 ? 'text-amber-400' : 'text-muted-foreground'}`}>
+                            {occupancy}%
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -1286,17 +1430,17 @@ export default function StationsPage() {
                 {/* By tariff */}
                 {byTariff.length > 0 && (
                   <div className="rounded-xl border border-white/10 bg-card p-4">
-                    <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><Clock className="h-4 w-4 text-primary" /> По тарифам</h3>
+                    <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><Clock className="h-4 w-4 text-violet-400" /> По тарифам</h3>
                     <div className="space-y-2">
                       {byTariff.map(({ tariff, count, revenue }) => (
                         <div key={tariff.id} className="flex items-center gap-3">
-                          <span className="w-36 text-sm truncate">{tariff.name}</span>
-                          <span className="text-xs text-muted-foreground w-20">{formatMinutes(tariff.duration_minutes)}</span>
+                          <span className="w-36 text-sm truncate shrink-0">{tariff.name}</span>
+                          <span className="text-xs text-muted-foreground w-16 shrink-0">{formatMinutes(tariff.duration_minutes)}</span>
                           <div className="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
-                            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${(revenue / (byTariff[0]?.revenue || 1)) * 100}%` }} />
+                            <div className="h-full rounded-full bg-violet-500" style={{ width: `${(revenue / (byTariff[0]?.revenue || 1)) * 100}%` }} />
                           </div>
-                          <span className="text-sm font-medium w-28 text-right">{formatPrice(revenue)}</span>
-                          <span className="text-xs text-muted-foreground w-16 text-right">{count} сес.</span>
+                          <span className="text-sm font-medium w-24 text-right shrink-0">{formatPrice(revenue)}</span>
+                          <span className="text-xs text-muted-foreground w-14 text-right shrink-0">{count} сес.</span>
                         </div>
                       ))}
                     </div>
@@ -1306,19 +1450,24 @@ export default function StationsPage() {
                 {/* Peak hours */}
                 <div className="rounded-xl border border-white/10 bg-card p-4">
                   <h3 className="mb-3 text-sm font-semibold flex items-center gap-2"><BarChart3 className="h-4 w-4 text-primary" /> Загруженность по часам</h3>
-                  <div className="flex items-end gap-1 h-20">
-                    {hourBuckets.map(({ hour, count }) => (
-                      <div key={hour} className="flex flex-col items-center gap-1 flex-1">
-                        <div className="w-full rounded-t bg-primary/70 hover:bg-primary transition-colors" style={{ height: `${(count / maxHourCount) * 60}px`, minHeight: count > 0 ? 2 : 0 }} title={`${hour}:00 — ${count} сес.`} />
-                        {hour % 4 === 0 && <span className="text-[9px] text-muted-foreground">{hour}</span>}
+                  <div className="flex items-end gap-0.5 h-20">
+                    {hourBuckets.map(({ hour, count, revenue }) => (
+                      <div key={hour} className="flex flex-col items-center gap-1 flex-1 min-w-0">
+                        <div className="w-full rounded-t bg-primary/60 hover:bg-primary transition-colors cursor-default"
+                          style={{ height: `${Math.max(0, (count / maxHourCount) * 64)}px`, minHeight: count > 0 ? 2 : 0 }}
+                          title={`${hour}:00 — ${count} сес. / ${formatPrice(revenue)}`} />
+                        {hour % 3 === 0 && <span className="text-[8px] text-muted-foreground">{hour}</span>}
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {completedSessions.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-muted-foreground text-sm">
-                    За выбранный период нет завершённых сессий
+                {/* Discounts summary — only if any discounts were given */}
+                {totalDiscount > 0 && (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                    <h3 className="mb-1 text-sm font-semibold text-amber-400">Скидки за период</h3>
+                    <p className="text-lg font-bold text-amber-400">{formatPrice(Math.round(totalDiscount))}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Сумма недополученной выручки от скидок</p>
                   </div>
                 )}
               </>
