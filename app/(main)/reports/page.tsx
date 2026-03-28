@@ -674,6 +674,14 @@ const DRILL_TITLES: Record<DrillDownType, string> = {
   profit: 'Доходы и расходы — детализация',
 }
 
+function SortIcon({ f, sortField, sortDir }: { f: string; sortField: string; sortDir: string }) {
+  return sortField === f ? (
+    <span className="ml-1 text-violet-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
+  ) : (
+    <span className="ml-1 text-gray-600">↕</span>
+  )
+}
+
 function DrillDownModal({
   type,
   incomes,
@@ -778,13 +786,6 @@ function DrillDownModal({
     else { setSortField(f); setSortDir('desc') }
   }
 
-  const SortIcon = ({ f }: { f: typeof sortField }) =>
-    sortField === f ? (
-      <span className="ml-1 text-violet-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
-    ) : (
-      <span className="ml-1 text-gray-600">↕</span>
-    )
-
   // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -858,13 +859,13 @@ function DrillDownModal({
                   className="text-left px-4 py-3 font-medium cursor-pointer hover:text-white select-none whitespace-nowrap"
                   onClick={() => toggleSort('date')}
                 >
-                  Дата <SortIcon f="date" />
+                  Дата <SortIcon f="date" sortField={sortField} sortDir={sortDir} />
                 </th>
                 <th
                   className="text-left px-4 py-3 font-medium cursor-pointer hover:text-white select-none"
                   onClick={() => toggleSort('company')}
                 >
-                  Компания <SortIcon f="company" />
+                  Компания <SortIcon f="company" sortField={sortField} sortDir={sortDir} />
                 </th>
                 {type === 'profit' && (
                   <th className="text-left px-4 py-3 font-medium">Тип</th>
@@ -876,7 +877,7 @@ function DrillDownModal({
                   className="text-right px-4 py-3 font-medium cursor-pointer hover:text-white select-none"
                   onClick={() => toggleSort('amount')}
                 >
-                  Итого <SortIcon f="amount" />
+                  Итого <SortIcon f="amount" sortField={sortField} sortDir={sortDir} />
                 </th>
               </tr>
             </thead>

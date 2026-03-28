@@ -68,21 +68,19 @@ type CartItem = {
 }
 type PaymentMethod = 'cash' | 'kaspi' | 'card' | 'online' | 'mixed'
 
-let receiptDateOverride: Date | null = null
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmt(n: number) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
 }
 
-function today() {
-  const value = receiptDateOverride ?? new Date()
+function today(override?: Date | null) {
+  const value = override ?? new Date()
   return value.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-function nowTime() {
-  const value = receiptDateOverride ?? new Date()
+function nowTime(override?: Date | null) {
+  const value = override ?? new Date()
   return value.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
 
@@ -121,11 +119,6 @@ function ReceiptModal({
   onNewSale,
 }: ReceiptProps) {
   const soldAt = receiptData.sale?.sold_at ? new Date(receiptData.sale.sold_at) : null
-  receiptDateOverride = soldAt
-  const soldDateLabel = soldAt ? soldAt.toLocaleDateString('ru-RU') : today()
-  const soldTimeLabel = soldAt
-    ? soldAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-    : nowTime()
   const change =
     receiptData.cash_amount > 0
       ? Math.max(0, receiptData.cash_amount - receiptData.total_amount)
@@ -155,7 +148,7 @@ function ReceiptModal({
                 {company?.name || ''} {location ? `— ${location.name}` : ''}
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                Дата: {today()} {nowTime()}
+                Дата: {today(soldAt)} {nowTime(soldAt)}
               </div>
             </div>
 
