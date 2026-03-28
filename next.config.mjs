@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  generateBuildId: async () => process.env.GITHUB_SHA ?? null,
   images: {
     unoptimized: true,
   },
