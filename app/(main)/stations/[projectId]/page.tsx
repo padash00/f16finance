@@ -81,6 +81,11 @@ const DECORATION_TYPES = [
   { type: 'label', emoji: 'Aa', label: 'Надпись' },
   { type: 'desk', emoji: '🖥', label: 'Стол' },
   { type: 'arrow', emoji: '➡️', label: 'Стрелка' },
+  { type: 'tv', emoji: '📺', label: 'Телевизор' },
+  { type: 'bar', emoji: '🍺', label: 'Барная стойка' },
+  { type: 'column', emoji: '⬤', label: 'Колонна' },
+  { type: 'window', emoji: '🪟', label: 'Окно' },
+  { type: 'stairs', emoji: '🪜', label: 'Лестница' },
 ]
 
 function decoEmoji(type: string) {
@@ -124,6 +129,8 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
   const [addDecoCell, setAddDecoCell] = useState<{ x: number; y: number } | null>(null)
   const [newDecoType, setNewDecoType] = useState('sofa')
   const [newDecoLabel, setNewDecoLabel] = useState('')
+  const [newDecoW, setNewDecoW] = useState(1)
+  const [newDecoH, setNewDecoH] = useState(1)
 
   // Sync when parent data changes
   useEffect(() => { setLocalZones(zones) }, [zones])
@@ -218,6 +225,8 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
     setAddDecoCell({ x, y })
     setNewDecoType('sofa')
     setNewDecoLabel('')
+    setNewDecoW(1)
+    setNewDecoH(1)
   }
 
   async function handleAddDecoration() {
@@ -233,7 +242,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
           type: newDecoType,
           grid_x: addDecoCell.x,
           grid_y: addDecoCell.y,
-          grid_w: 1, grid_h: 1,
+          grid_w: newDecoW, grid_h: newDecoH,
           label: newDecoLabel || null,
           rotation: 0,
         }),
@@ -410,22 +419,25 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
               key={deco.id}
               draggable
               onDragStart={e => { e.stopPropagation(); handleDragStart(e, 'deco', deco.id, deco.grid_x, deco.grid_y) }}
-              className="absolute flex items-center justify-center text-2xl select-none group"
+              className="absolute flex items-center justify-center select-none group overflow-hidden"
               style={{
                 left: deco.grid_x * CELL,
                 top: deco.grid_y * CELL,
-                width: CELL,
-                height: CELL,
+                width: deco.grid_w * CELL,
+                height: deco.grid_h * CELL,
                 zIndex: 2,
                 cursor: 'grab',
                 transform: deco.rotation ? `rotate(${deco.rotation}deg)` : undefined,
+                ...(deco.type === 'wall' ? { background: 'repeating-linear-gradient(45deg, #4b5563, #4b5563 5px, #374151 5px, #374151 10px)', opacity: 0.85 } : {}),
               }}
               onClick={e => e.stopPropagation()}
             >
-              <span title={deco.label ?? deco.type}>{decoEmoji(deco.type)}{deco.label && deco.type === 'label' ? '' : ''}</span>
-              {deco.type === 'label' && deco.label && (
-                <span className="absolute top-full left-0 text-[9px] text-white/60 whitespace-nowrap">{deco.label}</span>
-              )}
+              {deco.type === 'label'
+                ? <span className="text-[9px] text-white/60 text-center px-1 leading-tight break-words">{deco.label || 'Text'}</span>
+                : deco.type !== 'wall'
+                  ? <span className="text-xl" title={deco.label ?? deco.type}>{decoEmoji(deco.type)}</span>
+                  : null
+              }
               <button
                 className="absolute -top-1 -right-1 hidden group-hover:flex h-3.5 w-3.5 items-center justify-center rounded-full bg-destructive text-[9px] text-white"
                 onClick={e => { e.stopPropagation(); void handleDeleteDeco(deco.id) }}
@@ -495,6 +507,30 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                 className="rounded border border-white/20 bg-background px-2 py-1 text-sm"
               />
             )}
+            <div className="flex items-center gap-3 text-xs">
+              <label className="flex items-center gap-1.5 text-muted-foreground">
+                Ширина
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={newDecoW}
+                  onChange={e => setNewDecoW(Math.max(1, Math.min(10, Number(e.target.value))))}
+                  className="w-12 rounded border border-white/20 bg-background px-1.5 py-1 text-sm text-foreground"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-muted-foreground">
+                Высота
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={newDecoH}
+                  onChange={e => setNewDecoH(Math.max(1, Math.min(10, Number(e.target.value))))}
+                  className="w-12 rounded border border-white/20 bg-background px-1.5 py-1 text-sm text-foreground"
+                />
+              </label>
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={() => void handleAddDecoration()}

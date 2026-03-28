@@ -377,11 +377,112 @@ const MAP_CELL = 70
 const MAP_GRID_W = 24
 const MAP_GRID_H = 14
 
-function decoEmoji(type: string) {
-  const map: Record<string, string> = {
-    sofa: '🛋', entrance: '🚪', wall: '🧱', desk: '🖥', arrow: '➡️', label: '🏷',
-  }
-  return map[type] ?? '❓'
+function DecoIcon({ type, width, height, label, rotation }: { type: string; width: number; height: number; label?: string | null; rotation?: number }) {
+  const style: React.CSSProperties = { width, height, display: 'flex', alignItems: 'center', justifyContent: 'center', transform: rotation ? `rotate(${rotation}deg)` : undefined }
+
+  if (type === 'wall') return (
+    <div style={{ ...style }}>
+      <div style={{ width, height, background: 'repeating-linear-gradient(45deg, #4b5563, #4b5563 5px, #374151 5px, #374151 10px)', borderRadius: 2, opacity: 0.95 }} />
+    </div>
+  )
+
+  if (type === 'label') return (
+    <div style={{ ...style, padding: 4 }}>
+      <span style={{ fontSize: Math.max(9, Math.min(13, width / 5)), color: 'rgba(255,255,255,0.65)', textAlign: 'center', wordBreak: 'break-word', lineHeight: 1.2 }}>{label || 'Text'}</span>
+    </div>
+  )
+
+  if (type === 'entrance') return (
+    <div style={style}>
+      <svg viewBox="0 0 40 40" width={width * 0.8} height={height * 0.8} fill="none">
+        <rect x="4" y="4" width="32" height="36" rx="2" stroke="#60a5fa" strokeWidth="2.5" fill="#60a5fa18"/>
+        <path d="M20 4 Q36 4 36 20" stroke="#60a5fa" strokeWidth="2" fill="none"/>
+        <circle cx="30" cy="22" r="2" fill="#60a5fa"/>
+      </svg>
+    </div>
+  )
+
+  if (type === 'sofa') return (
+    <div style={style}>
+      <svg viewBox="0 0 40 40" width={width * 0.85} height={height * 0.85} fill="none">
+        <rect x="3" y="18" width="34" height="16" rx="4" fill="#7c3aed55" stroke="#7c3aed" strokeWidth="2"/>
+        <rect x="3" y="12" width="34" height="10" rx="3" fill="#7c3aed33" stroke="#7c3aed" strokeWidth="1.5"/>
+        <rect x="3" y="12" width="6" height="22" rx="3" fill="#7c3aed55" stroke="#7c3aed" strokeWidth="1.5"/>
+        <rect x="31" y="12" width="6" height="22" rx="3" fill="#7c3aed55" stroke="#7c3aed" strokeWidth="1.5"/>
+      </svg>
+    </div>
+  )
+
+  if (type === 'desk') return (
+    <div style={style}>
+      <svg viewBox="0 0 40 40" width={width * 0.85} height={height * 0.85} fill="none">
+        <rect x="3" y="10" width="34" height="20" rx="3" fill="#d9770633" stroke="#d97706" strokeWidth="2"/>
+        <line x1="10" y1="30" x2="10" y2="38" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round"/>
+        <line x1="30" y1="30" x2="30" y2="38" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round"/>
+      </svg>
+    </div>
+  )
+
+  if (type === 'tv') return (
+    <div style={style}>
+      <svg viewBox="0 0 40 40" width={width * 0.85} height={height * 0.85} fill="none">
+        <rect x="3" y="6" width="34" height="24" rx="3" fill="#06b6d433" stroke="#06b6d4" strokeWidth="2"/>
+        <rect x="7" y="10" width="26" height="16" rx="1" fill="#06b6d418"/>
+        <line x1="20" y1="30" x2="20" y2="36" stroke="#06b6d4" strokeWidth="2"/>
+        <line x1="13" y1="36" x2="27" y2="36" stroke="#06b6d4" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+    </div>
+  )
+
+  if (type === 'bar') return (
+    <div style={style}>
+      <svg viewBox="0 0 40 40" width={width * 0.85} height={height * 0.85} fill="none">
+        <rect x="3" y="14" width="34" height="6" rx="2" fill="#f59e0b55" stroke="#f59e0b" strokeWidth="2"/>
+        <rect x="5" y="20" width="30" height="14" rx="2" fill="#f59e0b22" stroke="#f59e0b" strokeWidth="1.5"/>
+        <line x1="13" y1="20" x2="13" y2="34" stroke="#f59e0b" strokeWidth="1" opacity="0.5"/>
+        <line x1="20" y1="20" x2="20" y2="34" stroke="#f59e0b" strokeWidth="1" opacity="0.5"/>
+        <line x1="27" y1="20" x2="27" y2="34" stroke="#f59e0b" strokeWidth="1" opacity="0.5"/>
+      </svg>
+    </div>
+  )
+
+  if (type === 'column') return (
+    <div style={style}>
+      <svg viewBox="0 0 40 40" width={width * 0.7} height={height * 0.7} fill="none">
+        <circle cx="20" cy="20" r="14" fill="#64748b44" stroke="#64748b" strokeWidth="2.5"/>
+        <circle cx="20" cy="20" r="8" fill="#64748b33" stroke="#64748b" strokeWidth="1.5"/>
+      </svg>
+    </div>
+  )
+
+  if (type === 'window') return (
+    <div style={style}>
+      <svg viewBox="0 0 40 40" width={width * 0.8} height={height * 0.8} fill="none">
+        <rect x="3" y="3" width="34" height="34" rx="2" fill="#bae6fd18" stroke="#7dd3fc" strokeWidth="2"/>
+        <line x1="20" y1="3" x2="20" y2="37" stroke="#7dd3fc" strokeWidth="1.5"/>
+        <line x1="3" y1="20" x2="37" y2="20" stroke="#7dd3fc" strokeWidth="1.5"/>
+      </svg>
+    </div>
+  )
+
+  if (type === 'stairs') return (
+    <div style={style}>
+      <svg viewBox="0 0 40 40" width={width * 0.8} height={height * 0.8} fill="none">
+        <path d="M5 35 L5 25 L15 25 L15 17 L25 17 L25 9 L35 9 L35 35 Z" fill="#84cc1633" stroke="#84cc16" strokeWidth="2" strokeLinejoin="round"/>
+      </svg>
+    </div>
+  )
+
+  if (type === 'arrow') return (
+    <div style={style}>
+      <svg viewBox="0 0 40 40" width={width * 0.8} height={height * 0.8} fill="none">
+        <path d="M5 20 L28 20 M20 10 L33 20 L20 30" stroke="#a78bfa" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </div>
+  )
+
+  // fallback
+  return <div style={{ ...style, fontSize: Math.min(width, height) * 0.5, opacity: 0.6 }}>?</div>
 }
 
 function ArenaMapView({
@@ -390,6 +491,7 @@ function ArenaMapView({
   decorations,
   sessions,
   tariffs,
+  operators,
   onStationClick,
 }: {
   zones: ArenaZone[]
@@ -397,6 +499,7 @@ function ArenaMapView({
   decorations: ArenaMapDecoration[]
   sessions: ArenaSession[]
   tariffs: ArenaTariff[]
+  operators: import('@/types').BootstrapOperator[]
   onStationClick: (station: ArenaStation) => void
 }) {
   const [now, setNow] = useState(Date.now())
@@ -472,21 +575,16 @@ function ArenaMapView({
         {decorations.map(deco => (
           <div
             key={deco.id}
-            className="absolute flex items-center justify-center pointer-events-none select-none"
+            className="absolute pointer-events-none select-none"
             style={{
               left: deco.grid_x * MAP_CELL,
               top: deco.grid_y * MAP_CELL,
-              width: MAP_CELL,
-              height: MAP_CELL,
-              fontSize: 28,
-              transform: deco.rotation ? `rotate(${deco.rotation}deg)` : undefined,
-              opacity: 0.7,
+              width: deco.grid_w * MAP_CELL,
+              height: deco.grid_h * MAP_CELL,
+              opacity: 0.85,
             }}
           >
-            {deco.type === 'label' && deco.label
-              ? <span className="text-[9px] text-white/50 text-center leading-tight">{deco.label}</span>
-              : decoEmoji(deco.type)
-            }
+            <DecoIcon type={deco.type} width={deco.grid_w * MAP_CELL} height={deco.grid_h * MAP_CELL} label={deco.label} rotation={deco.rotation} />
           </div>
         ))}
 
@@ -554,6 +652,27 @@ function ArenaMapView({
               {isExpired && (
                 <span className="text-[10px] font-semibold text-destructive mt-0.5">Истекло</span>
               )}
+              {occupied && activeSession && (() => {
+                const op = activeSession.operator_id ? operators.find(o => o.id === activeSession.operator_id) : null
+                return (
+                  <>
+                    {op && (
+                      <span
+                        className="truncate text-center leading-tight mt-0.5"
+                        style={{ fontSize: 9, maxWidth: MAP_CELL - 6, color: 'rgba(255,255,255,0.45)' }}
+                      >
+                        {op.short_name || op.name}
+                      </span>
+                    )}
+                    <span
+                      className="leading-none tabular-nums mt-0.5"
+                      style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)' }}
+                    >
+                      {formatMoney(activeSession.amount)}
+                    </span>
+                  </>
+                )
+              })()}
             </button>
           )
         })}
@@ -591,6 +710,9 @@ export default function ArenaPage({
   // Track which sessions we've already alerted/notified
   const notifiedRef = useRef<Set<string>>(new Set())
 
+  // Track previous session IDs to detect ended sessions
+  const prevSessionIdsRef = useRef<Set<string>>(new Set())
+
   // ─── Load data ──────────────────────────────────────────────────────────────
 
   const loadArena = useCallback(async () => {
@@ -599,7 +721,28 @@ export default function ArenaPage({
       setZones(data.zones)
       setStations(data.stations)
       setTariffs(data.tariffs)
-      setSessions(data.sessions)
+      const newSessions: ArenaSession[] = data.sessions
+      const newIds = new Set(newSessions.map((s: ArenaSession) => s.id))
+      // Detect ended sessions (were in prev, not in current)
+      const endedCount = [...prevSessionIdsRef.current].filter(id => !newIds.has(id)).length
+      if (endedCount > 0 && prevSessionIdsRef.current.size > 0) {
+        for (let i = 0; i < endedCount; i++) {
+          try {
+            const ctx = new AudioContext()
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.frequency.value = 440
+            gain.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.15)
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.3)
+            osc.start(ctx.currentTime + i * 0.15)
+            osc.stop(ctx.currentTime + i * 0.15 + 0.3)
+          } catch { /* ignore */ }
+        }
+      }
+      prevSessionIdsRef.current = newIds
+      setSessions(newSessions)
       setDecorations(data.decorations ?? [])
     } catch (err: any) {
       toastError(err?.message || 'Не удалось загрузить зал')
@@ -835,6 +978,7 @@ export default function ArenaPage({
               decorations={decorations}
               sessions={sessions}
               tariffs={tariffs}
+              operators={bootstrap.operators}
               onStationClick={handleStationClick}
             />
             {/* Mini summary under map */}
