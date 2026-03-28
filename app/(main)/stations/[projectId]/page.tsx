@@ -951,13 +951,13 @@ export default function StationsPage() {
   }
 
   // Daily revenue (last N days)
-  const dailyMap = new Map<string, { revenue: number; count: number }>()
+  const dailyMap: Record<string, { revenue: number; count: number }> = {}
   completedSessions.forEach(s => {
     const day = s.started_at.slice(0, 10)
-    const prev = dailyMap.get(day) || { revenue: 0, count: 0 }
-    dailyMap.set(day, { revenue: prev.revenue + Number(s.amount), count: prev.count + 1 })
+    const prev = dailyMap[day] || { revenue: 0, count: 0 }
+    dailyMap[day] = { revenue: prev.revenue + Number(s.amount), count: prev.count + 1 }
   })
-  const dailyData = Array.from(dailyMap.entries())
+  const dailyData = Object.entries(dailyMap)
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([date, d]) => ({ date, ...d }))
   const maxDailyRevenue = Math.max(...dailyData.map(d => d.revenue), 1)
