@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
@@ -635,8 +635,7 @@ export default function StationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics'>('manage')
 
-  // Dynamic cell size for map
-  const [cellSize, setCellSize] = useState(56)
+  const cellSize = 70
   const mapContainerRef = useRef<HTMLDivElement>(null)
 
   // Analytics
@@ -715,23 +714,6 @@ export default function StationsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
-  // Dynamic cell size: fill the map container without scrolling
-  useLayoutEffect(() => {
-    if (activeTab !== 'map') return
-    function compute() {
-      if (!mapContainerRef.current) return
-      const { width, height } = mapContainerRef.current.getBoundingClientRect()
-      const sidebarW = 216 // right sidebar width + gap
-      const availW = width - sidebarW - 16
-      const availH = height - 48 // subtract instructions row
-      const cs = Math.max(32, Math.floor(Math.min(availW, availH) / GRID))
-      setCellSize(cs)
-    }
-    compute()
-    const obs = new ResizeObserver(compute)
-    if (mapContainerRef.current) obs.observe(mapContainerRef.current)
-    return () => obs.disconnect()
-  }, [activeTab])
 
   const loadAnalytics = useCallback(async () => {
     setAnalyticsLoading(true)
