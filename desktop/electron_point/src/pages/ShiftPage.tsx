@@ -176,8 +176,7 @@ export default function ShiftPage({
   const kaspiDailySplitEnabled = flags.kaspi_daily_split === true
   const isNightKaspiSplit = kaspiDailySplitEnabled && form.shift === 'night'
 
-  const pointMode = (bootstrap.device.point_mode || '').toLowerCase()
-  const isArena = pointMode.includes('arena')
+  const isArena = bootstrap.device.feature_flags?.arena_enabled === true
   const wiponLabel = isArena ? 'Senet (система)' : 'Wipon (система)'
   const kaspiLabel = isArena ? 'Kaspi POS' : 'Kaspi'
 
