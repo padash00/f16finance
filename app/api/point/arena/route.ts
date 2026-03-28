@@ -49,6 +49,7 @@ export async function GET(request: Request) {
       { data: sessions, error: sessionsError },
       { data: decorations },
       { data: todayIncomes },
+      { data: todayTechLogs },
     ] = await Promise.all([
       withCo(supabase.from('arena_zones').select('*').eq('point_project_id', projectId).eq('is_active', true)).order('name'),
       withCo(supabase.from('arena_stations').select('*').eq('point_project_id', projectId).eq('is_active', true)).order('order_index').order('name'),
@@ -56,6 +57,7 @@ export async function GET(request: Request) {
       withCo(supabase.from('arena_sessions').select('*').eq('point_project_id', projectId).eq('status', 'active')),
       withCo(supabase.from('arena_map_decorations').select('*').eq('point_project_id', projectId)).order('created_at'),
       withCo(supabase.from('incomes').select('cash_amount,kaspi_amount,comment,created_at').eq('source', 'arena-session').eq('date', todayDate)),
+      withCo(supabase.from('arena_tech_logs').select('id,station_name,reason,amount,created_at').eq('point_project_id', projectId)).gte('created_at', todayDate + 'T00:00:00.000Z').order('created_at'),
     ])
 
     if (zonesError) throw zonesError
@@ -89,6 +91,7 @@ export async function GET(request: Request) {
         sessions: activeSessions,
         decorations: decorations || [],
         today_income: { cash: todayCash, kaspi: todayKaspi, rows: incomeRows },
+        today_tech_logs: todayTechLogs || [],
       },
     })
   } catch (error: any) {
@@ -383,6 +386,29 @@ export async function POST(request: Request) {
       }
 
       return json({ ok: true })
+    }
+
+    // ─── TECH LOG ─────────────────────────────────────────────────────────────
+    if (body.action === 'techLog') {
+      const { stationId, stationName, reason, amount, operatorId } = body
+      if (!reason) return json({ error: 'reason required' }, 400)
+
+      const { data: log, error: logError } = await supabase
+        .from('arena_tech_logs')
+        .insert({
+          point_project_id: projectId,
+          company_id: companyId,
+          station_id: stationId || null,
+          station_name: stationName || null,
+          reason,
+          amount: Number(amount) || 0,
+          operator_id: operatorId || null,
+        })
+        .select()
+        .single()
+
+      if (logError) throw logError
+      return json({ ok: true, data: log })
     }
 
     return json({ error: 'unknown action' }, 400)

@@ -643,15 +643,31 @@ export async function validatePromoCode(
 
 // ─── Arena ────────────────────────────────────────────────────────────────────
 
+export type ArenaTechLog = { id: string; station_name: string | null; reason: string; amount: number; created_at: string }
+
 export async function getArena(
   config: AppConfig,
   session: OperatorSession,
-): Promise<{ zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[]; decorations: ArenaMapDecoration[]; today_income: { cash: number; kaspi: number; rows: { cash_amount: number; kaspi_amount: number; comment: string | null }[] } }> {
+): Promise<{ zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[]; decorations: ArenaMapDecoration[]; today_income: { cash: number; kaspi: number; rows: { cash_amount: number; kaspi_amount: number; comment: string | null }[] }; today_tech_logs: ArenaTechLog[] }> {
   const data = await request<{
     ok: boolean
-    data: { zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[]; decorations: ArenaMapDecoration[]; today_income: { cash: number; kaspi: number; rows: { cash_amount: number; kaspi_amount: number; comment: string | null }[] } }
+    data: { zones: ArenaZone[]; stations: ArenaStation[]; tariffs: ArenaTariff[]; sessions: ArenaSession[]; decorations: ArenaMapDecoration[]; today_income: { cash: number; kaspi: number; rows: { cash_amount: number; kaspi_amount: number; comment: string | null }[] }; today_tech_logs: ArenaTechLog[] }
   }>(config, 'GET', '/api/point/arena', undefined, operatorHeaders(session))
   return data.data
+}
+
+export async function logArenaTech(
+  config: AppConfig,
+  session: OperatorSession,
+  payload: { stationId?: string | null; stationName?: string | null; reason: string; amount: number },
+): Promise<void> {
+  await request(
+    config,
+    'POST',
+    '/api/point/arena',
+    { action: 'techLog', operatorId: session.operator.operator_id, ...payload },
+    operatorHeaders(session),
+  )
 }
 
 export async function startArenaSession(

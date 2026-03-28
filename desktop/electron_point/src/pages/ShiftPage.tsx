@@ -163,8 +163,9 @@ export default function ShiftPage({
   const [salesSummary, setSalesSummary] = useState<PointInventorySaleShiftSummary | null>(null)
   const [salesSummaryLoading, setSalesSummaryLoading] = useState(false)
 
-  // Arena mode: today's income rows
+  // Arena mode: today's income rows + tech logs
   const [arenaIncomeRows, setArenaIncomeRows] = useState<{ cash_amount: number; kaspi_amount: number; comment: string | null; created_at?: string }[]>([])
+  const [arenaTechRows, setArenaTechRows] = useState<{ id: string; station_name: string | null; reason: string; amount: number; created_at: string }[]>([])
   const [arenaIncomeLoading, setArenaIncomeLoading] = useState(false)
   const [arenaCloseConfirm, setArenaCloseConfirm] = useState(false)
 
@@ -295,6 +296,7 @@ export default function ShiftPage({
     try {
       const data = await api.getArena(config, session)
       setArenaIncomeRows(data.today_income?.rows ?? [])
+      setArenaTechRows(data.today_tech_logs ?? [])
     } catch { /* ignore */ } finally {
       setArenaIncomeLoading(false)
     }
@@ -853,6 +855,30 @@ export default function ShiftPage({
                           </div>
                         )
                       })}
+                    </div>
+                  )}
+
+                  {/* Tech compensation section */}
+                  {arenaTechRows.length > 0 && (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-amber-400">Тех. компенсации</span>
+                        <span className="text-sm font-bold text-amber-400">
+                          −{arenaTechRows.reduce((s, r) => s + Number(r.amount || 0), 0).toLocaleString('ru-RU')} ₸
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {[...arenaTechRows].reverse().map((r) => (
+                          <div key={r.id} className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground truncate">
+                              🔧 {r.station_name ? `${r.station_name} — ` : ''}{r.reason}
+                            </span>
+                            <span className="ml-2 shrink-0 font-medium text-amber-300">
+                              {Number(r.amount || 0).toLocaleString('ru-RU')} ₸
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 

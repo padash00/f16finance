@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Clock, List, LogOut, Map as MapIcon, Monitor, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, List, LogOut, Map as MapIcon, Monitor, RefreshCw, Wrench, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { toastError, toastInfo } from '@/lib/toast'
@@ -223,6 +223,7 @@ function ManageSessionModal({
   zoneId,
   onExtend,
   onEnd,
+  onTech,
   onClose,
   loading,
 }: {
@@ -232,6 +233,7 @@ function ManageSessionModal({
   zoneId: string | null
   onExtend: (tariffId: string, paymentMethod: 'cash' | 'kaspi' | 'mixed', cashAmount: number, kaspiAmount: number) => void
   onEnd: () => void
+  onTech: () => void
   onClose: () => void
   loading: boolean
 }) {
@@ -283,6 +285,16 @@ function ManageSessionModal({
             <div className="flex flex-col gap-2">
               <Button type="button" variant="outline" onClick={() => setMode('extend')} disabled={loading}>
                 Продлить
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onTech}
+                disabled={loading}
+                className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+              >
+                <Wrench className="mr-1.5 h-3.5 w-3.5" />
+                Тех. компенсация
               </Button>
               <Button type="button" variant="destructive" onClick={onEnd} disabled={loading}>
                 {loading ? 'Завершаем...' : 'Завершить сессию'}
@@ -367,6 +379,84 @@ function ManageSessionModal({
             </div>
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Tech Log Modal ────────────────────────────────────────────────────────────
+
+const TECH_REASONS = ['Зависание игры', 'Долгая загрузка', 'Перезагрузка ПК', 'Проблемы со звуком', 'Другое']
+
+function TechLogModal({
+  station,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  station: ArenaStation
+  onConfirm: (reason: string, amount: number) => void
+  onCancel: () => void
+  loading: boolean
+}) {
+  const [reason, setReason] = useState(TECH_REASONS[0])
+  const [amount, setAmount] = useState('')
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Тех. компенсация</h2>
+          <button type="button" onClick={onCancel} className="rounded-full p-1 text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <p className="mb-4 text-sm text-muted-foreground">
+          Станция: <span className="font-medium text-foreground">{station.name}</span>
+        </p>
+
+        <p className="mb-2 text-sm font-medium">Причина</p>
+        <div className="mb-4 flex flex-col gap-1.5">
+          {TECH_REASONS.map(r => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setReason(r)}
+              className={`rounded-xl border px-4 py-2.5 text-left text-sm transition ${
+                reason === r
+                  ? 'border-amber-500/50 bg-amber-500/10 text-foreground'
+                  : 'border-border bg-muted/30 text-muted-foreground hover:border-amber-500/30 hover:text-foreground'
+              }`}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+
+        <p className="mb-2 text-sm font-medium">Сумма компенсации ₸</p>
+        <input
+          type="number"
+          min="0"
+          value={amount}
+          onChange={e => setAmount(e.target.value)}
+          placeholder="0"
+          className="mb-5 w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+        />
+
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            onClick={() => onConfirm(reason, Number(amount) || 0)}
+            disabled={loading}
+            className="flex-1 bg-amber-500 text-black hover:bg-amber-400"
+          >
+            {loading ? 'Сохраняем...' : 'Записать'}
+          </Button>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+            Отмена
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -984,6 +1074,7 @@ export default function ArenaPage({
   const [startTarget, setStartTarget] = useState<ArenaStation | null>(null)
   const [manageTarget, setManageTarget] = useState<{ station: ArenaStation; session: ArenaSession } | null>(null)
   const [massStartTarget, setMassStartTarget] = useState<ArenaZone | null>(null)
+  const [techTarget, setTechTarget] = useState<ArenaStation | null>(null)
 
   // Track which sessions we've already alerted/notified
   const notifiedRef = useRef<Set<string>>(new Set())
@@ -1143,6 +1234,26 @@ export default function ArenaPage({
       setManageTarget(null)
     } catch (err: any) {
       toastError(err?.message || 'Не удалось продлить сессию')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleTechLog(reason: string, amount: number) {
+    if (!techTarget) return
+    setActionLoading(true)
+    try {
+      await api.logArenaTech(config, session, {
+        stationId: techTarget.id,
+        stationName: techTarget.name,
+        reason,
+        amount,
+      })
+      setTechTarget(null)
+      setManageTarget(null)
+      toastInfo(`Тех. компенсация записана: ${techTarget.name}`)
+    } catch (err: any) {
+      toastError(err?.message || 'Не удалось записать компенсацию')
     } finally {
       setActionLoading(false)
     }
@@ -1407,7 +1518,7 @@ export default function ArenaPage({
       )}
 
       {/* Manage session modal */}
-      {manageTarget && (
+      {manageTarget && !techTarget && (
         <ManageSessionModal
           station={manageTarget.station}
           session={manageTarget.session}
@@ -1415,7 +1526,18 @@ export default function ArenaPage({
           zoneId={manageTarget.station.zone_id}
           onExtend={handleExtend}
           onEnd={handleEnd}
+          onTech={() => setTechTarget(manageTarget.station)}
           onClose={() => setManageTarget(null)}
+          loading={actionLoading}
+        />
+      )}
+
+      {/* Tech log modal */}
+      {techTarget && (
+        <TechLogModal
+          station={techTarget}
+          onConfirm={handleTechLog}
+          onCancel={() => setTechTarget(null)}
           loading={actionLoading}
         />
       )}
