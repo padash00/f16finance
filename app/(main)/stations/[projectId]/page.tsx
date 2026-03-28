@@ -878,23 +878,29 @@ export default function StationsPage() {
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-2.5">
           <Monitor className="h-6 w-6 text-cyan-300" />
         </div>
-        {/* Project selector */}
-        <div className="relative">
-          <select
-            value={projectId}
-            onChange={e => router.push(`/stations/${e.target.value}`)}
-            className="appearance-none rounded-xl border border-white/10 bg-card px-4 py-2 pr-8 text-lg font-bold text-foreground focus:outline-none focus:border-primary cursor-pointer"
-          >
-            {allProjects.length === 0 && (
-              <option value={projectId}>{projectName || '...'}</option>
-            )}
-            {allProjects.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        {/* Точка selector */}
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Точка</span>
+          <div className="relative">
+            <select
+              value={projectId}
+              onChange={e => router.push(`/stations/${e.target.value}`)}
+              className="appearance-none rounded-xl border border-white/10 bg-card px-4 py-2 pr-8 text-lg font-bold text-foreground focus:outline-none focus:border-primary cursor-pointer"
+            >
+              {allProjects.length === 0 && (
+                <option value={projectId}>{projectName || '...'}</option>
+              )}
+              {allProjects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground">Станции и тарифы</p>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Станций</span>
+          <span className="text-lg font-bold">{stations.length}</span>
+        </div>
       </div>
 
       {/* Flash */}

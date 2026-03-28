@@ -26,13 +26,24 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
 
-    // List mode — return all point projects for the project selector
+    // List mode — return only arena-enabled point projects (точки)
     if (!projectId) {
-      const { data: projects } = await supabase
+      // Fetch projects with their company assignments to filter by arena_enabled
+      const { data: allProjects } = await supabase
         .from('point_projects')
-        .select('id, name')
+        .select('id, name, feature_flags, point_project_companies(feature_flags)')
         .order('name')
-      return json({ ok: true, data: { projects: projects || [] } })
+
+      const arenaProjects = (allProjects || [])
+        .filter((p: any) => {
+          const projEnabled = p.feature_flags?.arena_enabled === true
+          const compEnabled = Array.isArray(p.point_project_companies) &&
+            p.point_project_companies.some((c: any) => c.feature_flags?.arena_enabled === true)
+          return projEnabled || compEnabled
+        })
+        .map((p: any) => ({ id: p.id, name: p.name }))
+
+      return json({ ok: true, data: { projects: arenaProjects } })
     }
 
     // Get project name
