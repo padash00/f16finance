@@ -7,6 +7,11 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+function getCurrentShift(): 'day' | 'night' {
+  const hour = new Date().getHours()
+  return hour >= 6 && hour < 22 ? 'day' : 'night'
+}
+
 // In-memory map: sessionId → notifiedAt timestamp (for 5-min Telegram dedup)
 const notified5minMap = new Map<string, number>()
 
@@ -102,7 +107,15 @@ export async function POST(request: Request) {
 
     // ─── START SESSION ────────────────────────────────────────────────────────
     if (body.action === 'startSession') {
-      const { stationId, tariffId, operatorId } = body
+      const {
+        stationId,
+        tariffId,
+        operatorId,
+        payment_method = 'cash',
+        cash_amount: rawCashAmt,
+        kaspi_amount: rawKaspiAmt,
+        discount_percent = 0,
+      } = body
       if (!stationId || !tariffId) return json({ error: 'stationId and tariffId required' }, 400)
 
       // Ensure station is not already occupied
@@ -124,9 +137,44 @@ export async function POST(request: Request) {
       if (tariffError || !tariff) return json({ error: 'tariff-not-found' }, 404)
 
       const startedAt = new Date()
-      const endsAt = new Date(startedAt.getTime() + Number(tariff.duration_minutes) * 60_000)
+      let endsAt: Date
 
-      const { data: session, error: insertError } = await supabase
+      if (tariff.tariff_type === 'time_window' && tariff.window_end_time) {
+        const [endHour, endMin] = (tariff.window_end_time as string).split(':').map(Number)
+        endsAt = new Date()
+        endsAt.setHours(endHour, endMin, 0, 0)
+        if (endsAt <= startedAt) endsAt.setDate(endsAt.getDate() + 1)
+      } else {
+        endsAt = new Date(startedAt.getTime() + Number(tariff.duration_minutes) * 60_000)
+      }
+
+      // Calculate discounted price
+      const discPct = Number(discount_percent) || 0
+      const discountedPrice = Math.round(Number(tariff.price) * (1 - discPct / 100))
+
+      // Resolve cash/kaspi amounts
+      let finalCash: number
+      let finalKaspi: number
+      if (payment_method === 'cash') {
+        finalCash = discountedPrice
+        finalKaspi = 0
+      } else if (payment_method === 'kaspi') {
+        finalCash = 0
+        finalKaspi = discountedPrice
+      } else {
+        finalCash = Number(rawCashAmt) || 0
+        finalKaspi = Number(rawKaspiAmt) || 0
+      }
+
+      // Fetch station name for income comment
+      const { data: stationRow } = await supabase
+        .from('arena_stations')
+        .select('name')
+        .eq('id', stationId)
+        .maybeSingle()
+      const stationName = (stationRow as any)?.name || stationId
+
+      const { data: arenaSession, error: insertError } = await supabase
         .from('arena_sessions')
         .insert({
           point_project_id: projectId,
@@ -136,14 +184,46 @@ export async function POST(request: Request) {
           operator_id: operatorId || null,
           started_at: startedAt.toISOString(),
           ends_at: endsAt.toISOString(),
-          amount: Number(tariff.price) || 0,
+          amount: discountedPrice,
           status: 'active',
+          payment_method,
+          cash_amount: finalCash,
+          kaspi_amount: finalKaspi,
+          discount_percent: discPct,
         })
         .select()
         .single()
 
       if (insertError) throw insertError
-      return json({ ok: true, data: session })
+
+      // Create income record
+      const { data: incomeRow } = await supabase
+        .from('incomes')
+        .insert({
+          date: new Date().toISOString().slice(0, 10),
+          company_id: companyId,
+          operator_id: operatorId || null,
+          shift: getCurrentShift(),
+          zone: 'arena',
+          cash_amount: finalCash,
+          kaspi_amount: finalKaspi,
+          online_amount: 0,
+          card_amount: 0,
+          comment: `Арена: ${stationName} — ${tariff.name}`,
+          source: 'arena-session',
+        })
+        .select('id')
+        .single()
+
+      // Update session with income_id if successfully created
+      if (incomeRow?.id) {
+        await supabase
+          .from('arena_sessions')
+          .update({ income_id: incomeRow.id })
+          .eq('id', (arenaSession as any).id)
+      }
+
+      return json({ ok: true, data: arenaSession })
     }
 
     // ─── END SESSION ──────────────────────────────────────────────────────────
@@ -166,7 +246,13 @@ export async function POST(request: Request) {
 
     // ─── EXTEND SESSION ───────────────────────────────────────────────────────
     if (body.action === 'extendSession') {
-      const { sessionId, tariffId } = body
+      const {
+        sessionId,
+        tariffId,
+        payment_method = 'cash',
+        cash_amount: extCashAmt,
+        kaspi_amount: extKaspiAmt,
+      } = body
       if (!sessionId || !tariffId) return json({ error: 'sessionId and tariffId required' }, 400)
 
       const { data: tariff, error: tariffError } = await supabase
@@ -178,31 +264,66 @@ export async function POST(request: Request) {
 
       const { data: current, error: fetchError } = await supabase
         .from('arena_sessions')
-        .select('ends_at, amount')
+        .select('ends_at, amount, station_id, operator_id')
         .eq('id', sessionId)
         .eq('point_project_id', projectId)
         .single()
       if (fetchError || !current) return json({ error: 'session-not-found' }, 404)
 
       // Extend from current ends_at (or now if already elapsed)
-      const currentEndsAt = new Date(current.ends_at)
+      const currentEndsAt = new Date((current as any).ends_at)
       const baseTime = currentEndsAt > new Date() ? currentEndsAt : new Date()
       const newEndsAt = new Date(baseTime.getTime() + Number(tariff.duration_minutes) * 60_000)
 
-      const { data: session, error: updateError } = await supabase
+      const extPrice = Number(tariff.price) || 0
+      let extCash: number
+      let extKaspi: number
+      if (payment_method === 'cash') {
+        extCash = extPrice; extKaspi = 0
+      } else if (payment_method === 'kaspi') {
+        extCash = 0; extKaspi = extPrice
+      } else {
+        extCash = Number(extCashAmt) || 0; extKaspi = Number(extKaspiAmt) || 0
+      }
+
+      const { data: updatedSession, error: updateError } = await supabase
         .from('arena_sessions')
         .update({
           ends_at: newEndsAt.toISOString(),
-          amount: (Number(current.amount) || 0) + (Number(tariff.price) || 0),
+          amount: (Number((current as any).amount) || 0) + extPrice,
         })
         .eq('id', sessionId)
         .select()
         .single()
 
       if (updateError) throw updateError
+
+      // Fetch station name for income comment
+      const { data: extStationRow } = await supabase
+        .from('arena_stations')
+        .select('name')
+        .eq('id', (current as any).station_id)
+        .maybeSingle()
+      const extStationName = (extStationRow as any)?.name || (current as any).station_id
+
+      // Create income record for extension
+      await supabase.from('incomes').insert({
+        date: new Date().toISOString().slice(0, 10),
+        company_id: companyId,
+        operator_id: (current as any).operator_id || null,
+        shift: getCurrentShift(),
+        zone: 'arena',
+        cash_amount: extCash,
+        kaspi_amount: extKaspi,
+        online_amount: 0,
+        card_amount: 0,
+        comment: `Арена продление: ${extStationName}`,
+        source: 'arena-session',
+      })
+
       // Reset notification flag so the new end time gets a fresh notification
       notified5minMap.delete(sessionId)
-      return json({ ok: true, data: session })
+      return json({ ok: true, data: updatedSession })
     }
 
     // ─── NOTIFY 5 MIN ─────────────────────────────────────────────────────────

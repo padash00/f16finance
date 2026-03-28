@@ -19,7 +19,7 @@ type Station = {
   id: string; zone_id: string | null; name: string; order_index: number; is_active: boolean
   grid_x: number | null; grid_y: number | null
 }
-type Tariff = { id: string; zone_id: string; name: string; duration_minutes: number; price: number; is_active: boolean }
+type Tariff = { id: string; zone_id: string; name: string; duration_minutes: number; price: number; is_active: boolean; tariff_type: 'fixed' | 'time_window'; window_end_time: string | null }
 type Decoration = {
   id: string; type: string; grid_x: number; grid_y: number; grid_w: number; grid_h: number
   label: string | null; rotation: number
@@ -696,7 +696,7 @@ export default function StationsPage() {
 
   // Add tariff
   const [addingTariffZone, setAddingTariffZone] = useState<string | null>(null)
-  const [newTariff, setNewTariff] = useState({ name: '', duration_minutes: '60', price: '' })
+  const [newTariff, setNewTariff] = useState({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' })
   const [editingTariff, setEditingTariff] = useState<Tariff | null>(null)
 
   const [saving, setSaving] = useState(false)
@@ -846,8 +846,18 @@ export default function StationsPage() {
     if (!newTariff.name.trim() || !newTariff.price) return
     setSaving(true)
     try {
-      await apiPost({ action: 'createTariff', projectId, companyId, zoneId, name: newTariff.name, duration_minutes: Number(newTariff.duration_minutes), price: Number(newTariff.price) })
-      setNewTariff({ name: '', duration_minutes: '60', price: '' }); setAddingTariffZone(null)
+      await apiPost({
+        action: 'createTariff',
+        projectId,
+        companyId,
+        zoneId,
+        name: newTariff.name,
+        duration_minutes: Number(newTariff.duration_minutes),
+        price: Number(newTariff.price),
+        tariff_type: newTariff.tariff_type || 'fixed',
+        window_end_time: newTariff.tariff_type === 'time_window' ? (newTariff.window_end_time || null) : null,
+      })
+      setNewTariff({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' }); setAddingTariffZone(null)
       await load(); showFlash('ok', 'Тариф добавлен')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
@@ -856,7 +866,15 @@ export default function StationsPage() {
     if (!editingTariff) return
     setSaving(true)
     try {
-      await apiPost({ action: 'updateTariff', tariffId: editingTariff.id, name: editingTariff.name, duration_minutes: editingTariff.duration_minutes, price: editingTariff.price })
+      await apiPost({
+        action: 'updateTariff',
+        tariffId: editingTariff.id,
+        name: editingTariff.name,
+        duration_minutes: editingTariff.duration_minutes,
+        price: editingTariff.price,
+        tariff_type: editingTariff.tariff_type || 'fixed',
+        window_end_time: editingTariff.tariff_type === 'time_window' ? (editingTariff.window_end_time || null) : null,
+      })
       setEditingTariff(null); await load(); showFlash('ok', 'Тариф обновлён')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
@@ -1115,6 +1133,15 @@ export default function StationsPage() {
                             <input value={newTariff.duration_minutes} onChange={e => setNewTariff(p => ({ ...p, duration_minutes: e.target.value }))} placeholder="Минуты" type="number" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
                             <input value={newTariff.price} onChange={e => setNewTariff(p => ({ ...p, price: e.target.value }))} placeholder="Цена ₸" type="number" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
                           </div>
+                          <div className="grid grid-cols-2 gap-1">
+                            <select value={newTariff.tariff_type} onChange={e => setNewTariff(p => ({ ...p, tariff_type: e.target.value }))} className="rounded border border-white/20 bg-background px-2 py-1 text-xs">
+                              <option value="fixed">Фиксированный</option>
+                              <option value="time_window">Пакет по времени</option>
+                            </select>
+                            {newTariff.tariff_type === 'time_window' && (
+                              <input value={newTariff.window_end_time} onChange={e => setNewTariff(p => ({ ...p, window_end_time: e.target.value }))} placeholder="До (напр. 16:00)" type="time" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
+                            )}
+                          </div>
                           <div className="flex gap-1">
                             <button onClick={() => handleCreateTariff(zone.id)} className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground">Добавить</button>
                             <button onClick={() => setAddingTariffZone(null)} className="rounded bg-white/10 px-2 py-1 text-xs text-muted-foreground">Отмена</button>
@@ -1133,6 +1160,15 @@ export default function StationsPage() {
                                   <input value={editingTariff.duration_minutes} onChange={e => setEditingTariff(p => p ? ({ ...p, duration_minutes: Number(e.target.value) }) : p)} type="number" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
                                   <input value={editingTariff.price} onChange={e => setEditingTariff(p => p ? ({ ...p, price: Number(e.target.value) }) : p)} type="number" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
                                 </div>
+                                <div className="grid grid-cols-2 gap-1">
+                                  <select value={editingTariff.tariff_type || 'fixed'} onChange={e => setEditingTariff(p => p ? ({ ...p, tariff_type: e.target.value as 'fixed' | 'time_window' }) : p)} className="rounded border border-white/20 bg-background px-2 py-1 text-xs">
+                                    <option value="fixed">Фиксированный</option>
+                                    <option value="time_window">Пакет по времени</option>
+                                  </select>
+                                  {editingTariff.tariff_type === 'time_window' && (
+                                    <input value={editingTariff.window_end_time || ''} onChange={e => setEditingTariff(p => p ? ({ ...p, window_end_time: e.target.value }) : p)} type="time" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
+                                  )}
+                                </div>
                                 <div className="flex gap-1">
                                   <button onClick={handleUpdateTariff} className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground">Сохранить</button>
                                   <button onClick={() => setEditingTariff(null)} className="rounded bg-white/10 px-2 py-1 text-xs">Отмена</button>
@@ -1142,7 +1178,15 @@ export default function StationsPage() {
                               <div className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5">
                                 <div>
                                   <span className="text-sm">{t.name}</span>
-                                  <span className="ml-2 text-xs text-muted-foreground">{formatMinutes(t.duration_minutes)} · {formatPrice(t.price)}</span>
+                                  <span className="ml-2 text-xs text-muted-foreground">
+                                    {t.tariff_type === 'time_window' && t.window_end_time
+                                      ? `до ${t.window_end_time}`
+                                      : formatMinutes(t.duration_minutes)}
+                                    {' · '}{formatPrice(t.price)}
+                                  </span>
+                                  {t.tariff_type === 'time_window' && (
+                                    <span className="ml-1.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-semibold text-amber-400">Пакет</span>
+                                  )}
                                 </div>
                                 <div className="hidden group-hover:flex items-center gap-1">
                                   <button onClick={() => setEditingTariff(t)} className="p-1 text-muted-foreground hover:text-foreground"><Pencil className="h-3 w-3" /></button>

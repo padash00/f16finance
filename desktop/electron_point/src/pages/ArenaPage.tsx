@@ -53,7 +53,7 @@ function StartSessionModal({
   station: ArenaStation
   tariffs: ArenaTariff[]
   zoneId: string | null
-  onConfirm: (tariffId: string) => void
+  onConfirm: (tariffId: string, paymentMethod: 'cash' | 'kaspi' | 'mixed', cashAmount: number, kaspiAmount: number, discountPct: number) => void
   onCancel: () => void
   loading: boolean
 }) {
@@ -62,6 +62,14 @@ function StartSessionModal({
     .sort((a, b) => a.price - b.price)
 
   const [selected, setSelected] = useState<string>(sorted[0]?.id ?? '')
+  const [payMethod, setPayMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
+  const [cashAmt, setCashAmt] = useState('')
+  const [kaspiAmt, setKaspiAmt] = useState('')
+  const [discountPct, setDiscountPct] = useState('')
+
+  const selectedTariff = sorted.find(t => t.id === selected)
+  const discPct = Number(discountPct) || 0
+  const finalPrice = selectedTariff ? Math.round(selectedTariff.price * (1 - discPct / 100)) : 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -78,7 +86,7 @@ function StartSessionModal({
         </p>
 
         <p className="mb-2 text-sm font-medium">Выберите тариф</p>
-        <div className="mb-6 flex flex-col gap-2">
+        <div className="mb-4 flex flex-col gap-2">
           {sorted.map((t) => (
             <button
               key={t.id}
@@ -92,10 +100,17 @@ function StartSessionModal({
             >
               <span className="font-medium">{t.name}</span>
               <span className="flex items-center gap-3 text-xs">
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {t.duration_minutes} мин
-                </span>
+                {t.tariff_type === 'time_window' && t.window_end_time ? (
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    до {t.window_end_time}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {t.duration_minutes} мин
+                  </span>
+                )}
                 <span className="font-semibold text-foreground">{formatMoney(t.price)}</span>
               </span>
             </button>
@@ -107,10 +122,84 @@ function StartSessionModal({
           )}
         </div>
 
+        {/* Discount */}
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className="text-sm text-muted-foreground">Скидка %</span>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            value={discountPct}
+            onChange={e => setDiscountPct(e.target.value)}
+            placeholder="0"
+            className="w-20 rounded-lg border border-white/10 bg-background px-2 py-1 text-sm text-right"
+          />
+        </div>
+
+        {/* Final price */}
+        {selectedTariff && (
+          <div className="mb-4 flex items-center justify-between rounded-xl bg-muted/30 px-4 py-2">
+            <span className="text-sm text-muted-foreground">К оплате</span>
+            <span className="text-lg font-bold">
+              {formatMoney(finalPrice)}
+              {discPct > 0 && (
+                <span className="ml-1.5 text-xs font-normal text-emerald-400">−{discPct}%</span>
+              )}
+            </span>
+          </div>
+        )}
+
+        {/* Payment method */}
+        <p className="mb-2 text-sm font-medium">Способ оплаты</p>
+        <div className="mb-4 flex gap-2">
+          {(['cash', 'kaspi', 'mixed'] as const).map(m => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setPayMethod(m)}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium border transition ${
+                payMethod === m
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-white/10 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Каспи' : 'Смешанный'}
+            </button>
+          ))}
+        </div>
+
+        {/* Mixed amounts */}
+        {payMethod === 'mixed' && (
+          <div className="mb-4 grid grid-cols-2 gap-2">
+            <div>
+              <p className="mb-1 text-xs text-muted-foreground">Наличка ₸</p>
+              <input
+                type="number"
+                min="0"
+                value={cashAmt}
+                onChange={e => setCashAmt(e.target.value)}
+                placeholder="0"
+                className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <p className="mb-1 text-xs text-muted-foreground">Каспи ₸</p>
+              <input
+                type="number"
+                min="0"
+                value={kaspiAmt}
+                onChange={e => setKaspiAmt(e.target.value)}
+                placeholder="0"
+                className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm"
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <Button
             type="button"
-            onClick={() => selected && onConfirm(selected)}
+            onClick={() => selected && onConfirm(selected, payMethod, Number(cashAmt), Number(kaspiAmt), discPct)}
             disabled={!selected || loading || sorted.length === 0}
             className="flex-1"
           >
@@ -141,7 +230,7 @@ function ManageSessionModal({
   session: ArenaSession
   tariffs: ArenaTariff[]
   zoneId: string | null
-  onExtend: (tariffId: string) => void
+  onExtend: (tariffId: string, paymentMethod: 'cash' | 'kaspi' | 'mixed', cashAmount: number, kaspiAmount: number) => void
   onEnd: () => void
   onClose: () => void
   loading: boolean
@@ -153,6 +242,10 @@ function ManageSessionModal({
     .sort((a, b) => a.price - b.price)
 
   const [selected, setSelected] = useState<string>(sorted[0]?.id ?? '')
+  const [extPayMethod, setExtPayMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
+  const [extCashAmt, setExtCashAmt] = useState('')
+  const [extKaspiAmt, setExtKaspiAmt] = useState('')
+
   const remainingMs = getRemainingMs(arenaSession.ends_at)
   const isExpired = remainingMs <= 0
   const endsAt = new Date(arenaSession.ends_at)
@@ -199,7 +292,7 @@ function ManageSessionModal({
         ) : (
           <>
             <p className="mb-2 text-sm font-medium">Выберите тариф для продления</p>
-            <div className="mb-5 flex flex-col gap-2">
+            <div className="mb-4 flex flex-col gap-2">
               {sorted.map((t) => (
                 <button
                   key={t.id}
@@ -227,10 +320,42 @@ function ManageSessionModal({
                 </p>
               )}
             </div>
+
+            {/* Payment method for extension */}
+            <p className="mb-2 text-sm font-medium">Способ оплаты</p>
+            <div className="mb-4 flex gap-2">
+              {(['cash', 'kaspi', 'mixed'] as const).map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setExtPayMethod(m)}
+                  className={`flex-1 rounded-lg py-2 text-sm font-medium border transition ${
+                    extPayMethod === m
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'border-white/10 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Каспи' : 'Смешанный'}
+                </button>
+              ))}
+            </div>
+            {extPayMethod === 'mixed' && (
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">Наличка ₸</p>
+                  <input type="number" min="0" value={extCashAmt} onChange={e => setExtCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+                </div>
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">Каспи ₸</p>
+                  <input type="number" min="0" value={extKaspiAmt} onChange={e => setExtKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button
                 type="button"
-                onClick={() => selected && onExtend(selected)}
+                onClick={() => selected && onExtend(selected, extPayMethod, Number(extCashAmt), Number(extKaspiAmt))}
                 disabled={!selected || loading || sorted.length === 0}
                 className="flex-1"
               >
@@ -242,6 +367,125 @@ function ManageSessionModal({
             </div>
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Mass Zone Start Modal ─────────────────────────────────────────────────────
+
+function MassZoneStartModal({
+  zone,
+  tariffs,
+  freeCount,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  zone: ArenaZone
+  tariffs: ArenaTariff[]
+  freeCount: number
+  onConfirm: (tariffId: string, paymentMethod: 'cash' | 'kaspi' | 'mixed', cashAmount: number, kaspiAmount: number) => void
+  onCancel: () => void
+  loading: boolean
+}) {
+  const sorted = tariffs
+    .filter(t => t.zone_id === zone.id)
+    .sort((a, b) => a.price - b.price)
+
+  const [selected, setSelected] = useState<string>(sorted[0]?.id ?? '')
+  const [payMethod, setPayMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
+  const [cashAmt, setCashAmt] = useState('')
+  const [kaspiAmt, setKaspiAmt] = useState('')
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Запустить зону</h2>
+          <button type="button" onClick={onCancel} className="rounded-full p-1 text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <p className="mb-4 text-sm text-muted-foreground">
+          Зона: <span className="font-medium text-foreground">{zone.name}</span>
+          {' · '}<span className="text-emerald-400">{freeCount} свободных станций</span>
+        </p>
+
+        <p className="mb-2 text-sm font-medium">Выберите тариф</p>
+        <div className="mb-4 flex flex-col gap-2">
+          {sorted.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setSelected(t.id)}
+              className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition ${
+                selected === t.id
+                  ? 'border-primary bg-primary/10 text-foreground'
+                  : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+              }`}
+            >
+              <span className="font-medium">{t.name}</span>
+              <span className="flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {t.duration_minutes} мин
+                </span>
+                <span className="font-semibold text-foreground">{formatMoney(t.price)}</span>
+              </span>
+            </button>
+          ))}
+          {sorted.length === 0 && (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              Нет тарифов для этой зоны.
+            </p>
+          )}
+        </div>
+
+        <p className="mb-2 text-sm font-medium">Способ оплаты</p>
+        <div className="mb-4 flex gap-2">
+          {(['cash', 'kaspi', 'mixed'] as const).map(m => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setPayMethod(m)}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium border transition ${
+                payMethod === m
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-white/10 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Каспи' : 'Смешанный'}
+            </button>
+          ))}
+        </div>
+        {payMethod === 'mixed' && (
+          <div className="mb-4 grid grid-cols-2 gap-2">
+            <div>
+              <p className="mb-1 text-xs text-muted-foreground">Наличка ₸</p>
+              <input type="number" min="0" value={cashAmt} onChange={e => setCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+            </div>
+            <div>
+              <p className="mb-1 text-xs text-muted-foreground">Каспи ₸</p>
+              <input type="number" min="0" value={kaspiAmt} onChange={e => setKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            onClick={() => selected && onConfirm(selected, payMethod, Number(cashAmt), Number(kaspiAmt))}
+            disabled={!selected || loading || sorted.length === 0 || freeCount === 0}
+            className="flex-1"
+          >
+            {loading ? 'Запускаем...' : `Запустить ${freeCount} станций`}
+          </Button>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+            Отмена
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -706,6 +950,7 @@ export default function ArenaPage({
   // Modal state
   const [startTarget, setStartTarget] = useState<ArenaStation | null>(null)
   const [manageTarget, setManageTarget] = useState<{ station: ArenaStation; session: ArenaSession } | null>(null)
+  const [massStartTarget, setMassStartTarget] = useState<ArenaZone | null>(null)
 
   // Track which sessions we've already alerted/notified
   const notifiedRef = useRef<Set<string>>(new Set())
@@ -809,7 +1054,7 @@ export default function ArenaPage({
 
   // ─── Actions ────────────────────────────────────────────────────────────────
 
-  async function handleStart(tariffId: string) {
+  async function handleStart(tariffId: string, payMethod: 'cash' | 'kaspi' | 'mixed', cashAmt: number, kaspiAmt: number, discPct: number) {
     if (!startTarget) return
     setActionLoading(true)
     try {
@@ -817,6 +1062,10 @@ export default function ArenaPage({
         stationId: startTarget.id,
         tariffId,
         operatorId: session.operator.operator_id,
+        payment_method: payMethod,
+        cash_amount: cashAmt,
+        kaspi_amount: kaspiAmt,
+        discount_percent: discPct,
       })
       setSessions((prev) => [...prev, newSession])
       setStartTarget(null)
@@ -847,11 +1096,15 @@ export default function ArenaPage({
     }
   }
 
-  async function handleExtend(tariffId: string) {
+  async function handleExtend(tariffId: string, payMethod: 'cash' | 'kaspi' | 'mixed', cashAmt: number, kaspiAmt: number) {
     if (!manageTarget) return
     setActionLoading(true)
     try {
-      const updated = await api.extendArenaSession(config, session, manageTarget.session.id, tariffId)
+      const updated = await api.extendArenaSession(config, session, manageTarget.session.id, tariffId, {
+        payment_method: payMethod,
+        cash_amount: cashAmt,
+        kaspi_amount: kaspiAmt,
+      })
       setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
       setManageTarget(null)
     } catch (err: any) {
@@ -859,6 +1112,31 @@ export default function ArenaPage({
     } finally {
       setActionLoading(false)
     }
+  }
+
+  async function handleMassStart(zoneId: string, tariffId: string, payMethod: 'cash' | 'kaspi' | 'mixed', cashAmt: number, kaspiAmt: number) {
+    const freeStations = stations.filter(s =>
+      s.zone_id === zoneId &&
+      s.is_active &&
+      !sessions.find(sess => sess.station_id === s.id)
+    )
+    setActionLoading(true)
+    for (const st of freeStations) {
+      try {
+        await api.startArenaSession(config, session, {
+          stationId: st.id,
+          tariffId,
+          operatorId: session.operator.operator_id,
+          payment_method: payMethod,
+          cash_amount: cashAmt,
+          kaspi_amount: kaspiAmt,
+          discount_percent: 0,
+        })
+      } catch { /* continue with next */ }
+    }
+    await loadArena()
+    setActionLoading(false)
+    setMassStartTarget(null)
   }
 
   function handleStationClick(station: ArenaStation) {
@@ -999,28 +1277,42 @@ export default function ArenaPage({
         ) : (
           <div className="flex flex-col gap-6">
             {/* Zones */}
-            {zoneGroups.map(({ zone, stations: zoneStations }) => (
-              <section key={zone.id}>
-                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {zone.name}
-                </h2>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {zoneStations.map((st) => (
-                    <StationCard
-                      key={st.id}
-                      station={st}
-                      activeSession={sessionsByStation.get(st.id)}
-                      tariffs={tariffs}
-                      onStart={() => setStartTarget(st)}
-                      onManage={() => {
-                        const s = sessionsByStation.get(st.id)
-                        if (s) setManageTarget({ station: st, session: s })
-                      }}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+            {zoneGroups.map(({ zone, stations: zoneStations }) => {
+              const freeInZone = zoneStations.filter(st => !sessionsByStation.has(st.id)).length
+              return (
+                <section key={zone.id}>
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {zone.name}
+                    </h2>
+                    {freeInZone > 0 && tariffs.some(t => t.zone_id === zone.id) && (
+                      <button
+                        type="button"
+                        onClick={() => setMassStartTarget(zone)}
+                        className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 hover:bg-emerald-500/20 transition"
+                      >
+                        Запустить зону
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {zoneStations.map((st) => (
+                      <StationCard
+                        key={st.id}
+                        station={st}
+                        activeSession={sessionsByStation.get(st.id)}
+                        tariffs={tariffs}
+                        onStart={() => setStartTarget(st)}
+                        onManage={() => {
+                          const s = sessionsByStation.get(st.id)
+                          if (s) setManageTarget({ station: st, session: s })
+                        }}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )
+            })}
 
             {/* Unzoned */}
             {unzoned.length > 0 && (
@@ -1088,6 +1380,18 @@ export default function ArenaPage({
           onExtend={handleExtend}
           onEnd={handleEnd}
           onClose={() => setManageTarget(null)}
+          loading={actionLoading}
+        />
+      )}
+
+      {/* Mass zone start modal */}
+      {massStartTarget && (
+        <MassZoneStartModal
+          zone={massStartTarget}
+          tariffs={tariffs}
+          freeCount={stations.filter(s => s.zone_id === massStartTarget.id && s.is_active && !sessions.find(sess => sess.station_id === s.id)).length}
+          onConfirm={(tariffId, payMethod, cashAmt, kaspiAmt) => handleMassStart(massStartTarget.id, tariffId, payMethod, cashAmt, kaspiAmt)}
+          onCancel={() => setMassStartTarget(null)}
           loading={actionLoading}
         />
       )}

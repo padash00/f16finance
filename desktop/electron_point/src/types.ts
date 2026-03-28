@@ -435,10 +435,13 @@ export interface ArenaTariff {
   id: string
   point_project_id: string
   zone_id: string | null
+  company_id: string | null
   name: string
   duration_minutes: number
   price: number
   is_active: boolean
+  tariff_type: 'fixed' | 'time_window'
+  window_end_time: string | null  // e.g. '16:00'
 }
 
 export interface ArenaSession {
@@ -452,4 +455,8 @@ export interface ArenaSession {
   ended_at: string | null
   amount: number
   status: 'active' | 'completed'
+  payment_method: 'cash' | 'kaspi' | 'mixed'
+  cash_amount: number
+  kaspi_amount: number
+  discount_percent: number
 }

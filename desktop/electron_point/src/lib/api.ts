@@ -657,7 +657,15 @@ export async function getArena(
 export async function startArenaSession(
   config: AppConfig,
   session: OperatorSession,
-  payload: { stationId: string; tariffId: string; operatorId?: string | null },
+  payload: {
+    stationId: string
+    tariffId: string
+    operatorId?: string | null
+    payment_method: 'cash' | 'kaspi' | 'mixed'
+    cash_amount?: number
+    kaspi_amount?: number
+    discount_percent?: number
+  },
 ): Promise<ArenaSession> {
   const data = await request<{ ok: boolean; data: ArenaSession }>(
     config,
@@ -689,12 +697,13 @@ export async function extendArenaSession(
   session: OperatorSession,
   sessionId: string,
   tariffId: string,
+  payment: { payment_method: 'cash' | 'kaspi' | 'mixed'; cash_amount?: number; kaspi_amount?: number },
 ): Promise<ArenaSession> {
   const data = await request<{ ok: boolean; data: ArenaSession }>(
     config,
     'POST',
     '/api/point/arena',
-    { action: 'extendSession', sessionId, tariffId },
+    { action: 'extendSession', sessionId, tariffId, ...payment },
     operatorHeaders(session),
   )
   return data.data
