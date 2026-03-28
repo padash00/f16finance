@@ -163,6 +163,11 @@ export default function ShiftPage({
   const [salesSummary, setSalesSummary] = useState<PointInventorySaleShiftSummary | null>(null)
   const [salesSummaryLoading, setSalesSummaryLoading] = useState(false)
 
+  // Arena mode: today's income rows
+  const [arenaIncomeRows, setArenaIncomeRows] = useState<{ cash_amount: number; kaspi_amount: number; comment: string | null; created_at?: string }[]>([])
+  const [arenaIncomeLoading, setArenaIncomeLoading] = useState(false)
+  const [arenaCloseConfirm, setArenaCloseConfirm] = useState(false)
+
   const flags = bootstrap.device.feature_flags
   const hasInventorySale = !!onSwitchToSale
   const hasScanner = flags.debt_report && onSwitchToScanner
@@ -283,6 +288,24 @@ export default function ShiftPage({
     const timer = setTimeout(() => void loadSalesSummary(form.date, form.shift), 600)
     return () => clearTimeout(timer)
   }, [form.date, form.shift, loadSalesSummary, viewMode])
+
+  const loadArenaIncome = useCallback(async () => {
+    if (!isArena) return
+    setArenaIncomeLoading(true)
+    try {
+      const data = await api.getArena(config, session)
+      setArenaIncomeRows(data.today_income?.rows ?? [])
+    } catch { /* ignore */ } finally {
+      setArenaIncomeLoading(false)
+    }
+  }, [config, session, isArena])
+
+  useEffect(() => {
+    if (!isArena) return
+    void loadArenaIncome()
+    const id = setInterval(() => void loadArenaIncome(), 10000)
+    return () => clearInterval(id)
+  }, [isArena, loadArenaIncome])
 
   const vCash = parseMoney(form.cash)
   const vCoins = parseMoney(form.coins)
@@ -761,7 +784,113 @@ export default function ShiftPage({
             </div>
           ) : null}
 
-          <div className={viewMode === 'shift' ? 'grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]' : 'hidden'}>
+          {/* ─── Arena shift view ─────────────────────────────────────── */}
+          {isArena && viewMode === 'shift' && (
+            <div className="space-y-4">
+              <Card className="overflow-hidden border-primary/10 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]">
+                <CardContent className="p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
+                        <ReceiptText className="h-3.5 w-3.5" />
+                        Смена арены
+                      </div>
+                      <h1 className="text-2xl font-semibold tracking-tight">Платежи за сегодня</h1>
+                      <p className="mt-1 text-sm text-muted-foreground">Записи создаются автоматически при запуске сессий.</p>
+                    </div>
+                    <Button type="button" variant="ghost" size="sm" onClick={loadArenaIncome} disabled={arenaIncomeLoading} className="text-muted-foreground">
+                      <RefreshCw className={`h-4 w-4 ${arenaIncomeLoading ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
+
+                  {/* Totals */}
+                  {(() => {
+                    const totalCash = arenaIncomeRows.reduce((s, r) => s + Number(r.cash_amount || 0), 0)
+                    const totalKaspi = arenaIncomeRows.reduce((s, r) => s + Number(r.kaspi_amount || 0), 0)
+                    const total = totalCash + totalKaspi
+                    return (
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-center">
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Нал</div>
+                          <div className="text-lg font-bold text-foreground">{totalCash.toLocaleString('ru-RU')} ₸</div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-center">
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Каспи</div>
+                          <div className="text-lg font-bold text-foreground">{totalKaspi.toLocaleString('ru-RU')} ₸</div>
+                        </div>
+                        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-center">
+                          <div className="text-[10px] uppercase tracking-wide text-emerald-400 mb-1">Итого</div>
+                          <div className="text-lg font-bold text-emerald-400">{total.toLocaleString('ru-RU')} ₸</div>
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {/* Payments list */}
+                  {arenaIncomeLoading && arenaIncomeRows.length === 0 ? (
+                    <div className="flex h-24 items-center justify-center">
+                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground" />
+                    </div>
+                  ) : arenaIncomeRows.length === 0 ? (
+                    <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+                      Нет платежей за сегодня
+                    </div>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+                      {[...arenaIncomeRows].reverse().map((row, i) => {
+                        const rowTotal = Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0)
+                        const isCash = Number(row.cash_amount || 0) > 0 && Number(row.kaspi_amount || 0) === 0
+                        const isKaspi = Number(row.kaspi_amount || 0) > 0 && Number(row.cash_amount || 0) === 0
+                        return (
+                          <div key={i} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-base shrink-0">{isCash ? '💵' : isKaspi ? '📱' : '🔀'}</span>
+                              <span className="truncate text-sm text-foreground">{row.comment || 'Арена'}</span>
+                            </div>
+                            <div className="ml-3 shrink-0 text-sm font-semibold text-foreground">
+                              {rowTotal.toLocaleString('ru-RU')} ₸
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Close shift button */}
+                  <Button
+                    type="button"
+                    className="w-full"
+                    size="lg"
+                    onClick={() => setArenaCloseConfirm(true)}
+                  >
+                    Закрыть смену
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Arena close confirm */}
+          {arenaCloseConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-6 shadow-2xl">
+                <h2 className="mb-2 text-lg font-semibold">Закрыть смену?</h2>
+                <p className="mb-5 text-sm text-muted-foreground">
+                  Все платежи уже записаны. После закрытия вы выйдете из аккаунта.
+                </p>
+                <div className="flex gap-2">
+                  <Button type="button" className="flex-1" onClick={() => { setArenaCloseConfirm(false); onLogout() }}>
+                    Да, закрыть
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setArenaCloseConfirm(false)}>
+                    Отмена
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className={!isArena && viewMode === 'shift' ? 'grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]' : 'hidden'}>
             <form id="shift-report-form" onSubmit={handleSubmit} className="space-y-4 no-drag">
               <Card className="overflow-hidden border-primary/10 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]">
                 <CardContent className="space-y-5 p-5">
