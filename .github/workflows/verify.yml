@@ -33,4 +33,6 @@ jobs:
         run: npm run lint
 
       - name: Build
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         run: npm run build
