@@ -1182,7 +1182,7 @@ export default function StationsPage() {
                     <div className="p-4">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Тарифы</span>
-                        <button onClick={() => { setAddingTariffZone(zone.id); setNewTariff({ name: '', duration_minutes: '60', price: '' }) }} className="flex items-center gap-1 rounded bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground">
+                        <button onClick={() => { setAddingTariffZone(zone.id); setNewTariff({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' }) }} className="flex items-center gap-1 rounded bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground">
                           <Plus className="h-3 w-3" /> Добавить
                         </button>
                       </div>
