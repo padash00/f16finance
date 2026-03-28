@@ -356,6 +356,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                   e.stopPropagation()
                   handleDragStart(e, 'zone', zone.id, x, y)
                 }}
+                onDragOver={e => e.preventDefault()}
                 onClick={e => { e.stopPropagation(); setColorPicker(colorPicker === zone.id ? null : zone.id) }}
                 className="absolute rounded select-none group"
                 style={{
@@ -432,6 +433,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
               key={deco.id}
               draggable
               onDragStart={e => { e.stopPropagation(); handleDragStart(e, 'deco', deco.id, deco.grid_x, deco.grid_y) }}
+              onDragOver={e => e.preventDefault()}
               className="absolute flex items-center justify-center select-none group overflow-hidden"
               style={{
                 left: deco.grid_x * CELL,
@@ -467,6 +469,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                 key={station.id}
                 draggable
                 onDragStart={e => { e.stopPropagation(); handleDragStart(e, 'station', station.id, x, y) }}
+                onDragOver={e => e.preventDefault()}
                 className="absolute flex flex-col items-center justify-center rounded border text-center select-none"
                 style={{
                   left: x * CELL + 2,
