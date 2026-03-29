@@ -3,7 +3,7 @@
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, Building2, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Wallet } from 'lucide-react'
+import { ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Wallet } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -118,6 +118,10 @@ export default function SalaryPage() {
     if (statusFilter !== 'all') list = list.filter((i) => i.week.status === statusFilter)
     return list
   }, [data?.operators, showZero, statusFilter])
+  const totalShifts = useMemo(
+    () => (data?.operators || []).reduce((sum, item) => sum + item.week.shiftsCount, 0),
+    [data?.operators],
+  )
   const broadcastTargets = useMemo(() => (data?.operators || []).filter((i) => i.operator.is_active && i.operator.telegram_chat_id), [data?.operators])
   const summaryText = useMemo(() => { const top = [...(data?.operators || [])].sort((a, b) => b.week.remainingAmount - a.week.remainingAmount)[0]; return top && top.week.remainingAmount > 0 ? `Самый большой остаток у ${getOperatorDisplayName(top.operator)}: ${money(top.week.remainingAmount)}.` : 'На этой неделе остатки закрыты или ещё не сформированы.' }, [data?.operators])
 
@@ -262,7 +266,8 @@ export default function SalaryPage() {
 
           {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-violet-500/15 p-2.5 text-violet-300"><CalendarDays className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Всего смен</div><div className="mt-1 text-2xl font-semibold text-white">{loading ? '—' : totalShifts}</div></div></div></Card>
             <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2.5 text-emerald-300"><DollarSign className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">К выплате</div><div className="mt-1 text-2xl font-semibold text-white">{data ? money(data.totals.netAmount) : '—'}</div></div></div></Card>
             <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2.5 text-blue-300"><CheckCircle2 className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Уже выплачено</div><div className="mt-1 text-2xl font-semibold text-white">{data ? money(data.totals.paidAmount) : '—'}</div></div></div></Card>
             <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2.5 text-amber-300"><CreditCard className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Авансы</div><div className="mt-1 text-2xl font-semibold text-white">{data ? money(data.totals.advanceAmount) : '—'}</div></div></div></Card>
