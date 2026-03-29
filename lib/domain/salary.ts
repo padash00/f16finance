@@ -80,6 +80,8 @@ export type SalarySummary = {
   manualBonuses: number
   totalAccrued: number
   autoDebts: number
+  manualDebts: number
+  totalDebts: number
   totalFines: number
   totalAdvances: number
   totalDeductions: number
@@ -353,6 +355,7 @@ export function calculateOperatorSalarySummary(params: {
   }
 
   let manualBonuses = 0
+  let manualDebts = 0
   let totalFines = 0
   let totalAdvances = 0
 
@@ -364,6 +367,7 @@ export function calculateOperatorSalarySummary(params: {
 
     if (adjustment.kind === 'bonus') manualBonuses += amount
     else if (adjustment.kind === 'advance') totalAdvances += amount
+    else if (adjustment.kind === 'debt') manualDebts += amount
     else totalFines += amount
   }
 
@@ -374,8 +378,9 @@ export function calculateOperatorSalarySummary(params: {
     if (amount > 0) autoDebts += amount
   }
 
+  const totalDebts = autoDebts + manualDebts
   const totalAccrued = baseSalary + autoBonuses + roleBonuses + manualBonuses
-  const totalDeductions = autoDebts + totalFines + totalAdvances
+  const totalDeductions = totalDebts + totalFines + totalAdvances
 
   return {
     shifts,
@@ -385,6 +390,8 @@ export function calculateOperatorSalarySummary(params: {
     manualBonuses,
     totalAccrued,
     autoDebts,
+    manualDebts,
+    totalDebts,
     totalFines,
     totalAdvances,
     totalDeductions,
@@ -710,6 +717,8 @@ export function calculateSalaryBoard(params: {
       manualBonuses: 0,
       totalAccrued: 0,
       autoDebts: 0,
+      manualDebts: 0,
+      totalDebts: 0,
       totalFines: 0,
       totalAdvances: 0,
       totalDeductions: 0,
@@ -778,6 +787,8 @@ export function calculateSalaryBoard(params: {
     } else if (adjustment.kind === 'advance') {
       stat.totalAdvances += amount
       stat.advances += amount
+    } else if (adjustment.kind === 'debt') {
+      stat.manualDebts += amount
     } else {
       stat.totalFines += amount
       stat.manualMinus += amount
@@ -795,10 +806,13 @@ export function calculateSalaryBoard(params: {
   let totalSalary = 0
   const operators = Array.from(board.values())
     .map((stat) => {
+      stat.totalDebts = stat.autoDebts + stat.manualDebts
       stat.totalAccrued = stat.baseSalary + stat.autoBonuses + stat.roleBonuses + stat.manualBonuses
-      stat.totalDeductions = stat.autoDebts + stat.totalFines + stat.totalAdvances
+      stat.totalDeductions = stat.totalDebts + stat.totalFines + stat.totalAdvances
       stat.remainingAmount = stat.totalAccrued - stat.totalDeductions
-      stat.finalSalary = stat.totalSalary + stat.manualPlus - stat.manualMinus - stat.autoDebts - stat.advances
+      // Keep the payout row anchored to the same canonical formula shown in the UI:
+      // total accrued (base + bonuses + premiums) minus all deductions.
+      stat.finalSalary = stat.remainingAmount
       totalSalary += stat.finalSalary
       return stat
     })
