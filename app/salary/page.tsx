@@ -142,6 +142,8 @@ type OperatorWeekStat = {
   roleBonusSalary: number
   totalSalary: number
   autoDebts: number
+  manualDebts: number
+  totalDebts: number
   manualPlus: number
   manualMinus: number
   advances: number
@@ -425,8 +427,7 @@ export default function SalaryPage() {
         supabase
           .from('debts')
           .select('id,operator_id,amount,week_start,status')
-          .gte('week_start', dateFrom)
-          .lte('week_start', dateTo)
+          .eq('week_start', weekStartISO)
           .eq('status', 'active'),
 
         supabase
@@ -500,6 +501,8 @@ export default function SalaryPage() {
       roleBonusSalary: operator.roleBonuses,
       totalSalary: operator.totalSalary,
       autoDebts: operator.autoDebts,
+      manualDebts: operator.manualDebts,
+      totalDebts: operator.totalDebts,
       manualPlus: operator.manualPlus,
       manualMinus: operator.manualMinus,
       advances: operator.advances,
@@ -521,7 +524,7 @@ export default function SalaryPage() {
   const totalBase = stats.operators.reduce((s, o) => s + o.baseSalary, 0)
   const totalBonus = stats.operators.reduce((s, o) => s + o.bonusSalary, 0)
   const totalRoleBonus = stats.operators.reduce((s, o) => s + o.roleBonusSalary, 0)
-  const totalAutoDebts = stats.operators.reduce((s, o) => s + o.autoDebts, 0)
+  const totalDebts = stats.operators.reduce((s, o) => s + o.totalDebts, 0)
   const totalMinus = stats.operators.reduce((s, o) => s + o.manualMinus, 0)
   const totalPlus = stats.operators.reduce((s, o) => s + o.manualPlus, 0)
   const totalAdvances = stats.operators.reduce((s, o) => s + o.advances, 0)
@@ -710,7 +713,7 @@ export default function SalaryPage() {
     const rows = stats.operators
     if (!rows.length) return
 
-    const header = ['Оператор', 'Смен', 'Оклад (база)', 'Авто-бонусы', 'Роль-бонусы', 'Ручные +', 'Ручные -', 'Долги', 'Авансы', 'Итого к выплате']
+    const header = ['Оператор', 'Смен', 'Оклад (база)', 'Авто-бонусы', 'Роль-бонусы', 'Премии', 'Штрафы', 'Долги', 'Авансы', 'Итого к выплате']
     const csvRows = rows.map((op) => [
       op.operatorName || '',
       op.shifts || 0,
@@ -719,7 +722,7 @@ export default function SalaryPage() {
       Math.round(op.roleBonusSalary || 0),
       Math.round(op.manualPlus || 0),
       Math.round(op.manualMinus || 0),
-      Math.round(op.autoDebts || 0),
+      Math.round(op.totalDebts || 0),
       Math.round(op.advances || 0),
       Math.round(op.finalSalary || 0),
     ])
@@ -750,9 +753,9 @@ export default function SalaryPage() {
     if (stats.operators.length === 0) return null
     const avgSalary = stats.totalSalary / (stats.operators.length || 1)
     if (avgSalary > 100000) return 'Высокая средняя зарплата — проверьте бонусные пороги'
-    if (totalAutoDebts > stats.totalSalary * 0.2) return 'Много долгов — рекомендуется проверить корректировки'
+    if (totalDebts > stats.totalSalary * 0.2) return 'Много долгов — рекомендуется проверить корректировки'
     return 'Расчет зарплаты в норме. Все операторы учтены.'
-  }, [stats, totalAutoDebts])
+  }, [stats, totalDebts])
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-gray-900 to-gray-950 text-foreground">
@@ -985,8 +988,8 @@ export default function SalaryPage() {
                 <p className="text-xs text-emerald-400/70 uppercase">К выплате</p>
               </div>
               <p className="text-2xl font-bold text-emerald-300">{loading ? '—' : Formatters.money(stats.totalSalary)}</p>
-              {!loading && totalAutoDebts > 0 && (
-                <p className="mt-1 text-[11px] text-red-400">Включая долги: {Formatters.money(totalAutoDebts)}</p>
+              {!loading && totalDebts > 0 && (
+                <p className="mt-1 text-[11px] text-red-400">Включая долги: {Formatters.money(totalDebts)}</p>
               )}
             </Card>
           </div>
@@ -1135,7 +1138,7 @@ export default function SalaryPage() {
                           <td className="py-4 px-4 text-right text-white font-mono">{Formatters.money(op.baseSalary)}</td>
                           <td className="py-4 px-4 text-right text-emerald-400 font-mono">{Formatters.money(op.bonusSalary)}</td>
                           <td className="py-4 px-4 text-right text-cyan-300 font-mono">{Formatters.money(op.roleBonusSalary)}</td>
-                          <td className="py-4 px-4 text-right text-red-400 font-mono">{Formatters.money(op.autoDebts)}</td>
+                          <td className="py-4 px-4 text-right text-red-400 font-mono">{Formatters.money(op.totalDebts)}</td>
                           <td className="py-4 px-4 text-right text-red-400 font-mono">{Formatters.money(op.manualMinus)}</td>
                           <td className="py-4 px-4 text-right text-amber-400 font-mono">{Formatters.money(op.advances)}</td>
                           <td className="py-4 px-4 text-right text-emerald-400 font-mono">{Formatters.money(op.manualPlus)}</td>
@@ -1193,7 +1196,7 @@ export default function SalaryPage() {
                       <td className="py-4 px-4 text-right font-bold text-white font-mono">{Formatters.money(totalBase)}</td>
                       <td className="py-4 px-4 text-right font-bold text-emerald-400 font-mono">{Formatters.money(totalBonus)}</td>
                       <td className="py-4 px-4 text-right font-bold text-cyan-300 font-mono">{Formatters.money(totalRoleBonus)}</td>
-                      <td className="py-4 px-4 text-right font-bold text-red-400 font-mono">{Formatters.money(totalAutoDebts)}</td>
+                      <td className="py-4 px-4 text-right font-bold text-red-400 font-mono">{Formatters.money(totalDebts)}</td>
                       <td className="py-4 px-4 text-right font-bold text-red-400 font-mono">{Formatters.money(totalMinus)}</td>
                       <td className="py-4 px-4 text-right font-bold text-amber-400 font-mono">{Formatters.money(totalAdvances)}</td>
                       <td className="py-4 px-4 text-right font-bold text-emerald-400 font-mono">{Formatters.money(totalPlus)}</td>

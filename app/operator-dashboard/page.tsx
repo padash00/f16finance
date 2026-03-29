@@ -81,6 +81,8 @@ type SalaryStats = {
   manualBonuses: number
   totalAccrued: number
   autoDebts: number
+  manualDebts: number
+  totalDebts: number
   totalFines: number
   totalAdvances: number
   totalDeductions: number
@@ -396,7 +398,7 @@ export default function OperatorDashboardPage() {
               id: Date.now() + Math.random(),
               date: adj.date,
               amount: adj.amount,
-              kind: 'fine',
+              kind: adj.kind === 'debt' ? 'debt' : 'fine',
               comment: adj.comment || (adj.kind === 'fine' ? 'Штраф' : 'Ручной долг')
             })
           }
@@ -458,6 +460,8 @@ export default function OperatorDashboardPage() {
           manualBonuses: salarySummary.manualBonuses,
           totalAccrued: salarySummary.totalAccrued,
           autoDebts: salarySummary.autoDebts,
+          manualDebts: salarySummary.manualDebts,
+          totalDebts: salarySummary.totalDebts,
           fines: salarySummary.totalFines,
           advances: salarySummary.totalAdvances,
           totalDeductions: salarySummary.totalDeductions,
@@ -471,6 +475,8 @@ export default function OperatorDashboardPage() {
           manualBonuses: salarySummary.manualBonuses,
           totalAccrued: salarySummary.totalAccrued,
           autoDebts: salarySummary.autoDebts,
+          manualDebts: salarySummary.manualDebts,
+          totalDebts: salarySummary.totalDebts,
           totalFines: salarySummary.totalFines,
           totalAdvances: salarySummary.totalAdvances,
           totalDeductions: salarySummary.totalDeductions,
@@ -1066,7 +1072,7 @@ export default function OperatorDashboardPage() {
                   <h3 className="font-medium text-white">Штрафы</h3>
                 </div>
                 <p className="text-2xl font-bold text-rose-400">-{salaryStats?.totalFines.toLocaleString()} ₸</p>
-                <p className="text-xs text-gray-500 mt-2">Включая ручные долги</p>
+                <p className="text-xs text-gray-500 mt-2">Только штрафы</p>
               </Card>
 
               <Card className="p-6 bg-blue-500/5 border-blue-500/20">
@@ -1080,10 +1086,10 @@ export default function OperatorDashboardPage() {
               <Card className="p-6 bg-purple-500/5 border-purple-500/20">
                 <div className="flex items-center gap-3 mb-3">
                   <Landmark className="w-5 h-5 text-purple-400" />
-                  <h3 className="font-medium text-white">Авто-долги</h3>
+                  <h3 className="font-medium text-white">Долги</h3>
                 </div>
-                <p className="text-2xl font-bold text-purple-400">-{salaryStats?.autoDebts.toLocaleString()} ₸</p>
-                <p className="text-xs text-gray-500 mt-2">Из программы</p>
+                <p className="text-2xl font-bold text-purple-400">-{salaryStats?.totalDebts.toLocaleString()} ₸</p>
+                <p className="text-xs text-gray-500 mt-2">Авто + ручные долги</p>
               </Card>
 
               <Card className="p-6 bg-emerald-500/5 border-emerald-500/20">
@@ -1132,7 +1138,7 @@ export default function OperatorDashboardPage() {
 
                 {salaryStats && salaryStats.totalFines > 0 && (
                   <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                    <span className="text-sm text-gray-400">Штрафы + ручные долги</span>
+                    <span className="text-sm text-gray-400">Штрафы</span>
                     <span className="text-sm font-medium text-rose-400">-{salaryStats.totalFines.toLocaleString()} ₸</span>
                   </div>
                 )}
@@ -1144,10 +1150,10 @@ export default function OperatorDashboardPage() {
                   </div>
                 )}
 
-                {salaryStats && salaryStats.autoDebts > 0 && (
+                {salaryStats && salaryStats.totalDebts > 0 && (
                   <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                    <span className="text-sm text-gray-400">Авто-долги (из программы)</span>
-                    <span className="text-sm font-medium text-rose-400">-{salaryStats.autoDebts.toLocaleString()} ₸</span>
+                    <span className="text-sm text-gray-400">Долги (авто + ручные)</span>
+                    <span className="text-sm font-medium text-rose-400">-{salaryStats.totalDebts.toLocaleString()} ₸</span>
                   </div>
                 )}
 

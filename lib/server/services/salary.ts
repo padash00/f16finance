@@ -69,8 +69,8 @@ export function buildSalaryTelegramMessage(params: {
   text += `💼 База: <b>${formatMoney(summary.baseSalary)}</b>\n`
   text += `✅ Авто-бонусы: <b>${formatMoney(summary.autoBonuses)}</b>\n`
   if (summary.roleBonuses > 0) text += `⭐ Надбавка за роль: <b>${formatMoney(summary.roleBonuses)}</b>\n`
-  text += `🧾 Долги недели: <b>${formatMoney(summary.autoDebts)}</b>\n`
-  if (summary.manualMinus > 0) text += `➖ Долги/штрафы: <b>${formatMoney(summary.manualMinus)}</b>\n`
+  if (summary.totalDebts > 0) text += `🧾 Долги недели: <b>${formatMoney(summary.totalDebts)}</b>\n`
+  if (summary.totalFines > 0) text += `➖ Штрафы: <b>${formatMoney(summary.totalFines)}</b>\n`
   if (summary.advances > 0) text += `💸 Авансы: <b>${formatMoney(summary.advances)}</b>\n`
   if (summary.manualPlus > 0) text += `🎁 Премии: <b>${formatMoney(summary.manualPlus)}</b>\n`
   text += `\n💰 <b>К выплате: ${formatMoney(summary.remainingAmount)}</b>`
