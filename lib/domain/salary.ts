@@ -544,7 +544,11 @@ export function calculateOperatorWeekSummary(params: {
 
   for (const shift of shifts) {
     const company = ensureCompany(shift.companyId)
-    company.accruedAmount += shift.salary
+    // "Начислено" on the weekly board is the fixed part for the shift
+    // (base + role premium). Auto bonuses are shown in a separate column
+    // and added explicitly into the final weekly/net formula below.
+    company.accruedAmount += shift.baseSalary + shift.roleBonus
+    company.bonusAmount += shift.autoBonus
   }
 
   let bonusAmount = 0
@@ -661,7 +665,7 @@ export function calculateOperatorWeekSummary(params: {
     debtAmount: roundMoney(debtAmount),
     advanceAmount: roundMoney(advanceAmount),
     netAmount: roundMoney(
-      grossAmount + bonusAmount - fineAmount - debtAmount - advanceAmount,
+      grossAmount + autoBonusTotal + bonusAmount - fineAmount - debtAmount - advanceAmount,
     ),
     companyAllocations: allocations,
     shiftsCount: shifts.length,
