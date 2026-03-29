@@ -1181,26 +1181,6 @@ export async function POST(req: Request) {
         actorUserId: user?.id || null,
       })
 
-      // Если неделя закрыта полностью — долг уже вычтен из зарплаты, помечаем как оплаченный
-      if (weekAfterPayment.remainingAmount < 0.01) {
-        const paidAt = new Date().toISOString()
-        await Promise.all([
-          supabase
-            .from('debts')
-            .update({ status: 'paid' })
-            .eq('operator_id', body.payload.operator_id)
-            .eq('week_start', weekStart)
-            .eq('status', 'active'),
-          // Убираем из сканера — инвентарь НЕ возвращаем (оператор оплатил деньгами, товар потреблён)
-          supabase
-            .from('point_debt_items')
-            .update({ status: 'deleted', deleted_at: paidAt })
-            .eq('operator_id', body.payload.operator_id)
-            .eq('week_start', weekStart)
-            .eq('status', 'active'),
-        ])
-      }
-
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
         entityType: 'operator-salary-week-payment',
