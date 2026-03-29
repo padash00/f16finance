@@ -82,7 +82,7 @@ export async function listOperatorSalaryData(
 
   const incomesQuery = supabase
     .from('incomes')
-    .select('date,company_id,shift,cash_amount,kaspi_amount,card_amount,operator_id,operator_name')
+    .select('date,company_id,shift,cash_amount,kaspi_amount,online_amount,card_amount,operator_id,operator_name')
     .eq('operator_id', operatorId)
     .gte('date', dateFrom)
     .lte('date', dateTo)

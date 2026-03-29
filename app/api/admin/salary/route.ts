@@ -651,7 +651,7 @@ export async function GET(req: Request) {
         listSalaryReferenceData(supabase),
         supabase
           .from('incomes')
-          .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, card_amount, comment')
+          .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment')
           .eq('operator_id', operatorId)
           .gte('date', weekStart)
           .lte('date', weekEnd)
@@ -817,7 +817,7 @@ export async function GET(req: Request) {
         .eq('is_active', true),
       supabase
         .from('incomes')
-        .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, card_amount, comment')
+        .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment')
         .eq('operator_id', operatorId)
         .gte('date', dateFrom)
         .lte('date', dateTo)

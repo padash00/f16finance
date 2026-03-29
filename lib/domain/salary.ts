@@ -34,6 +34,7 @@ export type SalaryIncomeRow = {
   shift: ShiftType | null
   cash_amount: number | null
   kaspi_amount: number | null
+  online_amount?: number | null
   card_amount: number | null
   operator_id: string | null
   operator_name?: string | null
@@ -80,8 +81,6 @@ export type SalarySummary = {
   manualBonuses: number
   totalAccrued: number
   autoDebts: number
-  manualDebts: number
-  totalDebts: number
   totalFines: number
   totalAdvances: number
   totalDeductions: number
@@ -118,6 +117,7 @@ export type SalaryShiftBreakdown = {
   totalIncome: number
   cash: number
   kaspi: number
+  online: number
   card: number
   zones: string[]
   comments: string[]
@@ -171,6 +171,15 @@ type CalculationOptions = {
 function toAmount(value: number | null | undefined): number {
   const amount = Number(value || 0)
   return Number.isFinite(amount) ? amount : 0
+}
+
+function calculateIncomeTotal(row: Pick<SalaryIncomeRow, 'cash_amount' | 'kaspi_amount' | 'online_amount' | 'card_amount'>) {
+  return (
+    toAmount(row.cash_amount) +
+    toAmount(row.kaspi_amount) +
+    toAmount(row.online_amount) +
+    toAmount(row.card_amount)
+  )
 }
 
 function isActiveStatus(value: string | null | undefined) {
@@ -276,7 +285,7 @@ function aggregateShifts(params: {
     if (!companyCode || !allowedCodes.has(companyCode)) continue
 
     const shift: ShiftType = row.shift === 'night' ? 'night' : 'day'
-    const turnover = toAmount(row.cash_amount) + toAmount(row.kaspi_amount) + toAmount(row.card_amount)
+    const turnover = calculateIncomeTotal(row)
     if (turnover <= 0) continue
 
     const operatorMeta = params.operatorsById?.[row.operator_id]
@@ -355,7 +364,6 @@ export function calculateOperatorSalarySummary(params: {
   }
 
   let manualBonuses = 0
-  let manualDebts = 0
   let totalFines = 0
   let totalAdvances = 0
 
@@ -367,7 +375,6 @@ export function calculateOperatorSalarySummary(params: {
 
     if (adjustment.kind === 'bonus') manualBonuses += amount
     else if (adjustment.kind === 'advance') totalAdvances += amount
-    else if (adjustment.kind === 'debt') manualDebts += amount
     else totalFines += amount
   }
 
@@ -378,9 +385,8 @@ export function calculateOperatorSalarySummary(params: {
     if (amount > 0) autoDebts += amount
   }
 
-  const totalDebts = autoDebts + manualDebts
   const totalAccrued = baseSalary + autoBonuses + roleBonuses + manualBonuses
-  const totalDeductions = totalDebts + totalFines + totalAdvances
+  const totalDeductions = autoDebts + totalFines + totalAdvances
 
   return {
     shifts,
@@ -390,8 +396,6 @@ export function calculateOperatorSalarySummary(params: {
     manualBonuses,
     totalAccrued,
     autoDebts,
-    manualDebts,
-    totalDebts,
     totalFines,
     totalAdvances,
     totalDeductions,
@@ -438,13 +442,15 @@ export function calculateOperatorShiftBreakdown(params: {
     const existing = aggregated.get(key)
     const cash = toAmount(row.cash_amount)
     const kaspi = toAmount(row.kaspi_amount)
+    const online = toAmount(row.online_amount)
     const card = toAmount(row.card_amount)
-    const totalIncome = cash + kaspi + card
+    const totalIncome = cash + kaspi + online + card
 
     if (existing) {
       existing.totalIncome += totalIncome
       existing.cash += cash
       existing.kaspi += kaspi
+      existing.online += online
       existing.card += card
       if (row.zone && !existing.zones.includes(row.zone)) existing.zones.push(row.zone)
       if (row.comment && !existing.comments.includes(row.comment)) existing.comments.push(row.comment)
@@ -462,6 +468,7 @@ export function calculateOperatorShiftBreakdown(params: {
       totalIncome,
       cash,
       kaspi,
+      online,
       card,
       zones: row.zone ? [row.zone] : [],
       comments: row.comment ? [row.comment] : [],
@@ -721,8 +728,6 @@ export function calculateSalaryBoard(params: {
       manualBonuses: 0,
       totalAccrued: 0,
       autoDebts: 0,
-      manualDebts: 0,
-      totalDebts: 0,
       totalFines: 0,
       totalAdvances: 0,
       totalDeductions: 0,
@@ -791,8 +796,6 @@ export function calculateSalaryBoard(params: {
     } else if (adjustment.kind === 'advance') {
       stat.totalAdvances += amount
       stat.advances += amount
-    } else if (adjustment.kind === 'debt') {
-      stat.manualDebts += amount
     } else {
       stat.totalFines += amount
       stat.manualMinus += amount
@@ -810,13 +813,10 @@ export function calculateSalaryBoard(params: {
   let totalSalary = 0
   const operators = Array.from(board.values())
     .map((stat) => {
-      stat.totalDebts = stat.autoDebts + stat.manualDebts
       stat.totalAccrued = stat.baseSalary + stat.autoBonuses + stat.roleBonuses + stat.manualBonuses
-      stat.totalDeductions = stat.totalDebts + stat.totalFines + stat.totalAdvances
+      stat.totalDeductions = stat.autoDebts + stat.totalFines + stat.totalAdvances
       stat.remainingAmount = stat.totalAccrued - stat.totalDeductions
-      // Keep the payout row anchored to the same canonical formula shown in the UI:
-      // total accrued (base + bonuses + premiums) minus all deductions.
-      stat.finalSalary = stat.remainingAmount
+      stat.finalSalary = stat.totalSalary + stat.manualPlus - stat.manualMinus - stat.autoDebts - stat.advances
       totalSalary += stat.finalSalary
       return stat
     })
