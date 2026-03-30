@@ -1273,6 +1273,22 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     {
       type: 'function',
       function: {
+        name: 'query_financials',
+        description: 'Запросить точные финансовые данные за любой период — по всем точкам или по конкретной. Используй ВСЕГДА когда пользователь спрашивает цифры за конкретный период (день, неделю, месяц, произвольные даты). Не используй данные из системного промпта для ответа на вопросы о конкретных периодах — всегда вызывай этот инструмент.',
+        parameters: {
+          type: 'object',
+          properties: {
+            date_from: { type: 'string', description: 'Начало периода YYYY-MM-DD' },
+            date_to: { type: 'string', description: 'Конец периода YYYY-MM-DD' },
+            company_name: { type: 'string', description: 'Название точки (например "F16 Arena"). Пусто = все точки.' },
+          },
+          required: ['date_from', 'date_to'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
         name: 'save_to_memory',
         description: 'Сохранить важный факт в долговременную память. Используй когда пользователь говорит "запомни", "не забудь", или сообщает важную информацию которая пригодится в будущих разговорах.',
         parameters: {
@@ -1370,6 +1386,87 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       return `✅ Сообщение отправлено ${sent} операторам.`
     }
 
+    if (name === 'query_financials') {
+      const { date_from, date_to, company_name } = args as { date_from: string; date_to: string; company_name?: string }
+
+      // Find company if specified
+      let companyFilter: { id: string; name: string } | null = null
+      if (company_name) {
+        const { data: allCompanies } = await supabase.from('companies').select('id, name')
+        const q = company_name.toLowerCase()
+        const found = (allCompanies || []).find((c: any) =>
+          c.name.toLowerCase().includes(q) || q.includes(c.name.toLowerCase())
+        )
+        if (!found) return `Точка "${company_name}" не найдена. Доступные: ${(allCompanies || []).map((c: any) => c.name).join(', ')}`
+        companyFilter = found
+      }
+
+      // Query incomes
+      let incomeQuery = supabase
+        .from('incomes')
+        .select('cash_amount, kaspi_amount, online_amount, card_amount, company_id, companies(name)')
+        .gte('date', date_from)
+        .lte('date', date_to)
+      if (companyFilter) incomeQuery = incomeQuery.eq('company_id', companyFilter.id)
+
+      // Query expenses
+      let expenseQuery = supabase
+        .from('expenses')
+        .select('cash_amount, kaspi_amount, category, company_id')
+        .gte('date', date_from)
+        .lte('date', date_to)
+      if (companyFilter) expenseQuery = expenseQuery.eq('company_id', companyFilter.id)
+
+      const [{ data: incomes }, { data: expenses }] = await Promise.all([incomeQuery, expenseQuery])
+
+      let totalIncome = 0, totalCash = 0, totalKaspi = 0, totalOnline = 0, totalCard = 0
+      const byCompanyIncome = new Map<string, number>()
+      for (const r of incomes ?? []) {
+        const cash = safeN(r.cash_amount), kaspi = safeN(r.kaspi_amount)
+        const online = safeN(r.online_amount), card = safeN(r.card_amount)
+        const t = cash + kaspi + online + card
+        totalIncome += t; totalCash += cash; totalKaspi += kaspi; totalOnline += online; totalCard += card
+        const cName = (r as any).companies?.name || r.company_id || 'Без точки'
+        byCompanyIncome.set(cName, (byCompanyIncome.get(cName) || 0) + t)
+      }
+
+      let totalExpense = 0
+      const byCat = new Map<string, number>()
+      const byCompanyExpense = new Map<string, number>()
+      for (const r of expenses ?? []) {
+        const t = safeN(r.cash_amount) + safeN(r.kaspi_amount)
+        totalExpense += t
+        byCat.set(r.category || 'Прочее', (byCat.get(r.category || 'Прочее') || 0) + t)
+        const cid = r.company_id || 'Без точки'
+        byCompanyExpense.set(cid, (byCompanyExpense.get(cid) || 0) + t)
+      }
+
+      const profit = totalIncome - totalExpense
+      const margin = totalIncome > 0 ? (profit / totalIncome * 100).toFixed(1) : '0'
+
+      const fmt = (v: number) => v.toLocaleString('ru-RU') + ' ₸'
+      const lines: string[] = [
+        `Период: ${date_from} — ${date_to}${companyFilter ? ` | Точка: ${companyFilter.name}` : ' | Все точки'}`,
+        `Доходы: ${fmt(totalIncome)} (нал ${fmt(totalCash)}, Kaspi ${fmt(totalKaspi)}, онлайн ${fmt(totalOnline)}, карта ${fmt(totalCard)})`,
+        `Расходы: ${fmt(totalExpense)}`,
+        `Прибыль: ${fmt(profit)} | Маржа: ${margin}%`,
+      ]
+
+      if (!companyFilter && byCompanyIncome.size > 0) {
+        lines.push('По точкам (доход):')
+        Array.from(byCompanyIncome.entries()).sort((a, b) => b[1] - a[1])
+          .forEach(([name, v]) => lines.push(`  • ${name}: ${fmt(v)} (${totalIncome > 0 ? (v/totalIncome*100).toFixed(1) : 0}%)`))
+      }
+
+      if (byCat.size > 0) {
+        lines.push('Расходы по категориям:')
+        Array.from(byCat.entries()).sort((a, b) => b[1] - a[1])
+          .forEach(([cat, v]) => lines.push(`  • ${cat}: ${fmt(v)}`))
+      }
+
+      return lines.join('\n')
+    }
+
     if (name === 'save_to_memory') {
       await saveMemory(supabase, chatIdStr, args.fact)
       return `✅ Запомнил: ${args.fact}`
@@ -1431,6 +1528,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
           if (n === 'get_operator_info') return '🔍 Ищу данные по оператору...'
           if (n === 'send_message_to_all_operators') return '📢 Рассылаю сообщение...'
           if (n === 'save_to_memory') return '🧠 Запоминаю...'
+          if (n === 'query_financials') return '🔍 Запрашиваю данные из базы...'
           return '⚙️ Выполняю действие...'
         })
         if (thinkingMsgId) {
