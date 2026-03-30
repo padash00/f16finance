@@ -167,21 +167,23 @@ function buildSharedAggregates(bundle: FinanceDataBundle) {
   const margin = totalIncome > 0 ? (profit / totalIncome) * 100 : 0
   const cashlessShare = totalIncome > 0 ? ((incomeKaspi + incomeOnline + incomeCard) / totalIncome) * 100 : 0
 
-  const topCategories = Array.from(categoryMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  const topCategories = Array.from(categoryMap.entries()).sort((a, b) => b[1] - a[1])
 
   const companyLeaderboard = Array.from(companyIncomeMap.entries())
     .map(([companyId, income]) => {
       const expense = companyExpenseMap.get(companyId) || 0
+      const profit = income - expense
+      const margin = income > 0 ? (profit / income) * 100 : 0
       return {
         companyId,
         name: companyMap.get(companyId) || companyId,
         income,
         expense,
-        profit: income - expense,
+        profit,
+        margin,
       }
     })
     .sort((a, b) => b.income - a.income)
-    .slice(0, 5)
 
   const incomeDays = Array.from(dailyIncomeMap.entries()).map(([, value]) => value)
   const expenseDays = Array.from(dailyExpenseMap.entries()).map(([, value]) => value)
@@ -263,6 +265,8 @@ export async function getAnalysisServerSnapshot(
           { label: 'Расходы', value: formatMoney(data.totals.totalExpense) },
           { label: 'Прибыль', value: formatMoney(data.totals.profit) },
           { label: 'Маржа', value: formatPercent(data.totals.margin) },
+          { label: 'Средняя выручка/день', value: formatMoney(data.totals.avgIncome) },
+          { label: 'Средняя прибыль/день', value: formatMoney(data.totals.avgProfit) },
           { label: 'Риск', value: riskLevel },
         ],
       },
@@ -277,11 +281,18 @@ export async function getAnalysisServerSnapshot(
         ],
       },
       {
-        title: 'Сигналы',
-        bullets: [
-          ...data.topCategories.slice(0, 3).map(([name, value]) => `Топ расход: ${name} — ${formatMoney(value)}`),
-          ...data.anomalies,
-        ],
+        title: 'По точкам (все)',
+        bullets: data.companyLeaderboard.map(
+          (c) => `${c.name}: выручка ${formatMoney(c.income)}, расходы ${formatMoney(c.expense)}, прибыль ${formatMoney(c.profit)}, маржа ${formatPercent(c.margin)}`,
+        ),
+      },
+      {
+        title: 'Расходы по категориям (все)',
+        bullets: data.topCategories.map(([name, value]) => `${name}: ${formatMoney(value)} (${data.totals.totalExpense > 0 ? formatPercent(value / data.totals.totalExpense * 100) : '0%'})`),
+      },
+      {
+        title: 'Аномалии и сигналы',
+        bullets: data.anomalies.length ? data.anomalies : ['Явных аномалий не обнаружено.'],
       },
     ],
   }
@@ -316,14 +327,14 @@ export async function getReportsServerSnapshot(
         ],
       },
       {
-        title: 'Компании-лидеры',
+        title: 'По точкам (все)',
         bullets: data.companyLeaderboard.map(
-          (company) => `${company.name}: выручка ${formatMoney(company.income)}, прибыль ${formatMoney(company.profit)}`,
+          (c) => `${c.name}: выручка ${formatMoney(c.income)}, расходы ${formatMoney(c.expense)}, прибыль ${formatMoney(c.profit)}, маржа ${formatPercent(c.margin)}`,
         ),
       },
       {
-        title: 'Категории расходов',
-        bullets: data.topCategories.map(([name, value]) => `${name}: ${formatMoney(value)}`),
+        title: 'Расходы по категориям (все)',
+        bullets: data.topCategories.map(([name, value]) => `${name}: ${formatMoney(value)} (${data.totals.totalExpense > 0 ? formatPercent(value / data.totals.totalExpense * 100) : '0%'})`),
       },
     ],
   }
@@ -433,8 +444,14 @@ export async function getExpensesServerSnapshot(
         ],
       },
       {
-        title: 'Категории',
-        bullets: data.topCategories.map(([name, value]) => `${name}: ${formatMoney(value)}`),
+        title: 'Категории расходов (все)',
+        bullets: data.topCategories.map(([name, value]) => `${name}: ${formatMoney(value)} (${data.totals.totalExpense > 0 ? formatPercent(value / data.totals.totalExpense * 100) : '0%'})`),
+      },
+      {
+        title: 'По точкам (расходы)',
+        bullets: data.companyLeaderboard.map(
+          (c) => `${c.name}: расходы ${formatMoney(c.expense)}, выручка ${formatMoney(c.income)}, прибыль ${formatMoney(c.profit)}`,
+        ),
       },
       {
         title: 'Аномалии',
