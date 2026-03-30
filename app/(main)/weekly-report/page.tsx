@@ -107,17 +107,20 @@ type WeekTotals = {
   extraTotal: number
 
   // По компаниям
-  statsByCompany: Record<string, { 
-    cash: number; 
+  statsByCompany: Record<string, {
+    cash: number;
     kaspi: number;
     online: number;
     card: number;
-    nonCash: number; 
+    nonCash: number;
     total: number;
     expenseCash: number;
     expenseKaspi: number;
+    expenseTotal: number;
+    expenseByCategory: Record<string, number>;
     netCash: number;
     netNonCash: number;
+    profit: number;
   }>
 
   // Категории расходов
@@ -848,17 +851,11 @@ function WeeklyReportContent() {
     }> = {}
     
     for (const c of activeCompanies) {
-      statsByCompany[c.id] = { 
-        cash: 0, 
-        kaspi: 0, 
-        online: 0, 
-        card: 0, 
-        nonCash: 0,
-        total: 0,
-        expenseCash: 0,
-        expenseKaspi: 0,
-        netCash: 0,
-        netNonCash: 0,
+      statsByCompany[c.id] = {
+        cash: 0, kaspi: 0, online: 0, card: 0, nonCash: 0, total: 0,
+        expenseCash: 0, expenseKaspi: 0, expenseTotal: 0,
+        expenseByCategory: {},
+        netCash: 0, netNonCash: 0, profit: 0,
       }
     }
 
@@ -1048,6 +1045,15 @@ function WeeklyReportContent() {
       const catName = (r.category || '').trim() || 'Без категории'
       catMap.set(catName, (catMap.get(catName) || 0) + total)
 
+      // Накапливаем расходы по компании с разбивкой по категориям
+      const sc = statsByCompany[r.company_id]
+      if (sc) {
+        sc.expenseCash += cash
+        sc.expenseKaspi += kaspi
+        sc.expenseTotal += total
+        sc.expenseByCategory[catName] = (sc.expenseByCategory[catName] || 0) + total
+      }
+
       // Добавляем к дневным данным
       const day = dailyMap.get(r.date)
       if (day) {
@@ -1060,8 +1066,17 @@ function WeeklyReportContent() {
       const bal = balanceMap.get(r.date)
       if (bal) {
         bal.cash -= cash
-        bal.nonCash -= kaspi  // предполагаем, что kaspi расходы из безнала
+        bal.nonCash -= kaspi
       }
+    }
+
+    // Финализируем netCash / netNonCash / profit по компаниям
+    for (const c of activeCompanies) {
+      const sc = statsByCompany[c.id]
+      if (!sc) continue
+      sc.netCash = sc.cash - sc.expenseCash
+      sc.netNonCash = sc.nonCash - sc.expenseKaspi
+      sc.profit = sc.total - sc.expenseTotal
     }
 
     // Итоговые показатели
@@ -2051,111 +2066,153 @@ function WeeklyReportContent() {
                 </div>
               </div>
             {/* ===== ДЕТАЛИЗАЦИЯ ПО ТОЧКАМ ===== */}
-            <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
-              <h3 className="text-lg font-semibold mb-5 flex items-center gap-2">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-blue-400" />
                 Детализация по точкам
               </h3>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="text-left py-2 pr-4 text-xs text-gray-500 font-medium w-32">Точка</th>
-                      {/* ДОХОД */}
-                      <th colSpan={5} className="text-center py-2 px-2 text-xs text-emerald-400 font-medium border-l border-white/5">
-                        ДОХОД
-                      </th>
-                      {/* РАСХОД */}
-                      <th colSpan={3} className="text-center py-2 px-2 text-xs text-rose-400 font-medium border-l border-white/5">
-                        РАСХОД
-                      </th>
-                      {/* ИТОГ */}
-                      <th colSpan={3} className="text-center py-2 px-2 text-xs text-violet-400 font-medium border-l border-white/5">
-                        САЛЬДО
-                      </th>
-                    </tr>
-                    <tr className="border-b border-white/5 text-xs text-gray-500">
-                      <th className="text-left py-1.5 pr-4" />
-                      <th className="text-right py-1.5 px-2 border-l border-white/5">Нал</th>
-                      <th className="text-right py-1.5 px-2">Каспи</th>
-                      <th className="text-right py-1.5 px-2">Онлайн</th>
-                      <th className="text-right py-1.5 px-2">Карта</th>
-                      <th className="text-right py-1.5 px-2 font-semibold text-white/60">Итого</th>
-                      <th className="text-right py-1.5 px-2 border-l border-white/5">Нал</th>
-                      <th className="text-right py-1.5 px-2">Каспи</th>
-                      <th className="text-right py-1.5 px-2 font-semibold text-white/60">Итого</th>
-                      <th className="text-right py-1.5 px-2 border-l border-white/5 text-emerald-500/70">Нал</th>
-                      <th className="text-right py-1.5 px-2 text-blue-500/70">Безнал</th>
-                      <th className="text-right py-1.5 px-2 font-semibold text-violet-400/70">Прибыль</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeCompanies.map((c, i) => {
-                      const s = totals.statsByCompany[c.id] || {
-                        cash: 0, kaspi: 0, online: 0, card: 0, nonCash: 0, total: 0,
-                        expenseCash: 0, expenseKaspi: 0, netCash: 0, netNonCash: 0,
-                      }
-                      const expTotal = s.expenseCash + s.expenseKaspi
-                      const profit = s.total - expTotal
-                      return (
-                        <tr
-                          key={c.id}
-                          className={`border-b border-white/5 hover:bg-white/[0.02] transition-colors ${i % 2 === 0 ? '' : 'bg-white/[0.01]'}`}
-                        >
-                          <td className="py-2.5 pr-4 text-xs text-gray-300 font-medium truncate max-w-[120px]">{c.name}</td>
-                          {/* Доход */}
-                          <td className="text-right py-2.5 px-2 text-xs text-gray-200 border-l border-white/5">{s.cash > 0 ? formatMoneyCompact(s.cash) : <span className="text-gray-600">—</span>}</td>
-                          <td className="text-right py-2.5 px-2 text-xs text-gray-200">{s.kaspi > 0 ? formatMoneyCompact(s.kaspi) : <span className="text-gray-600">—</span>}</td>
-                          <td className="text-right py-2.5 px-2 text-xs text-gray-200">{s.online > 0 ? formatMoneyCompact(s.online) : <span className="text-gray-600">—</span>}</td>
-                          <td className="text-right py-2.5 px-2 text-xs text-gray-200">{s.card > 0 ? formatMoneyCompact(s.card) : <span className="text-gray-600">—</span>}</td>
-                          <td className="text-right py-2.5 px-2 text-xs font-semibold text-white">{formatMoneyCompact(s.total)}</td>
-                          {/* Расход */}
-                          <td className="text-right py-2.5 px-2 text-xs text-rose-300 border-l border-white/5">{s.expenseCash > 0 ? formatMoneyCompact(s.expenseCash) : <span className="text-gray-600">—</span>}</td>
-                          <td className="text-right py-2.5 px-2 text-xs text-rose-300">{s.expenseKaspi > 0 ? formatMoneyCompact(s.expenseKaspi) : <span className="text-gray-600">—</span>}</td>
-                          <td className="text-right py-2.5 px-2 text-xs font-semibold text-rose-400">{expTotal > 0 ? formatMoneyCompact(expTotal) : <span className="text-gray-600">—</span>}</td>
-                          {/* Сальдо */}
-                          <td className={`text-right py-2.5 px-2 text-xs font-medium border-l border-white/5 ${s.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatMoneyCompact(s.netCash)}</td>
-                          <td className={`text-right py-2.5 px-2 text-xs font-medium ${s.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>{formatMoneyCompact(s.netNonCash)}</td>
-                          <td className={`text-right py-2.5 px-2 text-xs font-bold ${profit >= 0 ? 'text-violet-400' : 'text-rose-400'}`}>{formatMoneyCompact(profit)}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                  <tfoot>
-                    {(() => {
-                      const tot = activeCompanies.reduce(
-                        (acc, c) => {
-                          const s = totals.statsByCompany[c.id] || { cash:0, kaspi:0, online:0, card:0, total:0, expenseCash:0, expenseKaspi:0, netCash:0, netNonCash:0 }
-                          acc.cash += s.cash; acc.kaspi += s.kaspi; acc.online += s.online; acc.card += s.card
-                          acc.total += s.total; acc.expCash += s.expenseCash; acc.expKaspi += s.expenseKaspi
-                          acc.netCash += s.netCash; acc.netNonCash += s.netNonCash
-                          return acc
-                        },
-                        { cash:0, kaspi:0, online:0, card:0, total:0, expCash:0, expKaspi:0, netCash:0, netNonCash:0 }
-                      )
-                      const expTotal = tot.expCash + tot.expKaspi
-                      const profit = tot.total - expTotal
-                      return (
-                        <tr className="border-t border-white/10 bg-white/[0.03]">
-                          <td className="py-3 pr-4 text-xs font-bold text-white">ИТОГО</td>
-                          <td className="text-right py-3 px-2 text-xs font-bold text-white border-l border-white/5">{formatMoneyCompact(tot.cash)}</td>
-                          <td className="text-right py-3 px-2 text-xs font-bold text-white">{formatMoneyCompact(tot.kaspi)}</td>
-                          <td className="text-right py-3 px-2 text-xs font-bold text-white">{formatMoneyCompact(tot.online)}</td>
-                          <td className="text-right py-3 px-2 text-xs font-bold text-white">{formatMoneyCompact(tot.card)}</td>
-                          <td className="text-right py-3 px-2 text-xs font-bold text-emerald-400">{formatMoneyCompact(tot.total)}</td>
-                          <td className="text-right py-3 px-2 text-xs font-bold text-rose-300 border-l border-white/5">{formatMoneyCompact(tot.expCash)}</td>
-                          <td className="text-right py-3 px-2 text-xs font-bold text-rose-300">{formatMoneyCompact(tot.expKaspi)}</td>
-                          <td className="text-right py-3 px-2 text-xs font-bold text-rose-400">{formatMoneyCompact(expTotal)}</td>
-                          <td className={`text-right py-3 px-2 text-xs font-bold border-l border-white/5 ${tot.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatMoneyCompact(tot.netCash)}</td>
-                          <td className={`text-right py-3 px-2 text-xs font-bold ${tot.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>{formatMoneyCompact(tot.netNonCash)}</td>
-                          <td className={`text-right py-3 px-2 text-xs font-bold ${profit >= 0 ? 'text-violet-400' : 'text-rose-400'}`}>{formatMoneyCompact(profit)}</td>
-                        </tr>
-                      )
-                    })()}
-                  </tfoot>
-                </table>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {activeCompanies.map((c) => {
+                  const s = totals.statsByCompany[c.id] || {
+                    cash: 0, kaspi: 0, online: 0, card: 0, nonCash: 0, total: 0,
+                    expenseCash: 0, expenseKaspi: 0, expenseTotal: 0,
+                    expenseByCategory: {} as Record<string, number>,
+                    netCash: 0, netNonCash: 0, profit: 0,
+                  }
+                  const sortedCats = Object.entries(s.expenseByCategory).sort((a, b) => b[1] - a[1])
+                  return (
+                    <div key={c.id} className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-5">
+                      {/* Заголовок точки */}
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-semibold text-white flex items-center gap-2">
+                          <Store className="w-4 h-4 text-blue-400" />
+                          {c.name}
+                        </h4>
+                        <span className={`text-sm font-bold px-2.5 py-1 rounded-lg ${s.profit >= 0 ? 'bg-violet-500/15 text-violet-400' : 'bg-rose-500/15 text-rose-400'}`}>
+                          {s.profit >= 0 ? '+' : ''}{formatMoneyCompact(s.profit)}
+                        </span>
+                      </div>
+
+                      {/* ДОХОДЫ */}
+                      <div className="mb-3">
+                        <p className="text-xs text-emerald-400 font-medium mb-2 uppercase tracking-wide">Доходы</p>
+                        <div className="space-y-1">
+                          {s.cash > 0 && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-gray-400">Наличные</span>
+                              <span className="text-gray-200 font-medium">{formatMoneyCompact(s.cash)}</span>
+                            </div>
+                          )}
+                          {s.kaspi > 0 && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-gray-400">Kaspi</span>
+                              <span className="text-gray-200 font-medium">{formatMoneyCompact(s.kaspi)}</span>
+                            </div>
+                          )}
+                          {s.online > 0 && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-gray-400">Online</span>
+                              <span className="text-gray-200 font-medium">{formatMoneyCompact(s.online)}</span>
+                            </div>
+                          )}
+                          {s.card > 0 && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-gray-400">Карта</span>
+                              <span className="text-gray-200 font-medium">{formatMoneyCompact(s.card)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center text-xs border-t border-white/5 pt-1 mt-1">
+                            <span className="text-gray-300 font-medium">Итого доход</span>
+                            <span className="text-emerald-400 font-bold">{formatMoneyCompact(s.total)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* РАСХОДЫ ПО КАТЕГОРИЯМ */}
+                      <div className="mb-3">
+                        <p className="text-xs text-rose-400 font-medium mb-2 uppercase tracking-wide">Расходы по категориям</p>
+                        {sortedCats.length === 0 ? (
+                          <p className="text-xs text-gray-600">Нет расходов</p>
+                        ) : (
+                          <div className="space-y-1">
+                            {sortedCats.map(([cat, amt]) => (
+                              <div key={cat} className="flex justify-between items-center text-xs">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500/60 shrink-0" />
+                                  <span className="text-gray-400 truncate">{cat}</span>
+                                </div>
+                                <span className="text-rose-300 font-medium ml-2 shrink-0">{formatMoneyCompact(amt)}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between items-center text-xs border-t border-white/5 pt-1 mt-1">
+                              <span className="text-gray-300 font-medium">Итого расход</span>
+                              <span className="text-rose-400 font-bold">{formatMoneyCompact(s.expenseTotal)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* САЛЬДО */}
+                      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/5">
+                        <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
+                          <p className="text-xs text-gray-500 mb-0.5">Сальдо нал</p>
+                          <p className={`text-sm font-bold ${s.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {s.netCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netCash)}
+                          </p>
+                        </div>
+                        <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
+                          <p className="text-xs text-gray-500 mb-0.5">Сальдо безнал</p>
+                          <p className={`text-sm font-bold ${s.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>
+                            {s.netNonCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netNonCash)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
+
+              {/* Итоговая строка по всем точкам */}
+              {activeCompanies.length > 1 && (() => {
+                const tot = activeCompanies.reduce(
+                  (acc, c) => {
+                    const s = totals.statsByCompany[c.id]
+                    if (!s) return acc
+                    acc.income += s.total; acc.expense += s.expenseTotal; acc.profit += s.profit
+                    acc.netCash += s.netCash; acc.netNonCash += s.netNonCash
+                    return acc
+                  },
+                  { income: 0, expense: 0, profit: 0, netCash: 0, netNonCash: 0 }
+                )
+                return (
+                  <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 flex flex-wrap gap-4 items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-300">Все точки</span>
+                    <div className="flex flex-wrap gap-6 text-sm">
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">Доход</p>
+                        <p className="font-bold text-emerald-400">{formatMoneyCompact(tot.income)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">Расход</p>
+                        <p className="font-bold text-rose-400">{formatMoneyCompact(tot.expense)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">Сальдо нал</p>
+                        <p className={`font-bold ${tot.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{tot.netCash >= 0 ? '+' : ''}{formatMoneyCompact(tot.netCash)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">Сальдо безнал</p>
+                        <p className={`font-bold ${tot.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>{tot.netNonCash >= 0 ? '+' : ''}{formatMoneyCompact(tot.netNonCash)}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">Прибыль</p>
+                        <p className={`font-bold ${tot.profit >= 0 ? 'text-violet-400' : 'text-rose-400'}`}>{tot.profit >= 0 ? '+' : ''}{formatMoneyCompact(tot.profit)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
             </>
           )}
