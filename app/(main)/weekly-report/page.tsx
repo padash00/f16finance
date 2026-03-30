@@ -10,7 +10,7 @@ import {
   memo
 } from 'react'
 import ExcelJS from 'exceljs'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { buildDashboardSheet, buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { Card } from '@/components/ui/card'
@@ -1388,6 +1388,58 @@ function WeeklyReportContent() {
     const period = `${startDate} — ${endDate}`
     const generated = new Date().toLocaleString('ru-RU')
     const wb = createWorkbook()
+    const companyStats = [...activeCompanies, ...companies.filter(c => c.id === extraCompanyId)]
+      .map((company) => ({
+        name: company.name,
+        stats: totals.statsByCompany[company.id],
+      }))
+      .filter((item): item is { name: string; stats: NonNullable<typeof item.stats> } => Boolean(item.stats))
+      .sort((left, right) => right.stats.profit - left.stats.profit)
+    const bestCompany = companyStats[0]
+    const topExpense = totals.expenseCategories[0]
+
+    await buildDashboardSheet(wb, {
+      sheetName: 'Дашборд',
+      title: 'Недельный финансовый дашборд',
+      subtitle: `Период: ${period} | Сгенерирован: ${generated}`,
+      metrics: [
+        { label: 'Выручка', value: formatMoneyFull(totals.incomeTotal), hint: `Нал ${formatMoneyCompact(totals.incomeCash)} / Безнал ${formatMoneyCompact(totals.incomeKaspiOnline)}`, tone: 'good' },
+        { label: 'Расходы', value: formatMoneyFull(totals.expenseTotal), hint: `Cash ${formatMoneyCompact(totals.expenseCash)} / Kaspi ${formatMoneyCompact(totals.expenseKaspi)}`, tone: 'warn' },
+        { label: 'Прибыль', value: formatMoneyFull(totals.profit), hint: `Маржа ${totals.metrics.profitMargin.toFixed(1)}%`, tone: totals.profit >= 0 ? 'good' : 'danger' },
+        { label: 'Общее сальдо', value: formatMoneyFull(totals.netTotal), hint: `Нал ${totals.change.netCash} / Безнал ${totals.change.netNonCash}`, tone: totals.netTotal >= 0 ? 'neutral' : 'danger' },
+      ],
+      charts: [
+        {
+          title: 'Дневная прибыль',
+          subtitle: 'Как менялся итог по дням недели',
+          type: 'line',
+          tone: totals.profit >= 0 ? 'good' : 'danger',
+          valueFormat: 'money',
+          points: totals.dailyData.map((day) => ({
+            label: day.label,
+            value: day.profit,
+          })),
+        },
+        {
+          title: 'Структура доходов',
+          subtitle: 'Распределение по способам оплаты',
+          type: 'bar',
+          tone: 'neutral',
+          valueFormat: 'money',
+          points: [
+            { label: 'Наличные', value: totals.incomeCash },
+            { label: 'Kaspi', value: totals.incomeKaspi },
+            { label: 'Online', value: totals.incomeOnline },
+            { label: 'Карта', value: totals.incomeCard },
+          ],
+        },
+      ],
+      highlights: [
+        `Маржинальность за неделю: ${totals.metrics.profitMargin.toFixed(1)}%, расходы к выручке: ${totals.metrics.expenseRate.toFixed(1)}%.`,
+        bestCompany ? `Лучшая точка по прибыли: ${bestCompany.name} (${formatMoneyCompact(bestCompany.stats.profit)}).` : 'Лучшей точки по прибыли пока нет: недостаточно данных.',
+        topExpense ? `Крупнейшая статья расходов: ${topExpense.name} (${formatMoneyCompact(topExpense.value)}).` : 'Крупные расходы за период не зафиксированы.',
+      ],
+    })
 
     // ─── Лист 1: Сводка ───────────────────────────────────────────────────────
     buildStyledSheet(wb, 'Сводка', 'Недельный финансовый отчёт', `Период: ${period} | Сгенерирован: ${generated}`, [

@@ -11,7 +11,7 @@ import {
   memo
 } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { buildDashboardSheet, buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
 import { FloatingAssistant } from '@/components/ai/floating-assistant'
@@ -2009,6 +2009,49 @@ function ReportsContent() {
       : companyName(companyFilter)
     const period = `${dateFrom} — ${dateTo}`
     const wb = createWorkbook()
+    const topCompany = incomeByCompanyData[0]
+    const topExpense = expenseByCategoryData[0]
+
+    await buildDashboardSheet(wb, {
+      sheetName: 'Дашборд',
+      title: 'Финансовый дашборд',
+      subtitle: `Период: ${period} | Компания: ${companyLabel}`,
+      metrics: [
+        { label: 'Выручка', value: formatMoneyFull(totals.totalIncome), hint: `Было ${formatMoneyCompact(totalsPrev.totalIncome)}`, tone: 'good' },
+        { label: 'Расходы', value: formatMoneyFull(totals.totalExpense), hint: `Было ${formatMoneyCompact(totalsPrev.totalExpense)}`, tone: 'warn' },
+        { label: 'Прибыль', value: formatMoneyFull(totals.profit), hint: getPercentageChange(totals.profit, totalsPrev.profit), tone: totals.profit >= 0 ? 'good' : 'danger' },
+        { label: 'Средний чек', value: formatMoneyFull(totals.avgTransaction), hint: `${totals.transactionCount} транзакций`, tone: 'neutral' },
+      ],
+      charts: [
+        {
+          title: 'Выручка по компаниям',
+          subtitle: 'Топ компаний за период',
+          type: 'bar',
+          tone: 'good',
+          valueFormat: 'money',
+          points: incomeByCompanyData.slice(0, 6).map((item) => ({
+            label: item.name,
+            value: item.value,
+          })),
+        },
+        {
+          title: 'Расходы по категориям',
+          subtitle: 'Ключевые статьи затрат',
+          type: 'bar',
+          tone: 'warn',
+          valueFormat: 'money',
+          points: expenseByCategoryData.slice(0, 6).map((item) => ({
+            label: item.name,
+            value: item.amount,
+          })),
+        },
+      ],
+      highlights: [
+        `Сравнение с прошлым периодом: выручка ${getPercentageChange(totals.totalIncome, totalsPrev.totalIncome)}, прибыль ${getPercentageChange(totals.profit, totalsPrev.profit)}.`,
+        topCompany ? `Лидер по выручке: ${topCompany.name} (${formatMoneyCompact(topCompany.value)}).` : 'Лидер по выручке не определён: нет данных по компаниям.',
+        topExpense ? `Главная статья расходов: ${topExpense.name} (${formatMoneyCompact(topExpense.amount)}).` : 'Главная статья расходов не определена: нет данных по расходам.',
+      ],
+    })
 
     // Sheet 1: Summary
     buildStyledSheet(wb, 'Сводка', 'Финансовый отчёт', `Период: ${period} | Компания: ${companyLabel}`, [

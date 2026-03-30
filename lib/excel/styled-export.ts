@@ -8,6 +8,8 @@ import ExcelJS from 'exceljs'
 const COLORS = {
   headerBg: '0F172A',      // dark navy header
   headerText: 'FFFFFF',
+  bodyText: '0F172A',
+  mutedText: '475569',
   sectionBg: '1E3A5F',     // section header
   sectionText: 'FFFFFF',
   subheaderBg: '2D5A8E',
@@ -24,12 +26,68 @@ const COLORS = {
   warnBg: 'FEF3C7',
   dangerBg: 'FEE2E2',
   goodBg: 'DCFCE7',
+  neutralBg: 'F8FAFC',
+  panelBg: 'FFFFFF',
+  chartGrid: 'E2E8F0',
+  accentBlue: '2563EB',
+  accentEmerald: '059669',
+  accentAmber: 'D97706',
+  accentRed: 'DC2626',
 }
 
 const FONT_NAME = 'Arial'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function argbOf(hex: string) { return `FF${hex.toUpperCase()}` }
+
+function columnLetter(index: number) {
+  let result = ''
+  let current = index
+  while (current > 0) {
+    const modulo = (current - 1) % 26
+    result = String.fromCharCode(65 + modulo) + result
+    current = Math.floor((current - 1) / 26)
+  }
+  return result
+}
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+function truncateLabel(value: string, max = 20) {
+  return value.length > max ? `${value.slice(0, Math.max(0, max - 1))}…` : value
+}
+
+function formatChartValue(value: number, format: DashboardValueFormat = 'number') {
+  if (format === 'percent') return `${value.toFixed(1)}%`
+
+  const abs = Math.abs(value)
+  const suffix = format === 'money' ? ' ₸' : ''
+  const sign = value < 0 ? '-' : ''
+
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)} млн${suffix}`
+  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(1)} тыс${suffix}`
+  return `${sign}${Math.round(abs).toLocaleString('ru-RU')}${suffix}`
+}
+
+function paletteForTone(tone: DashboardTone = 'neutral') {
+  switch (tone) {
+    case 'good':
+      return { bg: COLORS.goodBg, accent: COLORS.accentEmerald }
+    case 'warn':
+      return { bg: COLORS.warnBg, accent: COLORS.accentAmber }
+    case 'danger':
+      return { bg: COLORS.dangerBg, accent: COLORS.accentRed }
+    default:
+      return { bg: COLORS.metricBg, accent: COLORS.accentBlue }
+  }
+}
 
 function headerStyle(bgHex: string, textHex = 'FFFFFF', size = 10): Partial<ExcelJS.Style> {
   return {
@@ -72,22 +130,6 @@ function totalsStyle(): Partial<ExcelJS.Style> {
       right: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
     },
   }
-}
-
-function moneyFmt(v: number, colStyle?: Partial<ExcelJS.Style>): Partial<ExcelJS.CellValue> & { style?: Partial<ExcelJS.Style> } {
-  const isNeg = v < 0
-  return {
-    value: v,
-    style: {
-      ...colStyle,
-      numFmt: '#,##0 ₸',
-      font: {
-        ...colStyle?.font,
-        name: FONT_NAME,
-        color: { argb: isNeg ? argbOf(COLORS.negative) : undefined },
-      },
-    } as any,
-  } as any
 }
 
 // ─── Title sheet setup ─────────────────────────────────────────────────────────
@@ -143,6 +185,51 @@ export interface SheetRow {
   _sectionLabel?: string
 }
 
+type AutoInsightMetric = {
+  label: string
+  value: string
+  tone?: DashboardTone
+}
+
+type AutoChartConfig = {
+  title: string
+  points: DashboardChartPoint[]
+  valueFormat: DashboardValueFormat
+}
+
+export type DashboardTone = 'neutral' | 'good' | 'warn' | 'danger'
+export type DashboardValueFormat = 'money' | 'number' | 'percent'
+
+export interface DashboardMetric {
+  label: string
+  value: string
+  hint?: string
+  tone?: DashboardTone
+}
+
+export interface DashboardChartPoint {
+  label: string
+  value: number
+}
+
+export interface DashboardChart {
+  title: string
+  subtitle?: string
+  type: 'bar' | 'line'
+  points: DashboardChartPoint[]
+  tone?: DashboardTone
+  valueFormat?: DashboardValueFormat
+}
+
+export interface DashboardSheetOptions {
+  sheetName: string
+  title: string
+  subtitle: string
+  metrics: DashboardMetric[]
+  charts?: DashboardChart[]
+  highlights?: string[]
+}
+
 export function buildStyledSheet(
   wb: ExcelJS.Workbook,
   sheetName: string,
@@ -157,13 +244,120 @@ export function buildStyledSheet(
   })
 
   const colCount = columns.length
+  const dataRows = rows.filter((row) => !row._isSection && !row._isTotals)
+
+  const autoMetrics: AutoInsightMetric[] = (() => {
+    const metrics: AutoInsightMetric[] = [{ label: 'Строк', value: String(dataRows.length), tone: 'neutral' }]
+    const numericColumns = columns.filter((column) => column.type === 'money' || column.type === 'number' || column.type === 'percent')
+
+    for (const column of numericColumns.slice(0, 3)) {
+      const values = dataRows
+        .map((row) => row[column.key])
+        .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+
+      if (values.length === 0) continue
+
+      if (column.type === 'percent') {
+        const avg = values.reduce((sum, value) => sum + value, 0) / values.length
+        metrics.push({ label: `Среднее: ${column.header}`, value: `${avg.toFixed(1)}%`, tone: avg >= 0 ? 'neutral' : 'danger' })
+        continue
+      }
+
+      const total = values.reduce((sum, value) => sum + value, 0)
+      const tone: DashboardTone = total > 0 ? 'good' : total < 0 ? 'danger' : 'neutral'
+      metrics.push({
+        label: column.header,
+        value: column.type === 'money' ? formatChartValue(total, 'money') : formatChartValue(total, 'number'),
+        tone,
+      })
+    }
+
+    return metrics.slice(0, Math.min(4, Math.max(1, colCount)))
+  })()
+
+  const autoChart: AutoChartConfig | null = (() => {
+    const labelColumn = columns.find((column) => column.type === 'text') || columns[0]
+    const metricColumn = columns.find((column) => column.type === 'money')
+      || columns.find((column) => column.type === 'number')
+      || columns.find((column) => column.type === 'percent')
+
+    if (!labelColumn || !metricColumn) return null
+
+    const points = dataRows
+      .map((row) => {
+        const labelValue = row[labelColumn.key]
+        const metricValue = row[metricColumn.key]
+        return {
+          label: typeof labelValue === 'string' ? labelValue : String(labelValue ?? ''),
+          value: typeof metricValue === 'number' ? metricValue : null,
+        }
+      })
+      .filter((point): point is { label: string; value: number } => Boolean(point.label) && point.value !== null)
+
+    if (points.length < 2) return null
+
+    const shouldKeepOrder = /дата|date|day|день/i.test(labelColumn.header)
+    const normalized = shouldKeepOrder
+      ? points.slice(0, 8)
+      : [...points].sort((left, right) => Math.abs(right.value) - Math.abs(left.value)).slice(0, 8)
+
+    return {
+      title: `${metricColumn.header} по ${labelColumn.header.toLowerCase()}`,
+      points: normalized.map((point) => ({ label: point.label, value: point.value })),
+      valueFormat: metricColumn.type === 'money' ? 'money' : metricColumn.type === 'percent' ? 'percent' : 'number',
+    }
+  })()
 
   // Title rows
   addTitleRow(ws, title, subtitle, colCount)
 
-  // Column headers row (row 4, row 3 = empty gap)
   ws.getRow(3).height = 6
-  const headerRow = ws.getRow(4)
+
+  if (autoMetrics.length > 0) {
+    const cardsCount = Math.min(autoMetrics.length, Math.max(1, colCount))
+    const baseSpan = Math.max(1, Math.floor(colCount / cardsCount))
+
+    autoMetrics.forEach((metric, index) => {
+      const startColumn = 1 + index * baseSpan
+      const endColumn = index === cardsCount - 1 ? colCount : Math.min(colCount, startColumn + baseSpan - 1)
+      ws.mergeCells(4, startColumn, 6, endColumn)
+      const cell = ws.getCell(4, startColumn)
+      styleDashboardCard(cell, { label: metric.label, value: metric.value, tone: metric.tone })
+    })
+
+    ws.getRow(4).height = 20
+    ws.getRow(5).height = 20
+    ws.getRow(6).height = 20
+  }
+
+  let headerRowNumber = autoMetrics.length > 0 ? 8 : 4
+
+  if (autoChart && typeof document !== 'undefined') {
+    ws.mergeCells(headerRowNumber, 1, headerRowNumber, colCount)
+    const chartTitleCell = ws.getCell(headerRowNumber, 1)
+    chartTitleCell.value = autoChart.title
+    chartTitleCell.style = {
+      font: { name: FONT_NAME, bold: true, size: 11, color: { argb: argbOf(COLORS.bodyText) } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argbOf(COLORS.neutralBg) } },
+      alignment: { horizontal: 'left', vertical: 'middle', indent: 1 },
+      border: {
+        top: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+        bottom: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+        left: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+        right: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+      },
+    }
+
+    const chartImageId = wb.addImage({
+      base64: renderBarChartToPngDataUrl(autoChart),
+      extension: 'png',
+    })
+    const chartEndColumn = Math.min(colCount, Math.max(4, colCount))
+    ws.addImage(chartImageId, `A${headerRowNumber + 1}:${columnLetter(chartEndColumn)}${headerRowNumber + 6}`)
+    headerRowNumber += 8
+  }
+
+  const headerRow = ws.getRow(headerRowNumber)
   headerRow.height = 28
   columns.forEach((col, i) => {
     const cell = headerRow.getCell(i + 1)
@@ -180,7 +374,7 @@ export function buildStyledSheet(
   // Data rows
   let dataRowIdx = 0
   rows.forEach((row) => {
-    const wsRowNum = 5 + dataRowIdx
+    const wsRowNum = headerRowNumber + 1 + dataRowIdx
 
     if (row._isSection) {
       addSectionHeader(ws, wsRowNum, row._sectionLabel || '', colCount)
@@ -239,7 +433,12 @@ export function buildStyledSheet(
   })
 
   // Freeze panes (keep headers visible)
-  ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 4 }]
+  ws.views = [{ state: 'frozen', xSplit: 0, ySplit: headerRowNumber }]
+  ws.autoFilter = {
+    from: { row: headerRowNumber, column: 1 },
+    to: { row: headerRowNumber, column: colCount },
+  }
+  ws.pageSetup.printTitlesRow = `${headerRowNumber}:${headerRowNumber}`
 
   return ws
 }
@@ -263,4 +462,310 @@ export function createWorkbook(company = 'Orda Control'): ExcelJS.Workbook {
   wb.created = new Date()
   wb.modified = new Date()
   return wb
+}
+
+function generateHorizontalBarChartSvg(chart: DashboardChart, width: number, height: number) {
+  const palette = paletteForTone(chart.tone)
+  const points = chart.points.slice(0, 6)
+
+  if (points.length === 0) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+      <rect width="100%" height="100%" fill="#FFFFFF" rx="20"/>
+      <text x="50%" y="50%" text-anchor="middle" font-family="${FONT_NAME}" font-size="22" fill="#64748B">Нет данных для диаграммы</text>
+    </svg>`
+  }
+
+  const top = 26
+  const left = 170
+  const right = 110
+  const rowHeight = (height - top - 24) / points.length
+  const maxValue = Math.max(...points.map((point) => Math.abs(point.value)), 1)
+  const chartWidth = width - left - right
+
+  const bars = points.map((point, index) => {
+    const y = top + index * rowHeight
+    const barHeight = Math.max(14, rowHeight * 0.46)
+    const barY = y + rowHeight / 2 - barHeight / 2
+    const barWidth = Math.max(6, (Math.abs(point.value) / maxValue) * chartWidth)
+    const fill = point.value >= 0 ? palette.accent : COLORS.accentRed
+
+    return `
+      <text x="${left - 12}" y="${barY + barHeight / 2 + 5}" text-anchor="end" font-family="${FONT_NAME}" font-size="15" fill="#0F172A">${escapeXml(truncateLabel(point.label, 22))}</text>
+      <rect x="${left}" y="${barY}" width="${chartWidth}" height="${barHeight}" rx="9" fill="#E2E8F0"/>
+      <rect x="${left}" y="${barY}" width="${barWidth}" height="${barHeight}" rx="9" fill="#${fill}"/>
+      <text x="${left + chartWidth + 12}" y="${barY + barHeight / 2 + 5}" font-family="${FONT_NAME}" font-size="14" fill="#334155">${escapeXml(formatChartValue(point.value, chart.valueFormat))}</text>
+    `
+  }).join('')
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+    <rect width="100%" height="100%" fill="#FFFFFF" rx="20"/>
+    ${bars}
+  </svg>`
+}
+
+function generateLineChartSvg(chart: DashboardChart, width: number, height: number) {
+  const palette = paletteForTone(chart.tone)
+  const points = chart.points
+
+  if (points.length === 0) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+      <rect width="100%" height="100%" fill="#FFFFFF" rx="20"/>
+      <text x="50%" y="50%" text-anchor="middle" font-family="${FONT_NAME}" font-size="22" fill="#64748B">Нет данных для диаграммы</text>
+    </svg>`
+  }
+
+  const top = 22
+  const right = 26
+  const bottom = 42
+  const left = 64
+  const plotWidth = width - left - right
+  const plotHeight = height - top - bottom
+  const minValue = Math.min(...points.map((point) => point.value), 0)
+  const maxValue = Math.max(...points.map((point) => point.value), 0)
+  const valueRange = Math.max(1, maxValue - minValue)
+  const stepX = points.length > 1 ? plotWidth / (points.length - 1) : 0
+  const labelEvery = points.length > 10 ? Math.ceil(points.length / 6) : 1
+
+  const coordinates = points.map((point, index) => {
+    const x = left + stepX * index
+    const y = top + (maxValue - point.value) / valueRange * plotHeight
+    return { x, y, point }
+  })
+
+  const linePath = coordinates.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x},${point.y}`).join(' ')
+  const areaPath = `${linePath} L${coordinates[coordinates.length - 1]?.x ?? left},${top + plotHeight} L${coordinates[0]?.x ?? left},${top + plotHeight} Z`
+  const zeroY = top + (maxValue - 0) / valueRange * plotHeight
+  const gridLines = Array.from({ length: 4 }, (_, index) => {
+    const y = top + (plotHeight / 3) * index
+    return `<line x1="${left}" y1="${y}" x2="${left + plotWidth}" y2="${y}" stroke="#${COLORS.chartGrid}" stroke-width="1"/>`
+  }).join('')
+
+  const labels = coordinates.map((point, index) => {
+    if (index % labelEvery !== 0 && index !== points.length - 1) return ''
+    return `<text x="${point.x}" y="${height - 14}" text-anchor="middle" font-family="${FONT_NAME}" font-size="12" fill="#64748B">${escapeXml(truncateLabel(point.point.label, 12))}</text>`
+  }).join('')
+
+  const dots = coordinates.map((point) => {
+    const fill = point.point.value >= 0 ? palette.accent : COLORS.accentRed
+    return `<circle cx="${point.x}" cy="${point.y}" r="4.5" fill="#${fill}" stroke="#FFFFFF" stroke-width="2"/>`
+  }).join('')
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+    <rect width="100%" height="100%" fill="#FFFFFF" rx="20"/>
+    ${gridLines}
+    <line x1="${left}" y1="${zeroY}" x2="${left + plotWidth}" y2="${zeroY}" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="6 6"/>
+    <path d="${areaPath}" fill="#${palette.bg}" opacity="0.9"/>
+    <path d="${linePath}" fill="none" stroke="#${palette.accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    ${dots}
+    <text x="${left}" y="${top - 6}" font-family="${FONT_NAME}" font-size="12" fill="#64748B">${escapeXml(formatChartValue(maxValue, chart.valueFormat))}</text>
+    <text x="${left}" y="${top + plotHeight + 18}" font-family="${FONT_NAME}" font-size="12" fill="#64748B">${escapeXml(formatChartValue(minValue, chart.valueFormat))}</text>
+    ${labels}
+  </svg>`
+}
+
+async function svgToPngDataUrl(svg: string, width: number, height: number) {
+  if (typeof document === 'undefined') {
+    throw new Error('PNG conversion is only available in the browser')
+  }
+
+  const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const nextImage = new Image()
+      nextImage.onload = () => resolve(nextImage)
+      nextImage.onerror = () => reject(new Error('Failed to render chart SVG'))
+      nextImage.src = url
+    })
+
+    const scale = 2
+    const canvas = document.createElement('canvas')
+    canvas.width = width * scale
+    canvas.height = height * scale
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Canvas is not available')
+
+    ctx.scale(scale, scale)
+    ctx.fillStyle = '#FFFFFF'
+    ctx.fillRect(0, 0, width, height)
+    ctx.drawImage(image, 0, 0, width, height)
+
+    return canvas.toDataURL('image/png')
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+function styleDashboardCard(cell: ExcelJS.Cell, metric: DashboardMetric) {
+  const palette = paletteForTone(metric.tone)
+  cell.value = [metric.label, metric.value, metric.hint].filter(Boolean).join('\n')
+  cell.style = {
+    font: { name: FONT_NAME, bold: true, size: 12, color: { argb: argbOf(COLORS.bodyText) } },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argbOf(palette.bg) } },
+    alignment: { vertical: 'middle', horizontal: 'left', wrapText: true },
+    border: {
+      top: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+      bottom: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+      left: { style: 'medium', color: { argb: argbOf(palette.accent) } },
+      right: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+    },
+  }
+}
+
+function renderBarChartToPngDataUrl(chart: AutoChartConfig) {
+  const canvas = document.createElement('canvas')
+  const width = 980
+  const height = 280
+  canvas.width = width * 2
+  canvas.height = height * 2
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    throw new Error('Canvas is not available')
+  }
+
+  ctx.scale(2, 2)
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fillRect(0, 0, width, height)
+
+  const left = 190
+  const right = 110
+  const top = 24
+  const rowHeight = (height - top - 26) / chart.points.length
+  const barHeight = Math.max(14, rowHeight * 0.46)
+  const chartWidth = width - left - right
+  const maxValue = Math.max(...chart.points.map((point) => Math.abs(point.value)), 1)
+
+  ctx.font = `14px ${FONT_NAME}`
+  ctx.textBaseline = 'middle'
+
+  chart.points.forEach((point, index) => {
+    const y = top + index * rowHeight
+    const barY = y + rowHeight / 2 - barHeight / 2
+    const barWidth = Math.max(8, (Math.abs(point.value) / maxValue) * chartWidth)
+
+    ctx.fillStyle = '#E2E8F0'
+    ctx.beginPath()
+    ctx.roundRect(left, barY, chartWidth, barHeight, 9)
+    ctx.fill()
+
+    ctx.fillStyle = point.value >= 0 ? `#${COLORS.accentBlue}` : `#${COLORS.accentRed}`
+    ctx.beginPath()
+    ctx.roundRect(left, barY, barWidth, barHeight, 9)
+    ctx.fill()
+
+    ctx.fillStyle = '#0F172A'
+    ctx.textAlign = 'right'
+    ctx.fillText(truncateLabel(point.label, 24), left - 12, barY + barHeight / 2)
+
+    ctx.fillStyle = '#334155'
+    ctx.textAlign = 'left'
+    ctx.fillText(formatChartValue(point.value, chart.valueFormat), left + chartWidth + 12, barY + barHeight / 2)
+  })
+
+  return canvas.toDataURL('image/png')
+}
+
+export async function buildDashboardSheet(wb: ExcelJS.Workbook, options: DashboardSheetOptions) {
+  const ws = wb.addWorksheet(options.sheetName, {
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
+    properties: { tabColor: { argb: argbOf(COLORS.headerBg) } },
+  })
+
+  const columnCount = 12
+  for (let index = 1; index <= columnCount; index += 1) {
+    ws.getColumn(index).width = 14
+  }
+
+  addTitleRow(ws, options.title, options.subtitle, columnCount)
+  ws.getRow(3).height = 8
+
+  const cardsPerRow = 4
+  const cardSpan = 3
+  let currentRow = 4
+
+  options.metrics.forEach((metric, index) => {
+    const cardRow = currentRow + Math.floor(index / cardsPerRow) * 4
+    const cardColumn = 1 + (index % cardsPerRow) * cardSpan
+    const cardEndColumn = cardColumn + cardSpan - 1
+    ws.mergeCells(cardRow, cardColumn, cardRow + 2, cardEndColumn)
+    const cell = ws.getCell(cardRow, cardColumn)
+    styleDashboardCard(cell, metric)
+    ws.getRow(cardRow).height = 22
+    ws.getRow(cardRow + 1).height = 22
+    ws.getRow(cardRow + 2).height = 22
+  })
+
+  const metricRows = Math.max(1, Math.ceil(options.metrics.length / cardsPerRow))
+  currentRow += metricRows * 4
+
+  const charts = options.charts || []
+  const chartWidth = 760
+  const chartHeight = 320
+
+  for (let index = 0; index < charts.length; index += 1) {
+    const chart = charts[index]
+    const rowGroup = Math.floor(index / 2)
+    const fullWidth = charts.length % 2 === 1 && index === charts.length - 1 && charts.length > 1
+    const startColumn = fullWidth ? 1 : index % 2 === 0 ? 1 : 7
+    const endColumn = fullWidth ? 12 : index % 2 === 0 ? 6 : 12
+    const titleRow = currentRow + rowGroup * 15
+    const imageTopRow = titleRow + 1
+    const imageBottomRow = imageTopRow + 10
+
+    ws.mergeCells(titleRow, startColumn, titleRow, endColumn)
+    const titleCell = ws.getCell(titleRow, startColumn)
+    titleCell.value = chart.subtitle ? `${chart.title}\n${chart.subtitle}` : chart.title
+    titleCell.style = {
+      font: { name: FONT_NAME, bold: true, size: 11, color: { argb: argbOf(COLORS.bodyText) } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argbOf(COLORS.neutralBg) } },
+      alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
+      border: {
+        top: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+        bottom: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+        left: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+        right: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+      },
+    }
+    ws.getRow(titleRow).height = chart.subtitle ? 28 : 22
+
+    const svg = chart.type === 'line'
+      ? generateLineChartSvg(chart, chartWidth, chartHeight)
+      : generateHorizontalBarChartSvg(chart, chartWidth, chartHeight)
+
+    const imageId = wb.addImage({
+      base64: await svgToPngDataUrl(svg, chartWidth, chartHeight),
+      extension: 'png',
+    })
+
+    ws.addImage(imageId, `${columnLetter(startColumn)}${imageTopRow}:${columnLetter(endColumn)}${imageBottomRow}`)
+  }
+
+  currentRow += Math.max(0, Math.ceil(charts.length / 2) * 15)
+
+  if (options.highlights?.length) {
+    addSectionHeader(ws, currentRow, 'Ключевые выводы', columnCount)
+    currentRow += 1
+
+    options.highlights.forEach((highlight) => {
+      ws.mergeCells(currentRow, 1, currentRow, columnCount)
+      const cell = ws.getCell(currentRow, 1)
+      cell.value = `• ${highlight}`
+      cell.style = {
+        font: { name: FONT_NAME, size: 10, color: { argb: argbOf(COLORS.bodyText) } },
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argbOf(COLORS.panelBg) } },
+        alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
+        border: {
+          bottom: { style: 'thin', color: { argb: argbOf(COLORS.border) } },
+        },
+      }
+      ws.getRow(currentRow).height = 20
+      currentRow += 1
+    })
+  }
+
+  ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }]
+  return ws
 }
