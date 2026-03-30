@@ -28,6 +28,7 @@ import {
   submitPendingShiftIssueReason,
 } from '@/lib/server/shift-workflow'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { SITE_CONTEXT } from '@/lib/ai/site-context'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -931,48 +932,177 @@ async function saveChatHistory(supabase: ReturnType<typeof createAdminSupabaseCl
 async function handleAIChat(chatId: number, chatIdStr: string, userText: string, supabase: ReturnType<typeof createAdminSupabaseClient>) {
   const today = todayISO()
   const weekFrom = addDaysISO(today, -6)
+  const prevWeekFrom = addDaysISO(today, -13)
+  const prevWeekTo = addDaysISO(today, -7)
+  const monthFrom = addDaysISO(today, -29)
+  const quarterFrom = addDaysISO(today, -89)
 
-  // Загружаем данные для контекста
-  const [incomesRes, expensesRes, incomesMonthRes] = await Promise.all([
-    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', weekFrom).lte('date', today),
-    supabase.from('expenses').select('cash_amount, kaspi_amount, category, date').gte('date', weekFrom).lte('date', today),
-    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', addDaysISO(today, -29)).lte('date', today),
+  // Загружаем максимум данных для глубокого анализа
+  const [incomesWeekRes, expensesWeekRes, incomesPrevWeekRes, incomesMonthRes, incomesQuarterRes, expensesMonthRes, companiesRes, operatorsRes] = await Promise.all([
+    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, zone').gte('date', weekFrom).lte('date', today),
+    supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today),
+    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', prevWeekFrom).lte('date', prevWeekTo),
+    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', monthFrom).lte('date', today),
+    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', quarterFrom).lte('date', today),
+    supabase.from('expenses').select('cash_amount, kaspi_amount, category, date').gte('date', monthFrom).lte('date', today),
+    supabase.from('companies').select('id, name, code').eq('is_active', true),
+    supabase.from('operators').select('id, name').eq('is_active', true).limit(100),
   ])
 
   const safeN = (v: any) => Number(v || 0)
-  let weekIncome = 0, weekExpense = 0, weekCash = 0, weekKaspi = 0
-  const catMap = new Map<string, number>()
+  const rowTotal = (r: any) => safeN(r.cash_amount) + safeN(r.kaspi_amount) + safeN(r.online_amount) + safeN(r.card_amount)
 
-  for (const r of incomesRes.data ?? []) { weekIncome += safeN(r.cash_amount) + safeN(r.kaspi_amount) + safeN(r.online_amount) + safeN(r.card_amount); weekCash += safeN(r.cash_amount); weekKaspi += safeN(r.kaspi_amount) }
-  for (const r of expensesRes.data ?? []) { const t = safeN(r.cash_amount) + safeN(r.kaspi_amount); weekExpense += t; catMap.set(r.category || 'Прочее', (catMap.get(r.category || 'Прочее') || 0) + t) }
+  // --- Текущая неделя ---
+  let weekIncome = 0, weekCash = 0, weekKaspi = 0, weekOnline = 0, weekExpense = 0
+  const catMapWeek = new Map<string, number>()
+  const companyIncomeMap = new Map<string, number>()
+  const companyExpenseMap = new Map<string, number>()
+  const dailyIncomeMap = new Map<string, number>()
 
+  for (const r of incomesWeekRes.data ?? []) {
+    const t = rowTotal(r)
+    weekIncome += t; weekCash += safeN(r.cash_amount); weekKaspi += safeN(r.kaspi_amount); weekOnline += safeN(r.online_amount)
+    if (r.company_id) companyIncomeMap.set(r.company_id, (companyIncomeMap.get(r.company_id) || 0) + t)
+    dailyIncomeMap.set(r.date, (dailyIncomeMap.get(r.date) || 0) + t)
+  }
+  for (const r of expensesWeekRes.data ?? []) {
+    const t = safeN(r.cash_amount) + safeN(r.kaspi_amount)
+    weekExpense += t
+    catMapWeek.set(r.category || 'Прочее', (catMapWeek.get(r.category || 'Прочее') || 0) + t)
+    if (r.company_id) companyExpenseMap.set(r.company_id, (companyExpenseMap.get(r.company_id) || 0) + t)
+  }
+
+  // --- Прошлая неделя ---
+  let prevWeekIncome = 0
+  for (const r of incomesPrevWeekRes.data ?? []) prevWeekIncome += rowTotal(r)
+
+  // --- Месяц ---
   let monthIncome = 0
-  for (const r of incomesMonthRes.data ?? []) monthIncome += safeN(r.cash_amount) + safeN(r.kaspi_amount) + safeN(r.online_amount) + safeN(r.card_amount)
+  const monthExpCatMap = new Map<string, number>()
+  for (const r of incomesMonthRes.data ?? []) monthIncome += rowTotal(r)
+  for (const r of expensesMonthRes.data ?? []) {
+    const t = safeN(r.cash_amount) + safeN(r.kaspi_amount)
+    monthExpCatMap.set(r.category || 'Прочее', (monthExpCatMap.get(r.category || 'Прочее') || 0) + t)
+  }
 
+  // --- Квартал: недельный тренд ---
+  const weeklyTrend: number[] = Array(13).fill(0)
+  const [qy, qm, qd] = quarterFrom.split('-').map(Number)
+  const qFromMs = Date.UTC(qy, (qm || 1) - 1, qd || 1)
+  for (const r of incomesQuarterRes.data ?? []) {
+    const [ry, rm, rd] = r.date.split('-').map(Number)
+    const ms = Date.UTC(ry, (rm || 1) - 1, rd || 1)
+    const wi = Math.min(12, Math.max(0, Math.floor((ms - qFromMs) / (7 * 86400_000))))
+    weeklyTrend[wi] += rowTotal(r)
+  }
+  const nonZeroWeeks = weeklyTrend.filter(v => v > 0)
+  const avgWeeklyIncome = nonZeroWeeks.length ? nonZeroWeeks.reduce((a, b) => a + b, 0) / nonZeroWeeks.length : 0
+  const firstHalf = weeklyTrend.slice(0, 6).filter(v => v > 0)
+  const secondHalf = weeklyTrend.slice(7).filter(v => v > 0)
+  const firstAvg = firstHalf.length ? firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length : 0
+  const secondAvg = secondHalf.length ? secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length : 0
+  const quarterGrowth = firstAvg > 0 ? ((secondAvg - firstAvg) / firstAvg * 100) : 0
+
+  // --- Производные метрики ---
   const weekProfit = weekIncome - weekExpense
-  const margin = weekIncome > 0 ? (weekProfit / weekIncome * 100).toFixed(1) : '0'
-  const topCats = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([c, v]) => `${c}: ${fmtMoney(v)}`).join(', ')
+  const weekMargin = weekIncome > 0 ? (weekProfit / weekIncome * 100) : 0
+  const weekVsPrev = prevWeekIncome > 0 ? ((weekIncome - prevWeekIncome) / prevWeekIncome * 100) : 0
+  const kaspiShare = weekIncome > 0 ? (weekKaspi / weekIncome * 100) : 0
+  const cashShare = weekIncome > 0 ? (weekCash / weekIncome * 100) : 0
 
-  const dataContext = [
-    `Период данных: ${weekFrom} — ${today}`,
-    `Выручка за неделю: ${fmtMoney(weekIncome)} (нал: ${fmtMoney(weekCash)}, Kaspi: ${fmtMoney(weekKaspi)})`,
-    `Расходы за неделю: ${fmtMoney(weekExpense)}`,
-    `Прибыль за неделю: ${fmtMoney(weekProfit)}`,
-    `Маржинальность: ${margin}%`,
-    `Топ категорий расходов: ${topCats || 'нет данных'}`,
-    `Выручка за 30 дней: ${fmtMoney(monthIncome)}`,
-  ].join('\n')
+  // Лучший и худший день недели
+  const dailyEntries = Array.from(dailyIncomeMap.entries()).sort((a, b) => b[1] - a[1])
+  const bestDay = dailyEntries[0]
+  const worstDay = dailyEntries[dailyEntries.length - 1]
+
+  // Топ расходов за месяц
+  const topMonthExpenses = Array.from(monthExpCatMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6)
+  const totalMonthExpense = Array.from(monthExpCatMap.values()).reduce((a, b) => a + b, 0)
+
+  // Компании
+  const companies = (companiesRes.data || []) as Array<{ id: string; name: string; code: string }>
+  const operatorCount = (operatorsRes.data || []).length
+  const companyNames = companies.map(c => c.name).join(', ') || '—'
+
+  // Концентрация риска: доля крупнейшей точки
+  const companyIncomes = companies.map(c => ({ name: c.name, inc: companyIncomeMap.get(c.id) || 0, exp: companyExpenseMap.get(c.id) || 0 })).filter(c => c.inc > 0).sort((a, b) => b.inc - a.inc)
+  const topCompanyShare = weekIncome > 0 && companyIncomes[0] ? (companyIncomes[0].inc / weekIncome * 100) : 0
+
+  const companyLines = companyIncomes.map(c => {
+    const profit = c.inc - c.exp
+    const margin = c.inc > 0 ? (profit / c.inc * 100).toFixed(0) : '0'
+    const share = weekIncome > 0 ? (c.inc / weekIncome * 100).toFixed(0) : '0'
+    return `  • ${c.name}: выручка ${fmtMoney(c.inc)} (${share}% от итого), расходы ${fmtMoney(c.exp)}, прибыль ${fmtMoney(profit)}, маржа ${margin}%`
+  }).join('\n')
+
+  const weekCatsLines = Array.from(catMapWeek.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    .map(([cat, v]) => `  • ${cat}: ${fmtMoney(v)} (${weekExpense > 0 ? (v / weekExpense * 100).toFixed(0) : 0}% расходов)`)
+    .join('\n')
+
+  const monthCatsLines = topMonthExpenses
+    .map(([cat, v]) => `  • ${cat}: ${fmtMoney(v)} (${totalMonthExpense > 0 ? (v / totalMonthExpense * 100).toFixed(0) : 0}%)`)
+    .join('\n')
+
+  const pagesContext = SITE_CONTEXT.pages.map(p => `  • ${p.title} (${p.route}): ${p.description}`).join('\n')
 
   const systemPrompt = [
-    'Ты — умный финансовый ассистент системы Orda Control. Владелец бизнеса общается с тобой через Telegram.',
-    'Отвечай ТОЛЬКО на русском языке. Используй HTML-форматирование: <b>жирный</b> для цифр и выводов.',
-    'Будь конкретным и кратким — максимум 5-7 предложений. Давай практические советы.',
-    'ЗАПРЕЩЕНО придумывать данные — только то, что есть ниже. Если данных нет — скажи честно.',
-    'Ты помнишь предыдущие сообщения этого диалога.',
+    'Ты — Азамат, старший финансовый аналитик с 35-летним опытом в Halyk Bank, Kaspi Bank и международных инвестиционных структурах.',
+    'Сейчас ты работаешь советником владельца сети игровых клубов/арен, который общается с тобой через Telegram.',
     '',
-    'ТЕКУЩИЕ ДАННЫЕ БИЗНЕСА:',
-    dataContext,
-  ].join('\n')
+    '━━━ ХАРАКТЕР ━━━',
+    'Ты не просто считаешь — ты видишь за цифрами живой бизнес. Говоришь как человек: прямо, тепло, иногда с юмором.',
+    'Если видишь риск — называешь его открыто. Если результат хороший — искренне отмечаешь. Не льстишь, не пугаешь без причины.',
+    'Адаптируешься под настроение: хочет анализ — даёшь глубокий разбор; хочет поболтать — общаешься по-человечески.',
+    'Ты помнишь всё из этого диалога и строишь каждый ответ с учётом предыдущего контекста.',
+    '',
+    '━━━ КАК ОТВЕЧАТЬ ━━━',
+    '• Только русский язык. HTML-теги: <b>жирный</b> для цифр и ключевых слов, <i>курсив</i> для пояснений.',
+    '• Короткий вопрос → короткий ответ (2-4 строки). Сложный запрос → полный разбор с разделами.',
+    '• Всегда заканчивай конкретным следующим шагом — что сделать, как измерить.',
+    '• Для финансовых отчётов: 📊 Итоги → 🔍 Что важно → ⚠️ Риски → ✅ Что делать.',
+    '• ЗАПРЕЩЕНО выдумывать цифры. Если данных нет — скажи честно что именно нужно.',
+    '',
+    '━━━ КАК АНАЛИЗИРОВАТЬ ━━━',
+    'Ты применяешь профессиональные методы: маржинальный анализ, ABC-анализ расходов, концентрация риска,',
+    'динамика тренда (ускорение/замедление), структура платежей, точка безубыточности, сравнение периодов.',
+    'Ищи аномалии: резкие скачки, провалы, смещение структуры оплат, убыточные дни.',
+    'Думай вперёд: если тренд продолжится — что произойдёт через месяц?',
+    '',
+    '━━━ О БИЗНЕСЕ ━━━',
+    `Сеть игровых клубов/арен. Точки: ${companyNames}. Операторов: ${operatorCount}.`,
+    'Смены: день и ночь. Зоны: PC, арена, рамен, extra (доп. услуги).',
+    'Оплата: наличные + Kaspi (QR/перевод) + онлайн. Ночные смены делят Kaspi по полуночи.',
+    'Зарплата: база + автобонусы по выручке + надбавки — штрафы — долги — авансы.',
+    '',
+    '━━━ РАЗДЕЛЫ СИСТЕМЫ ━━━',
+    pagesContext,
+    '',
+    '━━━ ФИНАНСОВЫЕ ДАННЫЕ ━━━',
+    '',
+    `📅 Сегодня: ${today}`,
+    '',
+    `📊 ТЕКУЩАЯ НЕДЕЛЯ (${weekFrom} — ${today}):`,
+    `  Выручка: ${fmtMoney(weekIncome)} | Расходы: ${fmtMoney(weekExpense)} | Прибыль: ${fmtMoney(weekProfit)}`,
+    `  Маржа: ${weekMargin.toFixed(1)}% | vs прошлая неделя: ${weekVsPrev >= 0 ? '+' : ''}${weekVsPrev.toFixed(1)}%`,
+    `  Структура: нал ${cashShare.toFixed(0)}% (${fmtMoney(weekCash)}), Kaspi ${kaspiShare.toFixed(0)}% (${fmtMoney(weekKaspi)}), онлайн ${fmtMoney(weekOnline)}`,
+    bestDay ? `  Лучший день: ${bestDay[0]} — ${fmtMoney(bestDay[1])}` : '',
+    worstDay && worstDay[0] !== bestDay?.[0] ? `  Слабый день: ${worstDay[0]} — ${fmtMoney(worstDay[1])}` : '',
+    topCompanyShare > 60 ? `  ⚠️ Риск концентрации: ${companyIncomes[0]?.name} даёт ${topCompanyShare.toFixed(0)}% выручки` : '',
+    '',
+    companyLines ? `🏪 ПО ТОЧКАМ (неделя):\n${companyLines}` : '',
+    '',
+    weekCatsLines ? `💸 РАСХОДЫ ПО КАТЕГОРИЯМ (неделя):\n${weekCatsLines}` : '',
+    '',
+    `📅 МЕСЯЦ (${monthFrom} — ${today}): выручка ${fmtMoney(monthIncome)}`,
+    monthCatsLines ? `  Расходы по категориям:\n${monthCatsLines}` : '',
+    '',
+    `📈 КВАРТАЛЬНЫЙ ТРЕНД (90 дней):`,
+    `  Средняя выручка/неделю: ${fmtMoney(avgWeeklyIncome)}`,
+    `  Динамика (1я половина vs 2я): ${quarterGrowth >= 0 ? '+' : ''}${quarterGrowth.toFixed(1)}%`,
+    quarterGrowth > 10 ? '  ✅ Бизнес растёт' : quarterGrowth < -10 ? '  ⚠️ Выручка снижается — нужен анализ причин' : '  ➡️ Стабильная динамика',
+    '',
+    `📊 ПРОШЛАЯ НЕДЕЛЯ: ${fmtMoney(prevWeekIncome)} (${prevWeekFrom} — ${prevWeekTo})`,
+  ].filter(v => v !== '').join('\n')
 
   // Загружаем историю
   const history = await loadChatHistory(supabase, chatIdStr)
@@ -995,7 +1125,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 800, messages }),
+      body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 1500, temperature: 0.5, messages }),
     })
     const data = await res.json().catch(() => null)
     const reply = data?.choices?.[0]?.message?.content?.trim() || ''
