@@ -1145,69 +1145,239 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     `Рост (1-я половина vs 2-я): ${quarterGrowth >= 0 ? '+' : ''}${quarterGrowth.toFixed(2)}%`,
   ].filter(v => v !== '').join('\n')
 
-  // Загружаем историю
+  // ─── Agent tools definition ───────────────────────────────────────────────
+  const tools = [
+    {
+      type: 'function',
+      function: {
+        name: 'send_message_to_operator',
+        description: 'Отправить сообщение конкретному оператору в Telegram по имени. Используй когда пользователь хочет что-то передать оператору.',
+        parameters: {
+          type: 'object',
+          properties: {
+            operator_name: { type: 'string', description: 'Имя оператора (можно частичное, например "Улан")' },
+            message: { type: 'string', description: 'Текст сообщения для оператора' },
+          },
+          required: ['operator_name', 'message'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'create_task_for_operator',
+        description: 'Создать задачу в системе для конкретного оператора.',
+        parameters: {
+          type: 'object',
+          properties: {
+            operator_name: { type: 'string', description: 'Имя оператора' },
+            title: { type: 'string', description: 'Название задачи' },
+            description: { type: 'string', description: 'Подробное описание задачи (необязательно)' },
+          },
+          required: ['operator_name', 'title'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_operator_info',
+        description: 'Получить информацию о конкретном операторе: статистику, ближайшие смены.',
+        parameters: {
+          type: 'object',
+          properties: {
+            operator_name: { type: 'string', description: 'Имя оператора' },
+          },
+          required: ['operator_name'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'send_message_to_all_operators',
+        description: 'Отправить одно сообщение всем активным операторам у которых есть Telegram.',
+        parameters: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', description: 'Текст сообщения' },
+          },
+          required: ['message'],
+        },
+      },
+    },
+  ]
+
+  // ─── Tool executor ────────────────────────────────────────────────────────
+  async function executeTool(name: string, args: any): Promise<string> {
+    if (name === 'send_message_to_operator') {
+      const { data: ops } = await supabase.from('operators').select('id, name, short_name, telegram_chat_id, operator_profiles(full_name)').eq('is_active', true)
+      if (!ops?.length) return 'Операторы не найдены в системе.'
+      const query = (args.operator_name as string).toLowerCase()
+      const found = ops.find((op: any) => {
+        const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
+        const fullName = (profiles?.[0]?.full_name || op.name || '').toLowerCase()
+        const shortName = (op.short_name || '').toLowerCase()
+        return fullName.includes(query) || shortName.includes(query) || query.includes(fullName.split(' ')[0] || '')
+      })
+      if (!found) return `Оператор "${args.operator_name}" не найден. Доступные: ${ops.map((o: any) => { const p = o.operator_profiles as any; return p?.[0]?.full_name || o.name }).join(', ')}`
+      if (!found.telegram_chat_id) return `Оператор найден, но у него нет Telegram в системе.`
+      const profiles = found.operator_profiles as Array<{ full_name: string | null }> | null
+      const displayName = profiles?.[0]?.full_name || found.name
+      const msgText = `📨 <b>Сообщение от руководства:</b>\n\n${args.message}`
+      await sendTelegramText(found.telegram_chat_id, msgText)
+      return `✅ Сообщение отправлено оператору ${displayName}.`
+    }
+
+    if (name === 'create_task_for_operator') {
+      const { data: ops } = await supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true)
+      if (!ops?.length) return 'Операторы не найдены.'
+      const query = (args.operator_name as string).toLowerCase()
+      const found = ops.find((op: any) => {
+        const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
+        const fullName = (profiles?.[0]?.full_name || op.name || '').toLowerCase()
+        const shortName = (op.short_name || '').toLowerCase()
+        return fullName.includes(query) || shortName.includes(query) || query.includes(fullName.split(' ')[0] || '')
+      })
+      if (!found) return `Оператор "${args.operator_name}" не найден.`
+      const profiles = found.operator_profiles as Array<{ full_name: string | null }> | null
+      const displayName = profiles?.[0]?.full_name || found.name
+      // Получаем следующий номер задачи
+      const { data: lastTask } = await supabase.from('tasks').select('task_number').order('task_number', { ascending: false }).limit(1).maybeSingle()
+      const nextNumber = (lastTask?.task_number || 0) + 1
+      const { error } = await supabase.from('tasks').insert({
+        task_number: nextNumber,
+        title: args.title,
+        description: args.description || null,
+        operator_id: found.id,
+        status: 'todo',
+        created_at: new Date().toISOString(),
+      })
+      if (error) return `Ошибка создания задачи: ${error.message}`
+      return `✅ Задача #${nextNumber} "${args.title}" создана для ${displayName}.`
+    }
+
+    if (name === 'get_operator_info') {
+      const { data: ops } = await supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true)
+      if (!ops?.length) return 'Операторы не найдены.'
+      const query = (args.operator_name as string).toLowerCase()
+      const found = ops.find((op: any) => {
+        const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
+        const fullName = (profiles?.[0]?.full_name || op.name || '').toLowerCase()
+        return fullName.includes(query) || query.includes(fullName.split(' ')[0] || '')
+      })
+      if (!found) return `Оператор "${args.operator_name}" не найден.`
+      const today2 = todayISO()
+      const dateFrom2 = addDaysISO(today2, -29)
+      const [incomesR, shiftsR] = await Promise.all([
+        supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').eq('operator_id', found.id).gte('date', dateFrom2).lte('date', today2),
+        supabase.from('shifts').select('shift_date, shift_type, company:company_id(name)').eq('operator_id', found.id).gte('shift_date', today2).lte('shift_date', addDaysISO(today2, 14)).order('shift_date'),
+      ])
+      const profiles = found.operator_profiles as Array<{ full_name: string | null }> | null
+      const displayName = profiles?.[0]?.full_name || found.name
+      let revenue = 0; let shifts2 = 0
+      for (const r of incomesR.data ?? []) { const t = safeN(r.cash_amount) + safeN(r.kaspi_amount) + safeN(r.online_amount) + safeN(r.card_amount); if (t) { revenue += t; shifts2++ } }
+      const upcomingShifts = (shiftsR.data || []).slice(0, 5).map((s: any) => `${s.shift_date} ${s.shift_type === 'night' ? '🌙' : '☀️'} ${(s.company as any)?.name || ''}`).join(', ')
+      return `${displayName}: выручка за 30 дней ${revenue.toLocaleString('ru-RU')} ₸, смен ${shifts2}. Ближайшие смены: ${upcomingShifts || 'нет'}.`
+    }
+
+    if (name === 'send_message_to_all_operators') {
+      const { data: ops } = await supabase.from('operators').select('name, telegram_chat_id, operator_profiles(full_name)').eq('is_active', true).not('telegram_chat_id', 'is', null)
+      if (!ops?.length) return 'Нет операторов с Telegram.'
+      const msgText = `📨 <b>Сообщение от руководства:</b>\n\n${args.message}`
+      let sent = 0
+      for (const op of ops) {
+        if (op.telegram_chat_id) { await sendTelegramText(op.telegram_chat_id, msgText).catch(() => null); sent++ }
+      }
+      return `✅ Сообщение отправлено ${sent} операторам.`
+    }
+
+    return 'Неизвестный инструмент.'
+  }
+
+  // ─── Agentic loop ─────────────────────────────────────────────────────────
   const history = await loadChatHistory(supabase, chatIdStr)
   history.push({ role: 'user', content: userText })
 
-  const messages = [
+  const messages: any[] = [
     { role: 'system', content: systemPrompt },
     ...history,
   ]
 
   const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    await sendTelegramText(chatId, '⚠️ OpenAI API не настроен.')
-    return
-  }
+  if (!apiKey) { await sendTelegramText(chatId, '⚠️ OpenAI API не настроен.'); return }
 
-  // Отправляем "Думаю..." и сохраняем message_id чтобы потом заменить ответом
   let thinkingMsgId: number | null = null
   try {
-    const sentMsg = await callTelegram('sendMessage', {
-      chat_id: String(chatId),
-      text: '💭 Думаю...',
-      parse_mode: 'HTML',
-    })
+    const sentMsg = await callTelegram('sendMessage', { chat_id: String(chatId), text: '💭 Думаю...', parse_mode: 'HTML' })
     thinkingMsgId = sentMsg?.result?.message_id ?? null
   } catch { /* ignore */ }
 
-  try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 1800, temperature: 0.7, messages }),
-    })
-    const data = await res.json().catch(() => null)
-    const reply = data?.choices?.[0]?.message?.content?.trim() || ''
+  const editOrSend = async (text: string) => {
+    if (thinkingMsgId) {
+      const ok = await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingMsgId, text, parse_mode: 'HTML', disable_web_page_preview: true }).then(() => true).catch(() => false)
+      thinkingMsgId = null
+      if (!ok) await sendTelegramText(chatId, text)
+    } else {
+      await sendTelegramText(chatId, text)
+    }
+  }
 
-    if (!reply) {
-      const errText = '❌ Не удалось получить ответ.'
-      if (thinkingMsgId) {
-        await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingMsgId, text: errText, parse_mode: 'HTML' }).catch(() => sendTelegramText(chatId, errText))
-      } else {
-        await sendTelegramText(chatId, errText)
+  try {
+    // Agentic loop — max 5 iterations to prevent infinite loops
+    for (let iter = 0; iter < 5; iter++) {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 1800, temperature: 0.7, messages, tools, tool_choice: 'auto' }),
+      })
+      const data = await res.json().catch(() => null)
+      const choice = data?.choices?.[0]
+      if (!choice) { await editOrSend('❌ Нет ответа от AI.'); return }
+
+      const msg = choice.message
+      messages.push(msg)
+
+      // AI wants to call tools
+      if (choice.finish_reason === 'tool_calls' && msg.tool_calls?.length) {
+        // Show user what we're doing
+        const actionNames = msg.tool_calls.map((tc: any) => {
+          const n = tc.function.name
+          if (n === 'send_message_to_operator') return '📤 Отправляю сообщение оператору...'
+          if (n === 'create_task_for_operator') return '📋 Создаю задачу...'
+          if (n === 'get_operator_info') return '🔍 Ищу данные по оператору...'
+          if (n === 'send_message_to_all_operators') return '📢 Рассылаю сообщение...'
+          return '⚙️ Выполняю действие...'
+        })
+        if (thinkingMsgId) {
+          await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingMsgId, text: actionNames[0], parse_mode: 'HTML' }).catch(() => null)
+        }
+
+        // Execute all tool calls
+        for (const tc of msg.tool_calls) {
+          let toolArgs: any = {}
+          try { toolArgs = JSON.parse(tc.function.arguments) } catch { /* ignore */ }
+          const result = await executeTool(tc.function.name, toolArgs)
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: result })
+        }
+        continue // loop back to get AI's final response
       }
+
+      // Final text response
+      const reply = msg.content?.trim() || ''
+      if (!reply) { await editOrSend('❌ Не удалось получить ответ.'); return }
+
+      history.push({ role: 'assistant', content: reply })
+      await Promise.all([
+        editOrSend(reply),
+        saveChatHistory(supabase, chatIdStr, history),
+      ])
       return
     }
 
-    history.push({ role: 'assistant', content: reply })
-
-    // Заменяем "Думаю..." на реальный ответ
-    const editOk = thinkingMsgId
-      ? await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingMsgId, text: reply, parse_mode: 'HTML', disable_web_page_preview: true }).then(() => true).catch(() => false)
-      : false
-
-    await Promise.all([
-      editOk ? Promise.resolve() : sendTelegramText(chatId, reply),
-      saveChatHistory(supabase, chatIdStr, history),
-    ])
+    await editOrSend('❌ Слишком много шагов — попробуй переформулировать запрос.')
   } catch (e: any) {
-    const errText = `❌ Ошибка: ${e?.message || 'Неизвестная ошибка'}`
-    if (thinkingMsgId) {
-      await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingMsgId, text: errText, parse_mode: 'HTML' }).catch(() => sendTelegramText(chatId, errText))
-    } else {
-      await sendTelegramText(chatId, errText)
-    }
+    await editOrSend(`❌ Ошибка: ${e?.message || 'Неизвестная ошибка'}`)
   }
 }
 
