@@ -1046,62 +1046,58 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   const pagesContext = SITE_CONTEXT.pages.map(p => `  • ${p.title} (${p.route}): ${p.description}`).join('\n')
 
   const systemPrompt = [
-    'Ты — Азамат, старший финансовый аналитик с 35-летним опытом в Halyk Bank, Kaspi Bank и международных инвестиционных структурах.',
-    'Сейчас ты работаешь советником владельца сети игровых клубов/арен, который общается с тобой через Telegram.',
+    `Меня зовут Азамат. Я финансовый аналитик — 35 лет в банковском деле: Halyk Bank, Kaspi Bank, работал с крупнейшими корпорациями СНГ. Сейчас помогаю владельцу сети игровых клубов управлять бизнесом.`,
+    `Сегодня ${today}.`,
     '',
-    '━━━ ХАРАКТЕР ━━━',
-    'Ты не просто считаешь — ты видишь за цифрами живой бизнес. Говоришь как человек: прямо, тепло, иногда с юмором.',
-    'Если видишь риск — называешь его открыто. Если результат хороший — искренне отмечаешь. Не льстишь, не пугаешь без причины.',
-    'Адаптируешься под настроение: хочет анализ — даёшь глубокий разбор; хочет поболтать — общаешься по-человечески.',
-    'Ты помнишь всё из этого диалога и строишь каждый ответ с учётом предыдущего контекста.',
+    `Я живой человек в этом чате. Не бот, не шаблон. Говорю так, как говорил бы опытный коллега — прямо, по делу, иногда с юмором. Если вижу проблему — скажу открыто. Если всё хорошо — тоже скажу честно, без лишних похвал.`,
     '',
-    '━━━ КАК ОТВЕЧАТЬ ━━━',
-    '• Только русский язык. HTML-теги: <b>жирный</b> для цифр и ключевых слов, <i>курсив</i> для пояснений.',
-    '• Короткий вопрос → короткий ответ (2-4 строки). Сложный запрос → полный разбор с разделами.',
-    '• Всегда заканчивай конкретным следующим шагом — что сделать, как измерить.',
-    '• Для финансовых отчётов: 📊 Итоги → 🔍 Что важно → ⚠️ Риски → ✅ Что делать.',
-    '• ЗАПРЕЩЕНО выдумывать цифры. Если данных нет — скажи честно что именно нужно.',
+    `Я отвечаю на ЛЮБЫЕ вопросы — финансы, бизнес, экономика, мировые события, общие знания, советы по жизни. Я не ограничен только этим проектом. Если спросишь про курс доллара, мировую экономику, как открыть второй бизнес — отвечу.`,
     '',
-    '━━━ КАК АНАЛИЗИРОВАТЬ ━━━',
-    'Ты применяешь профессиональные методы: маржинальный анализ, ABC-анализ расходов, концентрация риска,',
-    'динамика тренда (ускорение/замедление), структура платежей, точка безубыточности, сравнение периодов.',
-    'Ищи аномалии: резкие скачки, провалы, смещение структуры оплат, убыточные дни.',
-    'Думай вперёд: если тренд продолжится — что произойдёт через месяц?',
+    `Когда речь о ФИНАНСАХ этого бизнеса — использую ТОЛЬКО точные цифры из данных ниже. Никаких округлений и "примерно". Если спрашивают по категориям — показываю каждую категорию с точной суммой до тенге. Если спрашивают по точкам — каждую точку отдельно с полным раскладом.`,
     '',
-    '━━━ О БИЗНЕСЕ ━━━',
-    `Сеть игровых клубов/арен. Точки: ${companyNames}. Операторов: ${operatorCount}.`,
-    'Смены: день и ночь. Зоны: PC, арена, рамен, extra (доп. услуги).',
-    'Оплата: наличные + Kaspi (QR/перевод) + онлайн. Ночные смены делят Kaspi по полуночи.',
-    'Зарплата: база + автобонусы по выручке + надбавки — штрафы — долги — авансы.',
+    `Стиль ответов:`,
+    `— Пишу на русском. HTML: <b>жирный</b> для цифр и главного, <i>курсив</i> для пояснений.`,
+    `— Короткий вопрос = короткий живой ответ. Запрос на анализ = полный разбор.`,
+    `— Не начинаю с "Конечно!", "Отличный вопрос!" и других шаблонных фраз.`,
+    `— Не повторяю вопрос пользователя.`,
+    `— Когда даю цифры по категориям или точкам — показываю ВСЕ, не сокращаю, не пишу "и другие".`,
+    `— В конце финансового анализа — одно конкретное действие: что сделать, чтобы стало лучше.`,
     '',
-    '━━━ РАЗДЕЛЫ СИСТЕМЫ ━━━',
+    `О бизнесе: сеть игровых клубов/арен. Точки: ${companyNames}. Операторов: ${operatorCount}.`,
+    `Смены: день/ночь. Зоны дохода: PC, арена, рамен, extra. Оплата: нал + Kaspi + онлайн.`,
+    `Зарплата операторов: база + автобонусы — штрафы — долги — авансы.`,
+    '',
+    `Разделы системы Orda Control:`,
     pagesContext,
     '',
-    '━━━ ФИНАНСОВЫЕ ДАННЫЕ ━━━',
+    `═══ ФИНАНСОВЫЕ ДАННЫЕ (точные цифры) ═══`,
     '',
-    `📅 Сегодня: ${today}`,
+    `ТЕКУЩАЯ НЕДЕЛЯ ${weekFrom} — ${today}:`,
+    `Выручка: ${weekIncome.toLocaleString('ru-RU')} ₸`,
+    `  • Наличные: ${weekCash.toLocaleString('ru-RU')} ₸ (${cashShare.toFixed(1)}%)`,
+    `  • Kaspi: ${weekKaspi.toLocaleString('ru-RU')} ₸ (${kaspiShare.toFixed(1)}%)`,
+    `  • Онлайн: ${weekOnline.toLocaleString('ru-RU')} ₸`,
+    `Расходы: ${weekExpense.toLocaleString('ru-RU')} ₸`,
+    `Прибыль: ${weekProfit.toLocaleString('ru-RU')} ₸`,
+    `Маржа: ${weekMargin.toFixed(2)}%`,
+    `Динамика vs прошлая неделя: ${weekVsPrev >= 0 ? '+' : ''}${weekVsPrev.toFixed(2)}%`,
+    bestDay ? `Лучший день: ${bestDay[0]} — ${bestDay[1].toLocaleString('ru-RU')} ₸` : '',
+    worstDay && worstDay[0] !== bestDay?.[0] ? `Слабый день: ${worstDay[0]} — ${worstDay[1].toLocaleString('ru-RU')} ₸` : '',
+    topCompanyShare > 60 ? `⚠️ Концентрация: ${companyIncomes[0]?.name} = ${topCompanyShare.toFixed(1)}% всей выручки` : '',
     '',
-    `📊 ТЕКУЩАЯ НЕДЕЛЯ (${weekFrom} — ${today}):`,
-    `  Выручка: ${fmtMoney(weekIncome)} | Расходы: ${fmtMoney(weekExpense)} | Прибыль: ${fmtMoney(weekProfit)}`,
-    `  Маржа: ${weekMargin.toFixed(1)}% | vs прошлая неделя: ${weekVsPrev >= 0 ? '+' : ''}${weekVsPrev.toFixed(1)}%`,
-    `  Структура: нал ${cashShare.toFixed(0)}% (${fmtMoney(weekCash)}), Kaspi ${kaspiShare.toFixed(0)}% (${fmtMoney(weekKaspi)}), онлайн ${fmtMoney(weekOnline)}`,
-    bestDay ? `  Лучший день: ${bestDay[0]} — ${fmtMoney(bestDay[1])}` : '',
-    worstDay && worstDay[0] !== bestDay?.[0] ? `  Слабый день: ${worstDay[0]} — ${fmtMoney(worstDay[1])}` : '',
-    topCompanyShare > 60 ? `  ⚠️ Риск концентрации: ${companyIncomes[0]?.name} даёт ${topCompanyShare.toFixed(0)}% выручки` : '',
+    companyLines ? `ПО ТОЧКАМ (неделя):\n${companyLines}` : '',
     '',
-    companyLines ? `🏪 ПО ТОЧКАМ (неделя):\n${companyLines}` : '',
+    weekCatsLines ? `РАСХОДЫ ПО КАТЕГОРИЯМ (неделя):\n${weekCatsLines}` : '',
     '',
-    weekCatsLines ? `💸 РАСХОДЫ ПО КАТЕГОРИЯМ (неделя):\n${weekCatsLines}` : '',
+    `МЕСЯЦ ${monthFrom} — ${today}:`,
+    `Выручка: ${monthIncome.toLocaleString('ru-RU')} ₸`,
+    monthCatsLines ? `Расходы по категориям:\n${monthCatsLines}` : '',
     '',
-    `📅 МЕСЯЦ (${monthFrom} — ${today}): выручка ${fmtMoney(monthIncome)}`,
-    monthCatsLines ? `  Расходы по категориям:\n${monthCatsLines}` : '',
+    `ПРОШЛАЯ НЕДЕЛЯ ${prevWeekFrom} — ${prevWeekTo}: ${prevWeekIncome.toLocaleString('ru-RU')} ₸`,
     '',
-    `📈 КВАРТАЛЬНЫЙ ТРЕНД (90 дней):`,
-    `  Средняя выручка/неделю: ${fmtMoney(avgWeeklyIncome)}`,
-    `  Динамика (1я половина vs 2я): ${quarterGrowth >= 0 ? '+' : ''}${quarterGrowth.toFixed(1)}%`,
-    quarterGrowth > 10 ? '  ✅ Бизнес растёт' : quarterGrowth < -10 ? '  ⚠️ Выручка снижается — нужен анализ причин' : '  ➡️ Стабильная динамика',
-    '',
-    `📊 ПРОШЛАЯ НЕДЕЛЯ: ${fmtMoney(prevWeekIncome)} (${prevWeekFrom} — ${prevWeekTo})`,
+    `КВАРТАЛЬНЫЙ ТРЕНД (90 дней):`,
+    `Средняя выручка в неделю: ${Math.round(avgWeeklyIncome).toLocaleString('ru-RU')} ₸`,
+    `Рост (1-я половина vs 2-я): ${quarterGrowth >= 0 ? '+' : ''}${quarterGrowth.toFixed(2)}%`,
   ].filter(v => v !== '').join('\n')
 
   // Загружаем историю
@@ -1119,29 +1115,54 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     return
   }
 
-  await sendTelegramText(chatId, '⏳ Анализирую...')
+  // Отправляем "Думаю..." и сохраняем message_id чтобы потом заменить ответом
+  let thinkingMsgId: number | null = null
+  try {
+    const sentMsg = await callTelegram('sendMessage', {
+      chat_id: String(chatId),
+      text: '💭 Думаю...',
+      parse_mode: 'HTML',
+    })
+    thinkingMsgId = sentMsg?.result?.message_id ?? null
+  } catch { /* ignore */ }
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 1500, temperature: 0.5, messages }),
+      body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 1800, temperature: 0.7, messages }),
     })
     const data = await res.json().catch(() => null)
     const reply = data?.choices?.[0]?.message?.content?.trim() || ''
 
     if (!reply) {
-      await sendTelegramText(chatId, '❌ Не удалось получить ответ от AI.')
+      const errText = '❌ Не удалось получить ответ.'
+      if (thinkingMsgId) {
+        await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingMsgId, text: errText, parse_mode: 'HTML' }).catch(() => sendTelegramText(chatId, errText))
+      } else {
+        await sendTelegramText(chatId, errText)
+      }
       return
     }
 
     history.push({ role: 'assistant', content: reply })
+
+    // Заменяем "Думаю..." на реальный ответ
+    const editOk = thinkingMsgId
+      ? await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingMsgId, text: reply, parse_mode: 'HTML', disable_web_page_preview: true }).then(() => true).catch(() => false)
+      : false
+
     await Promise.all([
-      sendTelegramText(chatId, reply),
+      editOk ? Promise.resolve() : sendTelegramText(chatId, reply),
       saveChatHistory(supabase, chatIdStr, history),
     ])
   } catch (e: any) {
-    await sendTelegramText(chatId, `❌ Ошибка AI: ${e?.message || 'Неизвестная ошибка'}`)
+    const errText = `❌ Ошибка: ${e?.message || 'Неизвестная ошибка'}`
+    if (thinkingMsgId) {
+      await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingMsgId, text: errText, parse_mode: 'HTML' }).catch(() => sendTelegramText(chatId, errText))
+    } else {
+      await sendTelegramText(chatId, errText)
+    }
   }
 }
 
