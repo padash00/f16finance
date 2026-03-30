@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { FileSpreadsheet, RefreshCw, Download, TrendingUp, ShoppingCart, Tag, Percent } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -44,28 +45,33 @@ function dayName(dateStr: string) {
   return DAY_NAMES[new Date(dateStr).getDay()]
 }
 
-function downloadCSV(daily: DailyRow[], totals: Totals, year: number, month: number) {
-  const header = ['Дата', 'День недели', 'Продаж', 'Выручка', 'Наличные', 'Kaspi', 'Карта', 'Онлайн', 'Скидки']
-  const rows = daily.map(d => [
-    d.date,
-    dayName(d.date),
-    d.count,
-    d.total,
-    d.cash,
-    d.kaspi,
-    d.card,
-    d.online,
-    d.discount,
-  ])
-  rows.push(['ИТОГО', '', totals.count, totals.total, totals.cash, totals.kaspi, totals.card, totals.online, totals.discount])
-  const csv = [header, ...rows].map(r => r.join(';')).join('\n')
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `otchet_${year}_${String(month).padStart(2, '0')}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+async function downloadCSV(daily: DailyRow[], totals: Totals, year: number, month: number) {
+  const wb = createWorkbook()
+  const monthName = new Date(year, month - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+  const dataRows = daily.map(d => ({
+    date: d.date,
+    dayName: dayName(d.date),
+    count: d.count,
+    total: d.total,
+    cash: d.cash,
+    kaspi: d.kaspi,
+    card: d.card,
+    online: d.online,
+    discount: d.discount,
+  }))
+  dataRows.push({ _isTotals: true, date: 'ИТОГО', dayName: '', count: totals.count, total: totals.total, cash: totals.cash, kaspi: totals.kaspi, card: totals.card, online: totals.online, discount: totals.discount } as any)
+  buildStyledSheet(wb, 'Отчёт', `Месячный отчёт — ${monthName}`, `Период: ${year}-${String(month).padStart(2, '0')} | Дней: ${daily.length}`, [
+    { header: 'Дата', key: 'date', width: 13, type: 'text' },
+    { header: 'День', key: 'dayName', width: 8, type: 'text' },
+    { header: 'Продаж', key: 'count', width: 10, type: 'number', align: 'right' },
+    { header: 'Выручка', key: 'total', width: 16, type: 'money' },
+    { header: 'Наличные', key: 'cash', width: 15, type: 'money' },
+    { header: 'Kaspi', key: 'kaspi', width: 15, type: 'money' },
+    { header: 'Карта', key: 'card', width: 15, type: 'money' },
+    { header: 'Онлайн', key: 'online', width: 15, type: 'money' },
+    { header: 'Скидки', key: 'discount', width: 13, type: 'money' },
+  ], dataRows)
+  await downloadWorkbook(wb, `otchet_${year}_${String(month).padStart(2, '0')}.xlsx`)
 }
 
 function getMonthName(month: number) {

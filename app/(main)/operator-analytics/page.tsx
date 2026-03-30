@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, memo, useCallback, Suspense } from 'react'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
@@ -1634,62 +1635,64 @@ function OperatorAnalyticsContent() {
     }
   }, [dateFrom, dateTo, selectedCompanyIds, activeOperatorIds, showToast])
 
-  const handleDownloadCSV = useCallback(() => {
-    const rows: string[][] = []
+  const handleDownloadCSV = useCallback(async () => {
+    const wb = createWorkbook()
+    const period = `${dateFrom} — ${dateTo}`
 
-    rows.push(['АНАЛИТИКА ОПЕРАТОРОВ'])
-    rows.push(['Сгенерирован', new Date().toLocaleString('ru-RU')])
-    rows.push(['Период', `${dateFrom} — ${dateTo}`])
-    rows.push([''])
-
-    rows.push(['СВОДНЫЕ ПОКАЗАТЕЛИ'])
-    rows.push(['Показатель', 'Значение'])
-    rows.push(['Общая выручка', String(Math.round(analytics.totalsFiltered.turnover))])
-    rows.push(['Всего смен', String(analytics.totalsFiltered.shifts)])
-    rows.push(['Средняя смена', String(Math.round(avgPerShiftOverall))])
-    rows.push(['Премии', String(Math.round(analytics.totalPlus))])
-    rows.push(['Штрафы и долги', String(Math.round(totalPenalties))])
-    rows.push(['Авансы', String(Math.round(analytics.totalAdvances))])
-    rows.push(['Чистый эффект', String(Math.round(analytics.totalsFiltered.netEffect))])
-    rows.push([''])
-
-    rows.push(['ДЕТАЛЬНАЯ ТАБЛИЦА'])
-    rows.push([
-      'Оператор', 'Смен', 'Дней', 'Выручка', 'Ср. смена', 'Доля %',
-      'Нал', 'Kaspi', 'Online', 'Карта', 'Долги', 'Штрафы', 'Премии', 'Авансы', 'Чистый эффект'
+    // Sheet 1: Summary
+    buildStyledSheet(wb, 'Сводка', 'Аналитика операторов — Сводка', `Период: ${period}`, [
+      { header: 'Показатель', key: 'label', width: 28, type: 'text' },
+      { header: 'Значение', key: 'value', width: 20, type: 'money' },
+    ], [
+      { label: 'Общая выручка', value: Math.round(analytics.totalsFiltered.turnover) },
+      { label: 'Всего смен', value: analytics.totalsFiltered.shifts },
+      { label: 'Средняя смена', value: Math.round(avgPerShiftOverall) },
+      { label: 'Премии', value: Math.round(analytics.totalPlus) },
+      { label: 'Штрафы и долги', value: Math.round(totalPenalties) },
+      { label: 'Авансы', value: Math.round(analytics.totalAdvances) },
+      { _isTotals: true, label: 'Чистый эффект', value: Math.round(analytics.totalsFiltered.netEffect) },
     ])
 
-    for (const op of analytics.rows) {
-      rows.push([
-        op.operatorName,
-        String(op.shifts),
-        String(op.days),
-        String(Math.round(op.totalTurnover)),
-        String(Math.round(op.avgPerShift)),
-        (op.share * 100).toFixed(1),
-        String(Math.round(op.cashAmount)),
-        String(Math.round(op.kaspiAmount)),
-        String(Math.round(op.onlineAmount)),
-        String(Math.round(op.cardAmount)),
-        String(Math.round(op.autoDebts)),
-        String(Math.round(op.manualMinus)),
-        String(Math.round(op.manualPlus)),
-        String(Math.round(op.advances)),
-        String(Math.round(op.netEffect)),
-      ])
-    }
+    // Sheet 2: Detailed operators
+    const opRows = analytics.rows.map(op => ({
+      name: op.operatorName,
+      shifts: op.shifts,
+      days: op.days,
+      turnover: Math.round(op.totalTurnover),
+      avgShift: Math.round(op.avgPerShift),
+      share: op.share * 100,
+      cash: Math.round(op.cashAmount),
+      kaspi: Math.round(op.kaspiAmount),
+      online: Math.round(op.onlineAmount),
+      card: Math.round(op.cardAmount),
+      debts: Math.round(op.autoDebts),
+      fines: Math.round(op.manualMinus),
+      bonuses: Math.round(op.manualPlus),
+      advances: Math.round(op.advances),
+      net: Math.round(op.netEffect),
+    }))
+    const tot = opRows.reduce((a, r) => ({ turnover: a.turnover + r.turnover, cash: a.cash + r.cash, kaspi: a.kaspi + r.kaspi, online: a.online + r.online, card: a.card + r.card, debts: a.debts + r.debts, fines: a.fines + r.fines, bonuses: a.bonuses + r.bonuses, advances: a.advances + r.advances, net: a.net + r.net }), { turnover: 0, cash: 0, kaspi: 0, online: 0, card: 0, debts: 0, fines: 0, bonuses: 0, advances: 0, net: 0 })
+    opRows.push({ _isTotals: true, name: 'ИТОГО', shifts: analytics.totalsFiltered.shifts, days: 0, avgShift: 0, share: 100, ...tot } as any)
+    buildStyledSheet(wb, 'Операторы', 'Аналитика операторов', `Период: ${period}`, [
+      { header: 'Оператор', key: 'name', width: 24, type: 'text' },
+      { header: 'Смен', key: 'shifts', width: 8, type: 'number', align: 'right' },
+      { header: 'Дней', key: 'days', width: 8, type: 'number', align: 'right' },
+      { header: 'Выручка', key: 'turnover', width: 16, type: 'money' },
+      { header: 'Ср. смена', key: 'avgShift', width: 14, type: 'money' },
+      { header: 'Доля %', key: 'share', width: 10, type: 'percent' },
+      { header: 'Нал', key: 'cash', width: 14, type: 'money' },
+      { header: 'Kaspi', key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Online', key: 'online', width: 14, type: 'money' },
+      { header: 'Карта', key: 'card', width: 14, type: 'money' },
+      { header: 'Долги', key: 'debts', width: 13, type: 'money' },
+      { header: 'Штрафы', key: 'fines', width: 13, type: 'money' },
+      { header: 'Премии', key: 'bonuses', width: 13, type: 'money' },
+      { header: 'Авансы', key: 'advances', width: 13, type: 'money' },
+      { header: 'Чистый эффект', key: 'net', width: 16, type: 'money' },
+    ], opRows)
 
-    const blob = new Blob(['\uFEFF' + rows.map(r => r.join(';')).join('\n')], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `operators_${dateFrom}_${dateTo}.csv`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
-
-    showToast('CSV отчёт скачан', 'success')
+    await downloadWorkbook(wb, `operators_${dateFrom}_${dateTo}.xlsx`)
+    showToast('Excel отчёт скачан', 'success')
   }, [analytics, dateFrom, dateTo, avgPerShiftOverall, totalPenalties, showToast])
 
   // Loading states

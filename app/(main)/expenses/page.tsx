@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Link from 'next/link'
 import { useCompanies } from '@/hooks/use-companies'
 import { useExpenses, type ExpenseRow } from '@/hooks/use-expenses'
@@ -585,35 +586,32 @@ export default function ExpensesPage() {
   }, [analytics, companyFilter, companyName, dateFrom, dateTo, periodLabel])
 
   // Export
-  const downloadCSV = () => {
-    const SEP = ';'
-    const headers = ['Дата', 'Компания', 'Категория', 'Cash', 'Kaspi', 'Итого', 'Комментарий']
-
-    const lines = [
-      headers.join(SEP),
-      ...rows.map((r) => {
-        const total = rowTotal(r)
-        return [
-          escapeCSV(r.date),
-          escapeCSV(companyName(r.company_id)),
-          escapeCSV(r.category ?? ''),
-          escapeCSV(r.cash_amount ?? 0),
-          escapeCSV(r.kaspi_amount ?? 0),
-          escapeCSV(total),
-          escapeCSV(r.comment ?? ''),
-        ].join(SEP)
-      }),
-    ].join('\n')
-
-    const blob = new Blob(['\uFEFF' + lines], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `expenses_${DateUtils.todayISO()}.csv`
-    link.click()
+  const downloadCSV = async () => {
+    const wb = createWorkbook()
+    const period = dateFrom && dateTo ? `${dateFrom} — ${dateTo}` : DateUtils.todayISO()
+    const expRows = rows.map(r => ({
+      date: r.date,
+      company: companyName(r.company_id),
+      category: r.category ?? '',
+      cash: r.cash_amount ?? 0,
+      kaspi: r.kaspi_amount ?? 0,
+      total: rowTotal(r),
+      comment: r.comment ?? '',
+    }))
+    buildStyledSheet(wb, 'Расходы', 'Расходы', `Период: ${period} | Строк: ${expRows.length}`, [
+      { header: 'Дата', key: 'date', width: 12, type: 'text' },
+      { header: 'Компания', key: 'company', width: 22, type: 'text' },
+      { header: 'Категория', key: 'category', width: 26, type: 'text' },
+      { header: 'Cash', key: 'cash', width: 14, type: 'money' },
+      { header: 'Kaspi', key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Итого', key: 'total', width: 15, type: 'money' },
+      { header: 'Комментарий', key: 'comment', width: 24, type: 'text' },
+    ], expRows)
+    await downloadWorkbook(wb, `expenses_${DateUtils.todayISO()}.xlsx`)
     logExpenseEvent({
       entityType: 'expense-export',
       entityId: `export:${DateUtils.todayISO()}`,
-      action: 'download-csv',
+      action: 'download-xlsx',
       payload: {
         rows: rows.length,
         date_from: dateFrom || null,

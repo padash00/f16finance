@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback, useDeferredValue, useRef } from 'react'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import type { KeyboardEvent } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -751,40 +752,41 @@ export default function IncomePage() {
     setHideExtraRows(false)
   }
 
-  // Экспорт CSV
-  const downloadCSV = () => {
-    const SEP = ';'
-    const headers = ['Дата', 'Компания', 'Оператор', 'Смена', 'Зона', 'Cash', 'Kaspi POS', 'Kaspi Online', 'Card', 'Итого', 'Комментарий']
-    
-    const csvContent = [
-      headers.join(SEP),
-      ...displayRows.map(r => {
-        const total = (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.online_amount || 0) + (r.card_amount || 0)
-        return [
-          r.date,
-          companyName(r.company_id),
-          operatorName(r.operator_id),
-          r.shift,
-          r.zone || '',
-          r.cash_amount || 0,
-          r.kaspi_amount || 0,
-          r.online_amount || 0,
-          r.card_amount || 0,
-          total,
-          r.comment || ''
-        ].join(SEP)
-      })
-    ].join('\n')
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `incomes_${DateUtils.todayISO()}.csv`
-    link.click()
+  // Экспорт Excel
+  const downloadCSV = async () => {
+    const wb = createWorkbook()
+    const period = dateFrom && dateTo ? `${dateFrom} — ${dateTo}` : DateUtils.todayISO()
+    const incRows = displayRows.map(r => ({
+      date: r.date,
+      company: companyName(r.company_id),
+      operator: operatorName(r.operator_id),
+      shift: r.shift || '',
+      zone: r.zone || '',
+      cash: r.cash_amount || 0,
+      kaspi: r.kaspi_amount || 0,
+      online: r.online_amount || 0,
+      card: r.card_amount || 0,
+      total: (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.online_amount || 0) + (r.card_amount || 0),
+      comment: r.comment || '',
+    }))
+    buildStyledSheet(wb, 'Доходы', 'Доходы', `Период: ${period} | Строк: ${incRows.length}`, [
+      { header: 'Дата', key: 'date', width: 12, type: 'text' },
+      { header: 'Компания', key: 'company', width: 20, type: 'text' },
+      { header: 'Оператор', key: 'operator', width: 20, type: 'text' },
+      { header: 'Смена', key: 'shift', width: 10, type: 'text' },
+      { header: 'Зона', key: 'zone', width: 10, type: 'text' },
+      { header: 'Cash', key: 'cash', width: 14, type: 'money' },
+      { header: 'Kaspi POS', key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Kaspi Online', key: 'online', width: 14, type: 'money' },
+      { header: 'Card', key: 'card', width: 14, type: 'money' },
+      { header: 'Итого', key: 'total', width: 16, type: 'money' },
+      { header: 'Комментарий', key: 'comment', width: 22, type: 'text' },
+    ], incRows)
+    await downloadWorkbook(wb, `incomes_${DateUtils.todayISO()}.xlsx`)
     logIncomeEvent({
       entityType: 'income-export',
       entityId: `export:${DateUtils.todayISO()}`,
-      action: 'download-csv',
+      action: 'download-xlsx',
       payload: {
         rows: displayRows.length,
         date_from: dateFrom || null,

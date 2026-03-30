@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -566,33 +567,35 @@ export default function StaffPageSmart() {
     await runStaffAccountAction('sendPasswordReset', staffMember)
   }
 
-  const handleExport = () => {
-    const rows = [
-      ['Сотрудник', 'Роль', 'Оклад', 'Выплачено', 'Остаток', 'Прогресс', 'Статус'],
-      ...filteredStaff.map(s => {
-        const paid = paymentsByStaff.get(s.id)?.reduce((acc, p) => acc + p.amount, 0) || 0
-        const salary = s.monthly_salary || 0
-        const left = salary - paid
-        return [
-          s.full_name,
-          ROLE_LABEL[s.role as StaffRole]?.label || '',
-          salary,
-          paid,
-          left,
-          salary > 0 ? `${Math.round((paid / salary) * 100)}%` : '0%',
-          s.is_active ? 'Активен' : 'Архив'
-        ]
-      })
-    ]
-
-    const csv = rows.map(row => row.join(';')).join('\n')
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `salary_${monthYM}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  const handleExport = async () => {
+    const wb = createWorkbook()
+    const staffRows = filteredStaff.map(s => {
+      const paid = paymentsByStaff.get(s.id)?.reduce((acc, p) => acc + p.amount, 0) || 0
+      const salary = s.monthly_salary || 0
+      const left = salary - paid
+      const progress = salary > 0 ? (paid / salary) * 100 : 0
+      return {
+        name: s.full_name,
+        role: ROLE_LABEL[s.role as StaffRole]?.label || '',
+        salary,
+        paid,
+        left,
+        progress,
+        status: s.is_active ? 'Активен' : 'Архив',
+      }
+    })
+    const totals = staffRows.reduce((acc, r) => ({ salary: acc.salary + r.salary, paid: acc.paid + r.paid, left: acc.left + r.left }), { salary: 0, paid: 0, left: 0 })
+    staffRows.push({ _isTotals: true, name: 'ИТОГО', role: '', salary: totals.salary, paid: totals.paid, left: totals.left, progress: totals.salary > 0 ? (totals.paid / totals.salary) * 100 : 0, status: '' } as any)
+    buildStyledSheet(wb, 'Зарплаты', 'Ведомость зарплат', `Месяц: ${monthYM} | Сотрудников: ${filteredStaff.length}`, [
+      { header: 'Сотрудник', key: 'name', width: 28, type: 'text' },
+      { header: 'Роль', key: 'role', width: 18, type: 'text' },
+      { header: 'Оклад', key: 'salary', width: 16, type: 'money' },
+      { header: 'Выплачено', key: 'paid', width: 16, type: 'money' },
+      { header: 'Остаток', key: 'left', width: 16, type: 'money' },
+      { header: 'Прогресс %', key: 'progress', width: 14, type: 'percent' },
+      { header: 'Статус', key: 'status', width: 12, type: 'text' },
+    ], staffRows)
+    await downloadWorkbook(wb, `salary_${monthYM}.xlsx`)
   }
 
   return (

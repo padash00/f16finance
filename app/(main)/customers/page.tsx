@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Users, Plus, Search, Star, Edit2, Trash2, RefreshCw, Download, Clock } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -252,22 +252,31 @@ export default function CustomersPage() {
     }
   }
 
-  function exportExcel() {
-    const rows = customers.map((c) => ({
-      Имя: c.name,
-      Телефон: c.phone || '',
-      Карта: c.card_number || '',
-      Email: c.email || '',
-      'Баллы лояльности': c.loyalty_points,
-      'Потрачено (₸)': c.total_spent,
-      Визиты: c.visits_count,
-      Компания: c.company?.name || '',
-      'Дата добавления': formatDate(c.created_at),
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Клиенты')
-    XLSX.writeFile(wb, `customers_${new Date().toISOString().split('T')[0]}.xlsx`)
+  async function exportExcel() {
+    const wb = createWorkbook()
+    const today = new Date().toLocaleDateString('ru-RU')
+    buildStyledSheet(wb, 'Клиенты', 'База клиентов', `Экспорт: ${today} | Всего: ${customers.length}`, [
+      { header: 'Имя', key: 'name', width: 28, type: 'text' },
+      { header: 'Телефон', key: 'phone', width: 16, type: 'text' },
+      { header: 'Карта', key: 'card', width: 16, type: 'text' },
+      { header: 'Email', key: 'email', width: 24, type: 'text' },
+      { header: 'Баллы', key: 'points', width: 12, type: 'number', align: 'right' },
+      { header: 'Потрачено (₸)', key: 'spent', width: 18, type: 'money' },
+      { header: 'Визиты', key: 'visits', width: 10, type: 'number', align: 'right' },
+      { header: 'Компания', key: 'company', width: 20, type: 'text' },
+      { header: 'Дата добавления', key: 'created', width: 16, type: 'text' },
+    ], customers.map(c => ({
+      name: c.name,
+      phone: c.phone || '',
+      card: c.card_number || '',
+      email: c.email || '',
+      points: c.loyalty_points,
+      spent: c.total_spent,
+      visits: c.visits_count,
+      company: c.company?.name || '',
+      created: formatDate(c.created_at),
+    })))
+    await downloadWorkbook(wb, `clients_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   return (

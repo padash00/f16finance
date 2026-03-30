@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { FloatingAssistant } from "@/components/ai/floating-assistant"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -315,31 +316,6 @@ const summarizeMonthForecast = (rows: DataPoint[], monthKey: string) => {
     )
 }
 
-const downloadCSV = (filename: string, rows: Record<string, any>[]) => {
-  if (!rows.length) return
-  const headers = Object.keys(rows[0])
-  const csv = [
-    headers.join(","),
-    ...rows.map((r) =>
-      headers
-        .map((h) => {
-          const val = r[h]
-          const s = val === null || val === undefined ? "" : String(val)
-          if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replaceAll('"', '""')}"`
-          return s
-        })
-        .join(","),
-    ),
-  ].join("\n")
-
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
 // ================== AI АНАЛИТИКА ==================
 const calculateSeasonalityStrength = (dayAverages: DayAverage[]): number => {
@@ -1334,11 +1310,13 @@ export default function AIAnalysisPage() {
     }
   }, [dataForAi])
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!analysis) return
-    const rows = analysis.chartData.map((d) => ({
+    const wb = createWorkbook()
+    const period = `${analysis.dataRangeStart} — ${analysis.dataRangeEnd}`
+    const dataRows = analysis.chartData.map(d => ({
       date: d.date,
-      type: d.type ?? "fact",
+      type: d.type ?? 'fact',
       income: Math.round(d.income),
       expense: Math.round(d.expense),
       profit: Math.round(d.profit ?? d.income - d.expense),
@@ -1349,12 +1327,22 @@ export default function AIAnalysisPage() {
       planned_income: Math.round(d.planned_income || 0),
       planned_expense: Math.round(d.planned_expense || 0),
       margin_pct: Number((d.margin ?? safeMargin((d.profit ?? d.income - d.expense), d.income)).toFixed(2)),
-      income_p10: d.income_p10 ? Math.round(d.income_p10) : "",
-      income_p90: d.income_p90 ? Math.round(d.income_p90) : "",
-      profit_p10: d.profit_p10 ? Math.round(d.profit_p10) : "",
-      profit_p90: d.profit_p90 ? Math.round(d.profit_p90) : "",
     }))
-    downloadCSV(`ai-analysis-${analysis.dataRangeStart}_to_${analysis.dataRangeEnd}.csv`, rows)
+    buildStyledSheet(wb, 'Аналитика', 'AI-Аналитика', `Период: ${period} | Строк: ${dataRows.length}`, [
+      { header: 'Дата', key: 'date', width: 12, type: 'text' },
+      { header: 'Тип', key: 'type', width: 10, type: 'text' },
+      { header: 'Доход', key: 'income', width: 16, type: 'money' },
+      { header: 'Расход', key: 'expense', width: 16, type: 'money' },
+      { header: 'Прибыль', key: 'profit', width: 16, type: 'money' },
+      { header: 'Нал', key: 'income_cash', width: 14, type: 'money' },
+      { header: 'Kaspi', key: 'income_kaspi', width: 14, type: 'money' },
+      { header: 'Card', key: 'income_card', width: 14, type: 'money' },
+      { header: 'Online', key: 'income_online', width: 14, type: 'money' },
+      { header: 'План доход', key: 'planned_income', width: 16, type: 'money' },
+      { header: 'План расход', key: 'planned_expense', width: 16, type: 'money' },
+      { header: 'Маржа %', key: 'margin_pct', width: 12, type: 'percent' },
+    ], dataRows)
+    await downloadWorkbook(wb, `ai-analysis-${analysis.dataRangeStart}_to_${analysis.dataRangeEnd}.xlsx`)
   }
 
   return (

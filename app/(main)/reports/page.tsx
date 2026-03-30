@@ -11,6 +11,7 @@ import {
   memo
 } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
 import { FloatingAssistant } from '@/components/ai/floating-assistant'
@@ -2002,80 +2003,87 @@ function ReportsContent() {
     }
   }, [showToast])
 
-  const handleDownloadCSV = useCallback(() => {
-    const rows: string[][] = []
+  const handleDownloadCSV = useCallback(async () => {
     const companyLabel = companyFilter === 'all'
       ? (includeExtraInTotals ? 'Все компании (включая Extra)' : 'Все компании (без Extra)')
       : companyName(companyFilter)
+    const period = `${dateFrom} — ${dateTo}`
+    const wb = createWorkbook()
 
-    rows.push(['ФИНАНСОВЫЙ ОТЧЕТ'])
-    rows.push(['Сгенерирован', new Date().toLocaleString('ru-RU')])
-    rows.push(['Период', `${dateFrom} — ${dateTo}`])
-    rows.push(['Компания', companyLabel])
-    rows.push(['Группировка', groupMode])
-    rows.push([''])
+    // Sheet 1: Summary
+    buildStyledSheet(wb, 'Сводка', 'Финансовый отчёт', `Период: ${period} | Компания: ${companyLabel}`, [
+      { header: 'Показатель', key: 'label', width: 28, type: 'text' },
+      { header: 'Текущий период', key: 'current', width: 20, type: 'money' },
+      { header: 'Прошлый период', key: 'prev', width: 20, type: 'money' },
+      { header: 'Изменение', key: 'change', width: 14, type: 'text', align: 'right' },
+    ], [
+      { _isSection: true, _sectionLabel: 'ОСНОВНЫЕ ПОКАЗАТЕЛИ' },
+      { label: 'Выручка', current: totals.totalIncome, prev: totalsPrev.totalIncome, change: getPercentageChange(totals.totalIncome, totalsPrev.totalIncome) },
+      { label: 'Расходы', current: totals.totalExpense, prev: totalsPrev.totalExpense, change: getPercentageChange(totals.totalExpense, totalsPrev.totalExpense) },
+      { label: 'Прибыль', current: totals.profit, prev: totalsPrev.profit, change: getPercentageChange(totals.profit, totalsPrev.profit) },
+      { _isTotals: true, label: 'ИТОГО ПРИБЫЛЬ', current: totals.profit, prev: totalsPrev.profit, change: getPercentageChange(totals.profit, totalsPrev.profit) },
+      { _isSection: true, _sectionLabel: 'СТРУКТУРА ДОХОДОВ' },
+      { label: 'Наличные (доход)', current: totals.incomeCash, prev: totalsPrev.incomeCash, change: getPercentageChange(totals.incomeCash, totalsPrev.incomeCash) },
+      { label: 'Kaspi (доход)', current: totals.incomeKaspi, prev: totalsPrev.incomeKaspi, change: getPercentageChange(totals.incomeKaspi, totalsPrev.incomeKaspi) },
+      { label: 'Online (доход)', current: totals.incomeOnline, prev: totalsPrev.incomeOnline, change: getPercentageChange(totals.incomeOnline, totalsPrev.incomeOnline) },
+      { label: 'Card (доход)', current: totals.incomeCard, prev: totalsPrev.incomeCard, change: getPercentageChange(totals.incomeCard, totalsPrev.incomeCard) },
+      { label: 'Безнал (доход)', current: totals.incomeNonCash, prev: totalsPrev.incomeNonCash, change: getPercentageChange(totals.incomeNonCash, totalsPrev.incomeNonCash) },
+    ])
 
-    rows.push(['СВОДНЫЕ ПОКАЗАТЕЛИ'])
-    rows.push(['Показатель', 'Текущий период', 'Прошлый период', 'Изменение'])
-    rows.push(['Выручка', String(Math.round(totals.totalIncome)), String(Math.round(totalsPrev.totalIncome)), getPercentageChange(totals.totalIncome, totalsPrev.totalIncome)])
-    rows.push(['Расходы', String(Math.round(totals.totalExpense)), String(Math.round(totalsPrev.totalExpense)), getPercentageChange(totals.totalExpense, totalsPrev.totalExpense)])
-    rows.push(['Прибыль', String(Math.round(totals.profit)), String(Math.round(totalsPrev.profit)), getPercentageChange(totals.profit, totalsPrev.profit)])
-    rows.push(['Наличные (доход)', String(Math.round(totals.incomeCash)), String(Math.round(totalsPrev.incomeCash)), getPercentageChange(totals.incomeCash, totalsPrev.incomeCash)])
-    rows.push(['Kaspi (доход)', String(Math.round(totals.incomeKaspi)), String(Math.round(totalsPrev.incomeKaspi)), getPercentageChange(totals.incomeKaspi, totalsPrev.incomeKaspi)])
-    rows.push(['Online (доход)', String(Math.round(totals.incomeOnline)), String(Math.round(totalsPrev.incomeOnline)), getPercentageChange(totals.incomeOnline, totalsPrev.incomeOnline)])
-    rows.push(['Card (доход)', String(Math.round(totals.incomeCard)), String(Math.round(totalsPrev.incomeCard)), getPercentageChange(totals.incomeCard, totalsPrev.incomeCard)])
-    rows.push(['Безнал (доход)', String(Math.round(totals.incomeNonCash)), String(Math.round(totalsPrev.incomeNonCash)), getPercentageChange(totals.incomeNonCash, totalsPrev.incomeNonCash)])
-    rows.push([''])
+    // Sheet 2: By company
+    const coRows = incomeByCompanyData.map(c => ({ name: c.name, value: c.value, cash: c.cash, kaspi: c.kaspi, online: c.online, card: c.card, count: c.count }))
+    const coTot = coRows.reduce((a, r) => ({ value: a.value + r.value, cash: a.cash + r.cash, kaspi: a.kaspi + r.kaspi, online: a.online + r.online, card: a.card + r.card, count: a.count + r.count }), { value: 0, cash: 0, kaspi: 0, online: 0, card: 0, count: 0 })
+    coRows.push({ _isTotals: true, name: 'ИТОГО', ...coTot } as any)
+    buildStyledSheet(wb, 'По компаниям', 'Доходы по компаниям', `Период: ${period}`, [
+      { header: 'Компания', key: 'name', width: 24, type: 'text' },
+      { header: 'Выручка', key: 'value', width: 18, type: 'money' },
+      { header: 'Наличные', key: 'cash', width: 16, type: 'money' },
+      { header: 'Kaspi', key: 'kaspi', width: 16, type: 'money' },
+      { header: 'Online', key: 'online', width: 16, type: 'money' },
+      { header: 'Card', key: 'card', width: 16, type: 'money' },
+      { header: 'Транзакций', key: 'count', width: 13, type: 'number', align: 'right' },
+    ], coRows)
 
-    rows.push(['ДОХОДЫ ПО КОМПАНИЯМ'])
-    rows.push(['Компания', 'Выручка', 'Наличные', 'Kaspi', 'Online', 'Card', 'Транзакций'])
-    for (const c of incomeByCompanyData) {
-      rows.push([c.name, String(Math.round(c.value)), String(Math.round(c.cash)), String(Math.round(c.kaspi)), String(Math.round(c.online)), String(Math.round(c.card)), String(c.count)])
-    }
-    rows.push([''])
+    // Sheet 3: Expenses by category
+    const expRows = expenseByCategoryData.map(c => ({ name: c.name, amount: c.amount, pct: c.percentage }))
+    expRows.push({ _isTotals: true, name: 'ИТОГО', amount: totals.totalExpense, pct: 100 } as any)
+    buildStyledSheet(wb, 'Расходы', 'Расходы по категориям', `Период: ${period}`, [
+      { header: 'Категория', key: 'name', width: 30, type: 'text' },
+      { header: 'Сумма', key: 'amount', width: 18, type: 'money' },
+      { header: '% от общих', key: 'pct', width: 14, type: 'percent' },
+    ], expRows)
 
-    rows.push(['РАСХОДЫ ПО КАТЕГОРИЯМ'])
-    rows.push(['Категория', 'Сумма', '% от общих'])
-    for (const c of expenseByCategoryData) {
-      rows.push([c.name, String(Math.round(c.amount)), c.percentage.toFixed(1)])
-    }
-    rows.push([''])
+    // Sheet 4: Detailed operations
+    const detailRows = filteredRows.map(r => ({
+      date: r.date,
+      type: r.type === 'income' ? 'Доход' : 'Расход',
+      company: r.companyName,
+      category: r.category || r.shift || '',
+      amount: Math.round(r.amount),
+      cash: Math.round(r.cashAmount),
+      kaspi: Math.round(r.kaspiAmount),
+      online: r.type === 'income' ? Math.round(r.onlineAmount || 0) : 0,
+      card: r.type === 'income' ? Math.round(r.cardAmount || 0) : 0,
+      note: r.zone || r.comment || '',
+    }))
+    buildStyledSheet(wb, 'Операции', 'Детальные операции', `Период: ${period} | Строк: ${detailRows.length}`, [
+      { header: 'Дата', key: 'date', width: 12, type: 'text' },
+      { header: 'Тип', key: 'type', width: 10, type: 'text' },
+      { header: 'Компания', key: 'company', width: 20, type: 'text' },
+      { header: 'Категория/Смена', key: 'category', width: 22, type: 'text' },
+      { header: 'Сумма', key: 'amount', width: 16, type: 'money' },
+      { header: 'Наличные', key: 'cash', width: 14, type: 'money' },
+      { header: 'Kaspi', key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Online', key: 'online', width: 14, type: 'money' },
+      { header: 'Card', key: 'card', width: 14, type: 'money' },
+      { header: 'Примечание', key: 'note', width: 22, type: 'text' },
+    ], detailRows)
 
-    rows.push(['ДЕТАЛЬНЫЕ ОПЕРАЦИИ'])
-    rows.push(['Дата', 'Тип', 'Компания', 'Категория/Смена', 'Сумма', 'Наличные', 'Kaspi', 'Online', 'Card', 'Зона/Комментарий'])
-    for (const r of filteredRows) {
-      const typeLabel = r.type === 'income' ? 'Доход' : 'Расход'
-      const category = r.category || r.shift || ''
-      const online = r.type === 'income' ? (r.onlineAmount || 0) : 0
-      const card = r.type === 'income' ? (r.cardAmount || 0) : 0
-      const zoneComment = r.zone || r.comment || ''
-      rows.push([r.date, typeLabel, r.companyName, category, String(Math.round(r.amount)), String(Math.round(r.cashAmount)), String(Math.round(r.kaspiAmount)), String(Math.round(online)), String(Math.round(card)), zoneComment])
-    }
-
-    downloadTextFile(`financial_report_${dateFrom}_${dateTo}.csv`, toCSV(rows, ';'))
-    showToast('CSV отчет скачан', 'success')
+    await downloadWorkbook(wb, `financial_report_${dateFrom}_${dateTo}.xlsx`)
+    showToast('Excel отчёт скачан', 'success')
   }, [companyFilter, includeExtraInTotals, companyName, dateFrom, dateTo, groupMode, totals, totalsPrev, incomeByCompanyData, expenseByCategoryData, filteredRows, showToast])
 
-  const handleDownloadExcel = useCallback(() => {
-    const summaryHeaders = ['Показатель', 'Текущий период', 'Прошлый период', 'Изменение %']
-    const summaryRows = [
-      ['Выручка', totals.totalIncome, totalsPrev.totalIncome, parseFloat(getPercentageChange(totals.totalIncome, totalsPrev.totalIncome)) || 0],
-      ['Расходы', totals.totalExpense, totalsPrev.totalExpense, parseFloat(getPercentageChange(totals.totalExpense, totalsPrev.totalExpense)) || 0],
-      ['Прибыль', totals.profit, totalsPrev.profit, parseFloat(getPercentageChange(totals.profit, totalsPrev.profit)) || 0],
-      ['Маржа %', totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0, 0, 0],
-      ['Наличные (доход)', totals.incomeCash, totalsPrev.incomeCash, 0],
-      ['Kaspi (доход)', totals.incomeKaspi, totalsPrev.incomeKaspi, 0],
-      ['Online (доход)', totals.incomeOnline, totalsPrev.incomeOnline, 0],
-      ['Card (доход)', totals.incomeCard, totalsPrev.incomeCard, 0],
-      ['Безналичные (доход)', totals.incomeNonCash, totalsPrev.incomeNonCash, 0],
-      ['Наличные (расход)', totals.expenseCash, totalsPrev.expenseCash, 0],
-      ['Kaspi (расход)', totals.expenseKaspi, totalsPrev.expenseKaspi, 0],
-    ]
-
-    const xml = generateExcelXML('Сводка', summaryHeaders, summaryRows)
-    downloadTextFile(`report_${dateFrom}_${dateTo}.xls`, xml, 'application/vnd.ms-excel')
-    showToast('Excel файл скачан', 'success')
-  }, [dateFrom, dateTo, totals, totalsPrev, showToast])
+  const handleDownloadExcel = handleDownloadCSV
 
   const handlePrintPDF = useCallback(() => {
     window.print()

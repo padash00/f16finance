@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
@@ -351,28 +352,29 @@ export default function AnalyticsPage() {
     })
   }, [rows, companies])
 
-  const downloadCSV = () => {
-    const header = ['Дата', 'Компания', 'Наличные', 'Kaspi', 'Карта', 'Итого']
-    const csvRows = rows.map(row => {
+  const downloadCSV = async () => {
+    const wb = createWorkbook()
+    const period = `${dateFrom} — ${dateTo}`
+    const analRows = rows.map(row => {
       const company = companyMap.get(row.company_id)
-      const total = (row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.card_amount || 0)
-      return [
-        row.date,
-        company?.name || row.company_id,
-        String(Math.round(row.cash_amount || 0)),
-        String(Math.round(row.kaspi_amount || 0)),
-        String(Math.round(row.card_amount || 0)),
-        String(Math.round(total)),
-      ].join(';')
+      return {
+        date: row.date,
+        company: company?.name || row.company_id,
+        cash: Math.round(row.cash_amount || 0),
+        kaspi: Math.round(row.kaspi_amount || 0),
+        card: Math.round(row.card_amount || 0),
+        total: Math.round((row.cash_amount || 0) + (row.kaspi_amount || 0) + (row.card_amount || 0)),
+      }
     })
-    const csv = '\uFEFF' + [header.join(';'), ...csvRows].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `analytics_${dateFrom}_${dateTo}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    buildStyledSheet(wb, 'Аналитика', 'Аналитика доходов', `Период: ${period} | Строк: ${analRows.length}`, [
+      { header: 'Дата', key: 'date', width: 13, type: 'text' },
+      { header: 'Компания', key: 'company', width: 22, type: 'text' },
+      { header: 'Наличные', key: 'cash', width: 16, type: 'money' },
+      { header: 'Kaspi', key: 'kaspi', width: 16, type: 'money' },
+      { header: 'Карта', key: 'card', width: 16, type: 'money' },
+      { header: 'Итого', key: 'total', width: 16, type: 'money' },
+    ], analRows)
+    await downloadWorkbook(wb, `analytics_${dateFrom}_${dateTo}.xlsx`)
   }
 
   return (

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getPublicAppUrl } from '@/lib/core/app-url'
@@ -311,39 +312,29 @@ export default function AccessPage() {
     setTimeout(() => setSuccess(null), 3000)
   }
 
-  // Экспорт в CSV
-  const exportToCSV = () => {
-    const headers = ['Имя', 'Логин', 'Пароль', 'Телефон', 'Email', 'Telegram ID', 'Ссылка для входа']
-    
-    const rows = operators.map(op => [
-      op.short_name || op.name,
-      op.username || '',
-      newPasswords[op.id] || '••••••••',
-      op.phone || '',
-      op.email || '',
-      op.telegram_chat_id || '',
-      `${publicAppUrl}/login`
-    ])
-
-    const csvContent = [
-      headers.join(';'),
-      ...rows.map(row => row.join(';'))
-    ].join('\n')
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    
-    link.setAttribute('href', url)
-    link.setAttribute('download', `operators_${new Date().toISOString().split('T')[0]}.csv`)
-    link.style.display = 'none'
-    
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-    
-    setSuccess('CSV файл скачан')
+  // Экспорт в Excel
+  const exportToCSV = async () => {
+    const wb = createWorkbook()
+    const today = new Date().toLocaleDateString('ru-RU')
+    buildStyledSheet(wb, 'Операторы', 'Данные для входа операторов', `Экспорт: ${today} | Операторов: ${operators.length}`, [
+      { header: 'Имя', key: 'name', width: 24, type: 'text' },
+      { header: 'Логин', key: 'username', width: 20, type: 'text' },
+      { header: 'Пароль', key: 'password', width: 16, type: 'text' },
+      { header: 'Телефон', key: 'phone', width: 16, type: 'text' },
+      { header: 'Email', key: 'email', width: 24, type: 'text' },
+      { header: 'Telegram ID', key: 'telegram', width: 16, type: 'text' },
+      { header: 'Ссылка для входа', key: 'link', width: 30, type: 'text' },
+    ], operators.map(op => ({
+      name: op.short_name || op.name,
+      username: op.username || '',
+      password: newPasswords[op.id] || '••••••••',
+      phone: op.phone || '',
+      email: op.email || '',
+      telegram: op.telegram_chat_id || '',
+      link: `${publicAppUrl}/login`,
+    })))
+    await downloadWorkbook(wb, `operators_${new Date().toISOString().split('T')[0]}.xlsx`)
+    setSuccess('Excel файл скачан')
     setTimeout(() => setSuccess(null), 3000)
   }
 

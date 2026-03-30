@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Link from 'next/link'
 import {
   AlertTriangle,
@@ -172,42 +173,35 @@ export function AbcAnalysisPageContent() {
     return recs
   }, [items])
 
-  // Export CSV
-  function exportCsv() {
-    const headers = [
-      '#',
-      'Класс',
-      'Наименование',
-      'Категория',
-      'Выручка (₸)',
-      '% от итого',
-      'Кол-во продано',
-      'Сделок',
-      'Маржа (₸)',
-      'Маржа %',
-    ]
-    const rows = filtered.map((item, idx) => [
-      idx + 1,
-      item.abc_class,
-      item.name,
-      item.category || '',
-      item.revenue,
-      item.revenue_percent,
-      item.qty,
-      item.transactions,
-      item.margin,
-      item.margin_percent,
-    ])
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      .join('\n')
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `abc_analysis_${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  // Export Excel
+  async function exportCsv() {
+    const wb = createWorkbook()
+    const today = new Date().toLocaleDateString('ru-RU')
+    const abcRows = filtered.map((item, idx) => ({
+      num: idx + 1,
+      cls: item.abc_class,
+      name: item.name,
+      category: item.category || '',
+      revenue: item.revenue,
+      revPct: item.revenue_percent,
+      qty: item.qty,
+      transactions: item.transactions,
+      margin: item.margin,
+      marginPct: item.margin_percent,
+    }))
+    buildStyledSheet(wb, 'ABC-анализ', 'ABC-анализ товаров', `Экспорт: ${today} | Позиций: ${filtered.length}`, [
+      { header: '#', key: 'num', width: 6, type: 'number', align: 'right' },
+      { header: 'Класс', key: 'cls', width: 8, type: 'text', align: 'center' },
+      { header: 'Наименование', key: 'name', width: 30, type: 'text' },
+      { header: 'Категория', key: 'category', width: 18, type: 'text' },
+      { header: 'Выручка', key: 'revenue', width: 16, type: 'money' },
+      { header: '% от итого', key: 'revPct', width: 12, type: 'percent' },
+      { header: 'Кол-во', key: 'qty', width: 10, type: 'number', align: 'right' },
+      { header: 'Сделок', key: 'transactions', width: 10, type: 'number', align: 'right' },
+      { header: 'Маржа', key: 'margin', width: 16, type: 'money' },
+      { header: 'Маржа %', key: 'marginPct', width: 12, type: 'percent' },
+    ], abcRows)
+    await downloadWorkbook(wb, `abc_analysis_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   // Open price edit

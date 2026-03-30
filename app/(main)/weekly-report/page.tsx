@@ -9,7 +9,8 @@ import {
   useState,
   memo
 } from 'react'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { Card } from '@/components/ui/card'
@@ -337,28 +338,6 @@ const safeNumber = (v: unknown): number => {
 }
 
 // =====================
-// CSV & EXPORT UTILITIES
-// =====================
-const csvEscape = (v: string): string => {
-  const s = String(v).replaceAll('"', '""')
-  if (/[",\n\r;]/.test(s)) return `"${s}"`
-  return s
-}
-
-const toCSV = (rows: string[][], sep = ';'): string => 
-  rows.map((r) => r.map((c) => csvEscape(c)).join(sep)).join('\n') + '\n'
-
-const downloadTextFile = (filename: string, content: string, mime = 'text/csv'): void => {
-  const blob = new Blob(['\uFEFF' + content], { type: `${mime};charset=utf-8` })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
 
 // =====================
 // MEMOIZED CHART COMPONENTS
@@ -1403,118 +1382,128 @@ function WeeklyReportContent() {
     }
   }, [reloadIncome, reloadExpenses, showToast])
 
-  const handleDownloadExcel = useCallback(() => {
+  const handleDownloadExcel = useCallback(async () => {
     if (!totals) return
-
-    const wb = XLSX.utils.book_new()
-    const fmt = '#,##0 ₸'
-    const pct = '0.0%'
-
-    // ─── helpers ──────────────────────────────────────────────────────────────
-    function n(v: number) { return { t: 'n' as const, v, z: fmt } }
-    function p(v: number) { return { t: 'n' as const, v: v / 100, z: pct } }
-    function s(v: string) { return { t: 's' as const, v } }
-    function addSheet(name: string, aoa: any[][], colWidths: number[]) {
-      const ws = XLSX.utils.aoa_to_sheet(aoa)
-      ws['!cols'] = colWidths.map(w => ({ wch: w }))
-      XLSX.utils.book_append_sheet(wb, ws, name)
-    }
 
     const period = `${startDate} — ${endDate}`
     const generated = new Date().toLocaleString('ru-RU')
+    const wb = createWorkbook()
 
     // ─── Лист 1: Сводка ───────────────────────────────────────────────────────
-    const s1: any[][] = [
-      [s('НЕДЕЛЬНЫЙ ФИНАНСОВЫЙ ОТЧЁТ'), s(''), s(''), s(''), s('')],
-      [s('Период:'), s(period), s(''), s(''), s('')],
-      [s('Сгенерирован:'), s(generated), s(''), s(''), s('')],
-      [],
-      [s('ПОКАЗАТЕЛЬ'), s('ЭТА НЕДЕЛЯ'), s('ПРОШЛАЯ НЕДЕЛЯ'), s('ИЗМЕНЕНИЕ'), s('')],
-      [s('Выручка'), n(totals.incomeTotal), n(totals.prev.incomeTotal), s(totals.change.income), s('')],
-      [s('Расходы'), n(totals.expenseTotal), n(totals.prev.expenseTotal), s(totals.change.expense), s('')],
-      [s('Прибыль'), n(totals.profit), n(totals.prev.profit), s(totals.change.profit), s('')],
-      [],
-      [s('САЛЬДО'), s('ЭТА НЕДЕЛЯ'), s('ПРОШЛАЯ НЕДЕЛЯ'), s('ИЗМЕНЕНИЕ'), s('')],
-      [s('Сальдо наличных'), n(totals.netCash), n(totals.prev.netCash), s(totals.change.netCash), s('')],
-      [s('Сальдо безнала'), n(totals.netNonCash), n(totals.prev.netNonCash), s(totals.change.netNonCash), s('')],
-      [s('Общее сальдо'), n(totals.netTotal), s(''), s(''), s('')],
-      [],
-      [s('СТРУКТУРА ДОХОДОВ'), s('СУММА'), s('ДОЛЯ'), s(''), s('')],
-      [s('Наличные'), n(totals.incomeCash), p(totals.metrics.cashShare), s(''), s('')],
-      [s('Kaspi'), n(totals.incomeKaspi), p(totals.metrics.kaspiShare), s(''), s('')],
-      [s('Online'), n(totals.incomeOnline), p(totals.metrics.onlineShare), s(''), s('')],
-      [s('Карта'), n(totals.incomeCard), p(totals.metrics.cardShare), s(''), s('')],
-      [s('Итого безнал (Kaspi+Online)'), n(totals.incomeNonCash), p(totals.metrics.nonCashShare), s(''), s('')],
-      [s('ИТОГО ДОХОД'), n(totals.incomeTotal), p(100), s(''), s('')],
-      [],
-      [s('КЛЮЧЕВЫЕ МЕТРИКИ'), s('ЗНАЧЕНИЕ'), s('НОРМА'), s(''), s('')],
-      [s('Расходы / Выручка'), p(totals.metrics.expenseRate), s('< 70%'), s(''), s('')],
-      [s('Маржинальность'), p(totals.metrics.profitMargin), s('> 25%'), s(''), s('')],
-      [s('Доля нала в доходах'), p(totals.metrics.cashShare), s(''), s(''), s('')],
-      [s('Доля безнала в доходах'), p(totals.metrics.nonCashShare), s(''), s(''), s('')],
-    ]
-    addSheet('Сводка', s1, [30, 18, 18, 14, 10])
+    buildStyledSheet(wb, 'Сводка', 'Недельный финансовый отчёт', `Период: ${period} | Сгенерирован: ${generated}`, [
+      { header: 'Показатель', key: 'label', width: 34, type: 'text' },
+      { header: 'Эта неделя', key: 'current', width: 20, type: 'money' },
+      { header: 'Прошлая неделя', key: 'prev', width: 20, type: 'money' },
+      { header: 'Изменение', key: 'change', width: 16, type: 'text', align: 'right' },
+    ], [
+      { _isSection: true, _sectionLabel: 'ОСНОВНЫЕ ПОКАЗАТЕЛИ' },
+      { label: 'Выручка', current: totals.incomeTotal, prev: totals.prev.incomeTotal, change: totals.change.income },
+      { label: 'Расходы', current: totals.expenseTotal, prev: totals.prev.expenseTotal, change: totals.change.expense },
+      { label: 'Прибыль', current: totals.profit, prev: totals.prev.profit, change: totals.change.profit },
+      { _isTotals: true, label: 'ИТОГО ПРИБЫЛЬ', current: totals.profit, prev: totals.prev.profit, change: totals.change.profit },
+      { _isSection: true, _sectionLabel: 'САЛЬДО' },
+      { label: 'Сальдо наличных', current: totals.netCash, prev: totals.prev.netCash, change: totals.change.netCash },
+      { label: 'Сальдо безнала', current: totals.netNonCash, prev: totals.prev.netNonCash, change: totals.change.netNonCash },
+      { _isTotals: true, label: 'Общее сальдо', current: totals.netTotal, prev: null as any, change: '' },
+      { _isSection: true, _sectionLabel: 'СТРУКТУРА ДОХОДОВ' },
+      { label: 'Наличные', current: totals.incomeCash, prev: null as any, change: `${totals.metrics.cashShare.toFixed(1)}%` },
+      { label: 'Kaspi', current: totals.incomeKaspi, prev: null as any, change: `${totals.metrics.kaspiShare.toFixed(1)}%` },
+      { label: 'Online', current: totals.incomeOnline, prev: null as any, change: `${totals.metrics.onlineShare.toFixed(1)}%` },
+      { label: 'Карта', current: totals.incomeCard, prev: null as any, change: `${totals.metrics.cardShare.toFixed(1)}%` },
+      { _isTotals: true, label: 'ИТОГО ДОХОД', current: totals.incomeTotal, prev: null as any, change: '100%' },
+      { _isSection: true, _sectionLabel: 'КЛЮЧЕВЫЕ МЕТРИКИ' },
+      { label: 'Расходы / Выручка', current: null as any, prev: null as any, change: `${totals.metrics.expenseRate.toFixed(1)}% (норма < 70%)` },
+      { label: 'Маржинальность', current: null as any, prev: null as any, change: `${totals.metrics.profitMargin.toFixed(1)}% (норма > 25%)` },
+      { label: 'Доля нала в доходах', current: null as any, prev: null as any, change: `${totals.metrics.cashShare.toFixed(1)}%` },
+      { label: 'Доля безнала в доходах', current: null as any, prev: null as any, change: `${totals.metrics.nonCashShare.toFixed(1)}%` },
+    ])
 
     // ─── Лист 2: По дням ──────────────────────────────────────────────────────
-    const s2: any[][] = [
-      [s('ДИНАМИКА ПО ДНЯМ'), s(period)],
-      [],
-      [s('День'), s('Дата'), s('Доход нал'), s('Доход Kaspi'), s('Доход Online'), s('Доход Карта'), s('Итого доход'), s('Расход нал'), s('Расход Kaspi'), s('Итого расход'), s('Прибыль'), s('Сальдо нал'), s('Сальдо безнал')],
-    ]
     let totD = 0, totK = 0, totO = 0, totC = 0, totInc = 0, totEC = 0, totEK = 0, totExp = 0, totPr = 0, totNC = 0, totNN = 0
-    for (const d of totals.dailyData) {
-      s2.push([s(d.label), s(d.date), n(d.incomeCash), n(d.incomeKaspi), n(d.incomeOnline), n(d.incomeCard), n(d.income), n(d.expenseCash), n(d.expenseKaspi), n(d.expense), n(d.profit), n(d.netCash), n(d.netNonCash)])
+    const dailyRows = totals.dailyData.map((d, i) => {
       totD += d.incomeCash; totK += d.incomeKaspi; totO += d.incomeOnline; totC += d.incomeCard
       totInc += d.income; totEC += d.expenseCash; totEK += d.expenseKaspi; totExp += d.expense
       totPr += d.profit; totNC += d.netCash; totNN += d.netNonCash
-    }
-    s2.push([s('ИТОГО'), s(''), n(totD), n(totK), n(totO), n(totC), n(totInc), n(totEC), n(totEK), n(totExp), n(totPr), n(totNC), n(totNN)])
-    addSheet('По дням', s2, [6, 12, 14, 14, 14, 14, 16, 14, 14, 16, 14, 14, 14])
+      return { day: d.label, date: d.date, incomeCash: d.incomeCash, incomeKaspi: d.incomeKaspi, incomeOnline: d.incomeOnline, incomeCard: d.incomeCard, income: d.income, expenseCash: d.expenseCash, expenseKaspi: d.expenseKaspi, expense: d.expense, profit: d.profit, netCash: d.netCash, netNonCash: d.netNonCash }
+    })
+    dailyRows.push({ _isTotals: true, day: 'ИТОГО', date: '', incomeCash: totD, incomeKaspi: totK, incomeOnline: totO, incomeCard: totC, income: totInc, expenseCash: totEC, expenseKaspi: totEK, expense: totExp, profit: totPr, netCash: totNC, netNonCash: totNN } as any)
+    buildStyledSheet(wb, 'По дням', 'Динамика по дням', `Период: ${period}`, [
+      { header: 'День', key: 'day', width: 8, type: 'text' },
+      { header: 'Дата', key: 'date', width: 13, type: 'text' },
+      { header: 'Доход нал', key: 'incomeCash', width: 15, type: 'money' },
+      { header: 'Доход Kaspi', key: 'incomeKaspi', width: 15, type: 'money' },
+      { header: 'Доход Online', key: 'incomeOnline', width: 15, type: 'money' },
+      { header: 'Доход Карта', key: 'incomeCard', width: 15, type: 'money' },
+      { header: 'Итого доход', key: 'income', width: 16, type: 'money' },
+      { header: 'Расход нал', key: 'expenseCash', width: 15, type: 'money' },
+      { header: 'Расход Kaspi', key: 'expenseKaspi', width: 15, type: 'money' },
+      { header: 'Итого расход', key: 'expense', width: 16, type: 'money' },
+      { header: 'Прибыль', key: 'profit', width: 15, type: 'money' },
+      { header: 'Сальдо нал', key: 'netCash', width: 15, type: 'money' },
+      { header: 'Сальдо безнал', key: 'netNonCash', width: 15, type: 'money' },
+    ], dailyRows)
 
     // ─── Лист 3: По точкам ────────────────────────────────────────────────────
-    const s3: any[][] = [
-      [s('ДЕТАЛИЗАЦИЯ ПО ТОЧКАМ'), s(period)],
-      [],
-      [s('Точка'), s('Доход нал'), s('Доход Kaspi'), s('Доход Online'), s('Доход Карта'), s('Итого доход'), s('Расход нал'), s('Расход Kaspi'), s('Итого расход'), s('Сальдо нал'), s('Сальдо безнал'), s('Прибыль')],
-    ]
     const allCos = [...activeCompanies, ...companies.filter(c => c.id === extraCompanyId)]
+    const companyRows: any[] = []
     for (const c of allCos) {
       const sc = totals.statsByCompany[c.id]
       if (!sc) continue
-      s3.push([s(c.name), n(sc.cash), n(sc.kaspi), n(sc.online), n(sc.card), n(sc.total), n(sc.expenseCash), n(sc.expenseKaspi), n(sc.expenseTotal), n(sc.netCash), n(sc.netNonCash), n(sc.profit)])
+      companyRows.push({ name: c.name, cash: sc.cash, kaspi: sc.kaspi, online: sc.online, card: sc.card, total: sc.total, expenseCash: sc.expenseCash, expenseKaspi: sc.expenseKaspi, expenseTotal: sc.expenseTotal, netCash: sc.netCash, netNonCash: sc.netNonCash, profit: sc.profit })
     }
-    s3.push([])
-    // Expense categories per company
-    s3.push([s('РАСХОДЫ ПО КАТЕГОРИЯМ ПО ТОЧКАМ')])
-    s3.push([s('Точка'), s('Категория'), s('Сумма'), s(''), s(''), s(''), s(''), s(''), s(''), s(''), s(''), s('')])
+    const totByComp = companyRows.reduce((acc, r) => ({ cash: acc.cash + r.cash, kaspi: acc.kaspi + r.kaspi, online: acc.online + r.online, card: acc.card + r.card, total: acc.total + r.total, expenseCash: acc.expenseCash + r.expenseCash, expenseKaspi: acc.expenseKaspi + r.expenseKaspi, expenseTotal: acc.expenseTotal + r.expenseTotal, netCash: acc.netCash + r.netCash, netNonCash: acc.netNonCash + r.netNonCash, profit: acc.profit + r.profit }), { cash: 0, kaspi: 0, online: 0, card: 0, total: 0, expenseCash: 0, expenseKaspi: 0, expenseTotal: 0, netCash: 0, netNonCash: 0, profit: 0 })
+    companyRows.push({ _isTotals: true, name: 'ИТОГО', ...totByComp })
+    buildStyledSheet(wb, 'По точкам', 'Детализация по точкам', `Период: ${period}`, [
+      { header: 'Точка', key: 'name', width: 22, type: 'text' },
+      { header: 'Доход нал', key: 'cash', width: 15, type: 'money' },
+      { header: 'Доход Kaspi', key: 'kaspi', width: 15, type: 'money' },
+      { header: 'Доход Online', key: 'online', width: 15, type: 'money' },
+      { header: 'Доход Карта', key: 'card', width: 15, type: 'money' },
+      { header: 'Итого доход', key: 'total', width: 16, type: 'money' },
+      { header: 'Расход нал', key: 'expenseCash', width: 15, type: 'money' },
+      { header: 'Расход Kaspi', key: 'expenseKaspi', width: 15, type: 'money' },
+      { header: 'Итого расход', key: 'expenseTotal', width: 16, type: 'money' },
+      { header: 'Сальдо нал', key: 'netCash', width: 15, type: 'money' },
+      { header: 'Сальдо безнал', key: 'netNonCash', width: 15, type: 'money' },
+      { header: 'Прибыль', key: 'profit', width: 15, type: 'money' },
+    ], companyRows)
+
+    // ─── Лист 4: Расходы по категориям ───────────────────────────────────────
+    const expRows: any[] = totals.expenseCategories.map(cat => ({
+      name: cat.name,
+      value: cat.value,
+      pctExpense: cat.percentage,
+      pctIncome: totals.incomeTotal > 0 ? cat.value / totals.incomeTotal * 100 : 0,
+    }))
+    expRows.push({ _isTotals: true, name: 'ИТОГО', value: totals.expenseTotal, pctExpense: 100, pctIncome: totals.metrics.expenseRate })
+    buildStyledSheet(wb, 'Расходы', 'Расходы по категориям', `Период: ${period}`, [
+      { header: 'Категория', key: 'name', width: 32, type: 'text' },
+      { header: 'Сумма', key: 'value', width: 18, type: 'money' },
+      { header: '% от расходов', key: 'pctExpense', width: 16, type: 'percent' },
+      { header: '% от выручки', key: 'pctIncome', width: 16, type: 'percent' },
+    ], expRows)
+
+    // ─── Лист 5: Расходы по точкам ───────────────────────────────────────────
+    const catByCompRows: any[] = []
     for (const c of allCos) {
       const sc = totals.statsByCompany[c.id]
       if (!sc || Object.keys(sc.expenseByCategory).length === 0) continue
+      catByCompRows.push({ _isSection: true, _sectionLabel: c.name })
       const cats = Object.entries(sc.expenseByCategory).sort((a, b) => b[1] - a[1])
       for (const [cat, amt] of cats) {
-        s3.push([s(c.name), s(cat), n(amt)])
+        const pct = sc.expenseTotal > 0 ? amt / sc.expenseTotal * 100 : 0
+        catByCompRows.push({ company: c.name, category: cat, amount: amt, pct })
       }
-      s3.push([s(''), s('ИТОГО ' + c.name), n(sc.expenseTotal)])
-      s3.push([])
+      catByCompRows.push({ _isTotals: true, company: c.name, category: 'ИТОГО', amount: sc.expenseTotal, pct: 100 })
     }
-    addSheet('По точкам', s3, [24, 14, 14, 14, 14, 16, 14, 14, 16, 14, 14, 14])
+    buildStyledSheet(wb, 'Расходы по точкам', 'Расходы по категориям по точкам', `Период: ${period}`, [
+      { header: 'Точка', key: 'company', width: 22, type: 'text' },
+      { header: 'Категория', key: 'category', width: 30, type: 'text' },
+      { header: 'Сумма', key: 'amount', width: 18, type: 'money' },
+      { header: '% в точке', key: 'pct', width: 14, type: 'percent' },
+    ], catByCompRows)
 
-    // ─── Лист 4: Расходы по категориям ───────────────────────────────────────
-    const s4: any[][] = [
-      [s('РАСХОДЫ ПО КАТЕГОРИЯМ'), s(period)],
-      [],
-      [s('Категория'), s('Сумма'), s('% от расходов'), s('% от выручки')],
-    ]
-    for (const cat of totals.expenseCategories) {
-      const pctOfIncome = totals.incomeTotal > 0 ? cat.value / totals.incomeTotal * 100 : 0
-      s4.push([s(cat.name), n(cat.value), p(cat.percentage), p(pctOfIncome)])
-    }
-    s4.push([])
-    s4.push([s('ИТОГО'), n(totals.expenseTotal), p(100), p(totals.metrics.expenseRate)])
-    addSheet('Расходы', s4, [30, 16, 16, 16])
-
-    // ─── Запись файла ─────────────────────────────────────────────────────────
-    XLSX.writeFile(wb, `Orda_Недельный_отчёт_${startDate}_${endDate}.xlsx`)
+    await downloadWorkbook(wb, `Orda_Недельный_отчёт_${startDate}_${endDate}.xlsx`)
     showToast('Excel отчёт скачан', 'success')
   }, [totals, startDate, endDate, activeCompanies, companies, extraCompanyId, showToast])
 

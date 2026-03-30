@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Wallet } from 'lucide-react'
@@ -180,30 +181,39 @@ export default function SalaryPage() {
     }
   }
 
-  const downloadSalaryCSV = () => {
-    const header = ['Оператор', 'Смен', 'Начислено', 'Авто-бонус', 'Бонус', 'Штраф', 'Долг', 'Аванс', 'К выплате', 'Выплачено', 'Остаток', 'Статус']
-    const csvRows = (data?.operators || []).map(({ operator, week }) => [
-      getOperatorDisplayName(operator),
-      String(week.shiftsCount),
-      String(Math.round(week.grossAmount)),
-      String(Math.round(week.autoBonusTotal)),
-      String(Math.round(week.bonusAmount)),
-      String(Math.round(week.fineAmount)),
-      String(Math.round(week.debtAmount)),
-      String(Math.round(week.advanceAmount)),
-      String(Math.round(week.netAmount)),
-      String(Math.round(week.paidAmount)),
-      String(Math.round(week.remainingAmount)),
-      statusMeta(week.status).label,
-    ].join(';'))
-    const csv = '\uFEFF' + [header.join(';'), ...csvRows].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `salary_${weekStart}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  const downloadSalaryCSV = async () => {
+    const wb = createWorkbook()
+    const opRows = (data?.operators || []).map(({ operator, week }) => ({
+      name: getOperatorDisplayName(operator),
+      shifts: week.shiftsCount,
+      gross: Math.round(week.grossAmount),
+      autoBonus: Math.round(week.autoBonusTotal),
+      bonus: Math.round(week.bonusAmount),
+      fine: Math.round(week.fineAmount),
+      debt: Math.round(week.debtAmount),
+      advance: Math.round(week.advanceAmount),
+      net: Math.round(week.netAmount),
+      paid: Math.round(week.paidAmount),
+      remaining: Math.round(week.remainingAmount),
+      status: statusMeta(week.status).label,
+    }))
+    const tot = opRows.reduce((a, r) => ({ gross: a.gross + r.gross, net: a.net + r.net, paid: a.paid + r.paid, remaining: a.remaining + r.remaining }), { gross: 0, net: 0, paid: 0, remaining: 0 })
+    opRows.push({ _isTotals: true, name: 'ИТОГО', shifts: opRows.length, gross: tot.gross, autoBonus: 0, bonus: 0, fine: 0, debt: 0, advance: 0, net: tot.net, paid: tot.paid, remaining: tot.remaining, status: '' } as any)
+    buildStyledSheet(wb, 'Зарплаты', 'Ведомость зарплат', `Неделя: ${weekStart} | Операторов: ${(data?.operators || []).length}`, [
+      { header: 'Оператор', key: 'name', width: 26, type: 'text' },
+      { header: 'Смен', key: 'shifts', width: 8, type: 'number', align: 'right' },
+      { header: 'Начислено', key: 'gross', width: 15, type: 'money' },
+      { header: 'Авто-бонус', key: 'autoBonus', width: 14, type: 'money' },
+      { header: 'Бонус', key: 'bonus', width: 13, type: 'money' },
+      { header: 'Штраф', key: 'fine', width: 13, type: 'money' },
+      { header: 'Долг', key: 'debt', width: 13, type: 'money' },
+      { header: 'Аванс', key: 'advance', width: 13, type: 'money' },
+      { header: 'К выплате', key: 'net', width: 14, type: 'money' },
+      { header: 'Выплачено', key: 'paid', width: 14, type: 'money' },
+      { header: 'Остаток', key: 'remaining', width: 14, type: 'money' },
+      { header: 'Статус', key: 'status', width: 12, type: 'text' },
+    ], opRows)
+    await downloadWorkbook(wb, `salary_${weekStart}.xlsx`)
   }
 
   return (
