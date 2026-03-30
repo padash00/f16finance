@@ -945,7 +945,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', monthFrom).lte('date', today),
     supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', quarterFrom).lte('date', today),
     supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', monthFrom).lte('date', today),
-    supabase.from('companies').select('id, name, code').eq('is_active', true),
+    supabase.from('companies').select('id, name, code'),
     supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true).limit(200),
     supabase.from('staff').select('id, full_name, role').eq('is_active', true),
   ])
@@ -1075,6 +1075,14 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     return `  • ${c.name}: выручка ${c.inc.toLocaleString('ru-RU')} ₸ (${share}%), расходы ${c.exp.toLocaleString('ru-RU')} ₸, прибыль ${profit.toLocaleString('ru-RU')} ₸, маржа ${margin}%`
   }).join('\n')
 
+  // Доходы без привязки к компании
+  let unassignedMonthIncome = monthIncome
+  for (const c of companyMonthStats) unassignedMonthIncome -= c.inc
+  const unassignedNote = unassignedMonthIncome > 100 ? `  • Без точки (company_id не указан): ${Math.round(unassignedMonthIncome).toLocaleString('ru-RU')} ₸` : ''
+
+  // Список ВСЕХ компаний в системе (для AI)
+  const allCompanyNames = companies.map(c => `${c.name} (id: ${c.id})`).join(', ')
+
   const weekCatsLines = Array.from(catMapWeek.entries()).sort((a, b) => b[1] - a[1])
     .map(([cat, v]) => `  • ${cat}: ${v.toLocaleString('ru-RU')} ₸ (${weekExpense > 0 ? (v / weekExpense * 100).toFixed(1) : 0}%)`)
     .join('\n')
@@ -1129,13 +1137,15 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     worstDay && worstDay[0] !== bestDay?.[0] ? `Слабый день: ${worstDay[0]} — ${worstDay[1].toLocaleString('ru-RU')} ₸` : '',
     topCompanyShare > 60 ? `⚠️ Концентрация: ${companyWeekStats[0]?.name} = ${topCompanyShare.toFixed(1)}% всей выручки` : '',
     '',
-    companyWeekLines ? `ПО ТОЧКАМ (неделя, все):\n${companyWeekLines}` : '',
+    companyWeekLines ? `ПО ТОЧКАМ (неделя, все):\n${companyWeekLines}` : 'По точкам (неделя): нет данных (company_id не заполнен в доходах)',
     '',
     weekCatsLines ? `РАСХОДЫ ПО КАТЕГОРИЯМ (неделя, все):\n${weekCatsLines}` : '',
     '',
     `МЕСЯЦ (${monthFrom} — ${today}):`,
     `Выручка: ${monthIncome.toLocaleString('ru-RU')} ₸ | Расходы: ${totalMonthExpense.toLocaleString('ru-RU')} ₸ | Прибыль: ${(monthIncome - totalMonthExpense).toLocaleString('ru-RU')} ₸`,
-    companyMonthLines ? `По точкам (месяц, все, точные цифры):\n${companyMonthLines}` : '',
+    `Все компании в системе: ${allCompanyNames}`,
+    companyMonthLines ? `По точкам (месяц, все, точные цифры):\n${companyMonthLines}` : 'По точкам: нет данных (company_id не заполнен в доходах)',
+    unassignedNote,
     monthCatsLines ? `Расходы по категориям (месяц, все):\n${monthCatsLines}` : '',
     '',
     `ПРОШЛАЯ НЕДЕЛЯ ${prevWeekFrom} — ${prevWeekTo}: ${prevWeekIncome.toLocaleString('ru-RU')} ₸`,
