@@ -953,8 +953,8 @@ async function saveMemory(supabase: ReturnType<typeof createAdminSupabaseClient>
   } catch { /* ignore */ }
 }
 
-// Transcribe voice message via OpenAI Whisper
-async function transcribeVoice(fileId: string, botToken: string, apiKey: string): Promise<string | null> {
+// Transcribe voice message via OpenAI Whisper (auto language detection)
+async function transcribeVoice(fileId: string, botToken: string, apiKey: string): Promise<{ text: string; language: string } | null> {
   try {
     const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`)
     const fileData = await fileRes.json()
@@ -962,12 +962,18 @@ async function transcribeVoice(fileId: string, botToken: string, apiKey: string)
     if (!filePath) return null
 
     const audioRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`)
+    if (!audioRes.ok) return null
     const audioBuffer = await audioRes.arrayBuffer()
 
+    // Detect MIME from file path (.oga/.ogg → ogg, .mp4 → mp4, etc.)
+    const ext = filePath.split('.').pop()?.toLowerCase() || 'ogg'
+    const mimeMap: Record<string, string> = { oga: 'audio/ogg', ogg: 'audio/ogg', mp4: 'audio/mp4', m4a: 'audio/mp4', webm: 'audio/webm', wav: 'audio/wav' }
+    const mime = mimeMap[ext] || 'audio/ogg'
+
     const form = new FormData()
-    form.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'voice.ogg')
+    form.append('file', new Blob([audioBuffer], { type: mime }), `voice.${ext}`)
     form.append('model', 'whisper-1')
-    form.append('language', 'ru')
+    form.append('response_format', 'verbose_json') // get language detection
 
     const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
@@ -975,11 +981,41 @@ async function transcribeVoice(fileId: string, botToken: string, apiKey: string)
       body: form,
     })
     const whisperData = await whisperRes.json()
-    return whisperData?.text?.trim() || null
+    const text = whisperData?.text?.trim()
+    if (!text) return null
+    return { text, language: whisperData?.language || 'unknown' }
   } catch { return null }
 }
 
-async function handleAIChat(chatId: number, chatIdStr: string, userText: string, supabase: ReturnType<typeof createAdminSupabaseClient>) {
+// Language emoji/label
+function langLabel(lang: string): string {
+  const map: Record<string, string> = { russian: '🇷🇺', kazakh: '🇰🇿', english: '🇺🇸', unknown: '🌐' }
+  return map[lang] || '🌐'
+}
+
+// Text-to-speech via OpenAI TTS → send as voice to Telegram
+async function sendVoiceReply(chatId: number, text: string, apiKey: string, botToken: string) {
+  try {
+    // Limit TTS to 4096 chars
+    const ttsText = text.replace(/<[^>]+>/g, '').slice(0, 4096)
+
+    const ttsRes = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'tts-1', voice: 'onyx', input: ttsText, response_format: 'opus' }),
+    })
+    if (!ttsRes.ok) return
+
+    const audioBuffer = await ttsRes.arrayBuffer()
+    const form = new FormData()
+    form.append('chat_id', String(chatId))
+    form.append('voice', new Blob([audioBuffer], { type: 'audio/ogg' }), 'reply.ogg')
+
+    await fetch(`https://api.telegram.org/bot${botToken}/sendVoice`, { method: 'POST', body: form })
+  } catch { /* TTS is optional, don't fail */ }
+}
+
+async function handleAIChat(chatId: number, chatIdStr: string, userText: string, supabase: ReturnType<typeof createAdminSupabaseClient>, onReply?: (reply: string) => Promise<void>) {
   const today = todayISO()
   const weekFrom = addDaysISO(today, -6)
   const prevWeekFrom = addDaysISO(today, -13)
@@ -1553,6 +1589,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       await Promise.all([
         editOrSend(reply),
         saveChatHistory(supabase, chatIdStr, history),
+        onReply ? onReply(reply) : Promise.resolve(),
       ])
       return
     }
@@ -1808,22 +1845,36 @@ export async function POST(req: Request) {
       const botToken = process.env.TELEGRAM_BOT_TOKEN || ''
       if (!apiKey) { await sendTelegramText(chatId, '⚠️ OpenAI API не настроен.'); return json({ ok: true }) }
 
-      const thinkingMsg = await callTelegram('sendMessage', { chat_id: String(chatId), text: '🎤 Распознаю голос...', parse_mode: 'HTML' }).catch(() => null)
+      const duration = update.message.voice.duration || 0
+      const thinkingMsg = await callTelegram('sendMessage', {
+        chat_id: String(chatId),
+        text: `🎤 Распознаю голос${duration > 30 ? ` (${duration}с, может занять немного)` : ''}...`,
+        parse_mode: 'HTML',
+      }).catch(() => null)
       const thinkingId = thinkingMsg?.result?.message_id ?? null
 
-      const transcript = await transcribeVoice(update.message.voice.file_id, botToken, apiKey)
-      if (!transcript) {
+      const result = await transcribeVoice(update.message.voice.file_id, botToken, apiKey)
+      if (!result) {
         const err = '❌ Не удалось распознать голосовое сообщение.'
         if (thinkingId) await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingId, text: err, parse_mode: 'HTML' }).catch(() => sendTelegramText(chatId, err))
         else await sendTelegramText(chatId, err)
         return json({ ok: true })
       }
 
-      // Show what was heard, then process
-      if (thinkingId) await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingId, text: `🎤 <i>"${transcript}"</i>`, parse_mode: 'HTML' }).catch(() => null)
-      else await sendTelegramText(chatId, `🎤 <i>"${transcript}"</i>`)
+      const { text: transcript, language } = result
+      const langEmoji = langLabel(language)
+      const durationStr = duration > 0 ? ` · ${duration}с` : ''
 
-      await handleAIChat(Number(chatId), String(chatId), transcript, supabase)
+      // Beautiful transcription display
+      const transcriptDisplay = `${langEmoji} <i>"${transcript}"</i>\n<code>${durationStr.trim()}</code>`
+      if (thinkingId) await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingId, text: transcriptDisplay, parse_mode: 'HTML' }).catch(() => null)
+      else await sendTelegramText(chatId, transcriptDisplay)
+
+      // Process through AI and get reply
+      await handleAIChat(Number(chatId), String(chatId), transcript, supabase, async (aiReply: string) => {
+        // Send voice reply back after text reply
+        await sendVoiceReply(Number(chatId), aiReply, apiKey, botToken)
+      })
       return json({ ok: true })
     }
 
