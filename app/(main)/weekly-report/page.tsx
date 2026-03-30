@@ -837,17 +837,11 @@ function WeeklyReportContent() {
     let pNetNonCash = 0
 
     // Статистика по компаниям (расширенная)
-    const statsByCompany: Record<string, { 
-      cash: number; 
-      kaspi: number;
-      online: number;
-      card: number;
-      nonCash: number; 
-      total: number;
-      expenseCash: number;
-      expenseKaspi: number;
-      netCash: number;
-      netNonCash: number;
+    const statsByCompany: Record<string, {
+      cash: number; kaspi: number; online: number; card: number; nonCash: number; total: number;
+      expenseCash: number; expenseKaspi: number; expenseTotal: number;
+      expenseByCategory: Record<string, number>;
+      netCash: number; netNonCash: number; profit: number;
     }> = {}
     
     for (const c of activeCompanies) {
