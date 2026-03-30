@@ -30,6 +30,7 @@ import {
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { SITE_CONTEXT } from '@/lib/ai/site-context'
 import { sendTelegramMessage } from '@/lib/telegram/send'
+import { extractTextFromPdf, parseExpenseFromText } from '@/lib/server/expense-receipt-parser'
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -590,6 +591,7 @@ type TelegramUpdate = {
     text?: string
     photo?: TelegramPhotoSize[]
     voice?: { file_id: string; duration?: number; mime_type?: string; file_size?: number }
+    document?: { file_id: string; file_name?: string; mime_type?: string; file_size?: number }
     message_id?: number
     chat?: { id?: number | string }
     from?: { id?: number; first_name?: string; username?: string }
@@ -1737,6 +1739,61 @@ export async function POST(req: Request) {
         return json({ ok: true })
       }
 
+      // ── PDF expense: company selection ──
+      const pdfCompanyMatch = callbackData.match(/^pdf_company_(\d+)_(.+)$/)
+      if (pdfCompanyMatch && chatId) {
+        const sessionChatId = pdfCompanyMatch[1]
+        const companyId = pdfCompanyMatch[2]
+        await answerCallbackQuery(callbackQueryId, '').catch(() => null)
+        const { data: sessionRow } = await supabase.from('telegram_chat_history').select('history').eq('chat_id', `pdf_expense_${sessionChatId}`).maybeSingle()
+        if (sessionRow?.history?.[0]?.content) {
+          const session = JSON.parse(sessionRow.history[0].content)
+          session.selectedCompanyId = companyId
+          await supabase.from('telegram_chat_history').upsert({ chat_id: `pdf_expense_${sessionChatId}`, history: [{ content: JSON.stringify(session) }], updated_at: new Date().toISOString() })
+          const { parsed, companies } = session
+          const payMethod = parsed.payment_method === 'kaspi' ? 'Kaspi' : parsed.payment_method === 'card' ? 'Карта' : 'Наличные'
+          const selectedCompany = companies.find((c: any) => c.id === companyId)
+          const companyButtons = companies.map((c: any) => [{ text: (c.id === companyId ? '✅ ' : '') + c.name, callback_data: `pdf_company_${sessionChatId}_${c.id}` }])
+          const confirmText = [`📄 <b>Распознан чек</b>`, ``, `💰 Сумма: <b>${parsed.amount.toLocaleString('ru-RU')} ₸</b>`, `📁 Категория: <b>${parsed.category}</b>`, `📅 Дата: <b>${parsed.date}</b>`, `💳 Оплата: <b>${payMethod}</b>`, parsed.vendor ? `🏪 Поставщик: <b>${parsed.vendor}</b>` : '', `🏢 Точка: <b>${selectedCompany?.name || companyId}</b>`, ``, `Подтверди добавление:`].filter(Boolean).join('\n')
+          await callTelegram('editMessageText', { chat_id: String(chatId), message_id: messageId, text: confirmText, parse_mode: 'HTML', reply_markup: { inline_keyboard: [...companyButtons, [{ text: '✅ Добавить в расходы', callback_data: `pdf_confirm_${sessionChatId}` }, { text: '❌ Отмена', callback_data: `pdf_cancel_${sessionChatId}` }]] } }).catch(() => null)
+        }
+        return json({ ok: true })
+      }
+
+      // ── PDF expense: confirm ──
+      const pdfConfirmMatch = callbackData.match(/^pdf_confirm_(\d+)$/)
+      if (pdfConfirmMatch && chatId) {
+        const sessionChatId = pdfConfirmMatch[1]
+        await answerCallbackQuery(callbackQueryId, 'Добавляю...').catch(() => null)
+        const { data: sessionRow } = await supabase.from('telegram_chat_history').select('history').eq('chat_id', `pdf_expense_${sessionChatId}`).maybeSingle()
+        if (!sessionRow?.history?.[0]?.content) { await sendTelegramText(chatId, '❌ Сессия истекла.'); return json({ ok: true }) }
+        const { parsed, selectedCompanyId } = JSON.parse(sessionRow.history[0].content)
+        if (!selectedCompanyId) { await sendTelegramText(chatId, '❌ Выбери точку.'); return json({ ok: true }) }
+        const isKaspi = parsed.payment_method === 'kaspi' || parsed.payment_method === 'card'
+        const { error } = await supabase.from('expenses').insert({
+          date: parsed.date,
+          company_id: selectedCompanyId,
+          operator_id: null,
+          category: parsed.category,
+          cash_amount: isKaspi ? 0 : parsed.amount,
+          kaspi_amount: isKaspi ? parsed.amount : 0,
+          comment: [parsed.vendor, parsed.comment].filter(Boolean).join(' — ') || null,
+        })
+        if (error) { await sendTelegramText(chatId, `❌ Ошибка записи: ${error.message}`); return json({ ok: true }) }
+        await callTelegram('editMessageText', { chat_id: String(chatId), message_id: messageId, text: `✅ <b>Расход добавлен!</b>\n\n💰 ${parsed.amount.toLocaleString('ru-RU')} ₸ — ${parsed.category}\n📅 ${parsed.date}`, parse_mode: 'HTML', reply_markup: { inline_keyboard: [] } }).catch(() => null)
+        await supabase.from('telegram_chat_history').delete().eq('chat_id', `pdf_expense_${sessionChatId}`)
+        return json({ ok: true })
+      }
+
+      // ── PDF expense: cancel ──
+      const pdfCancelMatch = callbackData.match(/^pdf_cancel_(\d+)$/)
+      if (pdfCancelMatch && chatId) {
+        await answerCallbackQuery(callbackQueryId, 'Отменено').catch(() => null)
+        await callTelegram('editMessageText', { chat_id: String(chatId), message_id: messageId, text: '❌ Добавление отменено.', parse_mode: 'HTML', reply_markup: { inline_keyboard: [] } }).catch(() => null)
+        await supabase.from('telegram_chat_history').delete().eq('chat_id', `pdf_expense_${pdfCancelMatch[1]}`)
+        return json({ ok: true })
+      }
+
       // Invoice confirm / cancel
       const invoiceMatch = callbackData.match(/^invoice:([0-9a-f-]+):(confirm|cancel)$/i)
       if (invoiceMatch) {
@@ -1828,6 +1885,111 @@ export async function POST(req: Request) {
         await sendTelegramText(chatId, `❌ Ошибка при обработке накладной: ${error?.message || 'Неизвестная ошибка'}`).catch(() => null)
       }
       return json({ ok: true })
+    }
+
+    // ── PDF document → expense receipt parser ──
+    if (update.message?.document && update.message.chat?.id) {
+      const doc = update.message.document
+      if (doc.mime_type === 'application/pdf') {
+        const chatId = update.message.chat.id
+        const telegramUserId = String(update.message.from?.id || chatId)
+        const botUser = await identifyBotUser(telegramUserId)
+
+        if (!canUseFinance(botUser.role)) {
+          await sendTelegramText(chatId, '⛔ Добавление расходов доступно только администраторам.')
+          return json({ ok: true })
+        }
+
+        const apiKey = process.env.OPENAI_API_KEY
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || ''
+        if (!apiKey) { await sendTelegramText(chatId, '⚠️ OpenAI API не настроен.'); return json({ ok: true }) }
+
+        const processingMsg = await callTelegram('sendMessage', {
+          chat_id: String(chatId),
+          text: '📄 Читаю чек...',
+          parse_mode: 'HTML',
+        }).catch(() => null)
+        const processingId = processingMsg?.result?.message_id ?? null
+
+        const editMsg = async (text: string) => {
+          if (processingId) await callTelegram('editMessageText', { chat_id: String(chatId), message_id: processingId, text, parse_mode: 'HTML' }).catch(() => sendTelegramText(chatId, text))
+          else await sendTelegramText(chatId, text)
+        }
+
+        try {
+          // Download PDF
+          const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${doc.file_id}`)
+          const fileData = await fileRes.json()
+          const filePath = fileData?.result?.file_path
+          if (!filePath) { await editMsg('❌ Не удалось скачать файл.'); return json({ ok: true }) }
+
+          const audioRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`)
+          const pdfBuffer = await audioRes.arrayBuffer()
+
+          // Extract text
+          await editMsg('📄 Извлекаю данные из чека...')
+          const pdfText = await extractTextFromPdf(pdfBuffer)
+          if (!pdfText || pdfText.length < 10) {
+            await editMsg('❌ Не удалось прочитать текст из PDF. Попробуй прислать фото чека.')
+            return json({ ok: true })
+          }
+
+          // Parse with GPT
+          const today = todayISO()
+          const parsed = await parseExpenseFromText(pdfText, apiKey, today)
+          if (!parsed) { await editMsg('❌ Не удалось распознать чек. Попробуй другой формат.'); return json({ ok: true }) }
+
+          // Load companies for selection
+          const { data: companiesData } = await supabase.from('companies').select('id, name')
+          const companiesList = (companiesData || []) as Array<{ id: string; name: string }>
+
+          // Save session for confirmation
+          const session = { parsed, companies: companiesList, selectedCompanyId: companiesList[0]?.id || null }
+          await supabase.from('telegram_chat_history').upsert({
+            chat_id: `pdf_expense_${chatId}`,
+            history: [{ content: JSON.stringify(session) }],
+            updated_at: new Date().toISOString(),
+          })
+
+          const payMethod = parsed.payment_method === 'kaspi' ? 'Kaspi' : parsed.payment_method === 'card' ? 'Карта' : 'Наличные'
+          const companyButtons = companiesList.map((c, i) => [{
+            text: (c.id === session.selectedCompanyId ? '✅ ' : '') + c.name,
+            callback_data: `pdf_company_${chatId}_${c.id}`,
+          }])
+
+          const confirmText = [
+            `📄 <b>Распознан чек</b>`,
+            ``,
+            `💰 Сумма: <b>${parsed.amount.toLocaleString('ru-RU')} ₸</b>`,
+            `📁 Категория: <b>${parsed.category}</b>`,
+            `📅 Дата: <b>${parsed.date}</b>`,
+            `💳 Оплата: <b>${payMethod}</b>`,
+            parsed.vendor ? `🏪 Поставщик: <b>${parsed.vendor}</b>` : '',
+            parsed.comment ? `📝 ${parsed.comment}` : '',
+            ``,
+            `Выбери точку и подтверди:`,
+          ].filter(Boolean).join('\n')
+
+          await callTelegram('editMessageText', {
+            chat_id: String(chatId),
+            message_id: processingId,
+            text: confirmText,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                ...companyButtons,
+                [
+                  { text: '✅ Добавить в расходы', callback_data: `pdf_confirm_${chatId}` },
+                  { text: '❌ Отмена', callback_data: `pdf_cancel_${chatId}` },
+                ],
+              ],
+            },
+          }).catch(() => sendTelegramText(chatId, confirmText))
+        } catch (e: any) {
+          await editMsg(`❌ Ошибка: ${e?.message || 'Неизвестная ошибка'}`)
+        }
+        return json({ ok: true })
+      }
     }
 
     // ── Voice messages (Whisper transcription → AI chat) ──
