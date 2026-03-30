@@ -209,14 +209,14 @@ export async function POST(request: Request) {
       if (insertError) throw insertError
 
       // Create income record
-      const { data: incomeRow } = await supabase
+      const { data: incomeRow, error: incomeError } = await supabase
         .from('incomes')
         .insert({
           date: new Date().toISOString().slice(0, 10),
-          company_id: companyId,
+          company_id: companyId || null,
           operator_id: operatorId || null,
           shift: getCurrentShift(),
-          zone: 'arena',
+          zone: 'pc',
           cash_amount: finalCash,
           kaspi_amount: finalKaspi,
           online_amount: 0,
@@ -226,6 +226,14 @@ export async function POST(request: Request) {
         })
         .select('id')
         .single()
+
+      if (incomeError) {
+        await writeSystemErrorLogSafe({
+          scope: 'server',
+          area: 'api/point/arena:startSession:incomeInsert',
+          message: incomeError.message || 'Income insert failed',
+        })
+      }
 
       // Update session with income_id if successfully created
       if (incomeRow?.id) {
@@ -319,12 +327,12 @@ export async function POST(request: Request) {
       const extStationName = (extStationRow as any)?.name || (current as any).station_id
 
       // Create income record for extension
-      await supabase.from('incomes').insert({
+      const { error: extIncomeError } = await supabase.from('incomes').insert({
         date: new Date().toISOString().slice(0, 10),
         company_id: companyId,
         operator_id: (current as any).operator_id || null,
         shift: getCurrentShift(),
-        zone: 'arena',
+        zone: 'pc',
         cash_amount: extCash,
         kaspi_amount: extKaspi,
         online_amount: 0,
@@ -332,6 +340,13 @@ export async function POST(request: Request) {
         comment: `Арена продление: ${extStationName}`,
         source: 'arena-session',
       })
+      if (extIncomeError) {
+        await writeSystemErrorLogSafe({
+          scope: 'server',
+          area: 'api/point/arena:extendSession:incomeInsert',
+          message: extIncomeError.message || 'Income insert failed',
+        })
+      }
 
       // Reset notification flag so the new end time gets a fresh notification
       notified5minMap.delete(sessionId)
