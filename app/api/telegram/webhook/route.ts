@@ -30,7 +30,7 @@ import {
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { SITE_CONTEXT } from '@/lib/ai/site-context'
 import { sendTelegramMessage } from '@/lib/telegram/send'
-import { extractTextFromPdf, parseExpenseFromText } from '@/lib/server/expense-receipt-parser'
+import { extractTextFromPdf, parseExpenseFromText, parseExpenseFromImage } from '@/lib/server/expense-receipt-parser'
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -592,6 +592,7 @@ type TelegramUpdate = {
     photo?: TelegramPhotoSize[]
     voice?: { file_id: string; duration?: number; mime_type?: string; file_size?: number }
     document?: { file_id: string; file_name?: string; mime_type?: string; file_size?: number }
+    caption?: string
     message_id?: number
     chat?: { id?: number | string }
     from?: { id?: number; first_name?: string; username?: string }
@@ -1863,22 +1864,67 @@ export async function POST(req: Request) {
       return json({ ok: true })
     }
 
-    // ── Photo messages (invoice scanning) ──
+    // ── Photo messages ──
     if (update.message?.photo && update.message.chat?.id) {
       const chatId = update.message.chat.id
       const telegramUserId = String(update.message.from?.id || chatId)
       const messageId = update.message.message_id ?? 0
+      const caption = (update.message.caption || '').toLowerCase()
 
       const botUser = await identifyBotUser(telegramUserId)
       if (!canUseFinance(botUser.role)) {
-        await sendTelegramText(chatId, '⛔ Приёмка накладных доступна только руководителям и администраторам.')
+        await sendTelegramText(chatId, '⛔ Нет доступа.')
         return json({ ok: true })
       }
 
-      // Take the largest photo (last in array)
       const photos = update.message.photo
       const bestPhoto = photos[photos.length - 1]
 
+      // If caption says "расход/чек/шығын" → expense receipt flow
+      const isExpenseReceipt = /расход|чек|шығын|receipt|expense/i.test(caption)
+      if (isExpenseReceipt) {
+        const apiKey = process.env.OPENAI_API_KEY
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || ''
+        if (!apiKey) { await sendTelegramText(chatId, '⚠️ OpenAI API не настроен.'); return json({ ok: true }) }
+
+        const processingMsg = await callTelegram('sendMessage', { chat_id: String(chatId), text: '🧾 Читаю чек...', parse_mode: 'HTML' }).catch(() => null)
+        const processingId = processingMsg?.result?.message_id ?? null
+        const editMsg = async (text: string) => {
+          if (processingId) await callTelegram('editMessageText', { chat_id: String(chatId), message_id: processingId, text, parse_mode: 'HTML' }).catch(() => sendTelegramText(chatId, text))
+          else await sendTelegramText(chatId, text)
+        }
+
+        try {
+          const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${bestPhoto.file_id}`)
+          const fileData = await fileRes.json()
+          const filePath = fileData?.result?.file_path
+          if (!filePath) { await editMsg('❌ Не удалось скачать фото.'); return json({ ok: true }) }
+
+          const imgRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`)
+          const imgBuffer = await imgRes.arrayBuffer()
+          const base64 = Buffer.from(imgBuffer).toString('base64')
+          const imageDataUrl = `data:image/jpeg;base64,${base64}`
+
+          const today = todayISO()
+          const parsed = await parseExpenseFromImage(imageDataUrl, apiKey, today)
+          if (!parsed) { await editMsg('❌ Не удалось распознать чек. Попробуй другое фото.'); return json({ ok: true }) }
+
+          const { data: companiesData } = await supabase.from('companies').select('id, name')
+          const companiesList = (companiesData || []) as Array<{ id: string; name: string }>
+          const session = { parsed, companies: companiesList, selectedCompanyId: companiesList[0]?.id || null }
+          await supabase.from('telegram_chat_history').upsert({ chat_id: `pdf_expense_${chatId}`, history: [{ content: JSON.stringify(session) }], updated_at: new Date().toISOString() })
+
+          const payMethod = parsed.payment_method === 'kaspi' ? 'Kaspi' : parsed.payment_method === 'card' ? 'Карта' : 'Наличные'
+          const companyButtons = companiesList.map((c) => [{ text: (c.id === session.selectedCompanyId ? '✅ ' : '') + c.name, callback_data: `pdf_company_${chatId}_${c.id}` }])
+          const confirmText = [`🧾 <b>Распознан чек</b>`, ``, `💰 Сумма: <b>${parsed.amount.toLocaleString('ru-RU')} ₸</b>`, `📁 Категория: <b>${parsed.category}</b>`, `📅 Дата: <b>${parsed.date}</b>`, `💳 Оплата: <b>${payMethod}</b>`, parsed.vendor ? `🏪 ${parsed.vendor}` : '', parsed.comment ? `📝 ${parsed.comment}` : '', ``, `Выбери точку:`].filter(Boolean).join('\n')
+          await callTelegram('editMessageText', { chat_id: String(chatId), message_id: processingId, text: confirmText, parse_mode: 'HTML', reply_markup: { inline_keyboard: [...companyButtons, [{ text: '✅ Добавить в расходы', callback_data: `pdf_confirm_${chatId}` }, { text: '❌ Отмена', callback_data: `pdf_cancel_${chatId}` }]] } }).catch(() => null)
+        } catch (e: any) {
+          await editMsg(`❌ Ошибка: ${e?.message || 'Неизвестная ошибка'}`)
+        }
+        return json({ ok: true })
+      }
+
+      // Default: invoice scanning
       try {
         await handleInvoicePhoto(Number(chatId), messageId, telegramUserId, bestPhoto.file_id)
       } catch (error: any) {
@@ -1925,10 +1971,9 @@ export async function POST(req: Request) {
         }
 
         try {
-          // Download PDF with 15s timeout
+          // Try to extract text from PDF
           const controller = new AbortController()
           const timeoutId = setTimeout(() => controller.abort(), 15_000)
-
           const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${doc.file_id}`, { signal: controller.signal })
           const fileData = await fileRes.json()
           clearTimeout(timeoutId)
@@ -1938,9 +1983,14 @@ export async function POST(req: Request) {
           const audioRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`)
           const pdfBuffer = await audioRes.arrayBuffer()
 
-          // Extract text
           await editMsg('📄 Извлекаю данные из чека...')
           const pdfText = extractTextFromPdf(pdfBuffer)
+
+          // If PDF text extraction failed — ask for photo instead
+          if (!pdfText || pdfText.length < 20) {
+            await editMsg('📷 PDF не удалось прочитать.\n\nОтправь <b>фото чека</b> с подписью <code>расход</code> — GPT-4o точно распознает.')
+            return json({ ok: true })
+          }
           if (!pdfText || pdfText.length < 10) {
             await editMsg('❌ Не удалось прочитать текст из PDF. Попробуй прислать фото чека.')
             return json({ ok: true })

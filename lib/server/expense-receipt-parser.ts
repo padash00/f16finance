@@ -62,6 +62,46 @@ ${text.slice(0, 3000)}`
   }
 }
 
+// Parse expense receipt from photo using GPT-4o vision
+export async function parseExpenseFromImage(imageDataUrl: string, apiKey: string, today: string): Promise<ParsedExpense | null> {
+  const prompt = `Ты — финансовый аналитик. На фото — чек или квитанция об оплате.
+
+Извлеки данные и верни строго JSON (без markdown):
+{
+  "amount": <итоговая сумма числом>,
+  "payment_method": "cash" | "kaspi" | "card" | "unknown",
+  "category": "<категория из списка ниже>",
+  "date": "<YYYY-MM-DD, дата из чека или ${today} если нет>",
+  "vendor": "<название организации/магазина или null>",
+  "comment": "<что куплено/оплачено, кратко или null>"
+}
+
+Категории: ${KNOWN_CATEGORIES.join(', ')}`
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 400,
+        temperature: 0,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: imageDataUrl, detail: 'high' } },
+          ],
+        }],
+      }),
+    })
+    const data = await res.json()
+    const raw = data?.choices?.[0]?.message?.content?.trim() || ''
+    const json = JSON.parse(raw.replace(/```json|```/g, '').trim())
+    return { ...json, raw_text: '' }
+  } catch { return null }
+}
+
 export function extractTextFromPdf(buffer: ArrayBuffer): string {
   const buf = Buffer.from(buffer)
   const str = buf.toString('binary')
