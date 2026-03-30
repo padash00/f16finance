@@ -212,7 +212,13 @@ function buildHelpText(user: BotUser): string {
   if (canUseFinance(user.role)) {
     lines.push(
       '',
-      '<b>📊 Финансы:</b>',
+      '<b>🤖 AI-ассистент:</b>',
+      'Просто напишите вопрос — бот ответит на основе данных бизнеса',
+      'Примеры: "сколько заработали на этой неделе?", "где больше всего расходов?", "как дела по точкам?"',
+      '/report — детальный недельный отчёт по всем точкам',
+      '/reset — сбросить историю диалога',
+      '',
+      '<b>📊 Быстрые команды:</b>',
       '/today — сводка за сегодня',
       '/yesterday — вчера',
       '/week — последние 7 дней',
@@ -903,6 +909,190 @@ async function handleInvoiceCancel(
   await sendTelegramText(chatId, '❌ Создание приёмки отменено.')
 }
 
+// ─── AI Chat ──────────────────────────────────────────────────────────────────
+
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+const MAX_HISTORY = 12
+
+type ChatMessage = { role: 'user' | 'assistant'; content: string }
+
+async function loadChatHistory(supabase: ReturnType<typeof createAdminSupabaseClient>, chatId: string): Promise<ChatMessage[]> {
+  try {
+    const { data } = await supabase.from('telegram_chat_history').select('history').eq('chat_id', chatId).maybeSingle()
+    return (data?.history as ChatMessage[]) || []
+  } catch { return [] }
+}
+
+async function saveChatHistory(supabase: ReturnType<typeof createAdminSupabaseClient>, chatId: string, history: ChatMessage[]) {
+  const trimmed = history.slice(-MAX_HISTORY)
+  await supabase.from('telegram_chat_history').upsert({ chat_id: chatId, history: trimmed, updated_at: new Date().toISOString() })
+}
+
+async function handleAIChat(chatId: number, chatIdStr: string, userText: string, supabase: ReturnType<typeof createAdminSupabaseClient>) {
+  const today = todayISO()
+  const weekFrom = addDaysISO(today, -6)
+
+  // Загружаем данные для контекста
+  const [incomesRes, expensesRes, incomesMonthRes] = await Promise.all([
+    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', weekFrom).lte('date', today),
+    supabase.from('expenses').select('cash_amount, kaspi_amount, category, date').gte('date', weekFrom).lte('date', today),
+    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', addDaysISO(today, -29)).lte('date', today),
+  ])
+
+  const safeN = (v: any) => Number(v || 0)
+  let weekIncome = 0, weekExpense = 0, weekCash = 0, weekKaspi = 0
+  const catMap = new Map<string, number>()
+
+  for (const r of incomesRes.data ?? []) { weekIncome += safeN(r.cash_amount) + safeN(r.kaspi_amount) + safeN(r.online_amount) + safeN(r.card_amount); weekCash += safeN(r.cash_amount); weekKaspi += safeN(r.kaspi_amount) }
+  for (const r of expensesRes.data ?? []) { const t = safeN(r.cash_amount) + safeN(r.kaspi_amount); weekExpense += t; catMap.set(r.category || 'Прочее', (catMap.get(r.category || 'Прочее') || 0) + t) }
+
+  let monthIncome = 0
+  for (const r of incomesMonthRes.data ?? []) monthIncome += safeN(r.cash_amount) + safeN(r.kaspi_amount) + safeN(r.online_amount) + safeN(r.card_amount)
+
+  const weekProfit = weekIncome - weekExpense
+  const margin = weekIncome > 0 ? (weekProfit / weekIncome * 100).toFixed(1) : '0'
+  const topCats = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([c, v]) => `${c}: ${fmtMoney(v)}`).join(', ')
+
+  const dataContext = [
+    `Период данных: ${weekFrom} — ${today}`,
+    `Выручка за неделю: ${fmtMoney(weekIncome)} (нал: ${fmtMoney(weekCash)}, Kaspi: ${fmtMoney(weekKaspi)})`,
+    `Расходы за неделю: ${fmtMoney(weekExpense)}`,
+    `Прибыль за неделю: ${fmtMoney(weekProfit)}`,
+    `Маржинальность: ${margin}%`,
+    `Топ категорий расходов: ${topCats || 'нет данных'}`,
+    `Выручка за 30 дней: ${fmtMoney(monthIncome)}`,
+  ].join('\n')
+
+  const systemPrompt = [
+    'Ты — умный финансовый ассистент системы Orda Control. Владелец бизнеса общается с тобой через Telegram.',
+    'Отвечай ТОЛЬКО на русском языке. Используй HTML-форматирование: <b>жирный</b> для цифр и выводов.',
+    'Будь конкретным и кратким — максимум 5-7 предложений. Давай практические советы.',
+    'ЗАПРЕЩЕНО придумывать данные — только то, что есть ниже. Если данных нет — скажи честно.',
+    'Ты помнишь предыдущие сообщения этого диалога.',
+    '',
+    'ТЕКУЩИЕ ДАННЫЕ БИЗНЕСА:',
+    dataContext,
+  ].join('\n')
+
+  // Загружаем историю
+  const history = await loadChatHistory(supabase, chatIdStr)
+  history.push({ role: 'user', content: userText })
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...history,
+  ]
+
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    await sendTelegramText(chatId, '⚠️ OpenAI API не настроен.')
+    return
+  }
+
+  await sendTelegramText(chatId, '⏳ Анализирую...')
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: 800, messages }),
+    })
+    const data = await res.json().catch(() => null)
+    const reply = data?.choices?.[0]?.message?.content?.trim() || ''
+
+    if (!reply) {
+      await sendTelegramText(chatId, '❌ Не удалось получить ответ от AI.')
+      return
+    }
+
+    history.push({ role: 'assistant', content: reply })
+    await Promise.all([
+      sendTelegramText(chatId, reply),
+      saveChatHistory(supabase, chatIdStr, history),
+    ])
+  } catch (e: any) {
+    await sendTelegramText(chatId, `❌ Ошибка AI: ${e?.message || 'Неизвестная ошибка'}`)
+  }
+}
+
+async function handleDetailedReport(chatId: number) {
+  const supabase = createAdminSupabaseClient()
+  const today = todayISO()
+  const weekFrom = addDaysISO(today, -6)
+
+  const [incomesRes, expensesRes, companiesRes] = await Promise.all([
+    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, company_id').gte('date', weekFrom).lte('date', today),
+    supabase.from('expenses').select('cash_amount, kaspi_amount, category, company_id').gte('date', weekFrom).lte('date', today),
+    supabase.from('companies').select('id, name').eq('is_active', true),
+  ])
+
+  const safeN = (v: any) => Number(v || 0)
+  const companies = (companiesRes.data || []) as Array<{ id: string; name: string }>
+
+  // Итоги
+  let totalIncome = 0, totalCash = 0, totalKaspi = 0, totalOnline = 0, totalExpense = 0
+  const byCompany = new Map<string, { income: number; expense: number }>()
+  const catMap = new Map<string, number>()
+
+  for (const r of incomesRes.data ?? []) {
+    const inc = safeN(r.cash_amount) + safeN(r.kaspi_amount) + safeN(r.online_amount) + safeN(r.card_amount)
+    totalIncome += inc; totalCash += safeN(r.cash_amount); totalKaspi += safeN(r.kaspi_amount); totalOnline += safeN(r.online_amount)
+    const c = byCompany.get(r.company_id) || { income: 0, expense: 0 }
+    c.income += inc; byCompany.set(r.company_id, c)
+  }
+  for (const r of expensesRes.data ?? []) {
+    const exp = safeN(r.cash_amount) + safeN(r.kaspi_amount)
+    totalExpense += exp
+    catMap.set(r.category || 'Прочее', (catMap.get(r.category || 'Прочее') || 0) + exp)
+    const c = byCompany.get(r.company_id) || { income: 0, expense: 0 }
+    c.expense += exp; byCompany.set(r.company_id, c)
+  }
+
+  const profit = totalIncome - totalExpense
+  const margin = totalIncome > 0 ? (profit / totalIncome * 100) : 0
+  const sign = profit >= 0 ? '+' : ''
+  const marginEmoji = margin >= 20 ? '🟢' : margin >= 10 ? '🟡' : '🔴'
+
+  const lines = [
+    `<b>📊 Недельный отчёт</b>`,
+    `<i>${weekFrom} — ${today}</i>`,
+    '',
+    `💰 Выручка: <b>${fmtMoney(totalIncome)}</b>`,
+    `  • Нал: ${fmtMoney(totalCash)}`,
+    `  • Kaspi: ${fmtMoney(totalKaspi)}`,
+    `  • Online: ${fmtMoney(totalOnline)}`,
+    `📉 Расходы: <b>${fmtMoney(totalExpense)}</b>`,
+    `💼 Прибыль: <b>${sign}${fmtMoney(profit)}</b>`,
+    `${marginEmoji} Маржа: <b>${margin.toFixed(1)}%</b>`,
+  ]
+
+  // По точкам
+  if (companies.length > 0) {
+    lines.push('', '<b>По точкам:</b>')
+    for (const c of companies) {
+      const s = byCompany.get(c.id)
+      if (!s || s.income === 0) continue
+      const p = s.income - s.expense
+      const ps = p >= 0 ? '+' : ''
+      lines.push(`  📍 <b>${c.name}</b>: ${fmtMoney(s.income)} → прибыль ${ps}${fmtMoney(p)}`)
+    }
+  }
+
+  // Расходы по категориям
+  const topCats = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1])
+  if (topCats.length > 0) {
+    lines.push('', '<b>Расходы по категориям:</b>')
+    for (const [cat, val] of topCats.slice(0, 6)) {
+      const pct = totalExpense > 0 ? ((val / totalExpense) * 100).toFixed(0) : '0'
+      lines.push(`  • ${cat}: ${fmtMoney(val)} (${pct}%)`)
+    }
+  }
+
+  lines.push('', `<i>💬 Задайте вопрос боту — я проанализирую данные</i>`)
+
+  await sendTelegramText(chatId, lines.join('\n'))
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 export const runtime = 'nodejs'
@@ -1172,7 +1362,30 @@ export async function POST(req: Request) {
         return json({ ok: true })
       }
 
-      // Fallback
+      // /report — детальный недельный отчёт для владельца
+      if (cmd === '/report' || cmd === '/weekly') {
+        if (!canUseFinance(botUser.role)) {
+          await sendTelegramText(chatId, '⛔ Нет доступа.')
+          return json({ ok: true })
+        }
+        await handleDetailedReport(Number(chatId))
+        return json({ ok: true })
+      }
+
+      // /reset — очистить историю AI диалога
+      if (cmd === '/reset') {
+        await supabase.from('telegram_chat_history').delete().eq('chat_id', String(chatId))
+        await sendTelegramText(chatId, '🔄 История диалога очищена. Начинаем с чистого листа.')
+        return json({ ok: true })
+      }
+
+      // AI-чат для владельца/менеджера/администратора
+      if (canUseFinance(botUser.role)) {
+        await handleAIChat(Number(chatId), String(chatId), text, supabase)
+        return json({ ok: true })
+      }
+
+      // Fallback для остальных
       await sendTelegramText(chatId, buildHelpText(botUser))
       return json({ ok: true })
     }
