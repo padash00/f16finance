@@ -737,6 +737,7 @@ export default function SmartDashboardPage() {
   const [todayStats, setTodayStats] = useState<{ income: number; expense: number; txCount: number } | null>(null)
   const [overdueCount, setOverdueCount] = useState<number | null>(null)
   const [overdueDismissed, setOverdueDismissed] = useState(false)
+  const [realtimeKey, setRealtimeKey] = useState(0)
 
   useEffect(() => {
     let mounted = true
@@ -804,7 +805,18 @@ export default function SmartDashboardPage() {
     return () => {
       mounted = false
     }
-  }, [authResolved, isAuthenticated, dateFrom, dateTo])
+  }, [authResolved, isAuthenticated, dateFrom, dateTo, realtimeKey])
+
+  // Realtime subscription — refresh on new income/expense records
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incomes' }, () => setRealtimeKey(k => k + 1))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => setRealtimeKey(k => k + 1))
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [isAuthenticated])
 
   // Today stats fetch
   useEffect(() => {

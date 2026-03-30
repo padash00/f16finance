@@ -929,6 +929,55 @@ async function saveChatHistory(supabase: ReturnType<typeof createAdminSupabaseCl
   await supabase.from('telegram_chat_history').upsert({ chat_id: chatId, history: trimmed, updated_at: new Date().toISOString() })
 }
 
+// Long-term memory — stored separately from conversation history
+async function loadMemory(supabase: ReturnType<typeof createAdminSupabaseClient>, chatId: string): Promise<string> {
+  try {
+    const { data } = await supabase.from('telegram_chat_history').select('history').eq('chat_id', `memory_${chatId}`).maybeSingle()
+    const mem = (data?.history as Array<{ content: string }>) || []
+    return mem.map(m => m.content).join('\n')
+  } catch { return '' }
+}
+
+async function saveMemory(supabase: ReturnType<typeof createAdminSupabaseClient>, chatId: string, newFact: string) {
+  try {
+    const existing = await loadMemory(supabase, chatId)
+    const lines = existing ? existing.split('\n').filter(Boolean) : []
+    lines.push(`[${new Date().toISOString().slice(0, 10)}] ${newFact}`)
+    const trimmed = lines.slice(-50) // keep last 50 facts
+    await supabase.from('telegram_chat_history').upsert({
+      chat_id: `memory_${chatId}`,
+      history: trimmed.map(l => ({ content: l })),
+      updated_at: new Date().toISOString(),
+    })
+  } catch { /* ignore */ }
+}
+
+// Transcribe voice message via OpenAI Whisper
+async function transcribeVoice(fileId: string, botToken: string, apiKey: string): Promise<string | null> {
+  try {
+    const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`)
+    const fileData = await fileRes.json()
+    const filePath = fileData?.result?.file_path
+    if (!filePath) return null
+
+    const audioRes = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`)
+    const audioBuffer = await audioRes.arrayBuffer()
+
+    const form = new FormData()
+    form.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'voice.ogg')
+    form.append('model', 'whisper-1')
+    form.append('language', 'ru')
+
+    const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+    })
+    const whisperData = await whisperRes.json()
+    return whisperData?.text?.trim() || null
+  } catch { return null }
+}
+
 async function handleAIChat(chatId: number, chatIdStr: string, userText: string, supabase: ReturnType<typeof createAdminSupabaseClient>) {
   const today = todayISO()
   const weekFrom = addDaysISO(today, -6)
@@ -1093,9 +1142,13 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
 
   const pagesContext = SITE_CONTEXT.pages.map(p => `  • ${p.title} (${p.route}): ${p.description}`).join('\n')
 
+  // Long-term memory
+  const longTermMemory = await loadMemory(supabase, chatIdStr)
+
   const systemPrompt = [
     `Меня зовут Азамат. Я финансовый аналитик — 35 лет в банковском деле: Halyk Bank, Kaspi Bank, работал с крупнейшими корпорациями СНГ. Сейчас помогаю владельцу сети игровых клубов управлять бизнесом.`,
     `Сегодня ${today}.`,
+    longTermMemory ? `\nМОЯ ДОЛГОВРЕМЕННАЯ ПАМЯТЬ (важные факты из прошлых разговоров):\n${longTermMemory}\n` : '',
     '',
     `Я живой человек в этом чате. Не бот, не шаблон. Говорю так, как говорил бы опытный коллега — прямо, по делу, иногда с юмором. Если вижу проблему — скажу открыто. Если всё хорошо — тоже скажу честно, без лишних похвал.`,
     '',
@@ -1216,6 +1269,20 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
         },
       },
     },
+    {
+      type: 'function',
+      function: {
+        name: 'save_to_memory',
+        description: 'Сохранить важный факт в долговременную память. Используй когда пользователь говорит "запомни", "не забудь", или сообщает важную информацию которая пригодится в будущих разговорах.',
+        parameters: {
+          type: 'object',
+          properties: {
+            fact: { type: 'string', description: 'Факт для сохранения (коротко и конкретно)' },
+          },
+          required: ['fact'],
+        },
+      },
+    },
   ]
 
   // ─── Tool executor ────────────────────────────────────────────────────────
@@ -1302,6 +1369,11 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       return `✅ Сообщение отправлено ${sent} операторам.`
     }
 
+    if (name === 'save_to_memory') {
+      await saveMemory(supabase, chatIdStr, args.fact)
+      return `✅ Запомнил: ${args.fact}`
+    }
+
     return 'Неизвестный инструмент.'
   }
 
@@ -1357,6 +1429,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
           if (n === 'create_task_for_operator') return '📋 Создаю задачу...'
           if (n === 'get_operator_info') return '🔍 Ищу данные по оператору...'
           if (n === 'send_message_to_all_operators') return '📢 Рассылаю сообщение...'
+          if (n === 'save_to_memory') return '🧠 Запоминаю...'
           return '⚙️ Выполняю действие...'
         })
         if (thinkingMsgId) {
@@ -1618,6 +1691,40 @@ export async function POST(req: Request) {
       } catch (error: any) {
         await sendTelegramText(chatId, `❌ Ошибка при обработке накладной: ${error?.message || 'Неизвестная ошибка'}`).catch(() => null)
       }
+      return json({ ok: true })
+    }
+
+    // ── Voice messages (Whisper transcription → AI chat) ──
+    if (update.message?.voice && update.message.chat?.id) {
+      const chatId = update.message.chat.id
+      const telegramUserId = String(update.message.from?.id || chatId)
+      const botUser = await identifyBotUser(telegramUserId)
+
+      if (!canUseFinance(botUser.role)) {
+        await sendTelegramText(chatId, '⛔ Голосовые сообщения доступны только администраторам.')
+        return json({ ok: true })
+      }
+
+      const apiKey = process.env.OPENAI_API_KEY
+      const botToken = process.env.TELEGRAM_BOT_TOKEN || ''
+      if (!apiKey) { await sendTelegramText(chatId, '⚠️ OpenAI API не настроен.'); return json({ ok: true }) }
+
+      const thinkingMsg = await callTelegram('sendMessage', { chat_id: String(chatId), text: '🎤 Распознаю голос...', parse_mode: 'HTML' }).catch(() => null)
+      const thinkingId = thinkingMsg?.result?.message_id ?? null
+
+      const transcript = await transcribeVoice(update.message.voice.file_id, botToken, apiKey)
+      if (!transcript) {
+        const err = '❌ Не удалось распознать голосовое сообщение.'
+        if (thinkingId) await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingId, text: err, parse_mode: 'HTML' }).catch(() => sendTelegramText(chatId, err))
+        else await sendTelegramText(chatId, err)
+        return json({ ok: true })
+      }
+
+      // Show what was heard, then process
+      if (thinkingId) await callTelegram('editMessageText', { chat_id: String(chatId), message_id: thinkingId, text: `🎤 <i>"${transcript}"</i>`, parse_mode: 'HTML' }).catch(() => null)
+      else await sendTelegramText(chatId, `🎤 <i>"${transcript}"</i>`)
+
+      await handleAIChat(Number(chatId), String(chatId), transcript, supabase)
       return json({ ok: true })
     }
 

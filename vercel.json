@@ -10,7 +10,11 @@
     },
     {
       "path": "/api/cron/telegram-daily",
-      "schedule": "0 6 * * *"
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/shift-reminders",
+      "schedule": "0 * * * *"
     }
   ]
 }

@@ -173,7 +173,10 @@ export async function GET(req: Request) {
     for (const [cat, val] of topCats) lines.push(`  • ${cat}: ${fmtMoney(val)}`)
   }
 
-  await sendTg(chatId, lines.join('\n'))
+  const messageText = lines.join('\n')
+  const recipients = [chatId, process.env.TELEGRAM_OWNER_CHAT_ID].filter(Boolean) as string[]
+  const uniqueRecipients = [...new Set(recipients)]
+  await Promise.all(uniqueRecipients.map(id => sendTg(id, messageText).catch(() => null)))
 
-  return NextResponse.json({ ok: true, date, totalIncome, totalExpense, profit })
+  return NextResponse.json({ ok: true, date, totalIncome, totalExpense, profit, recipients: uniqueRecipients.length })
 }
