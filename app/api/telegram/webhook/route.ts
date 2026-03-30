@@ -1892,7 +1892,15 @@ export async function POST(req: Request) {
       const doc = update.message.document
       if (doc.mime_type === 'application/pdf') {
         const chatId = update.message.chat.id
+        const messageId = update.message.message_id ?? 0
         const telegramUserId = String(update.message.from?.id || chatId)
+
+        // Deduplication: skip if already processed this message
+        const dedupKey = `pdf_dedup_${chatId}_${messageId}`
+        const { data: dedupRow } = await supabase.from('telegram_chat_history').select('chat_id').eq('chat_id', dedupKey).maybeSingle()
+        if (dedupRow) return json({ ok: true }) // already handled
+        await supabase.from('telegram_chat_history').upsert({ chat_id: dedupKey, history: [], updated_at: new Date().toISOString() })
+
         const botUser = await identifyBotUser(telegramUserId)
 
         if (!canUseFinance(botUser.role)) {
@@ -1917,9 +1925,13 @@ export async function POST(req: Request) {
         }
 
         try {
-          // Download PDF
-          const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${doc.file_id}`)
+          // Download PDF with 15s timeout
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 15_000)
+
+          const fileRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${doc.file_id}`, { signal: controller.signal })
           const fileData = await fileRes.json()
+          clearTimeout(timeoutId)
           const filePath = fileData?.result?.file_path
           if (!filePath) { await editMsg('❌ Не удалось скачать файл.'); return json({ ok: true }) }
 
