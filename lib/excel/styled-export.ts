@@ -137,7 +137,7 @@ export interface SheetColumn {
 }
 
 export interface SheetRow {
-  [key: string]: number | string | null | undefined
+  [key: string]: number | string | boolean | null | undefined
   _isTotals?: boolean
   _isSection?: boolean
   _sectionLabel?: string
