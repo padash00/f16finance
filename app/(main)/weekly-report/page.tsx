@@ -903,9 +903,9 @@ function WeeklyReportContent() {
     for (const r of incomeRows) {
       const cash = safeNumber(r.cash_amount)
       const kaspi = safeNumber(r.kaspi_amount)
-      const online = safeNumber(r.online_amount)  // ✅ учитываем online_amount
+      const online = safeNumber(r.online_amount)
       const card = safeNumber(r.card_amount)
-      
+
       // nonCash = kaspi + online ONLY (card tracked separately)
       const nonCash = kaspi + online
       const total = cash + nonCash + card
@@ -913,6 +913,31 @@ function WeeklyReportContent() {
       if (total <= 0) continue
 
       const extra = isExtra(r.company_id)
+
+      // Edge case: ночная смена предыдущего дня (до начала недели) —
+      // её после-полуночная часть каспи принадлежит первому дню текущей недели
+      if (
+        r.date === addDaysISO(startDate, -1) &&
+        r.shift === 'night' &&
+        r.kaspi_before_midnight != null &&
+        (!extra || includeExtraInTotals)
+      ) {
+        const kaspiAfterMidnight = Math.max(kaspi - safeNumber(r.kaspi_before_midnight), 0)
+        if (kaspiAfterMidnight > 0) {
+          iKaspi += kaspiAfterMidnight
+          iNonCash += kaspiAfterMidnight
+          const firstDay = dailyMap.get(startDate)
+          if (firstDay) {
+            firstDay.income += kaspiAfterMidnight
+            firstDay.incomeKaspi += kaspiAfterMidnight
+            firstDay.incomeNonCash += kaspiAfterMidnight
+          }
+          const firstBal = balanceMap.get(startDate)
+          if (firstBal) firstBal.nonCash += kaspiAfterMidnight
+          const s = statsByCompany[r.company_id]
+          if (s) { s.kaspi += kaspiAfterMidnight; s.nonCash += kaspiAfterMidnight; s.total += kaspiAfterMidnight }
+        }
+      }
 
       // Предыдущая неделя
       if (inPrevWeek(r.date)) {
@@ -950,22 +975,46 @@ function WeeklyReportContent() {
         s.total += total
       }
 
-      // Добавляем к дневным данным
+      // Добавляем к дневным данным с корректной разбивкой каспи для ночных смен
       const day = dailyMap.get(r.date)
       if (day) {
-        day.income += total
-        day.incomeCash += cash
-        day.incomeKaspi += kaspi
-        day.incomeOnline += online
-        day.incomeCard += card
-        day.incomeNonCash += nonCash
-      }
+        if (r.shift === 'night' && r.kaspi_before_midnight != null) {
+          const kaspiBeforeMidnight = safeNumber(r.kaspi_before_midnight)
+          const kaspiAfterMidnight = Math.max(kaspi - kaspiBeforeMidnight, 0)
 
-      // Для сальдо (накопленное) — включаем card в nonCash для корректного итога на графике
-      const bal = balanceMap.get(r.date)
-      if (bal) {
-        bal.cash += cash
-        bal.nonCash += nonCash + card
+          // До полуночи — остаётся на текущей дате
+          day.income += total - kaspiAfterMidnight
+          day.incomeCash += cash
+          day.incomeKaspi += kaspiBeforeMidnight
+          day.incomeOnline += online
+          day.incomeCard += card
+          day.incomeNonCash += kaspiBeforeMidnight + online
+
+          // После полуночи — переходит на следующий день
+          const nextDate = addDaysISO(r.date, 1)
+          const nextDay = dailyMap.get(nextDate)
+          if (nextDay) {
+            nextDay.income += kaspiAfterMidnight
+            nextDay.incomeKaspi += kaspiAfterMidnight
+            nextDay.incomeNonCash += kaspiAfterMidnight
+          }
+
+          // Сальдо
+          const bal = balanceMap.get(r.date)
+          if (bal) { bal.cash += cash; bal.nonCash += kaspiBeforeMidnight + online + card }
+          const nextBal = balanceMap.get(nextDate)
+          if (nextBal) nextBal.nonCash += kaspiAfterMidnight
+        } else {
+          day.income += total
+          day.incomeCash += cash
+          day.incomeKaspi += kaspi
+          day.incomeOnline += online
+          day.incomeCard += card
+          day.incomeNonCash += nonCash
+
+          const bal = balanceMap.get(r.date)
+          if (bal) { bal.cash += cash; bal.nonCash += nonCash + card }
+        }
       }
     }
 
