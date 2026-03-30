@@ -1928,7 +1928,7 @@ export async function POST(req: Request) {
 
           // Extract text
           await editMsg('📄 Извлекаю данные из чека...')
-          const pdfText = await extractTextFromPdf(pdfBuffer)
+          const pdfText = extractTextFromPdf(pdfBuffer)
           if (!pdfText || pdfText.length < 10) {
             await editMsg('❌ Не удалось прочитать текст из PDF. Попробуй прислать фото чека.')
             return json({ ok: true })

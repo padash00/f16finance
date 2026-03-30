@@ -62,10 +62,50 @@ ${text.slice(0, 3000)}`
   }
 }
 
-export async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string> {
-  // Dynamic import to avoid build issues
-  const pdfModule = await import('pdf-parse')
-  const pdfParse = (pdfModule as any).default ?? pdfModule
-  const data = await pdfParse(Buffer.from(buffer))
-  return data.text?.trim() || ''
+export function extractTextFromPdf(buffer: ArrayBuffer): string {
+  const buf = Buffer.from(buffer)
+  const str = buf.toString('binary')
+  const texts: string[] = []
+
+  // Extract text from PDF BT...ET blocks (standard text streams)
+  const btEtRegex = /BT\s*([\s\S]*?)ET/g
+  let btMatch
+  while ((btMatch = btEtRegex.exec(str)) !== null) {
+    const block = btMatch[1]
+    // Tj operator: (text) Tj
+    const tjRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)\s*Tj/g
+    let m
+    while ((m = tjRegex.exec(block)) !== null) {
+      const decoded = m[1]
+        .replace(/\\n/g, '\n').replace(/\\r/g, ' ').replace(/\\t/g, ' ')
+        .replace(/\\([0-7]{1,3})/g, (_, o) => String.fromCharCode(parseInt(o, 8)))
+        .replace(/\\(.)/g, '$1')
+      if (decoded.trim()) texts.push(decoded.trim())
+    }
+    // TJ operator: [(text) ...] TJ
+    const tjArrRegex = /\[((?:[^[\]]*|\[[^\]]*\])*)\]\s*TJ/g
+    while ((m = tjArrRegex.exec(block)) !== null) {
+      const inner = m[1]
+      const strParts = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g
+      let sm
+      while ((sm = strParts.exec(inner)) !== null) {
+        const part = sm[1].replace(/\\(.)/g, '$1').trim()
+        if (part) texts.push(part)
+      }
+    }
+  }
+
+  // Fallback: extract readable ASCII sequences if nothing found
+  if (texts.length === 0) {
+    const readableRegex = /[\x20-\x7E]{6,}/g
+    let m
+    while ((m = readableRegex.exec(str)) !== null) {
+      const chunk = m[0].trim()
+      if (chunk && !chunk.startsWith('/') && !chunk.startsWith('stream')) {
+        texts.push(chunk)
+      }
+    }
+  }
+
+  return texts.join(' ').replace(/\s+/g, ' ').trim()
 }
