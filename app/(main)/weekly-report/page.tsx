@@ -844,7 +844,7 @@ function WeeklyReportContent() {
       netCash: number; netNonCash: number; profit: number;
     }> = {}
     
-    for (const c of activeCompanies) {
+    for (const c of companies) {
       statsByCompany[c.id] = {
         cash: 0, kaspi: 0, online: 0, card: 0, nonCash: 0, total: 0,
         expenseCash: 0, expenseKaspi: 0, expenseTotal: 0,
@@ -945,6 +945,9 @@ function WeeklyReportContent() {
 
       if (extra) {
         extraTotal += total
+        // Всегда фиксируем в statsByCompany для детализации
+        const se = statsByCompany[r.company_id]
+        if (se) { se.cash += cash; se.kaspi += kaspi; se.online += online; se.card += card; se.nonCash += nonCash; se.total += total }
         if (!includeExtraInTotals) continue
       }
 
@@ -955,15 +958,17 @@ function WeeklyReportContent() {
       iCard += card
       iNonCash += nonCash
 
-      // Статистика по компаниям
-      const s = statsByCompany[r.company_id]
-      if (s) {
-        s.cash += cash
-        s.kaspi += kaspi
-        s.online += online
-        s.card += card
-        s.nonCash += nonCash
-        s.total += total
+      // Статистика по компаниям (для не-Extra, Extra уже выше)
+      if (!extra) {
+        const s = statsByCompany[r.company_id]
+        if (s) {
+          s.cash += cash
+          s.kaspi += kaspi
+          s.online += online
+          s.card += card
+          s.nonCash += nonCash
+          s.total += total
+        }
       }
 
       // Добавляем к дневным данным с корректной разбивкой каспи для ночных смен
@@ -1031,15 +1036,9 @@ function WeeklyReportContent() {
       // Текущая неделя
       if (!inCurrentWeek(r.date)) continue
 
-      if (extra && !includeExtraInTotals) continue
-
-      eCash += cash
-      eKaspi += kaspi
-
       const catName = (r.category || '').trim() || 'Без категории'
-      catMap.set(catName, (catMap.get(catName) || 0) + total)
 
-      // Накапливаем расходы по компании с разбивкой по категориям
+      // Всегда фиксируем в statsByCompany для детализации (включая Extra)
       const sc = statsByCompany[r.company_id]
       if (sc) {
         sc.expenseCash += cash
@@ -1047,6 +1046,13 @@ function WeeklyReportContent() {
         sc.expenseTotal += total
         sc.expenseByCategory[catName] = (sc.expenseByCategory[catName] || 0) + total
       }
+
+      if (extra && !includeExtraInTotals) continue
+
+      eCash += cash
+      eKaspi += kaspi
+
+      catMap.set(catName, (catMap.get(catName) || 0) + total)
 
       // Добавляем к дневным данным
       const day = dailyMap.get(r.date)
@@ -1064,8 +1070,8 @@ function WeeklyReportContent() {
       }
     }
 
-    // Финализируем netCash / netNonCash / profit по компаниям
-    for (const c of activeCompanies) {
+    // Финализируем netCash / netNonCash / profit по всем компаниям (включая Extra)
+    for (const c of companies) {
       const sc = statsByCompany[c.id]
       if (!sc) continue
       sc.netCash = sc.cash - sc.expenseCash
@@ -2165,6 +2171,68 @@ function WeeklyReportContent() {
                     </div>
                   )
                 })}
+
+                {/* F16 Extra — отдельная карточка */}
+                {extraCompanyId && (() => {
+                  const extraCompany = companies.find(c => c.id === extraCompanyId)
+                  const s = totals.statsByCompany[extraCompanyId]
+                  if (!extraCompany || !s) return null
+                  const sortedCats = Object.entries(s.expenseByCategory).sort((a, b) => b[1] - a[1])
+                  return (
+                    <div className="rounded-2xl bg-purple-950/30 backdrop-blur-xl border border-purple-500/20 p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-semibold text-white flex items-center gap-2">
+                          <Store className="w-4 h-4 text-purple-400" />
+                          {extraCompany.name}
+                          <span className="text-xs text-purple-400/70 font-normal">(Extra)</span>
+                        </h4>
+                        <span className={`text-sm font-bold px-2.5 py-1 rounded-lg ${s.profit >= 0 ? 'bg-violet-500/15 text-violet-400' : 'bg-rose-500/15 text-rose-400'}`}>
+                          {s.profit >= 0 ? '+' : ''}{formatMoneyCompact(s.profit)}
+                        </span>
+                      </div>
+                      <div className="mb-3">
+                        <p className="text-xs text-emerald-400 font-medium mb-2 uppercase tracking-wide">Доходы</p>
+                        <div className="space-y-1">
+                          {s.cash > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">Наличные</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.cash)}</span></div>}
+                          {s.kaspi > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">Kaspi</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.kaspi)}</span></div>}
+                          {s.online > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">Online</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.online)}</span></div>}
+                          {s.card > 0 && <div className="flex justify-between text-xs"><span className="text-gray-400">Карта</span><span className="text-gray-200 font-medium">{formatMoneyCompact(s.card)}</span></div>}
+                          <div className="flex justify-between text-xs border-t border-white/5 pt-1 mt-1">
+                            <span className="text-gray-300 font-medium">Итого доход</span>
+                            <span className="text-emerald-400 font-bold">{formatMoneyCompact(s.total)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mb-3">
+                        <p className="text-xs text-rose-400 font-medium mb-2 uppercase tracking-wide">Расходы по категориям</p>
+                        {sortedCats.length === 0 ? <p className="text-xs text-gray-600">Нет расходов</p> : (
+                          <div className="space-y-1">
+                            {sortedCats.map(([cat, amt]) => (
+                              <div key={cat} className="flex justify-between items-center text-xs">
+                                <div className="flex items-center gap-1.5 min-w-0"><span className="w-1.5 h-1.5 rounded-full bg-rose-500/60 shrink-0" /><span className="text-gray-400 truncate">{cat}</span></div>
+                                <span className="text-rose-300 font-medium ml-2 shrink-0">{formatMoneyCompact(amt)}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between text-xs border-t border-white/5 pt-1 mt-1">
+                              <span className="text-gray-300 font-medium">Итого расход</span>
+                              <span className="text-rose-400 font-bold">{formatMoneyCompact(s.expenseTotal)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/5">
+                        <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
+                          <p className="text-xs text-gray-500 mb-0.5">Сальдо нал</p>
+                          <p className={`text-sm font-bold ${s.netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{s.netCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netCash)}</p>
+                        </div>
+                        <div className="bg-white/[0.03] rounded-lg p-2.5 text-center">
+                          <p className="text-xs text-gray-500 mb-0.5">Сальдо безнал</p>
+                          <p className={`text-sm font-bold ${s.netNonCash >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>{s.netNonCash >= 0 ? '+' : ''}{formatMoneyCompact(s.netNonCash)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
 
               {/* Итоговая строка по всем точкам */}
