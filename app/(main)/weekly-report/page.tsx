@@ -9,6 +9,7 @@ import {
   useState,
   memo
 } from 'react'
+import * as XLSX from 'xlsx'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { Card } from '@/components/ui/card'
@@ -1402,64 +1403,120 @@ function WeeklyReportContent() {
     }
   }, [reloadIncome, reloadExpenses, showToast])
 
-  const handleDownloadCSV = useCallback(() => {
+  const handleDownloadExcel = useCallback(() => {
     if (!totals) return
 
-    const rows: string[][] = []
+    const wb = XLSX.utils.book_new()
+    const fmt = '#,##0 ₸'
+    const pct = '0.0%'
 
-    rows.push(['НЕДЕЛЬНЫЙ ФИНАНСОВЫЙ ОТЧЁТ - САЛЬДО'])
-    rows.push(['Сгенерирован', new Date().toLocaleString('ru-RU')])
-    rows.push(['Период', `${startDate} — ${endDate}`])
-    rows.push([''])
-
-    rows.push(['СВОДНЫЕ ПОКАЗАТЕЛИ'])
-    rows.push(['Показатель', 'Значение', 'Прошлая неделя', 'Изменение'])
-    rows.push(['Выручка', String(Math.round(totals.incomeTotal)), String(Math.round(totals.prev.incomeTotal)), totals.change.income])
-    rows.push(['Расходы', String(Math.round(totals.expenseTotal)), String(Math.round(totals.prev.expenseTotal)), totals.change.expense])
-    rows.push(['Прибыль', String(Math.round(totals.profit)), String(Math.round(totals.prev.profit)), totals.change.profit])
-    rows.push([''])
-    rows.push(['САЛЬДО НАЛИЧНЫХ', String(Math.round(totals.netCash)), String(Math.round(totals.prev.netCash)), totals.change.netCash])
-    rows.push(['САЛЬДО БЕЗНАЛА', String(Math.round(totals.netNonCash)), String(Math.round(totals.prev.netNonCash)), totals.change.netNonCash])
-    rows.push(['ОБЩЕЕ САЛЬДО', String(Math.round(totals.netTotal)), '', ''])
-    rows.push([''])
-
-    rows.push(['ДОХОДЫ ПО ТИПАМ'])
-    rows.push(['Наличные', String(Math.round(totals.incomeCash)), totals.metrics.cashShare.toFixed(1) + '%'])
-    rows.push(['Kaspi', String(Math.round(totals.incomeKaspi)), totals.metrics.kaspiShare.toFixed(1) + '%'])
-    rows.push(['Online', String(Math.round(totals.incomeOnline)), totals.metrics.onlineShare.toFixed(1) + '%'])
-    rows.push(['Карта', String(Math.round(totals.incomeCard)), totals.metrics.cardShare.toFixed(1) + '%'])
-    rows.push(['Всего безнал', String(Math.round(totals.incomeNonCash)), totals.metrics.nonCashShare.toFixed(1) + '%'])
-    rows.push([''])
-
-    rows.push(['РАСХОДЫ ПО КАТЕГОРИЯМ'])
-    rows.push(['Категория', 'Сумма', '% от общих'])
-    for (const cat of totals.expenseCategories) {
-      rows.push([cat.name, String(Math.round(cat.value)), cat.percentage.toFixed(1)])
+    // ─── helpers ──────────────────────────────────────────────────────────────
+    function n(v: number) { return { t: 'n' as const, v, z: fmt } }
+    function p(v: number) { return { t: 'n' as const, v: v / 100, z: pct } }
+    function s(v: string) { return { t: 's' as const, v } }
+    function addSheet(name: string, aoa: any[][], colWidths: number[]) {
+      const ws = XLSX.utils.aoa_to_sheet(aoa)
+      ws['!cols'] = colWidths.map(w => ({ wch: w }))
+      XLSX.utils.book_append_sheet(wb, ws, name)
     }
-    rows.push([''])
 
-    rows.push(['ДОХОДЫ ПО ТОЧКАМ'])
-    rows.push(['Точка', 'Наличные', 'Kaspi', 'Online', 'Карта', 'Всего', 'Сальдо нал', 'Сальдо безнал'])
-    for (const c of activeCompanies) {
-      const s = totals.statsByCompany[c.id] || { 
-        cash: 0, kaspi: 0, online: 0, card: 0, total: 0,
-        expenseCash: 0, expenseKaspi: 0, netCash: 0, netNonCash: 0
+    const period = `${startDate} — ${endDate}`
+    const generated = new Date().toLocaleString('ru-RU')
+
+    // ─── Лист 1: Сводка ───────────────────────────────────────────────────────
+    const s1: any[][] = [
+      [s('НЕДЕЛЬНЫЙ ФИНАНСОВЫЙ ОТЧЁТ'), s(''), s(''), s(''), s('')],
+      [s('Период:'), s(period), s(''), s(''), s('')],
+      [s('Сгенерирован:'), s(generated), s(''), s(''), s('')],
+      [],
+      [s('ПОКАЗАТЕЛЬ'), s('ЭТА НЕДЕЛЯ'), s('ПРОШЛАЯ НЕДЕЛЯ'), s('ИЗМЕНЕНИЕ'), s('')],
+      [s('Выручка'), n(totals.incomeTotal), n(totals.prev.incomeTotal), s(totals.change.income), s('')],
+      [s('Расходы'), n(totals.expenseTotal), n(totals.prev.expenseTotal), s(totals.change.expense), s('')],
+      [s('Прибыль'), n(totals.profit), n(totals.prev.profit), s(totals.change.profit), s('')],
+      [],
+      [s('САЛЬДО'), s('ЭТА НЕДЕЛЯ'), s('ПРОШЛАЯ НЕДЕЛЯ'), s('ИЗМЕНЕНИЕ'), s('')],
+      [s('Сальдо наличных'), n(totals.netCash), n(totals.prev.netCash), s(totals.change.netCash), s('')],
+      [s('Сальдо безнала'), n(totals.netNonCash), n(totals.prev.netNonCash), s(totals.change.netNonCash), s('')],
+      [s('Общее сальдо'), n(totals.netTotal), s(''), s(''), s('')],
+      [],
+      [s('СТРУКТУРА ДОХОДОВ'), s('СУММА'), s('ДОЛЯ'), s(''), s('')],
+      [s('Наличные'), n(totals.incomeCash), p(totals.metrics.cashShare), s(''), s('')],
+      [s('Kaspi'), n(totals.incomeKaspi), p(totals.metrics.kaspiShare), s(''), s('')],
+      [s('Online'), n(totals.incomeOnline), p(totals.metrics.onlineShare), s(''), s('')],
+      [s('Карта'), n(totals.incomeCard), p(totals.metrics.cardShare), s(''), s('')],
+      [s('Итого безнал (Kaspi+Online)'), n(totals.incomeNonCash), p(totals.metrics.nonCashShare), s(''), s('')],
+      [s('ИТОГО ДОХОД'), n(totals.incomeTotal), p(100), s(''), s('')],
+      [],
+      [s('КЛЮЧЕВЫЕ МЕТРИКИ'), s('ЗНАЧЕНИЕ'), s('НОРМА'), s(''), s('')],
+      [s('Расходы / Выручка'), p(totals.metrics.expenseRate), s('< 70%'), s(''), s('')],
+      [s('Маржинальность'), p(totals.metrics.profitMargin), s('> 25%'), s(''), s('')],
+      [s('Доля нала в доходах'), p(totals.metrics.cashShare), s(''), s(''), s('')],
+      [s('Доля безнала в доходах'), p(totals.metrics.nonCashShare), s(''), s(''), s('')],
+    ]
+    addSheet('Сводка', s1, [30, 18, 18, 14, 10])
+
+    // ─── Лист 2: По дням ──────────────────────────────────────────────────────
+    const s2: any[][] = [
+      [s('ДИНАМИКА ПО ДНЯМ'), s(period)],
+      [],
+      [s('День'), s('Дата'), s('Доход нал'), s('Доход Kaspi'), s('Доход Online'), s('Доход Карта'), s('Итого доход'), s('Расход нал'), s('Расход Kaspi'), s('Итого расход'), s('Прибыль'), s('Сальдо нал'), s('Сальдо безнал')],
+    ]
+    let totD = 0, totK = 0, totO = 0, totC = 0, totInc = 0, totEC = 0, totEK = 0, totExp = 0, totPr = 0, totNC = 0, totNN = 0
+    for (const d of totals.dailyData) {
+      s2.push([s(d.label), s(d.date), n(d.incomeCash), n(d.incomeKaspi), n(d.incomeOnline), n(d.incomeCard), n(d.income), n(d.expenseCash), n(d.expenseKaspi), n(d.expense), n(d.profit), n(d.netCash), n(d.netNonCash)])
+      totD += d.incomeCash; totK += d.incomeKaspi; totO += d.incomeOnline; totC += d.incomeCard
+      totInc += d.income; totEC += d.expenseCash; totEK += d.expenseKaspi; totExp += d.expense
+      totPr += d.profit; totNC += d.netCash; totNN += d.netNonCash
+    }
+    s2.push([s('ИТОГО'), s(''), n(totD), n(totK), n(totO), n(totC), n(totInc), n(totEC), n(totEK), n(totExp), n(totPr), n(totNC), n(totNN)])
+    addSheet('По дням', s2, [6, 12, 14, 14, 14, 14, 16, 14, 14, 16, 14, 14, 14])
+
+    // ─── Лист 3: По точкам ────────────────────────────────────────────────────
+    const s3: any[][] = [
+      [s('ДЕТАЛИЗАЦИЯ ПО ТОЧКАМ'), s(period)],
+      [],
+      [s('Точка'), s('Доход нал'), s('Доход Kaspi'), s('Доход Online'), s('Доход Карта'), s('Итого доход'), s('Расход нал'), s('Расход Kaspi'), s('Итого расход'), s('Сальдо нал'), s('Сальдо безнал'), s('Прибыль')],
+    ]
+    const allCos = [...activeCompanies, ...companies.filter(c => c.id === extraCompanyId)]
+    for (const c of allCos) {
+      const sc = totals.statsByCompany[c.id]
+      if (!sc) continue
+      s3.push([s(c.name), n(sc.cash), n(sc.kaspi), n(sc.online), n(sc.card), n(sc.total), n(sc.expenseCash), n(sc.expenseKaspi), n(sc.expenseTotal), n(sc.netCash), n(sc.netNonCash), n(sc.profit)])
+    }
+    s3.push([])
+    // Expense categories per company
+    s3.push([s('РАСХОДЫ ПО КАТЕГОРИЯМ ПО ТОЧКАМ')])
+    s3.push([s('Точка'), s('Категория'), s('Сумма'), s(''), s(''), s(''), s(''), s(''), s(''), s(''), s(''), s('')])
+    for (const c of allCos) {
+      const sc = totals.statsByCompany[c.id]
+      if (!sc || Object.keys(sc.expenseByCategory).length === 0) continue
+      const cats = Object.entries(sc.expenseByCategory).sort((a, b) => b[1] - a[1])
+      for (const [cat, amt] of cats) {
+        s3.push([s(c.name), s(cat), n(amt)])
       }
-      rows.push([
-        c.name, 
-        String(Math.round(s.cash)), 
-        String(Math.round(s.kaspi)), 
-        String(Math.round(s.online)), 
-        String(Math.round(s.card)), 
-        String(Math.round(s.total)),
-        String(Math.round(s.netCash)),
-        String(Math.round(s.netNonCash)),
-      ])
+      s3.push([s(''), s('ИТОГО ' + c.name), n(sc.expenseTotal)])
+      s3.push([])
     }
+    addSheet('По точкам', s3, [24, 14, 14, 14, 14, 16, 14, 14, 16, 14, 14, 14])
 
-    downloadTextFile(`weekly_balance_${startDate}_${endDate}.csv`, toCSV(rows, ';'))
-    showToast('CSV отчёт скачан', 'success')
-  }, [totals, startDate, endDate, activeCompanies, showToast])
+    // ─── Лист 4: Расходы по категориям ───────────────────────────────────────
+    const s4: any[][] = [
+      [s('РАСХОДЫ ПО КАТЕГОРИЯМ'), s(period)],
+      [],
+      [s('Категория'), s('Сумма'), s('% от расходов'), s('% от выручки')],
+    ]
+    for (const cat of totals.expenseCategories) {
+      const pctOfIncome = totals.incomeTotal > 0 ? cat.value / totals.incomeTotal * 100 : 0
+      s4.push([s(cat.name), n(cat.value), p(cat.percentage), p(pctOfIncome)])
+    }
+    s4.push([])
+    s4.push([s('ИТОГО'), n(totals.expenseTotal), p(100), p(totals.metrics.expenseRate)])
+    addSheet('Расходы', s4, [30, 16, 16, 16])
+
+    // ─── Запись файла ─────────────────────────────────────────────────────────
+    XLSX.writeFile(wb, `Orda_Недельный_отчёт_${startDate}_${endDate}.xlsx`)
+    showToast('Excel отчёт скачан', 'success')
+  }, [totals, startDate, endDate, activeCompanies, companies, extraCompanyId, showToast])
 
   const handleGenerateAiReport = useCallback(async () => {
     setAiReportLoading(true)
@@ -1585,9 +1642,9 @@ function WeeklyReportContent() {
                     <ChevronDown className="w-4 h-4 ml-2" />
                   </Button>
                   <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                    <button onClick={handleDownloadCSV} className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
-                      <FileSpreadsheet className="w-4 h-4" />
-                      Скачать CSV
+                    <button onClick={handleDownloadExcel} className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                      Скачать Excel
                     </button>
                   </div>
                 </div>
