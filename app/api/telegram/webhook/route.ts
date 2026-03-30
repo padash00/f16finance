@@ -589,6 +589,7 @@ type TelegramUpdate = {
   message?: {
     text?: string
     photo?: TelegramPhotoSize[]
+    voice?: { file_id: string; duration?: number; mime_type?: string; file_size?: number }
     message_id?: number
     chat?: { id?: number | string }
     from?: { id?: number; first_name?: string; username?: string }
