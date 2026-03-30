@@ -938,7 +938,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   const quarterFrom = addDaysISO(today, -89)
 
   // Загружаем максимум данных для глубокого анализа
-  const [incomesWeekRes, expensesWeekRes, incomesPrevWeekRes, incomesMonthRes, incomesQuarterRes, expensesMonthRes, companiesRes, operatorsRes] = await Promise.all([
+  const [incomesWeekRes, expensesWeekRes, incomesPrevWeekRes, incomesMonthRes, incomesQuarterRes, expensesMonthRes, companiesRes, operatorsRes, staffRes] = await Promise.all([
     supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, zone').gte('date', weekFrom).lte('date', today),
     supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today),
     supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', prevWeekFrom).lte('date', prevWeekTo),
@@ -946,7 +946,8 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', quarterFrom).lte('date', today),
     supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', monthFrom).lte('date', today),
     supabase.from('companies').select('id, name, code').eq('is_active', true),
-    supabase.from('operators').select('id, name').eq('is_active', true).limit(100),
+    supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true).limit(200),
+    supabase.from('staff').select('id, full_name, role').eq('is_active', true),
   ])
 
   const safeN = (v: any) => Number(v || 0)
@@ -1029,8 +1030,25 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
 
   // Компании
   const companies = (companiesRes.data || []) as Array<{ id: string; name: string; code: string }>
-  const operatorCount = (operatorsRes.data || []).length
   const companyNames = companies.map(c => c.name).join(', ') || '—'
+
+  // Реальные имена операторов
+  const operatorsList = (operatorsRes.data || []).map((op: any) => {
+    const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
+    return profiles?.[0]?.full_name || op.name || op.short_name || '—'
+  })
+  const operatorCount = operatorsList.length
+
+  // Стафф по ролям
+  const roleLabel: Record<string, string> = { owner: 'Владелец', manager: 'Руководитель', marketer: 'Маркетолог', super_admin: 'Супер-админ' }
+  const staffByRole = new Map<string, string[]>()
+  for (const s of (staffRes.data || []) as Array<{ full_name: string; role: string }>) {
+    const role = roleLabel[s.role] || s.role
+    if (!staffByRole.has(role)) staffByRole.set(role, [])
+    staffByRole.get(role)!.push(s.full_name)
+  }
+  const staffLines = Array.from(staffByRole.entries()).map(([role, names]) => `  • ${role}: ${names.join(', ')}`).join('\n')
+  const operatorsLines = operatorsList.length > 0 ? `  • Операторы (${operatorCount}): ${operatorsList.join(', ')}` : ''
 
   // По точкам за неделю
   const companyWeekStats = companies.map(c => ({ name: c.name, inc: companyIncomeMap.get(c.id) || 0, exp: companyExpenseMap.get(c.id) || 0 })).filter(c => c.inc > 0 || c.exp > 0).sort((a, b) => b.inc - a.inc)
@@ -1085,9 +1103,13 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     `— Когда даю цифры по категориям или точкам — показываю ВСЕ, не сокращаю, не пишу "и другие".`,
     `— В конце финансового анализа — одно конкретное действие: что сделать, чтобы стало лучше.`,
     '',
-    `О бизнесе: сеть игровых клубов/арен. Точки: ${companyNames}. Операторов: ${operatorCount}.`,
+    `О бизнесе: сеть игровых клубов/арен. Точки: ${companyNames}.`,
     `Смены: день/ночь. Зоны дохода: PC, арена, рамен, extra. Оплата: нал + Kaspi + онлайн.`,
     `Зарплата операторов: база + автобонусы — штрафы — долги — авансы.`,
+    '',
+    `КОМАНДА (реальные сотрудники из системы):`,
+    staffLines || '  (нет данных о стаффе)',
+    operatorsLines || `  • Операторов: ${operatorCount}`,
     '',
     `Разделы системы Orda Control:`,
     pagesContext,
