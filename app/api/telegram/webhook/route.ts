@@ -942,9 +942,9 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, zone').gte('date', weekFrom).lte('date', today),
     supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today),
     supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', prevWeekFrom).lte('date', prevWeekTo),
-    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', monthFrom).lte('date', today),
+    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', monthFrom).lte('date', today),
     supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', quarterFrom).lte('date', today),
-    supabase.from('expenses').select('cash_amount, kaspi_amount, category, date').gte('date', monthFrom).lte('date', today),
+    supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', monthFrom).lte('date', today),
     supabase.from('companies').select('id, name, code').eq('is_active', true),
     supabase.from('operators').select('id, name').eq('is_active', true).limit(100),
   ])
@@ -977,12 +977,20 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   for (const r of incomesPrevWeekRes.data ?? []) prevWeekIncome += rowTotal(r)
 
   // --- Месяц ---
-  let monthIncome = 0
+  let monthIncome = 0, monthExpense = 0
   const monthExpCatMap = new Map<string, number>()
-  for (const r of incomesMonthRes.data ?? []) monthIncome += rowTotal(r)
+  const monthCompanyIncomeMap = new Map<string, number>()
+  const monthCompanyExpenseMap = new Map<string, number>()
+  for (const r of incomesMonthRes.data ?? []) {
+    const t = rowTotal(r)
+    monthIncome += t
+    if (r.company_id) monthCompanyIncomeMap.set(r.company_id, (monthCompanyIncomeMap.get(r.company_id) || 0) + t)
+  }
   for (const r of expensesMonthRes.data ?? []) {
     const t = safeN(r.cash_amount) + safeN(r.kaspi_amount)
+    monthExpense += t
     monthExpCatMap.set(r.category || 'Прочее', (monthExpCatMap.get(r.category || 'Прочее') || 0) + t)
+    if (r.company_id) monthCompanyExpenseMap.set(r.company_id, (monthCompanyExpenseMap.get(r.company_id) || 0) + t)
   }
 
   // --- Квартал: недельный тренд ---
@@ -1015,32 +1023,46 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   const bestDay = dailyEntries[0]
   const worstDay = dailyEntries[dailyEntries.length - 1]
 
-  // Топ расходов за месяц
-  const topMonthExpenses = Array.from(monthExpCatMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6)
-  const totalMonthExpense = Array.from(monthExpCatMap.values()).reduce((a, b) => a + b, 0)
+  // Все расходы за месяц по категориям
+  const allMonthExpenses = Array.from(monthExpCatMap.entries()).sort((a, b) => b[1] - a[1])
+  const totalMonthExpense = monthExpense
 
   // Компании
   const companies = (companiesRes.data || []) as Array<{ id: string; name: string; code: string }>
   const operatorCount = (operatorsRes.data || []).length
   const companyNames = companies.map(c => c.name).join(', ') || '—'
 
-  // Концентрация риска: доля крупнейшей точки
-  const companyIncomes = companies.map(c => ({ name: c.name, inc: companyIncomeMap.get(c.id) || 0, exp: companyExpenseMap.get(c.id) || 0 })).filter(c => c.inc > 0).sort((a, b) => b.inc - a.inc)
-  const topCompanyShare = weekIncome > 0 && companyIncomes[0] ? (companyIncomes[0].inc / weekIncome * 100) : 0
+  // По точкам за неделю
+  const companyWeekStats = companies.map(c => ({ name: c.name, inc: companyIncomeMap.get(c.id) || 0, exp: companyExpenseMap.get(c.id) || 0 })).filter(c => c.inc > 0 || c.exp > 0).sort((a, b) => b.inc - a.inc)
+  const topCompanyShare = weekIncome > 0 && companyWeekStats[0] ? (companyWeekStats[0].inc / weekIncome * 100) : 0
 
-  const companyLines = companyIncomes.map(c => {
+  // По точкам за месяц
+  const companyMonthStats = companies.map(c => ({
+    name: c.name,
+    inc: monthCompanyIncomeMap.get(c.id) || 0,
+    exp: monthCompanyExpenseMap.get(c.id) || 0,
+  })).filter(c => c.inc > 0 || c.exp > 0).sort((a, b) => b.inc - a.inc)
+
+  const companyWeekLines = companyWeekStats.map(c => {
     const profit = c.inc - c.exp
-    const margin = c.inc > 0 ? (profit / c.inc * 100).toFixed(0) : '0'
-    const share = weekIncome > 0 ? (c.inc / weekIncome * 100).toFixed(0) : '0'
-    return `  • ${c.name}: выручка ${fmtMoney(c.inc)} (${share}% от итого), расходы ${fmtMoney(c.exp)}, прибыль ${fmtMoney(profit)}, маржа ${margin}%`
+    const margin = c.inc > 0 ? (profit / c.inc * 100).toFixed(1) : '0'
+    const share = weekIncome > 0 ? (c.inc / weekIncome * 100).toFixed(1) : '0'
+    return `  • ${c.name}: выручка ${c.inc.toLocaleString('ru-RU')} ₸ (${share}%), расходы ${c.exp.toLocaleString('ru-RU')} ₸, прибыль ${profit.toLocaleString('ru-RU')} ₸, маржа ${margin}%`
   }).join('\n')
 
-  const weekCatsLines = Array.from(catMapWeek.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8)
-    .map(([cat, v]) => `  • ${cat}: ${fmtMoney(v)} (${weekExpense > 0 ? (v / weekExpense * 100).toFixed(0) : 0}% расходов)`)
+  const companyMonthLines = companyMonthStats.map(c => {
+    const profit = c.inc - c.exp
+    const margin = c.inc > 0 ? (profit / c.inc * 100).toFixed(1) : '0'
+    const share = monthIncome > 0 ? (c.inc / monthIncome * 100).toFixed(1) : '0'
+    return `  • ${c.name}: выручка ${c.inc.toLocaleString('ru-RU')} ₸ (${share}%), расходы ${c.exp.toLocaleString('ru-RU')} ₸, прибыль ${profit.toLocaleString('ru-RU')} ₸, маржа ${margin}%`
+  }).join('\n')
+
+  const weekCatsLines = Array.from(catMapWeek.entries()).sort((a, b) => b[1] - a[1])
+    .map(([cat, v]) => `  • ${cat}: ${v.toLocaleString('ru-RU')} ₸ (${weekExpense > 0 ? (v / weekExpense * 100).toFixed(1) : 0}%)`)
     .join('\n')
 
-  const monthCatsLines = topMonthExpenses
-    .map(([cat, v]) => `  • ${cat}: ${fmtMoney(v)} (${totalMonthExpense > 0 ? (v / totalMonthExpense * 100).toFixed(0) : 0}%)`)
+  const monthCatsLines = allMonthExpenses
+    .map(([cat, v]) => `  • ${cat}: ${v.toLocaleString('ru-RU')} ₸ (${totalMonthExpense > 0 ? (v / totalMonthExpense * 100).toFixed(1) : 0}%)`)
     .join('\n')
 
   const pagesContext = SITE_CONTEXT.pages.map(p => `  • ${p.title} (${p.route}): ${p.description}`).join('\n')
@@ -1083,15 +1105,16 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     `Динамика vs прошлая неделя: ${weekVsPrev >= 0 ? '+' : ''}${weekVsPrev.toFixed(2)}%`,
     bestDay ? `Лучший день: ${bestDay[0]} — ${bestDay[1].toLocaleString('ru-RU')} ₸` : '',
     worstDay && worstDay[0] !== bestDay?.[0] ? `Слабый день: ${worstDay[0]} — ${worstDay[1].toLocaleString('ru-RU')} ₸` : '',
-    topCompanyShare > 60 ? `⚠️ Концентрация: ${companyIncomes[0]?.name} = ${topCompanyShare.toFixed(1)}% всей выручки` : '',
+    topCompanyShare > 60 ? `⚠️ Концентрация: ${companyWeekStats[0]?.name} = ${topCompanyShare.toFixed(1)}% всей выручки` : '',
     '',
-    companyLines ? `ПО ТОЧКАМ (неделя):\n${companyLines}` : '',
+    companyWeekLines ? `ПО ТОЧКАМ (неделя, все):\n${companyWeekLines}` : '',
     '',
-    weekCatsLines ? `РАСХОДЫ ПО КАТЕГОРИЯМ (неделя):\n${weekCatsLines}` : '',
+    weekCatsLines ? `РАСХОДЫ ПО КАТЕГОРИЯМ (неделя, все):\n${weekCatsLines}` : '',
     '',
-    `МЕСЯЦ ${monthFrom} — ${today}:`,
-    `Выручка: ${monthIncome.toLocaleString('ru-RU')} ₸`,
-    monthCatsLines ? `Расходы по категориям:\n${monthCatsLines}` : '',
+    `МЕСЯЦ (${monthFrom} — ${today}):`,
+    `Выручка: ${monthIncome.toLocaleString('ru-RU')} ₸ | Расходы: ${totalMonthExpense.toLocaleString('ru-RU')} ₸ | Прибыль: ${(monthIncome - totalMonthExpense).toLocaleString('ru-RU')} ₸`,
+    companyMonthLines ? `По точкам (месяц, все, точные цифры):\n${companyMonthLines}` : '',
+    monthCatsLines ? `Расходы по категориям (месяц, все):\n${monthCatsLines}` : '',
     '',
     `ПРОШЛАЯ НЕДЕЛЯ ${prevWeekFrom} — ${prevWeekTo}: ${prevWeekIncome.toLocaleString('ru-RU')} ₸`,
     '',
