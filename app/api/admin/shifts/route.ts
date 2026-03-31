@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
-import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { resolveCompanyScope } from '@/lib/server/organizations'
+import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { loadShiftWeekWorkflow, publishShiftWeekForCompany, resolveShiftChangeRequest } from '@/lib/server/shift-workflow'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -578,10 +579,28 @@ function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
 }
 
+async function ensureShiftCompanyAccess(
+  supabase: ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createRequestSupabaseClient>,
+  access: { activeOrganization?: { id: string } | null; isSuperAdmin: boolean },
+  companyId: string | null | undefined,
+) {
+  if (!companyId && !access.isSuperAdmin) {
+    throw new RouteError('companyId обязателен', 400)
+  }
+
+  await resolveCompanyScope({
+    activeOrganizationId: access.activeOrganization?.id || null,
+    requestedCompanyId: companyId || null,
+    isSuperAdmin: access.isSuperAdmin,
+  })
+}
+
 export async function POST(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'shifts')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const body = (await req.json().catch(() => null)) as ShiftMutationBody | null
     if (!body) {
@@ -598,6 +617,7 @@ export async function POST(req: Request) {
       : requestClient
 
     if (body.action === 'saveShift') {
+      await ensureShiftCompanyAccess(supabase, access, body.payload.companyId)
       const result = await upsertShift(supabase, body.payload)
 
       await writeAuditLog(supabase, {
@@ -622,6 +642,7 @@ export async function POST(req: Request) {
       if (!companyId || !operatorName?.trim() || !shiftType || !Array.isArray(dates) || dates.length === 0) {
         return badRequest('companyId, operatorName, shiftType и dates обязательны')
       }
+      await ensureShiftCompanyAccess(supabase, access, companyId)
 
       let created = 0
       let updated = 0
@@ -693,21 +714,33 @@ export async function POST(req: Request) {
       const sourceWeekStart = shiftIsoDate(targetWeekStart, -7)
       const sourceWeekEnd = shiftIsoDate(targetWeekStart, -1)
       const targetWeekEnd = shiftIsoDate(targetWeekStart, 6)
+      const companyScope = await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      })
 
-      const { data: sourceShifts, error: sourceError } = await supabase
+      let sourceQuery = supabase
         .from('shifts')
         .select('id, company_id, date, shift_type, operator_name, comment')
         .gte('date', sourceWeekStart)
         .lte('date', sourceWeekEnd)
         .order('date')
+      if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+        sourceQuery = sourceQuery.in('company_id', companyScope.allowedCompanyIds)
+      }
+      const { data: sourceShifts, error: sourceError } = await sourceQuery
 
       if (sourceError) throw sourceError
 
-      const { data: targetShifts, error: targetError } = await supabase
+      let targetQuery = supabase
         .from('shifts')
         .select('id, company_id, date, shift_type, operator_name, comment')
         .gte('date', targetWeekStart)
         .lte('date', targetWeekEnd)
+      if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+        targetQuery = targetQuery.in('company_id', companyScope.allowedCompanyIds)
+      }
+      const { data: targetShifts, error: targetError } = await targetQuery
 
       if (targetError) throw targetError
 
@@ -792,6 +825,7 @@ export async function POST(req: Request) {
       if (!companyId || !weekStart) {
         return badRequest('companyId и weekStart обязательны')
       }
+      await ensureShiftCompanyAccess(supabase, access, companyId)
 
       const result = await publishShiftWeekForCompany({
         supabase,
@@ -842,6 +876,16 @@ export async function POST(req: Request) {
       if (!requestId || !status) {
         return badRequest('requestId и status обязательны')
       }
+
+      const { data: requestRow, error: requestError } = await supabase
+        .from('shift_change_requests')
+        .select('company_id')
+        .eq('id', requestId)
+        .maybeSingle()
+
+      if (requestError) throw requestError
+      if (!requestRow?.company_id) return badRequest('Запрос не найден')
+      await ensureShiftCompanyAccess(supabase, access, String(requestRow.company_id))
 
       const result = await applyShiftIssueResolution(supabase, {
         requestId,
@@ -898,6 +942,8 @@ export async function GET(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'shifts')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const url = new URL(req.url)
     const weekStart = url.searchParams.get('weekStart')?.trim()
@@ -908,6 +954,21 @@ export async function GET(req: Request) {
     const requestClient = createRequestSupabaseClient(req)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient
     const workflow = await loadShiftWeekWorkflow(supabase, weekStart)
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      const allowed = new Set(companyScope.allowedCompanyIds.map((id) => String(id)))
+      workflow.publications = workflow.publications.filter((item) => allowed.has(String(item.company_id)))
+      workflow.responses = workflow.responses.filter((item) => allowed.has(String(item.company_id)))
+      workflow.requests = workflow.requests.filter((item) => allowed.has(String(item.company_id)))
+    } else if (!access.isSuperAdmin) {
+      workflow.publications = []
+      workflow.responses = []
+      workflow.requests = []
+    }
 
     return NextResponse.json({ ok: true, ...workflow })
   } catch (error: any) {

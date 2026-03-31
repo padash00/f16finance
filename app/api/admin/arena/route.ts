@@ -1,10 +1,55 @@
 import { NextResponse } from 'next/server'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+function filterProjectsByCompanyScope(projects: any[], allowedCompanyIds: string[] | null) {
+  if (!allowedCompanyIds) return projects
+  return projects
+    .map((project) => {
+      const companies = Array.isArray(project.point_project_companies) ? project.point_project_companies : []
+      return {
+        ...project,
+        point_project_companies: companies.filter((item: any) => allowedCompanyIds.includes(String(item.company_id || ''))),
+      }
+    })
+    .filter((project) => project.point_project_companies.length > 0)
+}
+
+async function ensureProjectAccess(supabase: any, projectId: string, allowedCompanyIds: string[] | null) {
+  if (!allowedCompanyIds) return
+  const { data, error } = await supabase
+    .from('point_project_companies')
+    .select('company_id')
+    .eq('project_id', projectId)
+
+  if (error) throw error
+  const hasAccess = (data || []).some((row: any) => allowedCompanyIds.includes(String(row.company_id || '')))
+  if (!hasAccess) throw new Error('forbidden-project')
+}
+
+async function ensureArenaEntityAccess(
+  supabase: any,
+  table: 'arena_zones' | 'arena_stations' | 'arena_tariffs' | 'arena_map_decorations',
+  id: string,
+  allowedCompanyIds: string[] | null,
+) {
+  if (!allowedCompanyIds) return
+  const { data, error } = await supabase
+    .from(table)
+    .select('id, point_project_id, company_id')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) throw new Error('not-found')
+  if (data.company_id && allowedCompanyIds.includes(String(data.company_id))) return
+  await ensureProjectAccess(supabase, String(data.point_project_id || ''), allowedCompanyIds)
 }
 
 async function getContext(request: Request) {
@@ -22,10 +67,21 @@ export async function GET(request: Request) {
     const access = await getContext(request)
     if ('response' in access) return access.response
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
     const companyId = searchParams.get('companyId') || null
+    if (companyId) {
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        requestedCompanyId: companyId,
+      })
+    }
 
     // List mode — return arena-enabled point projects with their arena-enabled companies
     if (!projectId) {
@@ -34,7 +90,7 @@ export async function GET(request: Request) {
         .select('id, name, feature_flags, point_project_companies(company_id, feature_flags, company:company_id(id, name))')
         .order('name')
 
-      const arenaProjects = (allProjects || [])
+      const arenaProjects = filterProjectsByCompanyScope((allProjects || []) as any[], companyScope.allowedCompanyIds)
         .filter((p: any) => {
           const projEnabled = p.feature_flags?.arena_enabled === true
           const compEnabled = Array.isArray(p.point_project_companies) &&
@@ -55,6 +111,7 @@ export async function GET(request: Request) {
     }
 
     // Get project name
+    await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
     const { data: project } = await supabase
       .from('point_projects')
       .select('id, name')
@@ -96,16 +153,28 @@ export async function POST(request: Request) {
     const access = await getContext(request)
     if ('response' in access) return access.response
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'action required' }, 400)
 
     const bodyCompanyId: string | null = body.companyId || null
+    if (bodyCompanyId) {
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        requestedCompanyId: bodyCompanyId,
+      })
+    }
 
     // ─── ZONES ───────────────────────────────────────────────────────
     if (body.action === 'createZone') {
       const { projectId, name } = body
       if (!projectId || !name?.trim()) return json({ error: 'projectId and name required' }, 400)
+      await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
       const { data, error } = await supabase.from('arena_zones').insert({ point_project_id: projectId, company_id: bodyCompanyId, name: name.trim() }).select().single()
       if (error) throw error
       return json({ ok: true, data })
@@ -114,6 +183,7 @@ export async function POST(request: Request) {
     if (body.action === 'updateZone') {
       const { zoneId, name, is_active } = body
       if (!zoneId) return json({ error: 'zoneId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_zones', zoneId, companyScope.allowedCompanyIds)
       const update: any = {}
       if (name !== undefined) update.name = name.trim()
       if (is_active !== undefined) update.is_active = is_active
@@ -125,6 +195,7 @@ export async function POST(request: Request) {
     if (body.action === 'deleteZone') {
       const { zoneId } = body
       if (!zoneId) return json({ error: 'zoneId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_zones', zoneId, companyScope.allowedCompanyIds)
       const { error } = await supabase.from('arena_zones').delete().eq('id', zoneId)
       if (error) throw error
       return json({ ok: true })
@@ -134,6 +205,7 @@ export async function POST(request: Request) {
     if (body.action === 'createStation') {
       const { projectId, zoneId, name, order_index } = body
       if (!projectId || !name?.trim()) return json({ error: 'projectId and name required' }, 400)
+      await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
       const { data, error } = await supabase.from('arena_stations').insert({
         point_project_id: projectId,
         company_id: bodyCompanyId,
@@ -148,6 +220,7 @@ export async function POST(request: Request) {
     if (body.action === 'updateStation') {
       const { stationId, name, zone_id, order_index, is_active } = body
       if (!stationId) return json({ error: 'stationId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_stations', stationId, companyScope.allowedCompanyIds)
       const update: any = {}
       if (name !== undefined) update.name = name.trim()
       if (zone_id !== undefined) update.zone_id = zone_id
@@ -161,6 +234,7 @@ export async function POST(request: Request) {
     if (body.action === 'deleteStation') {
       const { stationId } = body
       if (!stationId) return json({ error: 'stationId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_stations', stationId, companyScope.allowedCompanyIds)
       const { error } = await supabase.from('arena_stations').delete().eq('id', stationId)
       if (error) throw error
       return json({ ok: true })
@@ -170,6 +244,7 @@ export async function POST(request: Request) {
     if (body.action === 'createTariff') {
       const { projectId, zoneId, name, duration_minutes, price, tariff_type, window_end_time } = body
       if (!projectId || !zoneId || !name?.trim()) return json({ error: 'projectId, zoneId and name required' }, 400)
+      await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
       const { data, error } = await supabase.from('arena_tariffs').insert({
         point_project_id: projectId,
         company_id: bodyCompanyId,
@@ -187,6 +262,7 @@ export async function POST(request: Request) {
     if (body.action === 'updateTariff') {
       const { tariffId, name, duration_minutes, price, is_active, tariff_type, window_end_time } = body
       if (!tariffId) return json({ error: 'tariffId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_tariffs', tariffId, companyScope.allowedCompanyIds)
       const update: any = {}
       if (name !== undefined) update.name = name.trim()
       if (duration_minutes !== undefined) update.duration_minutes = Number(duration_minutes)
@@ -202,6 +278,7 @@ export async function POST(request: Request) {
     if (body.action === 'deleteTariff') {
       const { tariffId } = body
       if (!tariffId) return json({ error: 'tariffId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_tariffs', tariffId, companyScope.allowedCompanyIds)
       const { error } = await supabase.from('arena_tariffs').delete().eq('id', tariffId)
       if (error) throw error
       return json({ ok: true })
@@ -213,12 +290,14 @@ export async function POST(request: Request) {
       if (Array.isArray(stationUpdates)) {
         for (const u of stationUpdates) {
           if (!u.id) continue
+          await ensureArenaEntityAccess(supabase, 'arena_stations', u.id, companyScope.allowedCompanyIds)
           await supabase.from('arena_stations').update({ grid_x: u.grid_x, grid_y: u.grid_y }).eq('id', u.id)
         }
       }
       if (Array.isArray(zoneUpdates)) {
         for (const u of zoneUpdates) {
           if (!u.id) continue
+          await ensureArenaEntityAccess(supabase, 'arena_zones', u.id, companyScope.allowedCompanyIds)
           const upd: any = {}
           if (u.grid_x !== undefined) upd.grid_x = u.grid_x
           if (u.grid_y !== undefined) upd.grid_y = u.grid_y
@@ -234,6 +313,7 @@ export async function POST(request: Request) {
     if (body.action === 'createDecoration') {
       const { projectId, type, grid_x, grid_y, grid_w, grid_h, label, rotation } = body
       if (!projectId) return json({ error: 'projectId required' }, 400)
+      await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
       const { data, error } = await supabase.from('arena_map_decorations').insert({
         point_project_id: projectId,
         company_id: bodyCompanyId,
@@ -252,6 +332,7 @@ export async function POST(request: Request) {
     if (body.action === 'updateDecoration') {
       const { decorationId, grid_x, grid_y, grid_w, grid_h, label, rotation, type } = body
       if (!decorationId) return json({ error: 'decorationId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_map_decorations', decorationId, companyScope.allowedCompanyIds)
       const upd: any = {}
       if (grid_x !== undefined) upd.grid_x = grid_x
       if (grid_y !== undefined) upd.grid_y = grid_y
@@ -268,6 +349,7 @@ export async function POST(request: Request) {
     if (body.action === 'deleteDecoration') {
       const { decorationId } = body
       if (!decorationId) return json({ error: 'decorationId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_map_decorations', decorationId, companyScope.allowedCompanyIds)
       const { error } = await supabase.from('arena_map_decorations').delete().eq('id', decorationId)
       if (error) throw error
       return json({ ok: true })
@@ -277,6 +359,14 @@ export async function POST(request: Request) {
     if (body.action === 'getAnalytics') {
       const { projectId, from, to, companyId: analyticsCompanyId } = body
       if (!projectId) return json({ error: 'projectId required' }, 400)
+      await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
+      if (analyticsCompanyId) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          requestedCompanyId: analyticsCompanyId,
+        })
+      }
 
       let query = supabase
         .from('arena_sessions')

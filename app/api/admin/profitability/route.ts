@@ -129,6 +129,10 @@ export async function GET(req: Request) {
     const supabase = createAdminSupabaseClient()
     let query = supabase.from('monthly_profitability_inputs').select('*').order('month', { ascending: true })
 
+    if (access.activeOrganization?.id && !access.isSuperAdmin) {
+      query = query.eq('organization_id', access.activeOrganization.id)
+    }
+
     if (from) query = query.gte('month', from)
     if (to) query = query.lte('month', to)
 
@@ -243,12 +247,13 @@ export async function POST(req: Request) {
       .upsert(
         [
           {
+            organization_id: access.activeOrganization?.id || null,
             month,
             ...payload,
             updated_at: new Date().toISOString(),
           },
         ],
-        { onConflict: 'month' },
+        { onConflict: 'organization_id,month' },
       )
       .select('*')
       .single()

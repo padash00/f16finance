@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 
 // SQL: create table if not exists expense_templates (
@@ -18,10 +19,18 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    const { data, error } = await access.supabase
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    let query = access.supabase
       .from('expense_templates')
       .select('*')
       .order('name')
+    if (companyScope.allowedCompanyIds) {
+      query = query.in('company_id', companyScope.allowedCompanyIds)
+    }
+    const { data, error } = await query
     if (error) {
       if (error.code === '42P01') return json({ data: [], tableExists: false })
       throw error
@@ -38,6 +47,13 @@ export async function POST(req: Request) {
     if (!body?.name || !body?.category || !body?.amount) {
       return json({ error: 'name, category, amount required' }, 400)
     }
+    if (body.company_id) {
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        requestedCompanyId: String(body.company_id),
+      })
+    }
     const { data, error } = await access.supabase
       .from('expense_templates')
       .insert({ name: body.name, category: body.category, amount: body.amount, payment_type: body.payment_type || 'cash', company_id: body.company_id || null, comment: body.comment || null })
@@ -53,6 +69,20 @@ export async function DELETE(req: Request) {
     if ('response' in access) return access.response
     const id = new URL(req.url).searchParams.get('id')
     if (!id) return json({ error: 'id required' }, 400)
+    const { data: existing, error: existingError } = await access.supabase
+      .from('expense_templates')
+      .select('id, company_id')
+      .eq('id', id)
+      .maybeSingle()
+    if (existingError) throw existingError
+    if (!existing) return json({ error: 'not-found' }, 404)
+    if (existing.company_id) {
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        requestedCompanyId: String(existing.company_id),
+      })
+    }
     const { error } = await access.supabase.from('expense_templates').delete().eq('id', id)
     if (error) throw error
     return json({ ok: true })

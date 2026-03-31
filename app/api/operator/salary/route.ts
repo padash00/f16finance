@@ -30,6 +30,7 @@ async function ensureSalaryWeekSnapshotLite(params: {
   operatorId: string
   weekStart: string
   references: Awaited<ReturnType<typeof listSalaryReferenceData>>
+  companyIds: string[]
 }) {
   const weekEnd = addDaysISO(params.weekStart, 6)
   const operatorData = await listOperatorSalaryData(params.supabase, {
@@ -37,6 +38,7 @@ async function ensureSalaryWeekSnapshotLite(params: {
     dateFrom: params.weekStart,
     dateTo: weekEnd,
     weekStart: params.weekStart,
+    companyIds: params.companyIds,
   })
 
   const summary = calculateOperatorWeekSummary({
@@ -163,13 +165,22 @@ export async function GET(request: Request) {
     const weekStart = normalizeIsoDate(url.searchParams.get('weekStart')) || currentWeekStart()
     const weekEnd = addDaysISO(weekStart, 6)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : (context.supabase as any)
+    const { data: operatorAssignments, error: operatorAssignmentsError } = await supabase
+      .from('operator_company_assignments')
+      .select('company_id')
+      .eq('operator_id', context.operator.id)
+      .eq('is_active', true)
 
-    const references = await listSalaryReferenceData(supabase)
+    if (operatorAssignmentsError) throw operatorAssignmentsError
+
+    const operatorCompanyIds = [...new Set((operatorAssignments || []).map((item: any) => String(item.company_id || '')).filter(Boolean))] as string[]
+    const references = await listSalaryReferenceData(supabase, { companyIds: operatorCompanyIds })
     const snapshot = await ensureSalaryWeekSnapshotLite({
       supabase,
       operatorId: context.operator.id,
       weekStart,
       references,
+      companyIds: operatorCompanyIds,
     })
 
     const [paymentsRes, allocationsRes, adjustmentsRes, debtsRes, recentWeeksRes] = await Promise.all([

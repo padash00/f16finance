@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 
+import { listOrganizationCompanyCodes } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type ShiftType = 'day' | 'night'
@@ -80,17 +81,36 @@ export async function GET(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'salary')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const requestClient = createRequestSupabaseClient(req)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient
+    const allowedCompanyCodes = await listOrganizationCompanyCodes({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    let rulesQuery = supabase
+      .from('operator_salary_rules')
+      .select('*')
+      .order('company_code', { ascending: true })
+      .order('shift_type', { ascending: true })
+    if (allowedCompanyCodes) {
+      if (allowedCompanyCodes.length === 0) {
+        return json({ ok: true, data: { rules: [], companies: [], history: [] } })
+      }
+      rulesQuery = rulesQuery.in('company_code', allowedCompanyCodes)
+    }
+
+    let companiesQuery = supabase.from('companies').select('id,name,code').order('name')
+    if (access.activeOrganization?.id && !access.isSuperAdmin) {
+      companiesQuery = companiesQuery.eq('organization_id', access.activeOrganization.id)
+    }
 
     const [rulesRes, companiesRes, historyRes] = await Promise.all([
-      supabase
-        .from('operator_salary_rules')
-        .select('*')
-        .order('company_code', { ascending: true })
-        .order('shift_type', { ascending: true }),
-      supabase.from('companies').select('id,name,code').order('name'),
+      rulesQuery,
+      companiesQuery,
       supabase
         .from('audit_log')
         .select('id, actor_user_id, entity_type, entity_id, action, payload, created_at')
@@ -114,7 +134,9 @@ export async function GET(req: Request) {
       data: {
         rules: rulesRes.data || [],
         companies: companiesRes.data || [],
-        history: (historyRes.data || []).map((item: any) => ({
+        history: (allowedCompanyCodes
+          ? (historyRes.data || []).filter((item: any) => allowedCompanyCodes.includes(String(item?.payload?.company_code || '')))
+          : historyRes.data || []).map((item: any) => ({
           ...item,
           actor_email: item.actor_user_id ? actorEmailMap.get(item.actor_user_id) || null : null,
         })),
@@ -135,6 +157,8 @@ export async function POST(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'salary')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const requestClient = createRequestSupabaseClient(req)
     const {
@@ -142,6 +166,10 @@ export async function POST(req: Request) {
     } = await requestClient.auth.getUser()
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient
     const body = (await req.json().catch(() => null)) as Body | null
+    const allowedCompanyCodes = await listOrganizationCompanyCodes({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     if (!body?.action) {
       return json({ error: 'Неверный формат запроса' }, 400)
@@ -149,6 +177,9 @@ export async function POST(req: Request) {
 
     if (body.action === 'createRule') {
       const payload = normalizePayload(body.payload)
+      if (allowedCompanyCodes && !allowedCompanyCodes.includes(payload.company_code)) {
+        return json({ error: 'forbidden-company' }, 403)
+      }
       const { data, error } = await supabase
         .from('operator_salary_rules')
         .insert([payload])
@@ -176,6 +207,9 @@ export async function POST(req: Request) {
 
     if (body.action === 'updateRule') {
       const payload = normalizePayload(body.payload)
+      if (allowedCompanyCodes && !allowedCompanyCodes.includes(payload.company_code)) {
+        return json({ error: 'forbidden-company' }, 403)
+      }
       const { data: previous, error: previousError } = await supabase
         .from('operator_salary_rules')
         .select('*')
@@ -184,6 +218,9 @@ export async function POST(req: Request) {
 
       if (previousError) throw previousError
       if (!previous) return json({ error: 'Правило не найдено' }, 404)
+      if (allowedCompanyCodes && !allowedCompanyCodes.includes(String(previous.company_code || ''))) {
+        return json({ error: 'forbidden-company' }, 403)
+      }
 
       const { data, error } = await supabase
         .from('operator_salary_rules')
@@ -237,6 +274,9 @@ export async function POST(req: Request) {
 
       if (previousError) throw previousError
       if (!previous) return json({ error: 'Правило не найдено' }, 404)
+      if (allowedCompanyCodes && !allowedCompanyCodes.includes(String(previous.company_code || ''))) {
+        return json({ error: 'forbidden-company' }, 403)
+      }
 
       const { error } = await supabase.from('operator_salary_rules').delete().eq('id', body.ruleId)
       if (error) throw error

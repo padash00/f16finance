@@ -38,23 +38,35 @@ export async function findOperatorByKey(
 
 export async function listSalaryReferenceData(
   supabase: AdminSupabaseClient,
+  options?: {
+    companyIds?: string[] | null
+  },
 ) {
+  const companyIds = (options?.companyIds || []).filter(Boolean)
+  const assignmentsQuery = supabase
+    .from('operator_company_assignments')
+    .select('operator_id,company_id,role_in_company,is_active')
+    .eq('is_active', true)
+
+  if (companyIds.length > 0) {
+    assignmentsQuery.in('company_id', companyIds)
+  }
+
   const [
     { data: companies, error: companiesError },
     { data: rules, error: rulesError },
     { data: assignments, error: assignmentsError },
   ] = await Promise.all([
-    supabase.from('companies').select('id,code,name'),
+    companyIds.length > 0
+      ? supabase.from('companies').select('id,code,name').in('id', companyIds)
+      : supabase.from('companies').select('id,code,name'),
     supabase
       .from('operator_salary_rules')
       .select(
         'company_code,shift_type,base_per_shift,senior_operator_bonus,senior_cashier_bonus,threshold1_turnover,threshold1_bonus,threshold2_turnover,threshold2_bonus',
       )
       .eq('is_active', true),
-    supabase
-      .from('operator_company_assignments')
-      .select('operator_id,company_id,role_in_company,is_active')
-      .eq('is_active', true),
+    assignmentsQuery,
   ])
 
   if (companiesError) throw companiesError
@@ -76,9 +88,11 @@ export async function listOperatorSalaryData(
     dateTo: string
     weekStart?: string
     companyCode?: string
+    companyIds?: string[] | null
   },
 ) {
   const { operatorId, dateFrom, dateTo, weekStart, companyCode } = params
+  const companyIds = (params.companyIds || []).filter(Boolean)
 
   const incomesQuery = supabase
     .from('incomes')
@@ -112,6 +126,15 @@ export async function listOperatorSalaryData(
   if (debtsError) throw debtsError
 
   let filteredIncomes = (incomes || []) as SalaryIncomeRow[]
+  let filteredAdjustments = (adjustments || []) as SalaryAdjustmentRow[]
+  let filteredDebts = (debts || []) as SalaryDebtRow[]
+
+  if (companyIds.length > 0) {
+    filteredIncomes = filteredIncomes.filter((row) => companyIds.includes(String(row.company_id || '')))
+    filteredAdjustments = filteredAdjustments.filter((row) => !row.company_id || companyIds.includes(String(row.company_id)))
+    filteredDebts = filteredDebts.filter((row) => !row.company_id || companyIds.includes(String(row.company_id)))
+  }
+
   if (companyCode) {
     const { data: companyRows, error: companyError } = await supabase
       .from('companies')
@@ -123,12 +146,14 @@ export async function listOperatorSalaryData(
 
     const companyId = companyRows?.[0]?.id
     filteredIncomes = companyId ? filteredIncomes.filter((row) => row.company_id === companyId) : []
+    filteredAdjustments = companyId ? filteredAdjustments.filter((row) => !row.company_id || row.company_id === companyId) : filteredAdjustments.filter((row) => !row.company_id)
+    filteredDebts = companyId ? filteredDebts.filter((row) => !row.company_id || row.company_id === companyId) : filteredDebts.filter((row) => !row.company_id)
   }
 
   return {
     incomes: filteredIncomes,
-    adjustments: (adjustments || []) as SalaryAdjustmentRow[],
-    debts: (debts || []) as SalaryDebtRow[],
+    adjustments: filteredAdjustments,
+    debts: filteredDebts,
   }
 }
 

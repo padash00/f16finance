@@ -46,6 +46,15 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const weekStart = url.searchParams.get('weekStart')?.trim() || getWeekStart()
     const weekEnd = shiftIsoDate(weekStart, 6)
+    const { data: operatorAssignments, error: operatorAssignmentsError } = await supabase
+      .from('operator_company_assignments')
+      .select('company_id')
+      .eq('operator_id', context.operator.id)
+      .eq('is_active', true)
+
+    if (operatorAssignmentsError) throw operatorAssignmentsError
+
+    const operatorCompanyIds = [...new Set((operatorAssignments || []).map((item: any) => String(item.company_id || '')).filter(Boolean))]
 
     const displayLabels = [
       getOperatorDisplayName(context.operator, 'Оператор'),
@@ -59,6 +68,7 @@ export async function GET(req: Request) {
       supabase
         .from('shifts')
         .select('id, company_id, date, shift_type, operator_name, comment')
+        .in('company_id', operatorCompanyIds.length > 0 ? operatorCompanyIds : ['00000000-0000-0000-0000-000000000000'])
         .gte('date', weekStart)
         .lte('date', weekEnd)
         .order('date'),

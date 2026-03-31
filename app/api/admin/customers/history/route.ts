@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -25,9 +26,27 @@ export async function GET(request: Request) {
     if (!customerId) return json({ error: 'customer_id-required' }, 400)
 
     const supabase = createAdminSupabaseClient()
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .select('id, company_id')
+      .eq('id', customerId)
+      .maybeSingle()
+    if (customerError) throw customerError
+    if (!customer) return json({ error: 'customer-not-found' }, 404)
+    if (customer.company_id) {
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        requestedCompanyId: String(customer.company_id),
+      })
+    }
 
     // Fetch sales with items using Supabase query builder
-    const { data: sales, error } = await supabase
+    let salesQuery = supabase
       .from('point_sales')
       .select(`
         id,
@@ -51,6 +70,10 @@ export async function GET(request: Request) {
       .eq('customer_id', customerId)
       .order('created_at', { ascending: false })
       .limit(50)
+    if (companyScope.allowedCompanyIds) {
+      salesQuery = salesQuery.in('company_id', companyScope.allowedCompanyIds)
+    }
+    const { data: sales, error } = await salesQuery
 
     if (error) throw error
 

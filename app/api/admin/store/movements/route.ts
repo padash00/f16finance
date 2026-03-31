@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { fetchStoreMovements } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -23,7 +24,15 @@ export async function GET(request: Request) {
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
-    const data = await fetchStoreMovements(supabase as any)
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const data = await fetchStoreMovements(supabase as any, {
+      organizationId: access.activeOrganization?.id || null,
+      allowedCompanyIds: companyScope.allowedCompanyIds,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     return json({ ok: true, data })
   } catch (error: any) {

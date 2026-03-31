@@ -2,6 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 type AnySupabase = SupabaseClient<any, 'public', any>
 
+export type InventoryScope = {
+  organizationId?: string | null
+  allowedCompanyIds?: string[] | null
+  isSuperAdmin?: boolean
+}
+
 export type InventoryOverview = {
   categories: any[]
   suppliers: any[]
@@ -57,7 +63,135 @@ export type StoreRevisionsData = {
   stocktakes: any[]
 }
 
-export async function fetchInventoryRequests(supabase: AnySupabase) {
+function isRestrictedScope(scope?: InventoryScope) {
+  return Boolean(scope && !scope.isSuperAdmin)
+}
+
+function hasOrganizationScope(scope?: InventoryScope) {
+  return Boolean(scope?.organizationId && !scope?.isSuperAdmin)
+}
+
+function getAllowedCompanyIdSet(scope?: InventoryScope) {
+  return new Set((scope?.allowedCompanyIds || []).filter(Boolean).map((value) => String(value)))
+}
+
+function filterByOrganizationScope<T>(
+  rows: T[],
+  scope: InventoryScope | undefined,
+  getOrganizationId: (row: T) => string | null | undefined,
+) {
+  if (!hasOrganizationScope(scope)) return rows
+  const organizationId = String(scope?.organizationId || '')
+  return rows.filter((row) => String(getOrganizationId(row) || '') === organizationId)
+}
+
+function filterByCompanyScope<T>(
+  rows: T[],
+  scope: InventoryScope | undefined,
+  getCompanyIds: (row: T) => Array<string | null | undefined>,
+) {
+  if (!isRestrictedScope(scope)) return rows
+  const allowed = getAllowedCompanyIdSet(scope)
+  if (allowed.size === 0) return []
+  return rows.filter((row) =>
+    getCompanyIds(row).some((companyId) => companyId && allowed.has(String(companyId))),
+  )
+}
+
+function filterByLocationScope<T>(
+  rows: T[],
+  scope: InventoryScope | undefined,
+  getLocation: (row: T) => { organization_id?: string | null; company_id?: string | null } | null | undefined,
+) {
+  if (!isRestrictedScope(scope)) return rows
+  const allowed = getAllowedCompanyIdSet(scope)
+  const organizationId = String(scope?.organizationId || '')
+  return rows.filter((row) => {
+    const location = getLocation(row)
+    if (!location) return false
+    if (location.organization_id && organizationId) {
+      return String(location.organization_id) === organizationId
+    }
+    return location.company_id ? allowed.has(String(location.company_id)) : false
+  })
+}
+
+function filterByMovementScope(rows: any[], scope?: InventoryScope) {
+  return filterByLocationScope(rows, scope, (row: any) => {
+    const fromLocation = Array.isArray(row.from_location) ? row.from_location[0] || null : row.from_location || null
+    const toLocation = Array.isArray(row.to_location) ? row.to_location[0] || null : row.to_location || null
+    return fromLocation || toLocation
+  })
+}
+
+function applyOrganizationFilter(query: any, scope?: InventoryScope) {
+  if (hasOrganizationScope(scope)) {
+    return query.eq('organization_id', String(scope?.organizationId || ''))
+  }
+  return query
+}
+
+export async function ensureInventoryCompanyAccess(
+  supabase: AnySupabase,
+  companyId: string,
+  scope?: InventoryScope,
+) {
+  if (!isRestrictedScope(scope)) return
+  const allowed = getAllowedCompanyIdSet(scope)
+  if (!allowed.has(String(companyId))) {
+    throw new Error('forbidden-company')
+  }
+}
+
+export async function ensureInventoryLocationAccess(
+  supabase: AnySupabase,
+  locationId: string,
+  scope?: InventoryScope,
+) {
+  if (!isRestrictedScope(scope)) return
+
+  const { data, error } = await supabase
+    .from('inventory_locations')
+    .select('id, company_id, organization_id')
+    .eq('id', locationId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) throw new Error('inventory-location-not-found')
+
+  const organizationId = String(scope?.organizationId || '')
+  const allowed = getAllowedCompanyIdSet(scope)
+  if (data.organization_id && organizationId && String(data.organization_id) === organizationId) {
+    return
+  }
+
+  if (data.company_id && allowed.has(String(data.company_id))) {
+    return
+  }
+
+  throw new Error('forbidden-location')
+}
+
+export async function ensureInventoryRequestAccess(
+  supabase: AnySupabase,
+  requestId: string,
+  scope?: InventoryScope,
+) {
+  if (!isRestrictedScope(scope)) return
+
+  const { data, error } = await supabase
+    .from('inventory_requests')
+    .select('id, requesting_company_id')
+    .eq('id', requestId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) throw new Error('inventory-request-not-found')
+
+  await ensureInventoryCompanyAccess(supabase, String(data.requesting_company_id), scope)
+}
+
+export async function fetchInventoryRequests(supabase: AnySupabase, scope?: InventoryScope) {
   const { data, error } = await supabase
     .from('inventory_requests')
     .select('id, source_location_id, target_location_id, requesting_company_id, status, comment, decision_comment, created_by, approved_by, approved_at, created_at, updated_at, source_location:source_location_id(id, name, code, location_type), target_location:target_location_id(id, name, code, location_type), company:requesting_company_id(id, name, code), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode))')
@@ -65,10 +199,10 @@ export async function fetchInventoryRequests(supabase: AnySupabase) {
     .limit(100)
 
   if (error) throw error
-  return mapNestedRows(data || [])
+  return filterByCompanyScope(mapNestedRows(data || []), scope, (row: any) => [row.requesting_company_id, row.company?.id])
 }
 
-export async function fetchStoreOverview(supabase: AnySupabase): Promise<StoreOverview> {
+export async function fetchStoreOverview(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreOverview> {
   const [
     { data: items, error: itemsError },
     { data: locations, error: locationsError },
@@ -77,35 +211,41 @@ export async function fetchStoreOverview(supabase: AnySupabase): Promise<StoreOv
     { data: receipts, error: receiptsError },
     { data: movements, error: movementsError },
   ] = await Promise.all([
-    supabase
+    applyOrganizationFilter(
+      supabase
       .from('inventory_items')
       .select('id, name, barcode, sale_price, unit, item_type, low_stock_threshold, is_active, category:category_id(id, name)')
       .eq('is_active', true)
       .order('name', { ascending: true }),
-    supabase
+      scope,
+    ),
+    applyOrganizationFilter(
+      supabase
       .from('inventory_locations')
-      .select('id, company_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+      .select('id, company_id, organization_id, name, code, location_type, is_active, company:company_id(id, name, code)')
       .eq('is_active', true)
       .order('location_type', { ascending: true })
       .order('name', { ascending: true }),
+      scope,
+    ),
     supabase
       .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
       .gt('quantity', 0)
       .order('updated_at', { ascending: false }),
     supabase
       .from('inventory_requests')
-      .select('id, status, comment, decision_comment, created_at, approved_at, company:requesting_company_id(id, name, code), source_location:source_location_id(id, name, code, location_type), target_location:target_location_id(id, name, code, location_type), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode, unit))')
+      .select('id, requesting_company_id, status, comment, decision_comment, created_at, approved_at, company:requesting_company_id(id, name, code), source_location:source_location_id(id, name, code, location_type, organization_id), target_location:target_location_id(id, name, code, location_type, organization_id), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode, unit))')
       .order('created_at', { ascending: false })
       .limit(24),
     supabase
       .from('inventory_receipts')
-      .select('id, received_at, total_amount, invoice_number, comment, location:location_id(id, name, code, location_type), supplier:supplier_id(id, name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, item:item_id(id, name, barcode, unit))')
+      .select('id, received_at, total_amount, invoice_number, comment, location:location_id(id, name, code, location_type, organization_id, company_id), supplier:supplier_id(id, name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, item:item_id(id, name, barcode, unit))')
       .order('created_at', { ascending: false })
       .limit(10),
     supabase
       .from('inventory_movements')
-      .select('id, movement_type, quantity, unit_cost, total_amount, reference_type, comment, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .select('id, movement_type, quantity, unit_cost, total_amount, reference_type, comment, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
       .order('created_at', { ascending: false })
       .limit(16),
   ])
@@ -118,35 +258,38 @@ export async function fetchStoreOverview(supabase: AnySupabase): Promise<StoreOv
   if (movementsError) throw movementsError
 
   return {
-    items: mapNestedRows(items || []),
-    locations: mapNestedRows(locations || []),
-    balances: mapNestedRows(balances || []),
-    requests: mapNestedRows(requests || []),
-    receipts: mapNestedRows(receipts || []),
-    movements: mapNestedRows(movements || []),
+    items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
+    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
+    requests: filterByCompanyScope(mapNestedRows(requests || []), scope, (row: any) => [row.requesting_company_id, row.company?.id]),
+    receipts: filterByLocationScope(mapNestedRows(receipts || []), scope, (row: any) => row.location),
+    movements: filterByMovementScope(mapNestedRows(movements || []), scope),
   }
 }
 
-export async function fetchStoreAnalytics(supabase: AnySupabase): Promise<StoreAnalyticsData> {
+export async function fetchStoreAnalytics(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreAnalyticsData> {
   const [
     { data: locations, error: locationsError },
     { data: balances, error: balancesError },
     { data: movements, error: movementsError },
   ] = await Promise.all([
-    supabase
+    applyOrganizationFilter(
+      supabase
       .from('inventory_locations')
-      .select('id, company_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+      .select('id, company_id, organization_id, name, code, location_type, is_active, company:company_id(id, name, code)')
       .eq('is_active', true)
       .order('location_type', { ascending: true })
       .order('name', { ascending: true }),
+      scope,
+    ),
     supabase
       .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, low_stock_threshold), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
       .gt('quantity', 0)
       .order('updated_at', { ascending: false }),
     supabase
       .from('inventory_movements')
-      .select('id, movement_type, quantity, total_amount, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .select('id, movement_type, quantity, total_amount, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
       .order('created_at', { ascending: false })
       .limit(320),
   ])
@@ -156,34 +299,40 @@ export async function fetchStoreAnalytics(supabase: AnySupabase): Promise<StoreA
   if (movementsError) throw movementsError
 
   return {
-    locations: mapNestedRows(locations || []),
-    balances: mapNestedRows(balances || []),
-    movements: mapNestedRows(movements || []),
+    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
+    movements: filterByMovementScope(mapNestedRows(movements || []), scope),
   }
 }
 
-export async function fetchStoreReceipts(supabase: AnySupabase): Promise<StoreReceiptsData> {
+export async function fetchStoreReceipts(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreReceiptsData> {
   const [
     { data: items, error: itemsError },
     { data: suppliers, error: suppliersError },
     { data: locations, error: locationsError },
     { data: receipts, error: receiptsError },
   ] = await Promise.all([
-    supabase
+    applyOrganizationFilter(
+      supabase
       .from('inventory_items')
       .select('id, name, barcode, unit, default_purchase_price, item_type, category:category_id(id, name)')
       .eq('is_active', true)
       .order('name', { ascending: true }),
-    supabase.from('inventory_suppliers').select('*').order('name', { ascending: true }),
-    supabase
+      scope,
+    ),
+    applyOrganizationFilter(supabase.from('inventory_suppliers').select('*').order('name', { ascending: true }), scope),
+    applyOrganizationFilter(
+      supabase
       .from('inventory_locations')
-      .select('id, company_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+      .select('id, company_id, organization_id, name, code, location_type, is_active, company:company_id(id, name, code)')
       .eq('location_type', 'warehouse')
       .eq('is_active', true)
       .order('name', { ascending: true }),
+      scope,
+    ),
     supabase
       .from('inventory_receipts')
-      .select('id, location_id, supplier_id, received_at, invoice_number, comment, total_amount, status, created_at, location:location_id(id, name, code, location_type), supplier:supplier_id(id, name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode, unit))')
+      .select('id, location_id, supplier_id, received_at, invoice_number, comment, total_amount, status, created_at, location:location_id(id, name, code, location_type, organization_id, company_id), supplier:supplier_id(id, name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode, unit))')
       .order('created_at', { ascending: false })
       .limit(60),
   ])
@@ -194,63 +343,72 @@ export async function fetchStoreReceipts(supabase: AnySupabase): Promise<StoreRe
   if (receiptsError) throw receiptsError
 
   return {
-    items: mapNestedRows(items || []),
-    suppliers: suppliers || [],
-    locations: mapNestedRows(locations || []),
-    receipts: mapNestedRows(receipts || []),
+    items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
+    suppliers: filterByOrganizationScope((suppliers || []) as any[], scope, (row: any) => row.organization_id),
+    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    receipts: filterByLocationScope(mapNestedRows(receipts || []), scope, (row: any) => row.location),
   }
 }
 
-export async function fetchStoreMovements(supabase: AnySupabase): Promise<StoreMovementsData> {
+export async function fetchStoreMovements(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreMovementsData> {
   const [{ data: movements, error: movementsError }, { data: locations, error: locationsError }] = await Promise.all([
     supabase
       .from('inventory_movements')
-      .select('id, movement_type, quantity, unit_cost, total_amount, reference_type, comment, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .select('id, movement_type, quantity, unit_cost, total_amount, reference_type, comment, created_at, item:item_id(id, name, barcode, unit), from_location:from_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
       .order('created_at', { ascending: false })
       .limit(160),
-    supabase
+    applyOrganizationFilter(
+      supabase
       .from('inventory_locations')
-      .select('id, company_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+      .select('id, company_id, organization_id, name, code, location_type, is_active, company:company_id(id, name, code)')
       .eq('is_active', true)
       .order('location_type', { ascending: true })
       .order('name', { ascending: true }),
+      scope,
+    ),
   ])
 
   if (movementsError) throw movementsError
   if (locationsError) throw locationsError
 
   return {
-    movements: mapNestedRows(movements || []),
-    locations: mapNestedRows(locations || []),
+    movements: filterByMovementScope(mapNestedRows(movements || []), scope),
+    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
   }
 }
 
-export async function fetchStoreWriteoffs(supabase: AnySupabase): Promise<StoreWriteoffsData> {
+export async function fetchStoreWriteoffs(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreWriteoffsData> {
   const [
     { data: items, error: itemsError },
     { data: locations, error: locationsError },
     { data: balances, error: balancesError },
     { data: writeoffs, error: writeoffsError },
   ] = await Promise.all([
-    supabase
+    applyOrganizationFilter(
+      supabase
       .from('inventory_items')
       .select('id, name, barcode, unit, item_type, is_active, category:category_id(id, name)')
       .eq('is_active', true)
       .order('name', { ascending: true }),
-    supabase
+      scope,
+    ),
+    applyOrganizationFilter(
+      supabase
       .from('inventory_locations')
-      .select('id, company_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+      .select('id, company_id, organization_id, name, code, location_type, is_active, company:company_id(id, name, code)')
       .eq('is_active', true)
       .order('location_type', { ascending: true })
       .order('name', { ascending: true }),
+      scope,
+    ),
     supabase
       .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
       .gt('quantity', 0)
       .order('updated_at', { ascending: false }),
     supabase
       .from('inventory_writeoffs')
-      .select('id, location_id, written_at, reason, comment, total_amount, created_at, location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), items:inventory_writeoff_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode, unit))')
+      .select('id, location_id, written_at, reason, comment, total_amount, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_writeoff_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode, unit))')
       .order('created_at', { ascending: false })
       .limit(80),
   ])
@@ -261,38 +419,44 @@ export async function fetchStoreWriteoffs(supabase: AnySupabase): Promise<StoreW
   if (writeoffsError) throw writeoffsError
 
   return {
-    items: mapNestedRows(items || []),
-    locations: mapNestedRows(locations || []),
-    balances: mapNestedRows(balances || []),
-    writeoffs: mapNestedRows(writeoffs || []),
+    items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
+    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
+    writeoffs: filterByLocationScope(mapNestedRows(writeoffs || []), scope, (row: any) => row.location),
   }
 }
 
-export async function fetchStoreRevisions(supabase: AnySupabase): Promise<StoreRevisionsData> {
+export async function fetchStoreRevisions(supabase: AnySupabase, scope?: InventoryScope): Promise<StoreRevisionsData> {
   const [
     { data: items, error: itemsError },
     { data: locations, error: locationsError },
     { data: balances, error: balancesError },
     { data: stocktakes, error: stocktakesError },
   ] = await Promise.all([
-    supabase
+    applyOrganizationFilter(
+      supabase
       .from('inventory_items')
       .select('id, name, barcode, unit, item_type, is_active, category:category_id(id, name)')
       .eq('is_active', true)
       .order('name', { ascending: true }),
-    supabase
+      scope,
+    ),
+    applyOrganizationFilter(
+      supabase
       .from('inventory_locations')
-      .select('id, company_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+      .select('id, company_id, organization_id, name, code, location_type, is_active, company:company_id(id, name, code)')
       .eq('is_active', true)
       .order('location_type', { ascending: true })
       .order('name', { ascending: true }),
+      scope,
+    ),
     supabase
       .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, item_type), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
       .order('updated_at', { ascending: false }),
     supabase
       .from('inventory_stocktakes')
-      .select('id, location_id, counted_at, comment, created_at, location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode, unit))')
+      .select('id, location_id, counted_at, comment, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode, unit))')
       .order('created_at', { ascending: false })
       .limit(80),
   ])
@@ -303,14 +467,14 @@ export async function fetchStoreRevisions(supabase: AnySupabase): Promise<StoreR
   if (stocktakesError) throw stocktakesError
 
   return {
-    items: mapNestedRows(items || []),
-    locations: mapNestedRows(locations || []),
-    balances: mapNestedRows(balances || []),
-    stocktakes: mapNestedRows(stocktakes || []),
+    items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
+    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
+    stocktakes: filterByLocationScope(mapNestedRows(stocktakes || []), scope, (row: any) => row.location),
   }
 }
 
-export async function fetchInventoryOverview(supabase: AnySupabase): Promise<InventoryOverview> {
+export async function fetchInventoryOverview(supabase: AnySupabase, scope?: InventoryScope): Promise<InventoryOverview> {
   const [
     { data: categories, error: categoriesError },
     { data: suppliers, error: suppliersError },
@@ -324,47 +488,57 @@ export async function fetchInventoryOverview(supabase: AnySupabase): Promise<Inv
     { data: movements, error: movementsError },
     { data: companies, error: companiesError },
   ] = await Promise.all([
-    supabase.from('inventory_categories').select('*').order('name', { ascending: true }),
-    supabase.from('inventory_suppliers').select('*').order('name', { ascending: true }),
-    supabase
+    applyOrganizationFilter(supabase.from('inventory_categories').select('*').order('name', { ascending: true }), scope),
+    applyOrganizationFilter(supabase.from('inventory_suppliers').select('*').order('name', { ascending: true }), scope),
+    applyOrganizationFilter(
+      supabase
       .from('inventory_items')
-      .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, created_at, updated_at, category:category_id(id, name)')
+      .select('id, name, barcode, organization_id, category_id, sale_price, default_purchase_price, unit, notes, is_active, created_at, updated_at, category:category_id(id, name)')
       .order('name', { ascending: true }),
-    supabase
+      scope,
+    ),
+    applyOrganizationFilter(
+      supabase
       .from('inventory_locations')
-      .select('id, company_id, name, code, location_type, is_active, created_at, updated_at, company:company_id(id, name, code)')
+      .select('id, company_id, organization_id, name, code, location_type, is_active, created_at, updated_at, company:company_id(id, name, code)')
       .order('location_type', { ascending: true })
       .order('name', { ascending: true }),
+      scope,
+    ),
     supabase
       .from('inventory_balances')
-      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode), location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode), location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
       .order('updated_at', { ascending: false }),
     supabase
       .from('inventory_receipts')
-      .select('id, location_id, supplier_id, received_at, invoice_number, comment, total_amount, status, created_by, created_at, location:location_id(id, name, code, location_type), supplier:supplier_id(id, name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode))')
+      .select('id, location_id, supplier_id, received_at, invoice_number, comment, total_amount, status, created_by, created_at, location:location_id(id, name, code, location_type, company_id, organization_id), supplier:supplier_id(id, name), items:inventory_receipt_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode))')
       .order('created_at', { ascending: false })
       .limit(20),
     supabase
       .from('inventory_requests')
-      .select('id, source_location_id, target_location_id, requesting_company_id, status, comment, decision_comment, created_by, approved_by, approved_at, created_at, updated_at, source_location:source_location_id(id, name, code, location_type), target_location:target_location_id(id, name, code, location_type), company:requesting_company_id(id, name, code), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode))')
+      .select('id, source_location_id, target_location_id, requesting_company_id, status, comment, decision_comment, created_by, approved_by, approved_at, created_at, updated_at, source_location:source_location_id(id, name, code, location_type, organization_id), target_location:target_location_id(id, name, code, location_type, organization_id), company:requesting_company_id(id, name, code), items:inventory_request_items(id, item_id, requested_qty, approved_qty, comment, item:item_id(id, name, barcode))')
       .order('created_at', { ascending: false })
       .limit(20),
     supabase
       .from('inventory_writeoffs')
-      .select('id, location_id, written_at, reason, comment, total_amount, created_by, created_at, location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), items:inventory_writeoff_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode))')
+      .select('id, location_id, written_at, reason, comment, total_amount, created_by, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_writeoff_items(id, item_id, quantity, unit_cost, total_cost, comment, item:item_id(id, name, barcode))')
       .order('created_at', { ascending: false })
       .limit(20),
     supabase
       .from('inventory_stocktakes')
-      .select('id, location_id, counted_at, comment, created_by, created_at, location:location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode))')
+      .select('id, location_id, counted_at, comment, created_by, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode))')
       .order('created_at', { ascending: false })
       .limit(20),
     supabase
       .from('inventory_movements')
-      .select('id, item_id, movement_type, from_location_id, to_location_id, quantity, unit_cost, total_amount, reference_type, reference_id, comment, actor_user_id, created_at, item:item_id(id, name, barcode), from_location:from_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, company:company_id(id, name, code))')
+      .select('id, item_id, movement_type, from_location_id, to_location_id, quantity, unit_cost, total_amount, reference_type, reference_id, comment, actor_user_id, created_at, item:item_id(id, name, barcode), from_location:from_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
       .order('created_at', { ascending: false })
       .limit(300),
-    supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
+    scope?.allowedCompanyIds && scope.allowedCompanyIds.length > 0
+      ? supabase.from('companies').select('id, name, code').in('id', scope.allowedCompanyIds).order('name', { ascending: true })
+      : scope?.isSuperAdmin
+        ? supabase.from('companies').select('id, name, code').order('name', { ascending: true })
+        : Promise.resolve({ data: [], error: null } as const),
   ])
 
   if (categoriesError) throw categoriesError
@@ -380,28 +554,30 @@ export async function fetchInventoryOverview(supabase: AnySupabase): Promise<Inv
   if (companiesError) throw companiesError
 
   return {
-    categories: mapNestedRows(categories || []),
-    suppliers: suppliers || [],
-    items: mapNestedRows(items || []),
-    locations: mapNestedRows(locations || []),
-    balances: mapNestedRows(balances || []),
-    receipts: mapNestedRows(receipts || []),
-    requests: mapNestedRows(requests || []),
-    writeoffs: mapNestedRows(writeoffs || []),
-    stocktakes: mapNestedRows(stocktakes || []),
-    movements: mapNestedRows(movements || []),
-    companies: companies || [],
+    categories: filterByOrganizationScope(mapNestedRows(categories || []), scope, (row: any) => row.organization_id),
+    suppliers: filterByOrganizationScope((suppliers || []) as any[], scope, (row: any) => row.organization_id),
+    items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
+    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
+    balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
+    receipts: filterByLocationScope(mapNestedRows(receipts || []), scope, (row: any) => row.location),
+    requests: filterByCompanyScope(mapNestedRows(requests || []), scope, (row: any) => [row.requesting_company_id, row.company?.id]),
+    writeoffs: filterByLocationScope(mapNestedRows(writeoffs || []), scope, (row: any) => row.location),
+    stocktakes: filterByLocationScope(mapNestedRows(stocktakes || []), scope, (row: any) => row.location),
+    movements: filterByMovementScope(mapNestedRows(movements || []), scope),
+    companies: Array.isArray(companies) ? [...companies] : [],
   }
 }
 
 export async function createInventoryCategory(
   supabase: AnySupabase,
   payload: { name: string; description?: string | null },
+  scope?: InventoryScope,
 ) {
   const { data, error } = await supabase
     .from('inventory_categories')
     .insert([
       {
+        organization_id: scope?.organizationId || null,
         name: payload.name.trim(),
         description: payload.description?.trim() || null,
       },
@@ -416,11 +592,13 @@ export async function createInventoryCategory(
 export async function createInventorySupplier(
   supabase: AnySupabase,
   payload: { name: string; contact_name?: string | null; phone?: string | null; notes?: string | null },
+  scope?: InventoryScope,
 ) {
   const { data, error } = await supabase
     .from('inventory_suppliers')
     .insert([
       {
+        organization_id: scope?.organizationId || null,
         name: payload.name.trim(),
         contact_name: payload.contact_name?.trim() || null,
         phone: payload.phone?.trim() || null,
@@ -447,11 +625,13 @@ export async function createInventoryItem(
     item_type?: string
     low_stock_threshold?: number | null
   },
+  scope?: InventoryScope,
 ) {
   const { data, error } = await supabase
     .from('inventory_items')
     .insert([
       {
+        organization_id: scope?.organizationId || null,
         name: payload.name.trim(),
         barcode: payload.barcode.trim(),
         category_id: payload.category_id || null,
@@ -477,18 +657,24 @@ export async function syncInventoryItemToPointProducts(
     barcode: string
     sale_price: number
     is_active?: boolean
-  },
+  } & InventoryScope,
 ) {
   const normalizedBarcode = String(payload.barcode || '').trim()
   const normalizedName = String(payload.name || '').trim()
   if (!normalizedBarcode || !normalizedName) return { syncedCompanyIds: [] as string[] }
 
-  const { data: locations, error: locationsError } = await supabase
+  let locationsQuery = supabase
     .from('inventory_locations')
     .select('company_id')
     .eq('location_type', 'point_display')
     .eq('is_active', true)
     .not('company_id', 'is', null)
+
+  if (payload.organizationId && !payload.isSuperAdmin) {
+    locationsQuery = locationsQuery.eq('organization_id', String(payload.organizationId))
+  }
+
+  const { data: locations, error: locationsError } = await locationsQuery
 
   if (locationsError) throw locationsError
 
@@ -522,13 +708,15 @@ export async function updateInventoryCategory(
   supabase: AnySupabase,
   id: string,
   payload: { name: string; description?: string | null },
+  scope?: InventoryScope,
 ) {
-  const { data, error } = await supabase
+  let query: any = supabase
     .from('inventory_categories')
     .update({ name: payload.name.trim(), description: payload.description?.trim() || null, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .select('*')
-    .single()
+  if (hasOrganizationScope(scope)) query = query.eq('organization_id', String(scope?.organizationId || ''))
+  query = query.select('*').single()
+  const { data, error } = await query
   if (error) throw error
   return data
 }
@@ -537,8 +725,9 @@ export async function updateInventorySupplier(
   supabase: AnySupabase,
   id: string,
   payload: { name: string; contact_name?: string | null; phone?: string | null; notes?: string | null },
+  scope?: InventoryScope,
 ) {
-  const { data, error } = await supabase
+  let query: any = supabase
     .from('inventory_suppliers')
     .update({
       name: payload.name.trim(),
@@ -548,8 +737,9 @@ export async function updateInventorySupplier(
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .select('*')
-    .single()
+  if (hasOrganizationScope(scope)) query = query.eq('organization_id', String(scope?.organizationId || ''))
+  query = query.select('*').single()
+  const { data, error } = await query
   if (error) throw error
   return data
 }
@@ -568,8 +758,9 @@ export async function updateInventoryItem(
     item_type?: string
     low_stock_threshold?: number | null
   },
+  scope?: InventoryScope,
 ) {
-  const { data, error } = await supabase
+  let query: any = supabase
     .from('inventory_items')
     .update({
       name: payload.name.trim(),
@@ -584,8 +775,9 @@ export async function updateInventoryItem(
       low_stock_threshold: payload.low_stock_threshold ?? null,
     })
     .eq('id', id)
-    .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, created_at, updated_at, category:category_id(id, name)')
-    .single()
+  if (hasOrganizationScope(scope)) query = query.eq('organization_id', String(scope?.organizationId || ''))
+  query = query.select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, created_at, updated_at, category:category_id(id, name)').single()
+  const { data, error } = await query
   if (error) throw error
   return mapNestedRow(data)
 }
@@ -839,7 +1031,7 @@ function mapNestedRows<T>(rows: T[]): T[] {
   return rows.map((row) => mapNestedRow(row))
 }
 
-export async function fetchConsumableDashboard(supabase: AnySupabase) {
+export async function fetchConsumableDashboard(supabase: AnySupabase, scope?: InventoryScope) {
   const [
     { data: items, error: itemsError },
     { data: norms, error: normsError },
@@ -848,12 +1040,15 @@ export async function fetchConsumableDashboard(supabase: AnySupabase) {
     { data: locations, error: locationsError },
     { data: companies, error: companiesError },
   ] = await Promise.all([
-    supabase
+    applyOrganizationFilter(
+      supabase
       .from('inventory_items')
       .select('id, name, barcode, unit, category_id, category:category_id(id, name)')
       .eq('item_type', 'consumable')
       .eq('is_active', true)
       .order('name', { ascending: true }),
+      scope,
+    ),
     supabase
       .from('inventory_consumption_norms')
       .select('id, item_id, location_id, monthly_qty, alert_days'),
@@ -862,13 +1057,20 @@ export async function fetchConsumableDashboard(supabase: AnySupabase) {
       .select('id, item_id, company_id, monthly_limit_qty'),
     supabase
       .from('inventory_balances')
-      .select('location_id, item_id, quantity, item:item_id(id, name), location:location_id(id, name, location_type, company_id)')
+      .select('location_id, item_id, quantity, item:item_id(id, name), location:location_id(id, name, location_type, company_id, organization_id)')
       .gt('quantity', 0),
-    supabase
+    applyOrganizationFilter(
+      supabase
       .from('inventory_locations')
-      .select('id, name, location_type, company_id, company:company_id(id, name, code)')
+      .select('id, name, location_type, company_id, organization_id, company:company_id(id, name, code)')
       .eq('is_active', true),
-    supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
+      scope,
+    ),
+    scope?.allowedCompanyIds && scope.allowedCompanyIds.length > 0
+      ? supabase.from('companies').select('id, name, code').in('id', scope.allowedCompanyIds).order('name', { ascending: true })
+      : scope?.isSuperAdmin
+        ? supabase.from('companies').select('id, name, code').order('name', { ascending: true })
+        : Promise.resolve({ data: [], error: null } as const),
   ])
 
   if (itemsError) throw itemsError
@@ -879,11 +1081,11 @@ export async function fetchConsumableDashboard(supabase: AnySupabase) {
   if (companiesError) throw companiesError
 
   return {
-    items: mapNestedRows(items || []),
+    items: filterByOrganizationScope(mapNestedRows(items || []), scope, (row: any) => row.organization_id),
     norms: norms || [],
-    limits: limits || [],
-    balances: mapNestedRows(balances || []),
-    locations: mapNestedRows(locations || []),
+    limits: filterByCompanyScope((limits || []) as any[], scope, (row: any) => [row.company_id]),
+    balances: filterByLocationScope(mapNestedRows(balances || []), scope, (row: any) => row.location),
+    locations: filterByOrganizationScope(mapNestedRows(locations || []), scope, (row: any) => row.organization_id),
     companies: companies || [],
   }
 }

@@ -2,9 +2,16 @@ import { NextResponse } from 'next/server'
 
 import { addDaysISO } from '@/lib/core/date'
 import { calculateOperatorWeekSummary } from '@/lib/domain/salary'
+import {
+  ensureOrganizationOperatorAccess,
+  listOrganizationCompanyIds,
+  listOrganizationCompanyCodes,
+  listOrganizationOperatorIds,
+  resolveCompanyScope,
+} from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { listOperatorSalaryData, listSalaryReferenceData } from '@/lib/server/repositories/salary'
-import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 type AdjustmentKind = 'debt' | 'fine' | 'bonus' | 'advance'
@@ -187,15 +194,17 @@ async function ensureSalaryWeekSnapshot(params: {
   operatorId: string
   weekStart: string
   actorUserId: string | null
+  companyIds?: string[] | null
   references?: Awaited<ReturnType<typeof listSalaryReferenceData>>
 }) {
   const weekEnd = addDaysISO(params.weekStart, 6)
-  const references = params.references || (await listSalaryReferenceData(params.supabase))
+  const references = params.references || (await listSalaryReferenceData(params.supabase, { companyIds: params.companyIds || null }))
   const operatorData = await listOperatorSalaryData(params.supabase, {
     operatorId: params.operatorId,
     dateFrom: params.weekStart,
     dateTo: weekEnd,
     weekStart: params.weekStart,
+    companyIds: params.companyIds || null,
   })
 
   const summary = calculateOperatorWeekSummary({
@@ -335,6 +344,22 @@ export async function GET(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'salary')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
+    const [allowedCompanyIds, allowedOperatorIds] = await Promise.all([
+      listOrganizationCompanyIds({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      }),
+      listOrganizationOperatorIds({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      }),
+    ])
+    const allowedCompanyCodes = await listOrganizationCompanyCodes({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     const url = new URL(req.url)
     const view = url.searchParams.get('view')
@@ -346,7 +371,48 @@ export async function GET(req: Request) {
 
       const weekEnd = addDaysISO(weekStart, 6)
       const supabase = createAdminSupabaseClient()
-      const referencesPromise = listSalaryReferenceData(supabase)
+      const referencesPromise = listSalaryReferenceData(supabase, { companyIds: allowedCompanyIds || null })
+
+      if (!access.isSuperAdmin && (!allowedOperatorIds || allowedOperatorIds.length === 0)) {
+        return json({
+          ok: true,
+          data: {
+            weekStart,
+            weekEnd,
+            operators: [],
+            totals: {
+              grossAmount: 0,
+              bonusAmount: 0,
+              fineAmount: 0,
+              debtAmount: 0,
+              advanceAmount: 0,
+              netAmount: 0,
+              paidAmount: 0,
+              remainingAmount: 0,
+              paidOperators: 0,
+              partialOperators: 0,
+              activeOperators: 0,
+              totalOperators: 0,
+            },
+          },
+        })
+      }
+
+      let activeOperatorsQuery = supabase
+        .from('operators')
+        .select('id,name,short_name,is_active,telegram_chat_id,operator_profiles(*)')
+        .eq('is_active', true)
+        .order('name')
+      if (allowedOperatorIds) activeOperatorsQuery = activeOperatorsQuery.in('id', allowedOperatorIds)
+
+      let existingWeeksQuery = supabase
+        .from('operator_salary_weeks')
+        .select('operator_id,remaining_amount,paid_amount,net_amount,status')
+        .eq('week_start', weekStart)
+      if (allowedOperatorIds) existingWeeksQuery = existingWeeksQuery.in('operator_id', allowedOperatorIds)
+
+      let documentsQuery = supabase.from('operator_documents').select('operator_id,expiry_date')
+      if (allowedOperatorIds) documentsQuery = documentsQuery.in('operator_id', allowedOperatorIds)
 
       const [
         references,
@@ -355,16 +421,9 @@ export async function GET(req: Request) {
         { data: documents, error: documentsError },
       ] = await Promise.all([
         referencesPromise,
-        supabase
-          .from('operators')
-          .select('id,name,short_name,is_active,telegram_chat_id,operator_profiles(*)')
-          .eq('is_active', true)
-          .order('name'),
-        supabase
-          .from('operator_salary_weeks')
-          .select('operator_id,remaining_amount,paid_amount,net_amount,status')
-          .eq('week_start', weekStart),
-        supabase.from('operator_documents').select('operator_id,expiry_date'),
+        activeOperatorsQuery,
+        existingWeeksQuery,
+        documentsQuery,
       ])
 
       if (activeOperatorsError) throw activeOperatorsError
@@ -442,6 +501,7 @@ export async function GET(req: Request) {
             operatorId: operator.id,
             weekStart,
             actorUserId: null,
+            companyIds: allowedCompanyIds || null,
             references,
           }),
         ),
@@ -634,9 +694,23 @@ export async function GET(req: Request) {
       if (!operatorId || !weekStart) {
         return json({ error: 'operatorId and weekStart are required' }, 400)
       }
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId,
+      })
 
       const weekEnd = addDaysISO(weekStart, 6)
       const supabase = createAdminSupabaseClient()
+
+      let incomesQuery = supabase
+        .from('incomes')
+        .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment')
+        .eq('operator_id', operatorId)
+        .gte('date', weekStart)
+        .lte('date', weekEnd)
+        .order('date', { ascending: false })
+      if (allowedCompanyIds) incomesQuery = incomesQuery.in('company_id', allowedCompanyIds)
 
       const [
         { data: operatorRow, error: operatorError },
@@ -648,21 +722,15 @@ export async function GET(req: Request) {
           .select('id, name, short_name, is_active, telegram_chat_id, operator_profiles(*)')
           .eq('id', operatorId)
           .maybeSingle(),
-        listSalaryReferenceData(supabase),
-        supabase
-          .from('incomes')
-          .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment')
-          .eq('operator_id', operatorId)
-          .gte('date', weekStart)
-          .lte('date', weekEnd)
-          .order('date', { ascending: false }),
+        listSalaryReferenceData(supabase, { companyIds: allowedCompanyIds || null }),
+        incomesQuery,
       ])
 
       if (operatorError) throw operatorError
       if (incomesError) throw incomesError
       if (!operatorRow) return json({ error: 'operator-not-found' }, 404)
 
-      const snapshot = await ensureSalaryWeekSnapshot({ supabase, operatorId, weekStart, actorUserId: null, references })
+      const snapshot = await ensureSalaryWeekSnapshot({ supabase, operatorId, weekStart, actorUserId: null, companyIds: allowedCompanyIds || null, references })
 
       const [
         { data: payments, error: paymentsError },
@@ -781,15 +849,45 @@ export async function GET(req: Request) {
       return json({ error: 'unsupported-view' }, 400)
     }
 
-    const operatorId = (url.searchParams.get('operatorId') || '').trim()
-    const dateFrom = normalizeIsoDate(url.searchParams.get('dateFrom'))
-    const dateTo = normalizeIsoDate(url.searchParams.get('dateTo'))
+      const operatorId = (url.searchParams.get('operatorId') || '').trim()
+      const dateFrom = normalizeIsoDate(url.searchParams.get('dateFrom'))
+      const dateTo = normalizeIsoDate(url.searchParams.get('dateTo'))
 
     if (!operatorId || !dateFrom || !dateTo) {
       return json({ error: 'operatorId, dateFrom and dateTo are required' }, 400)
     }
+    await ensureOrganizationOperatorAccess({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+      operatorId,
+    })
 
     const supabase = createAdminSupabaseClient()
+    let companiesQuery = supabase.from('companies').select('id, name, code').order('name')
+    if (allowedCompanyIds) companiesQuery = companiesQuery.in('id', allowedCompanyIds)
+    let rulesQuery = supabase
+      .from('operator_salary_rules')
+      .select(
+        'company_code, shift_type, base_per_shift, senior_operator_bonus, senior_cashier_bonus, threshold1_turnover, threshold1_bonus, threshold2_turnover, threshold2_bonus',
+      )
+      .eq('is_active', true)
+    if (allowedCompanyCodes) rulesQuery = rulesQuery.in('company_code', allowedCompanyCodes)
+    let assignmentsQuery = supabase
+      .from('operator_company_assignments')
+      .select('operator_id, company_id, role_in_company, is_active')
+      .eq('operator_id', operatorId)
+      .eq('is_active', true)
+    let incomesQuery2 = supabase
+      .from('incomes')
+      .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment')
+      .eq('operator_id', operatorId)
+      .gte('date', dateFrom)
+      .lte('date', dateTo)
+      .order('date', { ascending: false })
+    if (allowedCompanyIds) {
+      assignmentsQuery = assignmentsQuery.in('company_id', allowedCompanyIds)
+      incomesQuery2 = incomesQuery2.in('company_id', allowedCompanyIds)
+    }
     const [
       { data: operator, error: operatorError },
       { data: companies, error: companiesError },
@@ -803,25 +901,10 @@ export async function GET(req: Request) {
         .select('id, name, short_name, is_active, operator_profiles(*)')
         .eq('id', operatorId)
         .maybeSingle(),
-      supabase.from('companies').select('id, name, code').order('name'),
-      supabase
-        .from('operator_salary_rules')
-        .select(
-          'company_code, shift_type, base_per_shift, senior_operator_bonus, senior_cashier_bonus, threshold1_turnover, threshold1_bonus, threshold2_turnover, threshold2_bonus',
-        )
-        .eq('is_active', true),
-      supabase
-        .from('operator_company_assignments')
-        .select('operator_id, company_id, role_in_company, is_active')
-        .eq('operator_id', operatorId)
-        .eq('is_active', true),
-      supabase
-        .from('incomes')
-        .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, online_amount, card_amount, comment')
-        .eq('operator_id', operatorId)
-        .gte('date', dateFrom)
-        .lte('date', dateTo)
-        .order('date', { ascending: false }),
+      companiesQuery,
+      rulesQuery,
+      assignmentsQuery,
+      incomesQuery2,
       supabase
         .from('operator_salary_payouts')
         .select('id, operator_id, date, shift, is_paid, paid_at, comment')
@@ -867,6 +950,12 @@ export async function POST(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'salary')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
+    const allowedCompanyIds = await listOrganizationCompanyIds({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     const requestClient = createRequestSupabaseClient(req)
     const {
@@ -883,6 +972,18 @@ export async function POST(req: Request) {
     if (body.action === 'createAdjustment') {
       if (!body.payload.operator_id || !body.payload.date || !Number.isFinite(body.payload.amount)) {
         return json({ error: 'Недостаточно данных для корректировки' }, 400)
+      }
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: body.payload.operator_id,
+      })
+      if (body.payload.company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          requestedCompanyId: body.payload.company_id,
+        })
       }
 
       const { data, error } = await supabase
@@ -919,6 +1020,16 @@ export async function POST(req: Request) {
       if (!body.payload.operator_id || !body.payload.company_id || !weekStart || !paymentDate) {
         return json({ error: 'operator_id, company_id, week_start и payment_date обязательны' }, 400)
       }
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: body.payload.operator_id,
+      })
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        requestedCompanyId: body.payload.company_id,
+      })
       if (split.totalAmount <= 0) {
         return json({ error: 'Сумма аванса должна быть больше 0' }, 400)
       }
@@ -928,6 +1039,7 @@ export async function POST(req: Request) {
         operatorId: body.payload.operator_id,
         weekStart,
         actorUserId: user?.id || null,
+        companyIds: allowedCompanyIds || null,
       })
 
       const expenseComment =
@@ -1041,6 +1153,11 @@ export async function POST(req: Request) {
       if (!body.payload.operator_id || !weekStart || !paymentDate) {
         return json({ error: 'operator_id, week_start и payment_date обязательны' }, 400)
       }
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: body.payload.operator_id,
+      })
       if (split.totalAmount <= 0) {
         return json({ error: 'Сумма выплаты должна быть больше 0' }, 400)
       }
@@ -1050,6 +1167,7 @@ export async function POST(req: Request) {
         operatorId: body.payload.operator_id,
         weekStart,
         actorUserId: user?.id || null,
+        companyIds: allowedCompanyIds || null,
       })
 
       if (split.totalAmount - weekBeforePayment.remainingAmount > 0.009) {
@@ -1179,6 +1297,7 @@ export async function POST(req: Request) {
         operatorId: body.payload.operator_id,
         weekStart,
         actorUserId: user?.id || null,
+        companyIds: allowedCompanyIds || null,
       })
 
       await writeAuditLog(supabase, {
@@ -1211,6 +1330,11 @@ export async function POST(req: Request) {
       if (!body.paymentId || !weekStart2 || !body.operatorId) {
         return json({ error: 'paymentId, weekStart и operatorId обязательны' }, 400)
       }
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: body.operatorId,
+      })
 
       const { data: payment, error: paymentFetchError } = await supabase
         .from('operator_salary_week_payments')
@@ -1251,7 +1375,7 @@ export async function POST(req: Request) {
         .eq('id', body.paymentId)
       if (voidPayError) throw voidPayError
 
-      const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null })
+      const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null, companyIds: allowedCompanyIds || null })
 
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
@@ -1269,6 +1393,11 @@ export async function POST(req: Request) {
       if (!body.adjustmentId || !weekStart2 || !body.operatorId) {
         return json({ error: 'adjustmentId, weekStart и operatorId обязательны' }, 400)
       }
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: body.operatorId,
+      })
 
       const { data: adjustment, error: adjFetchError } = await supabase
         .from('operator_salary_adjustments')
@@ -1296,7 +1425,7 @@ export async function POST(req: Request) {
         .eq('id', body.adjustmentId)
       if (voidAdjError) throw voidAdjError
 
-      const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null })
+      const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null, companyIds: allowedCompanyIds || null })
 
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
@@ -1314,6 +1443,11 @@ export async function POST(req: Request) {
       if (!body.operatorId || !weekStart2) {
         return json({ error: 'operatorId и weekStart обязательны' }, 400)
       }
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: body.operatorId,
+      })
 
       const { data: activeDebts, error: fetchError } = await supabase
         .from('debts')
@@ -1361,6 +1495,11 @@ export async function POST(req: Request) {
     if (!body.operatorId) {
       return json({ error: 'operatorId обязателен' }, 400)
     }
+    await ensureOrganizationOperatorAccess({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+      operatorId: body.operatorId,
+    })
 
     const chatIdRaw = body.telegram_chat_id?.trim() || null
     if (chatIdRaw !== null && !/^-?\d+$/.test(chatIdRaw)) {

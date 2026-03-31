@@ -45,6 +45,16 @@ export async function GET(request: Request) {
       .map((value) => normalizeName(value))
       .filter(Boolean)
 
+    const { data: operatorAssignments, error: operatorAssignmentsError } = await supabase
+      .from('operator_company_assignments')
+      .select('company_id')
+      .eq('operator_id', context.operator.id)
+      .eq('is_active', true)
+
+    if (operatorAssignmentsError) throw operatorAssignmentsError
+
+    const operatorCompanyIds = [...new Set((operatorAssignments || []).map((item: any) => String(item.company_id || '')).filter(Boolean))] as string[]
+
     const [
       tasksRes,
       debtsRes,
@@ -69,15 +79,17 @@ export async function GET(request: Request) {
       supabase
         .from('shifts')
         .select('id,company_id,date,shift_type,operator_name')
+        .in('company_id', operatorCompanyIds.length > 0 ? operatorCompanyIds : ['00000000-0000-0000-0000-000000000000'])
         .gte('date', weekStart)
         .lte('date', weekEnd)
         .order('date', { ascending: true }),
-      listSalaryReferenceData(supabase),
+      listSalaryReferenceData(supabase, { companyIds: operatorCompanyIds }),
       listOperatorSalaryData(supabase, {
         operatorId: context.operator.id,
         dateFrom: weekStart,
         dateTo: weekEnd,
         weekStart,
+        companyIds: operatorCompanyIds,
       }),
       listActiveOperatorLeadAssignments(context.supabase, context.operator.id),
       supabase

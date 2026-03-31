@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 
@@ -14,6 +15,11 @@ export async function GET(request: Request) {
 
     const supabase = createAdminSupabaseClient()
     const today = new Date().toISOString().split('T')[0]
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const allowedCompanyIds = companyScope.allowedCompanyIds
 
     const [
       { data: companies, error: companiesError },
@@ -24,23 +30,42 @@ export async function GET(request: Request) {
       { data: discounts, error: discountsError },
       { data: loyaltyConfig, error: loyaltyConfigError },
     ] = await Promise.all([
-      supabase.from('companies').select('id, name, code').order('name'),
-      supabase
-        .from('inventory_locations')
-        .select('id, name, company_id, location_type')
-        .eq('location_type', 'point_display')
-        .eq('is_active', true)
-        .order('name'),
+      allowedCompanyIds && allowedCompanyIds.length > 0
+        ? supabase.from('companies').select('id, name, code').in('id', allowedCompanyIds).order('name')
+        : access.isSuperAdmin
+          ? supabase.from('companies').select('id, name, code').order('name')
+          : Promise.resolve({ data: [], error: null } as const),
+      allowedCompanyIds && allowedCompanyIds.length > 0
+        ? supabase
+            .from('inventory_locations')
+            .select('id, name, company_id, location_type')
+            .eq('location_type', 'point_display')
+            .eq('is_active', true)
+            .in('company_id', allowedCompanyIds)
+            .order('name')
+        : access.isSuperAdmin
+          ? supabase
+              .from('inventory_locations')
+              .select('id, name, company_id, location_type')
+              .eq('location_type', 'point_display')
+              .eq('is_active', true)
+              .order('name')
+          : Promise.resolve({ data: [], error: null } as const),
       supabase
         .from('inventory_items')
-        .select('id, name, barcode, sale_price, unit, category:category_id(id, name)')
+        .select('id, name, barcode, sale_price, unit, organization_id, category:category_id(id, name)')
+        .eq('organization_id', String(access.activeOrganization?.id || ''))
         .eq('is_active', true)
         .order('name'),
       supabase.from('inventory_balances').select('item_id, location_id, quantity'),
-      supabase.from('customers').select('id, name, phone, card_number, loyalty_points').order('name'),
+      allowedCompanyIds && allowedCompanyIds.length > 0
+        ? supabase.from('customers').select('id, name, phone, card_number, loyalty_points, company_id').in('company_id', allowedCompanyIds).order('name')
+        : access.isSuperAdmin
+          ? supabase.from('customers').select('id, name, phone, card_number, loyalty_points, company_id').order('name')
+          : Promise.resolve({ data: [], error: null } as const),
       supabase
         .from('discounts')
-        .select('id, name, type, value, promo_code, min_order_amount, valid_from, valid_to')
+        .select('id, name, type, value, promo_code, min_order_amount, valid_from, valid_to, company_id')
         .eq('is_active', true),
       supabase.from('loyalty_config').select('*').limit(1).maybeSingle(),
     ])
@@ -85,6 +110,7 @@ export async function GET(request: Request) {
 
     // Filter discounts: valid today
     const activeDiscounts = (discounts || []).filter((d: any) => {
+      if (allowedCompanyIds && allowedCompanyIds.length > 0 && d.company_id && !allowedCompanyIds.includes(String(d.company_id))) return false
       if (d.valid_from && d.valid_from > today) return false
       if (d.valid_to && d.valid_to < today) return false
       return true

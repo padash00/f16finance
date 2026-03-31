@@ -247,3 +247,140 @@ export async function resolveCompanyScope(params: {
     organizationId: activeOrganizationId,
   }
 }
+
+export async function listOrganizationCompanyIds(params: {
+  activeOrganizationId?: string | null
+  isSuperAdmin?: boolean
+}) {
+  const { activeOrganizationId, isSuperAdmin } = params
+  if (isSuperAdmin) return null
+  if (!activeOrganizationId) {
+    throw new Error('active-organization-required')
+  }
+
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
+  if (!supabase) {
+    throw new Error('organization-scope-unavailable')
+  }
+
+  const { data, error } = await supabase
+    .from('companies')
+    .select('id')
+    .eq('organization_id', activeOrganizationId)
+
+  if (error) throw error
+  return (data || []).map((row: any) => String(row.id))
+}
+
+export async function listOrganizationCompanyCodes(params: {
+  activeOrganizationId?: string | null
+  isSuperAdmin?: boolean
+}) {
+  const { activeOrganizationId, isSuperAdmin } = params
+  if (isSuperAdmin) return null
+  if (!activeOrganizationId) {
+    throw new Error('active-organization-required')
+  }
+
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
+  if (!supabase) {
+    throw new Error('organization-scope-unavailable')
+  }
+
+  const { data, error } = await supabase
+    .from('companies')
+    .select('code')
+    .eq('organization_id', activeOrganizationId)
+    .not('code', 'is', null)
+
+  if (error) throw error
+  return (data || [])
+    .map((row: any) => String(row.code || '').trim())
+    .filter(Boolean)
+}
+
+export async function listOrganizationOperatorIds(params: {
+  activeOrganizationId?: string | null
+  isSuperAdmin?: boolean
+}) {
+  const { activeOrganizationId, isSuperAdmin } = params
+  if (isSuperAdmin) return null
+  if (!activeOrganizationId) {
+    throw new Error('active-organization-required')
+  }
+
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
+  if (!supabase) {
+    throw new Error('organization-scope-unavailable')
+  }
+
+  const { data, error } = await supabase
+    .from('operator_company_assignments')
+    .select('operator_id, company:company_id(organization_id)')
+    .eq('is_active', true)
+
+  if (error) throw error
+
+  return Array.from(
+    new Set(
+      (data || [])
+        .filter((row: any) => {
+          const company = Array.isArray(row.company) ? row.company[0] || null : row.company || null
+          return String(company?.organization_id || '') === activeOrganizationId
+        })
+        .map((row: any) => String(row.operator_id || ''))
+        .filter(Boolean),
+    ),
+  )
+}
+
+export async function listOrganizationStaffIds(params: {
+  activeOrganizationId?: string | null
+  isSuperAdmin?: boolean
+}) {
+  const { activeOrganizationId, isSuperAdmin } = params
+  if (isSuperAdmin) return null
+  if (!activeOrganizationId) {
+    throw new Error('active-organization-required')
+  }
+
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
+  if (!supabase) {
+    throw new Error('organization-scope-unavailable')
+  }
+
+  const { data, error } = await supabase
+    .from('organization_members')
+    .select('staff_id')
+    .eq('organization_id', activeOrganizationId)
+    .not('staff_id', 'is', null)
+
+  if (error) throw error
+  return Array.from(new Set((data || []).map((row: any) => String(row.staff_id || '')).filter(Boolean)))
+}
+
+export async function ensureOrganizationOperatorAccess(params: {
+  activeOrganizationId?: string | null
+  isSuperAdmin?: boolean
+  operatorId: string
+}) {
+  const { activeOrganizationId, isSuperAdmin, operatorId } = params
+  if (isSuperAdmin) return
+  const allowedOperatorIds = await listOrganizationOperatorIds({ activeOrganizationId, isSuperAdmin })
+  if (!allowedOperatorIds?.includes(operatorId)) {
+    throw new Error('forbidden-operator')
+  }
+}
+
+export async function ensureOrganizationStaffAccess(params: {
+  activeOrganizationId?: string | null
+  isSuperAdmin?: boolean
+  staffId: string
+}) {
+  const { activeOrganizationId, isSuperAdmin, staffId } = params
+  if (isSuperAdmin) return
+  const allowedStaffIds = await listOrganizationStaffIds({ activeOrganizationId, isSuperAdmin })
+  if (!allowedStaffIds?.includes(staffId)) {
+    throw new Error('forbidden-staff')
+  }
+}

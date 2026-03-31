@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -118,6 +119,31 @@ function mapProjectRow(row: any) {
 
 const PROJECT_SELECT = 'id, name, project_token, point_mode, feature_flags, shift_report_chat_id, is_active, notes, last_seen_at, created_at, updated_at, point_project_companies(company_id, point_mode, feature_flags, company:company_id(id, name, code))'
 
+function filterProjectsByCompanyScope(projects: any[], allowedCompanyIds: string[] | null) {
+  if (!allowedCompanyIds) return projects
+  return projects
+    .map((project) => {
+      const companies = Array.isArray(project.point_project_companies) ? project.point_project_companies : []
+      return {
+        ...project,
+        point_project_companies: companies.filter((item: any) => allowedCompanyIds.includes(String(item.company_id || ''))),
+      }
+    })
+    .filter((project) => project.point_project_companies.length > 0)
+}
+
+async function ensureProjectAccess(supabase: any, projectId: string, allowedCompanyIds: string[] | null) {
+  if (!allowedCompanyIds) return
+  const { data, error } = await supabase
+    .from('point_project_companies')
+    .select('company_id')
+    .eq('project_id', projectId)
+
+  if (error) throw error
+  const hasAccess = (data || []).some((row: any) => allowedCompanyIds.includes(String(row.company_id || '')))
+  if (!hasAccess) throw new Error('forbidden-project')
+}
+
 async function getContext(request: Request) {
   const access = await getRequestAccessContext(request)
   if ('response' in access) return access
@@ -137,9 +163,15 @@ export async function GET(request: Request) {
     if ('response' in access) return access.response
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     const [{ data: companies, error: companiesError }, { data: projects, error: projectsError }] = await Promise.all([
-      supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
+      companyScope.allowedCompanyIds
+        ? supabase.from('companies').select('id, name, code').in('id', companyScope.allowedCompanyIds).order('name', { ascending: true })
+        : supabase.from('companies').select('id, name, code').order('name', { ascending: true }),
       supabase
         .from('point_projects')
         .select(PROJECT_SELECT)
@@ -153,7 +185,7 @@ export async function GET(request: Request) {
       ok: true,
       data: {
         companies: companies || [],
-        projects: ((projects || []) as any[]).map(mapProjectRow),
+        projects: filterProjectsByCompanyScope((projects || []) as any[], companyScope.allowedCompanyIds).map(mapProjectRow),
       },
     })
   } catch (error: any) {
@@ -175,6 +207,10 @@ export async function POST(request: Request) {
     const actorUserId = access.user?.id || null
     const body = (await request.json().catch(() => null)) as Body | null
     if (!body?.action) return badRequest('Неверный формат запроса')
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     if (body.action === 'createProject') {
       if (!body.payload.name?.trim()) return badRequest('Название проекта обязательно')
@@ -183,6 +219,13 @@ export async function POST(request: Request) {
         ? body.payload.company_assignments
         : []
       if (assignments.length === 0) return badRequest('Нужно добавить хотя бы одну точку в проект')
+      for (const assignment of assignments) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          requestedCompanyId: assignment.company_id,
+        })
+      }
 
       const initialToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
         .map((b) => b.toString(16).padStart(2, '0'))
@@ -222,6 +265,8 @@ export async function POST(request: Request) {
         .single()
 
       if (fullError) throw fullError
+      const scopedProject = filterProjectsByCompanyScope([full], companyScope.allowedCompanyIds)[0]
+      if (!scopedProject) return json({ error: 'forbidden-project' }, 403)
 
       await writeAuditLog(supabase, {
         actorUserId,
@@ -231,11 +276,12 @@ export async function POST(request: Request) {
         payload: { name: project.name, company_ids: assignments.map((a) => a.company_id) },
       })
 
-      return json({ ok: true, data: mapProjectRow(full) })
+      return json({ ok: true, data: mapProjectRow(scopedProject) })
     }
 
     if (!('projectId' in body) || !body.projectId?.trim()) return badRequest('projectId обязателен')
     const projectId = body.projectId
+    await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
 
     if (body.action === 'updateProject') {
       if (!body.payload.name?.trim()) return badRequest('Название проекта обязательно')
@@ -244,6 +290,13 @@ export async function POST(request: Request) {
         ? body.payload.company_assignments
         : []
       if (assignments.length === 0) return badRequest('Нужно добавить хотя бы одну точку в проект')
+      for (const assignment of assignments) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          requestedCompanyId: assignment.company_id,
+        })
+      }
 
       const { error: updateError } = await supabase
         .from('point_projects')
@@ -285,7 +338,9 @@ export async function POST(request: Request) {
         payload: { name: body.payload.name, company_ids: assignments.map((a) => a.company_id) },
       })
 
-      return json({ ok: true, data: mapProjectRow(full) })
+      const scopedProject = filterProjectsByCompanyScope([full], companyScope.allowedCompanyIds)[0]
+      if (!scopedProject) return json({ error: 'forbidden-project' }, 403)
+      return json({ ok: true, data: mapProjectRow(scopedProject) })
     }
 
     if (body.action === 'toggleProjectActive') {
@@ -306,7 +361,9 @@ export async function POST(request: Request) {
         payload: { name: data.name },
       })
 
-      return json({ ok: true, data: mapProjectRow(data) })
+      const scopedProject = filterProjectsByCompanyScope([data], companyScope.allowedCompanyIds)[0]
+      if (!scopedProject) return json({ error: 'forbidden-project' }, 403)
+      return json({ ok: true, data: mapProjectRow(scopedProject) })
     }
 
     if (body.action === 'rotateProjectToken') {
@@ -331,7 +388,9 @@ export async function POST(request: Request) {
         payload: { name: data.name },
       })
 
-      return json({ ok: true, data: mapProjectRow(data) })
+      const scopedProject = filterProjectsByCompanyScope([data], companyScope.allowedCompanyIds)[0]
+      if (!scopedProject) return json({ error: 'forbidden-project' }, 403)
+      return json({ ok: true, data: mapProjectRow(scopedProject) })
     }
 
     const { error: deleteError } = await supabase.from('point_projects').delete().eq('id', projectId)

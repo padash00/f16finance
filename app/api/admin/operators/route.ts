@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 
+import { ensureOrganizationOperatorAccess, listOrganizationOperatorIds } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type Body =
@@ -50,6 +51,8 @@ export async function GET(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'operators')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const url = new URL(req.url)
     const activeOnly = url.searchParams.get('active_only') === 'true'
@@ -64,6 +67,14 @@ export async function GET(req: Request) {
       .order('name', { ascending: true })
 
     if (activeOnly) query = query.eq('is_active', true)
+    const allowedOperatorIds = await listOrganizationOperatorIds({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    if (allowedOperatorIds) {
+      if (allowedOperatorIds.length === 0) return json({ data: [] })
+      query = query.in('id', allowedOperatorIds)
+    }
 
     const { data, error } = await query
     if (error) throw error
@@ -79,6 +90,8 @@ export async function POST(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'operators')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const requestClient = createRequestSupabaseClient(req)
     const {
@@ -136,6 +149,11 @@ export async function POST(req: Request) {
     if (body.action === 'updateOperator') {
       if (!body.operatorId?.trim()) return json({ error: 'operatorId обязателен' }, 400)
       if (!body.payload.name?.trim()) return json({ error: 'Имя оператора обязательно' }, 400)
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: body.operatorId,
+      })
 
       const { error: operatorError } = await supabase
         .from('operators')
@@ -193,6 +211,11 @@ export async function POST(req: Request) {
 
     if (body.action === 'toggleOperatorActive') {
       if (!body.operatorId?.trim()) return json({ error: 'operatorId обязателен' }, 400)
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: body.operatorId,
+      })
 
       const { error } = await supabase
         .from('operators')
@@ -214,6 +237,11 @@ export async function POST(req: Request) {
 
     if (body.action === 'deleteOperator') {
       if (!body.operatorId?.trim()) return json({ error: 'operatorId обязателен' }, 400)
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId: body.operatorId,
+      })
 
       const { error } = await supabase.from('operators').delete().eq('id', body.operatorId)
       if (error) throw error
@@ -232,6 +260,14 @@ export async function POST(req: Request) {
       const ids = Array.isArray(body.operatorIds) ? body.operatorIds.filter(Boolean) : []
       if (ids.length === 0) return json({ error: 'Нужен список операторов' }, 400)
       if (ids.length > 100) return json({ error: 'Максимум 100 операторов за один запрос' }, 400)
+
+      for (const operatorId of ids) {
+        await ensureOrganizationOperatorAccess({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          operatorId,
+        })
+      }
 
       const { error } = await supabase.from('operators').delete().in('id', ids)
       if (error) throw error

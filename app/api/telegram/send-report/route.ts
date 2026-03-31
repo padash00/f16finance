@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
@@ -42,22 +43,36 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}))
   const type = body.type || 'daily'
+  const requestedCompanyId = typeof body.company_id === 'string' ? body.company_id.trim() : ''
   const today = todayISO()
   const dateFrom = type === 'weekly' ? addDaysISO(today, -6) : today
+  const companyScope = await resolveCompanyScope({
+    activeOrganizationId: access.activeOrganization?.id || null,
+    isSuperAdmin: access.isSuperAdmin,
+    requestedCompanyId: requestedCompanyId || undefined,
+  })
 
   // Fetch data using the user's supabase client (already authenticated)
-  const [incomesRes, expensesRes] = await Promise.all([
-    access.supabase
-      .from('incomes')
-      .select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id')
-      .gte('date', dateFrom)
-      .lte('date', today),
-    access.supabase
-      .from('expenses')
-      .select('cash_amount, kaspi_amount, category, date')
-      .gte('date', dateFrom)
-      .lte('date', today),
-  ])
+  let incomesQuery = access.supabase
+    .from('incomes')
+    .select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id')
+    .gte('date', dateFrom)
+    .lte('date', today)
+  let expensesQuery = access.supabase
+    .from('expenses')
+    .select('cash_amount, kaspi_amount, category, date, company_id')
+    .gte('date', dateFrom)
+    .lte('date', today)
+
+  if (companyScope.allowedCompanyIds) {
+    if (companyScope.allowedCompanyIds.length === 0) {
+      return NextResponse.json({ error: 'no-companies-in-organization' }, { status: 403 })
+    }
+    incomesQuery = incomesQuery.in('company_id', companyScope.allowedCompanyIds)
+    expensesQuery = expensesQuery.in('company_id', companyScope.allowedCompanyIds)
+  }
+
+  const [incomesRes, expensesRes] = await Promise.all([incomesQuery, expensesQuery])
 
   let totalIncome = 0
   let totalExpense = 0

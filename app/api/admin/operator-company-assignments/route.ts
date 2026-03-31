@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
 
+import {
+  ensureOrganizationOperatorAccess,
+  resolveCompanyScope,
+} from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type CompanyRole = 'operator' | 'senior_operator' | 'senior_cashier'
@@ -78,6 +82,8 @@ export async function GET(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'operator_structure')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const requestClient = createRequestSupabaseClient(req)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient
@@ -86,12 +92,22 @@ export async function GET(req: Request) {
     const operatorId = searchParams.get('operatorId')?.trim()
     if (!operatorId) return json({ error: 'operatorId обязателен' }, 400)
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('operator_company_assignments')
       .select('id, operator_id, company_id, role_in_company, is_primary, is_active, notes, created_at, updated_at, company:company_id(id, name, code)')
       .eq('operator_id', operatorId)
       .order('is_primary', { ascending: false })
       .order('created_at', { ascending: true })
+
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    if (companyScope.allowedCompanyIds) {
+      query = query.in('company_id', companyScope.allowedCompanyIds)
+    }
+
+    const { data, error } = await query
 
     if (error) throw error
 
@@ -111,6 +127,8 @@ export async function POST(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'operator_structure')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const requestClient = createRequestSupabaseClient(req)
     const {
@@ -128,13 +146,45 @@ export async function POST(req: Request) {
     if (!operatorId) return json({ error: 'operatorId обязателен' }, 400)
 
     const normalized = normalizeAssignments(Array.isArray(body.assignments) ? body.assignments : [])
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    for (const item of normalized) {
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        requestedCompanyId: item.company_id,
+      })
+    }
 
     const { data: existingRows, error: existingError } = await supabase
       .from('operator_company_assignments')
-      .select('id, company_id, role_in_company, is_primary, is_active, notes')
+      .select('id, company_id, role_in_company, is_primary, is_active, notes, company:company_id(organization_id)')
       .eq('operator_id', operatorId)
 
     if (existingError) throw existingError
+
+    const existingCompanyRows = (existingRows || []) as any[]
+    const foreignRow = companyScope.allowedCompanyIds
+      ? existingCompanyRows.find((row) => {
+          const company = Array.isArray(row.company) ? row.company[0] || null : row.company || null
+          const organizationId = String(company?.organization_id || '')
+          return organizationId && organizationId !== String(access.activeOrganization?.id || '')
+        })
+      : null
+    if (foreignRow) {
+      return json({ error: 'forbidden-operator' }, 403)
+    }
+
+    if (existingCompanyRows.length > 0) {
+      await ensureOrganizationOperatorAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        operatorId,
+      })
+    }
 
     const existingById = new Map((existingRows || []).map((row) => [row.id as string, row]))
     const keepIds = new Set(normalized.map((item) => item.id).filter(Boolean) as string[])

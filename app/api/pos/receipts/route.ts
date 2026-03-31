@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -22,6 +23,11 @@ export async function GET(request: Request) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'))
     const pageSize = 20
     const offset = (page - 1) * pageSize
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: companyId || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     let query = supabase
       .from('point_sales')
@@ -29,7 +35,11 @@ export async function GET(request: Request) {
       .order('sold_at', { ascending: false })
       .range(offset, offset + pageSize - 1)
 
-    if (companyId) query = query.eq('company_id', companyId)
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      query = query.in('company_id', companyScope.allowedCompanyIds)
+    } else if (!access.isSuperAdmin) {
+      return json({ ok: true, data: [], total: 0, page, page_size: pageSize })
+    }
     if (locationId) query = query.eq('location_id', locationId)
     if (dateFrom) query = query.gte('sale_date', dateFrom)
     if (dateTo) query = query.lte('sale_date', dateTo)

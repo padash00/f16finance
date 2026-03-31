@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { checkAndNotifyLowStock } from '@/lib/server/low-stock-notifier'
@@ -134,6 +135,14 @@ export async function POST(request: Request) {
     const locationId = String(body.location_id || '').trim()
     if (!companyId) return json({ error: 'company_id-required' }, 400)
     if (!locationId) return json({ error: 'location_id-required' }, 400)
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: companyId,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length === 0 && !access.isSuperAdmin) {
+      return json({ error: 'forbidden-company' }, 403)
+    }
 
     const requestedItems = Array.isArray(body.items)
       ? body.items
@@ -177,7 +186,7 @@ export async function POST(request: Request) {
           .in('item_id', itemIds),
       ])
 
-    if (locationError) throw locationError
+      if (locationError) throw locationError
     if (itemError) throw itemError
     if (balanceError) throw balanceError
 

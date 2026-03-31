@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 
+import { listOrganizationCompanyIds, listOrganizationOperatorIds } from '@/lib/server/organizations'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
@@ -74,23 +75,58 @@ export async function GET(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'operator_structure')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const requestClient = createRequestSupabaseClient(req)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient
+    const allowedOperatorIds = await listOrganizationOperatorIds({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const allowedCompanyIds = await listOrganizationCompanyIds({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
-    const [operatorsRes, assignmentsRes] = await Promise.all([
-      supabase
-        .from('operators')
-        .select('id, name, short_name, is_active, telegram_chat_id, operator_profiles(full_name, birth_date, position, photo_url)')
-        .eq('is_active', true)
-        .order('name', { ascending: true }),
-      supabase
-        .from('operator_company_assignments')
-        .select('operator_id, company_id, is_primary, company:company_id(id, name, code)')
-        .eq('is_active', true)
-        .order('is_primary', { ascending: false })
-        .order('created_at', { ascending: true }),
-    ])
+    if (!access.isSuperAdmin && (!allowedOperatorIds || allowedOperatorIds.length === 0)) {
+      return json({
+        ok: true,
+        data: {
+          items: [],
+          stats: {
+            total: 0,
+            today: 0,
+            week: 0,
+            month: 0,
+            withoutBirthDate: 0,
+          },
+        },
+      })
+    }
+
+    let operatorsQuery = supabase
+      .from('operators')
+      .select('id, name, short_name, is_active, telegram_chat_id, operator_profiles(full_name, birth_date, position, photo_url)')
+      .eq('is_active', true)
+      .order('name', { ascending: true })
+
+    if (allowedOperatorIds) {
+      operatorsQuery = operatorsQuery.in('id', allowedOperatorIds)
+    }
+
+    let assignmentsQuery = supabase
+      .from('operator_company_assignments')
+      .select('operator_id, company_id, is_primary, company:company_id(id, name, code)')
+      .eq('is_active', true)
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: true })
+
+    if (allowedCompanyIds) {
+      assignmentsQuery = assignmentsQuery.in('company_id', allowedCompanyIds)
+    }
+
+    const [operatorsRes, assignmentsRes] = await Promise.all([operatorsQuery, assignmentsQuery])
 
     if (operatorsRes.error) throw operatorsRes.error
     if (assignmentsRes.error) throw assignmentsRes.error

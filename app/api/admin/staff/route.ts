@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 
+import { ensureOrganizationStaffAccess } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
@@ -60,6 +61,8 @@ export async function POST(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'staff')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const requestClient = createRequestSupabaseClient(req)
     const {
@@ -100,6 +103,21 @@ export async function POST(req: Request) {
 
       if (error) throw error
 
+      if (!access.isSuperAdmin && access.activeOrganization?.id) {
+        const { error: membershipError } = await supabase.from('organization_members').insert([
+          {
+            organization_id: access.activeOrganization.id,
+            staff_id: data.id,
+            email: data.email || null,
+            role: data.role,
+            status: data.is_active === false ? 'inactive' : 'active',
+            is_default: true,
+            metadata: { bootstrap_source: 'staff-create' },
+          },
+        ])
+        if (membershipError) throw membershipError
+      }
+
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
         entityType: 'staff',
@@ -116,6 +134,11 @@ export async function POST(req: Request) {
       if (!body.staffId?.trim()) {
         return json({ error: 'staffId обязателен' }, 400)
       }
+      await ensureOrganizationStaffAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        staffId: body.staffId,
+      })
       if (!payload.full_name?.trim()) {
         return json({ error: 'ФИО обязательно' }, 400)
       }
@@ -145,6 +168,19 @@ export async function POST(req: Request) {
         .single()
 
       if (error) throw error
+
+      if (!access.isSuperAdmin && access.activeOrganization?.id) {
+        const { error: membershipError } = await supabase
+          .from('organization_members')
+          .update({
+            email: data.email || null,
+            role: data.role,
+            status: data.is_active === false ? 'inactive' : 'active',
+          })
+          .eq('organization_id', access.activeOrganization.id)
+          .eq('staff_id', body.staffId)
+        if (membershipError) throw membershipError
+      }
 
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
@@ -178,6 +214,11 @@ export async function POST(req: Request) {
       if (!body.staffId?.trim()) {
         return json({ error: 'staffId обязателен' }, 400)
       }
+      await ensureOrganizationStaffAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        staffId: body.staffId,
+      })
 
       const { error } = await supabase
         .from('staff')
@@ -185,6 +226,15 @@ export async function POST(req: Request) {
         .eq('id', body.staffId)
 
       if (error) throw error
+
+      if (!access.isSuperAdmin && access.activeOrganization?.id) {
+        const { error: membershipError } = await supabase
+          .from('organization_members')
+          .update({ status: body.is_active ? 'active' : 'inactive' })
+          .eq('organization_id', access.activeOrganization.id)
+          .eq('staff_id', body.staffId)
+        if (membershipError) throw membershipError
+      }
 
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
@@ -209,6 +259,11 @@ export async function POST(req: Request) {
         .eq('id', paymentId)
         .single()
       if (existingError) throw existingError
+      await ensureOrganizationStaffAccess({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        staffId: String(existing.staff_id),
+      })
 
       const { error } = await supabase.from('staff_salary_payments').delete().eq('id', paymentId)
       if (error) throw error
@@ -233,6 +288,11 @@ export async function POST(req: Request) {
     if (!payload.staff_id || !payload.pay_date) {
       return json({ error: 'staff_id и pay_date обязательны' }, 400)
     }
+    await ensureOrganizationStaffAccess({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+      staffId: payload.staff_id,
+    })
     if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
       return json({ error: 'Сумма выплаты должна быть больше нуля' }, 400)
     }

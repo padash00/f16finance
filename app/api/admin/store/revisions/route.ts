@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { fetchStoreRevisions, postInventoryStocktake } from '@/lib/server/repositories/inventory'
+import { resolveCompanyScope } from '@/lib/server/organizations'
+import { ensureInventoryLocationAccess, fetchStoreRevisions, postInventoryStocktake } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -43,7 +44,16 @@ export async function GET(request: Request) {
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
-    const data = await fetchStoreRevisions(supabase as any)
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const inventoryScope = {
+      organizationId: access.activeOrganization?.id || null,
+      allowedCompanyIds: companyScope.allowedCompanyIds,
+      isSuperAdmin: access.isSuperAdmin,
+    }
+    const data = await fetchStoreRevisions(supabase as any, inventoryScope)
     return json({ ok: true, data })
   } catch (error: any) {
     await writeSystemErrorLogSafe({
@@ -63,8 +73,18 @@ export async function POST(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const actorUserId = access.user?.id || null
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const inventoryScope = {
+      organizationId: access.activeOrganization?.id || null,
+      allowedCompanyIds: companyScope.allowedCompanyIds,
+      isSuperAdmin: access.isSuperAdmin,
+    }
     const body = (await request.json().catch(() => null)) as Body | null
     if (!body?.action || body.action !== 'createRevision') return json({ error: 'invalid-action' }, 400)
+    await ensureInventoryLocationAccess(supabase as any, String(body.payload.location_id || '').trim(), inventoryScope)
 
     const result = await postInventoryStocktake(supabase as any, {
       location_id: String(body.payload.location_id || '').trim(),

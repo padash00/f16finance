@@ -5,6 +5,9 @@ import {
   createInventoryCategory,
   createInventoryItem,
   createInventoryRequest,
+  ensureInventoryCompanyAccess,
+  ensureInventoryLocationAccess,
+  ensureInventoryRequestAccess,
   createInventorySupplier,
   decideInventoryRequest,
   fetchInventoryOverview,
@@ -16,6 +19,7 @@ import {
   updateInventoryItem,
   updateInventorySupplier,
 } from '@/lib/server/repositories/inventory'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -236,7 +240,15 @@ export async function GET(request: Request) {
     if (!canManageInventory(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
-    const data = await fetchInventoryOverview(supabase as any)
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const data = await fetchInventoryOverview(supabase as any, {
+      organizationId: access.activeOrganization?.id || null,
+      allowedCompanyIds: companyScope.allowedCompanyIds,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     return json({ ok: true, data })
   } catch (error: any) {
@@ -257,6 +269,15 @@ export async function POST(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const actorUserId = access.user?.id || null
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    const inventoryScope = {
+      organizationId: access.activeOrganization?.id || null,
+      allowedCompanyIds: companyScope.allowedCompanyIds,
+      isSuperAdmin: access.isSuperAdmin,
+    }
     const body = (await request.json().catch(() => null)) as Body | null
 
     if (!body?.action) return json({ error: 'invalid-action' }, 400)
@@ -268,7 +289,7 @@ export async function POST(request: Request) {
       const category = await createInventoryCategory(supabase as any, {
         name,
         description: body.payload?.description || null,
-      })
+      }, inventoryScope)
 
       await writeAuditLog(supabase as any, {
         actorUserId,
@@ -290,7 +311,7 @@ export async function POST(request: Request) {
         contact_name: body.payload?.contact_name || null,
         phone: body.payload?.phone || null,
         notes: body.payload?.notes || null,
-      })
+      }, inventoryScope)
 
       await writeAuditLog(supabase as any, {
         actorUserId,
@@ -324,10 +345,13 @@ export async function POST(request: Request) {
         notes: body.payload?.notes || null,
         item_type: String(body.payload?.item_type || 'product') === 'consumable' ? 'consumable' : 'product',
         low_stock_threshold: lstCreate != null && Number.isFinite(Number(lstCreate)) ? Number(lstCreate) : null,
-      })
+      }, inventoryScope)
 
       if ((item as any)?.item_type !== 'consumable') {
         await syncInventoryItemToPointProducts(supabase as any, {
+          organizationId: access.activeOrganization?.id || null,
+          allowedCompanyIds: companyScope.allowedCompanyIds,
+          isSuperAdmin: access.isSuperAdmin,
           name,
           barcode,
           sale_price: salePrice,
@@ -354,6 +378,7 @@ export async function POST(request: Request) {
       if (!locationId) return json({ error: 'receipt-location-required' }, 400)
       if (!receivedAt) return json({ error: 'receipt-date-required' }, 400)
       if (items.length === 0) return json({ error: 'receipt-items-required' }, 400)
+      await ensureInventoryLocationAccess(supabase as any, locationId, inventoryScope)
 
       const normalizedItems = items
         .map((item) => ({
@@ -401,6 +426,9 @@ export async function POST(request: Request) {
       if (!targetLocationId) return json({ error: 'request-target-location-required' }, 400)
       if (!requestingCompanyId) return json({ error: 'request-company-required' }, 400)
       if (items.length === 0) return json({ error: 'request-items-required' }, 400)
+      await ensureInventoryLocationAccess(supabase as any, sourceLocationId, inventoryScope)
+      await ensureInventoryLocationAccess(supabase as any, targetLocationId, inventoryScope)
+      await ensureInventoryCompanyAccess(supabase as any, requestingCompanyId, inventoryScope)
 
       const normalizedItems = items
         .map((item) => ({
@@ -457,6 +485,7 @@ export async function POST(request: Request) {
     if (body.action === 'decideRequest') {
       const requestId = String(body.requestId || '').trim()
       if (!requestId) return json({ error: 'request-id-required' }, 400)
+      await ensureInventoryRequestAccess(supabase as any, requestId, inventoryScope)
 
       const decision = await decideInventoryRequest(supabase as any, {
         request_id: requestId,
@@ -496,6 +525,7 @@ export async function POST(request: Request) {
       if (!writtenAt) return json({ error: 'writeoff-date-required' }, 400)
       if (!reason) return json({ error: 'writeoff-reason-required' }, 400)
       if (items.length === 0) return json({ error: 'writeoff-items-required' }, 400)
+      await ensureInventoryLocationAccess(supabase as any, locationId, inventoryScope)
 
       const normalizedItems = items
         .map((item) => ({
@@ -539,6 +569,7 @@ export async function POST(request: Request) {
       if (!locationId) return json({ error: 'stocktake-location-required' }, 400)
       if (!countedAt) return json({ error: 'stocktake-date-required' }, 400)
       if (items.length === 0) return json({ error: 'stocktake-items-required' }, 400)
+      await ensureInventoryLocationAccess(supabase as any, locationId, inventoryScope)
 
       const normalizedItems = items
         .map((item) => ({
@@ -581,7 +612,7 @@ export async function POST(request: Request) {
       const category = await updateInventoryCategory(supabase as any, id, {
         name,
         description: (body as UpdateCategoryBody).payload?.description || null,
-      })
+      }, inventoryScope)
       await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-category', entityId: id, action: 'update', payload: category })
       return json({ ok: true, data: category })
     }
@@ -596,7 +627,7 @@ export async function POST(request: Request) {
         contact_name: (body as UpdateSupplierBody).payload?.contact_name || null,
         phone: (body as UpdateSupplierBody).payload?.phone || null,
         notes: (body as UpdateSupplierBody).payload?.notes || null,
-      })
+      }, inventoryScope)
       await writeAuditLog(supabase as any, { actorUserId, entityType: 'inventory-supplier', entityId: id, action: 'update', payload: supplier })
       return json({ ok: true, data: supplier })
     }
@@ -621,10 +652,13 @@ export async function POST(request: Request) {
         notes: (body as UpdateItemBody).payload?.notes || null,
         item_type: String((body as UpdateItemBody).payload?.item_type || 'product') === 'consumable' ? 'consumable' : 'product',
         low_stock_threshold: lstUpdate != null && Number.isFinite(Number(lstUpdate)) ? Number(lstUpdate) : null,
-      })
+      }, inventoryScope)
 
       if ((item as any)?.item_type !== 'consumable') {
         await syncInventoryItemToPointProducts(supabase as any, {
+          organizationId: access.activeOrganization?.id || null,
+          allowedCompanyIds: companyScope.allowedCompanyIds,
+          isSuperAdmin: access.isSuperAdmin,
           name,
           barcode,
           sale_price: salePrice,

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -17,6 +18,10 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const saleId = url.searchParams.get('sale_id') || ''
     const shortId = url.searchParams.get('short_id') || ''
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     let query = supabase
       .from('point_sales')
@@ -28,6 +33,12 @@ export async function GET(request: Request) {
       query = query.ilike('id', `%${shortId}`)
     } else {
       return json({ error: 'sale_id or short_id required' }, 400)
+    }
+
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      query = query.in('company_id', companyScope.allowedCompanyIds)
+    } else if (!access.isSuperAdmin) {
+      return json({ error: 'Чек не найден' }, 404)
     }
 
     const { data, error } = await query.maybeSingle()
@@ -47,6 +58,10 @@ export async function POST(request: Request) {
     if ('response' in access) return access.response
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
     const body = await request.json().catch(() => null)
     if (!body) return json({ error: 'invalid-body' }, 400)
 
@@ -64,6 +79,13 @@ export async function POST(request: Request) {
 
     if (saleError) throw saleError
     if (!originalSale) return json({ error: 'Чек не найден' }, 404)
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      if (!companyScope.allowedCompanyIds.includes(String(originalSale.company_id || ''))) {
+        return json({ error: 'Чек не найден' }, 404)
+      }
+    } else if (!access.isSuperAdmin) {
+      return json({ error: 'Чек не найден' }, 404)
+    }
 
     // Validate return items (can't return more than sold)
     const soldMap = new Map((originalSale.items || []).map((i: any) => [i.item_id, Number(i.quantity)]))
