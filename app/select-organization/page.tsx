@@ -43,6 +43,21 @@ type OrganizationHubOverview = {
     plan: PlanOption | null
   }
 }
+type OrganizationMember = {
+  id: string
+  organizationId: string
+  staffId: string | null
+  userId: string | null
+  email: string | null
+  role: 'owner' | 'manager' | 'marketer' | 'other'
+  status: string
+  isDefault: boolean
+  fullName: string
+  shortName: string | null
+  accountState: 'no_email' | 'no_account' | 'invited' | 'active'
+  emailConfirmedAt: string | null
+  lastSignInAt: string | null
+}
 type QuickAction = {
   id: string
   label: string
@@ -86,6 +101,12 @@ const PLAN_OPTIONS = [
   { value: 'starter', label: 'Starter' },
   { value: 'growth', label: 'Growth' },
   { value: 'enterprise', label: 'Enterprise' },
+]
+const MEMBER_ROLE_OPTIONS: Array<{ value: OrganizationMember['role']; label: string }> = [
+  { value: 'owner', label: 'Owner' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'marketer', label: 'Marketer' },
+  { value: 'other', label: 'Other' },
 ]
 
 const CYRILLIC_TO_LATIN_MAP: Record<string, string> = {
@@ -164,12 +185,15 @@ function SelectOrganizationContent() {
   const [hubOrganizations, setHubOrganizations] = useState<OrganizationHubOverview[]>([])
   const [plans, setPlans] = useState<PlanOption[]>([])
   const [loadingHub, setLoadingHub] = useState(false)
+  const [organizationMembers, setOrganizationMembers] = useState<OrganizationMember[]>([])
+  const [loadingMembers, setLoadingMembers] = useState(false)
   const [defaultPath, setDefaultPath] = useState('/')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [creatingOrganization, setCreatingOrganization] = useState(false)
   const [creatingCompany, setCreatingCompany] = useState(false)
   const [savingOrganization, setSavingOrganization] = useState(false)
+  const [invitingMember, setInvitingMember] = useState(false)
   const [organizationName, setOrganizationName] = useState('')
   const [organizationSlug, setOrganizationSlug] = useState('')
   const [organizationLegalName, setOrganizationLegalName] = useState('')
@@ -184,6 +208,9 @@ function SelectOrganizationContent() {
   const [editPlanCode, setEditPlanCode] = useState('starter')
   const [editSubscriptionStatus, setEditSubscriptionStatus] = useState('active')
   const [editBillingPeriod, setEditBillingPeriod] = useState('monthly')
+  const [inviteFullName, setInviteFullName] = useState('')
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState<OrganizationMember['role']>('manager')
 
   const nextPath = useMemo(() => {
     const next = searchParams.get('next')
@@ -202,6 +229,28 @@ function SelectOrganizationContent() {
       setPlans(Array.isArray(json?.plans) ? json.plans : [])
     } finally {
       setLoadingHub(false)
+    }
+  }
+
+  const refreshOrganizationMembers = async (organizationId?: string | null) => {
+    const resolvedOrganizationId = String(organizationId || activeOrganizationId || '').trim()
+    if (!resolvedOrganizationId) {
+      setOrganizationMembers([])
+      return
+    }
+
+    setLoadingMembers(true)
+    try {
+      const response = await fetch(`/api/admin/organization-members?organizationId=${encodeURIComponent(resolvedOrganizationId)}`, {
+        cache: 'no-store',
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || 'Не удалось загрузить участников организации.')
+      }
+      setOrganizationMembers(Array.isArray(json?.items) ? json.items : [])
+    } finally {
+      setLoadingMembers(false)
     }
   }
 
@@ -238,6 +287,18 @@ function SelectOrganizationContent() {
             setPlans(Array.isArray(hubJson?.plans) ? hubJson.plans : [])
           }
         } catch {}
+        if (json?.activeOrganization?.id) {
+          try {
+            const membersResponse = await fetch(
+              `/api/admin/organization-members?organizationId=${encodeURIComponent(String(json.activeOrganization.id))}`,
+              { cache: 'no-store' },
+            )
+            const membersJson = await membersResponse.json().catch(() => null)
+            if (active && membersResponse.ok) {
+              setOrganizationMembers(Array.isArray(membersJson?.items) ? membersJson.items : [])
+            }
+          } catch {}
+        }
       } catch (err: any) {
         if (!active) return
         setError(err?.message || 'Не удалось загрузить организации.')
@@ -275,6 +336,7 @@ function SelectOrganizationContent() {
       }
 
       setActiveOrganization(body?.activeOrganization || null)
+      await refreshOrganizationMembers(organizationId)
       if (navigateTo && isSafeInternalPath(navigateTo)) {
         router.replace(navigateTo)
         router.refresh()
@@ -302,6 +364,7 @@ function SelectOrganizationContent() {
   const activeOrganizationLabel = activeOrganization?.name || 'Организация пока не выбрана'
   const canCreateOrganizations = isSuperAdmin
   const canCreateCompanies = isSuperAdmin || staffRole === 'owner'
+  const canInviteMembers = isSuperAdmin || staffRole === 'owner'
   const activeOrganizationDetails = useMemo(
     () => hubOrganizations.find((organization) => organization.id === activeOrganizationId) || null,
     [activeOrganizationId, hubOrganizations],
@@ -403,6 +466,7 @@ function SelectOrganizationContent() {
       setFirstCompanyName('')
       setSuccess(`Организация "${body.organization.name}" создана и готова к работе.`)
       await refreshHubData()
+      await refreshOrganizationMembers(organizationId)
       await handleSelectOrganization(organizationId)
       router.refresh()
     } catch (err: any) {
@@ -512,10 +576,62 @@ function SelectOrganizationContent() {
             }
           : current,
       )
+      await refreshHubData()
     } catch (err: any) {
       setError(err?.message || 'Не удалось обновить организацию.')
     } finally {
       setSavingOrganization(false)
+    }
+  }
+
+  const handleInviteMember = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!activeOrganizationId) {
+      setError('Сначала выбери активную организацию.')
+      return
+    }
+
+    if (!inviteFullName.trim()) {
+      setError('Укажи имя сотрудника.')
+      return
+    }
+
+    if (!inviteEmail.trim()) {
+      setError('Укажи email сотрудника.')
+      return
+    }
+
+    try {
+      setInvitingMember(true)
+      setError(null)
+      setSuccess(null)
+
+      const response = await fetch('/api/admin/organization-members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'inviteMember',
+          organizationId: activeOrganizationId,
+          fullName: inviteFullName.trim(),
+          email: inviteEmail.trim(),
+          role: inviteRole,
+        }),
+      })
+
+      const body = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(body?.error || 'Не удалось отправить приглашение.')
+      }
+
+      setInviteFullName('')
+      setInviteEmail('')
+      setInviteRole('manager')
+      setSuccess(body?.message || `Приглашение отправлено на ${inviteEmail.trim()}.`)
+      await refreshOrganizationMembers(activeOrganizationId)
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось отправить приглашение.')
+    } finally {
+      setInvitingMember(false)
     }
   }
 
@@ -833,6 +949,77 @@ function SelectOrganizationContent() {
                         </div>
                       </div>
                     ) : null}
+
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="mb-3 text-sm font-medium text-white">Участники организации</div>
+
+                      {canInviteMembers ? (
+                        <form onSubmit={handleInviteMember} className="mb-4 grid gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                          <Input
+                            value={inviteFullName}
+                            onChange={(event) => setInviteFullName(event.target.value)}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="Имя сотрудника"
+                          />
+                          <Input
+                            value={inviteEmail}
+                            onChange={(event) => setInviteEmail(event.target.value)}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="email сотрудника"
+                            type="email"
+                          />
+                          <select
+                            value={inviteRole}
+                            onChange={(event) => setInviteRole(event.target.value as OrganizationMember['role'])}
+                            className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
+                          >
+                            {MEMBER_ROLE_OPTIONS.map((role) => (
+                              <option key={role.value} value={role.value}>
+                                {role.label}
+                              </option>
+                            ))}
+                          </select>
+                          <Button type="submit" disabled={invitingMember}>
+                            {invitingMember ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+                            Пригласить в организацию
+                          </Button>
+                        </form>
+                      ) : (
+                        <div className="mb-4 rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-300">
+                          Приглашать участников сейчас может только владелец организации или super-admin.
+                        </div>
+                      )}
+
+                      {loadingMembers ? (
+                        <div className="text-sm text-slate-400">Загружаем участников...</div>
+                      ) : organizationMembers.length ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {organizationMembers.map((member) => (
+                            <div key={member.id} className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium text-white">{member.fullName}</div>
+                                  <div className="truncate text-xs text-slate-500">{member.email || 'Без email'}</div>
+                                </div>
+                                <div className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] uppercase tracking-[0.16em] text-slate-300">
+                                  {member.role}
+                                </div>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
+                                  Статус: {member.status}
+                                </span>
+                                <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
+                                  Аккаунт: {member.accountState}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-slate-400">Пока никто не приглашён в эту организацию.</div>
+                      )}
+                    </div>
                   </div>
                 ) : null}
 
