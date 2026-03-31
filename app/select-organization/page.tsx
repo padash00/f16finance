@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowRight, Brain, Building2, Loader2, LogOut, PlusCircle, Settings2, ShieldAlert, Store, Users } from 'lucide-react'
+import { ArrowRight, Brain, Building2, CreditCard, Loader2, LogOut, PencilLine, PlusCircle, Settings2, ShieldAlert, Store, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -11,6 +11,38 @@ import { supabase } from '@/lib/supabaseClient'
 import type { SessionRoleInfo } from '@/lib/core/types'
 
 type OrganizationItem = NonNullable<SessionRoleInfo['organizations']>[number]
+type PlanOption = {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  status: string
+  priceMonthly: number | null
+  priceYearly: number | null
+  currency: string
+  limits: Record<string, unknown>
+  features: Record<string, unknown>
+}
+type OrganizationHubOverview = {
+  id: string
+  name: string
+  slug: string
+  legalName: string | null
+  status: string
+  createdAt: string | null
+  companyCount: number
+  memberCount: number
+  companies: Array<{ id: string; name: string; code: string | null }>
+  subscription: null | {
+    id: string
+    status: string
+    billingPeriod: string
+    startsAt: string | null
+    endsAt: string | null
+    cancelAt: string | null
+    plan: PlanOption | null
+  }
+}
 type QuickAction = {
   id: string
   label: string
@@ -129,11 +161,15 @@ function SelectOrganizationContent() {
   const [organizationHubRequired, setOrganizationHubRequired] = useState(false)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [staffRole, setStaffRole] = useState<SessionRoleInfo['staffRole'] | null>(null)
+  const [hubOrganizations, setHubOrganizations] = useState<OrganizationHubOverview[]>([])
+  const [plans, setPlans] = useState<PlanOption[]>([])
+  const [loadingHub, setLoadingHub] = useState(false)
   const [defaultPath, setDefaultPath] = useState('/')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [creatingOrganization, setCreatingOrganization] = useState(false)
   const [creatingCompany, setCreatingCompany] = useState(false)
+  const [savingOrganization, setSavingOrganization] = useState(false)
   const [organizationName, setOrganizationName] = useState('')
   const [organizationSlug, setOrganizationSlug] = useState('')
   const [organizationLegalName, setOrganizationLegalName] = useState('')
@@ -141,11 +177,33 @@ function SelectOrganizationContent() {
   const [firstCompanyName, setFirstCompanyName] = useState('')
   const [companyName, setCompanyName] = useState('')
   const [companyCode, setCompanyCode] = useState('')
+  const [editOrganizationName, setEditOrganizationName] = useState('')
+  const [editOrganizationSlug, setEditOrganizationSlug] = useState('')
+  const [editOrganizationLegalName, setEditOrganizationLegalName] = useState('')
+  const [editOrganizationStatus, setEditOrganizationStatus] = useState('active')
+  const [editPlanCode, setEditPlanCode] = useState('starter')
+  const [editSubscriptionStatus, setEditSubscriptionStatus] = useState('active')
+  const [editBillingPeriod, setEditBillingPeriod] = useState('monthly')
 
   const nextPath = useMemo(() => {
     const next = searchParams.get('next')
     return isSafeInternalPath(next) ? next : null
   }, [searchParams])
+
+  const refreshHubData = async () => {
+    setLoadingHub(true)
+    try {
+      const response = await fetch('/api/admin/organizations', { cache: 'no-store' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || 'Не удалось загрузить SaaS-кабинет.')
+      }
+      setHubOrganizations(Array.isArray(json?.organizations) ? json.organizations : [])
+      setPlans(Array.isArray(json?.plans) ? json.plans : [])
+    } finally {
+      setLoadingHub(false)
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -172,6 +230,14 @@ function SelectOrganizationContent() {
             ? String(json.defaultPath)
             : '/'
         setDefaultPath(resolvedDefaultPath)
+        try {
+          const hubResponse = await fetch('/api/admin/organizations', { cache: 'no-store' })
+          const hubJson = await hubResponse.json().catch(() => null)
+          if (active && hubResponse.ok) {
+            setHubOrganizations(Array.isArray(hubJson?.organizations) ? hubJson.organizations : [])
+            setPlans(Array.isArray(hubJson?.plans) ? hubJson.plans : [])
+          }
+        } catch {}
       } catch (err: any) {
         if (!active) return
         setError(err?.message || 'Не удалось загрузить организации.')
@@ -236,6 +302,33 @@ function SelectOrganizationContent() {
   const activeOrganizationLabel = activeOrganization?.name || 'Организация пока не выбрана'
   const canCreateOrganizations = isSuperAdmin
   const canCreateCompanies = isSuperAdmin || staffRole === 'owner'
+  const activeOrganizationDetails = useMemo(
+    () => hubOrganizations.find((organization) => organization.id === activeOrganizationId) || null,
+    [activeOrganizationId, hubOrganizations],
+  )
+  const availablePlanOptions = plans.length ? plans : PLAN_OPTIONS.map((plan) => ({
+    id: plan.value,
+    code: plan.value,
+    name: plan.label,
+    description: null,
+    status: 'active',
+    priceMonthly: null,
+    priceYearly: null,
+    currency: 'KZT',
+    limits: {},
+    features: {},
+  }))
+
+  useEffect(() => {
+    if (!activeOrganizationDetails) return
+    setEditOrganizationName(activeOrganizationDetails.name || '')
+    setEditOrganizationSlug(activeOrganizationDetails.slug || '')
+    setEditOrganizationLegalName(activeOrganizationDetails.legalName || '')
+    setEditOrganizationStatus(activeOrganizationDetails.status || 'active')
+    setEditPlanCode(activeOrganizationDetails.subscription?.plan?.code || 'starter')
+    setEditSubscriptionStatus(activeOrganizationDetails.subscription?.status || 'active')
+    setEditBillingPeriod(activeOrganizationDetails.subscription?.billingPeriod || 'monthly')
+  }, [activeOrganizationDetails])
 
   const handleCreateOrganization = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -309,6 +402,7 @@ function SelectOrganizationContent() {
       setOrganizationPlanCode('starter')
       setFirstCompanyName('')
       setSuccess(`Организация "${body.organization.name}" создана и готова к работе.`)
+      await refreshHubData()
       await handleSelectOrganization(organizationId)
       router.refresh()
     } catch (err: any) {
@@ -354,10 +448,74 @@ function SelectOrganizationContent() {
       setCompanyName('')
       setCompanyCode('')
       setSuccess(`Точка "${body?.company?.name || 'Новая точка'}" добавлена в организацию "${activeOrganizationLabel}".`)
+      await refreshHubData()
     } catch (err: any) {
       setError(err?.message || 'Не удалось создать точку.')
     } finally {
       setCreatingCompany(false)
+    }
+  }
+
+  const handleSaveOrganization = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!activeOrganizationId) {
+      setError('Сначала выбери активную организацию.')
+      return
+    }
+
+    if (!editOrganizationName.trim()) {
+      setError('Название организации не может быть пустым.')
+      return
+    }
+
+    try {
+      setSavingOrganization(true)
+      setError(null)
+      setSuccess(null)
+
+      const response = await fetch('/api/admin/organizations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: activeOrganizationId,
+          name: editOrganizationName.trim(),
+          legalName: editOrganizationLegalName.trim() || null,
+          slug: editOrganizationSlug.trim() || null,
+          organizationStatus: editOrganizationStatus,
+          planCode: editPlanCode,
+          subscriptionStatus: editSubscriptionStatus,
+          billingPeriod: editBillingPeriod,
+        }),
+      })
+
+      const body = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(body?.error || 'Не удалось обновить организацию.')
+      }
+
+      if (body?.organization) {
+        setHubOrganizations((current) =>
+          current.map((organization) => (organization.id === activeOrganizationId ? body.organization : organization)),
+        )
+      } else {
+        await refreshHubData()
+      }
+
+      setSuccess(`Организация "${editOrganizationName.trim()}" обновлена.`)
+      setActiveOrganization((current) =>
+        current?.id === activeOrganizationId
+          ? {
+              ...current,
+              name: editOrganizationName.trim(),
+              slug: editOrganizationSlug.trim() || current.slug,
+              status: editOrganizationStatus,
+            }
+          : current,
+      )
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось обновить организацию.')
+    } finally {
+      setSavingOrganization(false)
     }
   }
 
@@ -445,6 +603,9 @@ function SelectOrganizationContent() {
                 {organizations.map((organization) => {
                   const isActive = activeOrganization?.id === organization.id
                   const isBusy = switchingId === organization.id
+                  const overview = hubOrganizations.find((item) => item.id === organization.id)
+                  const planName = overview?.subscription?.plan?.name || overview?.subscription?.plan?.code || 'Без тарифа'
+                  const subscriptionStatus = overview?.subscription?.status || 'not_set'
 
                   return (
                     <div
@@ -468,6 +629,20 @@ function SelectOrganizationContent() {
                           <p className="mt-1 truncate text-xs uppercase tracking-[0.18em] text-slate-500">
                             {organization.slug} • {organization.accessRole}
                           </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
+                              Тариф: {planName}
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
+                              Статус: {subscriptionStatus}
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
+                              Точек: {overview?.companyCount ?? 0}
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
+                              Команда: {overview?.memberCount ?? 0}
+                            </span>
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -517,6 +692,150 @@ function SelectOrganizationContent() {
                   </div>
                 ) : null}
 
+                {activeOrganizationDetails ? (
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="mb-4 flex items-center gap-3">
+                      <div className="rounded-2xl bg-sky-500/10 p-3">
+                        <PencilLine className="h-5 w-5 text-sky-300" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-semibold text-white">Управление активной организацией</h2>
+                        <p className="text-sm text-slate-400">
+                          Редактирование проекта, подписки и текущих лимитов.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
+                        <div className="text-slate-500">Текущий тариф</div>
+                        <div className="mt-1 font-medium text-white">{activeOrganizationDetails.subscription?.plan?.name || 'Не задан'}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
+                        <div className="text-slate-500">Статус подписки</div>
+                        <div className="mt-1 font-medium text-white">{activeOrganizationDetails.subscription?.status || 'Не задан'}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
+                        <div className="text-slate-500">Точек</div>
+                        <div className="mt-1 font-medium text-white">{activeOrganizationDetails.companyCount}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
+                        <div className="text-slate-500">Сотрудников</div>
+                        <div className="mt-1 font-medium text-white">{activeOrganizationDetails.memberCount}</div>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleSaveOrganization} className="grid gap-3">
+                      <Input
+                        value={editOrganizationName}
+                        onChange={(event) => setEditOrganizationName(event.target.value)}
+                        className="border-white/10 bg-slate-900/60 text-white"
+                        placeholder="Название организации"
+                      />
+                      <Input
+                        value={editOrganizationLegalName}
+                        onChange={(event) => setEditOrganizationLegalName(event.target.value)}
+                        className="border-white/10 bg-slate-900/60 text-white"
+                        placeholder="Юр. название"
+                      />
+
+                      {isSuperAdmin ? (
+                        <>
+                          <Input
+                            value={editOrganizationSlug}
+                            onChange={(event) => setEditOrganizationSlug(slugify(event.target.value))}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="slug организации"
+                          />
+                          <select
+                            value={editOrganizationStatus}
+                            onChange={(event) => setEditOrganizationStatus(event.target.value)}
+                            className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
+                          >
+                            <option value="active">active</option>
+                            <option value="trial">trial</option>
+                            <option value="suspended">suspended</option>
+                            <option value="archived">archived</option>
+                          </select>
+                          <select
+                            value={editPlanCode}
+                            onChange={(event) => setEditPlanCode(event.target.value)}
+                            className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
+                          >
+                            {availablePlanOptions.map((plan) => (
+                              <option key={plan.code} value={plan.code}>
+                                {plan.name} {plan.priceMonthly ? `• ${plan.priceMonthly} ${plan.currency}/мес` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <select
+                              value={editSubscriptionStatus}
+                              onChange={(event) => setEditSubscriptionStatus(event.target.value)}
+                              className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
+                            >
+                              <option value="trialing">trialing</option>
+                              <option value="active">active</option>
+                              <option value="past_due">past_due</option>
+                              <option value="canceled">canceled</option>
+                              <option value="expired">expired</option>
+                            </select>
+                            <select
+                              value={editBillingPeriod}
+                              onChange={(event) => setEditBillingPeriod(event.target.value)}
+                              className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
+                            >
+                              <option value="monthly">monthly</option>
+                              <option value="yearly">yearly</option>
+                              <option value="custom">custom</option>
+                            </select>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-300">
+                          Тариф и статус подписки сейчас управляются только из super-admin контура.
+                        </div>
+                      )}
+
+                      <Button type="submit" disabled={savingOrganization}>
+                        {savingOrganization ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
+                        Сохранить изменения
+                      </Button>
+                    </form>
+
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="mb-3 text-sm font-medium text-white">Текущие точки</div>
+                      {activeOrganizationDetails.companies.length ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {activeOrganizationDetails.companies.map((company) => (
+                            <div key={company.id} className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                              <div className="text-sm font-medium text-white">{company.name}</div>
+                              <div className="mt-1 text-xs text-slate-500">{company.code || 'Без кода'}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-slate-400">Пока нет ни одной точки. Ниже можно добавить первую.</div>
+                      )}
+                    </div>
+
+                    {activeOrganizationDetails.subscription?.plan?.limits &&
+                    Object.keys(activeOrganizationDetails.subscription.plan.limits).length > 0 ? (
+                      <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="mb-3 text-sm font-medium text-white">Лимиты текущего плана</div>
+                        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                          {Object.entries(activeOrganizationDetails.subscription.plan.limits).map(([key, value]) => (
+                            <div key={key} className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
+                              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">{key}</div>
+                              <div className="mt-1 text-sm font-medium text-white">{String(value)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {canCreateOrganizations ? (
                   <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
                     <div className="mb-4 flex items-center gap-3">
@@ -558,9 +877,9 @@ function SelectOrganizationContent() {
                         onChange={(event) => setOrganizationPlanCode(event.target.value)}
                         className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
                       >
-                        {PLAN_OPTIONS.map((plan) => (
-                          <option key={plan.value} value={plan.value}>
-                            {plan.label}
+                        {availablePlanOptions.map((plan) => (
+                          <option key={plan.code} value={plan.code}>
+                            {plan.name}
                           </option>
                         ))}
                       </select>
@@ -619,6 +938,12 @@ function SelectOrganizationContent() {
                   <LogOut className="mr-2 h-4 w-4" />
                   Выйти
                 </Button>
+
+                {loadingHub ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-400">
+                    Обновляем SaaS-кабинет...
+                  </div>
+                ) : null}
               </div>
             )}
           </Card>
