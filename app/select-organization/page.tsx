@@ -575,6 +575,15 @@ function SelectOrganizationContent() {
             ? String(json.defaultPath)
             : '/'
         setDefaultPath(resolvedDefaultPath)
+
+        if (!json?.isSuperAdmin) {
+          const fallbackPath =
+            resolvedDefaultPath && resolvedDefaultPath !== '/select-organization' ? resolvedDefaultPath : '/dashboard'
+          router.replace(fallbackPath)
+          router.refresh()
+          return
+        }
+
         try {
           const hubResponse = await fetch('/api/admin/organizations', { cache: 'no-store' })
           const hubJson = await hubResponse.json().catch(() => null)
@@ -1245,6 +1254,21 @@ function SelectOrganizationContent() {
     } finally {
       setSavingPlan(false)
     }
+  }
+
+  if (!loading && !isSuperAdmin) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.14),_transparent_32%),radial-gradient(circle_at_bottom_left,_rgba(16,185,129,0.12),_transparent_28%),linear-gradient(135deg,#050816_0%,#090f1f_48%,#050816_100%)] px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
+        <div className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center">
+          <Card className="w-full border-white/10 bg-slate-950/70 p-6 text-white backdrop-blur-xl">
+            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-slate-300">
+              <Loader2 className="h-4 w-4 animate-spin text-sky-400" />
+              Перенаправляем в вашу организацию...
+            </div>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (

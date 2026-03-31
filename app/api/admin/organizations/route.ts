@@ -572,9 +572,12 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    if (!access.isSuperAdmin) {
+      return json({ error: 'forbidden' }, 403)
+    }
 
     const supabase = createAdminSupabaseClient()
-    const organizationIds = access.isSuperAdmin ? access.organizations.map((item) => item.id) : access.organizations.map((item) => item.id)
+    const organizationIds = access.organizations.map((item) => item.id)
     const data = await loadOrganizationHubData({ supabase, organizationIds })
     return json({
       ok: true,
