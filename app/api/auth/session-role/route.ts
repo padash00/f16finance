@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 
 import { getDefaultAppPath, normalizeStaffRole } from '@/lib/core/access'
-import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { createRequestSupabaseClient, listActiveOperatorLeadAssignments } from '@/lib/server/request-auth'
+import { getRequestAccessContext, listActiveOperatorLeadAssignments } from '@/lib/server/request-auth'
 
 function getRoleLabel(params: {
   isSuperAdmin: boolean
@@ -25,23 +24,10 @@ function getRoleLabel(params: {
 
 export async function GET(req: Request) {
   try {
-    const supabase = createRequestSupabaseClient(req)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
-    if (!user) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    }
-
-    const isSuperAdmin = isAdminEmail(user.email)
-    const staffMember = isSuperAdmin ? null : await resolveStaffByUser(supabase, user)
-    const staffRole = normalizeStaffRole(staffMember?.role)
-    const { data: operatorAuth } = await supabase
-      .from('operator_auth')
-      .select('id, operator_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    const { supabase, user, isSuperAdmin, staffMember, staffRole, operatorAuth, organizations, activeOrganization } = access
     const isOperator = !!operatorAuth
     const leadAssignments = operatorAuth
       ? await listActiveOperatorLeadAssignments(supabase, String((operatorAuth as any).operator_id || ''))
@@ -55,13 +41,13 @@ export async function GET(req: Request) {
           : null
     const displayName =
       (isSuperAdmin ? null : staffMember?.full_name || staffMember?.short_name) ||
-      user.user_metadata?.name ||
-      user.email ||
+      user?.user_metadata?.name ||
+      user?.email ||
       null
 
     return NextResponse.json({
       ok: true,
-      email: user.email || null,
+      email: user?.email || null,
       displayName,
       isSuperAdmin,
       isStaff: isSuperAdmin || !!staffMember,
@@ -83,6 +69,23 @@ export async function GET(req: Request) {
         leadAssignmentsCount: leadAssignments.length,
         leadRoleLabel,
       }),
+      organizations: organizations.map((organization) => ({
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        status: organization.status,
+        accessRole: organization.accessRole,
+        isDefault: organization.isDefault,
+      })),
+      activeOrganization: activeOrganization
+        ? {
+            id: activeOrganization.id,
+            name: activeOrganization.name,
+            slug: activeOrganization.slug,
+            status: activeOrganization.status,
+            accessRole: activeOrganization.accessRole,
+          }
+        : null,
       defaultPath: getDefaultAppPath({
         isSuperAdmin,
         isStaff: isSuperAdmin || !!staffMember,

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -110,6 +111,11 @@ export async function GET(req: Request) {
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: companyId,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     let query = supabase
       .from('incomes')
@@ -119,7 +125,11 @@ export async function GET(req: Request) {
 
     if (from) query = query.gte('date', from)
     if (to) query = query.lte('date', to)
-    if (companyId) query = query.eq('company_id', companyId)
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      query = query.in('company_id', companyScope.allowedCompanyIds)
+    } else if (!access.isSuperAdmin) {
+      return json({ data: [] })
+    }
     if (shift) query = query.eq('shift', shift)
     if (operatorNull) query = query.is('operator_id', null)
     else if (operatorId) query = query.eq('operator_id', operatorId)
@@ -160,6 +170,11 @@ export async function POST(req: Request) {
       if (!body.payload.date?.trim()) return json({ error: 'Дата обязательна' }, 400)
       if (!body.payload.company_id?.trim()) return json({ error: 'Компания обязательна' }, 400)
       if (!body.payload.operator_id?.trim()) return json({ error: 'Оператор обязателен' }, 400)
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        requestedCompanyId: body.payload.company_id,
+        isSuperAdmin: access.isSuperAdmin,
+      })
 
       const insertPayload = normalizeIncomePayload(body.payload)
       const totalAmount =
@@ -203,6 +218,13 @@ export async function POST(req: Request) {
         if (!row.operator_id?.trim()) return json({ error: 'Оператор обязателен' }, 400)
         if (totalAmount <= 0) return json({ error: 'Сумма дохода обязательна' }, 400)
       }
+      for (const row of normalizedRows) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          requestedCompanyId: row.company_id,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      }
 
       const { data, error } = await supabase.from('incomes').insert(normalizedRows).select('id, date, company_id, operator_id, shift, zone')
       if (error) throw error
@@ -244,6 +266,11 @@ export async function POST(req: Request) {
         .single()
 
       if (existingError) throw existingError
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        requestedCompanyId: existing.company_id,
+        isSuperAdmin: access.isSuperAdmin,
+      })
 
       const { error } = await supabase
         .from('incomes')
@@ -275,6 +302,11 @@ export async function POST(req: Request) {
 
       const { data: existing, error: existingError } = await supabase.from('incomes').select('*').eq('id', body.incomeId).single()
       if (existingError) throw existingError
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        requestedCompanyId: existing.company_id,
+        isSuperAdmin: access.isSuperAdmin,
+      })
 
       const updatePayload = {
         date: body.payload.date,
@@ -318,6 +350,11 @@ export async function POST(req: Request) {
 
       const { data: existing, error: existingError } = await supabase.from('incomes').select('*').eq('id', body.incomeId).single()
       if (existingError) throw existingError
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        requestedCompanyId: existing.company_id,
+        isSuperAdmin: access.isSuperAdmin,
+      })
 
       const { error } = await supabase.from('incomes').delete().eq('id', body.incomeId)
       if (error) throw error

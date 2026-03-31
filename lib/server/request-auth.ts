@@ -7,6 +7,12 @@ import { NextResponse } from 'next/server'
 import { normalizeStaffRole, staffRoleHasCapability, type StaffCapability, type StaffRole } from '@/lib/core/access'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { requiredEnv } from '@/lib/server/env'
+import {
+  ACTIVE_ORGANIZATION_COOKIE,
+  selectActiveOrganization,
+  resolveUserOrganizations,
+  type OrganizationAccess,
+} from '@/lib/server/organizations'
 
 function parseCookies(header: string | null): Map<string, string> {
   const map = new Map<string, string>()
@@ -65,9 +71,18 @@ export async function getRequestAccessContext(request: Request): Promise<
       isSuperAdmin: boolean
       staffMember: any | null
       staffRole: StaffRole
+      operatorAuth: {
+        id: string
+        operator_id: string
+        username?: string | null
+        role?: string | null
+      } | null
+      organizations: OrganizationAccess[]
+      activeOrganization: OrganizationAccess | null
     }
 > {
   const supabase = createRequestSupabaseClient(request)
+  const cookieMap = parseCookies(request.headers.get('cookie'))
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -79,6 +94,23 @@ export async function getRequestAccessContext(request: Request): Promise<
   }
 
   const isSuperAdmin = isAdminEmail(user.email)
+  const { data: operatorAuth } = await supabase
+    .from('operator_auth')
+    .select('id, operator_id, username, role')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  const staffMember = isSuperAdmin ? null : await resolveStaffByUser(supabase, user)
+  const organizationAccess = await resolveUserOrganizations({
+    user,
+    isSuperAdmin,
+    staffMember,
+    operatorId: String((operatorAuth as any)?.operator_id || '') || null,
+  })
+  const activeOrganization = selectActiveOrganization({
+    organizations: organizationAccess.organizations,
+    requestedOrganizationId: cookieMap.get(ACTIVE_ORGANIZATION_COOKIE) || null,
+  })
+
   if (isSuperAdmin) {
     return {
       supabase,
@@ -86,11 +118,13 @@ export async function getRequestAccessContext(request: Request): Promise<
       isSuperAdmin: true,
       staffMember: null,
       staffRole: 'owner',
+      operatorAuth: null,
+      organizations: organizationAccess.organizations,
+      activeOrganization,
     }
   }
 
-  const staffMember = await resolveStaffByUser(supabase, user)
-  if (!staffMember) {
+  if (!staffMember && !operatorAuth) {
     return {
       response: NextResponse.json({ error: 'forbidden' }, { status: 403 }),
     }
@@ -101,7 +135,17 @@ export async function getRequestAccessContext(request: Request): Promise<
     user,
     isSuperAdmin: false,
     staffMember,
-    staffRole: normalizeStaffRole(staffMember.role),
+    staffRole: normalizeStaffRole(staffMember?.role),
+    operatorAuth: operatorAuth
+      ? {
+          id: String((operatorAuth as any).id),
+          operator_id: String((operatorAuth as any).operator_id),
+          username: (operatorAuth as any).username || null,
+          role: (operatorAuth as any).role || null,
+        }
+      : null,
+    organizations: organizationAccess.organizations,
+    activeOrganization,
   }
 }
 

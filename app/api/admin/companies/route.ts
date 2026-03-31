@@ -13,14 +13,21 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
+    const activeOrganizationId = access.activeOrganization?.id || null
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('companies')
       .select('id, name, code')
       .order('name', { ascending: true })
+
+    if (!access.isSuperAdmin && activeOrganizationId) {
+      query = query.eq('organization_id', activeOrganizationId)
+    }
+
+    const { data, error } = await query
 
     if (error) throw error
 

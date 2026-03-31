@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 
@@ -17,6 +18,11 @@ export async function GET(request: Request) {
     const year = parseInt(url.searchParams.get('year') || String(new Date().getFullYear()))
     const month = parseInt(url.searchParams.get('month') || String(new Date().getMonth() + 1))
     const companyId = url.searchParams.get('company_id') || ''
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: companyId || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
     const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`
@@ -29,7 +35,11 @@ export async function GET(request: Request) {
       .lt('sale_date', nextMonth)
       .order('sale_date')
 
-    if (companyId) salesQuery = salesQuery.eq('company_id', companyId)
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      salesQuery = salesQuery.in('company_id', companyScope.allowedCompanyIds)
+    } else if (!access.isSuperAdmin) {
+      return json({ ok: true, data: { daily: [], totals: { count: 0, total: 0, cash: 0, kaspi: 0, card: 0, online: 0, discount: 0, avg_check: 0 }, year, month } })
+    }
     const { data: sales, error: salesError } = await salesQuery
     if (salesError) throw salesError
 

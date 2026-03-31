@@ -4,7 +4,8 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { resolveStaffByUser } from '@/lib/server/admin'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
-import { createRequestSupabaseClient, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
+import { resolveCompanyScope } from '@/lib/server/organizations'
+import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 import type { TaskStatus, TaskPriority, TaskResponse } from '@/lib/core/types'
@@ -235,6 +236,28 @@ async function loadTaskContext(supabase: ClientLike, taskId: string) {
   }
 }
 
+async function ensureTaskCompanyAccess(
+  params: {
+    activeOrganizationId?: string | null
+    isSuperAdmin: boolean
+  },
+  companyId: string | null | undefined,
+) {
+  if (!companyId) {
+    if (params.isSuperAdmin) {
+      return
+    }
+
+    throw new Error('task-company-required')
+  }
+
+  await resolveCompanyScope({
+    activeOrganizationId: params.activeOrganizationId || null,
+    requestedCompanyId: companyId,
+    isSuperAdmin: params.isSuperAdmin,
+  })
+}
+
 function buildTaskTelegramMessage(params: {
   type: 'assigned' | 'status'
   task: LoadedTask
@@ -426,6 +449,8 @@ export async function GET(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'tasks')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
     const url = new URL(req.url)
     const status = url.searchParams.get('status') as TaskStatus | null
@@ -437,6 +462,11 @@ export async function GET(req: Request) {
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: companyId,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     let query = supabase
       .from('tasks')
@@ -446,7 +476,11 @@ export async function GET(req: Request) {
 
     if (status) query = query.eq('status', status)
     if (operatorId) query = query.eq('operator_id', operatorId)
-    if (companyId) query = query.eq('company_id', companyId)
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      query = query.in('company_id', companyScope.allowedCompanyIds)
+    } else if (!access.isSuperAdmin) {
+      return json({ data: [], page, pageSize, hasMore: false })
+    }
 
     const { data, error } = await query
     if (error) throw error
@@ -462,12 +496,12 @@ export async function POST(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'tasks')
     if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
 
-    const requestClient = createRequestSupabaseClient(req)
-    const {
-      data: { user },
-    } = await requestClient.auth.getUser()
-    const staffMember = await resolveStaffByUser(requestClient, user)
+    const requestClient = access.supabase
+    const user = access.user
+    const staffMember = access.staffMember || (await resolveStaffByUser(requestClient, user))
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
@@ -478,6 +512,16 @@ export async function POST(req: Request) {
 
     if (body.action === 'createTask') {
       if (!body.payload.title?.trim()) return json({ error: 'Название задачи обязательно' }, 400)
+      if (!body.payload.company_id?.trim() && !access.isSuperAdmin) {
+        return json({ error: 'Для задачи нужно выбрать точку' }, 400)
+      }
+      await ensureTaskCompanyAccess(
+        {
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        },
+        body.payload.company_id,
+      )
 
       let nextTaskNumber = await getNextTaskNumber(supabase)
       let insertError: any = null
@@ -571,6 +615,23 @@ export async function POST(req: Request) {
 
     if (body.action === 'updateTask') {
       if (!body.taskId) return json({ error: 'taskId обязателен' }, 400)
+      const existingContext = await loadTaskContext(supabase, body.taskId)
+      await ensureTaskCompanyAccess(
+        {
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        },
+        existingContext.task.company_id,
+      )
+      if (body.payload.company_id !== undefined) {
+        await ensureTaskCompanyAccess(
+          {
+            activeOrganizationId: access.activeOrganization?.id || null,
+            isSuperAdmin: access.isSuperAdmin,
+          },
+          body.payload.company_id,
+        )
+      }
 
       const updatePayload = {
         title: body.payload.title?.trim(),
@@ -611,6 +672,14 @@ export async function POST(req: Request) {
 
     if (body.action === 'changeStatus') {
       if (!body.taskId) return json({ error: 'taskId обязателен' }, 400)
+      const existingContext = await loadTaskContext(supabase, body.taskId)
+      await ensureTaskCompanyAccess(
+        {
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        },
+        existingContext.task.company_id,
+      )
 
       const payload = {
         status: body.status,
@@ -654,6 +723,14 @@ export async function POST(req: Request) {
       if (!body.taskId || !RESPONSE_CONFIG[body.response]) {
         return json({ error: 'taskId и response обязательны' }, 400)
       }
+      const existingContext = await loadTaskContext(supabase, body.taskId)
+      await ensureTaskCompanyAccess(
+        {
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        },
+        existingContext.task.company_id,
+      )
 
       const config = RESPONSE_CONFIG[body.response]
       const payload = {
@@ -713,6 +790,14 @@ export async function POST(req: Request) {
 
     if (body.action === 'addComment') {
       if (!body.taskId || !body.content?.trim()) return json({ error: 'taskId и content обязательны' }, 400)
+      const existingContext = await loadTaskContext(supabase, body.taskId)
+      await ensureTaskCompanyAccess(
+        {
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        },
+        existingContext.task.company_id,
+      )
 
       const data = await addTaskComment(supabase, {
         taskId: body.taskId,
@@ -758,6 +843,13 @@ export async function POST(req: Request) {
     if (!body.taskId) return json({ error: 'taskId обязателен' }, 400)
 
     const context = await loadTaskContext(supabase, body.taskId)
+    await ensureTaskCompanyAccess(
+      {
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      },
+      context.task.company_id,
+    )
     if (!context.operator?.telegram_chat_id) return json({ error: 'У оператора нет telegram_chat_id' }, 400)
 
     try {

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { canAccessPath, type StaffRole } from '@/lib/core/access'
+import type { SessionRoleInfo } from '@/lib/core/types'
 import { cn } from '@/lib/utils'
 import {
   ArchiveX,
@@ -523,6 +524,84 @@ function UserCard({
   )
 }
 
+function OrganizationSwitcher({
+  organizations,
+  activeOrganization,
+  onSelect,
+  disabled,
+}: {
+  organizations: NonNullable<SessionRoleInfo['organizations']>
+  activeOrganization: SessionRoleInfo['activeOrganization']
+  onSelect: (organizationId: string) => Promise<void>
+  disabled: boolean
+}) {
+  const [open, setOpen] = useState(false)
+
+  if (!organizations.length) return null
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-3 text-left transition hover:border-amber-500/20 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+          <Building2 className="h-4 w-4 text-amber-300" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Организация</p>
+          <p className="truncate text-sm font-semibold text-white">
+            {activeOrganization?.name || organizations[0]?.name || 'Не выбрана'}
+          </p>
+          <p className="truncate text-xs text-slate-500">
+            {disabled ? 'Переключаем контекст...' : `${organizations.length} ${organizations.length === 1 ? 'организация' : 'организации'}`}
+          </p>
+        </div>
+        <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open ? (
+        <div className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl backdrop-blur-xl">
+          <div className="mb-1 px-2 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">Доступные организации</div>
+          <div className="space-y-1">
+            {organizations.map((organization) => {
+              const isActive = activeOrganization?.id === organization.id
+              return (
+                <button
+                  key={organization.id}
+                  type="button"
+                  disabled={disabled || isActive}
+                  onClick={async () => {
+                    await onSelect(organization.id)
+                    setOpen(false)
+                  }}
+                  className={cn(
+                    'flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition',
+                    isActive
+                      ? 'border-emerald-500/20 bg-emerald-500/10'
+                      : 'border-white/5 bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]',
+                    (disabled || isActive) && 'cursor-default',
+                  )}
+                >
+                  <div className={cn('mt-0.5 h-2.5 w-2.5 rounded-full', isActive ? 'bg-emerald-400' : 'bg-slate-600')} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-white">{organization.name}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {organization.slug} · {organization.accessRole}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function SearchBar({
   value,
   onChange,
@@ -568,6 +647,9 @@ export function Sidebar() {
   const [isStaff, setIsStaff] = useState(false)
   const [isOperator, setIsOperator] = useState(false)
   const [isLeadOperator, setIsLeadOperator] = useState(false)
+  const [organizations, setOrganizations] = useState<NonNullable<SessionRoleInfo['organizations']>>([])
+  const [activeOrganization, setActiveOrganization] = useState<SessionRoleInfo['activeOrganization']>(null)
+  const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     if (typeof window !== 'undefined') {
@@ -614,6 +696,8 @@ export function Sidebar() {
         setStaffRole((json?.staffRole as StaffRole | null) || null)
         setDisplayName((json?.displayName as string | null) || null)
         setRoleLabel((json?.roleLabel as string | null) || null)
+        setOrganizations(Array.isArray(json?.organizations) ? json.organizations : [])
+        setActiveOrganization((json?.activeOrganization as SessionRoleInfo['activeOrganization']) || null)
         // Super admin sees all sections expanded
         if (superAdmin) {
           setOpenSections(Object.fromEntries(navSections.map((s) => [s.id, true])))
@@ -719,6 +803,31 @@ export function Sidebar() {
     router.refresh()
   }
 
+  const handleSwitchOrganization = async (organizationId: string) => {
+    if (!organizationId || activeOrganization?.id === organizationId) return
+
+    try {
+      setIsSwitchingOrganization(true)
+      const response = await fetch('/api/auth/active-organization', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId }),
+      })
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body?.error || `HTTP ${response.status}`)
+      }
+
+      const body = await response.json().catch(() => null)
+      setActiveOrganization(body?.activeOrganization || null)
+      router.refresh()
+      window.location.reload()
+    } finally {
+      setIsSwitchingOrganization(false)
+    }
+  }
+
   const toggleSection = (sectionId: string) => {
     setOpenSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }))
   }
@@ -752,7 +861,15 @@ export function Sidebar() {
         className="flex-1 overflow-y-auto px-4 py-4"
       >
         <div className="sticky top-0 z-10 -mx-1 bg-gradient-to-b from-slate-950 via-slate-950/95 to-transparent px-1 pb-4 pt-1 backdrop-blur-xl">
-          <SearchBar value={searchQuery} onChange={setSearchQuery} inputRef={searchInputRef} />
+          <OrganizationSwitcher
+            organizations={organizations}
+            activeOrganization={activeOrganization}
+            onSelect={handleSwitchOrganization}
+            disabled={isSwitchingOrganization}
+          />
+          <div className="mt-3">
+            <SearchBar value={searchQuery} onChange={setSearchQuery} inputRef={searchInputRef} />
+          </div>
         </div>
 
         <div className="mt-4 space-y-3">
@@ -817,4 +934,3 @@ export function Sidebar() {
     </>
   )
 }
-

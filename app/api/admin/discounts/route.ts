@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -20,14 +21,21 @@ export async function GET(req: Request) {
     const supabase = createAdminSupabaseClient()
     const url = new URL(req.url)
     const companyId = url.searchParams.get('company_id')
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: companyId,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     let query = supabase
       .from('discounts')
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (companyId) {
-      query = query.eq('company_id', companyId)
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      query = query.in('company_id', companyScope.allowedCompanyIds)
+    } else if (!access.isSuperAdmin) {
+      return json({ ok: true, data: [] })
     }
 
     const { data, error } = await query
@@ -58,6 +66,13 @@ export async function POST(req: Request) {
       if (!name?.trim()) return json({ error: 'Название скидки обязательно' }, 400)
       if (!['percent', 'fixed', 'promo_code'].includes(type)) return json({ error: 'Неверный тип скидки' }, 400)
       if (typeof value !== 'number' || value < 0) return json({ error: 'Значение скидки обязательно' }, 400)
+      if (company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          requestedCompanyId: company_id,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      }
 
       const { data, error } = await supabase
         .from('discounts')
@@ -86,6 +101,19 @@ export async function POST(req: Request) {
     if (body.action === 'updateDiscount') {
       const { discountId, payload } = body
       if (!discountId) return json({ error: 'discountId required' }, 400)
+      const { data: existing, error: existingError } = await supabase
+        .from('discounts')
+        .select('id, company_id')
+        .eq('id', discountId)
+        .single()
+      if (existingError || !existing) return json({ error: 'discount not found' }, 404)
+      if (existing.company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          requestedCompanyId: existing.company_id,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      }
 
       const updates: Record<string, any> = {}
       if (payload.name !== undefined) updates.name = payload.name.trim()
@@ -116,6 +144,19 @@ export async function POST(req: Request) {
     if (body.action === 'deleteDiscount') {
       const { discountId } = body
       if (!discountId) return json({ error: 'discountId required' }, 400)
+      const { data: existing, error: existingError } = await supabase
+        .from('discounts')
+        .select('id, company_id')
+        .eq('id', discountId)
+        .single()
+      if (existingError || !existing) return json({ error: 'discount not found' }, 404)
+      if (existing.company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          requestedCompanyId: existing.company_id,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      }
 
       const { error } = await supabase
         .from('discounts')
@@ -129,6 +170,13 @@ export async function POST(req: Request) {
     if (body.action === 'validatePromoCode') {
       const { promo_code, company_id, order_amount } = body
       if (!promo_code?.trim()) return json({ error: 'promo_code required' }, 400)
+      if (company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          requestedCompanyId: company_id,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      }
 
       const today = new Date().toISOString().split('T')[0]
 

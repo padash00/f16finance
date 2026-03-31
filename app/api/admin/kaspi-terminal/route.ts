@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -24,6 +25,11 @@ export async function GET(req: Request) {
     const companyId = url.searchParams.get('company_id')
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : createRequestSupabaseClient(req)
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: companyId,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     let query = supabase
       .from('kaspi_terminal_daily')
@@ -33,7 +39,11 @@ export async function GET(req: Request) {
 
     if (from) query = query.gte('date', from)
     if (to) query = query.lte('date', to)
-    if (companyId) query = query.eq('company_id', companyId)
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      query = query.in('company_id', companyScope.allowedCompanyIds)
+    } else if (!access.isSuperAdmin) {
+      return json({ data: [] })
+    }
 
     const { data, error } = await query
     if (error) throw error
@@ -65,6 +75,11 @@ export async function POST(req: Request) {
       if (!date?.trim()) return json({ error: 'Дата обязательна' }, 400)
       if (!company_id?.trim()) return json({ error: 'Компания обязательна' }, 400)
       if (!Number.isFinite(amount) || amount <= 0) return json({ error: 'Сумма должна быть больше 0' }, 400)
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        requestedCompanyId: company_id,
+        isSuperAdmin: access.isSuperAdmin,
+      })
 
       const { data, error } = await supabase
         .from('kaspi_terminal_daily')
@@ -83,6 +98,22 @@ export async function POST(req: Request) {
       if (!date?.trim()) return json({ error: 'Дата обязательна' }, 400)
       if (!company_id?.trim()) return json({ error: 'Компания обязательна' }, 400)
       if (!Number.isFinite(amount) || amount <= 0) return json({ error: 'Сумма должна быть больше 0' }, 400)
+      const { data: existing, error: existingError } = await supabase
+        .from('kaspi_terminal_daily')
+        .select('id, company_id')
+        .eq('id', body.id)
+        .single()
+      if (existingError || !existing) return json({ error: 'not-found' }, 404)
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        requestedCompanyId: existing.company_id,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        requestedCompanyId: company_id,
+        isSuperAdmin: access.isSuperAdmin,
+      })
 
       const { data, error } = await supabase
         .from('kaspi_terminal_daily')
@@ -98,6 +129,17 @@ export async function POST(req: Request) {
 
     if (body.action === 'delete') {
       if (!body.id?.trim()) return json({ error: 'id обязателен' }, 400)
+      const { data: existing, error: existingError } = await supabase
+        .from('kaspi_terminal_daily')
+        .select('id, company_id')
+        .eq('id', body.id)
+        .single()
+      if (existingError || !existing) return json({ error: 'not-found' }, 404)
+      await resolveCompanyScope({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        requestedCompanyId: existing.company_id,
+        isSuperAdmin: access.isSuperAdmin,
+      })
       const { error } = await supabase.from('kaspi_terminal_daily').delete().eq('id', body.id)
       if (error) throw error
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -21,6 +22,11 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const companyId = url.searchParams.get('company_id')
     const search = url.searchParams.get('search')?.trim().toLowerCase()
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: companyId,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     let query = supabase
       .from('customers')
@@ -28,8 +34,10 @@ export async function GET(req: Request) {
       .eq('is_active', true)
       .order('total_spent', { ascending: false })
 
-    if (companyId) {
-      query = query.eq('company_id', companyId)
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      query = query.in('company_id', companyScope.allowedCompanyIds)
+    } else if (!access.isSuperAdmin) {
+      return json({ ok: true, data: [] })
     }
 
     const { data, error } = await query
@@ -73,6 +81,13 @@ export async function POST(req: Request) {
     if (body.action === 'createCustomer') {
       const { name, phone, card_number, email, notes, company_id } = body.payload || {}
       if (!name?.trim()) return json({ error: 'Имя клиента обязательно' }, 400)
+      if (company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          requestedCompanyId: company_id,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      }
 
       const { data, error } = await supabase
         .from('customers')
@@ -98,6 +113,19 @@ export async function POST(req: Request) {
     if (body.action === 'updateCustomer') {
       const { customerId, payload } = body
       if (!customerId) return json({ error: 'customerId required' }, 400)
+      const { data: existing, error: existingError } = await supabase
+        .from('customers')
+        .select('id, company_id')
+        .eq('id', customerId)
+        .single()
+      if (existingError || !existing) return json({ error: 'customer not found' }, 404)
+      if (existing.company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          requestedCompanyId: existing.company_id,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      }
 
       const updates: Record<string, any> = { updated_at: new Date().toISOString() }
       if (payload.name !== undefined) updates.name = payload.name.trim()
@@ -124,6 +152,19 @@ export async function POST(req: Request) {
     if (body.action === 'deleteCustomer') {
       const { customerId } = body
       if (!customerId) return json({ error: 'customerId required' }, 400)
+      const { data: existing, error: existingError } = await supabase
+        .from('customers')
+        .select('id, company_id')
+        .eq('id', customerId)
+        .single()
+      if (existingError || !existing) return json({ error: 'customer not found' }, 404)
+      if (existing.company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          requestedCompanyId: existing.company_id,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      }
 
       const { error } = await supabase
         .from('customers')
@@ -141,11 +182,18 @@ export async function POST(req: Request) {
 
       const { data: current, error: fetchError } = await supabase
         .from('customers')
-        .select('loyalty_points')
+        .select('loyalty_points, company_id')
         .eq('id', customerId)
         .single()
 
       if (fetchError || !current) return json({ error: 'customer not found' }, 404)
+      if (current.company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          requestedCompanyId: current.company_id,
+          isSuperAdmin: access.isSuperAdmin,
+        })
+      }
 
       const newPoints = Math.max(0, (current.loyalty_points || 0) + delta)
 

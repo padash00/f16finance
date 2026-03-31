@@ -14,6 +14,21 @@ export type Company = {
 export type SessionRoleInfo = {
   isSuperAdmin?: boolean
   staffRole?: 'manager' | 'marketer' | 'owner' | 'other'
+  organizations?: Array<{
+    id: string
+    name: string
+    slug: string
+    status: string
+    accessRole: 'super_admin' | 'owner' | 'manager' | 'marketer' | 'operator' | 'other'
+    isDefault?: boolean
+  }>
+  activeOrganization?: {
+    id: string
+    name: string
+    slug: string
+    status: string
+    accessRole: 'super_admin' | 'owner' | 'manager' | 'marketer' | 'operator' | 'other'
+  } | null
 }
 
 /** Staff role union — matches DB enum */

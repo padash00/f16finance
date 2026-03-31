@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 
@@ -18,6 +19,11 @@ export async function GET(request: Request) {
     const shift = url.searchParams.get('shift') || '' // 'day' | 'night' | '' (both)
     const locationId = url.searchParams.get('location_id') || ''
     const companyId = url.searchParams.get('company_id') || ''
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      requestedCompanyId: companyId || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
 
     // Build sales query
     let salesQuery = supabase
@@ -28,7 +34,21 @@ export async function GET(request: Request) {
 
     if (shift) salesQuery = salesQuery.eq('shift', shift)
     if (locationId) salesQuery = salesQuery.eq('location_id', locationId)
-    if (companyId) salesQuery = salesQuery.eq('company_id', companyId)
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      salesQuery = salesQuery.in('company_id', companyScope.allowedCompanyIds)
+    } else if (!access.isSuperAdmin) {
+      return json({
+        ok: true,
+        data: {
+          date,
+          shift: shift || 'all',
+          totals: { amount: 0, cash: 0, kaspi: 0, card: 0, online: 0, count: 0, avg_check: 0 },
+          top_items: [],
+          by_hour: Array.from({ length: 24 }, (_, h) => ({ hour: h, amount: 0 })),
+          sales: [],
+        },
+      })
+    }
 
     const { data: sales, error: salesError } = await salesQuery
     if (salesError) throw salesError
