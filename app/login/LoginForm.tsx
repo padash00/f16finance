@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { normalizeOperatorUsername, toOperatorAuthEmail } from '@/lib/core/auth'
@@ -12,10 +11,8 @@ import {
   AlertCircle,
   ArrowRight,
   Brain,
-  Building2,
   Eye,
   EyeOff,
-  KeyRound,
   Loader2,
   Lock,
   Mail,
@@ -25,23 +22,7 @@ import {
 
 type LoginMode = 'email' | 'operator'
 
-const MODE_META: Record<LoginMode, { title: string; hint: string; icon: any }> = {
-  email: {
-    title: 'Вход по email',
-    hint: 'Для руководителя, маркетолога, владельца и остальных сотрудников админ-команды.',
-    icon: Shield,
-  },
-  operator: {
-    title: 'Вход оператора',
-    hint: 'Для операторского кабинета по логину, который выдал администратор.',
-    icon: User,
-  },
-}
-
-type HostOrg = {
-  name: string
-  slug: string
-} | null
+type HostOrg = { name: string; slug: string } | null
 
 export default function LoginForm({ hostOrg }: { hostOrg: HostOrg }) {
   const router = useRouter()
@@ -52,21 +33,8 @@ export default function LoginForm({ hostOrg }: { hostOrg: HostOrg }) {
   const [error, setError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
 
-  const modeMeta = MODE_META[mode]
-  const ModeIcon = modeMeta.icon
-  const loginPlaceholder = mode === 'email' ? 'name@example.com' : 'login_operatora'
-
-  const helperText = useMemo(() => {
-    if (mode === 'email') {
-      return 'Если вас пригласили по почте, сначала откройте письмо, задайте пароль, затем вернитесь сюда.'
-    }
-    return 'Оператор входит по логину и паролю. Почта здесь не нужна.'
-  }, [mode])
-
   const resolvePostLoginPath = (payload: any) => {
-    if (payload?.organizationHubRequired || payload?.organizationSelectionRequired) {
-      return '/select-organization'
-    }
+    if (payload?.organizationHubRequired || payload?.organizationSelectionRequired) return '/select-organization'
     const rawPath = payload?.defaultPath ? String(payload.defaultPath) : '/'
     const isSafePath = rawPath.startsWith('/') && !rawPath.startsWith('//')
     return isSafePath && rawPath !== '/login' && rawPath !== '/operator-login' ? rawPath : '/'
@@ -76,235 +44,104 @@ export default function LoginForm({ hostOrg }: { hostOrg: HostOrg }) {
     e.preventDefault()
     setLoading(true)
     setError(null)
-
     try {
       if (mode === 'email') {
         const email = login.trim().toLowerCase()
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-
-        await fetch('/api/auth/login-attempt', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ method: 'email', target: 'staff', status: 'success', identifier: email }),
-        }).catch(() => null)
-
-        await fetch('/api/auth/login-log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ method: 'email', target: 'staff' }),
-        }).catch(() => null)
-
-        const response = await fetch('/api/auth/session-role').catch(() => null)
-        const json = await response?.json().catch(() => null)
-        const defaultPath = response?.ok ? resolvePostLoginPath(json) : '/'
-
-        router.push(defaultPath)
+        await fetch('/api/auth/login-attempt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ method: 'email', target: 'staff', status: 'success', identifier: email }) }).catch(() => null)
+        await fetch('/api/auth/login-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ method: 'email', target: 'staff' }) }).catch(() => null)
+        const res = await fetch('/api/auth/session-role').catch(() => null)
+        const json = await res?.json().catch(() => null)
+        router.push(res?.ok ? resolvePostLoginPath(json) : '/')
         router.refresh()
         return
       }
 
       const username = normalizeOperatorUsername(login)
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: toOperatorAuthEmail(username),
-        password,
-      })
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email: toOperatorAuthEmail(username), password })
       if (signInError) throw new Error('Неверный логин или пароль')
-
-      const {
-        data: { user: operatorUser },
-      } = await supabase.auth.getUser()
-
-      const operatorUserId = operatorUser?.id || null
-      if (!operatorUserId) throw new Error('Не удалось получить сессию оператора')
-
-      const { data: authByUser, error: authByUserError } = await supabase
-        .from('operator_auth')
-        .select('id, username')
-        .eq('user_id', operatorUserId)
-        .eq('is_active', true)
-        .maybeSingle()
-
-      if (authByUserError) throw authByUserError
-      if (!authByUser?.id) {
-        await supabase.auth.signOut().catch(() => null)
-        throw new Error('Неверный логин или пароль')
-      }
-
-      await fetch('/api/auth/login-attempt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method: 'operator', target: 'operator', status: 'success', identifier: authByUser.username || username }),
-      }).catch(() => null)
-
-      await fetch('/api/auth/login-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method: 'operator', target: 'operator' }),
-      }).catch(() => null)
-
-      await fetch('/api/auth/operator-last-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authId: authByUser.id }),
-      })
-
-      const response = await fetch('/api/auth/session-role').catch(() => null)
-      const json = await response?.json().catch(() => null)
-      router.push(response?.ok ? resolvePostLoginPath(json) : '/operator-dashboard')
+      const { data: { user: opUser } } = await supabase.auth.getUser()
+      if (!opUser?.id) throw new Error('Не удалось получить сессию')
+      const { data: authRow, error: authErr } = await supabase.from('operator_auth').select('id, username').eq('user_id', opUser.id).eq('is_active', true).maybeSingle()
+      if (authErr) throw authErr
+      if (!authRow?.id) { await supabase.auth.signOut().catch(() => null); throw new Error('Неверный логин или пароль') }
+      await fetch('/api/auth/login-attempt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ method: 'operator', target: 'operator', status: 'success', identifier: authRow.username || username }) }).catch(() => null)
+      await fetch('/api/auth/login-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ method: 'operator', target: 'operator' }) }).catch(() => null)
+      await fetch('/api/auth/operator-last-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ authId: authRow.id }) })
+      const res = await fetch('/api/auth/session-role').catch(() => null)
+      const json = await res?.json().catch(() => null)
+      router.push(res?.ok ? resolvePostLoginPath(json) : '/operator-dashboard')
       router.refresh()
     } catch (err: any) {
       console.error('Login error:', err)
-      await fetch('/api/auth/login-attempt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          method: mode === 'email' ? 'email' : 'operator',
-          target: mode === 'email' ? 'staff' : 'operator',
-          status: 'failed',
-          identifier: mode === 'email' ? login.trim().toLowerCase() : normalizeOperatorUsername(login),
-          reason: err?.message || null,
-        }),
-      }).catch(() => null)
-      setError(
-        err?.message ||
-          (mode === 'email'
-            ? 'Не удалось войти по email. Проверьте пароль или запросите письмо заново.'
-            : 'Не удалось войти по логину оператора.'),
-      )
+      await fetch('/api/auth/login-attempt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ method: mode === 'email' ? 'email' : 'operator', target: mode === 'email' ? 'staff' : 'operator', status: 'failed', identifier: mode === 'email' ? login.trim().toLowerCase() : normalizeOperatorUsername(login), reason: err?.message || null }) }).catch(() => null)
+      setError(err?.message || (mode === 'email' ? 'Не удалось войти. Проверьте пароль.' : 'Неверный логин или пароль.'))
     } finally {
       setLoading(false)
     }
   }
 
-  return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(217,70,239,0.16),_transparent_32%),radial-gradient(circle_at_bottom_left,_rgba(16,185,129,0.12),_transparent_28%),linear-gradient(135deg,#050816_0%,#090f1f_48%,#050816_100%)] p-4">
-      <div className="mx-auto flex min-h-screen max-w-5xl items-center justify-center">
-        <div className="grid w-full gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-
-          {/* Left panel */}
-          <Card className="hidden overflow-hidden border-white/10 bg-slate-950/55 p-8 text-white backdrop-blur-xl lg:block">
-            <div className="flex h-full flex-col justify-between">
-              <div>
-                {hostOrg ? (
-                  <>
-                    <div className="mb-6 inline-flex rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 p-4 shadow-lg shadow-violet-500/20">
-                      <Building2 className="h-8 w-8 text-white" />
-                    </div>
-                    <h1 className="max-w-md text-4xl font-semibold leading-tight text-white">
-                      {hostOrg.name}
-                    </h1>
-                    <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300">
-                      Войдите в рабочий кабинет вашей организации. Доступ предоставлен администратором.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="mb-6 inline-flex rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 p-4 shadow-lg shadow-violet-500/20">
-                      <Brain className="h-8 w-8 text-white" />
-                    </div>
-                    <h1 className="max-w-md text-4xl font-semibold leading-tight text-white">
-                      Orda Control для команды, точек и ежедневного ритма работы.
-                    </h1>
-                    <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300">
-                      Сотрудники входят по email после приглашения, операторы продолжают работать через свой логин.
-                      Внутри одной системы живут смены, задачи, структура, финансы и рабочий контроль.
-                    </p>
-                  </>
-                )}
-              </div>
-
-              <div className="grid gap-3">
-                <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-sm font-medium text-white">Управленческая команда</p>
-                  <p className="mt-1 text-sm text-slate-400">Email из приглашения, новый пароль и доступ по своей роли.</p>
-                </div>
-                <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-sm font-medium text-white">Операторы</p>
-                  <p className="mt-1 text-sm text-slate-400">Логин оператора и пароль от операторского кабинета.</p>
-                </div>
-                <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-                  Если приглашение просрочилось, администратор может отправить его заново или сделать сброс пароля.
-                </div>
-              </div>
+  // ─── Tenant subdomain: clean centered card ────────────────────────────────
+  if (hostOrg) {
+    const initials = hostOrg.name.slice(0, 2).toUpperCase()
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[linear-gradient(135deg,#050816_0%,#090f1f_48%,#050816_100%)] p-4">
+        <div className="w-full max-w-sm">
+          {/* Org identity */}
+          <div className="mb-8 flex flex-col items-center text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-xl font-bold text-white shadow-lg shadow-violet-500/30">
+              {initials}
             </div>
-          </Card>
+            <h1 className="text-2xl font-semibold text-white">{hostOrg.name}</h1>
+            <p className="mt-1 text-sm text-slate-400">Войдите в рабочий кабинет</p>
+          </div>
 
-          {/* Right panel: login form */}
-          <Card className="border-white/10 bg-slate-950/70 p-6 text-white backdrop-blur-xl sm:p-8">
-            <div className="mb-6 flex flex-col items-center text-center">
-              <div className="mb-4 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 p-4 shadow-lg shadow-violet-500/20">
-                {hostOrg ? <Building2 className="h-7 w-7 text-white" /> : <Brain className="h-7 w-7 text-white" />}
-              </div>
-              <h2 className="text-2xl font-semibold">
-                {hostOrg ? `Войти в ${hostOrg.name}` : 'Вход в Orda Control'}
-              </h2>
-              <p className="mt-2 max-w-sm text-sm text-slate-400">
-                {hostOrg
-                  ? 'Введите данные для входа в рабочий кабинет вашей организации.'
-                  : 'Выберите свой тип входа и используйте тот способ, который вам выдал администратор.'}
-              </p>
-            </div>
-
-            <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+          {/* Form card */}
+          <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 backdrop-blur-xl">
+            {/* Mode tabs */}
+            <div className="mb-5 flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
               <button
                 type="button"
                 onClick={() => { setMode('email'); setError(null) }}
-                className={`rounded-xl px-4 py-3 text-left transition ${
-                  mode === 'email' ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20' : 'text-slate-300 hover:bg-white/[0.04]'
-                }`}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition ${mode === 'email' ? 'bg-violet-500 text-white shadow shadow-violet-500/20' : 'text-slate-400 hover:text-white'}`}
               >
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Shield className="h-4 w-4" />
-                  По email
-                </div>
-                <p className="mt-1 text-xs opacity-80">Сотрудники и руководство</p>
+                <Shield className="h-3.5 w-3.5" />
+                Email
               </button>
               <button
                 type="button"
                 onClick={() => { setMode('operator'); setError(null) }}
-                className={`rounded-xl px-4 py-3 text-left transition ${
-                  mode === 'operator' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-300 hover:bg-white/[0.04]'
-                }`}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition ${mode === 'operator' ? 'bg-emerald-500 text-white shadow shadow-emerald-500/20' : 'text-slate-400 hover:text-white'}`}
               >
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <User className="h-4 w-4" />
-                  По логину
-                </div>
-                <p className="mt-1 text-xs opacity-80">Операторский кабинет</p>
+                <User className="h-3.5 w-3.5" />
+                Оператор
               </button>
             </div>
 
-            <div className="mb-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-white">
-                <ModeIcon className="h-4 w-4 text-violet-300" />
-                {modeMeta.title}
-              </div>
-              <p className="mt-2 text-sm text-slate-400">{modeMeta.hint}</p>
-            </div>
-
             <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-slate-400">{mode === 'email' ? 'Email' : 'Логин оператора'}</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-400">
+                  {mode === 'email' ? 'Email' : 'Логин оператора'}
+                </label>
                 <div className="relative">
-                  {mode === 'email' ? (
-                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  ) : (
-                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  )}
+                  {mode === 'email'
+                    ? <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    : <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  }
                   <Input
                     type={mode === 'email' ? 'email' : 'text'}
                     value={login}
                     onChange={(e) => setLogin(e.target.value)}
-                    className="border-white/10 bg-slate-900/60 pl-10 text-white"
-                    placeholder={loginPlaceholder}
+                    className="border-white/10 bg-slate-900/60 pl-10 text-white placeholder:text-slate-600"
+                    placeholder={mode === 'email' ? 'name@example.com' : 'login_operatora'}
                     required
                     autoComplete="username"
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-400">Пароль</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -312,24 +149,19 @@ export default function LoginForm({ hostOrg }: { hostOrg: HostOrg }) {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="border-white/10 bg-slate-900/60 pl-10 pr-10 text-white"
-                    placeholder="Введите пароль"
+                    className="border-white/10 bg-slate-900/60 pl-10 pr-10 text-white placeholder:text-slate-600"
+                    placeholder="Пароль"
                     required
                     autoComplete="current-password"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                  >
+                  <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="text-xs text-slate-500">{helperText}</p>
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                <div className="flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2.5 text-sm text-red-300">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -345,26 +177,115 @@ export default function LoginForm({ hostOrg }: { hostOrg: HostOrg }) {
               </Button>
             </form>
 
-            <div className="mt-6 space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
-              <p className="font-medium text-white">Если письмо уже пришло</p>
-              <ol className="list-decimal space-y-1 pl-5">
-                <li>Откройте письмо от системы.</li>
-                <li>Перейдите по ссылке и задайте пароль.</li>
-                <li>Вернитесь сюда и войдите по email и новому паролю.</li>
-              </ol>
+            <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+              <Link href="/forgot-password" className="hover:text-slate-300">Забыли пароль?</Link>
+              <span>Нет доступа — к администратору</span>
+            </div>
+          </div>
+
+          <p className="mt-6 text-center text-[11px] text-slate-600">
+            {hostOrg.name} · Powered by Orda Control
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Platform (ordaops.kz): two-column layout ─────────────────────────────
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(217,70,239,0.16),_transparent_32%),radial-gradient(circle_at_bottom_left,_rgba(16,185,129,0.12),_transparent_28%),linear-gradient(135deg,#050816_0%,#090f1f_48%,#050816_100%)] p-4">
+      <div className="mx-auto flex min-h-screen max-w-5xl items-center justify-center">
+        <div className="grid w-full gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+
+          {/* Left panel */}
+          <div className="hidden overflow-hidden rounded-2xl border border-white/10 bg-slate-950/55 p-8 text-white backdrop-blur-xl lg:flex lg:flex-col lg:justify-between">
+            <div>
+              <div className="mb-6 inline-flex rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 p-4 shadow-lg shadow-violet-500/20">
+                <Brain className="h-8 w-8 text-white" />
+              </div>
+              <h1 className="max-w-md text-4xl font-semibold leading-tight text-white">
+                Orda Control для команды, точек и ежедневного ритма работы.
+              </h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300">
+                Сотрудники входят по email после приглашения, операторы — через свой логин.
+                Смены, задачи, структура, финансы и рабочий контроль в одной системе.
+              </p>
+            </div>
+            <div className="grid gap-3">
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-sm font-medium text-white">Управленческая команда</p>
+                <p className="mt-1 text-sm text-slate-400">Email из приглашения, новый пароль и доступ по своей роли.</p>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-sm font-medium text-white">Операторы</p>
+                <p className="mt-1 text-sm text-slate-400">Логин оператора и пароль от операторского кабинета.</p>
+              </div>
+              <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+                Если приглашение просрочилось — администратор отправит заново или сбросит пароль.
+              </div>
+            </div>
+          </div>
+
+          {/* Right panel */}
+          <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white backdrop-blur-xl sm:p-8">
+            <div className="mb-6 flex flex-col items-center text-center">
+              <div className="mb-4 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 p-4 shadow-lg shadow-violet-500/20">
+                <Brain className="h-7 w-7 text-white" />
+              </div>
+              <h2 className="text-2xl font-semibold">Вход в Orda Control</h2>
+              <p className="mt-2 max-w-sm text-sm text-slate-400">
+                Выберите тип входа и используйте данные, которые выдал администратор.
+              </p>
             </div>
 
-            <div className="mt-5 flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-              <Link href="/forgot-password" className="text-violet-400 hover:text-violet-300">
-                Забыли пароль?
-              </Link>
-              <span className="text-slate-500">Нет доступа? Обратитесь к администратору</span>
+            <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+              <button type="button" onClick={() => { setMode('email'); setError(null) }}
+                className={`rounded-xl px-4 py-3 text-left transition ${mode === 'email' ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20' : 'text-slate-300 hover:bg-white/[0.04]'}`}>
+                <div className="flex items-center gap-2 text-sm font-medium"><Shield className="h-4 w-4" />По email</div>
+                <p className="mt-1 text-xs opacity-80">Сотрудники и руководство</p>
+              </button>
+              <button type="button" onClick={() => { setMode('operator'); setError(null) }}
+                className={`rounded-xl px-4 py-3 text-left transition ${mode === 'operator' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-300 hover:bg-white/[0.04]'}`}>
+                <div className="flex items-center gap-2 text-sm font-medium"><User className="h-4 w-4" />По логину</div>
+                <p className="mt-1 text-xs opacity-80">Операторский кабинет</p>
+              </button>
             </div>
 
-            <p className="mt-6 text-center text-[11px] text-slate-600">
-              {hostOrg ? `${hostOrg.name} · Powered by Orda Control` : 'Orda Control · Единый вход для сотрудников и операторов'}
-            </p>
-          </Card>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-slate-400">{mode === 'email' ? 'Email' : 'Логин оператора'}</label>
+                <div className="relative">
+                  {mode === 'email' ? <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /> : <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />}
+                  <Input type={mode === 'email' ? 'email' : 'text'} value={login} onChange={(e) => setLogin(e.target.value)} className="border-white/10 bg-slate-900/60 pl-10 text-white" placeholder={mode === 'email' ? 'name@example.com' : 'login_operatora'} required autoComplete="username" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-slate-400">Пароль</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <Input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} className="border-white/10 bg-slate-900/60 pl-10 pr-10 text-white" placeholder="Введите пароль" required autoComplete="current-password" />
+                  <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              {error && (
+                <div className="flex items-start gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
+                </div>
+              )}
+              <Button type="submit" disabled={loading}
+                className={`w-full ${mode === 'email' ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600' : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600'} text-white`}>
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}Войти
+              </Button>
+            </form>
+
+            <div className="mt-5 flex items-center justify-between text-sm">
+              <Link href="/forgot-password" className="text-violet-400 hover:text-violet-300">Забыли пароль?</Link>
+              <span className="text-slate-500">Нет доступа? К администратору</span>
+            </div>
+            <p className="mt-6 text-center text-[11px] text-slate-600">Orda Control · Единый вход для сотрудников и операторов</p>
+          </div>
         </div>
       </div>
     </div>
