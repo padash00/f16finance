@@ -9,6 +9,7 @@ type CreateOrganizationBody = {
   slug?: string | null
   legalName?: string | null
   planCode?: string | null
+  trialDays?: number | null
   createPrimaryDomain?: boolean | null
 }
 
@@ -28,6 +29,21 @@ type UpdateOrganizationBody = {
   planCode?: string | null
   subscriptionStatus?: string | null
   billingPeriod?: string | null
+  subscriptionEndsAt?: string | null
+  cancelAt?: string | null
+  trialDays?: number | null
+  subscriptionAction?:
+    | 'startTrial'
+    | 'activate'
+    | 'recordPayment'
+    | 'markPastDue'
+    | 'cancelAtPeriodEnd'
+    | 'cancelNow'
+    | 'resume'
+    | 'renewCycle'
+    | null
+  billingNote?: string | null
+  invoiceAmount?: number | null
 }
 
 type SubscriptionPlanRow = {
@@ -41,6 +57,19 @@ type SubscriptionPlanRow = {
   currency: string | null
   limits: Record<string, unknown> | null
   features: Record<string, unknown> | null
+}
+
+type BillingEventRow = {
+  id: string
+  organization_id: string
+  subscription_id: string | null
+  event_type: string
+  status: string | null
+  amount: number | null
+  currency: string | null
+  billing_period: string | null
+  note: string | null
+  created_at: string
 }
 
 const CYRILLIC_TO_LATIN_MAP: Record<string, string> = {
@@ -104,6 +133,102 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .replace(/-{2,}/g, '-')
+}
+
+function normalizeTrialDays(value: unknown, fallback = 14) {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return fallback
+  return Math.min(Math.max(Math.round(numeric), 1), 90)
+}
+
+function addDaysIso(baseDate: Date, days: number) {
+  const next = new Date(baseDate)
+  next.setUTCDate(next.getUTCDate() + days)
+  return next.toISOString()
+}
+
+function addBillingPeriodIso(baseDate: Date, billingPeriod: string) {
+  if (billingPeriod === 'yearly') {
+    const next = new Date(baseDate)
+    next.setUTCFullYear(next.getUTCFullYear() + 1)
+    return next.toISOString()
+  }
+
+  const next = new Date(baseDate)
+  next.setUTCMonth(next.getUTCMonth() + 1)
+  return next.toISOString()
+}
+
+function normalizeIsoDate(value: string | null | undefined) {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.toISOString()
+}
+
+function normalizeInvoiceAmount(value: unknown) {
+  if (value === null || value === undefined || value === '') return null
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric) || numeric < 0) return null
+  return numeric
+}
+
+function getMonthlyRevenueEquivalent(plan: SubscriptionPlanRow | null, billingPeriod: string | null | undefined) {
+  if (!plan) return 0
+  if (billingPeriod === 'yearly' && typeof plan.price_yearly === 'number') {
+    return Number(plan.price_yearly) / 12
+  }
+  if (typeof plan.price_monthly === 'number') {
+    return Number(plan.price_monthly)
+  }
+  return 0
+}
+
+async function writeBillingEvent(params: {
+  supabase: ReturnType<typeof createAdminSupabaseClient>
+  organizationId: string
+  subscriptionId?: string | null
+  eventType: string
+  status?: string | null
+  amount?: number | null
+  currency?: string | null
+  billingPeriod?: string | null
+  note?: string | null
+  createdByUserId?: string | null
+  payload?: Record<string, unknown>
+}) {
+  const {
+    supabase,
+    organizationId,
+    subscriptionId = null,
+    eventType,
+    status = null,
+    amount = null,
+    currency = null,
+    billingPeriod = null,
+    note = null,
+    createdByUserId = null,
+    payload = {},
+  } = params
+
+  const { error } = await supabase.from('organization_billing_events').insert([
+    {
+      organization_id: organizationId,
+      subscription_id: subscriptionId,
+      event_type: eventType,
+      status,
+      amount,
+      currency,
+      billing_period: billingPeriod,
+      note,
+      created_by_user_id: createdByUserId,
+      payload,
+    },
+  ])
+
+  if (error) {
+    console.warn('Failed to write organization billing event', error)
+  }
 }
 
 async function reserveUniqueSlug(
@@ -195,10 +320,28 @@ async function loadOrganizationHubData(params: {
     return {
       organizations: [],
       plans: ((plansData || []) as SubscriptionPlanRow[]).map(normalizePlan),
+      overview: {
+        organizationCount: 0,
+        activeOrganizationCount: 0,
+        activeSubscriptions: 0,
+        trialingSubscriptions: 0,
+        pastDueSubscriptions: 0,
+        totalCompanies: 0,
+        totalMembers: 0,
+        liveMrr: 0,
+        trialMrr: 0,
+      },
     }
   }
 
-  const [{ data: organizationsData, error: organizationsError }, { data: subscriptionsData, error: subscriptionsError }, { data: companiesData, error: companiesError }, { data: membersData, error: membersError }, { data: plansData, error: plansError }] =
+  const [
+    { data: organizationsData, error: organizationsError },
+    { data: subscriptionsData, error: subscriptionsError },
+    { data: companiesData, error: companiesError },
+    { data: membersData, error: membersError },
+    { data: plansData, error: plansError },
+    { data: billingEventsData, error: billingEventsError },
+  ] =
     await Promise.all([
       supabase
         .from('organizations')
@@ -225,6 +368,11 @@ async function loadOrganizationHubData(params: {
         .from('subscription_plans')
         .select('id, code, name, description, status, price_monthly, price_yearly, currency, limits, features')
         .order('price_monthly', { ascending: true }),
+      supabase
+        .from('organization_billing_events')
+        .select('id, organization_id, subscription_id, event_type, status, amount, currency, billing_period, note, created_at')
+        .in('organization_id', organizationIds)
+        .order('created_at', { ascending: false }),
     ])
 
   if (organizationsError) throw organizationsError
@@ -232,12 +380,48 @@ async function loadOrganizationHubData(params: {
   if (companiesError) throw companiesError
   if (membersError) throw membersError
   if (plansError) throw plansError
+  if (billingEventsError) throw billingEventsError
 
   const subscriptionsByOrganization = new Map<string, any>()
   for (const row of subscriptionsData || []) {
     const organizationId = String((row as any).organization_id || '')
     if (!organizationId || subscriptionsByOrganization.has(organizationId)) continue
     subscriptionsByOrganization.set(organizationId, row)
+  }
+
+  const billingEventsByOrganization = new Map<
+    string,
+    Array<{
+      id: string
+      subscriptionId: string | null
+      eventType: string
+      status: string | null
+      amount: number | null
+      currency: string | null
+      billingPeriod: string | null
+      note: string | null
+      createdAt: string
+    }>
+  >()
+  for (const row of (billingEventsData || []) as BillingEventRow[]) {
+    const organizationId = String(row.organization_id || '')
+    if (!organizationId) continue
+    if (!billingEventsByOrganization.has(organizationId)) {
+      billingEventsByOrganization.set(organizationId, [])
+    }
+    const current = billingEventsByOrganization.get(organizationId)!
+    if (current.length >= 8) continue
+    current.push({
+      id: String(row.id || ''),
+      subscriptionId: row.subscription_id ? String(row.subscription_id) : null,
+      eventType: String(row.event_type || ''),
+      status: row.status ? String(row.status) : null,
+      amount: typeof row.amount === 'number' ? row.amount : row.amount === null ? null : Number(row.amount),
+      currency: row.currency || null,
+      billingPeriod: row.billing_period || null,
+      note: row.note || null,
+      createdAt: row.created_at,
+    })
   }
 
   const companiesByOrganization = new Map<string, Array<{ id: string; name: string; code: string | null }>>()
@@ -268,8 +452,8 @@ async function loadOrganizationHubData(params: {
   )
   const usageByOrganization = new Map(usageByOrganizationEntries)
 
-  return {
-    organizations: (organizationsData || []).map((row: any) => {
+  const normalizedPlans = ((plansData || []) as SubscriptionPlanRow[]).map(normalizePlan)
+  const normalizedOrganizations = (organizationsData || []).map((row: any) => {
       const organizationId = String(row.id || '')
       const subscription = subscriptionsByOrganization.get(organizationId)
       const plan = subscription?.plan
@@ -305,6 +489,7 @@ async function loadOrganizationHubData(params: {
         },
         usage,
         companies,
+        billingEvents: billingEventsByOrganization.get(organizationId) || [],
         subscription: subscription
           ? {
               id: String(subscription.id || ''),
@@ -319,8 +504,67 @@ async function loadOrganizationHubData(params: {
             }
           : null,
       }
-    }),
-    plans: ((plansData || []) as SubscriptionPlanRow[]).map(normalizePlan),
+    })
+
+  const overview = normalizedOrganizations.reduce(
+    (acc, organization) => {
+      acc.organizationCount += 1
+      if (organization.status === 'active' || organization.status === 'trial') {
+        acc.activeOrganizationCount += 1
+      }
+      acc.totalCompanies += organization.companyCount
+      acc.totalMembers += organization.memberCount
+
+      const status = organization.subscription?.status || null
+      const plan = organization.subscription?.plan
+      const mrrEquivalent = plan
+        ? getMonthlyRevenueEquivalent(
+            {
+              id: plan.id,
+              code: plan.code,
+              name: plan.name,
+              description: null,
+              status: 'active',
+              price_monthly: plan.priceMonthly,
+              price_yearly: plan.priceYearly,
+              currency: plan.currency,
+              limits: plan.limits,
+              features: plan.features,
+            },
+            organization.subscription?.billingPeriod,
+          )
+        : 0
+
+      if (status === 'active') {
+        acc.activeSubscriptions += 1
+        acc.liveMrr += mrrEquivalent
+      } else if (status === 'trialing') {
+        acc.trialingSubscriptions += 1
+        acc.trialMrr += mrrEquivalent
+      } else if (status === 'past_due') {
+        acc.pastDueSubscriptions += 1
+        acc.liveMrr += mrrEquivalent
+      }
+
+      return acc
+    },
+    {
+      organizationCount: 0,
+      activeOrganizationCount: 0,
+      activeSubscriptions: 0,
+      trialingSubscriptions: 0,
+      pastDueSubscriptions: 0,
+      totalCompanies: 0,
+      totalMembers: 0,
+      liveMrr: 0,
+      trialMrr: 0,
+    },
+  )
+
+  return {
+    organizations: normalizedOrganizations,
+    plans: normalizedPlans,
+    overview,
   }
 }
 
@@ -336,6 +580,7 @@ export async function GET(req: Request) {
       ok: true,
       organizations: data.organizations,
       plans: data.plans,
+      overview: data.overview,
     })
   } catch (error: any) {
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
@@ -356,6 +601,7 @@ export async function POST(req: Request) {
     const legalName = String(body?.legalName || '').trim() || null
     const desiredSlug = String(body?.slug || '').trim() || name
     const planCode = String(body?.planCode || '').trim() || 'starter'
+    const trialDays = normalizeTrialDays(body?.trialDays, 14)
     const createPrimaryDomain = body?.createPrimaryDomain !== false
 
     if (!name) {
@@ -401,7 +647,9 @@ export async function POST(req: Request) {
 
     const organizationId = String((organization as any).id)
 
-    const { error: subscriptionError } = await supabase
+    const subscriptionStartsAt = new Date()
+    const subscriptionEndsAt = addDaysIso(subscriptionStartsAt, trialDays)
+    const { data: subscription, error: subscriptionError } = await supabase
       .from('organization_subscriptions')
       .insert([
         {
@@ -409,11 +657,16 @@ export async function POST(req: Request) {
           plan_id: String(plan.id),
           status: 'trialing',
           billing_period: 'monthly',
+          starts_at: subscriptionStartsAt.toISOString(),
+          ends_at: subscriptionEndsAt,
           metadata: {
             created_from: 'project-hub',
+            trial_days: trialDays,
           },
         },
       ])
+      .select('id')
+      .single()
     if (subscriptionError) throw subscriptionError
 
     const { error: memberError } = await supabase
@@ -453,6 +706,22 @@ export async function POST(req: Request) {
         console.warn('Primary tenant domain was not created', domainError)
       }
     }
+
+    await writeBillingEvent({
+      supabase,
+      organizationId,
+      subscriptionId: String((subscription as any)?.id || '') || null,
+      eventType: 'trial_started',
+      status: 'trialing',
+      billingPeriod: 'monthly',
+      createdByUserId: access.user?.id || null,
+      note: `Пробный период на ${trialDays} дней запущен при создании организации.`,
+      payload: {
+        plan_code: String(plan.code),
+        trial_days: trialDays,
+        created_from: 'project-hub',
+      },
+    })
 
     return json({
       ok: true,
@@ -573,12 +842,15 @@ export async function PATCH(req: Request) {
       rights.canManageSubscription &&
       (typeof body?.planCode === 'string' ||
         typeof body?.subscriptionStatus === 'string' ||
-        typeof body?.billingPeriod === 'string')
+        typeof body?.billingPeriod === 'string' ||
+        typeof body?.subscriptionEndsAt === 'string' ||
+        typeof body?.cancelAt === 'string' ||
+        typeof body?.subscriptionAction === 'string')
 
     if (canUpdateSubscription) {
       const { data: currentSubscription, error: currentSubscriptionError } = await supabase
         .from('organization_subscriptions')
-        .select('id, plan_id, status, billing_period')
+        .select('id, plan_id, status, billing_period, starts_at, ends_at, cancel_at')
         .eq('organization_id', organizationId)
         .order('starts_at', { ascending: false })
         .limit(1)
@@ -600,16 +872,85 @@ export async function PATCH(req: Request) {
         planId = String(plan.id)
       }
 
-      const subscriptionPayload = {
-        plan_id: planId,
-        status: typeof body?.subscriptionStatus === 'string' && body.subscriptionStatus.trim()
-          ? body.subscriptionStatus.trim()
-          : currentSubscription?.status || 'active',
-        billing_period: typeof body?.billingPeriod === 'string' && body.billingPeriod.trim()
+      const nextBillingPeriod =
+        typeof body?.billingPeriod === 'string' && body.billingPeriod.trim()
           ? body.billingPeriod.trim()
-          : currentSubscription?.billing_period || 'monthly',
+          : currentSubscription?.billing_period || 'monthly'
+      const currentStartsAt = normalizeIsoDate((currentSubscription as any)?.starts_at || null)
+      const currentEndsAt = normalizeIsoDate((currentSubscription as any)?.ends_at || null)
+      const currentCancelAt = normalizeIsoDate((currentSubscription as any)?.cancel_at || null)
+      const now = new Date()
+      const nextStartsAt = currentStartsAt || now.toISOString()
+      let nextStatus =
+        typeof body?.subscriptionStatus === 'string' && body.subscriptionStatus.trim()
+          ? body.subscriptionStatus.trim()
+          : currentSubscription?.status || 'active'
+      let nextEndsAt =
+        typeof body?.subscriptionEndsAt === 'string'
+          ? normalizeIsoDate(body.subscriptionEndsAt)
+          : currentEndsAt
+      let nextCancelAt =
+        typeof body?.cancelAt === 'string'
+          ? normalizeIsoDate(body.cancelAt)
+          : currentCancelAt
+
+      const subscriptionAction =
+        typeof body?.subscriptionAction === 'string' ? body.subscriptionAction.trim() : null
+      const billingNote = String(body?.billingNote || '').trim() || null
+      const invoiceAmount = normalizeInvoiceAmount(body?.invoiceAmount)
+      const trialDays = normalizeTrialDays(body?.trialDays, 14)
+      let billingEventType: string | null = null
+
+      if (subscriptionAction === 'startTrial') {
+        nextStatus = 'trialing'
+        nextEndsAt = addDaysIso(now, trialDays)
+        nextCancelAt = null
+        billingEventType = 'trial_started'
+      } else if (subscriptionAction === 'activate') {
+        nextStatus = 'active'
+        nextEndsAt = nextEndsAt || addBillingPeriodIso(now, nextBillingPeriod)
+        nextCancelAt = null
+        billingEventType = 'subscription_activated'
+      } else if (subscriptionAction === 'recordPayment') {
+        nextStatus = 'active'
+        nextEndsAt = addBillingPeriodIso(now, nextBillingPeriod)
+        nextCancelAt = null
+        billingEventType = 'payment_recorded'
+      } else if (subscriptionAction === 'markPastDue') {
+        nextStatus = 'past_due'
+        billingEventType = 'subscription_past_due'
+      } else if (subscriptionAction === 'cancelAtPeriodEnd') {
+        nextCancelAt = nextEndsAt || addBillingPeriodIso(now, nextBillingPeriod)
+        billingEventType = 'subscription_cancel_scheduled'
+      } else if (subscriptionAction === 'cancelNow') {
+        nextStatus = 'canceled'
+        nextEndsAt = now.toISOString()
+        nextCancelAt = now.toISOString()
+        billingEventType = 'subscription_canceled'
+      } else if (subscriptionAction === 'resume') {
+        nextStatus = 'active'
+        nextCancelAt = null
+        if (!nextEndsAt || new Date(nextEndsAt).getTime() <= now.getTime()) {
+          nextEndsAt = addBillingPeriodIso(now, nextBillingPeriod)
+        }
+        billingEventType = 'subscription_resumed'
+      } else if (subscriptionAction === 'renewCycle') {
+        nextStatus = 'active'
+        nextCancelAt = null
+        nextEndsAt = addBillingPeriodIso(now, nextBillingPeriod)
+        billingEventType = 'subscription_renewed'
       }
 
+      const subscriptionPayload = {
+        plan_id: planId,
+        status: nextStatus,
+        billing_period: nextBillingPeriod,
+        starts_at: nextStartsAt,
+        ends_at: nextEndsAt,
+        cancel_at: nextCancelAt,
+      }
+
+      let subscriptionId = currentSubscription?.id ? String(currentSubscription.id) : null
       if (currentSubscription?.id) {
         const { error: subscriptionError } = await supabase
           .from('organization_subscriptions')
@@ -617,7 +958,7 @@ export async function PATCH(req: Request) {
           .eq('id', currentSubscription.id)
         if (subscriptionError) throw subscriptionError
       } else if (planId) {
-        const { error: subscriptionError } = await supabase
+        const { data: createdSubscription, error: subscriptionError } = await supabase
           .from('organization_subscriptions')
           .insert([
             {
@@ -625,7 +966,65 @@ export async function PATCH(req: Request) {
               ...subscriptionPayload,
             },
           ])
+          .select('id')
+          .single()
         if (subscriptionError) throw subscriptionError
+        subscriptionId = String((createdSubscription as any)?.id || '') || null
+      }
+
+      const currentPlanId = currentSubscription?.plan_id ? String(currentSubscription.plan_id) : null
+      if (planId && currentPlanId && planId !== currentPlanId) {
+        await writeBillingEvent({
+          supabase,
+          organizationId,
+          subscriptionId,
+          eventType: 'plan_changed',
+          status: nextStatus,
+          billingPeriod: nextBillingPeriod,
+          note: billingNote || 'Тариф организации изменён.',
+          createdByUserId: access.user?.id || null,
+          payload: {
+            previous_plan_id: currentPlanId,
+            next_plan_id: planId,
+          },
+        })
+      }
+
+      if (billingEventType) {
+        await writeBillingEvent({
+          supabase,
+          organizationId,
+          subscriptionId,
+          eventType: billingEventType,
+          status: nextStatus,
+          amount: invoiceAmount,
+          currency: body?.currency?.trim() || null,
+          billingPeriod: nextBillingPeriod,
+          note: billingNote,
+          createdByUserId: access.user?.id || null,
+          payload: {
+            trial_days: subscriptionAction === 'startTrial' ? trialDays : undefined,
+            action: subscriptionAction,
+          },
+        })
+      } else if (
+        typeof body?.subscriptionStatus === 'string' ||
+        typeof body?.billingPeriod === 'string' ||
+        typeof body?.subscriptionEndsAt === 'string' ||
+        typeof body?.cancelAt === 'string'
+      ) {
+        await writeBillingEvent({
+          supabase,
+          organizationId,
+          subscriptionId,
+          eventType: 'subscription_updated',
+          status: nextStatus,
+          amount: invoiceAmount,
+          currency: body?.currency?.trim() || null,
+          billingPeriod: nextBillingPeriod,
+          note: billingNote || 'Параметры подписки обновлены вручную.',
+          createdByUserId: access.user?.id || null,
+        })
       }
     }
 

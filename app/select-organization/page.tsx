@@ -41,6 +41,28 @@ type PlanOption = {
   limits: Record<string, unknown>
   features: Record<string, unknown>
 }
+type BillingEventItem = {
+  id: string
+  subscriptionId: string | null
+  eventType: string
+  status: string | null
+  amount: number | null
+  currency: string | null
+  billingPeriod: string | null
+  note: string | null
+  createdAt: string
+}
+type HubOverview = {
+  organizationCount: number
+  activeOrganizationCount: number
+  activeSubscriptions: number
+  trialingSubscriptions: number
+  pastDueSubscriptions: number
+  totalCompanies: number
+  totalMembers: number
+  liveMrr: number
+  trialMrr: number
+}
 type OrganizationHubOverview = {
   id: string
   name: string
@@ -68,6 +90,7 @@ type OrganizationHubOverview = {
     point_projects: number
   }
   companies: Array<{ id: string; name: string; code: string | null }>
+  billingEvents: BillingEventItem[]
   subscription: null | {
     id: string
     status: string
@@ -278,6 +301,51 @@ function getEnabledFeatureLabels(features: Record<string, unknown> | null | unde
     .map(([feature]) => FEATURE_LABELS[feature] || feature)
 }
 
+function formatMoney(value: number | null | undefined, currency = 'KZT') {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '0'
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return 'Не задано'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Не задано'
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(parsed)
+}
+
+function getDaysUntil(dateValue: string | null | undefined) {
+  if (!dateValue) return null
+  const parsed = new Date(dateValue)
+  if (Number.isNaN(parsed.getTime())) return null
+  const diff = parsed.getTime() - Date.now()
+  return Math.ceil(diff / (1000 * 60 * 60 * 24))
+}
+
+function getBillingEventLabel(eventType: string) {
+  const labels: Record<string, string> = {
+    trial_started: 'Старт trial',
+    subscription_activated: 'Активация',
+    payment_recorded: 'Оплата',
+    subscription_past_due: 'Просрочка',
+    subscription_cancel_scheduled: 'Отмена в конце периода',
+    subscription_canceled: 'Подписка отменена',
+    subscription_resumed: 'Подписка возобновлена',
+    subscription_renewed: 'Продление',
+    plan_changed: 'Смена тарифа',
+    subscription_updated: 'Ручное обновление',
+  }
+
+  return labels[eventType] || eventType
+}
+
 function createEmptyPlanEditor(): PlanEditorState {
   return {
     id: null,
@@ -305,10 +373,12 @@ function SelectOrganizationContent() {
   const [staffRole, setStaffRole] = useState<SessionRoleInfo['staffRole'] | null>(null)
   const [hubOrganizations, setHubOrganizations] = useState<OrganizationHubOverview[]>([])
   const [plans, setPlans] = useState<PlanOption[]>([])
+  const [hubOverview, setHubOverview] = useState<HubOverview | null>(null)
   const [loadingHub, setLoadingHub] = useState(false)
   const [organizationMembers, setOrganizationMembers] = useState<OrganizationMember[]>([])
   const [loadingMembers, setLoadingMembers] = useState(false)
   const [savingPlan, setSavingPlan] = useState(false)
+  const [runningBillingAction, setRunningBillingAction] = useState(false)
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
   const [defaultPath, setDefaultPath] = useState('/')
   const [error, setError] = useState<string | null>(null)
@@ -322,6 +392,7 @@ function SelectOrganizationContent() {
   const [organizationSlug, setOrganizationSlug] = useState('')
   const [organizationLegalName, setOrganizationLegalName] = useState('')
   const [organizationPlanCode, setOrganizationPlanCode] = useState('starter')
+  const [organizationTrialDays, setOrganizationTrialDays] = useState('14')
   const [firstCompanyName, setFirstCompanyName] = useState('')
   const [organizationBusinessModel, setOrganizationBusinessModel] = useState<(typeof BUSINESS_MODEL_OPTIONS)[number]['value']>('club')
   const [organizationPointScale, setOrganizationPointScale] = useState<(typeof POINT_SCALE_OPTIONS)[number]['value']>('1')
@@ -346,6 +417,10 @@ function SelectOrganizationContent() {
   const [editPlanCode, setEditPlanCode] = useState('starter')
   const [editSubscriptionStatus, setEditSubscriptionStatus] = useState('active')
   const [editBillingPeriod, setEditBillingPeriod] = useState('monthly')
+  const [editSubscriptionEndsAt, setEditSubscriptionEndsAt] = useState('')
+  const [editCancelAt, setEditCancelAt] = useState('')
+  const [billingNote, setBillingNote] = useState('')
+  const [billingAmount, setBillingAmount] = useState('')
   const [inviteFullName, setInviteFullName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<OrganizationMember['role']>('manager')
@@ -366,6 +441,7 @@ function SelectOrganizationContent() {
       }
       setHubOrganizations(Array.isArray(json?.organizations) ? json.organizations : [])
       setPlans(Array.isArray(json?.plans) ? json.plans : [])
+      setHubOverview(json?.overview || null)
     } finally {
       setLoadingHub(false)
     }
@@ -424,6 +500,7 @@ function SelectOrganizationContent() {
           if (active && hubResponse.ok) {
             setHubOrganizations(Array.isArray(hubJson?.organizations) ? hubJson.organizations : [])
             setPlans(Array.isArray(hubJson?.plans) ? hubJson.plans : [])
+            setHubOverview(hubJson?.overview || null)
           }
         } catch {}
         if (json?.activeOrganization?.id) {
@@ -599,6 +676,50 @@ function SelectOrganizationContent() {
       }
     })
   }, [activeOrganizationDetails])
+  const subscriptionDeadlineDays = useMemo(
+    () => getDaysUntil(activeOrganizationDetails?.subscription?.endsAt),
+    [activeOrganizationDetails],
+  )
+  const cancelDeadlineDays = useMemo(
+    () => getDaysUntil(activeOrganizationDetails?.subscription?.cancelAt),
+    [activeOrganizationDetails],
+  )
+  const onboardingChecklist = useMemo(() => {
+    if (!activeOrganizationDetails) return []
+
+    const items = [
+      {
+        id: 'company',
+        label: 'Добавить хотя бы одну точку',
+        done: activeOrganizationDetails.companies.length > 0,
+      },
+      {
+        id: 'branding',
+        label: 'Заполнить бренд кабинета',
+        done:
+          Boolean(activeOrganizationDetails.branding?.productName?.trim()) &&
+          Boolean(activeOrganizationDetails.branding?.primaryColor?.trim()),
+      },
+      {
+        id: 'support',
+        label: 'Указать support email',
+        done: Boolean(activeOrganizationDetails.settings?.supportEmail?.trim()),
+      },
+      {
+        id: 'team',
+        label: 'Пригласить команду',
+        done: organizationMembers.length > 1,
+      },
+      {
+        id: 'subscription',
+        label: 'Довести подписку до active',
+        done: activeOrganizationDetails.subscription?.status === 'active',
+      },
+    ]
+
+    return items
+  }, [activeOrganizationDetails, organizationMembers])
+  const onboardingReadyCount = onboardingChecklist.filter((item) => item.done).length
 
   useEffect(() => {
     if (!activeOrganizationDetails) return
@@ -616,6 +737,16 @@ function SelectOrganizationContent() {
     setEditPlanCode(activeOrganizationDetails.subscription?.plan?.code || 'starter')
     setEditSubscriptionStatus(activeOrganizationDetails.subscription?.status || 'active')
     setEditBillingPeriod(activeOrganizationDetails.subscription?.billingPeriod || 'monthly')
+    setEditSubscriptionEndsAt(
+      activeOrganizationDetails.subscription?.endsAt
+        ? new Date(activeOrganizationDetails.subscription.endsAt).toISOString().slice(0, 10)
+        : '',
+    )
+    setEditCancelAt(
+      activeOrganizationDetails.subscription?.cancelAt
+        ? new Date(activeOrganizationDetails.subscription.cancelAt).toISOString().slice(0, 10)
+        : '',
+    )
   }, [activeOrganizationDetails])
 
   useEffect(() => {
@@ -691,6 +822,7 @@ function SelectOrganizationContent() {
           slug: trimmedSlug,
           legalName: organizationLegalName.trim() || null,
           planCode: organizationPlanCode,
+          trialDays: Number(organizationTrialDays) || 14,
         }),
       })
 
@@ -732,6 +864,7 @@ function SelectOrganizationContent() {
       setOrganizationSlug('')
       setOrganizationLegalName('')
       setOrganizationPlanCode('starter')
+      setOrganizationTrialDays('14')
       setFirstCompanyName('')
       setOrganizationBusinessModel('club')
       setOrganizationPointScale('1')
@@ -833,6 +966,8 @@ function SelectOrganizationContent() {
           planCode: editPlanCode,
           subscriptionStatus: editSubscriptionStatus,
           billingPeriod: editBillingPeriod,
+          subscriptionEndsAt: editSubscriptionEndsAt || null,
+          cancelAt: editCancelAt || null,
         }),
       })
 
@@ -865,6 +1000,51 @@ function SelectOrganizationContent() {
       setError(err?.message || 'Не удалось обновить организацию.')
     } finally {
       setSavingOrganization(false)
+    }
+  }
+
+  const handleSubscriptionAction = async (
+    action: 'startTrial' | 'activate' | 'recordPayment' | 'markPastDue' | 'cancelAtPeriodEnd' | 'cancelNow' | 'resume' | 'renewCycle',
+  ) => {
+    if (!activeOrganizationId) {
+      setError('Сначала выбери активную организацию.')
+      return
+    }
+
+    try {
+      setRunningBillingAction(true)
+      setError(null)
+      setSuccess(null)
+
+      const response = await fetch('/api/admin/organizations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: activeOrganizationId,
+          subscriptionAction: action,
+          planCode: editPlanCode,
+          billingPeriod: editBillingPeriod,
+          billingNote: billingNote.trim() || null,
+          invoiceAmount: billingAmount.trim() ? Number(billingAmount) : null,
+          trialDays: Number(organizationTrialDays) || 14,
+        }),
+      })
+
+      const body = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(body?.error || 'Не удалось выполнить действие по подписке.')
+      }
+
+      setBillingNote('')
+      if (action === 'recordPayment' || action === 'renewCycle') {
+        setBillingAmount('')
+      }
+      await refreshHubData()
+      setSuccess('Действие по подписке выполнено.')
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось выполнить действие по подписке.')
+    } finally {
+      setRunningBillingAction(false)
     }
   }
 
@@ -1067,6 +1247,49 @@ function SelectOrganizationContent() {
                   ) : null}
                 </div>
 
+                {hubOverview ? (
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="mb-4 flex items-center gap-3">
+                      <div className="rounded-2xl bg-emerald-500/10 p-3">
+                        <Sparkles className="h-5 w-5 text-emerald-300" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-semibold text-white">SaaS owner cockpit</h2>
+                        <p className="text-sm text-slate-400">
+                          Живой срез по организациям, подпискам и повторяющейся выручке.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
+                        <div className="text-slate-500">Организации</div>
+                        <div className="mt-1 font-medium text-white">{hubOverview.organizationCount}</div>
+                        <div className="mt-1 text-xs text-slate-400">Активных: {hubOverview.activeOrganizationCount}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
+                        <div className="text-slate-500">Подписки</div>
+                        <div className="mt-1 font-medium text-white">
+                          active {hubOverview.activeSubscriptions} · trial {hubOverview.trialingSubscriptions}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">past_due: {hubOverview.pastDueSubscriptions}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
+                        <div className="text-slate-500">MRR</div>
+                        <div className="mt-1 font-medium text-white">{formatMoney(hubOverview.liveMrr)}</div>
+                        <div className="mt-1 text-xs text-slate-400">Trial pipeline: {formatMoney(hubOverview.trialMrr)}</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
+                        <div className="text-slate-500">Сеть</div>
+                        <div className="mt-1 font-medium text-white">
+                          {hubOverview.totalCompanies} точек · {hubOverview.totalMembers} участников
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">Это общий контур по всем клиентам.</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
                 {organizations.map((organization) => {
                   const isActive = activeOrganization?.id === organization.id
                   const isBusy = switchingId === organization.id
@@ -1190,6 +1413,170 @@ function SelectOrganizationContent() {
                         <div className="text-slate-500">Часовой пояс / валюта</div>
                         <div className="mt-1 font-medium text-white">
                           {(activeOrganizationDetails.settings?.timezone || 'Asia/Qyzylorda')} · {(activeOrganizationDetails.settings?.currency || 'KZT')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-4 grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-white">Подписка и биллинг</div>
+                            <div className="text-xs text-slate-500">
+                              Управление жизненным циклом подписки, trial и ручными сценариями оплаты.
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="border-white/10 text-slate-300">
+                            {activeOrganizationDetails.subscription?.status || 'not_set'}
+                          </Badge>
+                        </div>
+
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
+                            <div className="text-slate-500">Период</div>
+                            <div className="mt-1 font-medium text-white">
+                              {activeOrganizationDetails.subscription?.billingPeriod || 'monthly'}
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
+                            <div className="text-slate-500">Следующая контрольная дата</div>
+                            <div className="mt-1 font-medium text-white">
+                              {formatDate(activeOrganizationDetails.subscription?.endsAt)}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-400">
+                              {subscriptionDeadlineDays === null
+                                ? 'Дата не задана'
+                                : subscriptionDeadlineDays >= 0
+                                  ? `До дедлайна ${subscriptionDeadlineDays} дн.`
+                                  : `Просрочка ${Math.abs(subscriptionDeadlineDays)} дн.`}
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
+                            <div className="text-slate-500">Cancel at</div>
+                            <div className="mt-1 font-medium text-white">
+                              {formatDate(activeOrganizationDetails.subscription?.cancelAt)}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-400">
+                              {cancelDeadlineDays === null
+                                ? 'Отмена не запланирована'
+                                : cancelDeadlineDays >= 0
+                                  ? `До отмены ${cancelDeadlineDays} дн.`
+                                  : 'Дата отмены уже прошла'}
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
+                            <div className="text-slate-500">Рекомендация</div>
+                            <div className="mt-1 font-medium text-white">
+                              {activeOrganizationDetails.subscription?.status === 'past_due'
+                                ? 'Срочно провести оплату'
+                                : activeOrganizationDetails.subscription?.status === 'trialing'
+                                  ? 'Подготовить активацию после trial'
+                                  : 'Подписка под контролем'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isSuperAdmin ? (
+                          <div className="mt-4 space-y-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <Input
+                                value={billingAmount}
+                                onChange={(event) => setBillingAmount(event.target.value)}
+                                className="border-white/10 bg-slate-900/60 text-white"
+                                placeholder="Сумма оплаты / счета"
+                              />
+                              <Input
+                                value={organizationTrialDays}
+                                onChange={(event) => setOrganizationTrialDays(event.target.value)}
+                                className="border-white/10 bg-slate-900/60 text-white"
+                                placeholder="Trial days"
+                              />
+                            </div>
+                            <Input
+                              value={billingNote}
+                              onChange={(event) => setBillingNote(event.target.value)}
+                              className="border-white/10 bg-slate-900/60 text-white"
+                              placeholder="Комментарий к действию по подписке"
+                            />
+                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                              <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('startTrial')}>
+                                Trial
+                              </Button>
+                              <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('activate')}>
+                                Activate
+                              </Button>
+                              <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('recordPayment')}>
+                                Record payment
+                              </Button>
+                              <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('renewCycle')}>
+                                Renew cycle
+                              </Button>
+                              <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('markPastDue')}>
+                                Mark past due
+                              </Button>
+                              <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('resume')}>
+                                Resume
+                              </Button>
+                              <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('cancelAtPeriodEnd')}>
+                                Cancel at period end
+                              </Button>
+                              <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('cancelNow')}>
+                                Cancel now
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-white">Готовность запуска клиента</div>
+                            <div className="text-xs text-slate-500">
+                              Что ещё нужно доделать, чтобы организация выглядела как готовый клиентский кабинет.
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="border-white/10 text-slate-300">
+                            {onboardingReadyCount}/{onboardingChecklist.length}
+                          </Badge>
+                        </div>
+                        <div className="space-y-2">
+                          {onboardingChecklist.map((item) => (
+                            <div
+                              key={item.id}
+                              className={`rounded-2xl border px-3 py-3 text-sm ${
+                                item.done
+                                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100'
+                                  : 'border-white/10 bg-slate-950/60 text-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className={`h-4 w-4 ${item.done ? 'text-emerald-300' : 'text-slate-500'}`} />
+                                {item.label}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-3">
+                          <div className="text-sm font-medium text-white">Последние billing-события</div>
+                          <div className="mt-3 space-y-2">
+                            {activeOrganizationDetails.billingEvents.length ? (
+                              activeOrganizationDetails.billingEvents.slice(0, 5).map((event) => (
+                                <div key={event.id} className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="font-medium text-white">{getBillingEventLabel(event.eventType)}</div>
+                                    <div className="text-xs text-slate-500">{formatDate(event.createdAt)}</div>
+                                  </div>
+                                  <div className="mt-1 text-xs text-slate-400">
+                                    {event.amount !== null ? `${formatMoney(event.amount, event.currency || editCurrency || 'KZT')} · ` : ''}
+                                    {event.note || event.status || 'Без комментария'}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-sm text-slate-400">История биллинга пока пустая.</div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1344,6 +1731,22 @@ function SelectOrganizationContent() {
                               <option value="yearly">yearly</option>
                               <option value="custom">custom</option>
                             </select>
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <Input
+                              value={editSubscriptionEndsAt}
+                              onChange={(event) => setEditSubscriptionEndsAt(event.target.value)}
+                              className="border-white/10 bg-slate-900/60 text-white"
+                              type="date"
+                              placeholder="Дата окончания периода"
+                            />
+                            <Input
+                              value={editCancelAt}
+                              onChange={(event) => setEditCancelAt(event.target.value)}
+                              className="border-white/10 bg-slate-900/60 text-white"
+                              type="date"
+                              placeholder="Дата отмены"
+                            />
                           </div>
                         </>
                       ) : (
@@ -1751,6 +2154,12 @@ function SelectOrganizationContent() {
                                   <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-xs text-slate-400">
                                     Tenant URL и доступы будут строиться вокруг slug: <span className="font-mono text-slate-200">{organizationSlug || 'company-slug'}</span>
                                   </div>
+                                  <Input
+                                    value={organizationTrialDays}
+                                    onChange={(event) => setOrganizationTrialDays(event.target.value)}
+                                    className="border-white/10 bg-slate-900/60 text-white"
+                                    placeholder="Trial days, например 14"
+                                  />
                                 </div>
                               </div>
 
@@ -1962,6 +2371,15 @@ function SelectOrganizationContent() {
                                     <div className="mt-1 font-medium text-white">{firstCompanyName || 'Можно создать позже'}</div>
                                   </div>
                                   <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Старт подписки</div>
+                                    <div className="mt-1 font-medium text-white">
+                                      Trial на {Number(organizationTrialDays) || 14} дней
+                                    </div>
+                                    <div className="text-xs text-slate-500">
+                                      После создания сразу появится billing history и дедлайн по активации.
+                                    </div>
+                                  </div>
+                                  <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
                                     <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Включенные возможности</div>
                                     <div className="mt-2 flex flex-wrap gap-2">
                                       {selectedPlanFeatureLabels.length ? (
@@ -2043,6 +2461,12 @@ function SelectOrganizationContent() {
                               </option>
                             ))}
                           </select>
+                          <Input
+                            value={organizationTrialDays}
+                            onChange={(event) => setOrganizationTrialDays(event.target.value)}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="Trial days"
+                          />
                           <Input
                             value={firstCompanyName}
                             onChange={(event) => setFirstCompanyName(event.target.value)}
