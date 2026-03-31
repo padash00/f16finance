@@ -2,11 +2,28 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowRight, Brain, Building2, CreditCard, Loader2, LogOut, PencilLine, PlusCircle, Settings2, ShieldAlert, Store, Users } from 'lucide-react'
+import {
+  ArrowRight,
+  Brain,
+  Building2,
+  CheckCircle2,
+  CreditCard,
+  Loader2,
+  LogOut,
+  PencilLine,
+  PlusCircle,
+  Settings2,
+  ShieldAlert,
+  Sparkles,
+  Store,
+  Users,
+} from 'lucide-react'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabaseClient'
 import type { SessionRoleInfo } from '@/lib/core/types'
 
@@ -102,6 +119,24 @@ const PLAN_OPTIONS = [
   { value: 'growth', label: 'Growth' },
   { value: 'enterprise', label: 'Enterprise' },
 ]
+const FEATURE_LABELS: Record<string, string> = {
+  ai_reports: 'AI-аналитика',
+  inventory: 'Склад и остатки',
+  web_pos: 'POS и терминал',
+  telegram: 'Telegram-боты и отчёты',
+  custom_branding: 'White-label и branding',
+}
+const BUSINESS_MODEL_OPTIONS = [
+  { value: 'club', label: 'Клуб / арена', hint: 'Операторы, смены, касса и KPI по точкам.' },
+  { value: 'restaurant', label: 'Общепит', hint: 'Продажи, расходы, кухня, Telegram и учёт.' },
+  { value: 'retail', label: 'Retail / store', hint: 'Склад, остатки, каталог, POS и движение товара.' },
+  { value: 'mixed', label: 'Смешанный формат', hint: 'Нужно сразу несколько модулей и гибкие лимиты.' },
+] as const
+const POINT_SCALE_OPTIONS = [
+  { value: '1', label: '1 точка', hint: 'Один объект или одна площадка.' },
+  { value: '2-5', label: '2-5 точек', hint: 'Сеть малого масштаба.' },
+  { value: '6+', label: '6+ точек', hint: 'Несколько филиалов и рост по сети.' },
+] as const
 const MEMBER_ROLE_OPTIONS: Array<{ value: OrganizationMember['role']; label: string }> = [
   { value: 'owner', label: 'Owner' },
   { value: 'manager', label: 'Manager' },
@@ -172,6 +207,40 @@ function isSafeInternalPath(value: string | null) {
   return !!value && value.startsWith('/') && !value.startsWith('//') && value !== '/select-organization'
 }
 
+function getRecommendedPlanCode(params: {
+  pointScale: string
+  needAi: boolean
+  needInventory: boolean
+  needPos: boolean
+  needTelegram: boolean
+  businessModel: string
+}) {
+  const { pointScale, needAi, needInventory, needPos, needTelegram, businessModel } = params
+
+  if (needPos || pointScale === '6+' || businessModel === 'mixed') {
+    return 'enterprise'
+  }
+
+  if (needAi || needInventory || needTelegram || pointScale === '2-5' || businessModel === 'retail') {
+    return 'growth'
+  }
+
+  return 'starter'
+}
+
+function getPlanPrice(plan: PlanOption | null, period: 'monthly' | 'yearly' = 'monthly') {
+  if (!plan) return null
+  const value = period === 'yearly' ? plan.priceYearly : plan.priceMonthly
+  if (typeof value !== 'number') return null
+  return new Intl.NumberFormat('ru-RU').format(value)
+}
+
+function getEnabledFeatureLabels(features: Record<string, unknown> | null | undefined) {
+  return Object.entries(features || {})
+    .filter(([, enabled]) => Boolean(enabled))
+    .map(([feature]) => FEATURE_LABELS[feature] || feature)
+}
+
 function SelectOrganizationContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -194,11 +263,19 @@ function SelectOrganizationContent() {
   const [creatingCompany, setCreatingCompany] = useState(false)
   const [savingOrganization, setSavingOrganization] = useState(false)
   const [invitingMember, setInvitingMember] = useState(false)
+  const [createOrganizationTab, setCreateOrganizationTab] = useState<'smart' | 'quick'>('smart')
   const [organizationName, setOrganizationName] = useState('')
   const [organizationSlug, setOrganizationSlug] = useState('')
   const [organizationLegalName, setOrganizationLegalName] = useState('')
   const [organizationPlanCode, setOrganizationPlanCode] = useState('starter')
   const [firstCompanyName, setFirstCompanyName] = useState('')
+  const [organizationBusinessModel, setOrganizationBusinessModel] = useState<(typeof BUSINESS_MODEL_OPTIONS)[number]['value']>('club')
+  const [organizationPointScale, setOrganizationPointScale] = useState<(typeof POINT_SCALE_OPTIONS)[number]['value']>('1')
+  const [organizationNeedAi, setOrganizationNeedAi] = useState(false)
+  const [organizationNeedInventory, setOrganizationNeedInventory] = useState(false)
+  const [organizationNeedPos, setOrganizationNeedPos] = useState(false)
+  const [organizationNeedTelegram, setOrganizationNeedTelegram] = useState(false)
+  const [organizationPlanManual, setOrganizationPlanManual] = useState(false)
   const [companyName, setCompanyName] = useState('')
   const [companyCode, setCompanyCode] = useState('')
   const [editOrganizationName, setEditOrganizationName] = useState('')
@@ -381,6 +458,53 @@ function SelectOrganizationContent() {
     limits: {},
     features: {},
   }))
+  const recommendedPlanCode = useMemo(
+    () =>
+      getRecommendedPlanCode({
+        pointScale: organizationPointScale,
+        needAi: organizationNeedAi,
+        needInventory: organizationNeedInventory,
+        needPos: organizationNeedPos,
+        needTelegram: organizationNeedTelegram,
+        businessModel: organizationBusinessModel,
+      }),
+    [
+      organizationBusinessModel,
+      organizationNeedAi,
+      organizationNeedInventory,
+      organizationNeedPos,
+      organizationNeedTelegram,
+      organizationPointScale,
+    ],
+  )
+  const selectedCreatePlan = useMemo(
+    () => availablePlanOptions.find((plan) => plan.code === organizationPlanCode) || availablePlanOptions[0] || null,
+    [availablePlanOptions, organizationPlanCode],
+  )
+  const recommendedCreatePlan = useMemo(
+    () => availablePlanOptions.find((plan) => plan.code === recommendedPlanCode) || null,
+    [availablePlanOptions, recommendedPlanCode],
+  )
+  const suggestedFirstCompanyName = useMemo(() => {
+    const baseName = organizationName.trim()
+    if (!baseName) return ''
+    if (organizationBusinessModel === 'retail') return `${baseName} Store`
+    if (organizationBusinessModel === 'restaurant') return `${baseName} Kitchen`
+    if (organizationPointScale === '1') return baseName
+    return `${baseName} Central`
+  }, [organizationBusinessModel, organizationName, organizationPointScale])
+  const selectedPlanFeatureLabels = useMemo(
+    () => getEnabledFeatureLabels(selectedCreatePlan?.features || {}),
+    [selectedCreatePlan],
+  )
+  const selectedBusinessModel = useMemo(
+    () => BUSINESS_MODEL_OPTIONS.find((option) => option.value === organizationBusinessModel) || null,
+    [organizationBusinessModel],
+  )
+  const selectedPointScale = useMemo(
+    () => POINT_SCALE_OPTIONS.find((option) => option.value === organizationPointScale) || null,
+    [organizationPointScale],
+  )
 
   useEffect(() => {
     if (!activeOrganizationDetails) return
@@ -392,6 +516,12 @@ function SelectOrganizationContent() {
     setEditSubscriptionStatus(activeOrganizationDetails.subscription?.status || 'active')
     setEditBillingPeriod(activeOrganizationDetails.subscription?.billingPeriod || 'monthly')
   }, [activeOrganizationDetails])
+
+  useEffect(() => {
+    if (!organizationPlanManual) {
+      setOrganizationPlanCode(recommendedPlanCode)
+    }
+  }, [organizationPlanManual, recommendedPlanCode])
 
   const handleCreateOrganization = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -464,6 +594,14 @@ function SelectOrganizationContent() {
       setOrganizationLegalName('')
       setOrganizationPlanCode('starter')
       setFirstCompanyName('')
+      setOrganizationBusinessModel('club')
+      setOrganizationPointScale('1')
+      setOrganizationNeedAi(false)
+      setOrganizationNeedInventory(false)
+      setOrganizationNeedPos(false)
+      setOrganizationNeedTelegram(false)
+      setOrganizationPlanManual(false)
+      setCreateOrganizationTab('smart')
       setSuccess(`Организация "${body.organization.name}" создана и готова к работе.`)
       await refreshHubData()
       await refreshOrganizationMembers(organizationId)
@@ -1025,62 +1163,360 @@ function SelectOrganizationContent() {
 
                 {canCreateOrganizations ? (
                   <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="mb-4 flex items-center gap-3">
-                      <div className="rounded-2xl bg-violet-500/10 p-3">
-                        <PlusCircle className="h-5 w-5 text-violet-300" />
+                    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-violet-500/10 p-3">
+                          <Sparkles className="h-5 w-5 text-violet-300" />
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-base font-semibold text-white">Создать новую организацию</h2>
+                            <Badge className="bg-violet-500/15 text-violet-100 hover:bg-violet-500/15">Smart onboarding</Badge>
+                          </div>
+                          <p className="text-sm text-slate-400">Новый клиент, новый проект или отдельный бизнес-контур с подсказкой по тарифу и первому запуску.</p>
+                        </div>
                       </div>
-                      <div>
-                        <h2 className="text-base font-semibold text-white">Создать новую организацию</h2>
-                        <p className="text-sm text-slate-400">Новый клиент, новый проект или отдельный бизнес-контур.</p>
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-xs text-slate-300">
+                        Система сама подскажет подходящий тариф по модулям и масштабу.
                       </div>
                     </div>
 
-                    <form onSubmit={handleCreateOrganization} className="grid gap-3">
-                      <Input
-                        value={organizationName}
-                        onChange={(event) => {
-                          setOrganizationName(event.target.value)
-                          if (!organizationSlug.trim()) {
-                            setOrganizationSlug(slugify(event.target.value))
-                          }
-                        }}
-                        className="border-white/10 bg-slate-900/60 text-white"
-                        placeholder="Название организации"
-                      />
-                      <Input
-                        value={organizationSlug}
-                        onChange={(event) => setOrganizationSlug(slugify(event.target.value))}
-                        className="border-white/10 bg-slate-900/60 text-white"
-                        placeholder="slug организации"
-                      />
-                      <Input
-                        value={organizationLegalName}
-                        onChange={(event) => setOrganizationLegalName(event.target.value)}
-                        className="border-white/10 bg-slate-900/60 text-white"
-                        placeholder="Юр. название, если нужно"
-                      />
-                      <select
-                        value={organizationPlanCode}
-                        onChange={(event) => setOrganizationPlanCode(event.target.value)}
-                        className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
-                      >
-                        {availablePlanOptions.map((plan) => (
-                          <option key={plan.code} value={plan.code}>
-                            {plan.name}
-                          </option>
-                        ))}
-                      </select>
-                      <Input
-                        value={firstCompanyName}
-                        onChange={(event) => setFirstCompanyName(event.target.value)}
-                        className="border-white/10 bg-slate-900/60 text-white"
-                        placeholder="Первая точка внутри организации, если нужна"
-                      />
-                      <Button type="submit" disabled={creatingOrganization}>
-                        {creatingOrganization ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                        Создать организацию
-                      </Button>
-                    </form>
+                    <Tabs value={createOrganizationTab} onValueChange={(value) => setCreateOrganizationTab(value as 'smart' | 'quick')} className="gap-4">
+                      <TabsList className="w-full justify-start rounded-2xl bg-slate-950/70 p-1">
+                        <TabsTrigger value="smart" className="rounded-xl data-[state=active]:bg-slate-900 data-[state=active]:text-white">
+                          Умный режим
+                        </TabsTrigger>
+                        <TabsTrigger value="quick" className="rounded-xl data-[state=active]:bg-slate-900 data-[state=active]:text-white">
+                          Быстрое создание
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="smart" className="space-y-4">
+                        <form onSubmit={handleCreateOrganization} className="grid gap-4">
+                          <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                            <div className="space-y-4">
+                              <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+                                <div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">
+                                  <CheckCircle2 className="h-4 w-4 text-sky-400" />
+                                  Шаг 1. Основа клиента
+                                </div>
+                                <div className="grid gap-3">
+                                  <Input
+                                    value={organizationName}
+                                    onChange={(event) => {
+                                      setOrganizationName(event.target.value)
+                                      if (!organizationSlug.trim()) {
+                                        setOrganizationSlug(slugify(event.target.value))
+                                      }
+                                    }}
+                                    className="border-white/10 bg-slate-900/60 text-white"
+                                    placeholder="Например: F16 Holding"
+                                  />
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <Input
+                                      value={organizationSlug}
+                                      onChange={(event) => setOrganizationSlug(slugify(event.target.value))}
+                                      className="border-white/10 bg-slate-900/60 text-white"
+                                      placeholder="slug организации"
+                                    />
+                                    <Input
+                                      value={organizationLegalName}
+                                      onChange={(event) => setOrganizationLegalName(event.target.value)}
+                                      className="border-white/10 bg-slate-900/60 text-white"
+                                      placeholder="Юр. название, если нужно"
+                                    />
+                                  </div>
+                                  <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-xs text-slate-400">
+                                    Tenant URL и доступы будут строиться вокруг slug: <span className="font-mono text-slate-200">{organizationSlug || 'company-slug'}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+                                <div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                  Шаг 2. Что нужно этому клиенту
+                                </div>
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  {BUSINESS_MODEL_OPTIONS.map((option) => (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      onClick={() => setOrganizationBusinessModel(option.value)}
+                                      className={`rounded-2xl border px-4 py-4 text-left transition ${
+                                        organizationBusinessModel === option.value
+                                          ? 'border-sky-400 bg-sky-500/10'
+                                          : 'border-white/10 bg-black/20 hover:border-white/20'
+                                      }`}
+                                    >
+                                      <div className="text-sm font-medium text-white">{option.label}</div>
+                                      <div className="mt-1 text-xs text-slate-400">{option.hint}</div>
+                                    </button>
+                                  ))}
+                                </div>
+
+                                <div className="mt-4">
+                                  <div className="mb-3 text-xs uppercase tracking-[0.18em] text-slate-500">Масштаб сети</div>
+                                  <div className="grid gap-3 sm:grid-cols-3">
+                                    {POINT_SCALE_OPTIONS.map((option) => (
+                                      <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => setOrganizationPointScale(option.value)}
+                                        className={`rounded-2xl border px-4 py-3 text-left transition ${
+                                          organizationPointScale === option.value
+                                            ? 'border-emerald-400 bg-emerald-500/10'
+                                            : 'border-white/10 bg-black/20 hover:border-white/20'
+                                        }`}
+                                      >
+                                        <div className="text-sm font-medium text-white">{option.label}</div>
+                                        <div className="mt-1 text-xs text-slate-400">{option.hint}</div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="mt-4">
+                                  <div className="mb-3 text-xs uppercase tracking-[0.18em] text-slate-500">Модули и интеграции</div>
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    {[
+                                      { key: 'ai', label: 'AI-аналитика и прогнозы', enabled: organizationNeedAi, toggle: () => setOrganizationNeedAi((value) => !value) },
+                                      { key: 'inventory', label: 'Склад и остатки', enabled: organizationNeedInventory, toggle: () => setOrganizationNeedInventory((value) => !value) },
+                                      { key: 'pos', label: 'POS и терминал', enabled: organizationNeedPos, toggle: () => setOrganizationNeedPos((value) => !value) },
+                                      { key: 'telegram', label: 'Telegram-бот и автоотчёты', enabled: organizationNeedTelegram, toggle: () => setOrganizationNeedTelegram((value) => !value) },
+                                    ].map((item) => (
+                                      <button
+                                        key={item.key}
+                                        type="button"
+                                        onClick={item.toggle}
+                                        className={`rounded-2xl border px-4 py-3 text-left transition ${
+                                          item.enabled ? 'border-violet-400 bg-violet-500/10' : 'border-white/10 bg-black/20 hover:border-white/20'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-sm font-medium text-white">{item.label}</span>
+                                          <span className={`h-2.5 w-2.5 rounded-full ${item.enabled ? 'bg-violet-300' : 'bg-slate-600'}`} />
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+                                <div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">
+                                  <CheckCircle2 className="h-4 w-4 text-amber-400" />
+                                  Шаг 3. Первая точка и запуск
+                                </div>
+                                <div className="grid gap-3">
+                                  <Input
+                                    value={firstCompanyName}
+                                    onChange={(event) => setFirstCompanyName(event.target.value)}
+                                    className="border-white/10 bg-slate-900/60 text-white"
+                                    placeholder="Первая точка внутри организации"
+                                  />
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                                    <span>Подсказка:</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setFirstCompanyName(suggestedFirstCompanyName)}
+                                      disabled={!suggestedFirstCompanyName}
+                                      className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-slate-200 transition hover:border-white/20 disabled:opacity-40"
+                                    >
+                                      Использовать «{suggestedFirstCompanyName || 'сначала укажи название'}»
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="space-y-4">
+                              <div className="rounded-3xl border border-[#d7ff00]/20 bg-[#d7ff00]/5 p-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Рекомендация</div>
+                                    <div className="mt-2 text-xl font-semibold text-white">
+                                      {recommendedCreatePlan?.name || organizationPlanCode}
+                                    </div>
+                                  </div>
+                                  <Sparkles className="h-5 w-5 text-[#d7ff00]" />
+                                </div>
+                                <p className="mt-3 text-sm text-slate-300">
+                                  На основе масштаба сети и выбранных модулей система рекомендует этот тариф как стартовый.
+                                </p>
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                  <Badge variant="outline" className="border-[#d7ff00]/30 text-[#f3ff9d]">
+                                    {selectedBusinessModel?.label || organizationBusinessModel}
+                                  </Badge>
+                                  <Badge variant="outline" className="border-[#d7ff00]/30 text-[#f3ff9d]">
+                                    {selectedPointScale?.label || `${organizationPointScale} точек`}
+                                  </Badge>
+                                </div>
+                              </div>
+
+                              <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                  <div className="text-sm font-medium text-white">Выбранный тариф</div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOrganizationPlanManual((value) => !value)
+                                      if (organizationPlanManual) {
+                                        setOrganizationPlanCode(recommendedPlanCode)
+                                      }
+                                    }}
+                                    className="text-xs text-slate-400 underline-offset-4 hover:text-white hover:underline"
+                                  >
+                                    {organizationPlanManual ? 'Вернуть авто-режим' : 'Выбрать вручную'}
+                                  </button>
+                                </div>
+                                <div className="grid gap-3">
+                                  {availablePlanOptions.map((plan) => {
+                                    const planFeatureLabels = getEnabledFeatureLabels(plan.features || {})
+                                    const isRecommended = plan.code === recommendedPlanCode
+                                    const isSelected = plan.code === organizationPlanCode
+                                    return (
+                                      <button
+                                        key={plan.code}
+                                        type="button"
+                                        onClick={() => {
+                                          setOrganizationPlanManual(true)
+                                          setOrganizationPlanCode(plan.code)
+                                        }}
+                                        className={`rounded-2xl border px-4 py-4 text-left transition ${
+                                          isSelected
+                                            ? 'border-sky-400 bg-sky-500/10'
+                                            : 'border-white/10 bg-black/20 hover:border-white/20'
+                                        }`}
+                                      >
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <span className="text-base font-semibold text-white">{plan.name}</span>
+                                              {isRecommended ? (
+                                                <Badge className="bg-[#d7ff00]/15 text-[#f3ff9d] hover:bg-[#d7ff00]/15">Рекомендуем</Badge>
+                                              ) : null}
+                                            </div>
+                                            <div className="mt-1 text-xs text-slate-400">
+                                              {plan.description || 'Тариф для этого tenant-контекста.'}
+                                            </div>
+                                          </div>
+                                          <div className="text-right text-xs text-slate-400">
+                                            {getPlanPrice(plan, 'monthly') ? (
+                                              <>
+                                                <div className="text-sm font-medium text-white">{getPlanPrice(plan, 'monthly')} {plan.currency}</div>
+                                                <div>/ месяц</div>
+                                              </>
+                                            ) : (
+                                              'Цена не задана'
+                                            )}
+                                          </div>
+                                        </div>
+                                        {planFeatureLabels.length ? (
+                                          <div className="mt-3 flex flex-wrap gap-2">
+                                            {planFeatureLabels.slice(0, 4).map((label) => (
+                                              <span key={label} className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-slate-300">
+                                                {label}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : null}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+
+                              <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+                                <div className="text-sm font-medium text-white">Что будет создано</div>
+                                <div className="mt-3 space-y-3 text-sm text-slate-300">
+                                  <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Organization</div>
+                                    <div className="mt-1 font-medium text-white">{organizationName || 'Название появится здесь'}</div>
+                                    <div className="text-xs text-slate-500">slug: {organizationSlug || 'company-slug'}</div>
+                                  </div>
+                                  <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Первая точка</div>
+                                    <div className="mt-1 font-medium text-white">{firstCompanyName || 'Можно создать позже'}</div>
+                                  </div>
+                                  <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Включенные возможности</div>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      {selectedPlanFeatureLabels.length ? (
+                                        selectedPlanFeatureLabels.map((label) => (
+                                          <span key={label} className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-slate-300">
+                                            {label}
+                                          </span>
+                                        ))
+                                      ) : (
+                                        <span className="text-xs text-slate-500">У выбранного плана пока нет явно заданных feature-флагов.</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <Button type="submit" disabled={creatingOrganization} className="mt-4 w-full">
+                                  {creatingOrganization ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                                  Создать организацию и открыть tenant
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </form>
+                      </TabsContent>
+
+                      <TabsContent value="quick">
+                        <form onSubmit={handleCreateOrganization} className="grid gap-3">
+                          <Input
+                            value={organizationName}
+                            onChange={(event) => {
+                              setOrganizationName(event.target.value)
+                              if (!organizationSlug.trim()) {
+                                setOrganizationSlug(slugify(event.target.value))
+                              }
+                            }}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="Название организации"
+                          />
+                          <Input
+                            value={organizationSlug}
+                            onChange={(event) => setOrganizationSlug(slugify(event.target.value))}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="slug организации"
+                          />
+                          <Input
+                            value={organizationLegalName}
+                            onChange={(event) => setOrganizationLegalName(event.target.value)}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="Юр. название, если нужно"
+                          />
+                          <select
+                            value={organizationPlanCode}
+                            onChange={(event) => {
+                              setOrganizationPlanManual(true)
+                              setOrganizationPlanCode(event.target.value)
+                            }}
+                            className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
+                          >
+                            {availablePlanOptions.map((plan) => (
+                              <option key={plan.code} value={plan.code}>
+                                {plan.name}
+                              </option>
+                            ))}
+                          </select>
+                          <Input
+                            value={firstCompanyName}
+                            onChange={(event) => setFirstCompanyName(event.target.value)}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="Первая точка внутри организации, если нужна"
+                          />
+                          <Button type="submit" disabled={creatingOrganization}>
+                            {creatingOrganization ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                            Создать организацию
+                          </Button>
+                        </form>
+                      </TabsContent>
+                    </Tabs>
                   </div>
                 ) : null}
 
