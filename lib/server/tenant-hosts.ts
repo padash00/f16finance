@@ -9,6 +9,9 @@ type HostOrganization = {
   status: string
 } | null
 
+const HOST_CACHE_TTL_MS = 60_000 // 1 minute
+const hostCache = new Map<string, { value: HostOrganization; expiresAt: number }>()
+
 function createServiceSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
@@ -41,6 +44,11 @@ export async function resolveOrganizationByHost(hostHeader: string | null | unde
     return null
   }
 
+  const cached = hostCache.get(host)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value
+  }
+
   const supabase = createServiceSupabaseClient()
   if (!supabase) return null
 
@@ -57,12 +65,14 @@ export async function resolveOrganizationByHost(hostHeader: string | null | unde
     : (directMatch.data as any)?.organization || null
 
   if (directOrganization?.id) {
-    return {
+    const result: HostOrganization = {
       id: String(directOrganization.id),
       name: String(directOrganization.name || ''),
       slug: String(directOrganization.slug || ''),
       status: String(directOrganization.status || 'active'),
     }
+    hostCache.set(host, { value: result, expiresAt: Date.now() + HOST_CACHE_TTL_MS })
+    return result
   }
 
   if (!host.endsWith(`.${baseHost}`)) {
@@ -87,13 +97,16 @@ export async function resolveOrganizationByHost(hostHeader: string | null | unde
     : (legacyMatch.data as any)?.organization || null
 
   if (!legacyOrganization?.id) {
+    hostCache.set(host, { value: null, expiresAt: Date.now() + HOST_CACHE_TTL_MS })
     return null
   }
 
-  return {
+  const legacyResult: HostOrganization = {
     id: String(legacyOrganization.id),
     name: String(legacyOrganization.name || ''),
     slug: String(legacyOrganization.slug || ''),
     status: String(legacyOrganization.status || 'active'),
   }
+  hostCache.set(host, { value: legacyResult, expiresAt: Date.now() + HOST_CACHE_TTL_MS })
+  return legacyResult
 }

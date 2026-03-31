@@ -21,20 +21,8 @@ export async function GET(request: Request) {
     })
     const allowedCompanyIds = companyScope.allowedCompanyIds
 
-    const [
-      { data: companies, error: companiesError },
-      { data: locations, error: locationsError },
-      { data: items, error: itemsError },
-      { data: balances, error: balancesError },
-      { data: customers, error: customersError },
-      { data: discounts, error: discountsError },
-      { data: loyaltyConfig, error: loyaltyConfigError },
-    ] = await Promise.all([
-      allowedCompanyIds && allowedCompanyIds.length > 0
-        ? supabase.from('companies').select('id, name, code').in('id', allowedCompanyIds).order('name')
-        : access.isSuperAdmin
-          ? supabase.from('companies').select('id, name, code').order('name')
-          : Promise.resolve({ data: [], error: null } as const),
+    // Step 1: fetch locations first so we can scope inventory_balances by location_id
+    const { data: locations, error: locationsError } = await (
       allowedCompanyIds && allowedCompanyIds.length > 0
         ? supabase
             .from('inventory_locations')
@@ -50,6 +38,25 @@ export async function GET(request: Request) {
               .eq('location_type', 'point_display')
               .eq('is_active', true)
               .order('name')
+          : Promise.resolve({ data: [] as any[], error: null })
+    )
+    if (locationsError) throw locationsError
+
+    const allowedLocationIds = (locations || []).map((l: any) => String(l.id))
+
+    // Step 2: fetch everything else, including balances scoped to allowed locations
+    const [
+      { data: companies, error: companiesError },
+      { data: items, error: itemsError },
+      { data: balances, error: balancesError },
+      { data: customers, error: customersError },
+      { data: discounts, error: discountsError },
+      { data: loyaltyConfig, error: loyaltyConfigError },
+    ] = await Promise.all([
+      allowedCompanyIds && allowedCompanyIds.length > 0
+        ? supabase.from('companies').select('id, name, code').in('id', allowedCompanyIds).order('name')
+        : access.isSuperAdmin
+          ? supabase.from('companies').select('id, name, code').order('name')
           : Promise.resolve({ data: [], error: null } as const),
       supabase
         .from('inventory_items')
@@ -57,21 +64,31 @@ export async function GET(request: Request) {
         .eq('organization_id', String(access.activeOrganization?.id || ''))
         .eq('is_active', true)
         .order('name'),
-      supabase.from('inventory_balances').select('item_id, location_id, quantity'),
+      allowedLocationIds.length > 0
+        ? supabase
+            .from('inventory_balances')
+            .select('item_id, location_id, quantity')
+            .in('location_id', allowedLocationIds)
+        : supabase.from('inventory_balances').select('item_id, location_id, quantity'),
       allowedCompanyIds && allowedCompanyIds.length > 0
         ? supabase.from('customers').select('id, name, phone, card_number, loyalty_points, company_id').in('company_id', allowedCompanyIds).order('name')
         : access.isSuperAdmin
           ? supabase.from('customers').select('id, name, phone, card_number, loyalty_points, company_id').order('name')
           : Promise.resolve({ data: [], error: null } as const),
-      supabase
-        .from('discounts')
-        .select('id, name, type, value, promo_code, min_order_amount, valid_from, valid_to, company_id')
-        .eq('is_active', true),
+      allowedCompanyIds && allowedCompanyIds.length > 0
+        ? supabase
+            .from('discounts')
+            .select('id, name, type, value, promo_code, min_order_amount, valid_from, valid_to, company_id')
+            .eq('is_active', true)
+            .in('company_id', allowedCompanyIds)
+        : supabase
+            .from('discounts')
+            .select('id, name, type, value, promo_code, min_order_amount, valid_from, valid_to, company_id')
+            .eq('is_active', true),
       supabase.from('loyalty_config').select('*').limit(1).maybeSingle(),
     ])
 
     if (companiesError) throw companiesError
-    if (locationsError) throw locationsError
     if (itemsError) throw itemsError
     if (balancesError) throw balancesError
     if (customersError) throw customersError
@@ -110,7 +127,6 @@ export async function GET(request: Request) {
 
     // Filter discounts: valid today
     const activeDiscounts = (discounts || []).filter((d: any) => {
-      if (allowedCompanyIds && allowedCompanyIds.length > 0 && d.company_id && !allowedCompanyIds.includes(String(d.company_id))) return false
       if (d.valid_from && d.valid_from > today) return false
       if (d.valid_to && d.valid_to < today) return false
       return true

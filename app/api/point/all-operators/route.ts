@@ -14,10 +14,21 @@ export async function GET(request: Request) {
 
     const { supabase } = point
 
+    const { data: assignments, error: assignmentsError } = await supabase
+      .from('operator_company_assignments')
+      .select('operator_id')
+      .in('company_id', point.device.company_ids)
+      .eq('is_active', true)
+
+    if (assignmentsError) throw assignmentsError
+
+    const allowedOperatorIds = (assignments || []).map((a: any) => String(a.operator_id)).filter(Boolean)
+
     const { data, error } = await supabase
       .from('operators')
       .select('id, name, short_name, is_active, operator_profiles(full_name)')
       .eq('is_active', true)
+      .in('id', allowedOperatorIds.length > 0 ? allowedOperatorIds : ['__none__'])
 
     if (error) throw error
 

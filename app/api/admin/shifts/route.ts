@@ -119,15 +119,27 @@ function formatShiftDate(isoDate: string) {
 async function findOperatorForShiftName(
   supabase: ReturnType<typeof createAdminSupabaseClient> | ReturnType<typeof createRequestSupabaseClient>,
   operatorName: string,
+  companyId?: string | null,
 ) {
   const normalizedTarget = normalizeOperatorName(operatorName)
   if (!normalizedTarget) return null
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('operators')
     .select('id, name, short_name, telegram_chat_id, operator_profiles(*)')
     .eq('is_active', true)
 
+  if (companyId) {
+    const { data: assignments } = await supabase
+      .from('operator_company_assignments')
+      .select('operator_id')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+    const ids = (assignments || []).map((a: any) => String(a.operator_id)).filter(Boolean)
+    query = query.in('id', ids.length > 0 ? ids : ['__none__'])
+  }
+
+  const { data, error } = await query
   if (error) throw error
 
   return ((data || []) as OperatorMatch[]).find((operator) => {
@@ -179,7 +191,7 @@ async function notifySingleShiftAssignment(
   const trimmedName = payload.operatorName.trim()
   if (!trimmedName) return { sent: false, reason: 'empty-operator' as const }
 
-  const operator = await findOperatorForShiftName(supabase, trimmedName)
+  const operator = await findOperatorForShiftName(supabase, trimmedName, payload.companyId)
   if (!operator?.telegram_chat_id) {
     return { sent: false, reason: 'telegram-missing' as const }
   }
@@ -212,7 +224,7 @@ async function notifyBulkShiftAssignment(
   const trimmedName = payload.operatorName.trim()
   if (!trimmedName || payload.dates.length === 0) return { sent: false, reason: 'empty-payload' as const }
 
-  const operator = await findOperatorForShiftName(supabase, trimmedName)
+  const operator = await findOperatorForShiftName(supabase, trimmedName, payload.companyId)
   if (!operator?.telegram_chat_id) {
     return { sent: false, reason: 'telegram-missing' as const }
   }
@@ -440,7 +452,7 @@ async function applyShiftIssueResolution(
         throw new Error('Для замены выбери нового оператора')
       }
 
-      replacementOperator = await findOperatorForShiftName(supabase, nextName)
+      replacementOperator = await findOperatorForShiftName(supabase, nextName, requestRow.company_id)
       if (!replacementOperator) {
         throw new Error('Не удалось найти выбранного оператора для замены')
       }

@@ -720,20 +720,16 @@ export async function POST(req: Request) {
       )
     if (memberError) throw memberError
 
-    if (createPrimaryDomain) {
-      const { error: domainError } = await supabase
-        .from('tenant_domains')
-        .insert([
-          {
-            organization_id: organizationId,
-            host: primaryDomainHost,
-            is_primary: true,
-          },
-        ])
-      if (domainError) {
-        console.warn('Primary tenant domain was not created', domainError)
-      }
-    }
+    const { error: domainError } = await supabase
+      .from('tenant_domains')
+      .insert([
+        {
+          organization_id: organizationId,
+          host: primaryDomainHost,
+          is_primary: true,
+        },
+      ])
+    if (domainError) throw domainError
 
     await writeBillingEvent({
       supabase,
