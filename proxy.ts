@@ -238,7 +238,16 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
+  // Resolve host-based organization early so we can use it in unauthenticated flow
+  const hostOrganization = await resolveOrganizationByHost(request.headers.get('host'))
+  const hostOrganizationId = hostOrganization?.id || null
+
   if (!user) {
+    // On a tenant subdomain unauthenticated users should always see login, not the platform marketing page
+    if (hostOrganizationId && isPublicPath(url.pathname)) {
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
     if (isPublicPath(url.pathname)) {
       return response
     }
@@ -268,8 +277,6 @@ export async function proxy(request: NextRequest) {
 
   const isStaff = isSuperAdmin || !!staffMember
   const isOperator = !!operatorAuth
-  const hostOrganization = await resolveOrganizationByHost(request.headers.get('host'))
-  const hostOrganizationId = hostOrganization?.id || null
   const organizations = await resolveAccessibleOrganizations({
     supabase,
     isSuperAdmin,
