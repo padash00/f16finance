@@ -32,7 +32,7 @@ alter table public.organizations enable row level security;
 alter table public.organization_members enable row level security;
 alter table public.organization_subscriptions enable row level security;
 alter table public.tenant_domains enable row level security;
-alter table public.subscription_billing_events enable row level security;
+alter table if exists public.organization_billing_events enable row level security;
 
 drop policy if exists organizations_select_same_org on public.organizations;
 create policy organizations_select_same_org
@@ -62,9 +62,9 @@ for select
 to authenticated
 using (public.can_access_organization(organization_id));
 
-drop policy if exists subscription_billing_events_select_same_org on public.subscription_billing_events;
-create policy subscription_billing_events_select_same_org
-on public.subscription_billing_events
+drop policy if exists organization_billing_events_select_same_org on public.organization_billing_events;
+create policy organization_billing_events_select_same_org
+on public.organization_billing_events
 for select
 to authenticated
 using (public.can_access_organization(organization_id));
