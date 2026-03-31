@@ -14,6 +14,7 @@ export type Company = {
 export type SessionRoleInfo = {
   isSuperAdmin?: boolean
   staffRole?: 'manager' | 'marketer' | 'owner' | 'other'
+  organizationSelectionRequired?: boolean
   organizations?: Array<{
     id: string
     name: string

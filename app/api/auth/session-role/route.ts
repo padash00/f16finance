@@ -27,7 +27,17 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    const { supabase, user, isSuperAdmin, staffMember, staffRole, operatorAuth, organizations, activeOrganization } = access
+    const {
+      supabase,
+      user,
+      isSuperAdmin,
+      staffMember,
+      staffRole,
+      operatorAuth,
+      organizations,
+      activeOrganization,
+      organizationSelectionRequired,
+    } = access
     const isOperator = !!operatorAuth
     const leadAssignments = operatorAuth
       ? await listActiveOperatorLeadAssignments(supabase, String((operatorAuth as any).operator_id || ''))
@@ -86,6 +96,7 @@ export async function GET(req: Request) {
             accessRole: activeOrganization.accessRole,
           }
         : null,
+      organizationSelectionRequired,
       defaultPath: getDefaultAppPath({
         isSuperAdmin,
         isStaff: isSuperAdmin || !!staffMember,

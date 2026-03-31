@@ -20,6 +20,9 @@ function parseHashParams() {
 async function getDefaultPath() {
   const response = await fetch('/api/auth/session-role').catch(() => null)
   const json = await response?.json().catch(() => null)
+  if (response?.ok && json?.organizationSelectionRequired) {
+    return '/select-organization'
+  }
   if (response?.ok && json?.defaultPath) {
     return String(json.defaultPath)
   }

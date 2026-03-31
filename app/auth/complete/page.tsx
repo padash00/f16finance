@@ -62,8 +62,12 @@ function CompleteContent() {
       const response = await fetch('/api/auth/session-role').catch(() => null)
       const json = await response?.json().catch(() => null)
 
-      if (active && response?.ok && json?.defaultPath) {
-        setDefaultPath(String(json.defaultPath))
+      if (active && response?.ok) {
+        if (json?.organizationSelectionRequired) {
+          setDefaultPath('/select-organization')
+        } else if (json?.defaultPath) {
+          setDefaultPath(String(json.defaultPath))
+        }
       }
     }
 

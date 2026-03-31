@@ -58,6 +58,16 @@ export default function UnifiedLoginPage() {
     return 'Оператор входит по логину и паролю. Почта здесь не нужна.'
   }, [mode])
 
+  const resolvePostLoginPath = (payload: any) => {
+    if (payload?.organizationSelectionRequired) {
+      return '/select-organization'
+    }
+
+    const rawPath = payload?.defaultPath ? String(payload.defaultPath) : '/'
+    const isSafePath = rawPath.startsWith('/') && !rawPath.startsWith('//')
+    return isSafePath && rawPath !== '/login' && rawPath !== '/operator-login' ? rawPath : '/'
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -87,9 +97,7 @@ export default function UnifiedLoginPage() {
 
         const response = await fetch('/api/auth/session-role').catch(() => null)
         const json = await response?.json().catch(() => null)
-        const rawPath = response?.ok && json?.defaultPath ? String(json.defaultPath) : '/'
-        const isSafePath = rawPath.startsWith('/') && !rawPath.startsWith('//')
-        const defaultPath = isSafePath && rawPath !== '/login' && rawPath !== '/operator-login' ? rawPath : '/'
+        const defaultPath = response?.ok ? resolvePostLoginPath(json) : '/'
 
         router.push(defaultPath)
         router.refresh()
@@ -146,7 +154,9 @@ export default function UnifiedLoginPage() {
         body: JSON.stringify({ authId: authByUser.id }),
       })
 
-      router.push('/operator-dashboard')
+      const response = await fetch('/api/auth/session-role').catch(() => null)
+      const json = await response?.json().catch(() => null)
+      router.push(response?.ok ? resolvePostLoginPath(json) : '/operator-dashboard')
       router.refresh()
     } catch (err: any) {
       console.error('Login error:', err)

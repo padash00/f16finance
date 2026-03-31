@@ -77,6 +77,8 @@ export async function getRequestAccessContext(request: Request): Promise<
         username?: string | null
         role?: string | null
       } | null
+      requestedOrganizationId: string | null
+      organizationSelectionRequired: boolean
       organizations: OrganizationAccess[]
       activeOrganization: OrganizationAccess | null
     }
@@ -106,10 +108,14 @@ export async function getRequestAccessContext(request: Request): Promise<
     staffMember,
     operatorId: String((operatorAuth as any)?.operator_id || '') || null,
   })
+  const requestedOrganizationId = cookieMap.get(ACTIVE_ORGANIZATION_COOKIE) || null
   const activeOrganization = selectActiveOrganization({
     organizations: organizationAccess.organizations,
-    requestedOrganizationId: cookieMap.get(ACTIVE_ORGANIZATION_COOKIE) || null,
+    requestedOrganizationId,
   })
+  const organizationSelectionRequired =
+    organizationAccess.organizations.length > 1 &&
+    (!requestedOrganizationId || !organizationAccess.organizations.some((item) => item.id === requestedOrganizationId))
 
   if (isSuperAdmin) {
     return {
@@ -119,6 +125,8 @@ export async function getRequestAccessContext(request: Request): Promise<
       staffMember: null,
       staffRole: 'owner',
       operatorAuth: null,
+      requestedOrganizationId,
+      organizationSelectionRequired,
       organizations: organizationAccess.organizations,
       activeOrganization,
     }
@@ -134,19 +142,21 @@ export async function getRequestAccessContext(request: Request): Promise<
     supabase,
     user,
     isSuperAdmin: false,
-    staffMember,
-    staffRole: normalizeStaffRole(staffMember?.role),
-    operatorAuth: operatorAuth
-      ? {
-          id: String((operatorAuth as any).id),
+      staffMember,
+      staffRole: normalizeStaffRole(staffMember?.role),
+      operatorAuth: operatorAuth
+        ? {
+            id: String((operatorAuth as any).id),
           operator_id: String((operatorAuth as any).operator_id),
           username: (operatorAuth as any).username || null,
-          role: (operatorAuth as any).role || null,
-        }
-      : null,
-    organizations: organizationAccess.organizations,
-    activeOrganization,
-  }
+            role: (operatorAuth as any).role || null,
+          }
+        : null,
+      requestedOrganizationId,
+      organizationSelectionRequired,
+      organizations: organizationAccess.organizations,
+      activeOrganization,
+    }
 }
 
 export async function requireAdminRequest(request: Request) {

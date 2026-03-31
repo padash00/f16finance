@@ -108,7 +108,15 @@ function ResetPasswordContent() {
 
         if (!active) return
 
-        setDefaultPath(response?.ok && json?.defaultPath ? String(json.defaultPath) : '/')
+        setDefaultPath(
+          response?.ok
+            ? json?.organizationSelectionRequired
+              ? '/select-organization'
+              : json?.defaultPath
+                ? String(json.defaultPath)
+                : '/'
+            : '/',
+        )
         setSessionReady(true)
       } catch (err: any) {
         if (!active) return
