@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getDefaultAppPath, normalizeStaffRole } from '@/lib/core/access'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext, listActiveOperatorLeadAssignments } from '@/lib/server/request-auth'
+import { resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
 
 function getRoleLabel(params: {
   isSuperAdmin: boolean
@@ -26,6 +27,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+    const hostOrganization = await resolveOrganizationByHost(req.headers.get('host'))
+    const isTenantContext = Boolean(hostOrganization?.id)
 
     const {
       supabase,
@@ -62,6 +65,8 @@ export async function GET(req: Request) {
       email: user?.email || null,
       displayName,
       isSuperAdmin,
+      isTenantContext,
+      isPlatformContext: isSuperAdmin && !isTenantContext,
       isStaff: isSuperAdmin || !!staffMember,
       isOperator,
       isLeadOperator: leadAssignments.length > 0,

@@ -331,7 +331,10 @@
 - `app/login/LoginForm.tsx` больше не уводит `super-admin` в `/platform`, если вход выполняется на tenant-поддомене организации.
 - `proxy.ts` теперь принудительно выбрасывает любые попытки открыть `/platform` на tenant-host обратно в рабочий контур организации.
 - Для `super-admin` на `f16.ordaops.kz` и других tenant-поддоменах платформа ведёт себя как вход в конкретную организацию, а не как глобальный SaaS-хаб.
+- `app/api/auth/session-role/route.ts` теперь явно помечает `tenant context` и `platform context`.
+- `components/sidebar.tsx` на tenant-поддоменах перестал показывать super-admin organization switcher и ведёт себя как контур конкретной организации.
+- `lib/core/types.ts` расширен новыми полями контекста, чтобы UI мог жёстко разделять platform и tenant режимы.
 
 Проверка:
 - `npm run build` ✅
-- `npm run typecheck` ⚠️ старый хвост проекта: `.next/types/cache-life.d.ts`
+- `npm run typecheck` ✅

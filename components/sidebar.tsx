@@ -669,6 +669,7 @@ export function Sidebar() {
   const [staffRole, setStaffRole] = useState<StaffRole | null>(null)
   const [roleLabel, setRoleLabel] = useState<string | null>(null)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [isTenantContext, setIsTenantContext] = useState(false)
   const [isStaff, setIsStaff] = useState(false)
   const [isOperator, setIsOperator] = useState(false)
   const [isLeadOperator, setIsLeadOperator] = useState(false)
@@ -716,6 +717,7 @@ export function Sidebar() {
       if (!ignore && response?.ok) {
         const superAdmin = !!json?.isSuperAdmin
         setIsSuperAdmin(superAdmin)
+        setIsTenantContext(!!json?.isTenantContext)
         setIsStaff(!!json?.isStaff)
         setIsOperator(!!json?.isOperator)
         setIsLeadOperator(!!json?.isLeadOperator)
@@ -891,7 +893,7 @@ export function Sidebar() {
         className="flex-1 overflow-y-auto px-4 py-4"
       >
         <div className="sticky top-0 z-10 -mx-1 bg-gradient-to-b from-slate-950 via-slate-950/95 to-transparent px-1 pb-4 pt-1 backdrop-blur-xl">
-          {isSuperAdmin ? (
+          {isSuperAdmin && !isTenantContext ? (
             <OrganizationSwitcher
               organizations={organizations}
               activeOrganization={activeOrganization}

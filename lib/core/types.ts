@@ -14,6 +14,8 @@ export type Company = {
 /** Session role info returned from /api/auth/session-role */
 export type SessionRoleInfo = {
   isSuperAdmin?: boolean
+  isTenantContext?: boolean
+  isPlatformContext?: boolean
   staffRole?: 'manager' | 'marketer' | 'owner' | 'other'
   organizationHubRequired?: boolean
   organizationSelectionRequired?: boolean
