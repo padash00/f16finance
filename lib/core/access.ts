@@ -56,6 +56,8 @@ export type RoleMatrixEntry = {
 }
 
 export const ADMIN_PATHS = [
+  '/platform',
+  '/platform/*',
   '/dashboard',
   '/welcome',
   '/logs',

@@ -34,7 +34,7 @@ export default function LoginForm({ hostOrg }: { hostOrg: HostOrg }) {
   const [showPassword, setShowPassword] = useState(false)
 
   const resolvePostLoginPath = (payload: any) => {
-    if (payload?.organizationHubRequired || payload?.organizationSelectionRequired) return '/select-organization'
+    if (payload?.organizationHubRequired || payload?.organizationSelectionRequired) return '/platform'
     const rawPath = payload?.defaultPath ? String(payload.defaultPath) : '/'
     const isSafePath = rawPath.startsWith('/') && !rawPath.startsWith('//')
     return isSafePath && rawPath !== '/login' && rawPath !== '/operator-login' ? rawPath : '/'

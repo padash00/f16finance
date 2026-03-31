@@ -324,7 +324,7 @@ export async function proxy(request: NextRequest) {
 
   if (url.pathname.startsWith('/login') || url.pathname.startsWith('/operator-login')) {
     if (organizationHubRequired) {
-      url.pathname = '/select-organization'
+      url.pathname = '/platform'
       return NextResponse.redirect(url)
     }
     // Guard: if defaultPath resolves back to /login (unresolved role), don't redirect — prevents infinite loop
@@ -339,6 +339,11 @@ export async function proxy(request: NextRequest) {
   const requestedTarget = `${requestedPath}${url.search}`
 
   if (requestedPath === '/select-organization') {
+    if (isSuperAdmin && !hostOrganizationId) {
+      url.pathname = '/platform'
+      url.search = ''
+      return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
+    }
     if (!isSuperAdmin || hostOrganizationId) {
       url.pathname = defaultPath
       url.search = ''
@@ -347,14 +352,23 @@ export async function proxy(request: NextRequest) {
     return setActiveOrganizationCookie(response, activeOrganizationId)
   }
 
+  if (requestedPath.startsWith('/platform')) {
+    if (!isSuperAdmin) {
+      url.pathname = '/unauthorized'
+      url.search = ''
+      return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
+    }
+    return setActiveOrganizationCookie(response, activeOrganizationId)
+  }
+
   if (!organizations.length) {
-    url.pathname = '/select-organization'
+    url.pathname = isSuperAdmin ? '/platform' : '/select-organization'
     return NextResponse.redirect(url)
   }
 
   if (needsOrganizationSelection) {
     const next = `${requestedPath}${url.search}`
-    url.pathname = '/select-organization'
+    url.pathname = '/platform'
     url.search = isPublicPath(next) ? '' : `?next=${encodeURIComponent(next)}`
     return NextResponse.redirect(url)
   }
@@ -371,7 +385,7 @@ export async function proxy(request: NextRequest) {
   const missingSubscriptionFeature = !isSuperAdmin && !hasSubscriptionFeature(subscriptionFeatures, requiredSubscriptionFeature)
 
   if (requestedPath === '/') {
-    url.pathname = organizationHubRequired ? '/select-organization' : defaultPath
+    url.pathname = organizationHubRequired ? '/platform' : defaultPath
     return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
   }
 
