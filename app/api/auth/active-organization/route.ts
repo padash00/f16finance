@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   response.cookies.set({
     name: ACTIVE_ORGANIZATION_COOKIE,
     value: organization.id,
-    httpOnly: false,
+    httpOnly: true,
     sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 24 * 365,

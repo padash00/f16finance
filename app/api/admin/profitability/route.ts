@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { listOrganizationCompanyIds } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { buildDailyKaspiSeriesFromRows, sumDailyKaspiReports, type DailyKaspiReport } from '@/lib/server/services/daily-kaspi'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -147,13 +148,26 @@ export async function GET(req: Request) {
     const dateTo = monthEnd(to)
     const previousDate = prevDayISO(dateFrom)
 
+    const allowedCompanyIds = await listOrganizationCompanyIds({
+      activeOrganizationId: access.activeOrganization?.id,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    let devicesQuery = supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true)
+    let incomesQuery = supabase
+      .from('incomes')
+      .select('company_id,date,shift,kaspi_amount,kaspi_before_midnight')
+      .gte('date', previousDate)
+      .lte('date', dateTo)
+
+    if (allowedCompanyIds !== null) {
+      devicesQuery = devicesQuery.in('company_id', allowedCompanyIds)
+      incomesQuery = incomesQuery.in('company_id', allowedCompanyIds)
+    }
+
     const [{ data: deviceRows, error: devicesError }, { data: incomeRows, error: incomesError }] = await Promise.all([
-      supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true),
-      supabase
-        .from('incomes')
-        .select('company_id,date,shift,kaspi_amount,kaspi_before_midnight')
-        .gte('date', previousDate)
-        .lte('date', dateTo),
+      devicesQuery,
+      incomesQuery,
     ])
 
     if (devicesError) throw devicesError

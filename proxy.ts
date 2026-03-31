@@ -56,7 +56,7 @@ function setActiveOrganizationCookie(response: NextResponse, organizationId: str
   response.cookies.set({
     name: ACTIVE_ORGANIZATION_COOKIE,
     value: organizationId,
-    httpOnly: false,
+    httpOnly: true,
     sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 24 * 365,
