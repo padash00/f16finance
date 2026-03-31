@@ -6,7 +6,7 @@ import { normalizeRequestHost, resolveOrganizationByHost } from '@/lib/server/te
 import LoginForm from './LoginForm'
 
 export default async function LoginPage() {
-  const headersList = headers()
+  const headersList = await headers()
   const host = headersList.get('host')
 
   const baseHost = getTenantBaseHost().toLowerCase()
