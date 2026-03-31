@@ -10,10 +10,45 @@ import {
   isPublicPath,
   type SubscriptionFeature,
 } from '@/lib/core/access'
+import { APEX_MAINTENANCE_MODE, SITE_URL } from '@/lib/core/site'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 
 const AUTH_SELF_SERVICE_PATHS = ['/forgot-password', '/reset-password', '/set-password', '/auth/callback', '/auth/complete'] as const
 const ACTIVE_ORGANIZATION_COOKIE = 'oc_org'
+
+function getPrimarySiteHosts() {
+  const url = new URL(SITE_URL)
+  const hostname = url.hostname.toLowerCase()
+  return new Set([hostname, `www.${hostname.replace(/^www\./, '')}`])
+}
+
+function shouldServeApexMaintenance(hostHeader: string | null) {
+  if (!APEX_MAINTENANCE_MODE) return false
+  const host = String(hostHeader || '')
+    .trim()
+    .toLowerCase()
+    .split(':')[0]
+  if (!host) return false
+  return getPrimarySiteHosts().has(host)
+}
+
+function clearSessionCookies(request: NextRequest, response: NextResponse) {
+  const cookieNames = request.cookies
+    .getAll()
+    .map((cookie) => cookie.name)
+    .filter((name) => name === ACTIVE_ORGANIZATION_COOKIE || name.startsWith('sb-'))
+
+  for (const name of cookieNames) {
+    response.cookies.set({
+      name,
+      value: '',
+      path: '/',
+      expires: new Date(0),
+    })
+  }
+
+  return response
+}
 
 function setActiveOrganizationCookie(response: NextResponse, organizationId: string | null) {
   if (!organizationId) return response
@@ -128,6 +163,24 @@ async function resolveActiveSubscriptionFeatures(params: {
 }
 
 export async function proxy(request: NextRequest) {
+  const maintenanceMode = shouldServeApexMaintenance(request.headers.get('host'))
+  if (maintenanceMode && !request.nextUrl.pathname.startsWith('/api/')) {
+    const url = request.nextUrl.clone()
+    if (url.pathname !== '/maintenance') {
+      url.pathname = '/maintenance'
+      url.search = ''
+      return clearSessionCookies(request, NextResponse.redirect(url))
+    }
+    return clearSessionCookies(
+      request,
+      NextResponse.next({
+        request: {
+          headers: request.headers,
+        },
+      }),
+    )
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 

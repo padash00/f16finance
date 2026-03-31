@@ -41,6 +41,20 @@
   - настройка хостинга / reverse proxy / Vercel domain routing
   - финальный host-based tenant resolution в runtime
 
+### Maintenance-режим на основном домене
+
+Сделано:
+- Для основного домена `ordaops.kz` и `www.ordaops.kz` включён временный maintenance-режим.
+- При заходе на основной домен пользователь перенаправляется на отдельную страницу техработ.
+- На этом маршруте middleware принудительно очищает:
+  - Supabase auth cookies
+  - cookie активной организации
+- Это временная мера на период переноса DNS, wildcard-доменов и поддоменного tenant-routing.
+
+Важно:
+- Режим включён флагом `APEX_MAINTENANCE_MODE = true` в `lib/core/site.ts`.
+- После завершения инфраструктурного перехода флаг нужно будет выключить.
+
 ### SaaS, tenant и доступы
 
 Сделано:
