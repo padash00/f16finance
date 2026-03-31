@@ -135,10 +135,18 @@ export default function LoginForm({
   }, [mode])
 
   const resolvePostLoginPath = (payload: any) => {
-    if (payload?.organizationHubRequired || payload?.organizationSelectionRequired) return '/platform'
+    if (!isTenantSubdomain && (payload?.organizationHubRequired || payload?.organizationSelectionRequired)) {
+      return '/platform'
+    }
     const rawPath = payload?.defaultPath ? String(payload.defaultPath) : '/'
     const isSafePath = rawPath.startsWith('/') && !rawPath.startsWith('//')
-    return isSafePath && rawPath !== '/login' && rawPath !== '/operator-login' ? rawPath : '/'
+    const resolvedPath = isSafePath && rawPath !== '/login' && rawPath !== '/operator-login' ? rawPath : '/'
+
+    if (isTenantSubdomain && resolvedPath.startsWith('/platform')) {
+      return '/dashboard'
+    }
+
+    return resolvedPath
   }
 
   const handleLogin = async (e: React.FormEvent) => {

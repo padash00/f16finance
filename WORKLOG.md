@@ -324,3 +324,14 @@
 Проверка:
 - `npm run build` ✅
 - `npm run typecheck` ✅
+
+### 2026-04-01 — super-admin вход на tenant-поддоменах
+
+Сделано:
+- `app/login/LoginForm.tsx` больше не уводит `super-admin` в `/platform`, если вход выполняется на tenant-поддомене организации.
+- `proxy.ts` теперь принудительно выбрасывает любые попытки открыть `/platform` на tenant-host обратно в рабочий контур организации.
+- Для `super-admin` на `f16.ordaops.kz` и других tenant-поддоменах платформа ведёт себя как вход в конкретную организацию, а не как глобальный SaaS-хаб.
+
+Проверка:
+- `npm run build` ✅
+- `npm run typecheck` ⚠️ старый хвост проекта: `.next/types/cache-life.d.ts`

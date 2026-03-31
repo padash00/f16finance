@@ -373,6 +373,11 @@ export async function proxy(request: NextRequest) {
   }
 
   if (requestedPath.startsWith('/platform')) {
+    if (hostOrganizationId) {
+      url.pathname = defaultPath
+      url.search = ''
+      return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
+    }
     if (!isSuperAdmin) {
       url.pathname = '/unauthorized'
       url.search = ''
