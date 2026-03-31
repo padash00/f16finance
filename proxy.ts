@@ -1,7 +1,15 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-import { canAccessPath, getDefaultAppPath, normalizeStaffRole, isPublicPath, type SubscriptionFeature } from '@/lib/core/access'
+import {
+  canAccessPath,
+  getDefaultAppPath,
+  getRequiredSubscriptionFeature,
+  hasSubscriptionFeature,
+  normalizeStaffRole,
+  isPublicPath,
+  type SubscriptionFeature,
+} from '@/lib/core/access'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 
 const AUTH_SELF_SERVICE_PATHS = ['/forgot-password', '/reset-password', '/set-password', '/auth/callback', '/auth/complete'] as const
@@ -246,6 +254,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const requestedPath = url.pathname
+  const requestedTarget = `${requestedPath}${url.search}`
 
   if (requestedPath === '/select-organization') {
     return setActiveOrganizationCookie(response, cookieOrganizationId)
@@ -271,6 +280,8 @@ export async function proxy(request: NextRequest) {
     isSuperAdmin,
     subscriptionFeatures,
   })
+  const requiredSubscriptionFeature = getRequiredSubscriptionFeature(requestedPath)
+  const missingSubscriptionFeature = !isSuperAdmin && !hasSubscriptionFeature(subscriptionFeatures, requiredSubscriptionFeature)
 
   if (requestedPath === '/') {
     url.pathname = organizationHubRequired ? '/select-organization' : defaultPath
@@ -280,6 +291,13 @@ export async function proxy(request: NextRequest) {
   if (!hasAccess) {
     if (!requestedPath.startsWith('/unauthorized')) {
       url.pathname = '/unauthorized'
+      if (missingSubscriptionFeature && requiredSubscriptionFeature) {
+        url.searchParams.set('kind', 'plan')
+        url.searchParams.set('feature', requiredSubscriptionFeature)
+        url.searchParams.set('next', requestedTarget)
+      } else {
+        url.search = ''
+      }
       return setActiveOrganizationCookie(NextResponse.redirect(url), cookieOrganizationId)
     }
     return setActiveOrganizationCookie(response, cookieOrganizationId)

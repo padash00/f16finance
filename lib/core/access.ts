@@ -22,6 +22,14 @@ export type SubscriptionFeature =
   | 'web_pos'
   | 'telegram'
   | 'custom_branding'
+export type SubscriptionFeatureMeta = {
+  label: string
+  headline: string
+  description: string
+  recommendedPlanCode: string
+  recommendedPlanName: string
+  upgradeReason: string
+}
 export type StaffCapability =
   | 'tasks'
   | 'shifts'
@@ -387,6 +395,54 @@ const SUBSCRIPTION_FEATURE_PATH_RULES: Array<{
   },
 ]
 
+const SUBSCRIPTION_FEATURE_META: Record<SubscriptionFeature, SubscriptionFeatureMeta> = {
+  ai_reports: {
+    label: 'AI-аналитика',
+    headline: 'AI-аналитика закрыта на вашем тарифе',
+    description:
+      'В этом разделе собраны AI-отчёты, прогнозы и недельная аналитика. Для доступа нужен тариф с расширенной аналитикой.',
+    recommendedPlanCode: 'growth',
+    recommendedPlanName: 'Growth',
+    upgradeReason: 'Откройте AI-отчёты, прогнозирование и недельные аналитические сводки.',
+  },
+  inventory: {
+    label: 'Склад и номенклатура',
+    headline: 'Складской контур недоступен на текущем тарифе',
+    description:
+      'Управление остатками, каталогом и внутренним store-контуром включается только в тарифах с модулем склада.',
+    recommendedPlanCode: 'growth',
+    recommendedPlanName: 'Growth',
+    upgradeReason: 'Подключите склад, каталог и контроль остатков по точкам.',
+  },
+  web_pos: {
+    label: 'POS и терминал',
+    headline: 'POS-модуль не включен в ваш тариф',
+    description:
+      'Онлайн-касса, возвраты, чеки и терминальные сценарии доступны только в тарифах с POS-контуром.',
+    recommendedPlanCode: 'enterprise',
+    recommendedPlanName: 'Enterprise',
+    upgradeReason: 'Подключите POS, чеки, возвраты и терминальный контур для точек.',
+  },
+  telegram: {
+    label: 'Telegram-интеграции',
+    headline: 'Telegram-модуль выключен для вашей подписки',
+    description:
+      'Автоматические отчёты, интеграции с ботами и Telegram-автоматизация доступны только в старших тарифах.',
+    recommendedPlanCode: 'growth',
+    recommendedPlanName: 'Growth',
+    upgradeReason: 'Откройте Telegram-отчёты и автоматизацию по сообщениям.',
+  },
+  custom_branding: {
+    label: 'Брендирование',
+    headline: 'White-label настройки недоступны на текущем тарифе',
+    description:
+      'Логотипы, фирменные цвета и кастомное брендирование включены только в тарифах с white-label возможностями.',
+    recommendedPlanCode: 'enterprise',
+    recommendedPlanName: 'Enterprise',
+    upgradeReason: 'Подключите фирменный стиль и кастомное брендирование интерфейса.',
+  },
+}
+
 export function getRequiredSubscriptionFeature(pathname: string): SubscriptionFeature | null {
   for (const entry of SUBSCRIPTION_FEATURE_PATH_RULES) {
     if (entry.rules.some((rule) => matchesPath(pathname, rule))) {
@@ -395,6 +451,25 @@ export function getRequiredSubscriptionFeature(pathname: string): SubscriptionFe
   }
 
   return null
+}
+
+export function normalizeSubscriptionFeature(value: string | null | undefined): SubscriptionFeature | null {
+  if (
+    value === 'ai_reports' ||
+    value === 'inventory' ||
+    value === 'web_pos' ||
+    value === 'telegram' ||
+    value === 'custom_branding'
+  ) {
+    return value
+  }
+
+  return null
+}
+
+export function getSubscriptionFeatureMeta(feature: SubscriptionFeature | null | undefined): SubscriptionFeatureMeta | null {
+  if (!feature) return null
+  return SUBSCRIPTION_FEATURE_META[feature] ?? null
 }
 
 export function hasSubscriptionFeature(
