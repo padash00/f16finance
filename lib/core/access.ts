@@ -30,6 +30,12 @@ export type SubscriptionFeatureMeta = {
   recommendedPlanName: string
   upgradeReason: string
 }
+export type SubscriptionFeatureBundle = {
+  feature: SubscriptionFeature
+  label: string
+  description: string
+  pages: readonly string[]
+}
 export type StaffCapability =
   | 'tasks'
   | 'shifts'
@@ -373,27 +379,38 @@ export function staffRoleHasCapability(role: StaffRole, capability: StaffCapabil
   return STAFF_ROLE_MATRIX[role].capabilities.includes(capability)
 }
 
-const SUBSCRIPTION_FEATURE_PATH_RULES: Array<{
-  feature: SubscriptionFeature
-  rules: readonly string[]
-}> = [
+export const SUBSCRIPTION_FEATURE_BUNDLES: readonly SubscriptionFeatureBundle[] = [
   {
     feature: 'ai_reports',
-    rules: ['/analysis', '/forecast', '/weekly-report'],
+    label: 'AI-аналитика',
+    description: 'Прогнозы, weekly report и AI-аналитические разделы.',
+    pages: ['/analysis', '/forecast', '/weekly-report'],
   },
   {
     feature: 'inventory',
-    rules: ['/inventory', '/inventory/*', '/store', '/store/*'],
+    label: 'Склад и номенклатура',
+    description: 'Каталог, остатки, движения товара и store-контур.',
+    pages: ['/inventory', '/inventory/*', '/store', '/store/*'],
   },
   {
     feature: 'web_pos',
-    rules: ['/pos', '/pos-receipts', '/pos-returns', '/point-terminal'],
+    label: 'POS и терминал',
+    description: 'POS-экран, чеки, возвраты и point terminal.',
+    pages: ['/pos', '/pos-receipts', '/pos-returns', '/point-terminal'],
   },
   {
     feature: 'telegram',
-    rules: ['/telegram'],
+    label: 'Telegram-интеграции',
+    description: 'Telegram-боты, отчёты и коммуникации.',
+    pages: ['/telegram'],
   },
-]
+  {
+    feature: 'custom_branding',
+    label: 'White-label и branding',
+    description: 'Кастомные branding-настройки организации и продукта.',
+    pages: ['/select-organization', '/settings'],
+  },
+] as const
 
 const SUBSCRIPTION_FEATURE_META: Record<SubscriptionFeature, SubscriptionFeatureMeta> = {
   ai_reports: {
@@ -444,8 +461,8 @@ const SUBSCRIPTION_FEATURE_META: Record<SubscriptionFeature, SubscriptionFeature
 }
 
 export function getRequiredSubscriptionFeature(pathname: string): SubscriptionFeature | null {
-  for (const entry of SUBSCRIPTION_FEATURE_PATH_RULES) {
-    if (entry.rules.some((rule) => matchesPath(pathname, rule))) {
+  for (const entry of SUBSCRIPTION_FEATURE_BUNDLES) {
+    if (entry.pages.some((rule) => matchesPath(pathname, rule))) {
       return entry.feature
     }
   }

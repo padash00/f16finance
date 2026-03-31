@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { SUBSCRIPTION_FEATURE_BUNDLES } from '@/lib/core/access'
 import { supabase } from '@/lib/supabaseClient'
 import type { SessionRoleInfo } from '@/lib/core/types'
 
@@ -99,6 +100,18 @@ type QuickAction = {
   description: string
   icon: any
 }
+type PlanEditorState = {
+  id: string | null
+  code: string
+  name: string
+  description: string
+  status: string
+  priceMonthly: string
+  priceYearly: string
+  currency: string
+  limits: Record<string, string>
+  features: Record<string, boolean>
+}
 
 const QUICK_ACTIONS: QuickAction[] = [
   {
@@ -149,6 +162,7 @@ const LIMIT_LABELS: Record<string, string> = {
   operators: 'Операторы',
   point_projects: 'POS проекты',
 }
+const LIMIT_FIELD_ORDER = ['companies', 'staff', 'operators', 'point_projects'] as const
 const BUSINESS_MODEL_OPTIONS = [
   { value: 'club', label: 'Клуб / арена', hint: 'Операторы, смены, касса и KPI по точкам.' },
   { value: 'restaurant', label: 'Общепит', hint: 'Продажи, расходы, кухня, Telegram и учёт.' },
@@ -264,6 +278,21 @@ function getEnabledFeatureLabels(features: Record<string, unknown> | null | unde
     .map(([feature]) => FEATURE_LABELS[feature] || feature)
 }
 
+function createEmptyPlanEditor(): PlanEditorState {
+  return {
+    id: null,
+    code: '',
+    name: '',
+    description: '',
+    status: 'active',
+    priceMonthly: '',
+    priceYearly: '',
+    currency: 'KZT',
+    limits: Object.fromEntries(LIMIT_FIELD_ORDER.map((key) => [key, ''])) as Record<string, string>,
+    features: Object.fromEntries(SUBSCRIPTION_FEATURE_BUNDLES.map((bundle) => [bundle.feature, false])) as Record<string, boolean>,
+  }
+}
+
 function SelectOrganizationContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -279,6 +308,8 @@ function SelectOrganizationContent() {
   const [loadingHub, setLoadingHub] = useState(false)
   const [organizationMembers, setOrganizationMembers] = useState<OrganizationMember[]>([])
   const [loadingMembers, setLoadingMembers] = useState(false)
+  const [savingPlan, setSavingPlan] = useState(false)
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
   const [defaultPath, setDefaultPath] = useState('/')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -318,6 +349,7 @@ function SelectOrganizationContent() {
   const [inviteFullName, setInviteFullName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<OrganizationMember['role']>('manager')
+  const [planEditor, setPlanEditor] = useState<PlanEditorState>(() => createEmptyPlanEditor())
 
   const nextPath = useMemo(() => {
     const next = searchParams.get('next')
@@ -488,6 +520,10 @@ function SelectOrganizationContent() {
     limits: {},
     features: {},
   }))
+  const selectedManagedPlan = useMemo(
+    () => availablePlanOptions.find((plan) => plan.id === selectedPlanId || plan.code === selectedPlanId) || null,
+    [availablePlanOptions, selectedPlanId],
+  )
   const recommendedPlanCode = useMemo(
     () =>
       getRecommendedPlanCode({
@@ -527,6 +563,13 @@ function SelectOrganizationContent() {
     () => getEnabledFeatureLabels(selectedCreatePlan?.features || {}),
     [selectedCreatePlan],
   )
+  const selectedCreatePlanBundles = useMemo(
+    () => {
+      const features = (selectedCreatePlan?.features || {}) as Record<string, unknown>
+      return SUBSCRIPTION_FEATURE_BUNDLES.filter((bundle) => Boolean(features[bundle.feature]))
+    },
+    [selectedCreatePlan],
+  )
   const selectedBusinessModel = useMemo(
     () => BUSINESS_MODEL_OPTIONS.find((option) => option.value === organizationBusinessModel) || null,
     [organizationBusinessModel],
@@ -537,7 +580,7 @@ function SelectOrganizationContent() {
   )
   const activeLimitEntries = useMemo(() => {
     const usage = activeOrganizationDetails?.usage
-    const limits = activeOrganizationDetails?.subscription?.plan?.limits || {}
+    const limits = ((activeOrganizationDetails?.subscription?.plan?.limits || {}) as Record<string, unknown>)
     if (!usage) return []
 
     return Object.entries(usage).map(([key, used]) => {
@@ -580,6 +623,44 @@ function SelectOrganizationContent() {
       setOrganizationPlanCode(recommendedPlanCode)
     }
   }, [organizationPlanManual, recommendedPlanCode])
+
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    if (selectedPlanId) return
+    if (!availablePlanOptions.length) return
+    setSelectedPlanId(availablePlanOptions[0].id)
+  }, [availablePlanOptions, isSuperAdmin, selectedPlanId])
+
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    if (!selectedManagedPlan) {
+      setPlanEditor(createEmptyPlanEditor())
+      return
+    }
+
+    setPlanEditor({
+      id: selectedManagedPlan.id,
+      code: selectedManagedPlan.code,
+      name: selectedManagedPlan.name,
+      description: selectedManagedPlan.description || '',
+      status: selectedManagedPlan.status || 'active',
+      priceMonthly: selectedManagedPlan.priceMonthly === null ? '' : String(selectedManagedPlan.priceMonthly),
+      priceYearly: selectedManagedPlan.priceYearly === null ? '' : String(selectedManagedPlan.priceYearly),
+      currency: selectedManagedPlan.currency || 'KZT',
+      limits: Object.fromEntries(
+        LIMIT_FIELD_ORDER.map((key) => {
+          const limits = (selectedManagedPlan.limits || {}) as Record<string, unknown>
+          return [key, limits[key] === undefined ? '' : String(limits[key])]
+        }),
+      ) as Record<string, string>,
+      features: Object.fromEntries(
+        SUBSCRIPTION_FEATURE_BUNDLES.map((bundle) => {
+          const features = (selectedManagedPlan.features || {}) as Record<string, unknown>
+          return [bundle.feature, Boolean(features[bundle.feature])]
+        }),
+      ) as Record<string, boolean>,
+    })
+  }, [isSuperAdmin, selectedManagedPlan])
 
   const handleCreateOrganization = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -835,6 +916,73 @@ function SelectOrganizationContent() {
       setError(err?.message || 'Не удалось отправить приглашение.')
     } finally {
       setInvitingMember(false)
+    }
+  }
+
+  const handleCreatePlanDraft = () => {
+    setSelectedPlanId('__new__')
+    setPlanEditor(createEmptyPlanEditor())
+    setSuccess(null)
+    setError(null)
+  }
+
+  const handleSavePlan = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!isSuperAdmin) {
+      setError('Тарифами сейчас может управлять только super-admin.')
+      return
+    }
+
+    if (!planEditor.name.trim()) {
+      setError('Укажи название тарифа.')
+      return
+    }
+
+    if (!planEditor.code.trim()) {
+      setError('Укажи код тарифа.')
+      return
+    }
+
+    try {
+      setSavingPlan(true)
+      setError(null)
+      setSuccess(null)
+
+      const payload = {
+        action: planEditor.id ? 'updatePlan' : 'createPlan',
+        planId: planEditor.id,
+        code: planEditor.code.trim(),
+        name: planEditor.name.trim(),
+        description: planEditor.description.trim() || null,
+        status: planEditor.status,
+        priceMonthly: planEditor.priceMonthly.trim() ? Number(planEditor.priceMonthly) : null,
+        priceYearly: planEditor.priceYearly.trim() ? Number(planEditor.priceYearly) : null,
+        currency: planEditor.currency.trim() || 'KZT',
+        limits: Object.fromEntries(
+          Object.entries(planEditor.limits).map(([key, value]) => [key, value.trim() ? Number(value) : null]),
+        ),
+        features: planEditor.features,
+      }
+
+      const response = await fetch('/api/admin/subscription-plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      const body = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(body?.error || 'Не удалось сохранить тариф.')
+      }
+
+      await refreshHubData()
+      const nextPlanId = String(body?.planId || '')
+      setSelectedPlanId(nextPlanId || null)
+      setSuccess(planEditor.id ? `Тариф "${planEditor.name}" обновлён.` : `Тариф "${planEditor.name}" создан.`)
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось сохранить тариф.')
+    } finally {
+      setSavingPlan(false)
     }
   }
 
@@ -1314,6 +1462,227 @@ function SelectOrganizationContent() {
                   </div>
                 ) : null}
 
+                {isSuperAdmin ? (
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-fuchsia-500/10 p-3">
+                          <CreditCard className="h-5 w-5 text-fuchsia-300" />
+                        </div>
+                        <div>
+                          <h2 className="text-base font-semibold text-white">Тарифы и доступ к страницам</h2>
+                          <p className="text-sm text-slate-400">
+                            Создавай планы, управляй лимитами и настраивай модульный доступ к разделам продукта.
+                          </p>
+                        </div>
+                      </div>
+                      <Button type="button" variant="outline" onClick={handleCreatePlanDraft}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Новый тариф
+                      </Button>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+                      <div className="space-y-3">
+                        {availablePlanOptions.map((plan) => {
+                          const enabledLabels = getEnabledFeatureLabels(plan.features || {})
+                          const isSelected = selectedManagedPlan?.id === plan.id
+                          return (
+                            <button
+                              key={plan.id}
+                              type="button"
+                              onClick={() => setSelectedPlanId(plan.id)}
+                              className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                                isSelected
+                                  ? 'border-fuchsia-400 bg-fuchsia-500/10'
+                                  : 'border-white/10 bg-slate-950/60 hover:border-white/20'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm font-semibold text-white">{plan.name}</span>
+                                    <Badge variant="outline" className="border-white/10 text-slate-300">
+                                      {plan.status}
+                                    </Badge>
+                                  </div>
+                                  <div className="mt-1 text-xs text-slate-400">{plan.code}</div>
+                                </div>
+                                <div className="text-right text-xs text-slate-400">
+                                  {getPlanPrice(plan, 'monthly') ? (
+                                    <>
+                                      <div className="text-sm font-medium text-white">{getPlanPrice(plan, 'monthly')} {plan.currency}</div>
+                                      <div>/ мес</div>
+                                    </>
+                                  ) : (
+                                    'Без цены'
+                                  )}
+                                </div>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {enabledLabels.length ? (
+                                  enabledLabels.map((label) => (
+                                    <span key={label} className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-slate-300">
+                                      {label}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-slate-500">Платные модули пока не включены</span>
+                                )}
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      <form onSubmit={handleSavePlan} className="space-y-4 rounded-3xl border border-white/10 bg-slate-950/60 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-white">
+                              {planEditor.id ? `Редактирование тарифа ${planEditor.name || ''}` : 'Создание нового тарифа'}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              Feature-бандлы здесь напрямую влияют на доступ к страницам в системе.
+                            </div>
+                          </div>
+                          {planEditor.id ? (
+                            <Badge className="bg-fuchsia-500/10 text-fuchsia-100 hover:bg-fuchsia-500/10">
+                              {planEditor.code}
+                            </Badge>
+                          ) : null}
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <Input
+                            value={planEditor.name}
+                            onChange={(event) => setPlanEditor((current) => ({ ...current, name: event.target.value }))}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="Название тарифа"
+                          />
+                          <Input
+                            value={planEditor.code}
+                            onChange={(event) =>
+                              setPlanEditor((current) => ({
+                                ...current,
+                                code: event.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-'),
+                              }))
+                            }
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="plan-code"
+                          />
+                        </div>
+
+                        <Input
+                          value={planEditor.description}
+                          onChange={(event) => setPlanEditor((current) => ({ ...current, description: event.target.value }))}
+                          className="border-white/10 bg-slate-900/60 text-white"
+                          placeholder="Краткое описание тарифа"
+                        />
+
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          <Input
+                            value={planEditor.priceMonthly}
+                            onChange={(event) => setPlanEditor((current) => ({ ...current, priceMonthly: event.target.value }))}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="Цена / месяц"
+                          />
+                          <Input
+                            value={planEditor.priceYearly}
+                            onChange={(event) => setPlanEditor((current) => ({ ...current, priceYearly: event.target.value }))}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="Цена / год"
+                          />
+                          <Input
+                            value={planEditor.currency}
+                            onChange={(event) => setPlanEditor((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
+                            className="border-white/10 bg-slate-900/60 text-white"
+                            placeholder="Валюта"
+                          />
+                          <select
+                            value={planEditor.status}
+                            onChange={(event) => setPlanEditor((current) => ({ ...current, status: event.target.value }))}
+                            className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
+                          >
+                            <option value="active">active</option>
+                            <option value="archived">archived</option>
+                          </select>
+                        </div>
+
+                        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                          <div className="mb-3 text-sm font-medium text-white">Лимиты тарифа</div>
+                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            {LIMIT_FIELD_ORDER.map((key) => (
+                              <Input
+                                key={key}
+                                value={planEditor.limits[key] || ''}
+                                onChange={(event) =>
+                                  setPlanEditor((current) => ({
+                                    ...current,
+                                    limits: { ...current.limits, [key]: event.target.value },
+                                  }))
+                                }
+                                className="border-white/10 bg-slate-900/60 text-white"
+                                placeholder={LIMIT_LABELS[key]}
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                          <div className="mb-3 text-sm font-medium text-white">Доступ к разделам</div>
+                          <div className="grid gap-3">
+                            {SUBSCRIPTION_FEATURE_BUNDLES.map((bundle) => {
+                              const enabled = Boolean(planEditor.features[bundle.feature])
+                              return (
+                                <button
+                                  key={bundle.feature}
+                                  type="button"
+                                  onClick={() =>
+                                    setPlanEditor((current) => ({
+                                      ...current,
+                                      features: {
+                                        ...current.features,
+                                        [bundle.feature]: !enabled,
+                                      },
+                                    }))
+                                  }
+                                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                                    enabled
+                                      ? 'border-emerald-400 bg-emerald-500/10'
+                                      : 'border-white/10 bg-slate-900/50 hover:border-white/20'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                      <div className="text-sm font-medium text-white">{bundle.label}</div>
+                                      <div className="mt-1 text-xs text-slate-400">{bundle.description}</div>
+                                    </div>
+                                    <Badge variant={enabled ? 'default' : 'outline'}>
+                                      {enabled ? 'Включено' : 'Выключено'}
+                                    </Badge>
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {bundle.pages.map((page) => (
+                                      <span key={page} className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-slate-300">
+                                        {page}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        <Button type="submit" disabled={savingPlan} className="w-full">
+                          {savingPlan ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
+                          {planEditor.id ? 'Сохранить тариф' : 'Создать тариф'}
+                        </Button>
+                      </form>
+                    </div>
+                  </div>
+                ) : null}
+
                 {canCreateOrganizations ? (
                   <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
                     <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1603,6 +1972,23 @@ function SelectOrganizationContent() {
                                         ))
                                       ) : (
                                         <span className="text-xs text-slate-500">У выбранного плана пока нет явно заданных feature-флагов.</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Какие разделы откроются</div>
+                                    <div className="mt-2 space-y-2">
+                                      {selectedCreatePlanBundles.length ? (
+                                        selectedCreatePlanBundles.map((bundle) => (
+                                          <div key={bundle.feature} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                                            <div className="text-xs font-medium text-white">{bundle.label}</div>
+                                            <div className="mt-1 text-[11px] text-slate-400">
+                                              {bundle.pages.join(', ')}
+                                            </div>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <span className="text-xs text-slate-500">На базовом наборе откроются только общие разделы без платных модулей.</span>
                                       )}
                                     </div>
                                   </div>
