@@ -25,6 +25,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SUBSCRIPTION_FEATURE_BUNDLES } from '@/lib/core/access'
+import { buildTenantHost, buildTenantUrl, getTenantBaseHost } from '@/lib/core/tenant-domain'
 import { supabase } from '@/lib/supabaseClient'
 import type { SessionRoleInfo } from '@/lib/core/types'
 
@@ -67,6 +68,8 @@ type OrganizationHubOverview = {
   id: string
   name: string
   slug: string
+  primaryDomain: string
+  appUrl: string
   legalName: string | null
   status: string
   createdAt: string | null
@@ -671,6 +674,9 @@ function SelectOrganizationContent() {
   const canCreateOrganizations = isSuperAdmin
   const canCreateCompanies = isSuperAdmin || staffRole === 'owner'
   const canInviteMembers = isSuperAdmin || staffRole === 'owner'
+  const workspaceBaseHost = getTenantBaseHost()
+  const suggestedWorkspaceHost = buildTenantHost(organizationSlug || 'company-slug')
+  const suggestedWorkspaceUrl = buildTenantUrl(organizationSlug || 'company-slug')
   const activeOrganizationDetails = useMemo(
     () => hubOrganizations.find((organization) => organization.id === activeOrganizationId) || null,
     [activeOrganizationId, hubOrganizations],
@@ -964,7 +970,9 @@ function SelectOrganizationContent() {
       setOrganizationNeedTelegram(false)
       setOrganizationPlanManual(false)
       setCreateOrganizationTab('smart')
-      setSuccess(`Организация "${body.organization.name}" создана и готова к работе.`)
+      setSuccess(
+        `Организация "${body.organization.name}" создана. Рабочий адрес: ${body?.organization?.primaryDomain || buildTenantHost(body.organization.slug)}.`,
+      )
       await refreshHubData()
       await refreshOrganizationMembers(organizationId)
       await handleSelectOrganization(organizationId)
@@ -1316,22 +1324,57 @@ function SelectOrganizationContent() {
                 <Loader2 className="h-4 w-4 animate-spin text-sky-400" />
                 Загружаем организации...
               </div>
-            ) : organizations.length === 0 ? (
+            ) : organizations.length === 0 && !canCreateOrganizations ? (
               <div className="space-y-4">
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
-                  <div className="mb-2 flex items-center gap-2 font-medium">
-                    <ShieldAlert className="h-4 w-4" />
-                    Нет доступных организаций
+                <div className="rounded-3xl border border-sky-500/20 bg-sky-500/10 p-5">
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="rounded-2xl bg-sky-500/10 p-3">
+                      <Sparkles className="h-5 w-5 text-sky-300" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-semibold text-white">Создайте первую организацию</h2>
+                      <p className="text-sm text-slate-300">
+                        Это ваш стартовый SaaS-контур. После создания появится отдельное рабочее пространство, тариф и адрес клиента.
+                      </p>
+                    </div>
                   </div>
-                  Для этого аккаунта ещё не назначена организация. Нужна привязка со стороны администратора.
+                  <div className="grid gap-2 text-sm text-slate-300 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
+                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Шаг 1</div>
+                      <div className="mt-1 font-medium text-white">Название и slug</div>
+                      <div className="mt-1 text-xs text-slate-400">Из этого сразу собирается адрес клиента.</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
+                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Шаг 2</div>
+                      <div className="mt-1 font-medium text-white">Тариф и модули</div>
+                      <div className="mt-1 text-xs text-slate-400">AI, склад, POS и Telegram на старте.</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
+                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Шаг 3</div>
+                      <div className="mt-1 font-medium text-white">Поддомен клиента</div>
+                      <div className="mt-1 text-xs text-slate-400">Например: `f16.{workspaceBaseHost}`.</div>
+                    </div>
+                  </div>
                 </div>
-                <Button variant="outline" className="w-full" onClick={handleSignOut}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Выйти
-                </Button>
               </div>
             ) : (
               <div className="space-y-4">
+                {organizations.length === 0 && canCreateOrganizations ? (
+                  <div className="rounded-3xl border border-sky-500/20 bg-sky-500/10 p-5">
+                    <div className="mb-3 flex items-center gap-3">
+                      <div className="rounded-2xl bg-sky-500/10 p-3">
+                        <Sparkles className="h-5 w-5 text-sky-300" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-semibold text-white">Создайте первую организацию</h2>
+                        <p className="text-sm text-slate-300">
+                          Начните с названия, slug и стартового тарифа. Система сама подготовит клиентский контур и адрес вида `{suggestedWorkspaceHost}`.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
                 {error ? (
                   <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
                     {error}
@@ -1423,6 +1466,9 @@ function SelectOrganizationContent() {
                           </div>
                           <p className="mt-1 truncate text-xs uppercase tracking-[0.18em] text-slate-500">
                             {organization.slug} • {formatAccessRole(organization.accessRole)}
+                          </p>
+                          <p className="mt-2 truncate text-xs text-slate-400">
+                            Рабочий адрес: {overview?.primaryDomain || buildTenantHost(organization.slug)}
                           </p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
@@ -2258,6 +2304,9 @@ function SelectOrganizationContent() {
                                   </div>
                                   <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-xs text-slate-400">
                                     Адрес организации и доступы будут строиться вокруг slug: <span className="font-mono text-slate-200">{organizationSlug || 'company-slug'}</span>
+                                    <div className="mt-2 rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-slate-200">
+                                      Поддомен клиента: <span className="font-mono text-white">{suggestedWorkspaceHost}</span>
+                                    </div>
                                   </div>
                                   <Input
                                     value={organizationTrialDays}
@@ -2472,6 +2521,11 @@ function SelectOrganizationContent() {
                                     <div className="text-xs text-slate-500">slug: {organizationSlug || 'company-slug'}</div>
                                   </div>
                                   <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Рабочий адрес</div>
+                                    <div className="mt-1 font-medium text-white">{suggestedWorkspaceHost}</div>
+                                    <div className="text-xs text-slate-500">{suggestedWorkspaceUrl}</div>
+                                  </div>
+                                  <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
                                     <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Первая точка</div>
                                     <div className="mt-1 font-medium text-white">{firstCompanyName || 'Можно создать позже'}</div>
                                   </div>
@@ -2546,6 +2600,9 @@ function SelectOrganizationContent() {
                             className="border-white/10 bg-slate-900/60 text-white"
                             placeholder="slug организации"
                           />
+                          <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-xs text-slate-400">
+                            Поддомен клиента создастся автоматически: <span className="font-mono text-slate-200">{suggestedWorkspaceHost}</span>
+                          </div>
                           <Input
                             value={organizationLegalName}
                             onChange={(event) => setOrganizationLegalName(event.target.value)}

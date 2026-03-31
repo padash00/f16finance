@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { buildTenantHost, buildTenantUrl, normalizeTenantHost } from '@/lib/core/tenant-domain'
 import { resolveOrganizationUsage } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -341,6 +342,7 @@ async function loadOrganizationHubData(params: {
     { data: membersData, error: membersError },
     { data: plansData, error: plansError },
     { data: billingEventsData, error: billingEventsError },
+    { data: tenantDomainsData, error: tenantDomainsError },
   ] =
     await Promise.all([
       supabase
@@ -373,6 +375,11 @@ async function loadOrganizationHubData(params: {
         .select('id, organization_id, subscription_id, event_type, status, amount, currency, billing_period, note, created_at')
         .in('organization_id', organizationIds)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('tenant_domains')
+        .select('organization_id, host, is_primary')
+        .in('organization_id', organizationIds)
+        .order('is_primary', { ascending: false }),
     ])
 
   if (organizationsError) throw organizationsError
@@ -381,6 +388,7 @@ async function loadOrganizationHubData(params: {
   if (membersError) throw membersError
   if (plansError) throw plansError
   if (billingEventsError) throw billingEventsError
+  if (tenantDomainsError) throw tenantDomainsError
 
   const subscriptionsByOrganization = new Map<string, any>()
   for (const row of subscriptionsData || []) {
@@ -444,6 +452,18 @@ async function loadOrganizationHubData(params: {
     memberCounts.set(organizationId, (memberCounts.get(organizationId) || 0) + 1)
   }
 
+  const tenantDomainByOrganization = new Map<string, { host: string; isPrimary: boolean }>()
+  for (const row of (tenantDomainsData || []) as Array<{ organization_id: string; host: string; is_primary: boolean }>) {
+    const organizationId = String(row.organization_id || '')
+    if (!organizationId || tenantDomainByOrganization.has(organizationId)) continue
+    const normalizedHost = normalizeTenantHost(row.host)
+    if (!normalizedHost) continue
+    tenantDomainByOrganization.set(organizationId, {
+      host: normalizedHost,
+      isPrimary: Boolean(row.is_primary),
+    })
+  }
+
   const usageByOrganizationEntries = await Promise.all(
     organizationIds.map(async (organizationId) => [
       organizationId,
@@ -458,6 +478,7 @@ async function loadOrganizationHubData(params: {
       const subscription = subscriptionsByOrganization.get(organizationId)
       const plan = subscription?.plan
       const companies = companiesByOrganization.get(organizationId) || []
+      const tenantDomain = tenantDomainByOrganization.get(organizationId) || null
       const branding = (row.branding as Record<string, unknown> | null) || {}
       const settings = (row.settings as Record<string, unknown> | null) || {}
       const usage = usageByOrganization.get(organizationId) || {
@@ -474,6 +495,8 @@ async function loadOrganizationHubData(params: {
         legalName: row.legal_name || null,
         status: String(row.status || 'active'),
         createdAt: row.created_at || null,
+        primaryDomain: tenantDomain?.host || buildTenantHost(String(row.slug || '')),
+        appUrl: buildTenantUrl(tenantDomain?.host || String(row.slug || '')),
         companyCount: companies.length,
         memberCount: memberCounts.get(organizationId) || 0,
         branding: {
@@ -649,6 +672,8 @@ export async function POST(req: Request) {
     if (organizationError) throw organizationError
 
     const organizationId = String((organization as any).id)
+    const primaryDomainHost = buildTenantHost(slug)
+    const appUrl = buildTenantUrl(primaryDomainHost)
 
     const subscriptionStartsAt = new Date()
     const subscriptionEndsAt = addDaysIso(subscriptionStartsAt, trialDays)
@@ -701,7 +726,7 @@ export async function POST(req: Request) {
         .insert([
           {
             organization_id: organizationId,
-            host: slug,
+            host: primaryDomainHost,
             is_primary: true,
           },
         ])
@@ -734,6 +759,8 @@ export async function POST(req: Request) {
         slug: String((organization as any).slug || slug),
         status: String((organization as any).status || 'active'),
         planCode: String(plan.code),
+        primaryDomain: primaryDomainHost,
+        appUrl,
       },
     })
   } catch (error: any) {
