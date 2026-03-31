@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { resolveOrganizationUsage } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
@@ -16,6 +17,13 @@ type UpdateOrganizationBody = {
   name?: string | null
   slug?: string | null
   legalName?: string | null
+  productName?: string | null
+  primaryColor?: string | null
+  logoUrl?: string | null
+  supportEmail?: string | null
+  supportPhone?: string | null
+  timezone?: string | null
+  currency?: string | null
   organizationStatus?: string | null
   planCode?: string | null
   subscriptionStatus?: string | null
@@ -194,7 +202,7 @@ async function loadOrganizationHubData(params: {
     await Promise.all([
       supabase
         .from('organizations')
-        .select('id, name, slug, legal_name, status, created_at')
+        .select('id, name, slug, legal_name, status, branding, settings, created_at')
         .in('id', organizationIds)
         .order('name', { ascending: true }),
       supabase
@@ -252,12 +260,28 @@ async function loadOrganizationHubData(params: {
     memberCounts.set(organizationId, (memberCounts.get(organizationId) || 0) + 1)
   }
 
+  const usageByOrganizationEntries = await Promise.all(
+    organizationIds.map(async (organizationId) => [
+      organizationId,
+      await resolveOrganizationUsage({ activeOrganizationId: organizationId, isSuperAdmin: false }),
+    ] as const),
+  )
+  const usageByOrganization = new Map(usageByOrganizationEntries)
+
   return {
     organizations: (organizationsData || []).map((row: any) => {
       const organizationId = String(row.id || '')
       const subscription = subscriptionsByOrganization.get(organizationId)
       const plan = subscription?.plan
       const companies = companiesByOrganization.get(organizationId) || []
+      const branding = (row.branding as Record<string, unknown> | null) || {}
+      const settings = (row.settings as Record<string, unknown> | null) || {}
+      const usage = usageByOrganization.get(organizationId) || {
+        companies: companies.length,
+        staff: memberCounts.get(organizationId) || 0,
+        operators: 0,
+        point_projects: 0,
+      }
 
       return {
         id: organizationId,
@@ -268,6 +292,18 @@ async function loadOrganizationHubData(params: {
         createdAt: row.created_at || null,
         companyCount: companies.length,
         memberCount: memberCounts.get(organizationId) || 0,
+        branding: {
+          productName: String(branding.product_name || row.name || ''),
+          primaryColor: typeof branding.primary_color === 'string' ? branding.primary_color : '',
+          logoUrl: typeof branding.logo_url === 'string' ? branding.logo_url : '',
+        },
+        settings: {
+          timezone: typeof settings.timezone === 'string' ? settings.timezone : 'Asia/Qyzylorda',
+          currency: typeof settings.currency === 'string' ? settings.currency : 'KZT',
+          supportEmail: typeof settings.support_email === 'string' ? settings.support_email : '',
+          supportPhone: typeof settings.support_phone === 'string' ? settings.support_phone : '',
+        },
+        usage,
         companies,
         subscription: subscription
           ? {
@@ -350,6 +386,11 @@ export async function POST(req: Request) {
           status: 'active',
           settings: {
             created_from: 'project-hub',
+            timezone: 'Asia/Qyzylorda',
+            currency: 'KZT',
+          },
+          branding: {
+            product_name: name,
           },
         },
       ])
@@ -450,6 +491,8 @@ export async function PATCH(req: Request) {
 
     const supabase = createAdminSupabaseClient()
     const organizationPayload: Record<string, unknown> = {}
+    const brandingPatch: Record<string, unknown> = {}
+    const settingsPatch: Record<string, unknown> = {}
 
     if (typeof body?.name === 'string' && body.name.trim()) {
       organizationPayload.name = body.name.trim()
@@ -465,6 +508,57 @@ export async function PATCH(req: Request) {
 
     if (rights.canManageSubscription && typeof body?.organizationStatus === 'string' && body.organizationStatus.trim()) {
       organizationPayload.status = body.organizationStatus.trim()
+    }
+
+    if (typeof body?.productName === 'string') {
+      brandingPatch.product_name = body.productName.trim() || null
+    }
+
+    if (typeof body?.primaryColor === 'string') {
+      brandingPatch.primary_color = body.primaryColor.trim() || null
+    }
+
+    if (typeof body?.logoUrl === 'string') {
+      brandingPatch.logo_url = body.logoUrl.trim() || null
+    }
+
+    if (typeof body?.supportEmail === 'string') {
+      settingsPatch.support_email = body.supportEmail.trim() || null
+    }
+
+    if (typeof body?.supportPhone === 'string') {
+      settingsPatch.support_phone = body.supportPhone.trim() || null
+    }
+
+    if (typeof body?.timezone === 'string') {
+      settingsPatch.timezone = body.timezone.trim() || 'Asia/Qyzylorda'
+    }
+
+    if (typeof body?.currency === 'string') {
+      settingsPatch.currency = body.currency.trim() || 'KZT'
+    }
+
+    if (Object.keys(brandingPatch).length > 0 || Object.keys(settingsPatch).length > 0) {
+      const { data: existingOrganization, error: existingOrganizationError } = await supabase
+        .from('organizations')
+        .select('branding, settings')
+        .eq('id', organizationId)
+        .single()
+      if (existingOrganizationError) throw existingOrganizationError
+
+      if (Object.keys(brandingPatch).length > 0) {
+        organizationPayload.branding = {
+          ...((((existingOrganization as any)?.branding as Record<string, unknown> | null) || {})),
+          ...brandingPatch,
+        }
+      }
+
+      if (Object.keys(settingsPatch).length > 0) {
+        organizationPayload.settings = {
+          ...((((existingOrganization as any)?.settings as Record<string, unknown> | null) || {})),
+          ...settingsPatch,
+        }
+      }
     }
 
     if (Object.keys(organizationPayload).length > 0) {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { ensureOrganizationStaffAccess } from '@/lib/server/organizations'
+import { assertOrganizationLimitAvailable, ensureOrganizationStaffAccess } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -84,6 +84,13 @@ export async function POST(req: Request) {
       if (!Number.isFinite(payload.monthly_salary) || payload.monthly_salary <= 0) {
         return json({ error: 'Оклад должен быть больше нуля' }, 400)
       }
+
+      await assertOrganizationLimitAvailable({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        activeSubscription: access.activeSubscription,
+        key: 'staff',
+      })
 
       const { data, error } = await supabase
         .from('staff')

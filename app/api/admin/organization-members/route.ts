@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getPublicAppUrl } from '@/lib/core/app-url'
+import { assertOrganizationLimitAvailable } from '@/lib/server/organizations'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -211,6 +212,24 @@ export async function POST(req: Request) {
     }
 
     const supabase = createAdminSupabaseClient()
+    const { data: existingMembershipByEmail, error: existingMembershipError } = await supabase
+      .from('organization_members')
+      .select('id, staff_id')
+      .eq('organization_id', organizationId)
+      .eq('email', email)
+      .maybeSingle()
+
+    if (existingMembershipError) throw existingMembershipError
+
+    if (!existingMembershipByEmail?.id) {
+      await assertOrganizationLimitAvailable({
+        activeOrganizationId: organizationId,
+        isSuperAdmin: access.isSuperAdmin,
+        activeSubscription: access.activeSubscription,
+        key: 'staff',
+      })
+    }
+
     const staffRow = await resolveOrCreateStaff({ supabase, fullName, email, role })
     const origin = getPublicAppUrl(new URL(req.url).origin)
     const accessRedirectTo = buildRedirectTo(origin, '/set-password')

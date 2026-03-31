@@ -49,6 +49,23 @@ type OrganizationHubOverview = {
   createdAt: string | null
   companyCount: number
   memberCount: number
+  branding: {
+    productName: string
+    primaryColor: string
+    logoUrl: string
+  }
+  settings: {
+    timezone: string
+    currency: string
+    supportEmail: string
+    supportPhone: string
+  }
+  usage: {
+    companies: number
+    staff: number
+    operators: number
+    point_projects: number
+  }
   companies: Array<{ id: string; name: string; code: string | null }>
   subscription: null | {
     id: string
@@ -125,6 +142,12 @@ const FEATURE_LABELS: Record<string, string> = {
   web_pos: 'POS и терминал',
   telegram: 'Telegram-боты и отчёты',
   custom_branding: 'White-label и branding',
+}
+const LIMIT_LABELS: Record<string, string> = {
+  companies: 'Точки',
+  staff: 'Команда',
+  operators: 'Операторы',
+  point_projects: 'POS проекты',
 }
 const BUSINESS_MODEL_OPTIONS = [
   { value: 'club', label: 'Клуб / арена', hint: 'Операторы, смены, касса и KPI по точкам.' },
@@ -281,6 +304,13 @@ function SelectOrganizationContent() {
   const [editOrganizationName, setEditOrganizationName] = useState('')
   const [editOrganizationSlug, setEditOrganizationSlug] = useState('')
   const [editOrganizationLegalName, setEditOrganizationLegalName] = useState('')
+  const [editProductName, setEditProductName] = useState('')
+  const [editPrimaryColor, setEditPrimaryColor] = useState('')
+  const [editLogoUrl, setEditLogoUrl] = useState('')
+  const [editTimezone, setEditTimezone] = useState('Asia/Qyzylorda')
+  const [editCurrency, setEditCurrency] = useState('KZT')
+  const [editSupportEmail, setEditSupportEmail] = useState('')
+  const [editSupportPhone, setEditSupportPhone] = useState('')
   const [editOrganizationStatus, setEditOrganizationStatus] = useState('active')
   const [editPlanCode, setEditPlanCode] = useState('starter')
   const [editSubscriptionStatus, setEditSubscriptionStatus] = useState('active')
@@ -505,12 +535,40 @@ function SelectOrganizationContent() {
     () => POINT_SCALE_OPTIONS.find((option) => option.value === organizationPointScale) || null,
     [organizationPointScale],
   )
+  const activeLimitEntries = useMemo(() => {
+    const usage = activeOrganizationDetails?.usage
+    const limits = activeOrganizationDetails?.subscription?.plan?.limits || {}
+    if (!usage) return []
+
+    return Object.entries(usage).map(([key, used]) => {
+      const rawLimit = limits[key]
+      const numericLimit = typeof rawLimit === 'number' ? rawLimit : typeof rawLimit === 'string' ? Number(rawLimit) : null
+      const limit = Number.isFinite(numericLimit as number) ? Number(numericLimit) : null
+      const isNearLimit = limit !== null && used >= Math.max(1, limit - 1)
+      const isOverLimit = limit !== null && used > limit
+      return {
+        key,
+        label: LIMIT_LABELS[key] || key,
+        used,
+        limit,
+        isNearLimit,
+        isOverLimit,
+      }
+    })
+  }, [activeOrganizationDetails])
 
   useEffect(() => {
     if (!activeOrganizationDetails) return
     setEditOrganizationName(activeOrganizationDetails.name || '')
     setEditOrganizationSlug(activeOrganizationDetails.slug || '')
     setEditOrganizationLegalName(activeOrganizationDetails.legalName || '')
+    setEditProductName(activeOrganizationDetails.branding?.productName || activeOrganizationDetails.name || '')
+    setEditPrimaryColor(activeOrganizationDetails.branding?.primaryColor || '')
+    setEditLogoUrl(activeOrganizationDetails.branding?.logoUrl || '')
+    setEditTimezone(activeOrganizationDetails.settings?.timezone || 'Asia/Qyzylorda')
+    setEditCurrency(activeOrganizationDetails.settings?.currency || 'KZT')
+    setEditSupportEmail(activeOrganizationDetails.settings?.supportEmail || '')
+    setEditSupportPhone(activeOrganizationDetails.settings?.supportPhone || '')
     setEditOrganizationStatus(activeOrganizationDetails.status || 'active')
     setEditPlanCode(activeOrganizationDetails.subscription?.plan?.code || 'starter')
     setEditSubscriptionStatus(activeOrganizationDetails.subscription?.status || 'active')
@@ -682,6 +740,13 @@ function SelectOrganizationContent() {
           organizationId: activeOrganizationId,
           name: editOrganizationName.trim(),
           legalName: editOrganizationLegalName.trim() || null,
+          productName: editProductName.trim() || null,
+          primaryColor: editPrimaryColor.trim() || null,
+          logoUrl: editLogoUrl.trim() || null,
+          timezone: editTimezone.trim() || null,
+          currency: editCurrency.trim() || null,
+          supportEmail: editSupportEmail.trim() || null,
+          supportPhone: editSupportPhone.trim() || null,
           slug: editOrganizationSlug.trim() || null,
           organizationStatus: editOrganizationStatus,
           planCode: editPlanCode,
@@ -970,12 +1035,52 @@ function SelectOrganizationContent() {
                         <div className="mt-1 font-medium text-white">{activeOrganizationDetails.subscription?.status || 'Не задан'}</div>
                       </div>
                       <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
-                        <div className="text-slate-500">Точек</div>
-                        <div className="mt-1 font-medium text-white">{activeOrganizationDetails.companyCount}</div>
+                        <div className="text-slate-500">Продукт бренда</div>
+                        <div className="mt-1 font-medium text-white">{activeOrganizationDetails.branding?.productName || activeOrganizationDetails.name}</div>
                       </div>
                       <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
-                        <div className="text-slate-500">Сотрудников</div>
-                        <div className="mt-1 font-medium text-white">{activeOrganizationDetails.memberCount}</div>
+                        <div className="text-slate-500">Часовой пояс / валюта</div>
+                        <div className="mt-1 font-medium text-white">
+                          {(activeOrganizationDetails.settings?.timezone || 'Asia/Qyzylorda')} · {(activeOrganizationDetails.settings?.currency || 'KZT')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="text-sm font-medium text-white">Использование и лимиты</div>
+                        <div className="text-xs text-slate-500">
+                          Всё считается в рамках активной организации
+                        </div>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                        {activeLimitEntries.map((entry) => (
+                          <div
+                            key={entry.key}
+                            className={`rounded-2xl border px-3 py-3 text-sm ${
+                              entry.isOverLimit
+                                ? 'border-red-500/30 bg-red-500/10'
+                                : entry.isNearLimit
+                                  ? 'border-amber-500/30 bg-amber-500/10'
+                                  : 'border-white/10 bg-slate-950/60'
+                            }`}
+                          >
+                            <div className="text-slate-500">{entry.label}</div>
+                            <div className="mt-1 font-medium text-white">
+                              {entry.used}
+                              {entry.limit !== null ? ` / ${entry.limit}` : ' / без лимита'}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-400">
+                              {entry.limit === null
+                                ? 'План не ограничивает этот модуль.'
+                                : entry.isOverLimit
+                                  ? 'Лимит превышен, нужен апгрейд.'
+                                  : entry.isNearLimit
+                                    ? 'Подходите к лимиту тарифа.'
+                                    : 'В пределах тарифа.'}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
@@ -992,6 +1097,54 @@ function SelectOrganizationContent() {
                         className="border-white/10 bg-slate-900/60 text-white"
                         placeholder="Юр. название"
                       />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Input
+                          value={editProductName}
+                          onChange={(event) => setEditProductName(event.target.value)}
+                          className="border-white/10 bg-slate-900/60 text-white"
+                          placeholder="Название продукта / кабинета"
+                        />
+                        <Input
+                          value={editPrimaryColor}
+                          onChange={(event) => setEditPrimaryColor(event.target.value)}
+                          className="border-white/10 bg-slate-900/60 text-white"
+                          placeholder="Primary color, например #D7FF00"
+                        />
+                      </div>
+                      <Input
+                        value={editLogoUrl}
+                        onChange={(event) => setEditLogoUrl(event.target.value)}
+                        className="border-white/10 bg-slate-900/60 text-white"
+                        placeholder="URL логотипа, если нужен branding"
+                      />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Input
+                          value={editTimezone}
+                          onChange={(event) => setEditTimezone(event.target.value)}
+                          className="border-white/10 bg-slate-900/60 text-white"
+                          placeholder="Timezone, например Asia/Qyzylorda"
+                        />
+                        <Input
+                          value={editCurrency}
+                          onChange={(event) => setEditCurrency(event.target.value.toUpperCase())}
+                          className="border-white/10 bg-slate-900/60 text-white"
+                          placeholder="Валюта, например KZT"
+                        />
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Input
+                          value={editSupportEmail}
+                          onChange={(event) => setEditSupportEmail(event.target.value)}
+                          className="border-white/10 bg-slate-900/60 text-white"
+                          placeholder="Support email"
+                        />
+                        <Input
+                          value={editSupportPhone}
+                          onChange={(event) => setEditSupportPhone(event.target.value)}
+                          className="border-white/10 bg-slate-900/60 text-white"
+                          placeholder="Support phone"
+                        />
+                      </div>
 
                       {isSuperAdmin ? (
                         <>
@@ -1080,7 +1233,7 @@ function SelectOrganizationContent() {
                         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                           {Object.entries(activeOrganizationDetails.subscription.plan.limits).map(([key, value]) => (
                             <div key={key} className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3">
-                              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">{key}</div>
+                              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">{LIMIT_LABELS[key] || key}</div>
                               <div className="mt-1 text-sm font-medium text-white">{String(value)}</div>
                             </div>
                           ))}

@@ -37,6 +37,51 @@ export type OrganizationSubscription = {
   } | null
 } | null
 
+export type OrganizationLimitKey = 'companies' | 'staff' | 'operators' | 'point_projects'
+
+export type OrganizationUsage = Record<OrganizationLimitKey, number>
+
+const ZERO_ORGANIZATION_USAGE: OrganizationUsage = {
+  companies: 0,
+  staff: 0,
+  operators: 0,
+  point_projects: 0,
+}
+
+const ORGANIZATION_LIMIT_LABELS: Record<OrganizationLimitKey, string> = {
+  companies: 'точек',
+  staff: 'сотрудников',
+  operators: 'операторов',
+  point_projects: 'проектов точек',
+}
+
+function parseLimitValue(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const numeric = Number(value)
+    if (Number.isFinite(numeric)) {
+      return numeric
+    }
+  }
+
+  return null
+}
+
+function formatUpgradeTarget(subscription: OrganizationSubscription) {
+  if (!subscription?.plan?.code || subscription.plan.code === 'enterprise') {
+    return 'Enterprise'
+  }
+
+  if (subscription.plan.code === 'starter') {
+    return 'Growth'
+  }
+
+  return 'Enterprise'
+}
+
 function normalizeOrganizationRole(value: string | null | undefined): OrganizationAccessRole {
   if (value === 'owner' || value === 'manager' || value === 'marketer' || value === 'operator') {
     return value
@@ -228,7 +273,7 @@ export async function resolveActiveOrganizationSubscription(params: {
   const { data, error } = await supabase
     .from('organization_subscriptions')
     .select(
-      'id, status, billing_period, starts_at, ends_at, plan:plan_id(id, code, name, features, limits)',
+      'id, status, billing_period, starts_at, ends_at, limits_override, plan:plan_id(id, code, name, features, limits)',
     )
     .eq('organization_id', activeOrganizationId)
     .order('starts_at', { ascending: false })
@@ -238,6 +283,11 @@ export async function resolveActiveOrganizationSubscription(params: {
   if (error || !data) return null
 
   const plan = Array.isArray((data as any).plan) ? (data as any).plan[0] || null : (data as any).plan || null
+  const limitsOverride = ((data as any).limits_override as Record<string, unknown> | null) || {}
+  const mergedLimits = {
+    ...(((plan?.limits as Record<string, unknown> | null) || {})),
+    ...limitsOverride,
+  }
 
   return {
     id: String((data as any).id || ''),
@@ -251,10 +301,99 @@ export async function resolveActiveOrganizationSubscription(params: {
           code: String(plan.code || ''),
           name: String(plan.name || ''),
           features: ((plan.features as Partial<Record<SubscriptionFeature, boolean>> | null) || {}),
-          limits: ((plan.limits as Record<string, unknown> | null) || {}),
+          limits: mergedLimits,
         }
       : null,
   } satisfies OrganizationSubscription
+}
+
+export function getOrganizationEffectiveLimits(subscription: OrganizationSubscription) {
+  return (subscription?.plan?.limits || {}) as Record<string, unknown>
+}
+
+export function getOrganizationLimitValue(params: {
+  subscription: OrganizationSubscription
+  key: OrganizationLimitKey
+}) {
+  return parseLimitValue(getOrganizationEffectiveLimits(params.subscription)[params.key])
+}
+
+export async function resolveOrganizationUsage(params: {
+  activeOrganizationId?: string | null
+  isSuperAdmin?: boolean
+}) {
+  const { activeOrganizationId, isSuperAdmin } = params
+  if (isSuperAdmin) return ZERO_ORGANIZATION_USAGE
+  if (!activeOrganizationId) {
+    throw new Error('active-organization-required')
+  }
+
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
+  if (!supabase) {
+    throw new Error('organization-scope-unavailable')
+  }
+
+  const [companiesResult, staffResult, projectAssignmentsResult, operatorIds] = await Promise.all([
+    supabase.from('companies').select('id').eq('organization_id', activeOrganizationId),
+    supabase
+      .from('organization_members')
+      .select('id')
+      .eq('organization_id', activeOrganizationId)
+      .in('status', ['invited', 'active']),
+    supabase
+      .from('point_project_companies')
+      .select('project_id, company:company_id(organization_id)'),
+    listOrganizationOperatorIds({ activeOrganizationId, isSuperAdmin }),
+  ])
+
+  if (companiesResult.error) throw companiesResult.error
+  if (staffResult.error) throw staffResult.error
+  if (projectAssignmentsResult.error) throw projectAssignmentsResult.error
+
+  const pointProjects = new Set(
+    ((projectAssignmentsResult.data || []) as any[])
+      .filter((row) => {
+        const company = Array.isArray((row as any).company) ? (row as any).company[0] || null : (row as any).company || null
+        return String(company?.organization_id || '') === activeOrganizationId
+      })
+      .map((row) => String((row as any).project_id || ''))
+      .filter(Boolean),
+  )
+
+  return {
+    companies: (companiesResult.data || []).length,
+    staff: (staffResult.data || []).length,
+    operators: operatorIds?.length || 0,
+    point_projects: pointProjects.size,
+  } satisfies OrganizationUsage
+}
+
+export async function assertOrganizationLimitAvailable(params: {
+  activeOrganizationId?: string | null
+  isSuperAdmin?: boolean
+  activeSubscription: OrganizationSubscription
+  key: OrganizationLimitKey
+  increment?: number
+}) {
+  const { activeOrganizationId, isSuperAdmin, activeSubscription, key, increment = 1 } = params
+  if (isSuperAdmin) return
+
+  const limit = getOrganizationLimitValue({ subscription: activeSubscription, key })
+  if (limit === null) return
+
+  const usage = await resolveOrganizationUsage({ activeOrganizationId, isSuperAdmin })
+  const currentUsage = usage[key] || 0
+
+  if (currentUsage + increment <= limit) {
+    return
+  }
+
+  const currentPlanName = activeSubscription?.plan?.name || 'текущий тариф'
+  const upgradeTarget = formatUpgradeTarget(activeSubscription)
+  throw new Error(
+    `Лимит по тарифу на ${ORGANIZATION_LIMIT_LABELS[key]} исчерпан: ${currentUsage}/${limit}. ` +
+      `Перейдите на ${upgradeTarget}, чтобы увеличить лимит для организации (${currentPlanName}).`,
+  )
 }
 
 export async function resolveCompanyScope(params: {

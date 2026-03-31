@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { assertOrganizationLimitAvailable } from '@/lib/server/organizations'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -76,6 +77,13 @@ export async function POST(req: Request) {
     if (!access.isSuperAdmin && targetOrganizationId !== access.activeOrganization?.id) {
       return json({ error: 'forbidden' }, 403)
     }
+
+    await assertOrganizationLimitAvailable({
+      activeOrganizationId: targetOrganizationId,
+      isSuperAdmin: access.isSuperAdmin,
+      activeSubscription: access.activeSubscription,
+      key: 'companies',
+    })
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()

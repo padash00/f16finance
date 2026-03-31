@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 
 import {
+  assertOrganizationLimitAvailable,
   ensureOrganizationOperatorAccess,
+  listOrganizationOperatorIds,
   resolveCompanyScope,
 } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -184,6 +186,24 @@ export async function POST(req: Request) {
         isSuperAdmin: access.isSuperAdmin,
         operatorId,
       })
+    }
+
+    const nextHasActiveAssignments = normalized.some((item) => item.is_active)
+    if (nextHasActiveAssignments) {
+      const organizationOperatorIds = await listOrganizationOperatorIds({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+      })
+      const alreadyCountedInOrganization = organizationOperatorIds?.includes(operatorId) ?? true
+
+      if (!alreadyCountedInOrganization) {
+        await assertOrganizationLimitAvailable({
+          activeOrganizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+          activeSubscription: access.activeSubscription,
+          key: 'operators',
+        })
+      }
     }
 
     const existingById = new Map((existingRows || []).map((row) => [row.id as string, row]))

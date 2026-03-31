@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { resolveCompanyScope } from '@/lib/server/organizations'
+import { assertOrganizationLimitAvailable, resolveCompanyScope } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -226,6 +226,13 @@ export async function POST(request: Request) {
           requestedCompanyId: assignment.company_id,
         })
       }
+
+      await assertOrganizationLimitAvailable({
+        activeOrganizationId: access.activeOrganization?.id || null,
+        isSuperAdmin: access.isSuperAdmin,
+        activeSubscription: access.activeSubscription,
+        key: 'point_projects',
+      })
 
       const initialToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
         .map((b) => b.toString(16).padStart(2, '0'))
