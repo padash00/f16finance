@@ -11,8 +11,9 @@ import {
   type SubscriptionFeature,
 } from '@/lib/core/access'
 import { APEX_MAINTENANCE_MODE, SITE_URL } from '@/lib/core/site'
+import { getTenantBaseHost } from '@/lib/core/tenant-domain'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
-import { resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
+import { normalizeRequestHost, resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
 
 const AUTH_SELF_SERVICE_PATHS = ['/forgot-password', '/reset-password', '/set-password', '/auth/callback', '/auth/complete'] as const
 const ACTIVE_ORGANIZATION_COOKIE = 'oc_org'
@@ -239,6 +240,9 @@ export async function proxy(request: NextRequest) {
   }
 
   // Resolve host-based organization early so we can use it in unauthenticated flow
+  const normalizedHost = normalizeRequestHost(request.headers.get('host'))
+  const baseHost = getTenantBaseHost().toLowerCase()
+  const isTenantSubdomain = Boolean(normalizedHost && normalizedHost !== baseHost && normalizedHost !== `www.${baseHost}`)
   const hostOrganization = await resolveOrganizationByHost(request.headers.get('host'))
   const hostOrganizationId = hostOrganization?.id || null
 
@@ -247,8 +251,9 @@ export async function proxy(request: NextRequest) {
 
   if (!user) {
     // On a tenant subdomain redirect platform-only marketing pages to login
-    if (hostOrganizationId && PLATFORM_ONLY_PATHS.includes(url.pathname)) {
+    if (isTenantSubdomain && PLATFORM_ONLY_PATHS.includes(url.pathname)) {
       url.pathname = '/login'
+      url.search = ''
       return NextResponse.redirect(url)
     }
     if (isPublicPath(url.pathname)) {
@@ -287,6 +292,14 @@ export async function proxy(request: NextRequest) {
     operatorAuth,
     userEmail: user.email?.trim().toLowerCase() || null,
   })
+  if (isTenantSubdomain && !hostOrganizationId) {
+    if (url.pathname !== '/login') {
+      url.pathname = '/login'
+      url.search = ''
+      return clearSessionCookies(request, NextResponse.redirect(url))
+    }
+    return clearSessionCookies(request, response)
+  }
   const hasHostOrganization = hostOrganizationId
     ? isSuperAdmin || organizations.some((organization) => organization.id === hostOrganizationId)
     : false

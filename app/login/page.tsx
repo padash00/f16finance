@@ -1,5 +1,6 @@
 import { headers } from 'next/headers'
 
+import { SITE_URL } from '@/lib/core/site'
 import { getTenantBaseHost } from '@/lib/core/tenant-domain'
 import { normalizeRequestHost, resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
 
@@ -22,5 +23,5 @@ export default async function LoginPage() {
     }
   }
 
-  return <LoginForm hostOrg={hostOrg} />
+  return <LoginForm hostOrg={hostOrg} isTenantSubdomain={isTenantSubdomain} platformUrl={SITE_URL} />
 }
