@@ -168,16 +168,16 @@ const QUICK_ACTIONS: QuickAction[] = [
 ]
 
 const PLAN_OPTIONS = [
-  { value: 'starter', label: 'Starter' },
-  { value: 'growth', label: 'Growth' },
-  { value: 'enterprise', label: 'Enterprise' },
+  { value: 'starter', label: 'Старт' },
+  { value: 'growth', label: 'Рост' },
+  { value: 'enterprise', label: 'Максимум' },
 ]
 const FEATURE_LABELS: Record<string, string> = {
   ai_reports: 'AI-аналитика',
   inventory: 'Склад и остатки',
   web_pos: 'POS и терминал',
   telegram: 'Telegram-боты и отчёты',
-  custom_branding: 'White-label и branding',
+  custom_branding: 'White-label и брендинг',
 }
 const LIMIT_LABELS: Record<string, string> = {
   companies: 'Точки',
@@ -189,7 +189,7 @@ const LIMIT_FIELD_ORDER = ['companies', 'staff', 'operators', 'point_projects'] 
 const BUSINESS_MODEL_OPTIONS = [
   { value: 'club', label: 'Клуб / арена', hint: 'Операторы, смены, касса и KPI по точкам.' },
   { value: 'restaurant', label: 'Общепит', hint: 'Продажи, расходы, кухня, Telegram и учёт.' },
-  { value: 'retail', label: 'Retail / store', hint: 'Склад, остатки, каталог, POS и движение товара.' },
+  { value: 'retail', label: 'Ритейл / магазин', hint: 'Склад, остатки, каталог, POS и движение товара.' },
   { value: 'mixed', label: 'Смешанный формат', hint: 'Нужно сразу несколько модулей и гибкие лимиты.' },
 ] as const
 const POINT_SCALE_OPTIONS = [
@@ -198,10 +198,10 @@ const POINT_SCALE_OPTIONS = [
   { value: '6+', label: '6+ точек', hint: 'Несколько филиалов и рост по сети.' },
 ] as const
 const MEMBER_ROLE_OPTIONS: Array<{ value: OrganizationMember['role']; label: string }> = [
-  { value: 'owner', label: 'Owner' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'marketer', label: 'Marketer' },
-  { value: 'other', label: 'Other' },
+  { value: 'owner', label: 'Владелец' },
+  { value: 'manager', label: 'Менеджер' },
+  { value: 'marketer', label: 'Маркетолог' },
+  { value: 'other', label: 'Другое' },
 ]
 
 const CYRILLIC_TO_LATIN_MAP: Record<string, string> = {
@@ -295,6 +295,18 @@ function getPlanPrice(plan: PlanOption | null, period: 'monthly' | 'yearly' = 'm
   return new Intl.NumberFormat('ru-RU').format(value)
 }
 
+function formatPlanName(plan: Pick<PlanOption, 'code' | 'name'> | null | undefined) {
+  if (!plan) return 'Не задан'
+
+  const labels: Record<string, string> = {
+    starter: 'Старт',
+    growth: 'Рост',
+    enterprise: 'Максимум',
+  }
+
+  return labels[String(plan.code || '')] || plan.name || 'Не задан'
+}
+
 function getEnabledFeatureLabels(features: Record<string, unknown> | null | undefined) {
   return Object.entries(features || {})
     .filter(([, enabled]) => Boolean(enabled))
@@ -331,7 +343,7 @@ function getDaysUntil(dateValue: string | null | undefined) {
 
 function getBillingEventLabel(eventType: string) {
   const labels: Record<string, string> = {
-    trial_started: 'Старт trial',
+    trial_started: 'Старт пробного периода',
     subscription_activated: 'Активация',
     payment_recorded: 'Оплата',
     subscription_past_due: 'Просрочка',
@@ -344,6 +356,75 @@ function getBillingEventLabel(eventType: string) {
   }
 
   return labels[eventType] || eventType
+}
+
+function formatSubscriptionStatus(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    active: 'Активна',
+    trialing: 'Пробный период',
+    past_due: 'Просрочена',
+    canceled: 'Отменена',
+    expired: 'Истекла',
+    invited: 'Приглашён',
+    inactive: 'Неактивен',
+    not_set: 'Не настроена',
+  }
+
+  return labels[String(value || '')] || String(value || 'Не задан')
+}
+
+function formatOrganizationStatus(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    active: 'Активна',
+    trial: 'Тестовый режим',
+    suspended: 'Приостановлена',
+    archived: 'В архиве',
+  }
+
+  return labels[String(value || '')] || String(value || 'Не задан')
+}
+
+function formatBillingPeriod(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    monthly: 'Ежемесячно',
+    yearly: 'Ежегодно',
+    custom: 'Особый период',
+  }
+
+  return labels[String(value || '')] || String(value || 'Не задан')
+}
+
+function formatAccessRole(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    super_admin: 'Супер-админ',
+    owner: 'Владелец',
+    manager: 'Менеджер',
+    marketer: 'Маркетолог',
+    operator: 'Оператор',
+    other: 'Участник',
+  }
+
+  return labels[String(value || '')] || String(value || 'Участник')
+}
+
+function formatAccountState(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    no_email: 'Нет email',
+    no_account: 'Нет аккаунта',
+    invited: 'Приглашён',
+    active: 'Активен',
+  }
+
+  return labels[String(value || '')] || String(value || 'Неизвестно')
+}
+
+function formatPlanEditorStatus(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    active: 'Активный',
+    archived: 'Архивный',
+  }
+
+  return labels[String(value || '')] || String(value || 'Не задан')
 }
 
 function createEmptyPlanEditor(): PlanEditorState {
@@ -631,8 +712,8 @@ function SelectOrganizationContent() {
   const suggestedFirstCompanyName = useMemo(() => {
     const baseName = organizationName.trim()
     if (!baseName) return ''
-    if (organizationBusinessModel === 'retail') return `${baseName} Store`
-    if (organizationBusinessModel === 'restaurant') return `${baseName} Kitchen`
+    if (organizationBusinessModel === 'retail') return `${baseName} Магазин`
+    if (organizationBusinessModel === 'restaurant') return `${baseName} Кухня`
     if (organizationPointScale === '1') return baseName
     return `${baseName} Central`
   }, [organizationBusinessModel, organizationName, organizationPointScale])
@@ -702,7 +783,7 @@ function SelectOrganizationContent() {
       },
       {
         id: 'support',
-        label: 'Указать support email',
+        label: 'Указать email поддержки',
         done: Boolean(activeOrganizationDetails.settings?.supportEmail?.trim()),
       },
       {
@@ -712,7 +793,7 @@ function SelectOrganizationContent() {
       },
       {
         id: 'subscription',
-        label: 'Довести подписку до active',
+        label: 'Довести подписку до активного статуса',
         done: activeOrganizationDetails.subscription?.status === 'active',
       },
     ]
@@ -1109,7 +1190,7 @@ function SelectOrganizationContent() {
   const handleSavePlan = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!isSuperAdmin) {
-      setError('Тарифами сейчас может управлять только super-admin.')
+      setError('Тарифами сейчас может управлять только супер-админ.')
       return
     }
 
@@ -1180,7 +1261,7 @@ function SelectOrganizationContent() {
                   Выберите проект, клиента или организацию, в которой хотите работать сейчас.
                 </h1>
                 <p className="mt-4 max-w-none text-sm leading-6 text-slate-300">
-                  После выбора система зафиксирует tenant-контекст и откроет только данные, точки, отчёты и людей этой организации.
+                  После выбора система зафиксирует контекст организации и откроет только данные, точки, отчёты и людей этой организации.
                 </p>
               </div>
 
@@ -1254,7 +1335,7 @@ function SelectOrganizationContent() {
                         <Sparkles className="h-5 w-5 text-emerald-300" />
                       </div>
                       <div>
-                        <h2 className="text-base font-semibold text-white">SaaS owner cockpit</h2>
+                        <h2 className="text-base font-semibold text-white">Пульт владельца SaaS</h2>
                         <p className="text-sm text-slate-400">
                           Живой срез по организациям, подпискам и повторяющейся выручке.
                         </p>
@@ -1270,14 +1351,14 @@ function SelectOrganizationContent() {
                       <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
                         <div className="text-slate-500">Подписки</div>
                         <div className="mt-1 font-medium text-white">
-                          active {hubOverview.activeSubscriptions} · trial {hubOverview.trialingSubscriptions}
+                          активных {hubOverview.activeSubscriptions} · пробных {hubOverview.trialingSubscriptions}
                         </div>
-                        <div className="mt-1 text-xs text-slate-400">past_due: {hubOverview.pastDueSubscriptions}</div>
+                        <div className="mt-1 text-xs text-slate-400">просроченных: {hubOverview.pastDueSubscriptions}</div>
                       </div>
                       <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
                         <div className="text-slate-500">MRR</div>
                         <div className="mt-1 font-medium text-white">{formatMoney(hubOverview.liveMrr)}</div>
-                        <div className="mt-1 text-xs text-slate-400">Trial pipeline: {formatMoney(hubOverview.trialMrr)}</div>
+                        <div className="mt-1 text-xs text-slate-400">Потенциал пробного периода: {formatMoney(hubOverview.trialMrr)}</div>
                       </div>
                       <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
                         <div className="text-slate-500">Сеть</div>
@@ -1294,7 +1375,7 @@ function SelectOrganizationContent() {
                   const isActive = activeOrganization?.id === organization.id
                   const isBusy = switchingId === organization.id
                   const overview = hubOrganizations.find((item) => item.id === organization.id)
-                  const planName = overview?.subscription?.plan?.name || overview?.subscription?.plan?.code || 'Без тарифа'
+                  const planName = overview?.subscription?.plan ? formatPlanName(overview.subscription.plan) : 'Без тарифа'
                   const subscriptionStatus = overview?.subscription?.status || 'not_set'
 
                   return (
@@ -1317,14 +1398,14 @@ function SelectOrganizationContent() {
                             ) : null}
                           </div>
                           <p className="mt-1 truncate text-xs uppercase tracking-[0.18em] text-slate-500">
-                            {organization.slug} • {organization.accessRole}
+                            {organization.slug} • {formatAccessRole(organization.accessRole)}
                           </p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
                               Тариф: {planName}
                             </span>
                             <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
-                              Статус: {subscriptionStatus}
+                              Статус: {formatSubscriptionStatus(subscriptionStatus)}
                             </span>
                             <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
                               Точек: {overview?.companyCount ?? 0}
@@ -1399,12 +1480,12 @@ function SelectOrganizationContent() {
                     <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                       <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
                         <div className="text-slate-500">Текущий тариф</div>
-                        <div className="mt-1 font-medium text-white">{activeOrganizationDetails.subscription?.plan?.name || 'Не задан'}</div>
+                          <div className="mt-1 font-medium text-white">{formatPlanName(activeOrganizationDetails.subscription?.plan || null)}</div>
                       </div>
-                      <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
-                        <div className="text-slate-500">Статус подписки</div>
-                        <div className="mt-1 font-medium text-white">{activeOrganizationDetails.subscription?.status || 'Не задан'}</div>
-                      </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
+                          <div className="text-slate-500">Статус подписки</div>
+                          <div className="mt-1 font-medium text-white">{formatSubscriptionStatus(activeOrganizationDetails.subscription?.status)}</div>
+                        </div>
                       <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
                         <div className="text-slate-500">Продукт бренда</div>
                         <div className="mt-1 font-medium text-white">{activeOrganizationDetails.branding?.productName || activeOrganizationDetails.name}</div>
@@ -1423,11 +1504,11 @@ function SelectOrganizationContent() {
                           <div>
                             <div className="text-sm font-medium text-white">Подписка и биллинг</div>
                             <div className="text-xs text-slate-500">
-                              Управление жизненным циклом подписки, trial и ручными сценариями оплаты.
+                          Управление жизненным циклом подписки, пробным периодом и ручными сценариями оплаты.
                             </div>
                           </div>
                           <Badge variant="outline" className="border-white/10 text-slate-300">
-                            {activeOrganizationDetails.subscription?.status || 'not_set'}
+                            {formatSubscriptionStatus(activeOrganizationDetails.subscription?.status || 'not_set')}
                           </Badge>
                         </div>
 
@@ -1435,7 +1516,7 @@ function SelectOrganizationContent() {
                           <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
                             <div className="text-slate-500">Период</div>
                             <div className="mt-1 font-medium text-white">
-                              {activeOrganizationDetails.subscription?.billingPeriod || 'monthly'}
+                              {formatBillingPeriod(activeOrganizationDetails.subscription?.billingPeriod)}
                             </div>
                           </div>
                           <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
@@ -1452,7 +1533,7 @@ function SelectOrganizationContent() {
                             </div>
                           </div>
                           <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm">
-                            <div className="text-slate-500">Cancel at</div>
+                            <div className="text-slate-500">Дата отмены</div>
                             <div className="mt-1 font-medium text-white">
                               {formatDate(activeOrganizationDetails.subscription?.cancelAt)}
                             </div>
@@ -1470,7 +1551,7 @@ function SelectOrganizationContent() {
                               {activeOrganizationDetails.subscription?.status === 'past_due'
                                 ? 'Срочно провести оплату'
                                 : activeOrganizationDetails.subscription?.status === 'trialing'
-                                  ? 'Подготовить активацию после trial'
+                                  ? 'Подготовить активацию после пробного периода'
                                   : 'Подписка под контролем'}
                             </div>
                           </div>
@@ -1489,7 +1570,7 @@ function SelectOrganizationContent() {
                                 value={organizationTrialDays}
                                 onChange={(event) => setOrganizationTrialDays(event.target.value)}
                                 className="border-white/10 bg-slate-900/60 text-white"
-                                placeholder="Trial days"
+                                placeholder="Дней пробного периода"
                               />
                             </div>
                             <Input
@@ -1500,28 +1581,28 @@ function SelectOrganizationContent() {
                             />
                             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                               <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('startTrial')}>
-                                Trial
+                                Запустить пробный период
                               </Button>
                               <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('activate')}>
-                                Activate
+                                Активировать
                               </Button>
                               <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('recordPayment')}>
-                                Record payment
+                                Зафиксировать оплату
                               </Button>
                               <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('renewCycle')}>
-                                Renew cycle
+                                Продлить период
                               </Button>
                               <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('markPastDue')}>
-                                Mark past due
+                                Отметить просрочку
                               </Button>
                               <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('resume')}>
-                                Resume
+                                Возобновить
                               </Button>
                               <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('cancelAtPeriodEnd')}>
-                                Cancel at period end
+                                Отменить в конце периода
                               </Button>
                               <Button type="button" variant="outline" disabled={runningBillingAction} onClick={() => handleSubscriptionAction('cancelNow')}>
-                                Cancel now
+                                Отменить сейчас
                               </Button>
                             </div>
                           </div>
@@ -1558,7 +1639,7 @@ function SelectOrganizationContent() {
                           ))}
                         </div>
                         <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-3">
-                          <div className="text-sm font-medium text-white">Последние billing-события</div>
+                          <div className="text-sm font-medium text-white">Последние события биллинга</div>
                           <div className="mt-3 space-y-2">
                             {activeOrganizationDetails.billingEvents.length ? (
                               activeOrganizationDetails.billingEvents.slice(0, 5).map((event) => (
@@ -1643,21 +1724,21 @@ function SelectOrganizationContent() {
                           value={editPrimaryColor}
                           onChange={(event) => setEditPrimaryColor(event.target.value)}
                           className="border-white/10 bg-slate-900/60 text-white"
-                          placeholder="Primary color, например #D7FF00"
+                          placeholder="Основной цвет, например #D7FF00"
                         />
                       </div>
                       <Input
                         value={editLogoUrl}
                         onChange={(event) => setEditLogoUrl(event.target.value)}
                         className="border-white/10 bg-slate-900/60 text-white"
-                        placeholder="URL логотипа, если нужен branding"
+                        placeholder="URL логотипа, если нужен брендинг"
                       />
                       <div className="grid gap-3 sm:grid-cols-2">
                         <Input
                           value={editTimezone}
                           onChange={(event) => setEditTimezone(event.target.value)}
                           className="border-white/10 bg-slate-900/60 text-white"
-                          placeholder="Timezone, например Asia/Qyzylorda"
+                          placeholder="Часовой пояс, например Asia/Qyzylorda"
                         />
                         <Input
                           value={editCurrency}
@@ -1671,13 +1752,13 @@ function SelectOrganizationContent() {
                           value={editSupportEmail}
                           onChange={(event) => setEditSupportEmail(event.target.value)}
                           className="border-white/10 bg-slate-900/60 text-white"
-                          placeholder="Support email"
+                          placeholder="Email поддержки"
                         />
                         <Input
                           value={editSupportPhone}
                           onChange={(event) => setEditSupportPhone(event.target.value)}
                           className="border-white/10 bg-slate-900/60 text-white"
-                          placeholder="Support phone"
+                          placeholder="Телефон поддержки"
                         />
                       </div>
 
@@ -1694,10 +1775,10 @@ function SelectOrganizationContent() {
                             onChange={(event) => setEditOrganizationStatus(event.target.value)}
                             className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
                           >
-                            <option value="active">active</option>
-                            <option value="trial">trial</option>
-                            <option value="suspended">suspended</option>
-                            <option value="archived">archived</option>
+                            <option value="active">Активна</option>
+                            <option value="trial">Тестовый режим</option>
+                            <option value="suspended">Приостановлена</option>
+                            <option value="archived">В архиве</option>
                           </select>
                           <select
                             value={editPlanCode}
@@ -1706,7 +1787,7 @@ function SelectOrganizationContent() {
                           >
                             {availablePlanOptions.map((plan) => (
                               <option key={plan.code} value={plan.code}>
-                                {plan.name} {plan.priceMonthly ? `• ${plan.priceMonthly} ${plan.currency}/мес` : ''}
+                                {formatPlanName(plan)} {plan.priceMonthly ? `• ${plan.priceMonthly} ${plan.currency}/мес` : ''}
                               </option>
                             ))}
                           </select>
@@ -1716,20 +1797,20 @@ function SelectOrganizationContent() {
                               onChange={(event) => setEditSubscriptionStatus(event.target.value)}
                               className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
                             >
-                              <option value="trialing">trialing</option>
-                              <option value="active">active</option>
-                              <option value="past_due">past_due</option>
-                              <option value="canceled">canceled</option>
-                              <option value="expired">expired</option>
+                              <option value="trialing">Пробный период</option>
+                              <option value="active">Активна</option>
+                              <option value="past_due">Просрочена</option>
+                              <option value="canceled">Отменена</option>
+                              <option value="expired">Истекла</option>
                             </select>
                             <select
                               value={editBillingPeriod}
                               onChange={(event) => setEditBillingPeriod(event.target.value)}
                               className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
                             >
-                              <option value="monthly">monthly</option>
-                              <option value="yearly">yearly</option>
-                              <option value="custom">custom</option>
+                              <option value="monthly">Ежемесячно</option>
+                              <option value="yearly">Ежегодно</option>
+                              <option value="custom">Особый период</option>
                             </select>
                           </div>
                           <div className="grid gap-3 sm:grid-cols-2">
@@ -1751,7 +1832,7 @@ function SelectOrganizationContent() {
                         </>
                       ) : (
                         <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-300">
-                          Тариф и статус подписки сейчас управляются только из super-admin контура.
+                          Тариф и статус подписки сейчас управляются только из контура супер-админа.
                         </div>
                       )}
 
@@ -1828,7 +1909,7 @@ function SelectOrganizationContent() {
                         </form>
                       ) : (
                         <div className="mb-4 rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-300">
-                          Приглашать участников сейчас может только владелец организации или super-admin.
+                          Приглашать участников сейчас может только владелец организации или супер-админ.
                         </div>
                       )}
 
@@ -1844,15 +1925,15 @@ function SelectOrganizationContent() {
                                   <div className="truncate text-xs text-slate-500">{member.email || 'Без email'}</div>
                                 </div>
                                 <div className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] uppercase tracking-[0.16em] text-slate-300">
-                                  {member.role}
+                                  {formatAccessRole(member.role)}
                                 </div>
                               </div>
                               <div className="mt-3 flex flex-wrap gap-2">
                                 <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
-                                  Статус: {member.status}
+                                  Статус: {formatSubscriptionStatus(member.status)}
                                 </span>
                                 <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-slate-300">
-                                  Аккаунт: {member.accountState}
+                                  Аккаунт: {formatAccountState(member.accountState)}
                                 </span>
                               </div>
                             </div>
@@ -1904,9 +1985,9 @@ function SelectOrganizationContent() {
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-sm font-semibold text-white">{plan.name}</span>
+                                    <span className="text-sm font-semibold text-white">{formatPlanName(plan)}</span>
                                     <Badge variant="outline" className="border-white/10 text-slate-300">
-                                      {plan.status}
+                                      {formatPlanEditorStatus(plan.status)}
                                     </Badge>
                                   </div>
                                   <div className="mt-1 text-xs text-slate-400">{plan.code}</div>
@@ -1945,7 +2026,7 @@ function SelectOrganizationContent() {
                               {planEditor.id ? `Редактирование тарифа ${planEditor.name || ''}` : 'Создание нового тарифа'}
                             </div>
                             <div className="text-xs text-slate-400">
-                              Feature-бандлы здесь напрямую влияют на доступ к страницам в системе.
+                              Наборы функций здесь напрямую влияют на доступ к страницам в системе.
                             </div>
                           </div>
                           {planEditor.id ? (
@@ -1971,7 +2052,7 @@ function SelectOrganizationContent() {
                               }))
                             }
                             className="border-white/10 bg-slate-900/60 text-white"
-                            placeholder="plan-code"
+                            placeholder="код-тарифа"
                           />
                         </div>
 
@@ -2006,8 +2087,8 @@ function SelectOrganizationContent() {
                             onChange={(event) => setPlanEditor((current) => ({ ...current, status: event.target.value }))}
                             className="h-10 rounded-md border border-white/10 bg-slate-900/60 px-3 text-sm text-white outline-none"
                           >
-                            <option value="active">active</option>
-                            <option value="archived">archived</option>
+                            <option value="active">Активный</option>
+                            <option value="archived">Архивный</option>
                           </select>
                         </div>
 
@@ -2096,7 +2177,7 @@ function SelectOrganizationContent() {
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <h2 className="text-base font-semibold text-white">Создать новую организацию</h2>
-                            <Badge className="bg-violet-500/15 text-violet-100 hover:bg-violet-500/15">Smart onboarding</Badge>
+                            <Badge className="bg-violet-500/15 text-violet-100 hover:bg-violet-500/15">Умный запуск</Badge>
                           </div>
                           <p className="text-sm text-slate-400">Новый клиент, новый проект или отдельный бизнес-контур с подсказкой по тарифу и первому запуску.</p>
                         </div>
@@ -2152,13 +2233,13 @@ function SelectOrganizationContent() {
                                     />
                                   </div>
                                   <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-xs text-slate-400">
-                                    Tenant URL и доступы будут строиться вокруг slug: <span className="font-mono text-slate-200">{organizationSlug || 'company-slug'}</span>
+                                    Адрес организации и доступы будут строиться вокруг slug: <span className="font-mono text-slate-200">{organizationSlug || 'company-slug'}</span>
                                   </div>
                                   <Input
                                     value={organizationTrialDays}
                                     onChange={(event) => setOrganizationTrialDays(event.target.value)}
                                     className="border-white/10 bg-slate-900/60 text-white"
-                                    placeholder="Trial days, например 14"
+                                    placeholder="Дней пробного периода, например 14"
                                   />
                                 </div>
                               </div>
@@ -2267,7 +2348,7 @@ function SelectOrganizationContent() {
                                   <div>
                                     <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Рекомендация</div>
                                     <div className="mt-2 text-xl font-semibold text-white">
-                                      {recommendedCreatePlan?.name || organizationPlanCode}
+                                      {formatPlanName(recommendedCreatePlan || null) || organizationPlanCode}
                                     </div>
                                   </div>
                                   <Sparkles className="h-5 w-5 text-[#d7ff00]" />
@@ -2323,13 +2404,13 @@ function SelectOrganizationContent() {
                                         <div className="flex items-start justify-between gap-3">
                                           <div>
                                             <div className="flex flex-wrap items-center gap-2">
-                                              <span className="text-base font-semibold text-white">{plan.name}</span>
+                                              <span className="text-base font-semibold text-white">{formatPlanName(plan)}</span>
                                               {isRecommended ? (
                                                 <Badge className="bg-[#d7ff00]/15 text-[#f3ff9d] hover:bg-[#d7ff00]/15">Рекомендуем</Badge>
                                               ) : null}
                                             </div>
                                             <div className="mt-1 text-xs text-slate-400">
-                                              {plan.description || 'Тариф для этого tenant-контекста.'}
+                                              {plan.description || 'Тариф для этого клиентского контура.'}
                                             </div>
                                           </div>
                                           <div className="text-right text-xs text-slate-400">
@@ -2362,7 +2443,7 @@ function SelectOrganizationContent() {
                                 <div className="text-sm font-medium text-white">Что будет создано</div>
                                 <div className="mt-3 space-y-3 text-sm text-slate-300">
                                   <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
-                                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Organization</div>
+                                    <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Организация</div>
                                     <div className="mt-1 font-medium text-white">{organizationName || 'Название появится здесь'}</div>
                                     <div className="text-xs text-slate-500">slug: {organizationSlug || 'company-slug'}</div>
                                   </div>
@@ -2373,10 +2454,10 @@ function SelectOrganizationContent() {
                                   <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
                                     <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Старт подписки</div>
                                     <div className="mt-1 font-medium text-white">
-                                      Trial на {Number(organizationTrialDays) || 14} дней
+                                      Пробный период на {Number(organizationTrialDays) || 14} дней
                                     </div>
                                     <div className="text-xs text-slate-500">
-                                      После создания сразу появится billing history и дедлайн по активации.
+                                      После создания сразу появится история биллинга и дедлайн по активации.
                                     </div>
                                   </div>
                                   <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
@@ -2389,7 +2470,7 @@ function SelectOrganizationContent() {
                                           </span>
                                         ))
                                       ) : (
-                                        <span className="text-xs text-slate-500">У выбранного плана пока нет явно заданных feature-флагов.</span>
+                                        <span className="text-xs text-slate-500">У выбранного плана пока нет явно заданных флагов возможностей.</span>
                                       )}
                                     </div>
                                   </div>
@@ -2414,7 +2495,7 @@ function SelectOrganizationContent() {
 
                                 <Button type="submit" disabled={creatingOrganization} className="mt-4 w-full">
                                   {creatingOrganization ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                                  Создать организацию и открыть tenant
+                                  Создать организацию и открыть проект
                                 </Button>
                               </div>
                             </div>
@@ -2457,7 +2538,7 @@ function SelectOrganizationContent() {
                           >
                             {availablePlanOptions.map((plan) => (
                               <option key={plan.code} value={plan.code}>
-                                {plan.name}
+                                {formatPlanName(plan)}
                               </option>
                             ))}
                           </select>
@@ -2465,7 +2546,7 @@ function SelectOrganizationContent() {
                             value={organizationTrialDays}
                             onChange={(event) => setOrganizationTrialDays(event.target.value)}
                             className="border-white/10 bg-slate-900/60 text-white"
-                            placeholder="Trial days"
+                            placeholder="Дней пробного периода"
                           />
                           <Input
                             value={firstCompanyName}
