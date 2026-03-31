@@ -15,6 +15,7 @@ import {
   type OrganizationSubscription,
   type OrganizationAccess,
 } from '@/lib/server/organizations'
+import { resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
 
 function parseCookies(header: string | null): Map<string, string> {
   const map = new Map<string, string>()
@@ -112,15 +113,26 @@ export async function getRequestAccessContext(request: Request): Promise<
     staffMember,
     operatorId: String((operatorAuth as any)?.operator_id || '') || null,
   })
-  const requestedOrganizationId = cookieMap.get(ACTIVE_ORGANIZATION_COOKIE) || null
+  const hostOrganization = await resolveOrganizationByHost(request.headers.get('host'))
+  const requestedOrganizationId = hostOrganization?.id || cookieMap.get(ACTIVE_ORGANIZATION_COOKIE) || null
   const activeOrganization = selectActiveOrganization({
     organizations: organizationAccess.organizations,
     requestedOrganizationId,
   })
+  const hostOrganizationLocked = Boolean(hostOrganization?.id)
+  const hostOrganizationAccessible =
+    !hostOrganizationLocked || isSuperAdmin || organizationAccess.organizations.some((item) => item.id === hostOrganization?.id)
+
+  if (!hostOrganizationAccessible) {
+    return {
+      response: NextResponse.json({ error: 'forbidden' }, { status: 403 }),
+    }
+  }
+
   const activeSubscription = await resolveActiveOrganizationSubscription({
     activeOrganizationId: activeOrganization?.id || null,
   })
-  const organizationHubRequired = isSuperAdmin && organizationAccess.organizations.length > 0
+  const organizationHubRequired = isSuperAdmin && organizationAccess.organizations.length > 0 && !hostOrganizationLocked
   const organizationSelectionRequired =
     organizationHubRequired &&
     (!requestedOrganizationId || !organizationAccess.organizations.some((item) => item.id === requestedOrganizationId))

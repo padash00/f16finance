@@ -12,6 +12,7 @@ import {
 } from '@/lib/core/access'
 import { APEX_MAINTENANCE_MODE, SITE_URL } from '@/lib/core/site'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
+import { resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
 
 const AUTH_SELF_SERVICE_PATHS = ['/forgot-password', '/reset-password', '/set-password', '/auth/callback', '/auth/complete'] as const
 const ACTIVE_ORGANIZATION_COOKIE = 'oc_org'
@@ -267,6 +268,8 @@ export async function proxy(request: NextRequest) {
 
   const isStaff = isSuperAdmin || !!staffMember
   const isOperator = !!operatorAuth
+  const hostOrganization = await resolveOrganizationByHost(request.headers.get('host'))
+  const hostOrganizationId = hostOrganization?.id || null
   const organizations = await resolveAccessibleOrganizations({
     supabase,
     isSuperAdmin,
@@ -274,19 +277,29 @@ export async function proxy(request: NextRequest) {
     operatorAuth,
     userEmail: user.email?.trim().toLowerCase() || null,
   })
+  const hasHostOrganization = hostOrganizationId
+    ? isSuperAdmin || organizations.some((organization) => organization.id === hostOrganizationId)
+    : false
+  if (hostOrganizationId && !hasHostOrganization) {
+    url.pathname = '/login'
+    url.search = ''
+    return clearSessionCookies(request, NextResponse.redirect(url))
+  }
   const requestedOrganizationId = request.cookies.get(ACTIVE_ORGANIZATION_COOKIE)?.value || null
   const hasRequestedOrganization = requestedOrganizationId
     ? organizations.some((organization) => organization.id === requestedOrganizationId)
     : false
   const defaultOrganizationId =
     organizations.find((organization) => organization.isDefault)?.id || organizations[0]?.id || null
-  const activeOrganizationId = hasRequestedOrganization
-    ? requestedOrganizationId
-    : !isSuperAdmin
-      ? defaultOrganizationId
-      : null
-  const needsOrganizationSelection = isSuperAdmin && organizations.length > 0 && !hasRequestedOrganization
-  const organizationHubRequired = isSuperAdmin && organizations.length > 0
+  const activeOrganizationId = hostOrganizationId
+    ? hostOrganizationId
+    : hasRequestedOrganization
+      ? requestedOrganizationId
+      : !isSuperAdmin
+        ? defaultOrganizationId
+        : null
+  const needsOrganizationSelection = isSuperAdmin && organizations.length > 0 && !hostOrganizationId && !hasRequestedOrganization
+  const organizationHubRequired = isSuperAdmin && organizations.length > 0 && !hostOrganizationId
   const subscriptionFeatures = isSuperAdmin
     ? null
     : await resolveActiveSubscriptionFeatures({
@@ -316,7 +329,7 @@ export async function proxy(request: NextRequest) {
   const requestedTarget = `${requestedPath}${url.search}`
 
   if (requestedPath === '/select-organization') {
-    if (!isSuperAdmin) {
+    if (!isSuperAdmin || hostOrganizationId) {
       url.pathname = defaultPath
       url.search = ''
       return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
