@@ -406,7 +406,7 @@ export async function resolveCompanyScope(params: {
 }) {
   const { activeOrganizationId, requestedCompanyId, isSuperAdmin } = params
 
-  if (isSuperAdmin) {
+  if (isSuperAdmin && !activeOrganizationId) {
     return {
       allowedCompanyIds: requestedCompanyId ? [requestedCompanyId] : null,
       organizationId: activeOrganizationId || null,
@@ -452,7 +452,7 @@ export async function listOrganizationCompanyIds(params: {
   isSuperAdmin?: boolean
 }) {
   const { activeOrganizationId, isSuperAdmin } = params
-  if (isSuperAdmin) return null
+  if (isSuperAdmin && !activeOrganizationId) return null
   if (!activeOrganizationId) {
     throw new Error('active-organization-required')
   }
@@ -476,7 +476,7 @@ export async function listOrganizationCompanyCodes(params: {
   isSuperAdmin?: boolean
 }) {
   const { activeOrganizationId, isSuperAdmin } = params
-  if (isSuperAdmin) return null
+  if (isSuperAdmin && !activeOrganizationId) return null
   if (!activeOrganizationId) {
     throw new Error('active-organization-required')
   }
@@ -503,7 +503,7 @@ export async function listOrganizationOperatorIds(params: {
   isSuperAdmin?: boolean
 }) {
   const { activeOrganizationId, isSuperAdmin } = params
-  if (isSuperAdmin) return null
+  if (isSuperAdmin && !activeOrganizationId) return null
   if (!activeOrganizationId) {
     throw new Error('active-organization-required')
   }
@@ -538,7 +538,7 @@ export async function listOrganizationStaffIds(params: {
   isSuperAdmin?: boolean
 }) {
   const { activeOrganizationId, isSuperAdmin } = params
-  if (isSuperAdmin) return null
+  if (isSuperAdmin && !activeOrganizationId) return null
   if (!activeOrganizationId) {
     throw new Error('active-organization-required')
   }
@@ -564,7 +564,7 @@ export async function ensureOrganizationOperatorAccess(params: {
   operatorId: string
 }) {
   const { activeOrganizationId, isSuperAdmin, operatorId } = params
-  if (isSuperAdmin) return
+  if (isSuperAdmin && !activeOrganizationId) return
   const allowedOperatorIds = await listOrganizationOperatorIds({ activeOrganizationId, isSuperAdmin })
   if (!allowedOperatorIds?.includes(operatorId)) {
     throw new Error('forbidden-operator')
@@ -577,7 +577,7 @@ export async function ensureOrganizationStaffAccess(params: {
   staffId: string
 }) {
   const { activeOrganizationId, isSuperAdmin, staffId } = params
-  if (isSuperAdmin) return
+  if (isSuperAdmin && !activeOrganizationId) return
   const allowedStaffIds = await listOrganizationStaffIds({ activeOrganizationId, isSuperAdmin })
   if (!allowedStaffIds?.includes(staffId)) {
     throw new Error('forbidden-staff')

@@ -8,6 +8,14 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+function requireActiveOrganization(organizationId?: string | null) {
+  if (!organizationId) {
+    throw new Error('active-organization-required')
+  }
+
+  return organizationId
+}
+
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
@@ -17,12 +25,13 @@ export async function GET(req: Request) {
     if (!isSuperAdmin && staffRole !== 'owner' && staffRole !== 'manager') {
       return json({ error: 'forbidden' }, 403)
     }
+    const activeOrganizationId = requireActiveOrganization(access.activeOrganization?.id)
 
     const supabase = createAdminSupabaseClient()
     const url = new URL(req.url)
     const companyId = url.searchParams.get('company_id')
     const companyScope = await resolveCompanyScope({
-      activeOrganizationId: access.activeOrganization?.id || null,
+      activeOrganizationId,
       requestedCompanyId: companyId,
       isSuperAdmin: access.isSuperAdmin,
     })
@@ -56,6 +65,7 @@ export async function POST(req: Request) {
     if (!isSuperAdmin && staffRole !== 'owner' && staffRole !== 'manager') {
       return json({ error: 'forbidden' }, 403)
     }
+    const activeOrganizationId = requireActiveOrganization(access.activeOrganization?.id)
 
     const supabase = createAdminSupabaseClient()
     const body = (await req.json().catch(() => null)) as any
@@ -66,9 +76,12 @@ export async function POST(req: Request) {
       if (!name?.trim()) return json({ error: 'Название скидки обязательно' }, 400)
       if (!['percent', 'fixed', 'promo_code'].includes(type)) return json({ error: 'Неверный тип скидки' }, 400)
       if (typeof value !== 'number' || value < 0) return json({ error: 'Значение скидки обязательно' }, 400)
+      if (!company_id && !isSuperAdmin) {
+        return json({ error: 'company_id обязателен для скидки организации' }, 400)
+      }
       if (company_id) {
         await resolveCompanyScope({
-          activeOrganizationId: access.activeOrganization?.id || null,
+          activeOrganizationId,
           requestedCompanyId: company_id,
           isSuperAdmin: access.isSuperAdmin,
         })
@@ -107,9 +120,12 @@ export async function POST(req: Request) {
         .eq('id', discountId)
         .single()
       if (existingError || !existing) return json({ error: 'discount not found' }, 404)
+      if (!existing.company_id && !isSuperAdmin) {
+        return json({ error: 'global-discount-forbidden' }, 403)
+      }
       if (existing.company_id) {
         await resolveCompanyScope({
-          activeOrganizationId: access.activeOrganization?.id || null,
+          activeOrganizationId,
           requestedCompanyId: existing.company_id,
           isSuperAdmin: access.isSuperAdmin,
         })
@@ -150,9 +166,12 @@ export async function POST(req: Request) {
         .eq('id', discountId)
         .single()
       if (existingError || !existing) return json({ error: 'discount not found' }, 404)
+      if (!existing.company_id && !isSuperAdmin) {
+        return json({ error: 'global-discount-forbidden' }, 403)
+      }
       if (existing.company_id) {
         await resolveCompanyScope({
-          activeOrganizationId: access.activeOrganization?.id || null,
+          activeOrganizationId,
           requestedCompanyId: existing.company_id,
           isSuperAdmin: access.isSuperAdmin,
         })
@@ -170,9 +189,12 @@ export async function POST(req: Request) {
     if (body.action === 'validatePromoCode') {
       const { promo_code, company_id, order_amount } = body
       if (!promo_code?.trim()) return json({ error: 'promo_code required' }, 400)
+      if (!company_id && !isSuperAdmin) {
+        return json({ error: 'company_id required' }, 400)
+      }
       if (company_id) {
         await resolveCompanyScope({
-          activeOrganizationId: access.activeOrganization?.id || null,
+          activeOrganizationId,
           requestedCompanyId: company_id,
           isSuperAdmin: access.isSuperAdmin,
         })

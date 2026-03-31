@@ -116,11 +116,20 @@ function canManageProfitability(access: {
   return access.isSuperAdmin || access.staffRole === 'owner'
 }
 
+function requireActiveOrganization(organizationId?: string | null) {
+  if (!organizationId) {
+    throw new Error('active-organization-required')
+  }
+
+  return organizationId
+}
+
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
     if (!canManageProfitability(access)) return json({ error: 'forbidden' }, 403)
+    const activeOrganizationId = requireActiveOrganization(access.activeOrganization?.id)
 
     const url = new URL(req.url)
     const from = normalizeMonth(url.searchParams.get('from'))
@@ -129,10 +138,7 @@ export async function GET(req: Request) {
 
     const supabase = createAdminSupabaseClient()
     let query = supabase.from('monthly_profitability_inputs').select('*').order('month', { ascending: true })
-
-    if (access.activeOrganization?.id && !access.isSuperAdmin) {
-      query = query.eq('organization_id', access.activeOrganization.id)
-    }
+    query = query.eq('organization_id', activeOrganizationId)
 
     if (from) query = query.gte('month', from)
     if (to) query = query.lte('month', to)
@@ -149,7 +155,7 @@ export async function GET(req: Request) {
     const previousDate = prevDayISO(dateFrom)
 
     const allowedCompanyIds = await listOrganizationCompanyIds({
-      activeOrganizationId: access.activeOrganization?.id,
+      activeOrganizationId,
       isSuperAdmin: access.isSuperAdmin,
     })
 
@@ -248,6 +254,7 @@ export async function POST(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
     if (!canManageProfitability(access)) return json({ error: 'forbidden' }, 403)
+    const activeOrganizationId = requireActiveOrganization(access.activeOrganization?.id)
 
     const body = (await req.json().catch(() => null)) as MutationBody | null
     const month = normalizeMonth(body?.month)
@@ -261,7 +268,7 @@ export async function POST(req: Request) {
       .upsert(
         [
           {
-            organization_id: access.activeOrganization?.id || null,
+            organization_id: activeOrganizationId,
             month,
             ...payload,
             updated_at: new Date().toISOString(),

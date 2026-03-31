@@ -272,6 +272,11 @@
 - `app/api/admin/settings/route.ts` теперь требует активную организацию и не позволяет супер-админу создавать или мутировать `companies`, `staff`, `expense_categories` вне выбранного tenant-контекста.
 - `app/api/pos/bootstrap/route.ts` больше не отдаёт глобальные скидки и глобальный `loyalty_config` арендаторам без доступных компаний; пустой tenant scope больше не тянет общие данные кассы.
 - `proxy.ts` теперь отфильтровывает `suspended` организации уже на edge-слое для staff/operator membership и tenant-host доступа.
+- `lib/server/organizations.ts` теперь уважает выбранную активную организацию даже для super-admin: company/operator/staff scope больше не автоматически глобальный, если выбран tenant-контекст.
+- `app/api/admin/profitability/route.ts` переведён в строгий org-context: без активной организации не читает и не пишет profitability inputs, а записи больше не создаются с `organization_id = null`.
+- `app/api/admin/discounts/route.ts` перестал создавать и валидировать глобальные клиентские скидки без `company_id`; для не-super-admin скидка и промокод теперь всегда идут через tenant/company scope.
+- `app/api/admin/staff/route.ts` теперь требует активную организацию для всех мутаций и всегда создаёт/синхронизирует `organization_members`, чтобы staff не появлялся в системе без org-привязки.
+- Добавлена миграция `supabase/migrations/20260401_saas_core_rls.sql` с RLS для `organizations`, `organization_members`, `organization_subscriptions`, `tenant_domains`, `subscription_billing_events`.
 
 Проверка:
 - `npm run build` ✅
