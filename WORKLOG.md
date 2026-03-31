@@ -43,6 +43,18 @@
   - `salary_week/payment`
 - Закрыт старый опасный policy на `arena_tech_logs`, где раньше был `using (true)`.
 - Admin-only таблицы (`app_settings`, `report_snapshots`, `audit_log`, `notification_log`, `telegram_chat_history`) переведены под RLS, чтобы они больше не торчали наружу через public API без защиты.
+- После получения конкретного списка из Supabase Security Advisor добавлена ещё одна catch-up миграция под legacy-таблицы:
+  - `incomes`
+  - `expense_categories`
+  - `operators`, `operator_profiles`, `operator_*`
+  - `salary_calculation_*`
+  - `point_projects`, `point_project_companies`, `arena_map_decorations`
+  - `tasks/projects`-suite
+  - и старые public-таблицы, которые есть в боевой БД, но не все описаны в текущих миграциях репозитория
+- В этой миграции:
+  - на все таблицы из Security Advisor включается `RLS`
+  - для таблиц с понятной tenant-связью автоматически создаются `select` policies
+  - для legacy-таблиц с неясной схемой включается `RLS` без открывающих policy, то есть они закрываются deny-by-default до ручного разбора
 
 Важно:
 - После применения миграции нужно повторно проверить Security Advisor в Supabase.
