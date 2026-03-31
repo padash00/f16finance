@@ -242,9 +242,12 @@ export async function proxy(request: NextRequest) {
   const hostOrganization = await resolveOrganizationByHost(request.headers.get('host'))
   const hostOrganizationId = hostOrganization?.id || null
 
+  // Marketing/landing paths that should not be visible on tenant subdomains
+  const PLATFORM_ONLY_PATHS = ['/', '/club-management-system', '/operator-salary-system', '/profit-and-loss-ebitda', '/point-terminal']
+
   if (!user) {
-    // On a tenant subdomain unauthenticated users should always see login, not the platform marketing page
-    if (hostOrganizationId && isPublicPath(url.pathname)) {
+    // On a tenant subdomain redirect platform-only marketing pages to login
+    if (hostOrganizationId && PLATFORM_ONLY_PATHS.includes(url.pathname)) {
       url.pathname = '/login'
       return NextResponse.redirect(url)
     }
