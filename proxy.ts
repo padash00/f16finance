@@ -225,19 +225,25 @@ export async function proxy(request: NextRequest) {
   const hasRequestedOrganization = requestedOrganizationId
     ? organizations.some((organization) => organization.id === requestedOrganizationId)
     : false
-  const cookieOrganizationId = hasRequestedOrganization ? requestedOrganizationId : null
-  const needsOrganizationSelection = organizations.length > 0 && !hasRequestedOrganization
-  const organizationHubRequired = organizations.length > 0
+  const defaultOrganizationId =
+    organizations.find((organization) => organization.isDefault)?.id || organizations[0]?.id || null
+  const activeOrganizationId = hasRequestedOrganization
+    ? requestedOrganizationId
+    : !isSuperAdmin
+      ? defaultOrganizationId
+      : null
+  const needsOrganizationSelection = isSuperAdmin && organizations.length > 0 && !hasRequestedOrganization
+  const organizationHubRequired = isSuperAdmin && organizations.length > 0
   const subscriptionFeatures = isSuperAdmin
     ? null
     : await resolveActiveSubscriptionFeatures({
         supabase,
-        organizationId: cookieOrganizationId,
+        organizationId: activeOrganizationId,
       })
   const defaultPath = getDefaultAppPath({ isSuperAdmin, isStaff, isOperator, staffRole })
 
   if (AUTH_SELF_SERVICE_PATHS.some((path) => url.pathname.startsWith(path))) {
-    return setActiveOrganizationCookie(response, cookieOrganizationId)
+    return setActiveOrganizationCookie(response, activeOrganizationId)
   }
 
   if (url.pathname.startsWith('/login') || url.pathname.startsWith('/operator-login')) {
@@ -247,17 +253,22 @@ export async function proxy(request: NextRequest) {
     }
     // Guard: if defaultPath resolves back to /login (unresolved role), don't redirect — prevents infinite loop
     if (defaultPath === '/login' || defaultPath.startsWith('/login')) {
-      return setActiveOrganizationCookie(response, cookieOrganizationId)
+      return setActiveOrganizationCookie(response, activeOrganizationId)
     }
     url.pathname = defaultPath
-    return setActiveOrganizationCookie(NextResponse.redirect(url), cookieOrganizationId)
+    return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
   }
 
   const requestedPath = url.pathname
   const requestedTarget = `${requestedPath}${url.search}`
 
   if (requestedPath === '/select-organization') {
-    return setActiveOrganizationCookie(response, cookieOrganizationId)
+    if (!isSuperAdmin) {
+      url.pathname = defaultPath
+      url.search = ''
+      return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
+    }
+    return setActiveOrganizationCookie(response, activeOrganizationId)
   }
 
   if (!organizations.length) {
@@ -285,7 +296,7 @@ export async function proxy(request: NextRequest) {
 
   if (requestedPath === '/') {
     url.pathname = organizationHubRequired ? '/select-organization' : defaultPath
-    return setActiveOrganizationCookie(NextResponse.redirect(url), cookieOrganizationId)
+    return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
   }
 
   if (!hasAccess) {
@@ -298,17 +309,17 @@ export async function proxy(request: NextRequest) {
       } else {
         url.search = ''
       }
-      return setActiveOrganizationCookie(NextResponse.redirect(url), cookieOrganizationId)
+      return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
     }
-    return setActiveOrganizationCookie(response, cookieOrganizationId)
+    return setActiveOrganizationCookie(response, activeOrganizationId)
   }
 
   if (requestedPath.startsWith('/unauthorized') && hasAccess) {
     url.pathname = defaultPath
-    return setActiveOrganizationCookie(NextResponse.redirect(url), cookieOrganizationId)
+    return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
   }
 
-  return setActiveOrganizationCookie(response, cookieOrganizationId)
+  return setActiveOrganizationCookie(response, activeOrganizationId)
 }
 
 export const config = {

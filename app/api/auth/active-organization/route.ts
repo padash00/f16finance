@@ -10,6 +10,9 @@ function json(data: unknown, status = 200) {
 export async function POST(req: Request) {
   const access = await getRequestAccessContext(req)
   if ('response' in access) return access.response
+  if (!access.isSuperAdmin) {
+    return json({ error: 'forbidden' }, 403)
+  }
 
   const body = await req.json().catch(() => null) as { organizationId?: string | null } | null
   const organizationId = String(body?.organizationId || '').trim()

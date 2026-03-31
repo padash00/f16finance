@@ -120,9 +120,9 @@ export async function getRequestAccessContext(request: Request): Promise<
   const activeSubscription = await resolveActiveOrganizationSubscription({
     activeOrganizationId: activeOrganization?.id || null,
   })
-  const organizationHubRequired = organizationAccess.organizations.length > 0
+  const organizationHubRequired = isSuperAdmin && organizationAccess.organizations.length > 0
   const organizationSelectionRequired =
-    organizationAccess.organizations.length > 0 &&
+    organizationHubRequired &&
     (!requestedOrganizationId || !organizationAccess.organizations.some((item) => item.id === requestedOrganizationId))
 
   if (isSuperAdmin) {

@@ -602,6 +602,31 @@ function OrganizationSwitcher({
   )
 }
 
+function ActiveOrganizationCard({
+  activeOrganization,
+}: {
+  activeOrganization: SessionRoleInfo['activeOrganization']
+}) {
+  if (!activeOrganization) return null
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-3">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10">
+          <Building2 className="h-4 w-4 text-emerald-300" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Ваша организация</p>
+          <p className="truncate text-sm font-semibold text-white">{activeOrganization.name}</p>
+          <p className="truncate text-xs text-slate-500">
+            {activeOrganization.slug} · {activeOrganization.accessRole}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SearchBar({
   value,
   onChange,
@@ -866,12 +891,16 @@ export function Sidebar() {
         className="flex-1 overflow-y-auto px-4 py-4"
       >
         <div className="sticky top-0 z-10 -mx-1 bg-gradient-to-b from-slate-950 via-slate-950/95 to-transparent px-1 pb-4 pt-1 backdrop-blur-xl">
-          <OrganizationSwitcher
-            organizations={organizations}
-            activeOrganization={activeOrganization}
-            onSelect={handleSwitchOrganization}
-            disabled={isSwitchingOrganization}
-          />
+          {isSuperAdmin ? (
+            <OrganizationSwitcher
+              organizations={organizations}
+              activeOrganization={activeOrganization}
+              onSelect={handleSwitchOrganization}
+              disabled={isSwitchingOrganization}
+            />
+          ) : (
+            <ActiveOrganizationCard activeOrganization={activeOrganization} />
+          )}
           <div className="mt-3">
             <SearchBar value={searchQuery} onChange={setSearchQuery} inputRef={searchInputRef} />
           </div>
