@@ -17,6 +17,37 @@
 
 ## 2026-04-01
 
+### Supabase security hardening после alert по public tables
+
+Сделано:
+- Добавлена отдельная bulk-RLS миграция для чувствительных и tenant-scoped таблиц:
+  - `companies`
+  - `customers`
+  - `discounts`
+  - `loyalty_config`
+  - `point_devices`
+  - `point_products`
+  - `point_debt_items`
+  - `inventory_*`
+  - `point_sales` / `point_returns`
+  - `shift_*`
+  - `operator_salary_*`
+  - `arena_tech_logs`
+- Добавлены SQL helper-функции для RLS-проверок через:
+  - `organization`
+  - `company`
+  - `inventory_location`
+  - `point_device`
+  - `point_sale`
+  - `point_return`
+  - `salary_week/payment`
+- Закрыт старый опасный policy на `arena_tech_logs`, где раньше был `using (true)`.
+- Admin-only таблицы (`app_settings`, `report_snapshots`, `audit_log`, `notification_log`, `telegram_chat_history`) переведены под RLS, чтобы они больше не торчали наружу через public API без защиты.
+
+Важно:
+- После применения миграции нужно повторно проверить Security Advisor в Supabase.
+- Если Advisor после этого всё ещё ругнётся, следующим этапом надо отдельно пройти legacy-таблицы, которые были созданы до текущих миграций и не описаны в repo полностью.
+
 ### Multi-tenant изоляция — финальный проход
 
 Сделано:
