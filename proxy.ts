@@ -257,7 +257,7 @@ export async function proxy(request: NextRequest) {
 
   if (!user) {
     // On a tenant subdomain redirect platform-only marketing pages to login
-    if (isTenantSubdomain && PLATFORM_ONLY_PATHS.includes(url.pathname)) {
+    if (isTenantSubdomain && PLATFORM_ONLY_PATHS.includes(url.pathname) && url.pathname !== '/') {
       url.pathname = '/login'
       url.search = ''
       return NextResponse.redirect(url)
