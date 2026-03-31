@@ -63,7 +63,7 @@ function CompleteContent() {
       const json = await response?.json().catch(() => null)
 
       if (active && response?.ok) {
-        if (json?.organizationSelectionRequired) {
+        if (json?.organizationHubRequired || json?.organizationSelectionRequired) {
           setDefaultPath('/select-organization')
         } else if (json?.defaultPath) {
           setDefaultPath(String(json.defaultPath))

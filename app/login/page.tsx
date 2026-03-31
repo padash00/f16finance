@@ -59,7 +59,7 @@ export default function UnifiedLoginPage() {
   }, [mode])
 
   const resolvePostLoginPath = (payload: any) => {
-    if (payload?.organizationSelectionRequired) {
+    if (payload?.organizationHubRequired || payload?.organizationSelectionRequired) {
       return '/select-organization'
     }
 

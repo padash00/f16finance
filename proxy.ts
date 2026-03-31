@@ -198,13 +198,9 @@ export async function proxy(request: NextRequest) {
   const hasRequestedOrganization = requestedOrganizationId
     ? organizations.some((organization) => organization.id === requestedOrganizationId)
     : false
-  const cookieOrganizationId =
-    organizations.length === 1
-      ? organizations[0].id
-      : hasRequestedOrganization
-        ? requestedOrganizationId
-        : null
-  const needsOrganizationSelection = organizations.length > 1 && !hasRequestedOrganization
+  const cookieOrganizationId = hasRequestedOrganization ? requestedOrganizationId : null
+  const needsOrganizationSelection = organizations.length > 0 && !hasRequestedOrganization
+  const organizationHubRequired = organizations.length > 0
   const defaultPath = getDefaultAppPath({ isSuperAdmin, isStaff, isOperator, staffRole })
 
   if (AUTH_SELF_SERVICE_PATHS.some((path) => url.pathname.startsWith(path))) {
@@ -212,7 +208,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (url.pathname.startsWith('/login') || url.pathname.startsWith('/operator-login')) {
-    if (needsOrganizationSelection) {
+    if (organizationHubRequired) {
       url.pathname = '/select-organization'
       return NextResponse.redirect(url)
     }
@@ -227,10 +223,6 @@ export async function proxy(request: NextRequest) {
   const requestedPath = url.pathname
 
   if (requestedPath === '/select-organization') {
-    if (organizations.length === 1 && cookieOrganizationId) {
-      url.pathname = defaultPath
-      return setActiveOrganizationCookie(NextResponse.redirect(url), cookieOrganizationId)
-    }
     return setActiveOrganizationCookie(response, cookieOrganizationId)
   }
 
@@ -255,7 +247,7 @@ export async function proxy(request: NextRequest) {
   })
 
   if (requestedPath === '/') {
-    url.pathname = defaultPath
+    url.pathname = organizationHubRequired ? '/select-organization' : defaultPath
     return setActiveOrganizationCookie(NextResponse.redirect(url), cookieOrganizationId)
   }
 

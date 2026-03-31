@@ -78,6 +78,7 @@ export async function getRequestAccessContext(request: Request): Promise<
         role?: string | null
       } | null
       requestedOrganizationId: string | null
+      organizationHubRequired: boolean
       organizationSelectionRequired: boolean
       organizations: OrganizationAccess[]
       activeOrganization: OrganizationAccess | null
@@ -113,8 +114,9 @@ export async function getRequestAccessContext(request: Request): Promise<
     organizations: organizationAccess.organizations,
     requestedOrganizationId,
   })
+  const organizationHubRequired = organizationAccess.organizations.length > 0
   const organizationSelectionRequired =
-    organizationAccess.organizations.length > 1 &&
+    organizationAccess.organizations.length > 0 &&
     (!requestedOrganizationId || !organizationAccess.organizations.some((item) => item.id === requestedOrganizationId))
 
   if (isSuperAdmin) {
@@ -126,6 +128,7 @@ export async function getRequestAccessContext(request: Request): Promise<
       staffRole: 'owner',
       operatorAuth: null,
       requestedOrganizationId,
+      organizationHubRequired,
       organizationSelectionRequired,
       organizations: organizationAccess.organizations,
       activeOrganization,
@@ -153,6 +156,7 @@ export async function getRequestAccessContext(request: Request): Promise<
           }
         : null,
       requestedOrganizationId,
+      organizationHubRequired,
       organizationSelectionRequired,
       organizations: organizationAccess.organizations,
       activeOrganization,

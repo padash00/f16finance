@@ -36,6 +36,7 @@ export async function GET(req: Request) {
       operatorAuth,
       organizations,
       activeOrganization,
+      organizationHubRequired,
       organizationSelectionRequired,
     } = access
     const isOperator = !!operatorAuth
@@ -96,6 +97,7 @@ export async function GET(req: Request) {
             accessRole: activeOrganization.accessRole,
           }
         : null,
+      organizationHubRequired,
       organizationSelectionRequired,
       defaultPath: getDefaultAppPath({
         isSuperAdmin,

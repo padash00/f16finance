@@ -110,7 +110,7 @@ function ResetPasswordContent() {
 
         setDefaultPath(
           response?.ok
-            ? json?.organizationSelectionRequired
+            ? json?.organizationHubRequired || json?.organizationSelectionRequired
               ? '/select-organization'
               : json?.defaultPath
                 ? String(json.defaultPath)
