@@ -43,6 +43,12 @@ export async function GET(request: Request) {
     if (locationsError) throw locationsError
 
     const allowedLocationIds = (locations || []).map((l: any) => String(l.id))
+    const primaryCompanyId =
+      allowedCompanyIds && allowedCompanyIds.length > 0
+        ? String(allowedCompanyIds[0])
+        : access.isSuperAdmin
+          ? null
+          : null
 
     // Step 2: fetch everything else, including balances scoped to allowed locations
     const [
@@ -69,7 +75,9 @@ export async function GET(request: Request) {
             .from('inventory_balances')
             .select('item_id, location_id, quantity')
             .in('location_id', allowedLocationIds)
-        : supabase.from('inventory_balances').select('item_id, location_id, quantity'),
+        : access.isSuperAdmin
+          ? supabase.from('inventory_balances').select('item_id, location_id, quantity')
+          : Promise.resolve({ data: [] as any[], error: null } as const),
       allowedCompanyIds && allowedCompanyIds.length > 0
         ? supabase.from('customers').select('id, name, phone, card_number, loyalty_points, company_id').in('company_id', allowedCompanyIds).order('name')
         : access.isSuperAdmin
@@ -81,11 +89,17 @@ export async function GET(request: Request) {
             .select('id, name, type, value, promo_code, min_order_amount, valid_from, valid_to, company_id')
             .eq('is_active', true)
             .in('company_id', allowedCompanyIds)
-        : supabase
-            .from('discounts')
-            .select('id, name, type, value, promo_code, min_order_amount, valid_from, valid_to, company_id')
-            .eq('is_active', true),
-      supabase.from('loyalty_config').select('*').limit(1).maybeSingle(),
+        : access.isSuperAdmin
+          ? supabase
+              .from('discounts')
+              .select('id, name, type, value, promo_code, min_order_amount, valid_from, valid_to, company_id')
+              .eq('is_active', true)
+          : Promise.resolve({ data: [] as any[], error: null } as const),
+      primaryCompanyId
+        ? supabase.from('loyalty_config').select('*').eq('company_id', primaryCompanyId).maybeSingle()
+        : access.isSuperAdmin
+          ? supabase.from('loyalty_config').select('*').limit(1).maybeSingle()
+          : Promise.resolve({ data: null as any, error: null } as const),
     ])
 
     if (companiesError) throw companiesError

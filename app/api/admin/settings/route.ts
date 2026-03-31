@@ -73,6 +73,10 @@ export async function POST(req: Request) {
     const actorUserId = access.user?.id || null
     const activeOrgId = access.activeOrganization?.id || null
 
+    if (!activeOrgId) {
+      return badRequest('Сначала выберите организацию в platform dashboard.')
+    }
+
     if (body.entity === 'company') {
       if (body.action === 'create') {
         if (!body.payload.name?.trim()) return badRequest('Название компании обязательно')
@@ -107,6 +111,7 @@ export async function POST(req: Request) {
             show_in_structure: body.payload.show_in_structure !== false,
           })
           .eq('id', body.id)
+          .eq('organization_id', activeOrgId)
           .select('id,name,code,show_in_structure')
           .single()
         if (error) throw error
@@ -120,7 +125,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      const { error } = await supabase.from('companies').delete().eq('id', body.id)
+      const { error } = await supabase.from('companies').delete().eq('id', body.id).eq('organization_id', activeOrgId)
       if (error) throw error
       await writeAuditLog(supabase, {
         actorUserId,
@@ -167,6 +172,7 @@ export async function POST(req: Request) {
             role: body.payload.role?.trim() || 'operator',
           })
           .eq('id', body.id)
+          .eq('organization_id', activeOrgId)
           .select('id,full_name,email,role')
           .single()
         if (error) throw error
@@ -180,7 +186,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      const { error } = await supabase.from('staff').delete().eq('id', body.id)
+      const { error } = await supabase.from('staff').delete().eq('id', body.id).eq('organization_id', activeOrgId)
       if (error) throw error
       await writeAuditLog(supabase, {
         actorUserId,
@@ -225,6 +231,7 @@ export async function POST(req: Request) {
             accounting_group: body.payload.accounting_group || null,
           })
           .eq('id', body.id)
+          .eq('organization_id', activeOrgId)
           .select('id,name,monthly_budget,accounting_group')
           .single()
         if (error) throw error
@@ -238,7 +245,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      const { error } = await supabase.from('expense_categories').delete().eq('id', body.id)
+      const { error } = await supabase
+        .from('expense_categories')
+        .delete()
+        .eq('id', body.id)
+        .eq('organization_id', activeOrgId)
       if (error) throw error
       await writeAuditLog(supabase, {
         actorUserId,

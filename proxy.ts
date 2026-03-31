@@ -100,10 +100,12 @@ async function resolveAccessibleOrganizations(params: {
   if (staffMember?.id) {
     const { data } = await supabase
       .from('organization_members')
-      .select('organization_id, is_default')
+      .select('organization_id, is_default, organization:organization_id(status)')
       .eq('staff_id', staffMember.id)
       .eq('status', 'active')
     for (const row of data || []) {
+      const organization = Array.isArray((row as any).organization) ? (row as any).organization[0] || null : (row as any).organization || null
+      if (organization?.status === 'suspended') continue
       organizations.push({
         id: String((row as any).organization_id),
         isDefault: Boolean((row as any).is_default),
@@ -114,10 +116,12 @@ async function resolveAccessibleOrganizations(params: {
   if (userEmail) {
     const { data } = await supabase
       .from('organization_members')
-      .select('organization_id, is_default')
+      .select('organization_id, is_default, organization:organization_id(status)')
       .eq('email', userEmail)
       .eq('status', 'active')
     for (const row of data || []) {
+      const organization = Array.isArray((row as any).organization) ? (row as any).organization[0] || null : (row as any).organization || null
+      if (organization?.status === 'suspended') continue
       organizations.push({
         id: String((row as any).organization_id),
         isDefault: Boolean((row as any).is_default),
@@ -128,11 +132,13 @@ async function resolveAccessibleOrganizations(params: {
   if (operatorAuth?.operator_id) {
     const { data } = await supabase
       .from('operator_company_assignments')
-      .select('company:company_id(organization_id)')
+      .select('company:company_id(organization_id, organization:organization_id(status))')
       .eq('operator_id', operatorAuth.operator_id)
       .eq('is_active', true)
     for (const row of data || []) {
       const company = Array.isArray((row as any).company) ? (row as any).company[0] || null : (row as any).company || null
+      const organization = Array.isArray(company?.organization) ? company.organization[0] || null : company?.organization || null
+      if (organization?.status === 'suspended') continue
       if (company?.organization_id) {
         organizations.push({
           id: String(company.organization_id),
@@ -301,7 +307,8 @@ export async function proxy(request: NextRequest) {
     return clearSessionCookies(request, response)
   }
   const hasHostOrganization = hostOrganizationId
-    ? isSuperAdmin || organizations.some((organization) => organization.id === hostOrganizationId)
+    ? (hostOrganization?.status !== 'suspended' || isSuperAdmin) &&
+      (isSuperAdmin || organizations.some((organization) => organization.id === hostOrganizationId))
     : false
   if (hostOrganizationId && !hasHostOrganization) {
     url.pathname = '/login'

@@ -265,3 +265,14 @@
 Ниже приоритетом:
 - white-label и branding на уровне организаций
 - тесты на tenant-изоляцию, тарифы и login flow
+
+### 2026-04-01 — добивка tenant-изоляции
+
+Сделано:
+- `app/api/admin/settings/route.ts` теперь требует активную организацию и не позволяет супер-админу создавать или мутировать `companies`, `staff`, `expense_categories` вне выбранного tenant-контекста.
+- `app/api/pos/bootstrap/route.ts` больше не отдаёт глобальные скидки и глобальный `loyalty_config` арендаторам без доступных компаний; пустой tenant scope больше не тянет общие данные кассы.
+- `proxy.ts` теперь отфильтровывает `suspended` организации уже на edge-слое для staff/operator membership и tenant-host доступа.
+
+Проверка:
+- `npm run build` ✅
+- `npm run typecheck` ✅
