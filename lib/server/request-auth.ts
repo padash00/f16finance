@@ -9,8 +9,10 @@ import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { requiredEnv } from '@/lib/server/env'
 import {
   ACTIVE_ORGANIZATION_COOKIE,
+  resolveActiveOrganizationSubscription,
   selectActiveOrganization,
   resolveUserOrganizations,
+  type OrganizationSubscription,
   type OrganizationAccess,
 } from '@/lib/server/organizations'
 
@@ -82,6 +84,7 @@ export async function getRequestAccessContext(request: Request): Promise<
       organizationSelectionRequired: boolean
       organizations: OrganizationAccess[]
       activeOrganization: OrganizationAccess | null
+      activeSubscription: OrganizationSubscription
     }
 > {
   const supabase = createRequestSupabaseClient(request)
@@ -114,6 +117,9 @@ export async function getRequestAccessContext(request: Request): Promise<
     organizations: organizationAccess.organizations,
     requestedOrganizationId,
   })
+  const activeSubscription = await resolveActiveOrganizationSubscription({
+    activeOrganizationId: activeOrganization?.id || null,
+  })
   const organizationHubRequired = organizationAccess.organizations.length > 0
   const organizationSelectionRequired =
     organizationAccess.organizations.length > 0 &&
@@ -132,6 +138,7 @@ export async function getRequestAccessContext(request: Request): Promise<
       organizationSelectionRequired,
       organizations: organizationAccess.organizations,
       activeOrganization,
+      activeSubscription,
     }
   }
 
@@ -160,6 +167,7 @@ export async function getRequestAccessContext(request: Request): Promise<
       organizationSelectionRequired,
       organizations: organizationAccess.organizations,
       activeOrganization,
+      activeSubscription,
     }
 }
 

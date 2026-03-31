@@ -2,6 +2,7 @@
  * Shared domain types used across multiple pages and API routes.
  * Import from here instead of redefining locally.
  */
+import type { SubscriptionFeature } from '@/lib/core/access'
 
 /** Business unit (arena, ramen, extra) */
 export type Company = {
@@ -30,6 +31,20 @@ export type SessionRoleInfo = {
     slug: string
     status: string
     accessRole: 'super_admin' | 'owner' | 'manager' | 'marketer' | 'operator' | 'other'
+  } | null
+  activeSubscription?: {
+    id: string
+    status: string
+    billingPeriod: string
+    startsAt: string | null
+    endsAt: string | null
+    plan: {
+      id: string
+      code: string
+      name: string
+      features: Partial<Record<SubscriptionFeature, boolean>>
+      limits: Record<string, unknown>
+    } | null
   } | null
 }
 

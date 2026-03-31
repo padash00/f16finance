@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { canAccessPath, type StaffRole } from '@/lib/core/access'
+import { canAccessPath, type StaffRole, type SubscriptionFeature } from '@/lib/core/access'
 import type { SessionRoleInfo } from '@/lib/core/types'
 import { cn } from '@/lib/utils'
 import {
@@ -649,6 +649,7 @@ export function Sidebar() {
   const [isLeadOperator, setIsLeadOperator] = useState(false)
   const [organizations, setOrganizations] = useState<NonNullable<SessionRoleInfo['organizations']>>([])
   const [activeOrganization, setActiveOrganization] = useState<SessionRoleInfo['activeOrganization']>(null)
+  const [subscriptionFeatures, setSubscriptionFeatures] = useState<Partial<Record<SubscriptionFeature, boolean>>>({})
   const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
@@ -698,6 +699,9 @@ export function Sidebar() {
         setRoleLabel((json?.roleLabel as string | null) || null)
         setOrganizations(Array.isArray(json?.organizations) ? json.organizations : [])
         setActiveOrganization((json?.activeOrganization as SessionRoleInfo['activeOrganization']) || null)
+        setSubscriptionFeatures(
+          ((json?.activeSubscription as SessionRoleInfo['activeSubscription'] | null)?.plan?.features as Partial<Record<SubscriptionFeature, boolean>> | undefined) || {},
+        )
         // Super admin sees all sections expanded
         if (superAdmin) {
           setOpenSections(Object.fromEntries(navSections.map((s) => [s.id, true])))
@@ -755,6 +759,7 @@ export function Sidebar() {
               isOperator,
               staffRole,
               isSuperAdmin,
+              subscriptionFeatures,
             })
           })
           .filter((item) => {
@@ -769,7 +774,7 @@ export function Sidebar() {
         const sectionText = `${section.title} ${section.subtitle}`.toLowerCase()
         return sectionText.includes(query)
       })
-  }, [baseSections, isLeadOperator, isOperator, isStaff, isSuperAdmin, searchQuery, staffRole])
+  }, [baseSections, isLeadOperator, isOperator, isStaff, isSuperAdmin, searchQuery, staffRole, subscriptionFeatures])
 
   useEffect(() => {
     if (!searchQuery.trim()) return

@@ -36,6 +36,7 @@ export async function GET(req: Request) {
       operatorAuth,
       organizations,
       activeOrganization,
+      activeSubscription,
       organizationHubRequired,
       organizationSelectionRequired,
     } = access
@@ -95,6 +96,24 @@ export async function GET(req: Request) {
             slug: activeOrganization.slug,
             status: activeOrganization.status,
             accessRole: activeOrganization.accessRole,
+          }
+        : null,
+      activeSubscription: activeSubscription
+        ? {
+            id: activeSubscription.id,
+            status: activeSubscription.status,
+            billingPeriod: activeSubscription.billingPeriod,
+            startsAt: activeSubscription.startsAt,
+            endsAt: activeSubscription.endsAt,
+            plan: activeSubscription.plan
+              ? {
+                  id: activeSubscription.plan.id,
+                  code: activeSubscription.plan.code,
+                  name: activeSubscription.plan.name,
+                  features: activeSubscription.plan.features,
+                  limits: activeSubscription.plan.limits,
+                }
+              : null,
           }
         : null,
       organizationHubRequired,

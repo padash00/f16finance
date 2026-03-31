@@ -16,6 +16,12 @@
 ] as const
 
 export type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
+export type SubscriptionFeature =
+  | 'ai_reports'
+  | 'inventory'
+  | 'web_pos'
+  | 'telegram'
+  | 'custom_branding'
 export type StaffCapability =
   | 'tasks'
   | 'shifts'
@@ -318,8 +324,9 @@ export function canAccessPath(params: {
   isOperator: boolean
   staffRole?: StaffRole | null
   isSuperAdmin?: boolean
+  subscriptionFeatures?: Partial<Record<SubscriptionFeature, boolean>> | null
 }): boolean {
-  const { pathname, isStaff, isOperator, staffRole, isSuperAdmin } = params
+  const { pathname, isStaff, isOperator, staffRole, isSuperAdmin, subscriptionFeatures } = params
 
   if (isSuperAdmin) {
     // Super admin has access to everything except public/auth-only paths
@@ -330,10 +337,10 @@ export function canAccessPath(params: {
   const operatorAllowed = isOperator && OPERATOR_PATHS.some((rule) => matchesPath(pathname, rule))
 
   if (isStaff) {
-    return staffAllowed
+    return staffAllowed && canUsePathForSubscription(pathname, subscriptionFeatures)
   }
 
-  return operatorAllowed
+  return operatorAllowed && canUsePathForSubscription(pathname, subscriptionFeatures)
 }
 
 export function getDefaultPathForStaffRole(role: StaffRole) {
@@ -358,3 +365,49 @@ export function staffRoleHasCapability(role: StaffRole, capability: StaffCapabil
   return STAFF_ROLE_MATRIX[role].capabilities.includes(capability)
 }
 
+const SUBSCRIPTION_FEATURE_PATH_RULES: Array<{
+  feature: SubscriptionFeature
+  rules: readonly string[]
+}> = [
+  {
+    feature: 'ai_reports',
+    rules: ['/analysis', '/forecast', '/weekly-report'],
+  },
+  {
+    feature: 'inventory',
+    rules: ['/inventory', '/inventory/*', '/store', '/store/*'],
+  },
+  {
+    feature: 'web_pos',
+    rules: ['/pos', '/pos-receipts', '/pos-returns', '/point-terminal'],
+  },
+  {
+    feature: 'telegram',
+    rules: ['/telegram'],
+  },
+]
+
+export function getRequiredSubscriptionFeature(pathname: string): SubscriptionFeature | null {
+  for (const entry of SUBSCRIPTION_FEATURE_PATH_RULES) {
+    if (entry.rules.some((rule) => matchesPath(pathname, rule))) {
+      return entry.feature
+    }
+  }
+
+  return null
+}
+
+export function hasSubscriptionFeature(
+  features: Partial<Record<SubscriptionFeature, boolean>> | null | undefined,
+  feature: SubscriptionFeature | null,
+) {
+  if (!feature) return true
+  return Boolean(features?.[feature])
+}
+
+export function canUsePathForSubscription(
+  pathname: string,
+  features: Partial<Record<SubscriptionFeature, boolean>> | null | undefined,
+) {
+  return hasSubscriptionFeature(features, getRequiredSubscriptionFeature(pathname))
+}

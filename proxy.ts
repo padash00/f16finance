@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-import { canAccessPath, getDefaultAppPath, normalizeStaffRole, isPublicPath } from '@/lib/core/access'
+import { canAccessPath, getDefaultAppPath, normalizeStaffRole, isPublicPath, type SubscriptionFeature } from '@/lib/core/access'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 
 const AUTH_SELF_SERVICE_PATHS = ['/forgot-password', '/reset-password', '/set-password', '/auth/callback', '/auth/complete'] as const
@@ -98,6 +98,25 @@ async function resolveAccessibleOrganizations(params: {
   }
 
   return dedupeOrganizationIds(organizations)
+}
+
+async function resolveActiveSubscriptionFeatures(params: {
+  supabase: ReturnType<typeof createServerClient>
+  organizationId?: string | null
+}) {
+  const { supabase, organizationId } = params
+  if (!organizationId) return {}
+
+  const { data } = await supabase
+    .from('organization_subscriptions')
+    .select('plan:plan_id(features)')
+    .eq('organization_id', organizationId)
+    .order('starts_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const plan = Array.isArray((data as any)?.plan) ? (data as any).plan[0] || null : (data as any)?.plan || null
+  return ((plan?.features as Partial<Record<SubscriptionFeature, boolean>> | null) || {})
 }
 
 export async function proxy(request: NextRequest) {
@@ -201,6 +220,12 @@ export async function proxy(request: NextRequest) {
   const cookieOrganizationId = hasRequestedOrganization ? requestedOrganizationId : null
   const needsOrganizationSelection = organizations.length > 0 && !hasRequestedOrganization
   const organizationHubRequired = organizations.length > 0
+  const subscriptionFeatures = isSuperAdmin
+    ? null
+    : await resolveActiveSubscriptionFeatures({
+        supabase,
+        organizationId: cookieOrganizationId,
+      })
   const defaultPath = getDefaultAppPath({ isSuperAdmin, isStaff, isOperator, staffRole })
 
   if (AUTH_SELF_SERVICE_PATHS.some((path) => url.pathname.startsWith(path))) {
@@ -244,6 +269,7 @@ export async function proxy(request: NextRequest) {
     isOperator,
     staffRole,
     isSuperAdmin,
+    subscriptionFeatures,
   })
 
   if (requestedPath === '/') {

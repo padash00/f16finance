@@ -2,6 +2,7 @@ import 'server-only'
 
 import type { User } from '@supabase/supabase-js'
 
+import type { SubscriptionFeature } from '@/lib/core/access'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 export const ACTIVE_ORGANIZATION_COOKIE = 'oc_org'
@@ -20,6 +21,21 @@ export type OrganizationAccess = OrganizationSummary & {
   isDefault: boolean
   source: 'super_admin' | 'staff' | 'operator'
 }
+
+export type OrganizationSubscription = {
+  id: string
+  status: string
+  billingPeriod: string
+  startsAt: string | null
+  endsAt: string | null
+  plan: {
+    id: string
+    code: string
+    name: string
+    features: Partial<Record<SubscriptionFeature, boolean>>
+    limits: Record<string, unknown>
+  } | null
+} | null
 
 function normalizeOrganizationRole(value: string | null | undefined): OrganizationAccessRole {
   if (value === 'owner' || value === 'manager' || value === 'marketer' || value === 'operator') {
@@ -198,6 +214,47 @@ export function selectActiveOrganization(params: {
   }
 
   return organizations.find((item) => item.isDefault) || organizations[0] || null
+}
+
+export async function resolveActiveOrganizationSubscription(params: {
+  activeOrganizationId?: string | null
+}) {
+  const { activeOrganizationId } = params
+  if (!activeOrganizationId) return null
+
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
+  if (!supabase) return null
+
+  const { data, error } = await supabase
+    .from('organization_subscriptions')
+    .select(
+      'id, status, billing_period, starts_at, ends_at, plan:plan_id(id, code, name, features, limits)',
+    )
+    .eq('organization_id', activeOrganizationId)
+    .order('starts_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error || !data) return null
+
+  const plan = Array.isArray((data as any).plan) ? (data as any).plan[0] || null : (data as any).plan || null
+
+  return {
+    id: String((data as any).id || ''),
+    status: String((data as any).status || 'active'),
+    billingPeriod: String((data as any).billing_period || 'monthly'),
+    startsAt: (data as any).starts_at || null,
+    endsAt: (data as any).ends_at || null,
+    plan: plan
+      ? {
+          id: String(plan.id || ''),
+          code: String(plan.code || ''),
+          name: String(plan.name || ''),
+          features: ((plan.features as Partial<Record<SubscriptionFeature, boolean>> | null) || {}),
+          limits: ((plan.limits as Record<string, unknown> | null) || {}),
+        }
+      : null,
+  } satisfies OrganizationSubscription
 }
 
 export async function resolveCompanyScope(params: {
