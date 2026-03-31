@@ -15,6 +15,50 @@
 - Обычные пользователи и операторы должны попадать только в свой контур и не видеть SaaS-хаб.
 - Tenant-изоляция уже существенно усилена, но ещё остаются хвосты в глобальных настройках и shared-справочниках.
 
+## 2026-04-01
+
+### Multi-tenant изоляция — финальный проход
+
+Сделано:
+- **Tenant-aware login page** — `app/login/page.tsx` переведён в server component, `LoginForm.tsx` — client. На поддомене `f16.ordaops.kz` страница входа показывает брендинг организации (название, иконка). На `ordaops.kz` — общий Orda Control.
+- **proxy.ts** — host-организация теперь резолвится до проверки авторизации. На tenant-поддомене неавторизованные пользователи не видят маркетинговую страницу, а сразу уходят на `/login`.
+- **point/all-operators** — операторы теперь фильтруются по `operator_company_assignments.company_id IN [device.company_ids]`. Больше не возвращаются операторы других организаций.
+- **admin/shifts — findOperatorForShiftName** — scoped по companyId через `operator_company_assignments`.
+- **pos/bootstrap** — `inventory_balances` фильтруются по `location_id IN [allowed locations]` (двухэтапный запрос). `discounts` фильтруются по `allowedCompanyIds` в запросе к БД.
+- **admin/profitability** — `point_devices` и `incomes` фильтруются через `listOrganizationCompanyIds`.
+- **admin/settings** — при создании company/staff/expense_category добавляется `organization_id`.
+- **admin/organizations** — создание домена `tenant_domains` больше не silent-skip, бросает ошибку. Домен создаётся всегда при создании организации.
+- **proxy.ts и active-organization** — `httpOnly: true` на cookie активной организации (был false — XSS).
+- **lib/server/organizations** — suspended-организации фильтруются в resolveUserOrganizations.
+- **lib/core/site.ts** — `APEX_MAINTENANCE_MODE` из env-переменной вместо хардкода.
+- **lib/server/tenant-hosts.ts** — in-memory TTL-кеш 60s на резолв host→organization.
+
+Ключевые коммиты:
+- `8328aa7` `fix(saas): harden tenant isolation and cookie security`
+- `00f8a01` `fix(tenant): close remaining cross-org data leaks and add host cache`
+- `896be13` `feat(saas): tenant-aware login page and platform/tenant mode routing`
+
+Платформенная логика:
+- `ordaops.kz` → owner dashboard (`/select-organization`) только для super-admin
+- `f16.ordaops.kz` → tenant login с брендингом F16 → workspace F16
+- Данные между организациями не пересекаются на уровне API
+
+### Что осталось
+
+Критично:
+- RLS (Row Level Security) в Supabase по organization_id — текущая изоляция на уровне app (service role bypasses RLS), но DB-уровень не защищён
+- Проверить `point/*`, `pos/*` хвосты на финальную изоляцию
+
+Высокий приоритет:
+- Реальный billing flow с оплатой, просрочкой, апгрейдом и историей платежей
+- Owner dashboard UX improvements (более premium SaaS вид)
+- Финальный onboarding после создания организации
+
+Ниже приоритетом:
+- White-label / branding на уровне организаций (логотип, цвета)
+- Тесты на tenant-изоляцию, тарифы, login flow
+- Добавить `APEX_MAINTENANCE_MODE=true` в Vercel env при необходимости
+
 ## 2026-03-31
 
 ### Host-based tenant routing
