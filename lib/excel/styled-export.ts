@@ -36,6 +36,8 @@ const COLORS = {
 }
 
 const FONT_NAME = 'Arial'
+const CONTENTS_SHEET_NAME = 'Содержание'
+const RAW_PREFIX = 'raw-'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function argbOf(hex: string) { return `FF${hex.toUpperCase()}` }
@@ -230,6 +232,254 @@ export interface DashboardSheetOptions {
   highlights?: string[]
 }
 
+type ExportSheetMeta = {
+  kind: 'table' | 'dashboard'
+  sheetName: string
+  title: string
+  subtitle: string
+  rowCount?: number
+  rawSheetName?: string
+  columns?: SheetColumn[]
+  rows?: SheetRow[]
+}
+
+const workbookMeta = new WeakMap<ExcelJS.Workbook, ExportSheetMeta[]>()
+const finalizedWorkbooks = new WeakSet<ExcelJS.Workbook>()
+
+function getWorkbookMeta(wb: ExcelJS.Workbook) {
+  const existing = workbookMeta.get(wb)
+  if (existing) return existing
+  const next: ExportSheetMeta[] = []
+  workbookMeta.set(wb, next)
+  return next
+}
+
+function registerWorkbookSheet(wb: ExcelJS.Workbook, meta: ExportSheetMeta) {
+  const items = getWorkbookMeta(wb)
+  const index = items.findIndex((item) => item.sheetName === meta.sheetName)
+  if (index >= 0) {
+    items[index] = meta
+    return
+  }
+  items.push(meta)
+}
+
+function safeSheetName(name: string, fallback: string) {
+  const sanitized = name.replace(/[\\/*?:[\]]/g, ' ').trim() || fallback
+  return sanitized.slice(0, 31)
+}
+
+function rawSheetNameFor(sheetName: string) {
+  return safeSheetName(`${RAW_PREFIX}${sheetName}`, `${RAW_PREFIX}sheet`)
+}
+
+function styleHyperlinkCell(cell: ExcelJS.Cell, align: ExcelJS.Alignment['horizontal'] = 'right') {
+  cell.font = {
+    name: FONT_NAME,
+    size: 10,
+    bold: true,
+    underline: true,
+    color: { argb: argbOf(COLORS.accentBlue) },
+  }
+  cell.alignment = { horizontal: align, vertical: 'middle' }
+}
+
+function applyConditionalFormatting(
+  ws: ExcelJS.Worksheet,
+  columns: SheetColumn[],
+  dataStartRow: number,
+  dataEndRow: number,
+) {
+  if (dataEndRow < dataStartRow) return
+
+  columns.forEach((column, index) => {
+    const columnIndex = index + 1
+    const ref = `${columnLetter(columnIndex)}${dataStartRow}:${columnLetter(columnIndex)}${dataEndRow}`
+
+    if (column.type === 'money' || column.type === 'number') {
+      ws.addConditionalFormatting({
+        ref,
+        rules: [
+          {
+            type: 'cellIs',
+            operator: 'lessThan',
+            formulae: ['0'],
+            priority: 2,
+            style: {
+              font: { color: { argb: argbOf(COLORS.negative) }, bold: true },
+              fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: argbOf(COLORS.dangerBg) }, fgColor: { argb: argbOf(COLORS.dangerBg) } },
+            },
+          },
+          {
+            type: 'cellIs',
+            operator: 'greaterThan',
+            formulae: ['0'],
+            priority: 1,
+            style: {
+              font: { color: { argb: argbOf(COLORS.positive) } },
+              fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: argbOf(COLORS.goodBg) }, fgColor: { argb: argbOf(COLORS.goodBg) } },
+            },
+          },
+        ],
+      })
+      return
+    }
+
+    if (column.type === 'percent') {
+      ws.addConditionalFormatting({
+        ref,
+        rules: [
+          {
+            type: 'cellIs',
+            operator: 'greaterThan',
+            formulae: ['0.79'],
+            priority: 1,
+            style: {
+              font: { color: { argb: argbOf(COLORS.positive) }, bold: true },
+              fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: argbOf(COLORS.goodBg) }, fgColor: { argb: argbOf(COLORS.goodBg) } },
+            },
+          },
+          {
+            type: 'cellIs',
+            operator: 'lessThan',
+            formulae: ['0.3'],
+            priority: 2,
+            style: {
+              font: { color: { argb: argbOf(COLORS.accentAmber) }, bold: true },
+              fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: argbOf(COLORS.warnBg) }, fgColor: { argb: argbOf(COLORS.warnBg) } },
+            },
+          },
+        ],
+      })
+    }
+  })
+}
+
+function buildRawSheet(wb: ExcelJS.Workbook, meta: ExportSheetMeta) {
+  if (meta.kind !== 'table' || !meta.columns || !meta.rows) return
+  if (wb.getWorksheet(meta.rawSheetName || '')) return
+
+  const rawSheet = wb.addWorksheet(meta.rawSheetName || rawSheetNameFor(meta.sheetName), {
+    properties: { tabColor: { argb: argbOf(COLORS.mutedText) } },
+  })
+  rawSheet.state = 'hidden'
+
+  const rawColumns = [
+    { header: 'row_type', key: '__rowType', width: 14 },
+    { header: 'section_label', key: '__sectionLabel', width: 22 },
+    ...meta.columns.map((column) => ({
+      header: column.header,
+      key: column.key,
+      width: Math.max(14, Math.min(column.width, 26)),
+    })),
+  ]
+
+  rawSheet.columns = rawColumns
+  rawSheet.getRow(1).font = { name: FONT_NAME, bold: true }
+  rawSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argbOf(COLORS.neutralBg) } }
+
+  meta.rows.forEach((row) => {
+    const rowType = row._isSection ? 'section' : row._isTotals ? 'total' : 'data'
+    rawSheet.addRow({
+      __rowType: rowType,
+      __sectionLabel: row._sectionLabel ?? '',
+      ...meta.columns?.reduce<Record<string, number | string | boolean | null | undefined>>((acc, column) => {
+        acc[column.key] = row[column.key]
+        return acc
+      }, {}),
+    })
+  })
+
+  rawSheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }]
+  rawSheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: rawColumns.length },
+  }
+}
+
+function populateContentsSheet(wb: ExcelJS.Workbook, items: ExportSheetMeta[]) {
+  const ws = wb.getWorksheet(CONTENTS_SHEET_NAME) || wb.addWorksheet(CONTENTS_SHEET_NAME, {
+    properties: { tabColor: { argb: argbOf(COLORS.sectionBg) } },
+  })
+
+  ws.eachRow((row) => {
+    row.eachCell((cell) => {
+      cell.value = null
+      cell.style = {}
+    })
+  })
+
+  ws.columns = [
+    { width: 24 },
+    { width: 30 },
+    { width: 48 },
+    { width: 14 },
+    { width: 18 },
+  ]
+
+  addTitleRow(ws, 'Содержание книги', `Сгенерировано: ${new Date().toLocaleString('ru-RU')}`, 5)
+  ws.getRow(3).height = 8
+
+  const introCell = ws.getCell(4, 1)
+  ws.mergeCells(4, 1, 4, 5)
+  introCell.value = 'Быстрая навигация по отчёту, дашбордам и скрытым raw-data листам.'
+  introCell.style = {
+    font: { name: FONT_NAME, size: 10, color: { argb: argbOf(COLORS.mutedText) } },
+    alignment: { horizontal: 'left', vertical: 'middle' },
+  }
+
+  const headerRow = ws.getRow(6)
+  ;['Лист', 'Тип', 'Описание', 'Строк', 'Raw-data'].forEach((title, index) => {
+    const cell = headerRow.getCell(index + 1)
+    cell.value = title
+    cell.style = headerStyle(COLORS.subheaderBg, COLORS.subheaderText, 9)
+  })
+  headerRow.height = 24
+
+  let rowIndex = 7
+  items
+    .filter((item) => item.sheetName !== CONTENTS_SHEET_NAME)
+    .forEach((item, index) => {
+      const row = ws.getRow(rowIndex)
+      const baseStyle = dataStyle(index, false, 'left')
+
+      row.getCell(1).value = { text: item.sheetName, hyperlink: `#'${item.sheetName}'!A1` }
+      row.getCell(2).value = item.kind === 'dashboard' ? 'Дашборд' : 'Таблица'
+      row.getCell(3).value = `${item.title}${item.subtitle ? ` | ${item.subtitle}` : ''}`
+      row.getCell(4).value = item.rowCount ?? null
+      row.getCell(5).value = item.rawSheetName ? `Скрыт: ${item.rawSheetName}` : '—'
+
+      for (let cellIndex = 1; cellIndex <= 5; cellIndex += 1) {
+        row.getCell(cellIndex).style = {
+          ...baseStyle,
+          alignment: { horizontal: cellIndex === 4 ? 'right' : 'left', vertical: 'middle', wrapText: true },
+        }
+      }
+      styleHyperlinkCell(row.getCell(1), 'left')
+      row.height = 22
+      rowIndex += 1
+    })
+
+  ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 6 }]
+  ws.autoFilter = {
+    from: { row: 6, column: 1 },
+    to: { row: 6, column: 5 },
+  }
+  ws.pageSetup.printTitlesRow = '6:6'
+}
+
+function finalizeWorkbook(wb: ExcelJS.Workbook) {
+  if (finalizedWorkbooks.has(wb)) return
+
+  const items = getWorkbookMeta(wb)
+  items
+    .filter((item) => item.kind === 'table')
+    .forEach((item) => buildRawSheet(wb, item))
+
+  populateContentsSheet(wb, items)
+  finalizedWorkbooks.add(wb)
+}
+
 export function buildStyledSheet(
   wb: ExcelJS.Workbook,
   sheetName: string,
@@ -312,6 +562,9 @@ export function buildStyledSheet(
   addTitleRow(ws, title, subtitle, colCount)
 
   ws.getRow(3).height = 6
+  const tocCell = ws.getCell(3, colCount)
+  tocCell.value = { text: 'Оглавление', hyperlink: `#'${CONTENTS_SHEET_NAME}'!A1` }
+  styleHyperlinkCell(tocCell)
 
   if (autoMetrics.length > 0) {
     const cardsCount = Math.min(autoMetrics.length, Math.max(1, colCount))
@@ -373,10 +626,16 @@ export function buildStyledSheet(
 
   // Data rows
   let dataRowIdx = 0
+  let currentDataStartRow: number | null = null
+  const conditionalRanges: Array<{ start: number; end: number }> = []
   rows.forEach((row) => {
     const wsRowNum = headerRowNumber + 1 + dataRowIdx
 
     if (row._isSection) {
+      if (currentDataStartRow !== null && wsRowNum - 1 >= currentDataStartRow) {
+        conditionalRanges.push({ start: currentDataStartRow, end: wsRowNum - 1 })
+      }
+      currentDataStartRow = null
       addSectionHeader(ws, wsRowNum, row._sectionLabel || '', colCount)
       ws.getRow(wsRowNum).height = 20
       dataRowIdx++
@@ -386,6 +645,9 @@ export function buildStyledSheet(
     const wsRow = ws.getRow(wsRowNum)
     wsRow.height = 18
     const isTotals = row._isTotals === true
+    if (!isTotals && currentDataStartRow === null) {
+      currentDataStartRow = wsRowNum
+    }
 
     columns.forEach((col, colIdx) => {
       const cell = wsRow.getCell(colIdx + 1)
@@ -393,9 +655,22 @@ export function buildStyledSheet(
 
       if (isTotals) {
         const s = totalsStyle()
-        if (col.type === 'money') {
-          cell.value = typeof rawVal === 'number' ? rawVal : null
-          cell.numFmt = '#,##0 ₸'
+        if (col.type === 'money' || col.type === 'number') {
+          const hasFormulaWindow = currentDataStartRow !== null && wsRowNum - 1 >= currentDataStartRow
+          if (typeof rawVal === 'number' && hasFormulaWindow) {
+            const colLetter = columnLetter(colIdx + 1)
+            cell.value = {
+              formula: `SUM(${colLetter}${currentDataStartRow}:${colLetter}${wsRowNum - 1})`,
+              result: rawVal,
+            }
+          } else {
+            cell.value = typeof rawVal === 'number' ? rawVal : null
+          }
+          if (col.type === 'money') {
+            cell.numFmt = '#,##0 ₸'
+          } else {
+            cell.numFmt = '#,##0'
+          }
           if (typeof rawVal === 'number' && rawVal < 0) {
             s.font = { ...s.font, color: { argb: argbOf(COLORS.negative) } }
           }
@@ -429,8 +704,17 @@ export function buildStyledSheet(
         cell.style = s
       }
     })
+    if (isTotals) {
+      if (currentDataStartRow !== null && wsRowNum - 1 >= currentDataStartRow) {
+        conditionalRanges.push({ start: currentDataStartRow, end: wsRowNum - 1 })
+      }
+      currentDataStartRow = null
+    }
     dataRowIdx++
   })
+  if (currentDataStartRow !== null) {
+    conditionalRanges.push({ start: currentDataStartRow, end: headerRowNumber + dataRowIdx })
+  }
 
   // Freeze panes (keep headers visible)
   ws.views = [{ state: 'frozen', xSplit: 0, ySplit: headerRowNumber }]
@@ -439,12 +723,28 @@ export function buildStyledSheet(
     to: { row: headerRowNumber, column: colCount },
   }
   ws.pageSetup.printTitlesRow = `${headerRowNumber}:${headerRowNumber}`
+  ws.pageSetup.fitToHeight = 0
+  ws.pageSetup.margins = { left: 0.25, right: 0.25, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }
+  ws.pageSetup.printArea = `A1:${columnLetter(colCount)}${headerRowNumber + dataRowIdx}`
+  conditionalRanges.forEach((range) => applyConditionalFormatting(ws, columns, range.start, range.end))
+
+  registerWorkbookSheet(wb, {
+    kind: 'table',
+    sheetName,
+    title,
+    subtitle,
+    rowCount: rows.filter((row) => !row._isSection && !row._isTotals).length,
+    rawSheetName: rawSheetNameFor(sheetName),
+    columns,
+    rows,
+  })
 
   return ws
 }
 
 // ─── Download helper (browser) ─────────────────────────────────────────────────
 export async function downloadWorkbook(wb: ExcelJS.Workbook, filename: string) {
+  finalizeWorkbook(wb)
   const buffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
@@ -461,6 +761,16 @@ export function createWorkbook(company = 'Orda Control'): ExcelJS.Workbook {
   wb.lastModifiedBy = company
   wb.created = new Date()
   wb.modified = new Date()
+  wb.addWorksheet(CONTENTS_SHEET_NAME, {
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
+    properties: { tabColor: { argb: argbOf(COLORS.sectionBg) } },
+  })
+  registerWorkbookSheet(wb, {
+    kind: 'dashboard',
+    sheetName: CONTENTS_SHEET_NAME,
+    title: 'Содержание книги',
+    subtitle: '',
+  })
   return wb
 }
 
@@ -681,6 +991,9 @@ export async function buildDashboardSheet(wb: ExcelJS.Workbook, options: Dashboa
 
   addTitleRow(ws, options.title, options.subtitle, columnCount)
   ws.getRow(3).height = 8
+  const tocCell = ws.getCell(3, columnCount)
+  tocCell.value = { text: 'Оглавление', hyperlink: `#'${CONTENTS_SHEET_NAME}'!A1` }
+  styleHyperlinkCell(tocCell)
 
   const cardsPerRow = 4
   const cardSpan = 3
@@ -767,5 +1080,14 @@ export async function buildDashboardSheet(wb: ExcelJS.Workbook, options: Dashboa
   }
 
   ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }]
+  ws.pageSetup.fitToHeight = 0
+  ws.pageSetup.margins = { left: 0.25, right: 0.25, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }
+  ws.pageSetup.printArea = `A1:${columnLetter(columnCount)}${Math.max(currentRow, 20)}`
+  registerWorkbookSheet(wb, {
+    kind: 'dashboard',
+    sheetName: options.sheetName,
+    title: options.title,
+    subtitle: options.subtitle,
+  })
   return ws
 }
