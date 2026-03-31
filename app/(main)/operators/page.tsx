@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
-import { supabase } from '@/lib/supabaseClient'
 import { 
   Users2, 
   Plus, 
@@ -112,82 +111,54 @@ export default function OperatorsPage() {
     setError(null)
     
     try {
-      // Загружаем операторов
-      const { data: operatorsData, error: operatorsError } = await supabase
-        .from('operators')
-        .select('id, name, short_name, is_active, created_at, role, telegram_chat_id')
-        .order('name')
+      const response = await fetch('/api/admin/operators', { cache: 'no-store' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
 
-      if (operatorsError) throw operatorsError
-      
-      const operatorsList = (operatorsData || []) as Operator[]
+      const rows = Array.isArray(json?.data) ? json.data : []
+      const operatorsList: Operator[] = rows.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        short_name: row.short_name ?? null,
+        is_active: Boolean(row.is_active),
+        created_at: row.created_at,
+        role: row.auth?.role || row.role || null,
+        telegram_chat_id: row.telegram_chat_id ?? null,
+      }))
       setOperators(operatorsList)
 
-      // Загружаем профили для всех операторов
-      if (operatorsList.length > 0) {
-        const { data: profilesData, error: profilesError } = await supabase
-          .from('operator_profiles')
-          .select('id, operator_id, full_name, phone, email, hire_date, position, emergency_contact_name, emergency_contact_phone, photo_url')
-          .in('operator_id', operatorsList.map(o => o.id))
+      const profilesMap = new Map<string, OperatorProfile>()
+      const statsMap = new Map<string, OperatorStats>()
 
-        if (profilesError) throw profilesError
+      rows.forEach((row: any) => {
+        const profile = Array.isArray(row.operator_profiles) ? row.operator_profiles[0] || null : row.operator_profiles || null
+        if (profile) {
+          profilesMap.set(String(row.id), {
+            id: profile.id || `${row.id}-profile`,
+            operator_id: String(row.id),
+            full_name: profile.full_name ?? null,
+            phone: profile.phone ?? null,
+            email: profile.email ?? null,
+            hire_date: profile.hire_date ?? null,
+            position: profile.position ?? null,
+            emergency_contact_name: profile.emergency_contact_name ?? null,
+            emergency_contact_phone: profile.emergency_contact_phone ?? null,
+            photo_url: profile.photo_url ?? null,
+          })
+        }
 
-        const profilesMap = new Map()
-        ;(profilesData || []).forEach((profile: OperatorProfile) => {
-          profilesMap.set(profile.operator_id, profile)
+        const rawStats = row.stats || {}
+        statsMap.set(String(row.id), {
+          totalShifts: Number(rawStats.totalShifts || 0),
+          totalTurnover: Number(rawStats.totalTurnover || 0),
+          avgPerShift: Number(rawStats.avgPerShift || 0),
+          totalDebts: Number(rawStats.totalDebts || 0),
+          totalBonuses: Number(rawStats.totalBonuses || 0),
         })
-        setProfiles(profilesMap)
+      })
 
-        // Загружаем статистику для всех операторов за 30 дней (3 запроса вместо N*3)
-        const thirtyDaysAgo = new Date()
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        const dateStr = thirtyDaysAgo.toISOString().split('T')[0]
-        const operatorIds = operatorsList.map(o => o.id)
-
-        const [incomesRes, debtsRes, bonusesRes] = await Promise.all([
-          supabase
-            .from('incomes')
-            .select('operator_id, cash_amount, kaspi_amount, online_amount, card_amount')
-            .in('operator_id', operatorIds)
-            .gte('date', dateStr),
-          supabase
-            .from('debts')
-            .select('operator_id, amount')
-            .in('operator_id', operatorIds)
-            .eq('status', 'active'),
-          supabase
-            .from('operator_salary_adjustments')
-            .select('operator_id, amount')
-            .in('operator_id', operatorIds)
-            .eq('kind', 'bonus')
-            .gte('date', dateStr),
-        ])
-
-        const statsMap = new Map<string, OperatorStats>()
-        for (const op of operatorsList) {
-          statsMap.set(op.id, { totalShifts: 0, totalTurnover: 0, avgPerShift: 0, totalDebts: 0, totalBonuses: 0 })
-        }
-
-        for (const inc of (incomesRes.data || [])) {
-          const s = statsMap.get(inc.operator_id)
-          if (!s) continue
-          s.totalShifts += 1
-          s.totalTurnover += (inc.cash_amount || 0) + (inc.kaspi_amount || 0) + (inc.online_amount || 0) + (inc.card_amount || 0)
-        }
-        for (const d of (debtsRes.data || [])) {
-          const s = statsMap.get(d.operator_id)
-          if (s) s.totalDebts += (d.amount || 0)
-        }
-        for (const b of (bonusesRes.data || [])) {
-          const s = statsMap.get(b.operator_id)
-          if (s) s.totalBonuses += (b.amount || 0)
-        }
-        for (const s of statsMap.values()) {
-          s.avgPerShift = s.totalShifts > 0 ? s.totalTurnover / s.totalShifts : 0
-        }
-
-        setStats(statsMap)
-      }
+      setProfiles(profilesMap)
+      setStats(statsMap)
 
     } catch (err: any) {
       console.error(err)

@@ -1,19 +1,26 @@
 import { NextResponse } from 'next/server'
-import { requireAdminRequest } from '@/lib/server/request-auth'
+import { ensureOrganizationOperatorAccess } from '@/lib/server/organizations'
+import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 
 export async function POST(request: Request) {
   try {
-    const guard = await requireAdminRequest(request)
-    if (guard) return guard
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
 
     const body = await request.json().catch(() => null)
-    const { chatId, username, password, name } = body ?? {}
+    const { operatorId, chatId, username, password, name } = body ?? {}
 
-    if (!chatId || !username || !password) {
-      return NextResponse.json({ error: 'chatId, username и password обязательны' }, { status: 400 })
+    if (!operatorId || !chatId || !username || !password) {
+      return NextResponse.json({ error: 'operatorId, chatId, username и password обязательны' }, { status: 400 })
     }
+
+    await ensureOrganizationOperatorAccess({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+      operatorId: String(operatorId),
+    })
 
     const text = [
       `🔐 <b>Данные для входа в Orda Point</b>`,

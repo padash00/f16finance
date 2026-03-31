@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
+import { ensureOrganizationOperatorAccess } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { requireAdminRequest } from '@/lib/server/request-auth'
+import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { toOperatorAuthEmail } from '@/lib/core/auth'
 
 export async function POST(request: Request) {
   try {
-    const guard = await requireAdminRequest(request)
-    if (guard) return guard
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
 
     const body = await request.json().catch(() => null)
     const { operatorId, username } = body ?? {}
@@ -20,6 +21,12 @@ export async function POST(request: Request) {
     if (trimmed.length < 2) {
       return NextResponse.json({ error: 'Логин должен быть не менее 2 символов' }, { status: 400 })
     }
+
+    await ensureOrganizationOperatorAccess({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+      operatorId,
+    })
 
     const supabaseAdmin = createAdminSupabaseClient()
 
@@ -62,7 +69,7 @@ export async function POST(request: Request) {
     if (error) throw error
 
     await writeAuditLog(supabaseAdmin, {
-      actorUserId: null,
+      actorUserId: access.user?.id || null,
       entityType: 'operator-auth',
       entityId: operatorId,
       action: 'update-username',

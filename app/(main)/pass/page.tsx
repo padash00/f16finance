@@ -5,7 +5,6 @@ import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getPublicAppUrl } from '@/lib/core/app-url'
-import { supabase } from '@/lib/supabaseClient'
 import {
   Users,
   Key,
@@ -69,62 +68,20 @@ export default function AccessPage() {
       setLoading(true)
       setError(null)
 
-      // Получаем только АКТИВНЫХ операторов
-      const { data: operatorsData, error: operatorsError } = await supabase
-        .from('operators')
-        .select('id, name, short_name, is_active, telegram_chat_id')
-        .eq('is_active', true)  // ✅ Фильтр только активных
-        .order('name')
+      const response = await fetch('/api/admin/operators?active_only=true', { cache: 'no-store' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(json?.error || `Ошибка запроса (${response.status})`)
 
-      if (operatorsError) throw operatorsError
-
-      // Получаем их профили
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('operator_profiles')
-        .select('operator_id, photo_url, phone, email')
-
-      if (profilesError) throw profilesError
-
-      // Получаем данные для входа из operator_auth
-      const { data: authData, error: authError } = await supabase
-        .from('operator_auth')
-        .select('operator_id, user_id, username, role, is_active, last_login')
-
-      if (authError) throw authError
-
-      // Создаем карту профилей
-      const profileMap = new Map()
-      for (const p of profilesData || []) {
-        profileMap.set(p.operator_id, {
-          photo_url: p.photo_url,
-          phone: p.phone,
-          email: p.email
-        })
-      }
-
-      // Создаем карту auth данных
-      const authMap = new Map()
-      for (const a of authData || []) {
-        authMap.set(a.operator_id, {
-          user_id: a.user_id,
-          username: a.username,
-          role: a.role,
-          is_active: a.is_active,
-          last_login: a.last_login
-        })
-      }
-
-      // Объединяем данные
-      const combined: Operator[] = (operatorsData || []).map((op: any) => {
-        const profile = profileMap.get(op.id) || {}
-        const auth = authMap.get(op.id) || { 
+      const combined: Operator[] = (Array.isArray(json?.data) ? json.data : []).map((op: any) => {
+        const profile = Array.isArray(op.operator_profiles) ? op.operator_profiles[0] || {} : op.operator_profiles || {}
+        const auth = op.auth || {
           user_id: null,
-          username: null, 
-          role: 'operator', 
+          username: null,
+          role: 'operator',
           is_active: true,
-          last_login: null 
+          last_login: null,
         }
-        
+
         return {
           id: op.id,
           name: op.name,
@@ -135,9 +92,9 @@ export default function AccessPage() {
           photo_url: profile.photo_url || null,
           phone: profile.phone || null,
           telegram_chat_id: op.telegram_chat_id,
-          is_active: true, // Уже отфильтровано
+          is_active: Boolean(op.is_active),
           last_login: auth.last_login,
-          user_id: auth.user_id
+          user_id: auth.user_id,
         }
       })
 
@@ -350,6 +307,7 @@ export default function AccessPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          operatorId: op.id,
           chatId: op.telegram_chat_id,
           username: op.username,
           password,
@@ -385,6 +343,7 @@ export default function AccessPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          operatorId: op.id,
           chatId: op.telegram_chat_id,
           username: op.username,
           password: newPasswords[op.id],
