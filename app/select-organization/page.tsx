@@ -1167,19 +1167,19 @@ function SelectOrganizationContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.14),_transparent_32%),radial-gradient(circle_at_bottom_left,_rgba(16,185,129,0.12),_transparent_28%),linear-gradient(135deg,#050816_0%,#090f1f_48%,#050816_100%)] p-4">
-      <div className="mx-auto flex min-h-screen max-w-5xl items-center justify-center">
-        <div className="grid w-full gap-6 lg:grid-cols-[1fr_0.95fr]">
-          <Card className="hidden border-white/10 bg-slate-950/60 p-8 text-white backdrop-blur-xl lg:block">
-            <div className="flex h-full flex-col justify-between">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.14),_transparent_32%),radial-gradient(circle_at_bottom_left,_rgba(16,185,129,0.12),_transparent_28%),linear-gradient(135deg,#050816_0%,#090f1f_48%,#050816_100%)] px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
+      <div className="mx-auto w-full max-w-[1760px]">
+        <div className="grid w-full gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <Card className="hidden self-start border-white/10 bg-slate-950/60 p-8 text-white backdrop-blur-xl xl:sticky xl:top-6 xl:block">
+            <div className="flex h-full min-h-[calc(100vh-3rem)] flex-col justify-between">
               <div>
                 <div className="mb-6 inline-flex rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-500 p-4 shadow-lg shadow-sky-500/20">
                   <Brain className="h-8 w-8 text-white" />
                 </div>
-                <h1 className="max-w-md text-4xl font-semibold leading-tight text-white">
+                <h1 className="max-w-none text-4xl font-semibold leading-tight text-white">
                   Выберите проект, клиента или организацию, в которой хотите работать сейчас.
                 </h1>
-                <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300">
+                <p className="mt-4 max-w-none text-sm leading-6 text-slate-300">
                   После выбора система зафиксирует tenant-контекст и откроет только данные, точки, отчёты и людей этой организации.
                 </p>
               </div>
@@ -1195,7 +1195,7 @@ function SelectOrganizationContent() {
             </div>
           </Card>
 
-          <Card className="border-white/10 bg-slate-950/70 p-6 text-white backdrop-blur-xl sm:p-8">
+          <Card className="min-h-[calc(100vh-1.5rem)] border-white/10 bg-slate-950/70 p-5 text-white backdrop-blur-xl sm:p-6 xl:min-h-[calc(100vh-3rem)] xl:p-8">
             <div className="mb-5 flex items-center gap-3">
               <div className="rounded-2xl bg-sky-500/10 p-3">
                 <Building2 className="h-6 w-6 text-sky-400" />
