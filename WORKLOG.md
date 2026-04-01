@@ -17,6 +17,19 @@
 
 ## 2026-04-01
 
+### Tenant login redirect loop на `*.ordaops.kz`
+
+Сделано:
+- Исправлен post-login flow в `app/login/LoginForm.tsx` для tenant-поддоменов.
+- После `signInWithPassword` переход в tenant workspace теперь идёт через полную браузерную навигацию (`window.location.assign(...)`), а не через `router.push(...)`.
+- Это убирает race-condition, когда middleware ещё не видит свежие Supabase SSR cookies во время мгновенного RSC-перехода на `/dashboard`, из-за чего появлялась петля `ERR_TOO_MANY_REDIRECTS`.
+
+Проверка:
+- `npm run build` проходит.
+
+Ожидаемый результат:
+- `f16.ordaops.kz/login` после успешного входа должен стабильно открывать tenant dashboard даже в обычной сессии браузера, не только в инкогнито.
+
 ### Supabase security hardening после alert по public tables
 
 Сделано:

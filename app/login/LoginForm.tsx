@@ -149,6 +149,12 @@ export default function LoginForm({
     return resolvedPath
   }
 
+  const navigateAfterLogin = (path: string) => {
+    // Full navigation avoids a race where Supabase SSR cookies are not yet
+    // visible to middleware during an immediate RSC transition after sign-in.
+    window.location.assign(path)
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -174,8 +180,7 @@ export default function LoginForm({
 
         const response = await fetch('/api/auth/session-role').catch(() => null)
         const json = await response?.json().catch(() => null)
-        router.push(response?.ok ? resolvePostLoginPath(json) : '/')
-        router.refresh()
+        navigateAfterLogin(response?.ok ? resolvePostLoginPath(json) : '/')
         return
       }
 
@@ -228,8 +233,7 @@ export default function LoginForm({
 
       const response = await fetch('/api/auth/session-role').catch(() => null)
       const json = await response?.json().catch(() => null)
-      router.push(response?.ok ? resolvePostLoginPath(json) : '/operator-dashboard')
-      router.refresh()
+      navigateAfterLogin(response?.ok ? resolvePostLoginPath(json) : '/operator-dashboard')
     } catch (err: any) {
       console.error('Login error:', err)
       await fetch('/api/auth/login-attempt', {
