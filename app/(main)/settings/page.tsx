@@ -3,7 +3,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabaseClient'
 import {
   Plus,
   Pencil,
@@ -93,20 +92,25 @@ export default function SettingsPage() {
   // --- ЗАГРУЗКА ---
   const fetchData = async () => {
     setLoading(true)
-    const [compRes, staffRes, catRes] = await Promise.all([
-        supabase.from('companies').select('id, name, code, show_in_structure').order('name'),
-        supabase.from('staff').select('id, full_name, phone, email, role').order('full_name'),
-        supabase.from('expense_categories').select('id, name, monthly_budget, accounting_group').order('name'),
-    ])
+    setError(null)
+    try {
+      const response = await fetch('/api/admin/settings', { cache: 'no-store' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      }
 
-    if (compRes.error || staffRes.error) {
-        setError('Ошибка загрузки данных')
-    } else {
-        setCompanies((compRes.data || []) as Company[])
-        setStaff((staffRes.data || []) as Staff[])
-        setCategories((catRes.data || []) as ExpenseCategory[])
+      setCompanies((json?.companies || []) as Company[])
+      setStaff((json?.staff || []) as Staff[])
+      setCategories((json?.categories || []) as ExpenseCategory[])
+    } catch (err: any) {
+      setError(err?.message || 'Ошибка загрузки данных')
+      setCompanies([])
+      setStaff([])
+      setCategories([])
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => {

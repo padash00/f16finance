@@ -284,30 +284,15 @@ export default function ShiftsPage() {
   const fetchScheduleData = useCallback(async () => {
 
     const weekStart = weekDays[0].dateISO
-    const weekEnd = weekDays[6].dateISO
 
     try {
-      const [companiesRes, shiftsRes, operatorsRes] = await Promise.all([
-        supabase.from('companies').select('id, name, code').order('name'),
-        supabase
-          .from('shifts')
-          .select('id, date, operator_name, shift_type, company_id')
-          .gte('date', weekStart)
-          .lte('date', weekEnd),
-        supabase
-          .from('operators')
-          .select('id, name, short_name, is_active, operator_profiles(*)')
-          .eq('is_active', true)
-          .order('name'),
-      ])
+      const res = await fetch(`/api/admin/shifts?weekStart=${weekStart}&includeSchedule=1`)
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(payload?.error || `Ошибка запроса (${res.status})`)
 
-      if (companiesRes.error) throw companiesRes.error
-      if (shiftsRes.error) throw shiftsRes.error
-      if (operatorsRes.error) throw operatorsRes.error
-
-      setCompanies(companiesRes.data || [])
-      setShifts(shiftsRes.data || [])
-      setOperators(operatorsRes.data || [])
+      setCompanies(payload?.schedule?.companies || [])
+      setShifts(payload?.schedule?.shifts || [])
+      setOperators(payload?.schedule?.operators || [])
       setError(null)
     } catch (err: any) {
       console.error('❌ Ошибка загрузки:', err)

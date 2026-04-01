@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 
 import { getDefaultAppPath, normalizeStaffRole } from '@/lib/core/access'
-import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { createRequestSupabaseClient, listActiveOperatorLeadAssignments } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, getRequestAccessContext, listActiveOperatorLeadAssignments } from '@/lib/server/request-auth'
 
 function getRoleLabel(params: {
   isSuperAdmin: boolean
@@ -25,23 +24,15 @@ function getRoleLabel(params: {
 
 export async function GET(req: Request) {
   try {
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
+
     const supabase = createRequestSupabaseClient(req)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    }
-
-    const isSuperAdmin = isAdminEmail(user.email)
-    const staffMember = isSuperAdmin ? null : await resolveStaffByUser(supabase, user)
+    const user = access.user!
+    const isSuperAdmin = access.isSuperAdmin
+    const staffMember = access.staffMember
     const staffRole = normalizeStaffRole(staffMember?.role)
-    const { data: operatorAuth } = await supabase
-      .from('operator_auth')
-      .select('id, operator_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
+    const operatorAuth = access.operatorAuth
     const isOperator = !!operatorAuth
     const leadAssignments = operatorAuth
       ? await listActiveOperatorLeadAssignments(supabase, String((operatorAuth as any).operator_id || '')).catch(() => [])
@@ -79,6 +70,13 @@ export async function GET(req: Request) {
         leadAssignmentsCount: leadAssignments.length,
         leadRoleLabel,
       }),
+      isTenantContext: false,
+      isPlatformContext: false,
+      organizationHubRequired: access.organizationHubRequired,
+      organizationSelectionRequired: access.organizationSelectionRequired,
+      organizations: access.organizations,
+      activeOrganization: access.activeOrganization,
+      activeSubscription: access.activeSubscription,
       defaultPath: getDefaultAppPath({
         isSuperAdmin,
         isStaff: isSuperAdmin || !!staffMember,

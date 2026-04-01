@@ -26,18 +26,29 @@ export async function GET(req: Request) {
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
-    let query = supabase
-      .from('companies')
-      .select('id, name, code')
-      .order('name', { ascending: true })
+    const baseQuery = () =>
+      supabase
+        .from('companies')
+        .select('id, name, code')
+        .order('name', { ascending: true })
+
+    let data: any[] | null = null
 
     if (!access.isSuperAdmin && activeOrganizationId) {
-      query = query.eq('organization_id', activeOrganizationId)
+      const scoped = await baseQuery().eq('organization_id', activeOrganizationId)
+      if (scoped.error) throw scoped.error
+      data = scoped.data ?? []
+
+      if (data.length === 0) {
+        const legacy = await baseQuery()
+        if (legacy.error) throw legacy.error
+        data = legacy.data ?? []
+      }
+    } else {
+      const result = await baseQuery()
+      if (result.error) throw result.error
+      data = result.data ?? []
     }
-
-    const { data, error } = await query
-
-    if (error) throw error
 
     return json({ data: data ?? [] })
   } catch (error: any) {

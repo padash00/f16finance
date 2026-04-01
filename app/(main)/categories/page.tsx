@@ -3,7 +3,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabaseClient'
 import {
   FINANCIAL_GROUP_OPTIONS,
   PL_CHAIN,
@@ -60,15 +59,13 @@ export default function CategoriesPage() {
 
   const loadCategories = async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('expense_categories')
-      .select('id, name, type, accounting_group, monthly_budget, created_at')
-      .order('name', { ascending: true })
+    const response = await fetch('/api/admin/expense-categories', { cache: 'no-store' })
+    const body = await response.json().catch(() => null)
 
-    if (error) {
+    if (!response.ok) {
       setError('Ошибка загрузки')
     } else {
-      setCategories((data || []) as Category[])
+      setCategories((body?.data || []) as Category[])
     }
     setLoading(false)
   }
@@ -93,14 +90,19 @@ export default function CategoriesPage() {
     e.preventDefault()
     if (!newName.trim()) return
     setSaving(true)
-    const { error } = await supabase.from('expense_categories').insert([{
-      name: newName.trim(),
-      type: newType.trim() || 'Общее',
-      accounting_group: newAccountingGroup,
-      monthly_budget: Number(newBudget) || 0,
-    }])
-    if (error) {
-      setError(error.message)
+    const response = await fetch('/api/admin/expense-categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: newName.trim(),
+        type: newType.trim() || 'Общее',
+        accounting_group: newAccountingGroup,
+        monthly_budget: Number(newBudget) || 0,
+      }),
+    })
+    const body = await response.json().catch(() => null)
+    if (!response.ok) {
+      setError(body?.error || 'Ошибка сохранения')
     } else {
       setNewName('')
       setNewType('')
@@ -122,10 +124,18 @@ export default function CategoriesPage() {
   const handleSaveEdit = async () => {
     if (!editingId || !editName.trim()) return
     setSaving(true)
-    const { error } = await supabase.from('expense_categories')
-      .update({ name: editName.trim(), type: editType.trim() || null, accounting_group: editAccountingGroup, monthly_budget: Number(editBudget) || 0 })
-      .eq('id', editingId)
-    if (error) {
+    const response = await fetch('/api/admin/expense-categories', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: editingId,
+        name: editName.trim(),
+        type: editType.trim() || null,
+        accounting_group: editAccountingGroup,
+        monthly_budget: Number(editBudget) || 0,
+      }),
+    })
+    if (!response.ok) {
       setError('Ошибка обновления')
     } else {
       setEditingId(null)
@@ -137,8 +147,8 @@ export default function CategoriesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Удалить эту категорию?')) return
     setSaving(true)
-    const { error } = await supabase.from('expense_categories').delete().eq('id', id)
-    if (!error) setCategories(prev => prev.filter(c => c.id !== id))
+    const response = await fetch(`/api/admin/expense-categories?id=${id}`, { method: 'DELETE' })
+    if (response.ok) setCategories(prev => prev.filter(c => c.id !== id))
     setSaving(false)
   }
 

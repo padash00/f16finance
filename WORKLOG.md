@@ -395,6 +395,31 @@
 - `npm run build` ✅
 - `npm run typecheck` ✅
 
+### 2026-04-01 — восстановление данных на страницах после RLS
+
+Сделано:
+- `app/api/auth/session-role/route.ts` снова отдаёт полный набор полей, который ожидают старые страницы и сайдбар: `organizations`, `activeOrganization`, `activeSubscription`, `defaultPath`, `displayName`, `roleLabel`, флаги выбора организации.
+- `lib/server/organizations.ts` получил legacy-fallback для single-tenant данных `F16`: если org-scoped записей нет, helpers подхватывают старые глобальные `companies`, `staff`, `operators`.
+- `app/api/admin/settings/route.ts` получил `GET` и legacy fallback, чтобы точки, сотрудники и категории снова подтягивались даже из старых таблиц без `organization_id`.
+- Добавлен маршрут `app/api/admin/expense-categories/route.ts` и через него переведены экраны категорий и формы расходов.
+- На API переведены основные страницы, которые раньше читали Supabase напрямую и из-за RLS становились пустыми:
+  - `app/(main)/dashboard/page.tsx`
+  - `app/(main)/analytics/page.tsx`
+  - `app/(main)/income/add/page.tsx`
+  - `app/(main)/expenses/add/page.tsx`
+  - `app/(main)/expenses/page.tsx`
+  - `app/(main)/expenses/analysis/page.tsx`
+  - `app/(main)/profitability/page.tsx`
+  - `app/(main)/tax/page.tsx`
+  - `app/(main)/settings/page.tsx`
+  - `app/(main)/staff/page.tsx`
+- `app/api/admin/companies/route.ts` и `app/api/admin/staff/route.ts` теперь умеют fallback на старые данные `F16`, если tenant-данных ещё нет.
+- `app/api/admin/shifts/route.ts` расширен `includeSchedule=1` и теперь умеет серверно отдавать точки, операторов и смены; `app/(main)/shifts/page.tsx` переведён на этот API.
+
+Проверка:
+- `npm run typecheck` ✅
+- `npm run build` ✅
+
 ### 2026-04-01 — super-admin вход на tenant-поддоменах
 
 Сделано:

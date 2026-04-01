@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabaseClient'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -85,31 +84,31 @@ export default function ExpensesDashboard() {
   
   // ================== LOAD ==================
   useEffect(() => {
-    supabase.from('companies').select('id, name, code').order('name').then(({ data }: { data: any }) => {
-        if(data) setCompanies(data)
-    })
+    fetch('/api/admin/companies')
+      .then((res) => res.json().catch(() => null).then((json) => ({ ok: res.ok, json })))
+      .then(({ ok, json }) => {
+        if (ok && json?.data) setCompanies(json.data)
+      })
   }, [])
 
   const loadData = useCallback(async () => {
     setLoading(true)
     const { from, to } = getDateRange(range)
-    
-    let q = supabase
-        .from('expenses')
-        .select('id, date, company_id, category, cash_amount, kaspi_amount, comment')
-        .lte('date', to)
-        .order('date', { ascending: true })
-        .limit(MAX_ROWS)
 
-    // При фильтре "All" не ограничиваем нижнюю дату жестко, иначе берем range
-    if (range !== 'all') {
-        q = q.gte('date', from)
+    const params = new URLSearchParams()
+    params.set('to', to)
+    params.set('page_size', String(MAX_ROWS))
+    params.set('sort', 'date_asc')
+    if (range !== 'all') params.set('from', from)
+    if (companyId !== 'all') params.set('company_id', companyId)
+
+    const res = await fetch(`/api/admin/expenses?${params.toString()}`)
+    const payload = await res.json().catch(() => null)
+    if (res.ok && payload?.data) {
+      setRows(payload.data as ExpenseRow[])
+    } else {
+      setRows([])
     }
-
-    if (companyId !== 'all') q = q.eq('company_id', companyId)
-
-    const { data } = await q
-    if (data) setRows(data as ExpenseRow[])
     setLoading(false)
   }, [range, companyId])
 

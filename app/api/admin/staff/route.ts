@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { assertOrganizationLimitAvailable, ensureOrganizationStaffAccess } from '@/lib/server/organizations'
+import { assertOrganizationLimitAvailable, ensureOrganizationStaffAccess, listOrganizationStaffIds } from '@/lib/server/organizations'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -63,6 +63,59 @@ function requireActiveOrganization(organizationId?: string | null) {
   }
 
   return organizationId
+}
+
+export async function GET(req: Request) {
+  try {
+    const guard = await requireStaffCapabilityRequest(req, 'staff')
+    if (guard) return guard
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
+
+    const url = new URL(req.url)
+    const from = url.searchParams.get('from')
+    const to = url.searchParams.get('to')
+
+    const supabase = hasAdminSupabaseCredentials()
+      ? createAdminSupabaseClient()
+      : createRequestSupabaseClient(req)
+
+    const allowedStaffIds = await listOrganizationStaffIds({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    let staffQuery = supabase
+      .from('staff')
+      .select('id, full_name, role, short_name, monthly_salary, is_active, phone, email')
+      .order('full_name')
+
+    let paymentsQuery = supabase
+      .from('staff_salary_payments')
+      .select('id, staff_id, pay_date, slot, amount, comment, created_at')
+      .order('pay_date', { ascending: true })
+
+    if (from) paymentsQuery = paymentsQuery.gte('pay_date', from)
+    if (to) paymentsQuery = paymentsQuery.lte('pay_date', to)
+
+    if (allowedStaffIds) {
+      if (allowedStaffIds.length === 0) return json({ staff: [], payments: [] })
+      staffQuery = staffQuery.in('id', allowedStaffIds)
+      paymentsQuery = paymentsQuery.in('staff_id', allowedStaffIds)
+    }
+
+    const [staffRes, paymentsRes] = await Promise.all([staffQuery, paymentsQuery])
+    if (staffRes.error) throw staffRes.error
+    if (paymentsRes.error) throw paymentsRes.error
+
+    return json({
+      staff: staffRes.data ?? [],
+      payments: paymentsRes.data ?? [],
+    })
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/staff GET', message: error?.message || 'error' })
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
 }
 
 export async function POST(req: Request) {

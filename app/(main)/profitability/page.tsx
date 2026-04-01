@@ -5,7 +5,6 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { supabase } from '@/lib/supabaseClient'
 import { resolveFinancialGroup, type FinancialGroup } from '@/lib/core/financial-groups'
 import { ArrowDown, ArrowUp, BarChart2, Calculator, CalendarDays, CreditCard, Landmark, Save, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 
@@ -96,21 +95,24 @@ export default function ProfitabilityPage() {
       setLoading(true); setError(null)
       try {
         const [incomeRes, expenseRes, categoriesRes, inputsRes] = await Promise.all([
-          supabase.from('incomes').select('date,cash_amount,kaspi_amount,card_amount,online_amount').gte('date', monthStart(monthFrom)).lte('date', monthEnd(monthTo)).order('date'),
-          supabase.from('expenses').select('date,category,cash_amount,kaspi_amount').gte('date', monthStart(monthFrom)).lte('date', monthEnd(monthTo)).order('date'),
-          supabase.from('expense_categories').select('name,accounting_group'),
+          fetch(`/api/admin/incomes?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}`),
+          fetch(`/api/admin/expenses?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}&page_size=2000`),
+          fetch('/api/admin/expense-categories'),
           fetch(`/api/admin/profitability?from=${monthFrom}&to=${monthTo}&includeKaspiDaily=1`),
         ])
-        if (incomeRes.error) throw incomeRes.error
-        if (expenseRes.error) throw expenseRes.error
-        if (categoriesRes.error) throw categoriesRes.error
+        if (!incomeRes.ok) throw new Error((await incomeRes.json().catch(() => null))?.error || 'Не удалось загрузить доходы')
+        if (!expenseRes.ok) throw new Error((await expenseRes.json().catch(() => null))?.error || 'Не удалось загрузить расходы')
+        if (!categoriesRes.ok) throw new Error((await categoriesRes.json().catch(() => null))?.error || 'Не удалось загрузить категории')
         if (!inputsRes.ok) throw new Error((await inputsRes.json().catch(() => null))?.error || 'Не удалось загрузить месячные вводы')
+        const incomePayload = (await incomeRes.json()) as { data?: IncomeRow[] }
+        const expensePayload = (await expenseRes.json()) as { data?: ExpenseRow[] }
+        const categoriesPayload = (await categoriesRes.json()) as { data?: ExpenseCategoryRow[] }
         const payload = (await inputsRes.json()) as { items?: ProfitabilityInputRow[]; kaspiDaily?: KaspiDailyPayload }
-        setIncomes((incomeRes.data || []) as IncomeRow[])
-        setExpenses((expenseRes.data || []) as ExpenseRow[])
+        setIncomes((incomePayload.data || []) as IncomeRow[])
+        setExpenses((expensePayload.data || []) as ExpenseRow[])
         setExpenseCategories(
           Object.fromEntries(
-            (((categoriesRes.data || []) as ExpenseCategoryRow[]).map((row) => [
+            (((categoriesPayload.data || []) as ExpenseCategoryRow[]).map((row) => [
               String(row.name || '').trim().toLowerCase(),
               resolveFinancialGroup(row.name, row.accounting_group),
             ])),

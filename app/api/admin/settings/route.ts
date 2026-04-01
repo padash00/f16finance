@@ -58,6 +58,86 @@ function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
 }
 
+export async function GET(req: Request) {
+  try {
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
+
+    const activeOrgId = access.activeOrganization?.id || null
+    if (!activeOrgId) {
+      return badRequest('active-organization-required')
+    }
+
+    const supabase = createAdminSupabaseClient()
+    const [companiesRes, staffRes, categoriesRes] = await Promise.all([
+      supabase
+        .from('companies')
+        .select('id, name, code, show_in_structure')
+        .eq('organization_id', activeOrgId)
+        .order('name'),
+      supabase
+        .from('staff')
+        .select('id, full_name, phone, email, role')
+        .eq('organization_id', activeOrgId)
+        .order('full_name'),
+      supabase
+        .from('expense_categories')
+        .select('id, name, monthly_budget, accounting_group, organization_id')
+        .eq('organization_id', activeOrgId)
+        .order('name'),
+    ])
+
+    if (companiesRes.error) throw companiesRes.error
+    if (staffRes.error) throw staffRes.error
+    if (categoriesRes.error) throw categoriesRes.error
+
+    let companies = companiesRes.data || []
+    let staff = staffRes.data || []
+    let categories = categoriesRes.data || []
+
+    if (companies.length === 0) {
+      const legacyCompanies = await supabase
+        .from('companies')
+        .select('id, name, code, show_in_structure')
+        .order('name')
+      if (legacyCompanies.error) throw legacyCompanies.error
+      companies = legacyCompanies.data || []
+    }
+
+    if (staff.length === 0) {
+      const legacyStaff = await supabase
+        .from('staff')
+        .select('id, full_name, phone, email, role')
+        .order('full_name')
+      if (legacyStaff.error) throw legacyStaff.error
+      staff = legacyStaff.data || []
+    }
+
+    if (categories.length === 0) {
+      const legacyCategories = await supabase
+        .from('expense_categories')
+        .select('id, name, monthly_budget, accounting_group, organization_id')
+        .order('name')
+      if (legacyCategories.error) throw legacyCategories.error
+      categories = legacyCategories.data || []
+    }
+
+    return NextResponse.json({
+      companies,
+      staff,
+      categories,
+    })
+  } catch (error: any) {
+    console.error('Admin settings read error', error)
+    await writeSystemErrorLogSafe({
+      scope: 'server',
+      area: 'api/admin/settings GET',
+      message: error?.message || 'Admin settings read error',
+    })
+    return NextResponse.json({ error: error?.message || 'Ошибка сервера' }, { status: 500 })
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const access = await getRequestAccessContext(req)

@@ -43,6 +43,15 @@ import {
   Bar,
 } from 'recharts'
 
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, { cache: 'no-store' })
+  const json = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+  }
+  return json as T
+}
+
 // ==================== TYPES ====================
 
 type Company = { id: string; name: string; code?: string | null }
@@ -772,30 +781,17 @@ export default function SmartDashboardPage() {
       try {
         const { prevFrom } = DateUtils.calcPrevPeriod(dateFrom, dateTo)
 
-        const [cRes, iRes, eRes] = await Promise.all([
-          supabase.from('companies').select('id,name,code').order('name'),
-          supabase
-            .from('incomes')
-            .select('id,date,company_id,cash_amount,kaspi_amount,card_amount,online_amount,comment')
-            .gte('date', prevFrom)
-            .lte('date', dateTo)
-            .order('date', { ascending: false }),
-          supabase
-            .from('expenses')
-            .select('id,date,company_id,category,cash_amount,kaspi_amount,comment')
-            .gte('date', prevFrom)
-            .lte('date', dateTo)
-            .order('date', { ascending: false }),
+        const [companiesBody, incomesBody, expensesBody] = await Promise.all([
+          fetchJson<{ data: Company[] }>('/api/admin/companies'),
+          fetchJson<{ data: IncomeRow[] }>(`/api/admin/incomes?from=${prevFrom}&to=${dateTo}`),
+          fetchJson<{ data: ExpenseRow[] }>(`/api/admin/expenses?from=${prevFrom}&to=${dateTo}`),
         ])
 
         if (!mounted) return
-        if (cRes.error) throw cRes.error
-        if (iRes.error) throw iRes.error
-        if (eRes.error) throw eRes.error
 
-        setCompanies(cRes.data || [])
-        setIncomes(iRes.data || [])
-        setExpenses(eRes.data || [])
+        setCompanies(companiesBody.data || [])
+        setIncomes(incomesBody.data || [])
+        setExpenses(expensesBody.data || [])
       } catch (e: any) {
         setError(e?.message || 'Ошибка загрузки')
       } finally {
@@ -824,30 +820,30 @@ export default function SmartDashboardPage() {
     let mounted = true
     ;(async () => {
       const today = DateUtils.todayISO()
-      const [iRes, eRes] = await Promise.all([
-        supabase
-          .from('incomes')
-          .select('cash_amount, kaspi_amount, card_amount, online_amount')
-          .eq('date', today),
-        supabase
-          .from('expenses')
-          .select('cash_amount, kaspi_amount')
-          .eq('date', today),
+      const [incomesBody, expensesBody] = await Promise.all([
+        fetchJson<{ data: Array<{ cash_amount: number | null; kaspi_amount: number | null; card_amount: number | null; online_amount: number | null }> }>(
+          `/api/admin/incomes?from=${today}&to=${today}`,
+        ),
+        fetchJson<{ data: Array<{ cash_amount: number | null; kaspi_amount: number | null }> }>(
+          `/api/admin/expenses?from=${today}&to=${today}`,
+        ),
       ])
       if (!mounted) return
-      const income = (iRes.data || []).reduce(
+      const income = (incomesBody.data || []).reduce(
         (s: number, r: { cash_amount: number | null; kaspi_amount: number | null; card_amount: number | null; online_amount: number | null }) =>
           s + Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0) + Number(r.card_amount || 0) + Number(r.online_amount || 0),
         0,
       )
-      const expense = (eRes.data || []).reduce(
+      const expense = (expensesBody.data || []).reduce(
         (s: number, r: { cash_amount: number | null; kaspi_amount: number | null }) =>
           s + Number(r.cash_amount || 0) + Number(r.kaspi_amount || 0),
         0,
       )
-      const txCount = (iRes.data?.length || 0) + (eRes.data?.length || 0)
+      const txCount = (incomesBody.data?.length || 0) + (expensesBody.data?.length || 0)
       setTodayStats({ income, expense, txCount })
-    })()
+    })().catch(() => {
+      if (mounted) setTodayStats({ income: 0, expense: 0, txCount: 0 })
+    })
     return () => { mounted = false }
   }, [isAuthenticated])
 

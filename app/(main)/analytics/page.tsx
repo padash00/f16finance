@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
 
 import { Card } from '@/components/ui/card'
@@ -158,8 +157,9 @@ export default function AnalyticsPage() {
   // refs: companies
   useEffect(() => {
     const fetchCompanies = async () => {
-      const { data, error } = await supabase.from('companies').select('id, name, code').order('name')
-      if (!error && data) setCompanies(data as Company[])
+      const response = await fetch('/api/admin/companies', { cache: 'no-store' })
+      const body = await response.json().catch(() => null)
+      if (response.ok && body?.data) setCompanies(body.data as Company[])
     }
     fetchCompanies()
   }, [])
@@ -220,32 +220,26 @@ export default function AnalyticsPage() {
     setLoading(true)
     setErrorText(null)
 
-    let query = supabase
-      .from('incomes')
-      .select('id, date, company_id, cash_amount, kaspi_amount, card_amount')
-      .order('date', { ascending: false })
-
-    if (dateFrom) query = query.gte('date', dateFrom)
-    if (dateTo) query = query.lte('date', dateTo)
-
-    // In compare mode always fetch all companies; in analysis mode respect filter
+    const params = new URLSearchParams()
+    if (dateFrom) params.set('from', dateFrom)
+    if (dateTo) params.set('to', dateTo)
     if (viewType !== 'compare' && companyId !== 'all') {
-      query = query.eq('company_id', companyId)
+      params.set('company_id', companyId)
     }
 
-    query = query.limit(5000)
-
-    const { data, error } = await query
+    const response = await fetch(`/api/admin/incomes?${params}`, { cache: 'no-store' })
     if (reqId !== lastReqId.current) return
 
-    if (error) {
+    if (!response.ok) {
       setRows([])
-      setErrorText(error.message ?? 'Ошибка загрузки данных')
+      const body = await response.json().catch(() => null)
+      setErrorText(body?.error ?? 'Ошибка загрузки данных')
       setLoading(false)
       return
     }
 
-    setRows((data ?? []) as IncomeRow[])
+    const body = await response.json().catch(() => ({ data: [] }))
+    setRows((body.data ?? []) as IncomeRow[])
     setLoading(false)
   }, [dateFrom, dateTo, companyId, viewType])
 

@@ -3,7 +3,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabaseClient'
 import { 
   Calculator,
   CalendarDays,
@@ -77,19 +76,16 @@ export default function TaxPage() {
   useEffect(() => {
     const load = async () => {
         setLoading(true)
-        // 1. Грузим компании, чтобы понять ху из ху (Arena, Ramen, Extra)
-        const { data: comps } = await supabase.from('companies').select('id, name, code');
-        setCompanies(comps || []);
+        const [companiesRes, incomesRes] = await Promise.all([
+          fetch('/api/admin/companies'),
+          fetch(`/api/admin/incomes?from=${dateFrom}&to=${dateTo}`),
+        ])
 
-        // 2. Грузим доходы за период
-        const { data: inc } = await supabase
-            .from('incomes')
-            .select('id, date, company_id, cash_amount, kaspi_amount, card_amount')
-            .gte('date', dateFrom)
-            .lte('date', dateTo)
-            .order('date');
-            
-        setIncomes(inc || []);
+        const companiesJson = await companiesRes.json().catch(() => null)
+        const incomesJson = await incomesRes.json().catch(() => null)
+
+        setCompanies(companiesRes.ok ? (companiesJson?.data || []) : [])
+        setIncomes(incomesRes.ok ? (incomesJson?.data || []) : [])
         setLoading(false);
     }
     load();

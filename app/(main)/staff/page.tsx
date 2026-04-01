@@ -341,28 +341,20 @@ export default function StaffPageSmart() {
     if (showRefresh) setRefreshing(true)
     else setLoading(true)
 
-    const [staffRes, payRes] = await Promise.all([
-      supabase.from('staff').select('id, full_name, role, short_name, monthly_salary, is_active, phone, email').order('full_name'),
-      supabase
-        .from('staff_salary_payments')
-        .select('id, staff_id, pay_date, slot, amount, comment, created_at')
-        .gte('pay_date', monthFrom)
-        .lte('pay_date', monthTo)
-        .order('pay_date', { ascending: true }),
-    ])
+    const response = await fetch(`/api/admin/staff?from=${monthFrom}&to=${monthTo}`, { cache: 'no-store' })
+    const body = await response.json().catch(() => null)
 
-    if (staffRes.error) {
-      console.error('staff load error:', staffRes.error)
-      setPageNotice({ tone: 'error', text: `Ошибка загрузки сотрудников: ${staffRes.error.message}` })
+    if (!response.ok) {
+      setPageNotice({ tone: 'error', text: `Ошибка загрузки сотрудников: ${body?.error || 'неизвестная ошибка'}` })
       setLoading(false)
       setRefreshing(false)
       return
     }
 
-    if (!staffRes.error && !payRes.error) {
-      const staffRows = (staffRes.data as Staff[]) || []
+    {
+      const staffRows = (body?.staff as Staff[]) || []
       setStaff(staffRows)
-      setPayments(payRes.data as StaffPayment[])
+      setPayments((body?.payments as StaffPayment[]) || [])
 
       if (staffRows.length > 0) {
         const response = await fetch(`/api/admin/staff-accounts?staffIds=${encodeURIComponent(staffRows.map((item) => item.id).join(','))}`).catch(() => null)

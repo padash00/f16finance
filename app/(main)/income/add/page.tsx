@@ -27,7 +27,6 @@ import {
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabaseClient'
 
 type Company = {
   id: string
@@ -114,18 +113,21 @@ export default function AddIncomePage() {
       setError(null)
 
       const [compRes, opRes] = await Promise.all([
-        supabase.from('companies').select('id, name, code').order('name'),
-        supabase.from('operators').select('id, name, short_name, is_active').eq('is_active', true).order('name'),
+        fetch('/api/admin/companies', { cache: 'no-store' }),
+        fetch('/api/admin/operators?active_only=true', { cache: 'no-store' }),
       ])
 
-      if (compRes.error || opRes.error) {
+      if (!compRes.ok || !opRes.ok) {
         setError('Не удалось загрузить компании/операторов')
-        setCompanies(compRes.data || [])
-        setOperators(opRes.data || [])
+        setCompanies([])
+        setOperators([])
       } else {
-        setCompanies(compRes.data || [])
-        setOperators(opRes.data || [])
-        if (compRes.data?.length) setCompanyId(compRes.data[0].id)
+        const [companiesBody, operatorsBody] = await Promise.all([compRes.json(), opRes.json()])
+        const loadedCompanies = companiesBody?.data || []
+        const loadedOperators = operatorsBody?.data || []
+        setCompanies(loadedCompanies)
+        setOperators(loadedOperators)
+        if (loadedCompanies?.length) setCompanyId(loadedCompanies[0].id)
       }
 
       setLoadingMeta(false)

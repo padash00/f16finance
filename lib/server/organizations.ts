@@ -429,7 +429,16 @@ export async function resolveCompanyScope(params: {
 
   if (error) throw error
 
-  const allowedCompanyIds = (data || []).map((row: any) => String(row.id))
+  let allowedCompanyIds = (data || []).map((row: any) => String(row.id))
+  if (allowedCompanyIds.length === 0) {
+    const { data: legacyCompanies, error: legacyError } = await supabase
+      .from('companies')
+      .select('id')
+      .order('name', { ascending: true })
+
+    if (legacyError) throw legacyError
+    allowedCompanyIds = (legacyCompanies || []).map((row: any) => String(row.id)).filter(Boolean)
+  }
   if (requestedCompanyId) {
     if (!allowedCompanyIds.includes(requestedCompanyId)) {
       throw new Error('forbidden-company')
@@ -468,7 +477,18 @@ export async function listOrganizationCompanyIds(params: {
     .eq('organization_id', activeOrganizationId)
 
   if (error) throw error
-  return (data || []).map((row: any) => String(row.id))
+  let companyIds = (data || []).map((row: any) => String(row.id)).filter(Boolean)
+  if (companyIds.length === 0) {
+    const { data: legacyCompanies, error: legacyError } = await supabase
+      .from('companies')
+      .select('id')
+      .order('name', { ascending: true })
+
+    if (legacyError) throw legacyError
+    companyIds = (legacyCompanies || []).map((row: any) => String(row.id)).filter(Boolean)
+  }
+
+  return companyIds
 }
 
 export async function listOrganizationCompanyCodes(params: {
@@ -493,9 +513,22 @@ export async function listOrganizationCompanyCodes(params: {
     .not('code', 'is', null)
 
   if (error) throw error
-  return (data || [])
+  let codes = (data || [])
     .map((row: any) => String(row.code || '').trim())
     .filter(Boolean)
+  if (codes.length === 0) {
+    const { data: legacyCodes, error: legacyError } = await supabase
+      .from('companies')
+      .select('code')
+      .not('code', 'is', null)
+
+    if (legacyError) throw legacyError
+    codes = (legacyCodes || [])
+      .map((row: any) => String(row.code || '').trim())
+      .filter(Boolean)
+  }
+
+  return codes
 }
 
 export async function listOrganizationOperatorIds(params: {
@@ -520,7 +553,7 @@ export async function listOrganizationOperatorIds(params: {
 
   if (error) throw error
 
-  return Array.from(
+  let operatorIds = Array.from(
     new Set(
       (data || [])
         .filter((row: any) => {
@@ -531,6 +564,17 @@ export async function listOrganizationOperatorIds(params: {
         .filter(Boolean),
     ),
   )
+  if (operatorIds.length === 0) {
+    const { data: legacyOperators, error: legacyError } = await supabase
+      .from('operators')
+      .select('id')
+      .eq('is_active', true)
+
+    if (legacyError) throw legacyError
+    operatorIds = (legacyOperators || []).map((row: any) => String(row.id)).filter(Boolean)
+  }
+
+  return operatorIds
 }
 
 export async function listOrganizationStaffIds(params: {
@@ -555,7 +599,18 @@ export async function listOrganizationStaffIds(params: {
     .not('staff_id', 'is', null)
 
   if (error) throw error
-  return Array.from(new Set((data || []).map((row: any) => String(row.staff_id || '')).filter(Boolean)))
+  let staffIds = Array.from(new Set((data || []).map((row: any) => String(row.staff_id || '')).filter(Boolean)))
+  if (staffIds.length === 0) {
+    const { data: legacyStaff, error: legacyError } = await supabase
+      .from('staff')
+      .select('id')
+      .order('full_name', { ascending: true })
+
+    if (legacyError) throw legacyError
+    staffIds = (legacyStaff || []).map((row: any) => String(row.id)).filter(Boolean)
+  }
+
+  return staffIds
 }
 
 export async function ensureOrganizationOperatorAccess(params: {

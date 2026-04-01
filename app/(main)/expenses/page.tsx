@@ -42,7 +42,6 @@ import {
   Loader2,
   Bookmark,
 } from 'lucide-react'
-import { supabase } from '@/lib/supabaseClient'
 import {
   ResponsiveContainer,
   Line,
@@ -332,10 +331,25 @@ export default function ExpensesPage() {
   const [categoryBudgets, setCategoryBudgets] = useState<{id:string,name:string,monthly_budget:number}[]>([])
   const [allCategories, setAllCategories] = useState<{id:string,name:string}[]>([])
   useEffect(() => {
-    supabase.from('expense_categories').select('id,name,monthly_budget').gt('monthly_budget', 0)
-      .then(({data}: {data: {id:string,name:string,monthly_budget:number}[] | null}) => setCategoryBudgets(data ?? []))
-    supabase.from('expense_categories').select('id,name').order('name')
-      .then(({data}: {data: {id:string,name:string}[] | null}) => setAllCategories(data ?? []))
+    fetch('/api/admin/expense-categories', { cache: 'no-store' })
+      .then(r => r.json())
+      .then((body) => {
+        const categories = (body?.data || []) as Array<{id:string,name:string,monthly_budget?:number | null}>
+        setCategoryBudgets(
+          categories
+            .filter((item) => Number(item.monthly_budget || 0) > 0)
+            .map((item) => ({
+              id: item.id,
+              name: item.name,
+              monthly_budget: Number(item.monthly_budget || 0),
+            })),
+        )
+        setAllCategories(categories.map((item) => ({ id: item.id, name: item.name })))
+      })
+      .catch(() => {
+        setCategoryBudgets([])
+        setAllCategories([])
+      })
   }, [])
 
   // Data hooks

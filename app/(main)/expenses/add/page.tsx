@@ -27,7 +27,6 @@ import {
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabaseClient'
 import { getFinancialGroupLabel, type FinancialGroup } from '@/lib/core/financial-groups'
 
 type ExpenseCategory = { id: string; name: string; accounting_group: FinancialGroup | null; monthly_budget: number | null }
@@ -128,20 +127,21 @@ export default function AddExpensePage() {
       setError(null)
 
       const [catRes, compRes, opRes] = await Promise.all([
-        supabase.from('expense_categories').select('id, name, accounting_group, monthly_budget').order('name'),
-        supabase.from('companies').select('id, name, code').order('name'),
-        supabase.from('operators').select('id, name, short_name, is_active').eq('is_active', true).order('name'),
+        fetch('/api/admin/expense-categories', { cache: 'no-store' }),
+        fetch('/api/admin/companies', { cache: 'no-store' }),
+        fetch('/api/admin/operators?active_only=true', { cache: 'no-store' }),
       ])
 
-      if (catRes.error || compRes.error || opRes.error) {
+      if (!catRes.ok || !compRes.ok || !opRes.ok) {
         setError('Ошибка загрузки справочников')
         setLoading(false)
         return
       }
 
-      const cats = (catRes.data || []) as ExpenseCategory[]
-      const comps = (compRes.data || []) as Company[]
-      const ops = (opRes.data || []) as Operator[]
+      const [catsBody, compsBody, opsBody] = await Promise.all([catRes.json(), compRes.json(), opRes.json()])
+      const cats = (catsBody.data || []) as ExpenseCategory[]
+      const comps = (compsBody.data || []) as Company[]
+      const ops = (opsBody.data || []) as Operator[]
 
       setCategories(cats)
       setCompanies(comps)
@@ -182,14 +182,13 @@ export default function AddExpensePage() {
       const lastDay = new Date(y, now.getMonth() + 1, 0).getDate()
       const monthEnd = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
 
-      const { data } = await supabase
-        .from('expenses')
-        .select('cash_amount, kaspi_amount')
-        .eq('category', categoryName)
-        .gte('date', monthStart)
-        .lte('date', monthEnd)
+      const response = await fetch(
+        `/api/admin/expenses?from=${monthStart}&to=${monthEnd}&category=${encodeURIComponent(categoryName)}`,
+        { cache: 'no-store' },
+      )
+      const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] }
 
-      const spent = (data || []).reduce(
+      const spent = ((body.data || []) as Array<{ cash_amount: number | null; kaspi_amount: number | null }>).reduce(
         (sum: number, row: { cash_amount: number | null; kaspi_amount: number | null }) => sum + Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0),
         0,
       )

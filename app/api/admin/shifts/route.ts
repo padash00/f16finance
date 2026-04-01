@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
-import { resolveCompanyScope } from '@/lib/server/organizations'
+import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { loadShiftWeekWorkflow, publishShiftWeekForCompany, resolveShiftChangeRequest } from '@/lib/server/shift-workflow'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -959,6 +959,7 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url)
     const weekStart = url.searchParams.get('weekStart')?.trim()
+    const includeSchedule = url.searchParams.get('includeSchedule') === '1'
     if (!weekStart) {
       return badRequest('weekStart обязателен')
     }
@@ -966,6 +967,7 @@ export async function GET(req: Request) {
     const requestClient = createRequestSupabaseClient(req)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient
     const workflow = await loadShiftWeekWorkflow(supabase, weekStart)
+    const weekEnd = shiftIsoDate(weekStart, 6)
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
@@ -982,7 +984,65 @@ export async function GET(req: Request) {
       workflow.requests = []
     }
 
-    return NextResponse.json({ ok: true, ...workflow })
+    if (!includeSchedule) {
+      return NextResponse.json({ ok: true, ...workflow })
+    }
+
+    let companiesQuery = supabase.from('companies').select('id, name, code').order('name')
+    let shiftsQuery = supabase
+      .from('shifts')
+      .select('id, date, operator_name, shift_type, company_id')
+      .gte('date', weekStart)
+      .lte('date', weekEnd)
+    let operatorsQuery = supabase
+      .from('operators')
+      .select('id, name, short_name, is_active, operator_profiles(*)')
+      .eq('is_active', true)
+      .order('name')
+
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      companiesQuery = companiesQuery.in('id', companyScope.allowedCompanyIds)
+      shiftsQuery = shiftsQuery.in('company_id', companyScope.allowedCompanyIds)
+    } else if (!access.isSuperAdmin) {
+      return NextResponse.json({
+        ok: true,
+        ...workflow,
+        schedule: { companies: [], shifts: [], operators: [] },
+      })
+    }
+
+    const allowedOperatorIds = await listOrganizationOperatorIds({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    if (allowedOperatorIds) {
+      if (allowedOperatorIds.length === 0) {
+        operatorsQuery = operatorsQuery.in('id', ['__none__'])
+      } else {
+        operatorsQuery = operatorsQuery.in('id', allowedOperatorIds)
+      }
+    }
+
+    const [companiesRes, shiftsRes, operatorsRes] = await Promise.all([
+      companiesQuery,
+      shiftsQuery,
+      operatorsQuery,
+    ])
+
+    if (companiesRes.error) throw companiesRes.error
+    if (shiftsRes.error) throw shiftsRes.error
+    if (operatorsRes.error) throw operatorsRes.error
+
+    return NextResponse.json({
+      ok: true,
+      ...workflow,
+      schedule: {
+        companies: companiesRes.data || [],
+        shifts: shiftsRes.data || [],
+        operators: operatorsRes.data || [],
+      },
+    })
   } catch (error: any) {
     console.error('Admin shifts workflow GET error', error)
     await writeSystemErrorLogSafe({
