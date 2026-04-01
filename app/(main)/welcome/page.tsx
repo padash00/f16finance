@@ -25,6 +25,7 @@ import {
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import type { StaffRole } from '@/lib/core/access'
+import { getTenantBaseHost } from '@/lib/core/tenant-domain'
 
 type SessionRoleResponse = {
   ok: boolean
@@ -96,12 +97,18 @@ export default function WelcomePage() {
         }
 
         setIsSuperAdmin(!!json.isSuperAdmin)
-        setIsTenantContext(!!json.isTenantContext)
+        const currentHost =
+          typeof window !== 'undefined'
+            ? window.location.hostname.replace(/^www\./i, '').toLowerCase()
+            : null
+        const baseHost = getTenantBaseHost().replace(/^www\./i, '').toLowerCase()
+        const hostSaysTenant = !!currentHost && currentHost !== baseHost
+        setIsTenantContext(hostSaysTenant || !!json.isTenantContext)
         setStaffRole((json.staffRole as StaffRole | null) || null)
         setRoleLabel((json.roleLabel as string | null) || null)
         setDisplayName((json.displayName as string | null) || null)
 
-        if (json.isSuperAdmin && !json.isTenantContext) {
+        if (json.isSuperAdmin && !(hostSaysTenant || !!json.isTenantContext)) {
           router.replace('/dashboard')
           return
         }
