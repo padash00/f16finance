@@ -134,22 +134,6 @@ export default function LoginForm({
       : 'Для операторов и сотрудников смены, которые входят по логину.'
   }, [mode])
 
-  const resolvePostLoginPath = (payload: any) => {
-    if (!isTenantSubdomain && !payload?.isTenantContext && (payload?.organizationHubRequired || payload?.organizationSelectionRequired)) {
-      return '/platform'
-    }
-    if (isTenantSubdomain || payload?.isTenantContext) {
-      const rawPath = payload?.defaultPath ? String(payload.defaultPath) : '/dashboard'
-      const isSafePath = rawPath.startsWith('/') && !rawPath.startsWith('//')
-      return isSafePath ? rawPath : '/dashboard'
-    }
-    const rawPath = payload?.defaultPath ? String(payload.defaultPath) : '/'
-    const isSafePath = rawPath.startsWith('/') && !rawPath.startsWith('//')
-    const resolvedPath = isSafePath && rawPath !== '/login' && rawPath !== '/operator-login' ? rawPath : '/'
-
-    return resolvedPath
-  }
-
   const navigateAfterLogin = (path: string) => {
     // Full navigation avoids a race where Supabase SSR cookies are not yet
     // visible to middleware during an immediate RSC transition after sign-in.
@@ -179,9 +163,7 @@ export default function LoginForm({
           body: JSON.stringify({ method: 'email', target: 'staff' }),
         }).catch(() => null)
 
-        const response = await fetch('/api/auth/session-role').catch(() => null)
-        const json = await response?.json().catch(() => null)
-        navigateAfterLogin(response?.ok ? resolvePostLoginPath(json) : '/')
+        navigateAfterLogin('/welcome')
         return
       }
 
@@ -232,9 +214,7 @@ export default function LoginForm({
         body: JSON.stringify({ authId: authByUser.id }),
       })
 
-      const response = await fetch('/api/auth/session-role').catch(() => null)
-      const json = await response?.json().catch(() => null)
-      navigateAfterLogin(response?.ok ? resolvePostLoginPath(json) : '/operator-dashboard')
+      navigateAfterLogin('/operator-dashboard')
     } catch (err: any) {
       console.error('Login error:', err)
       await fetch('/api/auth/login-attempt', {
