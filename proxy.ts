@@ -368,7 +368,14 @@ export async function proxy(request: NextRequest) {
   const requestedPath = url.pathname
   const requestedTarget = `${requestedPath}${url.search}`
 
-  if (hostOrganizationId && isSuperAdmin && (requestedPath === '/platform' || requestedPath.startsWith('/platform/'))) {
+  if (hostOrganizationId && isSuperAdmin && requestedPath === '/platform') {
+    const workspaceUrl = url.clone()
+    workspaceUrl.pathname = '/workspace'
+    workspaceUrl.search = ''
+    return setActiveOrganizationCookie(NextResponse.rewrite(workspaceUrl), activeOrganizationId)
+  }
+
+  if (hostOrganizationId && isSuperAdmin && requestedPath.startsWith('/platform/')) {
     const workspaceUrl = url.clone()
     workspaceUrl.pathname = '/workspace'
     workspaceUrl.search = ''
