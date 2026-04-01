@@ -4,7 +4,7 @@ import { getDefaultAppPath, normalizeStaffRole } from '@/lib/core/access'
 import { getTenantBaseHost } from '@/lib/core/tenant-domain'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext, listActiveOperatorLeadAssignments } from '@/lib/server/request-auth'
-import { normalizeRequestHost, resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
+import { normalizeRequestHost, resolveDefaultOrganization, resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
 
 function getRoleLabel(params: {
   isSuperAdmin: boolean
@@ -32,7 +32,9 @@ export async function GET(req: Request) {
     const baseHost = getTenantBaseHost().toLowerCase()
     const isTenantHost =
       !!normalizedHost && normalizedHost !== baseHost && normalizedHost !== `www.${baseHost}`
-    const hostOrganization = await resolveOrganizationByHost(req.headers.get('host'))
+    const hostOrganization = isTenantHost
+      ? await resolveOrganizationByHost(req.headers.get('host'))
+      : await resolveDefaultOrganization()
     const isTenantContext = isTenantHost || Boolean(hostOrganization?.id)
 
     const {

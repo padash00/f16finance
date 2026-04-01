@@ -28,7 +28,7 @@ import { ContactLeadForm } from '@/components/public/contact-lead-form'
 import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/core/site'
 import { getTenantBaseHost } from '@/lib/core/tenant-domain'
-import { normalizeRequestHost, resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
+import { normalizeRequestHost, resolveDefaultOrganization, resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
 
 import LoginForm from './login/LoginForm'
 
@@ -244,10 +244,12 @@ export default async function MarketingHomePage() {
   const normalizedHost = normalizeRequestHost(host)
   const isTenantSubdomain =
     !!normalizedHost && normalizedHost !== baseHost && normalizedHost !== `www.${baseHost}`
+  const entryOrganization = isTenantSubdomain
+    ? await resolveOrganizationByHost(host)
+    : await resolveDefaultOrganization()
 
-  if (isTenantSubdomain) {
-    const org = await resolveOrganizationByHost(host)
-    const hostOrg = org?.id ? { name: org.name, slug: org.slug } : null
+  if (entryOrganization?.id) {
+    const hostOrg = { name: entryOrganization.name, slug: entryOrganization.slug }
     return <LoginForm hostOrg={hostOrg} isTenantSubdomain={true} platformUrl={SITE_URL} />
   }
 

@@ -11,6 +11,7 @@ type HostOrganization = {
 
 const HOST_CACHE_TTL_MS = 60_000 // 1 minute
 const hostCache = new Map<string, { value: HostOrganization; expiresAt: number }>()
+const defaultOrgCache = new Map<string, { value: HostOrganization; expiresAt: number }>()
 
 function createServiceSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
@@ -33,6 +34,44 @@ export function normalizeRequestHost(hostHeader: string | null | undefined) {
     .split(':')[0]
 
   return normalizeTenantHost(rawHost)
+}
+
+export function getDefaultOrganizationSlug() {
+  return String(process.env.DEFAULT_ORGANIZATION_SLUG || 'f16')
+    .trim()
+    .toLowerCase()
+}
+
+export async function resolveDefaultOrganization(): Promise<HostOrganization> {
+  const slug = getDefaultOrganizationSlug()
+  if (!slug) return null
+
+  const cached = defaultOrgCache.get(slug)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value
+  }
+
+  const supabase = createServiceSupabaseClient()
+  if (!supabase) return null
+
+  const { data } = await supabase
+    .from('organizations')
+    .select('id, name, slug, status')
+    .eq('slug', slug)
+    .limit(1)
+    .maybeSingle()
+
+  const result: HostOrganization = (data as any)?.id
+    ? {
+        id: String((data as any).id),
+        name: String((data as any).name || ''),
+        slug: String((data as any).slug || ''),
+        status: String((data as any).status || 'active'),
+      }
+    : null
+
+  defaultOrgCache.set(slug, { value: result, expiresAt: Date.now() + HOST_CACHE_TTL_MS })
+  return result
 }
 
 export async function resolveOrganizationByHost(hostHeader: string | null | undefined): Promise<HostOrganization> {

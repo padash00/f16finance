@@ -13,7 +13,7 @@ import {
 import { APEX_MAINTENANCE_MODE, SITE_URL } from '@/lib/core/site'
 import { getTenantBaseHost } from '@/lib/core/tenant-domain'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
-import { normalizeRequestHost, resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
+import { normalizeRequestHost, resolveDefaultOrganization, resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
 
 const AUTH_SELF_SERVICE_PATHS = ['/forgot-password', '/reset-password', '/set-password', '/auth/callback', '/auth/complete'] as const
 const ACTIVE_ORGANIZATION_COOKIE = 'oc_org'
@@ -249,13 +249,23 @@ export async function proxy(request: NextRequest) {
   const normalizedHost = normalizeRequestHost(request.headers.get('host'))
   const baseHost = getTenantBaseHost().toLowerCase()
   const isTenantSubdomain = Boolean(normalizedHost && normalizedHost !== baseHost && normalizedHost !== `www.${baseHost}`)
-  const hostOrganization = await resolveOrganizationByHost(request.headers.get('host'))
+  const resolvedHostOrganization = await resolveOrganizationByHost(request.headers.get('host'))
+  const defaultOrganization = !isTenantSubdomain ? await resolveDefaultOrganization() : null
+  const hostOrganization = resolvedHostOrganization || defaultOrganization
   const hostOrganizationId = hostOrganization?.id || null
 
   // Marketing/landing paths that should not be visible on tenant subdomains
   const PLATFORM_ONLY_PATHS = ['/', '/club-management-system', '/operator-salary-system', '/profit-and-loss-ebitda', '/point-terminal']
 
   if (!user) {
+    if (hostOrganizationId && !AUTH_SELF_SERVICE_PATHS.some((path) => url.pathname.startsWith(path))) {
+      if (url.pathname === '/' || url.pathname === '/login') {
+        return response
+      }
+      url.pathname = '/login'
+      url.search = ''
+      return NextResponse.redirect(url)
+    }
     // On a tenant subdomain redirect platform-only marketing pages to login
     if (isTenantSubdomain && PLATFORM_ONLY_PATHS.includes(url.pathname) && url.pathname !== '/') {
       url.pathname = '/login'
@@ -329,7 +339,7 @@ export async function proxy(request: NextRequest) {
         ? defaultOrganizationId
         : null
   const needsOrganizationSelection = isSuperAdmin && organizations.length > 0 && !hostOrganizationId && !hasRequestedOrganization
-  const organizationHubRequired = isSuperAdmin && organizations.length > 0 && !hostOrganizationId
+  const organizationHubRequired = false
   const subscriptionFeatures = isSuperAdmin
     ? null
     : await resolveActiveSubscriptionFeatures({
@@ -398,7 +408,7 @@ export async function proxy(request: NextRequest) {
 
   if (requestedPath.startsWith('/platform')) {
     if (hostOrganizationId) {
-      url.pathname = effectiveDefaultPath
+      url.pathname = '/dashboard'
       url.search = ''
       return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
     }
@@ -411,7 +421,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!organizations.length) {
-    url.pathname = isSuperAdmin ? '/platform' : '/select-organization'
+    url.pathname = hostOrganizationId ? '/login' : isSuperAdmin ? '/platform' : '/select-organization'
     return NextResponse.redirect(url)
   }
 

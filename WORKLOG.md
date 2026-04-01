@@ -402,3 +402,16 @@
 Проверка:
 - `npm run build` ✅
 - `npm run typecheck` ✅
+
+### 2026-04-01 — временный rollback в single-tenant режим F16
+
+Сделано:
+- `ordaops.kz` временно переведён в тот же контур, что и `F16`: основной домен больше не считается отдельной SaaS-платформой и открывает вход в организацию `F16`.
+- Добавлен fallback-resolver дефолтной организации по slug `f16` в `lib/server/tenant-hosts.ts`.
+- `app/page.tsx` и `app/login/page.tsx` теперь рендерят tenant-login для `F16` и на apex-домене.
+- `proxy.ts` больше не ведёт apex-пользователя в `/platform`; логика временно сведена к прямому входу в `F16` и редиректу `/platform -> /dashboard`.
+- `app/api/auth/session-role/route.ts` и `app/platform/layout.tsx` синхронизированы с этим rollback-сценарием.
+
+Проверка:
+- `npm run build` ✅
+- `npm run typecheck` ✅
