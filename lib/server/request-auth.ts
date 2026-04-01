@@ -132,10 +132,8 @@ export async function getRequestAccessContext(request: Request): Promise<
   const activeSubscription = await resolveActiveOrganizationSubscription({
     activeOrganizationId: activeOrganization?.id || null,
   })
-  const organizationHubRequired = isSuperAdmin && organizationAccess.organizations.length > 0 && !hostOrganizationLocked
-  const organizationSelectionRequired =
-    organizationHubRequired &&
-    (!requestedOrganizationId || !organizationAccess.organizations.some((item) => item.id === requestedOrganizationId))
+  const organizationHubRequired = false
+  const organizationSelectionRequired = false
 
   if (isSuperAdmin) {
     return {

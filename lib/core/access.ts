@@ -505,5 +505,6 @@ export function canUsePathForSubscription(
   pathname: string,
   features: Partial<Record<SubscriptionFeature, boolean>> | null | undefined,
 ) {
-  return hasSubscriptionFeature(features, getRequiredSubscriptionFeature(pathname))
+  // SaaS subscription gating removed — all paths are accessible
+  return true
 }
