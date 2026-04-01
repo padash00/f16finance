@@ -139,9 +139,9 @@ export default function LoginForm({
       return '/platform'
     }
     if (isTenantSubdomain || payload?.isTenantContext) {
-      const rawPath = payload?.defaultPath ? String(payload.defaultPath) : '/workspace'
+      const rawPath = payload?.defaultPath ? String(payload.defaultPath) : '/dashboard'
       const isSafePath = rawPath.startsWith('/') && !rawPath.startsWith('//')
-      return isSafePath ? rawPath : '/workspace'
+      return isSafePath ? rawPath : '/dashboard'
     }
     const rawPath = payload?.defaultPath ? String(payload.defaultPath) : '/'
     const isSafePath = rawPath.startsWith('/') && !rawPath.startsWith('//')

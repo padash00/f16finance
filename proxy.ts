@@ -339,7 +339,7 @@ export async function proxy(request: NextRequest) {
   const defaultPath = getDefaultAppPath({ isSuperAdmin, isStaff, isOperator, staffRole })
   const effectiveDefaultPath = hostOrganizationId
     ? isSuperAdmin
-      ? '/workspace'
+      ? '/dashboard'
       : defaultPath.startsWith('/platform')
         ? '/dashboard'
         : defaultPath
@@ -369,17 +369,17 @@ export async function proxy(request: NextRequest) {
   const requestedTarget = `${requestedPath}${url.search}`
 
   if (hostOrganizationId && isSuperAdmin && requestedPath === '/platform') {
-    const workspaceUrl = url.clone()
-    workspaceUrl.pathname = '/workspace'
-    workspaceUrl.search = ''
-    return setActiveOrganizationCookie(NextResponse.redirect(workspaceUrl), activeOrganizationId)
+    const tenantUrl = url.clone()
+    tenantUrl.pathname = '/dashboard'
+    tenantUrl.search = ''
+    return setActiveOrganizationCookie(NextResponse.redirect(tenantUrl), activeOrganizationId)
   }
 
   if (hostOrganizationId && isSuperAdmin && requestedPath.startsWith('/platform/')) {
-    const workspaceUrl = url.clone()
-    workspaceUrl.pathname = '/workspace'
-    workspaceUrl.search = ''
-    return setActiveOrganizationCookie(NextResponse.redirect(workspaceUrl), activeOrganizationId)
+    const tenantUrl = url.clone()
+    tenantUrl.pathname = '/dashboard'
+    tenantUrl.search = ''
+    return setActiveOrganizationCookie(NextResponse.redirect(tenantUrl), activeOrganizationId)
   }
 
   if (requestedPath === '/select-organization') {
