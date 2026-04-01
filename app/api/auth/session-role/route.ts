@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 
 import { getDefaultAppPath, normalizeStaffRole } from '@/lib/core/access'
+import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { getRequestAccessContext, listActiveOperatorLeadAssignments } from '@/lib/server/request-auth'
+import { createRequestSupabaseClient, listActiveOperatorLeadAssignments } from '@/lib/server/request-auth'
 
 function getRoleLabel(params: {
   isSuperAdmin: boolean
@@ -24,26 +25,26 @@ function getRoleLabel(params: {
 
 export async function GET(req: Request) {
   try {
-    const access = await getRequestAccessContext(req)
-    if ('response' in access) return access.response
-
+    const supabase = createRequestSupabaseClient(req)
     const {
-      supabase,
-      user,
-      isSuperAdmin,
-      staffMember,
-      staffRole,
-      operatorAuth,
-      organizations,
-      activeOrganization,
-      activeSubscription,
-      organizationHubRequired,
-      organizationSelectionRequired,
-    } = access
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
+
+    const isSuperAdmin = isAdminEmail(user.email)
+    const staffMember = isSuperAdmin ? null : await resolveStaffByUser(supabase, user)
+    const staffRole = normalizeStaffRole(staffMember?.role)
+    const { data: operatorAuth } = await supabase
+      .from('operator_auth')
+      .select('id, operator_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
     const isOperator = !!operatorAuth
     const leadAssignments = operatorAuth
-      ? await listActiveOperatorLeadAssignments(supabase, String((operatorAuth as any).operator_id || ''))
-          .catch(() => [])
+      ? await listActiveOperatorLeadAssignments(supabase, String((operatorAuth as any).operator_id || '')).catch(() => [])
       : []
     const leadRoleLabel =
       leadAssignments[0]?.role_in_company === 'senior_cashier'
@@ -52,18 +53,13 @@ export async function GET(req: Request) {
           ? 'Старший оператор'
           : null
     const displayName =
-      (isSuperAdmin ? null : staffMember?.full_name || staffMember?.short_name) ||
-      user?.user_metadata?.name ||
-      user?.email ||
-      null
+      (isSuperAdmin ? null : staffMember?.full_name || staffMember?.short_name) || user.user_metadata?.name || user.email || null
 
     return NextResponse.json({
       ok: true,
-      email: user?.email || null,
+      email: user.email || null,
       displayName,
       isSuperAdmin,
-      isTenantContext: false,
-      isPlatformContext: !!isSuperAdmin,
       isStaff: isSuperAdmin || !!staffMember,
       isOperator,
       isLeadOperator: leadAssignments.length > 0,
@@ -83,43 +79,6 @@ export async function GET(req: Request) {
         leadAssignmentsCount: leadAssignments.length,
         leadRoleLabel,
       }),
-      organizations: organizations.map((organization) => ({
-        id: organization.id,
-        name: organization.name,
-        slug: organization.slug,
-        status: organization.status,
-        accessRole: organization.accessRole,
-        isDefault: organization.isDefault,
-      })),
-      activeOrganization: activeOrganization
-        ? {
-            id: activeOrganization.id,
-            name: activeOrganization.name,
-            slug: activeOrganization.slug,
-            status: activeOrganization.status,
-            accessRole: activeOrganization.accessRole,
-          }
-        : null,
-      activeSubscription: activeSubscription
-        ? {
-            id: activeSubscription.id,
-            status: activeSubscription.status,
-            billingPeriod: activeSubscription.billingPeriod,
-            startsAt: activeSubscription.startsAt,
-            endsAt: activeSubscription.endsAt,
-            plan: activeSubscription.plan
-              ? {
-                  id: activeSubscription.plan.id,
-                  code: activeSubscription.plan.code,
-                  name: activeSubscription.plan.name,
-                  features: activeSubscription.plan.features,
-                  limits: activeSubscription.plan.limits,
-                }
-              : null,
-          }
-        : null,
-      organizationHubRequired,
-      organizationSelectionRequired,
       defaultPath: getDefaultAppPath({
         isSuperAdmin,
         isStaff: isSuperAdmin || !!staffMember,

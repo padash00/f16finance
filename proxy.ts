@@ -1,194 +1,20 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-import {
-  canAccessPath,
-  getDefaultAppPath,
-  getRequiredSubscriptionFeature,
-  hasSubscriptionFeature,
-  normalizeStaffRole,
-  isPublicPath,
-  type SubscriptionFeature,
-} from '@/lib/core/access'
-import { APEX_MAINTENANCE_MODE, SITE_URL } from '@/lib/core/site'
-import { getTenantBaseHost } from '@/lib/core/tenant-domain'
+import { canAccessPath, getDefaultAppPath, normalizeStaffRole, isPublicPath } from '@/lib/core/access'
+import { SITE_URL } from '@/lib/core/site'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
-import { normalizeRequestHost } from '@/lib/server/tenant-hosts'
 
 const AUTH_SELF_SERVICE_PATHS = ['/forgot-password', '/reset-password', '/set-password', '/auth/callback', '/auth/complete'] as const
-const ACTIVE_ORGANIZATION_COOKIE = 'oc_org'
 
-function getPrimarySiteHosts() {
-  const url = new URL(SITE_URL)
-  const hostname = url.hostname.toLowerCase()
-  return new Set([hostname, `www.${hostname.replace(/^www\./, '')}`])
-}
-
-function shouldServeApexMaintenance(hostHeader: string | null) {
-  if (!APEX_MAINTENANCE_MODE) return false
-  const host = String(hostHeader || '')
+function normalizeHost(hostHeader: string | null) {
+  return String(hostHeader || '')
     .trim()
     .toLowerCase()
     .split(':')[0]
-  if (!host) return false
-  return getPrimarySiteHosts().has(host)
-}
-
-function clearSessionCookies(request: NextRequest, response: NextResponse) {
-  const cookieNames = request.cookies
-    .getAll()
-    .map((cookie) => cookie.name)
-    .filter((name) => name === ACTIVE_ORGANIZATION_COOKIE || name.startsWith('sb-'))
-
-  for (const name of cookieNames) {
-    response.cookies.set({
-      name,
-      value: '',
-      path: '/',
-      expires: new Date(0),
-    })
-  }
-
-  return response
-}
-
-function setActiveOrganizationCookie(response: NextResponse, organizationId: string | null) {
-  if (!organizationId) return response
-  response.cookies.set({
-    name: ACTIVE_ORGANIZATION_COOKIE,
-    value: organizationId,
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 365,
-  })
-  return response
-}
-
-function dedupeOrganizationIds(items: Array<{ id: string; isDefault: boolean }>) {
-  const map = new Map<string, { id: string; isDefault: boolean }>()
-  for (const item of items) {
-    const current = map.get(item.id)
-    if (!current) {
-      map.set(item.id, item)
-      continue
-    }
-    if (!current.isDefault && item.isDefault) {
-      map.set(item.id, item)
-    }
-  }
-  return Array.from(map.values())
-}
-
-async function resolveAccessibleOrganizations(params: {
-  supabase: ReturnType<typeof createServerClient>
-  isSuperAdmin: boolean
-  staffMember: any | null
-  operatorAuth: any | null
-  userEmail?: string | null
-}) {
-  const { supabase, isSuperAdmin, staffMember, operatorAuth, userEmail } = params
-  const organizations: Array<{ id: string; isDefault: boolean }> = []
-
-  if (isSuperAdmin) {
-    const { data } = await supabase.from('organizations').select('id').order('name', { ascending: true })
-    for (const [index, row] of (data || []).entries()) {
-      organizations.push({ id: String((row as any).id), isDefault: index === 0 })
-    }
-  }
-
-  if (staffMember?.id) {
-    const { data } = await supabase
-      .from('organization_members')
-      .select('organization_id, is_default, organization:organization_id(status)')
-      .eq('staff_id', staffMember.id)
-      .eq('status', 'active')
-    for (const row of data || []) {
-      const organization = Array.isArray((row as any).organization) ? (row as any).organization[0] || null : (row as any).organization || null
-      if (organization?.status === 'suspended') continue
-      organizations.push({
-        id: String((row as any).organization_id),
-        isDefault: Boolean((row as any).is_default),
-      })
-    }
-  }
-
-  if (userEmail) {
-    const { data } = await supabase
-      .from('organization_members')
-      .select('organization_id, is_default, organization:organization_id(status)')
-      .eq('email', userEmail)
-      .eq('status', 'active')
-    for (const row of data || []) {
-      const organization = Array.isArray((row as any).organization) ? (row as any).organization[0] || null : (row as any).organization || null
-      if (organization?.status === 'suspended') continue
-      organizations.push({
-        id: String((row as any).organization_id),
-        isDefault: Boolean((row as any).is_default),
-      })
-    }
-  }
-
-  if (operatorAuth?.operator_id) {
-    const { data } = await supabase
-      .from('operator_company_assignments')
-      .select('company:company_id(organization_id, organization:organization_id(status))')
-      .eq('operator_id', operatorAuth.operator_id)
-      .eq('is_active', true)
-    for (const row of data || []) {
-      const company = Array.isArray((row as any).company) ? (row as any).company[0] || null : (row as any).company || null
-      const organization = Array.isArray(company?.organization) ? company.organization[0] || null : company?.organization || null
-      if (organization?.status === 'suspended') continue
-      if (company?.organization_id) {
-        organizations.push({
-          id: String(company.organization_id),
-          isDefault: organizations.length === 0,
-        })
-      }
-    }
-  }
-
-  return dedupeOrganizationIds(organizations)
-}
-
-async function resolveActiveSubscriptionFeatures(params: {
-  supabase: ReturnType<typeof createServerClient>
-  organizationId?: string | null
-}) {
-  const { supabase, organizationId } = params
-  if (!organizationId) return {}
-
-  const { data } = await supabase
-    .from('organization_subscriptions')
-    .select('plan:plan_id(features)')
-    .eq('organization_id', organizationId)
-    .order('starts_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const plan = Array.isArray((data as any)?.plan) ? (data as any).plan[0] || null : (data as any)?.plan || null
-  return ((plan?.features as Partial<Record<SubscriptionFeature, boolean>> | null) || {})
 }
 
 export async function proxy(request: NextRequest) {
-  const maintenanceMode = shouldServeApexMaintenance(request.headers.get('host'))
-  if (maintenanceMode && !request.nextUrl.pathname.startsWith('/api/')) {
-    const url = request.nextUrl.clone()
-    if (url.pathname !== '/maintenance') {
-      url.pathname = '/maintenance'
-      url.search = ''
-      return clearSessionCookies(request, NextResponse.redirect(url))
-    }
-    return clearSessionCookies(
-      request,
-      NextResponse.next({
-        request: {
-          headers: request.headers,
-        },
-      }),
-    )
-  }
-
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -240,19 +66,17 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const url = request.nextUrl.clone()
+  const apexHost = new URL(SITE_URL).hostname.toLowerCase()
+  const requestHost = normalizeHost(request.headers.get('host'))
+
+  if (requestHost && requestHost !== apexHost && requestHost !== `www.${apexHost}`) {
+    url.protocol = new URL(SITE_URL).protocol
+    url.host = apexHost
+    return NextResponse.redirect(url)
+  }
 
   if (url.pathname.startsWith('/api/')) {
     return response
-  }
-
-  const normalizedHost = normalizeRequestHost(request.headers.get('host'))
-  const baseHost = getTenantBaseHost().toLowerCase()
-  const isTenantSubdomain = Boolean(normalizedHost && normalizedHost !== baseHost && normalizedHost !== `www.${baseHost}`)
-  if (isTenantSubdomain) {
-    const apexUrl = url.clone()
-    apexUrl.protocol = new URL(SITE_URL).protocol
-    apexUrl.host = baseHost
-    return NextResponse.redirect(apexUrl)
   }
 
   if (!user) {
@@ -285,127 +109,54 @@ export async function proxy(request: NextRequest) {
 
   const isStaff = isSuperAdmin || !!staffMember
   const isOperator = !!operatorAuth
-  const organizations = await resolveAccessibleOrganizations({
-    supabase,
-    isSuperAdmin,
-    staffMember,
-    operatorAuth,
-    userEmail: user.email?.trim().toLowerCase() || null,
-  })
-  const requestedOrganizationId = request.cookies.get(ACTIVE_ORGANIZATION_COOKIE)?.value || null
-  const hasRequestedOrganization = requestedOrganizationId
-    ? organizations.some((organization) => organization.id === requestedOrganizationId)
-    : false
-  const defaultOrganizationId =
-    organizations.find((organization) => organization.isDefault)?.id || organizations[0]?.id || null
-  const activeOrganizationId = hasRequestedOrganization
-    ? requestedOrganizationId
-    : !isSuperAdmin
-      ? defaultOrganizationId
-      : null
-  const needsOrganizationSelection = false
-  const organizationHubRequired = false
-  const subscriptionFeatures = isSuperAdmin
-    ? null
-    : await resolveActiveSubscriptionFeatures({
-      supabase,
-      organizationId: activeOrganizationId,
-    })
   const defaultPath = getDefaultAppPath({ isSuperAdmin, isStaff, isOperator, staffRole })
-  const effectiveDefaultPath = defaultPath
 
   if (AUTH_SELF_SERVICE_PATHS.some((path) => url.pathname.startsWith(path))) {
-    return setActiveOrganizationCookie(response, activeOrganizationId)
+    return response
+  }
+
+  if (url.pathname === '/platform' || url.pathname.startsWith('/platform/') || url.pathname === '/select-organization') {
+    url.pathname = defaultPath
+    url.search = ''
+    return NextResponse.redirect(url)
   }
 
   if (url.pathname.startsWith('/login') || url.pathname.startsWith('/operator-login')) {
-    if (organizationHubRequired) {
-      url.pathname = '/platform'
-      return NextResponse.redirect(url)
+    if (defaultPath === '/login' || defaultPath.startsWith('/login')) {
+      return response
     }
-    // Guard: if defaultPath resolves back to /login (unresolved role), don't redirect — prevents infinite loop
-    if (effectiveDefaultPath === '/login' || effectiveDefaultPath.startsWith('/login')) {
-      return setActiveOrganizationCookie(response, activeOrganizationId)
-    }
-    url.pathname = effectiveDefaultPath
-    return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
+    url.pathname = defaultPath
+    return NextResponse.redirect(url)
   }
 
   const requestedPath = url.pathname
-  const requestedTarget = `${requestedPath}${url.search}`
-
-  if (requestedPath === '/select-organization') {
-    if (isSuperAdmin) {
-      url.pathname = '/platform'
-      url.search = ''
-      return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
-    }
-    if (!isSuperAdmin) {
-      url.pathname = effectiveDefaultPath
-      url.search = ''
-      return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
-    }
-    return setActiveOrganizationCookie(response, activeOrganizationId)
-  }
-
-  if (requestedPath.startsWith('/platform')) {
-    if (!isSuperAdmin) {
-      url.pathname = '/unauthorized'
-      url.search = ''
-      return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
-    }
-    return setActiveOrganizationCookie(response, activeOrganizationId)
-  }
-
-  if (!organizations.length) {
-    url.pathname = isSuperAdmin ? '/platform' : '/select-organization'
-    return NextResponse.redirect(url)
-  }
-
-  if (needsOrganizationSelection) {
-    const next = `${requestedPath}${url.search}`
-    url.pathname = '/platform'
-    url.search = isPublicPath(next) ? '' : `?next=${encodeURIComponent(next)}`
-    return NextResponse.redirect(url)
-  }
-
   const hasAccess = canAccessPath({
     pathname: requestedPath,
     isStaff,
     isOperator,
     staffRole,
     isSuperAdmin,
-    subscriptionFeatures,
   })
-  const requiredSubscriptionFeature = getRequiredSubscriptionFeature(requestedPath)
-  const missingSubscriptionFeature = !isSuperAdmin && !hasSubscriptionFeature(subscriptionFeatures, requiredSubscriptionFeature)
 
   if (requestedPath === '/') {
-    url.pathname = organizationHubRequired ? '/platform' : effectiveDefaultPath
-    return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
+    url.pathname = defaultPath
+    return NextResponse.redirect(url)
   }
 
   if (!hasAccess) {
     if (!requestedPath.startsWith('/unauthorized')) {
       url.pathname = '/unauthorized'
-      if (missingSubscriptionFeature && requiredSubscriptionFeature) {
-        url.searchParams.set('kind', 'plan')
-        url.searchParams.set('feature', requiredSubscriptionFeature)
-        url.searchParams.set('next', requestedTarget)
-      } else {
-        url.search = ''
-      }
-      return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
+      return NextResponse.redirect(url)
     }
-    return setActiveOrganizationCookie(response, activeOrganizationId)
+    return response
   }
 
   if (requestedPath.startsWith('/unauthorized') && hasAccess) {
-    url.pathname = effectiveDefaultPath
-    return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
+    url.pathname = defaultPath
+    return NextResponse.redirect(url)
   }
 
-  return setActiveOrganizationCookie(response, activeOrganizationId)
+  return response
 }
 
 export const config = {
