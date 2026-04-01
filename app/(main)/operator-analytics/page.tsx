@@ -1044,30 +1044,21 @@ function OperatorAnalyticsContent() {
       setStaticLoading(true)
       setError(null)
 
-      const [compRes, opsRes, profilesRes, docsRes] = await Promise.all([
-        supabase.from('companies').select('id,name,code'),
-        supabase.from('operators').select('id,name,short_name,is_active').order('name'),
-        supabase.from('operator_profiles').select('operator_id,photo_url,position,phone,email,hire_date'),
-        supabase.from('operator_documents').select('operator_id,expiry_date'),
-      ])
-
-      if (compRes.error || opsRes.error || profilesRes.error || docsRes.error) {
-        console.error('Static load error', { 
-          compErr: compRes.error, 
-          opsErr: opsRes.error,
-          profilesErr: profilesRes.error,
-          docsErr: docsRes.error
-        })
+      const resp = await fetch('/api/admin/operator-analytics')
+      const json = await resp.json()
+      if (!resp.ok || json.error) {
         setError('Ошибка загрузки справочников')
-        setCompanies((compRes.data || []) as Company[])
-        setOperators((opsRes.data || []) as Operator[])
         setStaticLoading(false)
         return
       }
 
+      const { companies: companiesData, operators: operatorsData, profiles: profilesData, documents: documentsData } = json.data
+      setCompanies((companiesData || []) as Company[])
+      setOperators((operatorsData || []) as Operator[])
+
       // Создаем карту профилей
       const profilesMap = new Map<string, OperatorProfile>()
-      for (const p of profilesRes.data || []) {
+      for (const p of profilesData || []) {
         profilesMap.set(p.operator_id, {
           photo_url: p.photo_url,
           position: p.position,
@@ -1087,7 +1078,7 @@ function OperatorAnalyticsContent() {
       const docsCount = new Map<string, number>()
       const expiringCount = new Map<string, number>()
 
-      for (const d of docsRes.data || []) {
+      for (const d of documentsData || []) {
         const opId = d.operator_id
         docsCount.set(opId, (docsCount.get(opId) || 0) + 1)
         
@@ -1105,8 +1096,6 @@ function OperatorAnalyticsContent() {
         profile.expiring_documents = expiringCount.get(opId) || 0
       }
 
-      setCompanies((compRes.data || []) as Company[])
-      setOperators((opsRes.data || []) as Operator[])
       setOperatorProfiles(profilesMap)
       setStaticLoading(false)
     }

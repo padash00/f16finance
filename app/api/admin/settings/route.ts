@@ -164,10 +164,6 @@ export async function POST(req: Request) {
     const actorUserId = access.user?.id || null
     const activeOrgId = access.activeOrganization?.id || null
 
-    if (!access.isSuperAdmin && !activeOrgId) {
-      return badRequest('Сначала выберите организацию в platform dashboard.')
-    }
-
     if (body.entity === 'company') {
       if (body.action === 'create') {
         if (!body.payload.name?.trim()) return badRequest('Название компании обязательно')

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
 function todayISO() {
@@ -52,19 +53,19 @@ export async function POST(request: Request) {
     requestedCompanyId: requestedCompanyId || undefined,
   })
 
-  // Fetch data using the user's supabase client (already authenticated)
-  let incomesQuery = access.supabase
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+  let incomesQuery = supabase
     .from('incomes')
     .select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id')
     .gte('date', dateFrom)
     .lte('date', today)
-  let expensesQuery = access.supabase
+  let expensesQuery = supabase
     .from('expenses')
     .select('cash_amount, kaspi_amount, category, date, company_id')
     .gte('date', dateFrom)
     .lte('date', today)
 
-  if (companyScope.allowedCompanyIds) {
+  if (companyScope.allowedCompanyIds !== null) {
     if (companyScope.allowedCompanyIds.length === 0) {
       return NextResponse.json({ error: 'no-companies-in-organization' }, { status: 403 })
     }

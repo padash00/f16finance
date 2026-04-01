@@ -1147,22 +1147,20 @@ function ReportsContent() {
   const loadCompanies = async () => {
     setError(null)
 
-    const { data, error } = await supabase
-      .from('companies')
-      .select('id,name,code') // ✅ убрали address
-      .order('name', { ascending: true })
+    const resp = await fetch('/api/admin/companies').catch(() => null)
+    const json = await resp?.json().catch(() => null)
 
     if (!alive) return
 
-    if (error) {
-      console.error('loadCompanies error:', error)
-      setError('Не удалось загрузить список компаний: ' + error.message)
+    if (!resp?.ok || json?.error) {
+      console.error('loadCompanies error:', json?.error)
+      setError('Не удалось загрузить список компаний')
       setCompaniesLoaded(true)
       setLoading(false)
       return
     }
 
-    setCompanies((data || []) as Company[])
+    setCompanies((json?.data || []) as Company[])
     setCompaniesLoaded(true)
   }
 
