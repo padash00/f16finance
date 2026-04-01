@@ -17,6 +17,25 @@
 
 ## 2026-04-01
 
+### Разделение platform и tenant для super-admin
+
+Сделано:
+- В `proxy.ts` введён `effectiveDefaultPath`, чтобы на tenant-поддоменах любой внутренний redirect для `super-admin` вёл в tenant workspace, а не в `/platform`.
+- Любые server-side redirect'ы на поддомене теперь используют tenant-safe путь по умолчанию.
+- `app/platform/layout.tsx` переведён в server-side guard:
+  - на `ordaops.kz` работает normal platform shell
+  - на `*.ordaops.kz` маршрут `/platform*` больше не существует как контур платформы и сразу редиректит в `/dashboard` конкретной организации
+- Клиентская часть platform layout вынесена в `app/platform/PlatformShell.tsx`, чтобы server redirect не смешивался с client hooks.
+
+Проверка:
+- `npm run build` проходит.
+- `npm run typecheck` проходит.
+
+Ожидаемый результат:
+- С одного `super-admin` аккаунта можно заходить на любой tenant-поддомен.
+- `ordaops.kz` остаётся owner/platform-контуром.
+- `f16.ordaops.kz/platform` больше не должен уходить в redirect-loop и вместо этого должен приводить в tenant dashboard F16.
+
 ### Tenant login redirect loop на `*.ordaops.kz`
 
 Сделано:

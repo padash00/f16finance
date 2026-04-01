@@ -337,6 +337,10 @@ export async function proxy(request: NextRequest) {
         organizationId: activeOrganizationId,
       })
   const defaultPath = getDefaultAppPath({ isSuperAdmin, isStaff, isOperator, staffRole })
+  const effectiveDefaultPath =
+    hostOrganizationId && defaultPath.startsWith('/platform')
+      ? '/dashboard'
+      : defaultPath
 
   if (AUTH_SELF_SERVICE_PATHS.some((path) => url.pathname.startsWith(path))) {
     return setActiveOrganizationCookie(response, activeOrganizationId)
@@ -348,10 +352,10 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(url)
     }
     // Guard: if defaultPath resolves back to /login (unresolved role), don't redirect — prevents infinite loop
-    if (defaultPath === '/login' || defaultPath.startsWith('/login')) {
+    if (effectiveDefaultPath === '/login' || effectiveDefaultPath.startsWith('/login')) {
       return setActiveOrganizationCookie(response, activeOrganizationId)
     }
-    url.pathname = defaultPath
+    url.pathname = effectiveDefaultPath
     return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
   }
 
@@ -365,7 +369,7 @@ export async function proxy(request: NextRequest) {
       return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
     }
     if (!isSuperAdmin || hostOrganizationId) {
-      url.pathname = defaultPath
+      url.pathname = effectiveDefaultPath
       url.search = ''
       return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
     }
@@ -374,7 +378,7 @@ export async function proxy(request: NextRequest) {
 
   if (requestedPath.startsWith('/platform')) {
     if (hostOrganizationId) {
-      url.pathname = defaultPath
+      url.pathname = effectiveDefaultPath
       url.search = ''
       return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
     }
@@ -410,7 +414,7 @@ export async function proxy(request: NextRequest) {
   const missingSubscriptionFeature = !isSuperAdmin && !hasSubscriptionFeature(subscriptionFeatures, requiredSubscriptionFeature)
 
   if (requestedPath === '/') {
-    url.pathname = organizationHubRequired ? '/platform' : defaultPath
+    url.pathname = organizationHubRequired ? '/platform' : effectiveDefaultPath
     return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
   }
 
@@ -430,7 +434,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (requestedPath.startsWith('/unauthorized') && hasAccess) {
-    url.pathname = defaultPath
+    url.pathname = effectiveDefaultPath
     return setActiveOrganizationCookie(NextResponse.redirect(url), activeOrganizationId)
   }
 
