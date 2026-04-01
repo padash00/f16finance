@@ -337,10 +337,13 @@ export async function proxy(request: NextRequest) {
         organizationId: activeOrganizationId,
       })
   const defaultPath = getDefaultAppPath({ isSuperAdmin, isStaff, isOperator, staffRole })
-  const effectiveDefaultPath =
-    hostOrganizationId && defaultPath.startsWith('/platform')
-      ? '/dashboard'
-      : defaultPath
+  const effectiveDefaultPath = hostOrganizationId
+    ? isSuperAdmin
+      ? '/welcome'
+      : defaultPath.startsWith('/platform')
+        ? '/dashboard'
+        : defaultPath
+    : defaultPath
 
   if (AUTH_SELF_SERVICE_PATHS.some((path) => url.pathname.startsWith(path))) {
     return setActiveOrganizationCookie(response, activeOrganizationId)

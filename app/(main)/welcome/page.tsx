@@ -29,6 +29,7 @@ import type { StaffRole } from '@/lib/core/access'
 type SessionRoleResponse = {
   ok: boolean
   isSuperAdmin?: boolean
+  isTenantContext?: boolean
   isStaff?: boolean
   staffRole?: StaffRole | null
   roleLabel?: string | null
@@ -77,6 +78,7 @@ export default function WelcomePage() {
   const [roleLabel, setRoleLabel] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [isTenantContext, setIsTenantContext] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -94,16 +96,17 @@ export default function WelcomePage() {
         }
 
         setIsSuperAdmin(!!json.isSuperAdmin)
+        setIsTenantContext(!!json.isTenantContext)
         setStaffRole((json.staffRole as StaffRole | null) || null)
         setRoleLabel((json.roleLabel as string | null) || null)
         setDisplayName((json.displayName as string | null) || null)
 
-        if (json.isSuperAdmin) {
+        if (json.isSuperAdmin && !json.isTenantContext) {
           router.replace('/dashboard')
           return
         }
 
-        if (!['manager', 'marketer', 'owner'].includes(json.staffRole || '')) {
+        if (!json.isSuperAdmin && !['manager', 'marketer', 'owner'].includes(json.staffRole || '')) {
           router.replace(json.defaultPath || '/unauthorized')
           return
         }
@@ -119,7 +122,7 @@ export default function WelcomePage() {
   }, [router])
 
   const welcomeConfig = useMemo(() => {
-    if (staffRole === 'owner') {
+    if (isSuperAdmin || staffRole === 'owner') {
       return {
         title: displayName ? `Добро пожаловать, ${displayName}` : 'Добро пожаловать, Владелец',
         description: 'У вас открыт полный управленческий доступ к финансам, команде и аналитике бизнеса.',
@@ -158,7 +161,7 @@ export default function WelcomePage() {
       ],
       actions: MARKETER_ACTIONS,
     }
-  }, [staffRole])
+  }, [displayName, isSuperAdmin, staffRole])
 
   if (loading) {
     return (
@@ -175,7 +178,7 @@ export default function WelcomePage() {
     )
   }
 
-  if (isSuperAdmin) {
+  if (isSuperAdmin && !isTenantContext) {
     return null
   }
 

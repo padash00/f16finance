@@ -123,12 +123,15 @@ export async function GET(req: Request) {
         : null,
       organizationHubRequired,
       organizationSelectionRequired,
-      defaultPath: getDefaultAppPath({
-        isSuperAdmin,
-        isStaff: isSuperAdmin || !!staffMember,
-        isOperator,
-        staffRole,
-      }),
+      defaultPath:
+        isSuperAdmin && isTenantContext
+          ? '/welcome'
+          : getDefaultAppPath({
+              isSuperAdmin,
+              isStaff: isSuperAdmin || !!staffMember,
+              isOperator,
+              staffRole,
+            }),
     })
   } catch (error: any) {
     console.error('Session role route error', error)
