@@ -17,6 +17,27 @@
 
 ## 2026-04-01
 
+### Tenant bootstrap для super-admin на поддоменах
+
+Сделано:
+- Добавлен отдельный server-side bootstrap маршрут `app/auth/tenant-entry/route.ts`.
+- На `*.ordaops.kz` он:
+  - проверяет текущий host,
+  - резолвит организацию по поддомену,
+  - выставляет `oc_org`,
+  - и одним redirect переводит пользователя в tenant workspace без старого platform-flow.
+- `app/login/LoginForm.tsx` для tenant-поддоменов после успешного входа теперь всегда ведёт в `/auth/tenant-entry`, а не пытается вычислять tenant-home на клиенте.
+- `app/platform/layout.tsx` на tenant-поддоменах теперь тоже уводит в `/auth/tenant-entry`, чтобы `/platform` не жил как отдельный контур внутри tenant host.
+- `proxy.ts` и `api/auth/session-role` синхронизированы с этим сценарием и больше не используют `/welcome` как special home для `super-admin` на tenant host.
+
+Проверка:
+- `npm run typecheck` проходит.
+- `npm run build` проходит.
+
+Ожидаемый результат:
+- `super-admin` может входить на любой `*.ordaops.kz` своим аккаунтом.
+- Поддомен ведёт в tenant workspace конкретной организации, а не в platform/dashboard loop.
+
 ### Разделение platform и tenant для super-admin
 
 Сделано:

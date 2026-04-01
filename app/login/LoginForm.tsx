@@ -138,13 +138,12 @@ export default function LoginForm({
     if (!isTenantSubdomain && !payload?.isTenantContext && (payload?.organizationHubRequired || payload?.organizationSelectionRequired)) {
       return '/platform'
     }
+    if (isTenantSubdomain || payload?.isTenantContext) {
+      return '/auth/tenant-entry'
+    }
     const rawPath = payload?.defaultPath ? String(payload.defaultPath) : '/'
     const isSafePath = rawPath.startsWith('/') && !rawPath.startsWith('//')
     const resolvedPath = isSafePath && rawPath !== '/login' && rawPath !== '/operator-login' ? rawPath : '/'
-
-    if ((isTenantSubdomain || payload?.isTenantContext) && resolvedPath.startsWith('/platform')) {
-      return '/dashboard'
-    }
 
     return resolvedPath
   }
