@@ -90,12 +90,11 @@ export async function GET(req: Request) {
       access.isSuperAdmin || !activeOrgId
         ? supabase
             .from('expense_categories')
-            .select('id, name, monthly_budget, accounting_group, organization_id')
+            .select('id, name, monthly_budget, accounting_group')
             .order('name')
         : supabase
             .from('expense_categories')
-            .select('id, name, monthly_budget, accounting_group, organization_id')
-            .eq('organization_id', activeOrgId)
+            .select('id, name, monthly_budget, accounting_group')
             .order('name'),
     ])
 
@@ -128,7 +127,7 @@ export async function GET(req: Request) {
     if (categories.length === 0) {
       const legacyCategories = await supabase
         .from('expense_categories')
-        .select('id, name, monthly_budget, accounting_group, organization_id')
+        .select('id, name, monthly_budget, accounting_group')
         .order('name')
       if (legacyCategories.error) throw legacyCategories.error
       categories = legacyCategories.data || []
@@ -295,7 +294,6 @@ export async function POST(req: Request) {
             name: body.payload.name.trim(),
             monthly_budget: body.payload.monthly_budget ?? null,
             accounting_group: body.payload.accounting_group || null,
-            organization_id: access.isSuperAdmin ? null : activeOrgId,
           },
         ]).select('id,name,monthly_budget,accounting_group').single()
         if (error) throw error

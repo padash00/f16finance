@@ -20,33 +20,12 @@ export async function GET(req: Request) {
     if ('response' in access) return access.response
 
     const supabase = getSupabase(req)
-    const activeOrganizationId = access.activeOrganization?.id || null
-
-    let data: any[] | null = null
-    if (!access.isSuperAdmin && activeOrganizationId) {
-      const scoped = await supabase
-        .from('expense_categories')
-        .select('id, name, type, accounting_group, monthly_budget, organization_id')
-        .eq('organization_id', activeOrganizationId)
-        .order('name')
-      if (scoped.error) throw scoped.error
-      data = scoped.data ?? []
-      if (data.length === 0) {
-        const legacy = await supabase
-          .from('expense_categories')
-          .select('id, name, type, accounting_group, monthly_budget, organization_id')
-          .order('name')
-        if (legacy.error) throw legacy.error
-        data = legacy.data ?? []
-      }
-    } else {
-      const result = await supabase
-        .from('expense_categories')
-        .select('id, name, type, accounting_group, monthly_budget, organization_id')
-        .order('name')
-      if (result.error) throw result.error
-      data = result.data ?? []
-    }
+    const result = await supabase
+      .from('expense_categories')
+      .select('id, name, type, accounting_group, monthly_budget')
+      .order('name')
+    if (result.error) throw result.error
+    const data = result.data ?? []
 
     return json({ data: data ?? [] })
   } catch (error: any) {
@@ -80,9 +59,8 @@ export async function POST(req: Request) {
         type: String(body?.type || '').trim() || 'Общее',
         accounting_group: String(body?.accounting_group || '').trim() || 'operating',
         monthly_budget: Number(body?.monthly_budget || 0) || 0,
-        organization_id: access.activeOrganization?.id || null,
       }])
-      .select('id, name, type, accounting_group, monthly_budget, organization_id')
+      .select('id, name, type, accounting_group, monthly_budget')
       .single()
     if (error) throw error
 
@@ -123,7 +101,7 @@ export async function PATCH(req: Request) {
         monthly_budget: Number(body?.monthly_budget || 0) || 0,
       })
       .eq('id', id)
-      .select('id, name, type, accounting_group, monthly_budget, organization_id')
+      .select('id, name, type, accounting_group, monthly_budget')
       .single()
     if (error) throw error
 
