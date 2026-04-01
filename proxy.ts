@@ -347,6 +347,9 @@ export async function proxy(request: NextRequest) {
   }
 
   if (url.pathname.startsWith('/login') || url.pathname.startsWith('/operator-login')) {
+    if (hostOrganizationId) {
+      return setActiveOrganizationCookie(response, activeOrganizationId)
+    }
     if (organizationHubRequired) {
       url.pathname = '/platform'
       return NextResponse.redirect(url)
