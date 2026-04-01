@@ -17,7 +17,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
 
   if (isTenantSubdomain) {
     const hostOrganization = await resolveOrganizationByHost(host)
-    redirect(hostOrganization?.id ? '/auth/tenant-entry' : '/login')
+    redirect(hostOrganization?.id ? '/workspace' : '/login')
   }
 
   return <PlatformShell>{children}</PlatformShell>

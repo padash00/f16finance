@@ -372,7 +372,7 @@ export async function proxy(request: NextRequest) {
     const workspaceUrl = url.clone()
     workspaceUrl.pathname = '/workspace'
     workspaceUrl.search = ''
-    return setActiveOrganizationCookie(NextResponse.rewrite(workspaceUrl), activeOrganizationId)
+    return setActiveOrganizationCookie(NextResponse.redirect(workspaceUrl), activeOrganizationId)
   }
 
   if (hostOrganizationId && isSuperAdmin && requestedPath.startsWith('/platform/')) {
