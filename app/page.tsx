@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { headers } from 'next/headers'
 import Link from 'next/link'
 import {
   ArrowRight,
@@ -27,10 +26,6 @@ import { Card } from '@/components/ui/card'
 import { ContactLeadForm } from '@/components/public/contact-lead-form'
 import { FaqStructuredData, WebsiteStructuredData } from '@/components/public/structured-data'
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/core/site'
-import { getTenantBaseHost } from '@/lib/core/tenant-domain'
-import { normalizeRequestHost, resolveDefaultOrganization, resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
-
-import LoginForm from './login/LoginForm'
 
 export const metadata: Metadata = {
   title: 'Система управления клубом, сменами и финансами',
@@ -238,21 +233,6 @@ const faqItems = [
 ]
 
 export default async function MarketingHomePage() {
-  const headersList = await headers()
-  const host = headersList.get('host')
-  const baseHost = getTenantBaseHost().toLowerCase()
-  const normalizedHost = normalizeRequestHost(host)
-  const isTenantSubdomain =
-    !!normalizedHost && normalizedHost !== baseHost && normalizedHost !== `www.${baseHost}`
-  const entryOrganization = isTenantSubdomain
-    ? await resolveOrganizationByHost(host)
-    : await resolveDefaultOrganization()
-
-  if (entryOrganization?.id) {
-    const hostOrg = { name: entryOrganization.name, slug: entryOrganization.slug }
-    return <LoginForm hostOrg={hostOrg} isTenantSubdomain={true} platformUrl={SITE_URL} />
-  }
-
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.12),transparent_20%),linear-gradient(180deg,#050816_0%,#0a1020_48%,#050816_100%)] text-white">
       <WebsiteStructuredData />

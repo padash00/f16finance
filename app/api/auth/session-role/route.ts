@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
 
 import { getDefaultAppPath, normalizeStaffRole } from '@/lib/core/access'
-import { getTenantBaseHost } from '@/lib/core/tenant-domain'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestAccessContext, listActiveOperatorLeadAssignments } from '@/lib/server/request-auth'
-import { normalizeRequestHost, resolveDefaultOrganization, resolveOrganizationByHost } from '@/lib/server/tenant-hosts'
 
 function getRoleLabel(params: {
   isSuperAdmin: boolean
@@ -28,14 +26,6 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    const normalizedHost = normalizeRequestHost(req.headers.get('host'))
-    const baseHost = getTenantBaseHost().toLowerCase()
-    const isTenantHost =
-      !!normalizedHost && normalizedHost !== baseHost && normalizedHost !== `www.${baseHost}`
-    const hostOrganization = isTenantHost
-      ? await resolveOrganizationByHost(req.headers.get('host'))
-      : await resolveDefaultOrganization()
-    const isTenantContext = isTenantHost || Boolean(hostOrganization?.id)
 
     const {
       supabase,
@@ -72,8 +62,8 @@ export async function GET(req: Request) {
       email: user?.email || null,
       displayName,
       isSuperAdmin,
-      isTenantContext,
-      isPlatformContext: isSuperAdmin && !isTenantContext,
+      isTenantContext: false,
+      isPlatformContext: !!isSuperAdmin,
       isStaff: isSuperAdmin || !!staffMember,
       isOperator,
       isLeadOperator: leadAssignments.length > 0,
@@ -130,15 +120,12 @@ export async function GET(req: Request) {
         : null,
       organizationHubRequired,
       organizationSelectionRequired,
-      defaultPath:
-        isSuperAdmin && isTenantContext
-          ? '/dashboard'
-          : getDefaultAppPath({
-              isSuperAdmin,
-              isStaff: isSuperAdmin || !!staffMember,
-              isOperator,
-              staffRole,
-            }),
+      defaultPath: getDefaultAppPath({
+        isSuperAdmin,
+        isStaff: isSuperAdmin || !!staffMember,
+        isOperator,
+        staffRole,
+      }),
     })
   } catch (error: any) {
     console.error('Session role route error', error)

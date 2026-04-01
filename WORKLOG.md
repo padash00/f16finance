@@ -415,3 +415,22 @@
 Проверка:
 - `npm run build` ✅
 - `npm run typecheck` ✅
+
+### 2026-04-01 — полный rollback входа к apex-only режиму
+
+Сделано:
+- Полностью отключён активный subdomain split во входе: любые `*.ordaops.kz` теперь редиректятся обратно на `ordaops.kz`.
+- `app/page.tsx` снова работает как обычная главная страница без tenant-подстановки по host.
+- `app/login/page.tsx` снова работает как единый общий вход, без поддоменной логики и branded tenant-entry.
+- `app/api/auth/session-role/route.ts` возвращён к общему apex-контексту без `tenant/platform` развилки.
+- `app/platform/layout.tsx` снова работает как обычный layout платформы без host-based redirect.
+- `proxy.ts` очищен от конфликтующей host-based логики и снова держит единый apex-flow.
+
+Результат:
+- рабочая точка входа снова одна: `ordaops.kz`
+- поддомены временно не участвуют в логике входа
+- цель этого отката: вернуть предсказуемый и стабильный доступ в систему
+
+Проверка:
+- `npm run build` ✅
+- `npm run typecheck` ✅
