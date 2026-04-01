@@ -1183,42 +1183,40 @@ function ReportsContent() {
     try {
       const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
 
-      let incomeQuery = supabase
-        .from('incomes')
-        .select('id,date,company_id,shift,zone,cash_amount,kaspi_amount,online_amount,card_amount,comment,created_at')
-        .gte('date', prevFrom)
-        .lte('date', dateTo)
-
-      let expenseQuery = supabase
-        .from('expenses')
-        .select('id,date,company_id,category,cash_amount,kaspi_amount,comment,created_at,operator_id')
-        .gte('date', prevFrom)
-        .lte('date', dateTo)
-
+      const incomeParams = new URLSearchParams({ from: prevFrom, to: dateTo })
+      const expenseParams = new URLSearchParams({ from: prevFrom, to: dateTo })
       if (companyFilter !== 'all') {
-        incomeQuery = incomeQuery.eq('company_id', companyFilter)
-        expenseQuery = expenseQuery.eq('company_id', companyFilter)
-      } else if (!includeExtraInTotals && extraCompanyId) {
-        incomeQuery = incomeQuery.neq('company_id', extraCompanyId)
-        expenseQuery = expenseQuery.neq('company_id', extraCompanyId)
+        incomeParams.set('company_id', companyFilter)
+        expenseParams.set('company_id', companyFilter)
       }
-
       if (shiftFilter !== 'all') {
-        incomeQuery = incomeQuery.eq('shift', shiftFilter)
+        incomeParams.set('shift', shiftFilter)
       }
 
-      const [incomeResult, expenseResult] = await Promise.all([
-        incomeQuery.order('date', { ascending: false }),
-        expenseQuery.order('date', { ascending: false }),
+      const [incomeResp, expenseResp] = await Promise.all([
+        fetch(`/api/admin/incomes?${incomeParams}`),
+        fetch(`/api/admin/expenses?${expenseParams}`),
       ])
 
       if (myReqId !== reqIdRef.current) return
 
-      if (incomeResult.error) throw incomeResult.error
-      if (expenseResult.error) throw expenseResult.error
+      const incomeJson = await incomeResp.json()
+      const expenseJson = await expenseResp.json()
 
-      setIncomes((incomeResult.data || []) as IncomeRow[])
-      setExpenses((expenseResult.data || []) as ExpenseRow[])
+      if (incomeJson.error) throw new Error(incomeJson.error)
+      if (expenseJson.error) throw new Error(expenseJson.error)
+
+      let incomes: IncomeRow[] = incomeJson.data || []
+      let expenses: ExpenseRow[] = expenseJson.data || []
+
+      // Client-side extra company exclusion (when no specific company selected)
+      if (companyFilter === 'all' && !includeExtraInTotals && extraCompanyId) {
+        incomes = incomes.filter((r) => r.company_id !== extraCompanyId)
+        expenses = expenses.filter((r) => r.company_id !== extraCompanyId)
+      }
+
+      setIncomes(incomes)
+      setExpenses(expenses)
 
       if (isRefresh) showToast('Данные обновлены', 'success')
     } catch (err) {

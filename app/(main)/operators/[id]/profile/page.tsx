@@ -988,36 +988,22 @@ export default function OperatorProfilePage() {
 
         if (!operatorId) throw new Error('ID оператора не указан')
 
-        // Все независимые запросы — параллельно
-        const [
-          { data: { user } },
-          { data: companiesData },
-          { data: operatorData, error: operatorError },
-          { data: profileData },
-          { data: workData },
-          { data: docsData },
-          { data: notesData },
-          { data: accountData },
-        ] = await Promise.all([
+        const [{ data: { user } }, profileResp] = await Promise.all([
           supabase.auth.getUser(),
-          supabase.from('companies').select('id, name, code').order('name'),
-          supabase.from('operators').select('*').eq('id', operatorId).single(),
-          supabase.from('operator_profiles').select('*').eq('operator_id', operatorId).maybeSingle(),
-          supabase.from('operator_work_history').select('*, companies:company_id(name, code)').eq('operator_id', operatorId).order('start_date', { ascending: false }),
-          supabase.from('operator_documents').select('*').eq('operator_id', operatorId).order('created_at', { ascending: false }),
-          supabase.from('operator_notes').select('*').eq('operator_id', operatorId).order('created_at', { ascending: false }),
-          supabase.from('operator_auth').select('*').eq('operator_id', operatorId).maybeSingle(),
+          fetch(`/api/admin/operators/profile?operator_id=${encodeURIComponent(operatorId)}`),
         ])
 
-        if (operatorError) throw operatorError
-        if (!operatorData) throw new Error('Оператор не найден')
+        const profileJson = await profileResp.json()
+        if (!profileResp.ok) throw new Error(profileJson?.error || 'Ошибка загрузки профиля')
+
+        const { operator: operatorData, profile: profileData, workHistory: workData, documents: docsData, notes: notesData, account: accountData, companies: companiesData } = profileJson.data
 
         setCurrentUser(user)
         setCompanies(companiesData || [])
         setOperator(operatorData)
         setEditedTelegramChatId(operatorData.telegram_chat_id || '')
         if (profileData) { setProfile(profileData); setEditedProfile(profileData) }
-        if (workData) setWorkHistory(workData.map((w: any) => ({ ...w, company_name: w.companies?.name, company_code: w.companies?.code })))
+        if (workData) setWorkHistory(workData)
         if (docsData) setDocuments(docsData)
         if (notesData) setNotes(notesData.map((n: any) => ({ ...n, created_by_name: 'Система' })))
         if (accountData) setOperatorAccount(accountData)
