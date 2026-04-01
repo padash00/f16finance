@@ -40,7 +40,7 @@ export async function GET(req: Request) {
   }
 
   const targetPath = access.isSuperAdmin
-    ? '/dashboard'
+    ? '/workspace'
     : getDefaultAppPath({
         isSuperAdmin: false,
         isStaff: !!access.staffMember,

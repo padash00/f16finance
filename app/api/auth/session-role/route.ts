@@ -130,7 +130,7 @@ export async function GET(req: Request) {
       organizationSelectionRequired,
       defaultPath:
         isSuperAdmin && isTenantContext
-          ? '/auth/tenant-entry'
+          ? '/workspace'
           : getDefaultAppPath({
               isSuperAdmin,
               isStaff: isSuperAdmin || !!staffMember,
