@@ -1,5 +1,6 @@
-import PlatformShell from './PlatformShell'
+import { redirect } from 'next/navigation'
 
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
-  return <PlatformShell>{children}</PlatformShell>
+  void children
+  redirect('/dashboard')
 }
