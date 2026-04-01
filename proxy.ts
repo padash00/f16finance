@@ -339,7 +339,7 @@ export async function proxy(request: NextRequest) {
   const defaultPath = getDefaultAppPath({ isSuperAdmin, isStaff, isOperator, staffRole })
   const effectiveDefaultPath = hostOrganizationId
     ? isSuperAdmin
-      ? '/auth/tenant-entry'
+      ? '/workspace'
       : defaultPath.startsWith('/platform')
         ? '/dashboard'
         : defaultPath
