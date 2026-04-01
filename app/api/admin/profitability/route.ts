@@ -116,20 +116,12 @@ function canManageProfitability(access: {
   return access.isSuperAdmin || access.staffRole === 'owner'
 }
 
-function requireActiveOrganization(organizationId?: string | null) {
-  if (!organizationId) {
-    throw new Error('active-organization-required')
-  }
-
-  return organizationId
-}
-
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
     if (!canManageProfitability(access)) return json({ error: 'forbidden' }, 403)
-    const activeOrganizationId = requireActiveOrganization(access.activeOrganization?.id)
+    const activeOrganizationId = access.activeOrganization?.id || null
 
     const url = new URL(req.url)
     const from = normalizeMonth(url.searchParams.get('from'))
@@ -138,7 +130,11 @@ export async function GET(req: Request) {
 
     const supabase = createAdminSupabaseClient()
     let query = supabase.from('monthly_profitability_inputs').select('*').order('month', { ascending: true })
-    query = query.eq('organization_id', activeOrganizationId)
+    if (access.isSuperAdmin || !activeOrganizationId) {
+      // no org filter — return all rows
+    } else {
+      query = query.eq('organization_id', activeOrganizationId)
+    }
 
     if (from) query = query.gte('month', from)
     if (to) query = query.lte('month', to)
@@ -254,7 +250,10 @@ export async function POST(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
     if (!canManageProfitability(access)) return json({ error: 'forbidden' }, 403)
-    const activeOrganizationId = requireActiveOrganization(access.activeOrganization?.id)
+    const activeOrganizationId = access.activeOrganization?.id || null
+    if (!activeOrganizationId) {
+      return json({ error: 'active-organization-required' }, 400)
+    }
 
     const body = (await req.json().catch(() => null)) as MutationBody | null
     const month = normalizeMonth(body?.month)

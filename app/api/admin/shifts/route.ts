@@ -737,7 +737,10 @@ export async function POST(req: Request) {
         .gte('date', sourceWeekStart)
         .lte('date', sourceWeekEnd)
         .order('date')
-      if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      if (companyScope.allowedCompanyIds !== null) {
+        if (companyScope.allowedCompanyIds.length === 0) {
+          return NextResponse.json({ ok: true, mode: 'copied-week-template', created: 0, updated: 0, skipped: 0, conflicts: [], sourceWeekStart, targetWeekStart })
+        }
         sourceQuery = sourceQuery.in('company_id', companyScope.allowedCompanyIds)
       }
       const { data: sourceShifts, error: sourceError } = await sourceQuery
@@ -749,7 +752,7 @@ export async function POST(req: Request) {
         .select('id, company_id, date, shift_type, operator_name, comment')
         .gte('date', targetWeekStart)
         .lte('date', targetWeekEnd)
-      if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length > 0) {
         targetQuery = targetQuery.in('company_id', companyScope.allowedCompanyIds)
       }
       const { data: targetShifts, error: targetError } = await targetQuery
@@ -973,15 +976,17 @@ export async function GET(req: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
-      const allowed = new Set(companyScope.allowedCompanyIds.map((id) => String(id)))
-      workflow.publications = workflow.publications.filter((item) => allowed.has(String(item.company_id)))
-      workflow.responses = workflow.responses.filter((item) => allowed.has(String(item.company_id)))
-      workflow.requests = workflow.requests.filter((item) => allowed.has(String(item.company_id)))
-    } else if (!access.isSuperAdmin) {
-      workflow.publications = []
-      workflow.responses = []
-      workflow.requests = []
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) {
+        workflow.publications = []
+        workflow.responses = []
+        workflow.requests = []
+      } else {
+        const allowed = new Set(companyScope.allowedCompanyIds.map((id) => String(id)))
+        workflow.publications = workflow.publications.filter((item) => allowed.has(String(item.company_id)))
+        workflow.responses = workflow.responses.filter((item) => allowed.has(String(item.company_id)))
+        workflow.requests = workflow.requests.filter((item) => allowed.has(String(item.company_id)))
+      }
     }
 
     if (!includeSchedule) {
@@ -1000,15 +1005,16 @@ export async function GET(req: Request) {
       .eq('is_active', true)
       .order('name')
 
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) {
+        return NextResponse.json({
+          ok: true,
+          ...workflow,
+          schedule: { companies: [], shifts: [], operators: [] },
+        })
+      }
       companiesQuery = companiesQuery.in('id', companyScope.allowedCompanyIds)
       shiftsQuery = shiftsQuery.in('company_id', companyScope.allowedCompanyIds)
-    } else if (!access.isSuperAdmin) {
-      return NextResponse.json({
-        ok: true,
-        ...workflow,
-        schedule: { companies: [], shifts: [], operators: [] },
-      })
     }
 
     const allowedOperatorIds = await listOrganizationOperatorIds({

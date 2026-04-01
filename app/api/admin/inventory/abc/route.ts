@@ -38,10 +38,10 @@ export async function GET(request: Request) {
     // Filter by company if provided
     const filtered = (saleItems || []).filter((si: any) => {
       const sale = Array.isArray(si.point_sales) ? si.point_sales[0] : si.point_sales
-      if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+      if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length > 0) {
         return companyScope.allowedCompanyIds.includes(String(sale?.company_id || ''))
       }
-      return access.isSuperAdmin
+      return true // null = no restriction, include all
     })
 
     // Aggregate by item_id

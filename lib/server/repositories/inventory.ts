@@ -64,7 +64,7 @@ export type StoreRevisionsData = {
 }
 
 function isRestrictedScope(scope?: InventoryScope) {
-  return Boolean(scope && !scope.isSuperAdmin)
+  return Boolean(scope && !scope.isSuperAdmin && scope.allowedCompanyIds !== null)
 }
 
 function hasOrganizationScope(scope?: InventoryScope) {
@@ -534,10 +534,10 @@ export async function fetchInventoryOverview(supabase: AnySupabase, scope?: Inve
       .select('id, item_id, movement_type, from_location_id, to_location_id, quantity, unit_cost, total_amount, reference_type, reference_id, comment, actor_user_id, created_at, item:item_id(id, name, barcode), from_location:from_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), to_location:to_location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code))')
       .order('created_at', { ascending: false })
       .limit(300),
-    scope?.allowedCompanyIds && scope.allowedCompanyIds.length > 0
-      ? supabase.from('companies').select('id, name, code').in('id', scope.allowedCompanyIds).order('name', { ascending: true })
-      : scope?.isSuperAdmin
-        ? supabase.from('companies').select('id, name, code').order('name', { ascending: true })
+    scope?.allowedCompanyIds === null || !scope?.allowedCompanyIds
+      ? supabase.from('companies').select('id, name, code').order('name', { ascending: true })
+      : scope.allowedCompanyIds.length > 0
+        ? supabase.from('companies').select('id, name, code').in('id', scope.allowedCompanyIds).order('name', { ascending: true })
         : Promise.resolve({ data: [], error: null } as const),
   ])
 
@@ -1066,10 +1066,10 @@ export async function fetchConsumableDashboard(supabase: AnySupabase, scope?: In
       .eq('is_active', true),
       scope,
     ),
-    scope?.allowedCompanyIds && scope.allowedCompanyIds.length > 0
-      ? supabase.from('companies').select('id, name, code').in('id', scope.allowedCompanyIds).order('name', { ascending: true })
-      : scope?.isSuperAdmin
-        ? supabase.from('companies').select('id, name, code').order('name', { ascending: true })
+    scope?.allowedCompanyIds === null || !scope?.allowedCompanyIds
+      ? supabase.from('companies').select('id, name, code').order('name', { ascending: true })
+      : scope.allowedCompanyIds.length > 0
+        ? supabase.from('companies').select('id, name, code').in('id', scope.allowedCompanyIds).order('name', { ascending: true })
         : Promise.resolve({ data: [], error: null } as const),
   ])
 

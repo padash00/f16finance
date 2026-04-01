@@ -399,96 +399,25 @@ export async function assertOrganizationLimitAvailable(params: {
   )
 }
 
-export async function resolveCompanyScope(params: {
-  activeOrganizationId?: string | null
-  requestedCompanyId?: string | null
-  isSuperAdmin?: boolean
-}) {
-  const { activeOrganizationId, requestedCompanyId, isSuperAdmin } = params
-
-  if (isSuperAdmin && !activeOrganizationId) {
-    return {
-      allowedCompanyIds: requestedCompanyId ? [requestedCompanyId] : null,
-      organizationId: activeOrganizationId || null,
-    }
-  }
-
-  if (!activeOrganizationId) {
-    throw new Error('active-organization-required')
-  }
-
-  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
-  if (!supabase) {
-    throw new Error('organization-scope-unavailable')
-  }
-
-  const { data, error } = await supabase
-    .from('companies')
-    .select('id')
-    .eq('organization_id', activeOrganizationId)
-
-  if (error) throw error
-
-  let allowedCompanyIds = (data || []).map((row: any) => String(row.id))
-  if (allowedCompanyIds.length === 0) {
-    const { data: legacyCompanies, error: legacyError } = await supabase
-      .from('companies')
-      .select('id')
-      .order('name', { ascending: true })
-
-    if (legacyError) throw legacyError
-    allowedCompanyIds = (legacyCompanies || []).map((row: any) => String(row.id)).filter(Boolean)
-  }
-  if (requestedCompanyId) {
-    if (!allowedCompanyIds.includes(requestedCompanyId)) {
-      throw new Error('forbidden-company')
-    }
-
-    return {
-      allowedCompanyIds: [requestedCompanyId],
-      organizationId: activeOrganizationId,
-    }
-  }
-
-  return {
-    allowedCompanyIds,
-    organizationId: activeOrganizationId,
-  }
-}
-
 export async function listOrganizationCompanyIds(params: {
   activeOrganizationId?: string | null
   isSuperAdmin?: boolean
 }) {
   const { activeOrganizationId, isSuperAdmin } = params
-  if (isSuperAdmin && !activeOrganizationId) return null
-  if (!activeOrganizationId) {
-    throw new Error('active-organization-required')
-  }
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
   if (!supabase) {
     throw new Error('organization-scope-unavailable')
   }
 
-  const { data, error } = await supabase
-    .from('companies')
-    .select('id')
-    .eq('organization_id', activeOrganizationId)
-
-  if (error) throw error
-  let companyIds = (data || []).map((row: any) => String(row.id)).filter(Boolean)
-  if (companyIds.length === 0) {
-    const { data: legacyCompanies, error: legacyError } = await supabase
-      .from('companies')
-      .select('id')
-      .order('name', { ascending: true })
-
-    if (legacyError) throw legacyError
-    companyIds = (legacyCompanies || []).map((row: any) => String(row.id)).filter(Boolean)
+  let query = supabase.from('companies').select('id')
+  if (!isSuperAdmin && activeOrganizationId) {
+    query = query.eq('organization_id', activeOrganizationId)
   }
 
-  return companyIds
+  const { data, error } = await query
+  if (error) throw error
+  return (data || []).map((row: any) => String(row.id))
 }
 
 export async function listOrganizationCompanyCodes(params: {
@@ -496,39 +425,41 @@ export async function listOrganizationCompanyCodes(params: {
   isSuperAdmin?: boolean
 }) {
   const { activeOrganizationId, isSuperAdmin } = params
-  if (isSuperAdmin && !activeOrganizationId) return null
-  if (!activeOrganizationId) {
-    throw new Error('active-organization-required')
-  }
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
   if (!supabase) {
     throw new Error('organization-scope-unavailable')
   }
 
-  const { data, error } = await supabase
-    .from('companies')
-    .select('code')
-    .eq('organization_id', activeOrganizationId)
-    .not('code', 'is', null)
-
-  if (error) throw error
-  let codes = (data || [])
-    .map((row: any) => String(row.code || '').trim())
-    .filter(Boolean)
-  if (codes.length === 0) {
-    const { data: legacyCodes, error: legacyError } = await supabase
-      .from('companies')
-      .select('code')
-      .not('code', 'is', null)
-
-    if (legacyError) throw legacyError
-    codes = (legacyCodes || [])
-      .map((row: any) => String(row.code || '').trim())
-      .filter(Boolean)
+  let query = supabase.from('companies').select('code')
+  if (!isSuperAdmin && activeOrganizationId) {
+    query = query.eq('organization_id', activeOrganizationId)
   }
 
-  return codes
+  const { data, error } = await query
+  if (error) throw error
+  return (data || []).map((row: any) => String(row.code || '')).filter(Boolean)
+}
+
+export async function listOrganizationStaffIds(params: {
+  activeOrganizationId?: string | null
+  isSuperAdmin?: boolean
+}) {
+  const { activeOrganizationId, isSuperAdmin } = params
+
+  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
+  if (!supabase) {
+    throw new Error('organization-scope-unavailable')
+  }
+
+  let query = supabase.from('staff').select('id')
+  if (!isSuperAdmin && activeOrganizationId) {
+    query = query.eq('organization_id', activeOrganizationId)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data || []).map((row: any) => String(row.id))
 }
 
 export async function listOrganizationOperatorIds(params: {
@@ -536,14 +467,16 @@ export async function listOrganizationOperatorIds(params: {
   isSuperAdmin?: boolean
 }) {
   const { activeOrganizationId, isSuperAdmin } = params
-  if (isSuperAdmin && !activeOrganizationId) return null
-  if (!activeOrganizationId) {
-    throw new Error('active-organization-required')
-  }
 
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
   if (!supabase) {
     throw new Error('organization-scope-unavailable')
+  }
+
+  if (isSuperAdmin || !activeOrganizationId) {
+    const { data, error } = await supabase.from('operators').select('id').eq('is_active', true)
+    if (error) throw error
+    return (data || []).map((row: any) => String(row.id))
   }
 
   const { data, error } = await supabase
@@ -553,64 +486,42 @@ export async function listOrganizationOperatorIds(params: {
 
   if (error) throw error
 
-  let operatorIds = Array.from(
+  return Array.from(
     new Set(
-      (data || [])
-        .filter((row: any) => {
+      ((data || []) as any[])
+        .filter((row) => {
           const company = Array.isArray(row.company) ? row.company[0] || null : row.company || null
           return String(company?.organization_id || '') === activeOrganizationId
         })
-        .map((row: any) => String(row.operator_id || ''))
+        .map((row) => String(row.operator_id || ''))
         .filter(Boolean),
     ),
   )
-  if (operatorIds.length === 0) {
-    const { data: legacyOperators, error: legacyError } = await supabase
-      .from('operators')
-      .select('id')
-      .eq('is_active', true)
-
-    if (legacyError) throw legacyError
-    operatorIds = (legacyOperators || []).map((row: any) => String(row.id)).filter(Boolean)
-  }
-
-  return operatorIds
 }
 
-export async function listOrganizationStaffIds(params: {
+export async function resolveCompanyScope(params: {
   activeOrganizationId?: string | null
+  requestedCompanyId?: string | null
   isSuperAdmin?: boolean
 }) {
-  const { activeOrganizationId, isSuperAdmin } = params
-  if (isSuperAdmin && !activeOrganizationId) return null
-  if (!activeOrganizationId) {
-    throw new Error('active-organization-required')
+  const { activeOrganizationId, requestedCompanyId, isSuperAdmin } = params
+
+  if (isSuperAdmin || !activeOrganizationId) {
+    return {
+      allowedCompanyIds: requestedCompanyId ? [requestedCompanyId] : null,
+      organizationId: activeOrganizationId || null,
+    }
   }
 
-  const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
-  if (!supabase) {
-    throw new Error('organization-scope-unavailable')
+  const allowedCompanyIds = await listOrganizationCompanyIds({ activeOrganizationId, isSuperAdmin })
+  if (requestedCompanyId && !allowedCompanyIds.includes(requestedCompanyId)) {
+    throw new Error('company-out-of-scope')
   }
 
-  const { data, error } = await supabase
-    .from('organization_members')
-    .select('staff_id')
-    .eq('organization_id', activeOrganizationId)
-    .not('staff_id', 'is', null)
-
-  if (error) throw error
-  let staffIds = Array.from(new Set((data || []).map((row: any) => String(row.staff_id || '')).filter(Boolean)))
-  if (staffIds.length === 0) {
-    const { data: legacyStaff, error: legacyError } = await supabase
-      .from('staff')
-      .select('id')
-      .order('full_name', { ascending: true })
-
-    if (legacyError) throw legacyError
-    staffIds = (legacyStaff || []).map((row: any) => String(row.id)).filter(Boolean)
+  return {
+    allowedCompanyIds: requestedCompanyId ? [requestedCompanyId] : allowedCompanyIds,
+    organizationId: activeOrganizationId || null,
   }
-
-  return staffIds
 }
 
 export async function ensureOrganizationOperatorAccess(params: {

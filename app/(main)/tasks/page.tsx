@@ -341,40 +341,22 @@ function TasksContent() {
     setError(null)
 
     try {
-      const [
-        { data: operatorsData, error: operatorsError },
-        { data: staffData, error: staffError },
-        { data: companiesData, error: companiesError },
-        { data: tasksData, error: tasksError },
-      ] = await Promise.all([
-        supabase
-          .from('operators')
-          .select('id, name, short_name, telegram_chat_id, role, is_active, operator_profiles(*)')
-          .eq('is_active', true),
-        supabase
-          .from('staff')
-          .select('id, full_name, short_name'),
-        supabase
-          .from('companies')
-          .select('id, name, code'),
-        supabase
-          .from('tasks')
-          .select('*')
-          .order('created_at', { ascending: false }),
-      ])
+      const response = await fetch('/api/admin/tasks?includeLookups=1', { cache: 'no-store' })
+      const json = await response.json().catch(() => null)
 
-      if (operatorsError) throw operatorsError
-      setOperators(operatorsData || [])
+      if (!response.ok) {
+        throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+      }
 
-      if (staffError) throw staffError
-      setStaff(staffData || [])
+      const operatorsData = Array.isArray(json?.operators) ? (json.operators as Operator[]) : []
+      const staffData = Array.isArray(json?.staff) ? (json.staff as Staff[]) : []
+      const companiesData = Array.isArray(json?.companies) ? (json.companies as Company[]) : []
+      const tasksData = Array.isArray(json?.data) ? (json.data as TasksQueryTask[]) : []
 
-      if (companiesError) throw companiesError
-      setCompanies(companiesData || [])
-
-      if (tasksError) throw tasksError
-
-      setTasks(enrichTasks((tasksData || []) as TasksQueryTask[], operatorsData || [], companiesData || []))
+      setOperators(operatorsData)
+      setStaff(staffData)
+      setCompanies(companiesData)
+      setTasks(enrichTasks(tasksData, operatorsData, companiesData))
     } catch (err) {
       console.error('Error loading data:', err)
       setError('Не удалось загрузить данные')
@@ -560,10 +542,34 @@ function TasksContent() {
   const bulkUpdateStatus = async (status: TaskStatus) => {
     if (selectedTaskIds.size === 0) return
     const ids = Array.from(selectedTaskIds)
-    const { error } = await supabase.from('tasks').update({ status, updated_at: new Date().toISOString() }).in('id', ids)
-    if (!error) {
+    try {
+      await Promise.all(
+        ids.map(async (taskId) => {
+          const response = await fetch('/api/admin/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'changeStatus',
+              taskId,
+              status,
+            }),
+          })
+
+          const json = await response.json().catch(() => null)
+          if (!response.ok) {
+            throw new Error(json?.error || `Ошибка запроса (${response.status})`)
+          }
+        }),
+      )
+
       setSelectedTaskIds(new Set())
       await loadData(true)
+    } catch (error) {
+      toast({
+        title: 'Не удалось обновить задачи',
+        description: error instanceof Error ? error.message : 'Попробуй ещё раз',
+        variant: 'destructive',
+      })
     }
   }
 

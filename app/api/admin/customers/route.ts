@@ -34,10 +34,11 @@ export async function GET(req: Request) {
       .eq('is_active', true)
       .order('total_spent', { ascending: false })
 
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) {
+        return json({ ok: true, data: [] })
+      }
       query = query.in('company_id', companyScope.allowedCompanyIds)
-    } else if (!access.isSuperAdmin) {
-      return json({ ok: true, data: [] })
     }
 
     const { data, error } = await query

@@ -95,10 +95,11 @@ export async function GET(req: Request) {
 
     if (from) query = query.gte('date', from)
     if (to) query = query.lte('date', to)
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) {
+        return json({ data: [] })
+      }
       query = query.in('company_id', companyScope.allowedCompanyIds)
-    } else if (!access.isSuperAdmin) {
-      return json({ data: [] })
     }
     if (category) query = query.eq('category', category)
     if (payFilter === 'cash') query = query.gt('cash_amount', 0)

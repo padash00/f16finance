@@ -8,14 +8,6 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-function requireActiveOrganization(organizationId?: string | null) {
-  if (!organizationId) {
-    throw new Error('active-organization-required')
-  }
-
-  return organizationId
-}
-
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
@@ -25,7 +17,7 @@ export async function GET(req: Request) {
     if (!isSuperAdmin && staffRole !== 'owner' && staffRole !== 'manager') {
       return json({ error: 'forbidden' }, 403)
     }
-    const activeOrganizationId = requireActiveOrganization(access.activeOrganization?.id)
+    const activeOrganizationId = access.activeOrganization?.id || null
 
     const supabase = createAdminSupabaseClient()
     const url = new URL(req.url)
@@ -41,10 +33,11 @@ export async function GET(req: Request) {
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) {
+        return json({ ok: true, data: [] })
+      }
       query = query.in('company_id', companyScope.allowedCompanyIds)
-    } else if (!access.isSuperAdmin) {
-      return json({ ok: true, data: [] })
     }
 
     const { data, error } = await query
@@ -65,7 +58,7 @@ export async function POST(req: Request) {
     if (!isSuperAdmin && staffRole !== 'owner' && staffRole !== 'manager') {
       return json({ error: 'forbidden' }, 403)
     }
-    const activeOrganizationId = requireActiveOrganization(access.activeOrganization?.id)
+    const activeOrganizationId = access.activeOrganization?.id || null
 
     const supabase = createAdminSupabaseClient()
     const body = (await req.json().catch(() => null)) as any

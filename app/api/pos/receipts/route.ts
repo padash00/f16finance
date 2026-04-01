@@ -35,10 +35,11 @@ export async function GET(request: Request) {
       .order('sold_at', { ascending: false })
       .range(offset, offset + pageSize - 1)
 
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) {
+        return json({ ok: true, data: [], total: 0, page, page_size: pageSize })
+      }
       query = query.in('company_id', companyScope.allowedCompanyIds)
-    } else if (!access.isSuperAdmin) {
-      return json({ ok: true, data: [], total: 0, page, page_size: pageSize })
     }
     if (locationId) query = query.eq('location_id', locationId)
     if (dateFrom) query = query.gte('sale_date', dateFrom)

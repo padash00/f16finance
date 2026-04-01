@@ -57,14 +57,6 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-function requireActiveOrganization(organizationId?: string | null) {
-  if (!organizationId) {
-    throw new Error('active-organization-required')
-  }
-
-  return organizationId
-}
-
 export async function GET(req: Request) {
   try {
     const guard = await requireStaffCapabilityRequest(req, 'staff')
@@ -136,7 +128,7 @@ export async function POST(req: Request) {
 
     const body = (await req.json().catch(() => null)) as Body | null
     if (!body?.action) return json({ error: 'Неверный формат запроса' }, 400)
-    const activeOrganizationId = requireActiveOrganization(access.activeOrganization?.id)
+    const activeOrganizationId = access.activeOrganization?.id || null
 
     if (body.action === 'createStaff') {
       const payload = body.payload
@@ -172,18 +164,20 @@ export async function POST(req: Request) {
 
       if (error) throw error
 
-      const { error: membershipError } = await supabase.from('organization_members').insert([
-        {
-          organization_id: activeOrganizationId,
-          staff_id: data.id,
-          email: data.email || null,
-          role: data.role,
-          status: data.is_active === false ? 'inactive' : 'active',
-          is_default: true,
-          metadata: { bootstrap_source: 'staff-create' },
-        },
-      ])
-      if (membershipError) throw membershipError
+      if (activeOrganizationId) {
+        const { error: membershipError } = await supabase.from('organization_members').insert([
+          {
+            organization_id: activeOrganizationId,
+            staff_id: data.id,
+            email: data.email || null,
+            role: data.role,
+            status: data.is_active === false ? 'inactive' : 'active',
+            is_default: true,
+            metadata: { bootstrap_source: 'staff-create' },
+          },
+        ])
+        if (membershipError) throw membershipError
+      }
 
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
@@ -236,16 +230,18 @@ export async function POST(req: Request) {
 
       if (error) throw error
 
-      const { error: membershipError } = await supabase
-        .from('organization_members')
-        .update({
-          email: data.email || null,
-          role: data.role,
-          status: data.is_active === false ? 'inactive' : 'active',
-        })
-        .eq('organization_id', activeOrganizationId)
-        .eq('staff_id', body.staffId)
-      if (membershipError) throw membershipError
+      if (activeOrganizationId) {
+        const { error: membershipError } = await supabase
+          .from('organization_members')
+          .update({
+            email: data.email || null,
+            role: data.role,
+            status: data.is_active === false ? 'inactive' : 'active',
+          })
+          .eq('organization_id', activeOrganizationId)
+          .eq('staff_id', body.staffId)
+        if (membershipError) throw membershipError
+      }
 
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
@@ -292,12 +288,14 @@ export async function POST(req: Request) {
 
       if (error) throw error
 
-      const { error: membershipError } = await supabase
-        .from('organization_members')
-        .update({ status: body.is_active ? 'active' : 'inactive' })
-        .eq('organization_id', activeOrganizationId)
-        .eq('staff_id', body.staffId)
-      if (membershipError) throw membershipError
+      if (activeOrganizationId) {
+        const { error: membershipError } = await supabase
+          .from('organization_members')
+          .update({ status: body.is_active ? 'active' : 'inactive' })
+          .eq('organization_id', activeOrganizationId)
+          .eq('staff_id', body.staffId)
+        if (membershipError) throw membershipError
+      }
 
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,

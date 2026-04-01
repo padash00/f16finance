@@ -453,6 +453,7 @@ export async function GET(req: Request) {
     if ('response' in access) return access.response
 
     const url = new URL(req.url)
+    const includeLookups = url.searchParams.get('includeLookups') === '1'
     const status = url.searchParams.get('status') as TaskStatus | null
     const operatorId = url.searchParams.get('operator_id')
     const companyId = url.searchParams.get('company_id')
@@ -476,16 +477,63 @@ export async function GET(req: Request) {
 
     if (status) query = query.eq('status', status)
     if (operatorId) query = query.eq('operator_id', operatorId)
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) {
+        return json({ data: [], page, pageSize, hasMore: false })
+      }
       query = query.in('company_id', companyScope.allowedCompanyIds)
-    } else if (!access.isSuperAdmin) {
-      return json({ data: [], page, pageSize, hasMore: false })
     }
 
     const { data, error } = await query
     if (error) throw error
 
-    return json({ data: data ?? [], page, pageSize, hasMore: (data?.length ?? 0) === pageSize })
+    if (!includeLookups) {
+      return json({ data: data ?? [], page, pageSize, hasMore: (data?.length ?? 0) === pageSize })
+    }
+
+    const [operatorsResult, staffResult, companiesResult] = await Promise.all([
+      access.isSuperAdmin
+        ? supabase
+            .from('operators')
+            .select('id, name, short_name, telegram_chat_id, role, is_active, operator_profiles(*)')
+            .eq('is_active', true)
+        : (() => {
+            const operatorIds = Array.from(new Set((data || []).map((row: any) => row.operator_id).filter(Boolean)))
+            if (!operatorIds.length) return Promise.resolve({ data: [], error: null } as any)
+
+            return supabase
+              .from('operators')
+              .select('id, name, short_name, telegram_chat_id, role, is_active, operator_profiles(*)')
+              .in('id', operatorIds)
+          })(),
+      access.isSuperAdmin
+        ? supabase.from('staff').select('id, full_name, short_name').order('full_name')
+        : (() => {
+            const staffIds = Array.from(new Set((data || []).map((row: any) => row.created_by).filter(Boolean)))
+            if (!staffIds.length) return Promise.resolve({ data: [], error: null } as any)
+
+            return supabase.from('staff').select('id, full_name, short_name').in('id', staffIds)
+          })(),
+      access.isSuperAdmin || companyScope.allowedCompanyIds === null
+        ? supabase.from('companies').select('id, name, code').order('name')
+        : companyScope.allowedCompanyIds.length > 0
+          ? supabase.from('companies').select('id, name, code').in('id', companyScope.allowedCompanyIds).order('name')
+          : Promise.resolve({ data: [], error: null } as any),
+    ])
+
+    if (operatorsResult.error) throw operatorsResult.error
+    if (staffResult.error) throw staffResult.error
+    if (companiesResult.error) throw companiesResult.error
+
+    return json({
+      data: data ?? [],
+      operators: operatorsResult.data || [],
+      staff: staffResult.data || [],
+      companies: companiesResult.data || [],
+      page,
+      pageSize,
+      hasMore: (data?.length ?? 0) === pageSize,
+    })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/tasks GET', message: error?.message || 'error' })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)

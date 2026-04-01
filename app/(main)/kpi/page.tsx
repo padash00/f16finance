@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabaseClient'
 import { calculateForecast, CompanyCode } from '@/lib/kpiEngine'
 import { monthKeyFromDateStr } from '@/lib/kpiTeams'
 import {
@@ -38,6 +37,19 @@ type CompanyStats = {
   trend: number
 }
 
+type IncomeRow = {
+  date: string
+  company_id: string | null
+  cash_amount: number | null
+  kaspi_amount: number | null
+  card_amount: number | null
+}
+
+type CompanyRow = {
+  id: string
+  code: string | null
+}
+
 function useKpiForecast(targetMonthStartISO: string) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -62,13 +74,27 @@ function useKpiForecast(targetMonthStartISO: string) {
         const startISO = `${monthKey(prev2Date)}-01`
         const endISO = new Date(prev1Date.getFullYear(), prev1Date.getMonth() + 1, 0).toISOString().slice(0, 10)
 
-        const { data: rows, error: e } = await supabase
-          .from('incomes')
-          .select('date, cash_amount, kaspi_amount, card_amount, companies:company_id (code)')
-          .gte('date', startISO)
-          .lte('date', endISO)
+        const [incomesResponse, companiesResponse] = await Promise.all([
+          fetch(`/api/admin/incomes?from=${startISO}&to=${endISO}`, { cache: 'no-store' }),
+          fetch('/api/admin/companies', { cache: 'no-store' }),
+        ])
 
-        if (e) throw e
+        const incomesJson = await incomesResponse.json().catch(() => null)
+        const companiesJson = await companiesResponse.json().catch(() => null)
+
+        if (!incomesResponse.ok) {
+          throw new Error(incomesJson?.error || `Ошибка загрузки incomes (${incomesResponse.status})`)
+        }
+
+        if (!companiesResponse.ok) {
+          throw new Error(companiesJson?.error || `Ошибка загрузки companies (${companiesResponse.status})`)
+        }
+
+        const rows = Array.isArray(incomesJson?.data) ? (incomesJson.data as IncomeRow[]) : []
+        const companies = Array.isArray(companiesJson?.data) ? (companiesJson.data as CompanyRow[]) : []
+        const companyCodeById = new Map(
+          companies.map((company) => [String(company.id), String(company.code || '').toLowerCase()]),
+        )
 
         const k1 = monthKey(prev1Date)
         const k2 = monthKey(prev2Date)
@@ -80,7 +106,7 @@ function useKpiForecast(targetMonthStartISO: string) {
 
         for (const r of rows || []) {
           const key = monthKeyFromDateStr((r as any).date)
-          const code = String((r as any).companies?.code || '').toLowerCase() as CompanyCode
+          const code = String(companyCodeById.get(String((r as any).company_id || '')) || '').toLowerCase() as CompanyCode
           if (!sums[key]) continue
           if (!COMPANIES.includes(code)) continue
 

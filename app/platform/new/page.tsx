@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Loader2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Building2, CheckCircle2, ExternalLink, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -24,17 +24,27 @@ function slugify(value: string) {
     .slice(0, 32)
 }
 
+type CreatedOrg = {
+  name: string
+  slug: string
+  primaryDomain: string
+  appUrl: string
+  planCode: string
+}
+
 export default function NewOrganizationPage() {
   const router = useRouter()
-  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [step, setStep] = useState<1 | 2>(1)
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [slugManual, setSlugManual] = useState(false)
+  const [ownerFullName, setOwnerFullName] = useState('')
+  const [ownerEmail, setOwnerEmail] = useState('')
   const [trialDays, setTrialDays] = useState('14')
   const [planCode, setPlanCode] = useState('starter')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [created, setCreated] = useState(false)
+  const [createdOrg, setCreatedOrg] = useState<CreatedOrg | null>(null)
 
   const handleNameChange = (v: string) => {
     setName(v)
@@ -48,11 +58,19 @@ export default function NewOrganizationPage() {
       const res = await fetch('/api/admin/organizations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), slug: slug.trim(), planCode, trialDays: Number(trialDays) || 14, createPrimaryDomain: true }),
+        body: JSON.stringify({
+          name: name.trim(),
+          slug: slug.trim(),
+          planCode,
+          trialDays: Number(trialDays) || 14,
+          createPrimaryDomain: true,
+          ownerFullName: ownerFullName.trim() || null,
+          ownerEmail: ownerEmail.trim() || null,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Ошибка создания')
-      setCreated(true)
+      setCreatedOrg(data.organization)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -60,7 +78,20 @@ export default function NewOrganizationPage() {
     }
   }
 
-  if (created) {
+  const handleReset = () => {
+    setCreatedOrg(null)
+    setStep(1)
+    setName('')
+    setSlug('')
+    setSlugManual(false)
+    setOwnerFullName('')
+    setOwnerEmail('')
+    setTrialDays('14')
+    setPlanCode('starter')
+    setError(null)
+  }
+
+  if (createdOrg) {
     return (
       <div className="flex h-full min-h-[60vh] flex-col items-center justify-center p-6 text-center">
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20">
@@ -68,15 +99,32 @@ export default function NewOrganizationPage() {
         </div>
         <h2 className="text-2xl font-semibold text-white">Организация создана</h2>
         <p className="mt-2 text-sm text-slate-400">
-          Поддомен <span className="text-violet-300">{slug}.ordaops.kz</span> активирован.
+          Поддомен <span className="text-violet-300">{createdOrg.primaryDomain}</span> активирован.
           После DNS-пропагации клиент сможет войти.
         </p>
+        {createdOrg.appUrl && (
+          <a
+            href={createdOrg.appUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 text-sm text-violet-400 hover:text-violet-300"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Открыть рабочее пространство
+          </a>
+        )}
         <div className="mt-6 flex gap-3">
-          <Button variant="outline" onClick={() => router.push('/platform/organizations')} className="border-white/10 text-white hover:bg-white/[0.04]">
+          <Button
+            variant="outline"
+            onClick={() => router.push('/platform/organizations')}
+            className="border-white/10 text-white hover:bg-white/[0.04]"
+          >
             К списку организаций
           </Button>
-          <Button onClick={() => { setCreated(false); setStep(1); setName(''); setSlug(''); setSlugManual(false) }}
-            className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:opacity-90">
+          <Button
+            onClick={handleReset}
+            className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:opacity-90"
+          >
             Создать ещё
           </Button>
         </div>
@@ -133,6 +181,30 @@ export default function NewOrganizationPage() {
                 </p>
               )}
             </div>
+
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-4">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Владелец (необязательно)</p>
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-500">Имя и фамилия</label>
+                <Input
+                  value={ownerFullName}
+                  onChange={e => setOwnerFullName(e.target.value)}
+                  placeholder="Алибек Сейткали"
+                  className="border-white/10 bg-slate-900/60 text-white placeholder:text-slate-600"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-500">Email</label>
+                <Input
+                  type="email"
+                  value={ownerEmail}
+                  onChange={e => setOwnerEmail(e.target.value)}
+                  placeholder="alibek@example.com"
+                  className="border-white/10 bg-slate-900/60 text-white placeholder:text-slate-600"
+                />
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-400">Пробный период (дней)</label>
               <Input
@@ -176,6 +248,24 @@ export default function NewOrganizationPage() {
                   <p className="mt-1 text-xs text-slate-400">{plan.description}</p>
                 </button>
               ))}
+            </div>
+
+            {/* Summary */}
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm space-y-1">
+              <div className="flex justify-between text-slate-400">
+                <span>Организация</span><span className="text-white">{name}</span>
+              </div>
+              <div className="flex justify-between text-slate-400">
+                <span>Поддомен</span><span className="text-violet-300">{slug}.ordaops.kz</span>
+              </div>
+              {ownerEmail && (
+                <div className="flex justify-between text-slate-400">
+                  <span>Владелец</span><span className="text-white">{ownerFullName || ownerEmail}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-slate-400">
+                <span>Пробный период</span><span className="text-white">{trialDays} дней</span>
+              </div>
             </div>
 
             {error && (

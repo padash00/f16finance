@@ -64,27 +64,39 @@ export async function GET(req: Request) {
     if ('response' in access) return access.response
 
     const activeOrgId = access.activeOrganization?.id || null
-    if (!activeOrgId) {
-      return badRequest('active-organization-required')
-    }
 
     const supabase = createAdminSupabaseClient()
     const [companiesRes, staffRes, categoriesRes] = await Promise.all([
-      supabase
-        .from('companies')
-        .select('id, name, code, show_in_structure')
-        .eq('organization_id', activeOrgId)
-        .order('name'),
-      supabase
-        .from('staff')
-        .select('id, full_name, phone, email, role')
-        .eq('organization_id', activeOrgId)
-        .order('full_name'),
-      supabase
-        .from('expense_categories')
-        .select('id, name, monthly_budget, accounting_group, organization_id')
-        .eq('organization_id', activeOrgId)
-        .order('name'),
+      access.isSuperAdmin || !activeOrgId
+        ? supabase
+            .from('companies')
+            .select('id, name, code, show_in_structure')
+            .order('name')
+        : supabase
+            .from('companies')
+            .select('id, name, code, show_in_structure')
+            .eq('organization_id', activeOrgId)
+            .order('name'),
+      access.isSuperAdmin || !activeOrgId
+        ? supabase
+            .from('staff')
+            .select('id, full_name, phone, email, role')
+            .order('full_name')
+        : supabase
+            .from('staff')
+            .select('id, full_name, phone, email, role')
+            .eq('organization_id', activeOrgId)
+            .order('full_name'),
+      access.isSuperAdmin || !activeOrgId
+        ? supabase
+            .from('expense_categories')
+            .select('id, name, monthly_budget, accounting_group, organization_id')
+            .order('name')
+        : supabase
+            .from('expense_categories')
+            .select('id, name, monthly_budget, accounting_group, organization_id')
+            .eq('organization_id', activeOrgId)
+            .order('name'),
     ])
 
     if (companiesRes.error) throw companiesRes.error
@@ -153,7 +165,7 @@ export async function POST(req: Request) {
     const actorUserId = access.user?.id || null
     const activeOrgId = access.activeOrganization?.id || null
 
-    if (!activeOrgId) {
+    if (!access.isSuperAdmin && !activeOrgId) {
       return badRequest('Сначала выберите организацию в platform dashboard.')
     }
 
@@ -165,7 +177,7 @@ export async function POST(req: Request) {
             name: body.payload.name.trim(),
             code: body.payload.code?.trim() || null,
             show_in_structure: body.payload.show_in_structure !== false,
-            organization_id: activeOrgId,
+            organization_id: access.isSuperAdmin ? null : activeOrgId,
           },
         ]).select('id,name,code,show_in_structure').single()
         if (error) throw error
@@ -191,7 +203,6 @@ export async function POST(req: Request) {
             show_in_structure: body.payload.show_in_structure !== false,
           })
           .eq('id', body.id)
-          .eq('organization_id', activeOrgId)
           .select('id,name,code,show_in_structure')
           .single()
         if (error) throw error
@@ -205,7 +216,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      const { error } = await supabase.from('companies').delete().eq('id', body.id).eq('organization_id', activeOrgId)
+      const { error } = await supabase.from('companies').delete().eq('id', body.id)
       if (error) throw error
       await writeAuditLog(supabase, {
         actorUserId,
@@ -225,7 +236,7 @@ export async function POST(req: Request) {
             phone: body.payload.phone?.trim() || null,
             email: body.payload.email?.trim() || null,
             role: body.payload.role?.trim() || 'operator',
-            organization_id: activeOrgId,
+            organization_id: access.isSuperAdmin ? null : activeOrgId,
           },
         ]).select('id,full_name,email,role').single()
         if (error) throw error
@@ -252,7 +263,6 @@ export async function POST(req: Request) {
             role: body.payload.role?.trim() || 'operator',
           })
           .eq('id', body.id)
-          .eq('organization_id', activeOrgId)
           .select('id,full_name,email,role')
           .single()
         if (error) throw error
@@ -266,7 +276,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true })
       }
 
-      const { error } = await supabase.from('staff').delete().eq('id', body.id).eq('organization_id', activeOrgId)
+      const { error } = await supabase.from('staff').delete().eq('id', body.id)
       if (error) throw error
       await writeAuditLog(supabase, {
         actorUserId,
@@ -285,7 +295,7 @@ export async function POST(req: Request) {
             name: body.payload.name.trim(),
             monthly_budget: body.payload.monthly_budget ?? null,
             accounting_group: body.payload.accounting_group || null,
-            organization_id: activeOrgId,
+            organization_id: access.isSuperAdmin ? null : activeOrgId,
           },
         ]).select('id,name,monthly_budget,accounting_group').single()
         if (error) throw error
@@ -311,7 +321,6 @@ export async function POST(req: Request) {
             accounting_group: body.payload.accounting_group || null,
           })
           .eq('id', body.id)
-          .eq('organization_id', activeOrgId)
           .select('id,name,monthly_budget,accounting_group')
           .single()
         if (error) throw error
@@ -329,7 +338,6 @@ export async function POST(req: Request) {
         .from('expense_categories')
         .delete()
         .eq('id', body.id)
-        .eq('organization_id', activeOrgId)
       if (error) throw error
       await writeAuditLog(supabase, {
         actorUserId,

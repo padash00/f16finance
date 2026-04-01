@@ -125,10 +125,11 @@ export async function GET(req: Request) {
 
     if (from) query = query.gte('date', from)
     if (to) query = query.lte('date', to)
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) {
+        return json({ data: [] })
+      }
       query = query.in('company_id', companyScope.allowedCompanyIds)
-    } else if (!access.isSuperAdmin) {
-      return json({ data: [] })
     }
     if (shift) query = query.eq('shift', shift)
     if (operatorNull) query = query.is('operator_id', null)

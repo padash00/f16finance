@@ -35,10 +35,11 @@ export async function GET(request: Request) {
       return json({ error: 'sale_id or short_id required' }, 400)
     }
 
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) {
+        return json({ error: 'Чек не найден' }, 404)
+      }
       query = query.in('company_id', companyScope.allowedCompanyIds)
-    } else if (!access.isSuperAdmin) {
-      return json({ error: 'Чек не найден' }, 404)
     }
 
     const { data, error } = await query.maybeSingle()
@@ -79,12 +80,10 @@ export async function POST(request: Request) {
 
     if (saleError) throw saleError
     if (!originalSale) return json({ error: 'Чек не найден' }, 404)
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
-      if (!companyScope.allowedCompanyIds.includes(String(originalSale.company_id || ''))) {
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0 || !companyScope.allowedCompanyIds.includes(String(originalSale.company_id || ''))) {
         return json({ error: 'Чек не найден' }, 404)
       }
-    } else if (!access.isSuperAdmin) {
-      return json({ error: 'Чек не найден' }, 404)
     }
 
     // Validate return items (can't return more than sold)

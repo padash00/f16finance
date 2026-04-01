@@ -35,10 +35,11 @@ export async function GET(request: Request) {
       .lt('sale_date', nextMonth)
       .order('sale_date')
 
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) {
+        return json({ ok: true, data: { daily: [], totals: { count: 0, total: 0, cash: 0, kaspi: 0, card: 0, online: 0, discount: 0, avg_check: 0 }, year, month } })
+      }
       salesQuery = salesQuery.in('company_id', companyScope.allowedCompanyIds)
-    } else if (!access.isSuperAdmin) {
-      return json({ ok: true, data: { daily: [], totals: { count: 0, total: 0, cash: 0, kaspi: 0, card: 0, online: 0, discount: 0, avg_check: 0 }, year, month } })
     }
     const { data: sales, error: salesError } = await salesQuery
     if (salesError) throw salesError

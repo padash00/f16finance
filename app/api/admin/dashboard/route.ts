@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     })
     const allowedCompanyIds = companyScope.allowedCompanyIds
 
-    if (allowedCompanyIds && allowedCompanyIds.length === 0 && !access.isSuperAdmin) {
+    if (allowedCompanyIds !== null && allowedCompanyIds.length === 0) {
       return json({
         ok: true,
         data: {
@@ -88,7 +88,7 @@ export async function GET(request: Request) {
           .limit(10),
       ),
       // Low stock items (balance <= threshold)
-      access.isSuperAdmin
+      access.isSuperAdmin || allowedCompanyIds === null
         ? supabase
             .from('inventory_items')
             .select('id, name, low_stock_threshold, total_balance:inventory_balances(quantity)')

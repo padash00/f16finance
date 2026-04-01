@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { getPublicAppUrl } from '@/lib/core/app-url'
 import { buildTenantHost, buildTenantUrl, normalizeTenantHost } from '@/lib/core/tenant-domain'
 import { resolveOrganizationUsage } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
@@ -9,6 +10,8 @@ type CreateOrganizationBody = {
   name?: string | null
   slug?: string | null
   legalName?: string | null
+  ownerFullName?: string | null
+  ownerEmail?: string | null
   planCode?: string | null
   trialDays?: number | null
   createPrimaryDomain?: boolean | null
@@ -120,6 +123,14 @@ const CYRILLIC_TO_LATIN_MAP: Record<string, string> = {
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+function normalizeEmail(value: string | null | undefined) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function buildRedirectTo(origin: string, nextPath: string) {
+  return `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`
 }
 
 function slugify(value: string) {
@@ -266,6 +277,64 @@ async function reserveUniqueSlug(
   }
 
   return `${normalizedBase}-${counter}`
+}
+
+async function resolveOrCreateOwnerStaff(params: {
+  supabase: ReturnType<typeof createAdminSupabaseClient>
+  organizationId: string
+  fullName: string
+  email: string
+}) {
+  const { supabase, organizationId, fullName, email } = params
+
+  const { data: existing, error: existingError } = await supabase
+    .from('staff')
+    .select('id, full_name, short_name, email, role, is_active, organization_id')
+    .ilike('email', email)
+    .eq('organization_id', organizationId)
+    .maybeSingle()
+
+  if (existingError) throw existingError
+
+  if (existing?.id) {
+    const updatePayload: Record<string, unknown> = {}
+    if (!existing.full_name && fullName) updatePayload.full_name = fullName
+    if (!existing.short_name && fullName) updatePayload.short_name = fullName.split(' ')[0] || fullName
+    if (!existing.email) updatePayload.email = email
+    if (!existing.role) updatePayload.role = 'owner'
+    if (existing.is_active === false) updatePayload.is_active = true
+
+    if (Object.keys(updatePayload).length > 0) {
+      const { data: updated, error: updateError } = await supabase
+        .from('staff')
+        .update(updatePayload)
+        .eq('id', existing.id)
+        .select('id, full_name, short_name, email, role, is_active')
+        .single()
+      if (updateError) throw updateError
+      return updated
+    }
+
+    return existing
+  }
+
+  const { data: created, error: createError } = await supabase
+    .from('staff')
+    .insert([
+      {
+        organization_id: organizationId,
+        full_name: fullName,
+        short_name: fullName.split(' ')[0] || fullName,
+        email,
+        role: 'owner',
+        is_active: true,
+      },
+    ])
+    .select('id, full_name, short_name, email, role, is_active')
+    .single()
+
+  if (createError) throw createError
+  return created
 }
 
 function getManageableAccess(params: {
@@ -629,6 +698,8 @@ export async function POST(req: Request) {
     const planCode = String(body?.planCode || '').trim() || 'starter'
     const trialDays = normalizeTrialDays(body?.trialDays, 14)
     const createPrimaryDomain = body?.createPrimaryDomain !== false
+    const ownerEmail = normalizeEmail(body?.ownerEmail)
+    const ownerFullName = String(body?.ownerFullName || '').trim()
 
     if (!name) {
       return json({ error: 'Название организации обязательно' }, 400)
@@ -720,6 +791,36 @@ export async function POST(req: Request) {
       )
     if (memberError) throw memberError
 
+    // If an owner email is provided, create/resolve a staff record and add as org member
+    let ownerStaff: { id: string } | null = null
+    if (ownerEmail) {
+      ownerStaff = await resolveOrCreateOwnerStaff({
+        supabase,
+        organizationId,
+        fullName: ownerFullName || ownerEmail,
+        email: ownerEmail,
+      })
+      if (ownerStaff?.id) {
+        const { error: ownerMemberError } = await supabase
+          .from('organization_members')
+          .upsert(
+            [
+              {
+                organization_id: organizationId,
+                staff_id: ownerStaff.id,
+                email: ownerEmail,
+                role: 'owner',
+                status: 'active',
+                is_default: true,
+                metadata: { created_from: 'project-hub', invited: true },
+              },
+            ],
+            { onConflict: 'organization_id,staff_id' },
+          )
+        if (ownerMemberError) throw ownerMemberError
+      }
+    }
+
     const { error: domainError } = await supabase
       .from('tenant_domains')
       .insert([
@@ -757,6 +858,7 @@ export async function POST(req: Request) {
         planCode: String(plan.code),
         primaryDomain: primaryDomainHost,
         appUrl,
+        ownerStaffId: ownerStaff?.id || null,
       },
     })
   } catch (error: any) {

@@ -34,20 +34,21 @@ export async function GET(request: Request) {
 
     if (shift) salesQuery = salesQuery.eq('shift', shift)
     if (locationId) salesQuery = salesQuery.eq('location_id', locationId)
-    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0) {
+    if (companyScope.allowedCompanyIds !== null) {
+      if (companyScope.allowedCompanyIds.length === 0) {
+        return json({
+          ok: true,
+          data: {
+            date,
+            shift: shift || 'all',
+            totals: { amount: 0, cash: 0, kaspi: 0, card: 0, online: 0, count: 0, avg_check: 0 },
+            top_items: [],
+            by_hour: Array.from({ length: 24 }, (_, h) => ({ hour: h, amount: 0 })),
+            sales: [],
+          },
+        })
+      }
       salesQuery = salesQuery.in('company_id', companyScope.allowedCompanyIds)
-    } else if (!access.isSuperAdmin) {
-      return json({
-        ok: true,
-        data: {
-          date,
-          shift: shift || 'all',
-          totals: { amount: 0, cash: 0, kaspi: 0, card: 0, online: 0, count: 0, avg_check: 0 },
-          top_items: [],
-          by_hour: Array.from({ length: 24 }, (_, h) => ({ hour: h, amount: 0 })),
-          sales: [],
-        },
-      })
     }
 
     const { data: sales, error: salesError } = await salesQuery

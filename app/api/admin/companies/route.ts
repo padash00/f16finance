@@ -81,10 +81,6 @@ export async function POST(req: Request) {
       ? requestedOrganizationId || access.activeOrganization?.id || null
       : access.activeOrganization?.id || null
 
-    if (!targetOrganizationId) {
-      return json({ error: 'active-organization-required' }, 400)
-    }
-
     if (!access.isSuperAdmin && targetOrganizationId !== access.activeOrganization?.id) {
       return json({ error: 'forbidden' }, 403)
     }

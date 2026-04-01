@@ -39,8 +39,7 @@ export async function GET(request: Request) {
     // Filter by company/location
     const filtered = (saleItems || []).filter((si: any) => {
       const sale = Array.isArray(si.point_sales) ? si.point_sales[0] : si.point_sales
-      if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0 && !companyScope.allowedCompanyIds.includes(String(sale?.company_id || ''))) return false
-      if (!access.isSuperAdmin && (!companyScope.allowedCompanyIds || companyScope.allowedCompanyIds.length === 0)) return false
+      if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length > 0 && !companyScope.allowedCompanyIds.includes(String(sale?.company_id || ''))) return false
       if (locationId && sale?.location_id !== locationId) return false
       return true
     })
@@ -56,14 +55,12 @@ export async function GET(request: Request) {
     }
 
     const { data: scopedLocations, error: scopedLocationsError } =
-      companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length > 0
+      companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length > 0
         ? await supabase
             .from('inventory_locations')
             .select('id')
             .eq('organization_id', String(access.activeOrganization?.id || ''))
-        : access.isSuperAdmin
-          ? { data: null, error: null }
-          : { data: [], error: null }
+        : { data: null, error: null }
 
     if (scopedLocationsError) throw scopedLocationsError
     const scopedLocationIds = new Set((scopedLocations || []).map((row: any) => String(row.id)))
