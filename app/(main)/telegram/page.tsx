@@ -166,7 +166,9 @@ export default function TelegramPage() {
       const data = await res.json()
       setStatus(data)
       if (typeof window !== 'undefined' && !webhookUrl) {
-        setWebhookUrl(`${window.location.origin}/api/telegram/webhook`)
+        // Force HTTPS — Telegram requires it; HTTP causes 307 redirect
+        const origin = window.location.origin.replace(/^http:/, 'https:')
+        setWebhookUrl(`${origin}/api/telegram/webhook`)
       }
     } catch {}
     finally { setStatusLoading(false) }
