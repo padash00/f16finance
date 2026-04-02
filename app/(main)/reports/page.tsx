@@ -1179,33 +1179,38 @@ function ReportsContent() {
     setError(null)
 
     try {
-      const { prevFrom } = calculatePrevPeriod(dateFrom, dateTo)
+      const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
 
       const incomeParams = new URLSearchParams({ from: prevFrom, to: dateTo })
-      const expenseParams = new URLSearchParams({ from: prevFrom, to: dateTo })
+      const expenseCurParams = new URLSearchParams({ from: dateFrom, to: dateTo, page_size: '2000', page: '0' })
+      const expensePrevParams = new URLSearchParams({ from: prevFrom, to: prevTo, page_size: '2000', page: '0' })
       if (companyFilter !== 'all') {
         incomeParams.set('company_id', companyFilter)
-        expenseParams.set('company_id', companyFilter)
+        expenseCurParams.set('company_id', companyFilter)
+        expensePrevParams.set('company_id', companyFilter)
       }
       if (shiftFilter !== 'all') {
         incomeParams.set('shift', shiftFilter)
       }
 
-      const [incomeResp, expenseResp] = await Promise.all([
+      const [incomeResp, expenseCurResp, expensePrevResp] = await Promise.all([
         fetch(`/api/admin/incomes?${incomeParams}`),
-        fetch(`/api/admin/expenses?${expenseParams}`),
+        fetch(`/api/admin/expenses?${expenseCurParams}`),
+        fetch(`/api/admin/expenses?${expensePrevParams}`),
       ])
 
       if (myReqId !== reqIdRef.current) return
 
       const incomeJson = await incomeResp.json()
-      const expenseJson = await expenseResp.json()
+      const expenseCurJson = await expenseCurResp.json()
+      const expensePrevJson = await expensePrevResp.json()
 
       if (incomeJson.error) throw new Error(incomeJson.error)
-      if (expenseJson.error) throw new Error(expenseJson.error)
+      if (expenseCurJson.error) throw new Error(expenseCurJson.error)
+      if (expensePrevJson.error) throw new Error(expensePrevJson.error)
 
       let incomes: IncomeRow[] = incomeJson.data || []
-      let expenses: ExpenseRow[] = expenseJson.data || []
+      let expenses: ExpenseRow[] = [...(expenseCurJson.data || []), ...(expensePrevJson.data || [])]
 
       // Client-side extra company exclusion (when no specific company selected)
       if (companyFilter === 'all' && !includeExtraInTotals && extraCompanyId) {
