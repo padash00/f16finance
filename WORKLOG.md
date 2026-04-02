@@ -395,6 +395,25 @@
 - `npm run build` ✅
 - `npm run typecheck` ✅
 
+### 2026-04-02 — восстановление legacy data-flow после SaaS-поломок
+
+Сделано:
+- `lib/server/organizations.ts` временно переведён в `LEGACY_SINGLE_TENANT_MODE`, чтобы вернуть старое F16-поведение для общих helper'ов компаний, сотрудников, операторов и company-scope.
+- `app/api/admin/settings/route.ts` больше не зависит только от service-role; добавлен fallback на request-scoped Supabase client, чтобы `/api/admin/settings` снова поднимал точки, команду и категории.
+- `app/api/admin/expense-categories/route.ts` приведён к legacy-схеме без ожидания `organization_id`, чтобы экран расходов и справочник категорий перестали падать на старой базе.
+- `app/(main)/categories/page.tsx` синхронизирован с legacy API категорий и больше не шлёт лишние SaaS-поля при создании/редактировании.
+- `app/api/admin/operators/profile/route.ts` расширен: теперь сохраняет `telegram_chat_id` и весь профиль оператора через серверный API.
+- `app/(main)/operators/[id]/profile/page.tsx` больше не пишет `operators` и `operator_profiles` напрямую из браузера при сохранении профиля.
+
+Результат:
+- проект снова ближе к досааS single-tenant F16-схеме
+- критичные экраны, завязанные на `resolveCompanyScope` и `settings`, должны начать видеть старые данные как раньше
+- операторский профиль перестаёт упираться в прямой browser-Supabase при сохранении
+
+Проверка:
+- `npm run build` ✅
+- `npm run typecheck` ✅
+
 ### 2026-04-01 — восстановление данных на страницах после RLS
 
 Сделано:
