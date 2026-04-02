@@ -1107,39 +1107,23 @@ export default function OperatorProfilePage() {
       setSaving(true)
       setError(null)
 
-      // Save telegram_chat_id to operators table
-      const { error: opError } = await supabase
-        .from('operators')
-        .update({ telegram_chat_id: editedTelegramChatId || null })
-        .eq('id', operatorId)
-      if (opError) throw opError
-      setOperator(prev => prev ? { ...prev, telegram_chat_id: editedTelegramChatId || null } : prev)
+      const response = await fetch('/api/admin/operators/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operator_id: operatorId,
+          telegram_chat_id: editedTelegramChatId || null,
+          profile: editedProfile,
+        }),
+      })
 
-      if (profile) {
-        const { error } = await supabase
-          .from('operator_profiles')
-          .update({
-            ...editedProfile,
-            updated_at: new Date().toISOString()
-          })
-          .eq('operator_id', operatorId)
-
-        if (error) throw error
-
-        setProfile({ ...profile, ...editedProfile } as OperatorProfile)
-      } else {
-        const { data, error } = await supabase
-          .from('operator_profiles')
-          .insert({
-            operator_id: operatorId,
-            ...editedProfile
-          })
-          .select()
-          .single()
-
-        if (error) throw error
-        setProfile(data)
+      const json = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(json?.error || 'Ошибка при сохранении')
       }
+
+      setOperator(prev => prev ? { ...prev, telegram_chat_id: editedTelegramChatId || null } : prev)
+      setProfile((prev) => ({ ...(prev || { operator_id: operatorId }), ...editedProfile } as OperatorProfile))
 
       setIsEditing(false)
       setUploadSuccess('Профиль сохранен')

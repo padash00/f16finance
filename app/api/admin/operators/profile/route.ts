@@ -89,10 +89,33 @@ export async function PATCH(req: Request) {
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
+    const profilePayload = body?.profile && typeof body.profile === 'object'
+      ? { ...(body.profile as Record<string, unknown>) }
+      : {}
+    delete (profilePayload as any).id
+    delete (profilePayload as any).operator_id
+    delete (profilePayload as any).created_at
+
+    const telegramChatId =
+      typeof body?.telegram_chat_id === 'string' && body.telegram_chat_id.trim()
+        ? body.telegram_chat_id.trim()
+        : null
+
+    const { error: operatorError } = await supabase
+      .from('operators')
+      .update({ telegram_chat_id: telegramChatId })
+      .eq('id', operatorId)
+
+    if (operatorError) throw operatorError
+
     const { error } = await supabase
       .from('operator_profiles')
       .upsert(
-        { operator_id: operatorId, photo_url: body?.photo_url ?? null, updated_at: new Date().toISOString() },
+        {
+          operator_id: operatorId,
+          ...profilePayload,
+          updated_at: new Date().toISOString(),
+        },
         { onConflict: 'operator_id' }
       )
 

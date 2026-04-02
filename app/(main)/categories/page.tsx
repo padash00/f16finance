@@ -27,10 +27,10 @@ import {
 type Category = {
   id: string
   name: string
-  type: string | null
+  type?: string | null
   accounting_group: FinancialGroup | null
   monthly_budget: number | null
-  created_at: string
+  created_at?: string
 }
 
 type PageTab = 'categories' | 'groups'
@@ -95,7 +95,6 @@ export default function CategoriesPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: newName.trim(),
-        type: newType.trim() || 'Общее',
         accounting_group: newAccountingGroup,
         monthly_budget: Number(newBudget) || 0,
       }),
@@ -130,7 +129,6 @@ export default function CategoriesPage() {
       body: JSON.stringify({
         id: editingId,
         name: editName.trim(),
-        type: editType.trim() || null,
         accounting_group: editAccountingGroup,
         monthly_budget: Number(editBudget) || 0,
       }),

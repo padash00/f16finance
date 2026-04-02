@@ -41,6 +41,10 @@ export type OrganizationLimitKey = 'companies' | 'staff' | 'operators' | 'point_
 
 export type OrganizationUsage = Record<OrganizationLimitKey, number>
 
+// Temporary rollback: restore the old F16-style single-tenant behavior
+// while the SaaS layer is being redesigned safely.
+const LEGACY_SINGLE_TENANT_MODE = true
+
 const ZERO_ORGANIZATION_USAGE: OrganizationUsage = {
   companies: 0,
   staff: 0,
@@ -326,6 +330,32 @@ export async function resolveOrganizationUsage(params: {
   isSuperAdmin?: boolean
 }) {
   const { activeOrganizationId, isSuperAdmin } = params
+  if (LEGACY_SINGLE_TENANT_MODE) {
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
+    if (!supabase) {
+      throw new Error('organization-scope-unavailable')
+    }
+
+    const [companiesResult, staffResult, projectAssignmentsResult, operatorResult] = await Promise.all([
+      supabase.from('companies').select('id'),
+      supabase.from('staff').select('id'),
+      supabase.from('point_projects').select('id'),
+      supabase.from('operators').select('id').eq('is_active', true),
+    ])
+
+    if (companiesResult.error) throw companiesResult.error
+    if (staffResult.error) throw staffResult.error
+    if (projectAssignmentsResult.error) throw projectAssignmentsResult.error
+    if (operatorResult.error) throw operatorResult.error
+
+    return {
+      companies: (companiesResult.data || []).length,
+      staff: (staffResult.data || []).length,
+      operators: (operatorResult.data || []).length,
+      point_projects: (projectAssignmentsResult.data || []).length,
+    } satisfies OrganizationUsage
+  }
+
   if (isSuperAdmin) return ZERO_ORGANIZATION_USAGE
   if (!activeOrganizationId) {
     throw new Error('active-organization-required')
@@ -411,7 +441,7 @@ export async function listOrganizationCompanyIds(params: {
   }
 
   let query = supabase.from('companies').select('id')
-  if (!isSuperAdmin && activeOrganizationId) {
+  if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && activeOrganizationId) {
     query = query.eq('organization_id', activeOrganizationId)
   }
 
@@ -432,7 +462,7 @@ export async function listOrganizationCompanyCodes(params: {
   }
 
   let query = supabase.from('companies').select('code')
-  if (!isSuperAdmin && activeOrganizationId) {
+  if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && activeOrganizationId) {
     query = query.eq('organization_id', activeOrganizationId)
   }
 
@@ -453,7 +483,7 @@ export async function listOrganizationStaffIds(params: {
   }
 
   let query = supabase.from('staff').select('id')
-  if (!isSuperAdmin && activeOrganizationId) {
+  if (!LEGACY_SINGLE_TENANT_MODE && !isSuperAdmin && activeOrganizationId) {
     query = query.eq('organization_id', activeOrganizationId)
   }
 
@@ -473,7 +503,7 @@ export async function listOrganizationOperatorIds(params: {
     throw new Error('organization-scope-unavailable')
   }
 
-  if (isSuperAdmin || !activeOrganizationId) {
+  if (LEGACY_SINGLE_TENANT_MODE || isSuperAdmin || !activeOrganizationId) {
     const { data, error } = await supabase.from('operators').select('id').eq('is_active', true)
     if (error) throw error
     return (data || []).map((row: any) => String(row.id))
@@ -506,10 +536,10 @@ export async function resolveCompanyScope(params: {
 }) {
   const { activeOrganizationId, requestedCompanyId, isSuperAdmin } = params
 
-  if (isSuperAdmin || !activeOrganizationId) {
+  if (LEGACY_SINGLE_TENANT_MODE || isSuperAdmin || !activeOrganizationId) {
     return {
       allowedCompanyIds: requestedCompanyId ? [requestedCompanyId] : null,
-      organizationId: activeOrganizationId || null,
+      organizationId: null,
     }
   }
 

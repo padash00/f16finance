@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { getRequestAccessContext } from '@/lib/server/request-auth'
-import { createAdminSupabaseClient } from '@/lib/server/supabase'
+import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 type MutationBody =
   | {
@@ -58,26 +58,57 @@ function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
 }
 
+function getSupabase(req: Request) {
+  return hasAdminSupabaseCredentials()
+    ? createAdminSupabaseClient()
+    : createRequestSupabaseClient(req)
+}
+
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    const supabase = createAdminSupabaseClient()
-    const [companiesRes, staffRes, categoriesRes] = await Promise.all([
+    const supabase = getSupabase(req)
+    const [companiesRes, staffRes, categoriesRes] = await Promise.allSettled([
       supabase.from('companies').select('id, name, code, show_in_structure').order('name'),
       supabase.from('staff').select('id, full_name, phone, email, role').order('full_name'),
       supabase.from('expense_categories').select('id, name, monthly_budget, accounting_group').order('name'),
     ])
 
-    if (companiesRes.error) throw companiesRes.error
-    if (staffRes.error) throw staffRes.error
-    if (categoriesRes.error) throw categoriesRes.error
+    const companies =
+      companiesRes.status === 'fulfilled' && !companiesRes.value.error
+        ? companiesRes.value.data || []
+        : []
+    const staff =
+      staffRes.status === 'fulfilled' && !staffRes.value.error
+        ? staffRes.value.data || []
+        : []
+    const categories =
+      categoriesRes.status === 'fulfilled' && !categoriesRes.value.error
+        ? categoriesRes.value.data || []
+        : []
+
+    const readErrors = [
+      companiesRes.status === 'fulfilled' ? companiesRes.value.error : companiesRes.reason,
+      staffRes.status === 'fulfilled' ? staffRes.value.error : staffRes.reason,
+      categoriesRes.status === 'fulfilled' ? categoriesRes.value.error : categoriesRes.reason,
+    ].filter(Boolean)
+
+    if (readErrors.length > 0) {
+      await writeSystemErrorLogSafe({
+        scope: 'server',
+        area: 'api/admin/settings GET partial',
+        message: readErrors
+          .map((entry: any) => entry?.message || String(entry))
+          .join(' | '),
+      })
+    }
 
     return NextResponse.json({
-      companies: companiesRes.data || [],
-      staff: staffRes.data || [],
-      categories: categoriesRes.data || [],
+      companies,
+      staff,
+      categories,
     })
   } catch (error: any) {
     console.error('Admin settings read error', error)
@@ -101,7 +132,7 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as MutationBody | null
     if (!body?.entity || !body?.action) return badRequest('Неверный формат запроса')
 
-    const supabase = createAdminSupabaseClient()
+    const supabase = getSupabase(req)
     const actorUserId = access.user?.id || null
 
     if (body.entity === 'company') {

@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     const supabase = getSupabase(req)
     const result = await supabase
       .from('expense_categories')
-      .select('id, name, type, accounting_group, monthly_budget')
+      .select('id, name, accounting_group, monthly_budget')
       .order('name')
     if (result.error) throw result.error
     const data = result.data ?? []
@@ -44,7 +44,6 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => null) as {
       name?: string | null
-      type?: string | null
       accounting_group?: string | null
       monthly_budget?: number | null
     } | null
@@ -56,11 +55,10 @@ export async function POST(req: Request) {
       .from('expense_categories')
       .insert([{
         name,
-        type: String(body?.type || '').trim() || 'Общее',
         accounting_group: String(body?.accounting_group || '').trim() || 'operating',
         monthly_budget: Number(body?.monthly_budget || 0) || 0,
       }])
-      .select('id, name, type, accounting_group, monthly_budget')
+      .select('id, name, accounting_group, monthly_budget')
       .single()
     if (error) throw error
 
@@ -82,7 +80,6 @@ export async function PATCH(req: Request) {
     const body = await req.json().catch(() => null) as {
       id?: string | null
       name?: string | null
-      type?: string | null
       accounting_group?: string | null
       monthly_budget?: number | null
     } | null
@@ -96,12 +93,11 @@ export async function PATCH(req: Request) {
       .from('expense_categories')
       .update({
         name,
-        type: String(body?.type || '').trim() || null,
         accounting_group: String(body?.accounting_group || '').trim() || 'operating',
         monthly_budget: Number(body?.monthly_budget || 0) || 0,
       })
       .eq('id', id)
-      .select('id, name, type, accounting_group, monthly_budget')
+      .select('id, name, accounting_group, monthly_budget')
       .single()
     if (error) throw error
 
