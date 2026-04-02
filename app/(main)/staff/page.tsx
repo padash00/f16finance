@@ -544,12 +544,8 @@ export default function StaffPageSmart() {
             </Card>
           )}
 
-          {/* Tabs + Stats row */}
+          {/* Stats row */}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5">
-              <button type="button" className="rounded-lg px-4 py-2 text-sm font-medium transition bg-white/10 text-white">Административные сотрудники</button>
-              <a href="/operators" className="rounded-lg px-4 py-2 text-sm font-medium transition text-slate-400 hover:text-slate-200">Операторы</a>
-            </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
               <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">ФОТ: <span className="font-semibold text-white">{money(stats.totalBudget)}</span></div>
               <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Сотрудников: <span className="font-semibold text-white">{stats.activeStaff}</span></div>

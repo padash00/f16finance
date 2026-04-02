@@ -157,6 +157,7 @@ export default function SalaryPage() {
   const saveChatId = async (e: FormEvent) => { e.preventDefault(); if (!chatTarget) return; const trimmed = chatValue.trim(); if (trimmed && !/^-?\d+$/.test(trimmed)) return setError('telegram_chat_id должен быть числом'); setChatSaving(true); setError(null); try { await post({ action: 'updateOperatorChatId', operatorId: chatTarget.operator.id, telegram_chat_id: trimmed || null }); setChatTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить Telegram chat_id') } finally { setChatSaving(false) } }
   const sendOne = async (operatorId: string) => { setSendingId(operatorId); setError(null); try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) throw new Error(json?.error || `Ошибка отправки (${res.status})`) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось отправить расчёт в Telegram') } finally { setSendingId(null) } }
   const sendAll = async () => { if (loading || broadcastSending || !broadcastTargets.length) return; setBroadcastSending(true); setBroadcastDone(0); setBroadcastTotal(broadcastTargets.length); setBroadcastErrors([]); setError(null); try { for (let i = 0; i < broadcastTargets.length; i += 1) { const item = broadcastTargets[i]; try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId: item.operator.id, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${json?.error || `HTTP ${res.status}`}`]) } catch (e: any) { setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${e?.message || 'ошибка'}`]) } setBroadcastDone(i + 1); await new Promise((r) => setTimeout(r, 250)) } } finally { setBroadcastSending(false) } }
+  const [tab, setTab] = useState<'operators' | 'staff'>('operators')
   const [markDebtId, setMarkDebtId] = useState<string | null>(null)
   const [markDebtSaving, setMarkDebtSaving] = useState(false)
 
@@ -314,69 +315,85 @@ export default function SalaryPage() {
   return (
     <>
         <div className="mx-auto max-w-[1600px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6 xl:px-8">
-          <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.96),_rgba(2,6,23,0.96))] p-5 md:p-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-3">
-                <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white">
-                  <ArrowLeft className="h-4 w-4" />
-                  На главную
-                </Link>
-                <div className="flex items-center gap-4">
-                  <div className="rounded-2xl bg-emerald-500/15 p-3 text-emerald-300">
-                    <Wallet className="h-8 w-8" />
-                  </div>
-                  <div>
-                    <h1 className="text-3xl font-semibold tracking-tight text-white">Зарплата по неделям</h1>
-                    <p className="mt-1 max-w-2xl text-sm text-slate-300">Недельные выплаты, авансы и автоматические расходы по компаниям.</p>
-                  </div>
+
+          {/* ── Compact header ─────────────────────────────────────────────── */}
+          <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.98))] p-4 md:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <Link href="/" className="text-slate-400 hover:text-white transition"><ArrowLeft className="h-4 w-4" /></Link>
+                <div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-300"><Wallet className="h-5 w-5" /></div>
+                <div>
+                  <h1 className="text-lg font-semibold text-white">Зарплата</h1>
+                  <p className="text-xs text-slate-500">Выплаты, авансы, административный персонал</p>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" onClick={() => setBroadcastConfirm(true)} disabled={loading || broadcastSending || !broadcastTargets.length} className="rounded-xl bg-blue-500 text-white hover:bg-blue-400 disabled:opacity-50">
-                  {broadcastSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                  {broadcastSending ? `Рассылка ${broadcastDone}/${broadcastTotal}` : 'Отправить всем'}
-                </Button>
-                <Button type="button" variant="outline" onClick={downloadSalaryCSV} disabled={loading || !data} className="rounded-xl border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 gap-2">
-                  <Download className="h-4 w-4" />
-                  CSV
-                </Button>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>Прошлая неделя</Button>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(currentWeek)}>Текущая</Button>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, 7))}>Следующая</Button>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void load()}>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Обновить
-                </Button>
-              </div>
-            </div>
-            <div className="mt-5 flex flex-wrap items-center gap-3 text-xs text-slate-300">
-              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Неделя: <span className="font-semibold text-white">{formatRuDate(weekStart)} - {formatRuDate(weekEnd)}</span></div>
-              {data ? <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-emerald-300">Выплачено операторов: <span className="font-semibold">{data.totals.paidOperators}</span></div> : null}
-              {broadcastTotal > 0 && !broadcastSending ? <div className={`rounded-full border px-3 py-1.5 ${broadcastErrors.length ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}>Рассылка: {broadcastDone}/{broadcastTotal}</div> : null}
-            </div>
-                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
-              <div className="min-w-0 flex-1">{summaryText}</div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs">
-                  {(['all', 'draft', 'partial', 'paid'] as const).map((s) => (
-                    <button key={s} type="button" onClick={() => setStatusFilter(s)} className={`rounded-lg px-3 py-1.5 transition ${statusFilter === s ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-                      {s === 'all' ? 'Все' : s === 'draft' ? 'Не выплачено' : s === 'partial' ? 'Частично' : 'Выплачено'}
-                    </button>
-                  ))}
+              {tab === 'operators' && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" onClick={() => setBroadcastConfirm(true)} disabled={loading || broadcastSending || !broadcastTargets.length} className="h-8 rounded-xl bg-blue-500 text-xs text-white hover:bg-blue-400 disabled:opacity-50 gap-1.5">
+                    {broadcastSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                    {broadcastSending ? `${broadcastDone}/${broadcastTotal}` : 'Всем'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={downloadSalaryCSV} disabled={loading || !data} className="h-8 rounded-xl border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 gap-1.5 text-xs">
+                    <Download className="h-3.5 w-3.5" />CSV
+                  </Button>
+                  <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs">
+                    <button type="button" onClick={() => setWeekStart(addDaysISO(weekStart, -7))} className="rounded-lg px-2.5 py-1.5 text-slate-400 hover:text-white transition">←</button>
+                    <button type="button" onClick={() => setWeekStart(currentWeek)} className="rounded-lg px-2.5 py-1.5 text-slate-300 hover:text-white transition">Сейчас</button>
+                    <button type="button" onClick={() => setWeekStart(addDaysISO(weekStart, 7))} className="rounded-lg px-2.5 py-1.5 text-slate-400 hover:text-white transition">→</button>
+                  </div>
+                  <Button type="button" variant="outline" className="h-8 w-8 rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void load()}><RefreshCw className="h-3.5 w-3.5" /></Button>
                 </div>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setShowZero((v) => !v)}>{showZero ? 'Скрыть пустые строки' : 'Показать все строки'}</Button>
+              )}
+              {tab === 'staff' && (
+                <Button type="button" variant="outline" className="h-8 w-8 rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void loadStaffSalary()}><RefreshCw className="h-3.5 w-3.5" /></Button>
+              )}
+            </div>
+
+            {/* Tabs */}
+            <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5">
+                <button type="button" onClick={() => setTab('operators')} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'operators' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                  Операторы
+                </button>
+                <button type="button" onClick={() => setTab('staff')} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'staff' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                  Административные сотрудники
+                </button>
               </div>
+              {tab === 'operators' && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">Неделя: <span className="font-semibold text-white">{formatRuDate(weekStart)} — {formatRuDate(weekEnd)}</span></span>
+                  {data ? <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-300">Выплачено: <span className="font-semibold">{data.totals.paidOperators}</span></span> : null}
+                  {broadcastTotal > 0 && !broadcastSending ? <span className={`rounded-full border px-3 py-1 ${broadcastErrors.length ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}>{broadcastDone}/{broadcastTotal}</span> : null}
+                </div>
+              )}
             </div>
           </Card>
 
           {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-violet-500/15 p-2.5 text-violet-300"><CalendarDays className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Всего смен</div><div className="mt-1 text-2xl font-semibold text-white">{loading ? '—' : totalShifts}</div></div></div></Card>
-            <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2.5 text-emerald-300"><DollarSign className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">К выплате</div><div className="mt-1 text-2xl font-semibold text-white">{data ? money(data.totals.netAmount) : '—'}</div></div></div></Card>
-            <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2.5 text-blue-300"><CheckCircle2 className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Уже выплачено</div><div className="mt-1 text-2xl font-semibold text-white">{data ? money(data.totals.paidAmount) : '—'}</div></div></div></Card>
-            <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2.5 text-amber-300"><CreditCard className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Авансы</div><div className="mt-1 text-2xl font-semibold text-white">{data ? money(data.totals.advanceAmount) : '—'}</div></div></div></Card>
-            <Card className="border-white/10 bg-white/[0.04] p-5"><div className="flex items-center gap-3"><div className="rounded-xl bg-red-500/15 p-2.5 text-red-300"><TrendingDown className="h-5 w-5" /></div><div><div className="text-xs uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-1 text-2xl font-semibold text-white">{data ? money(data.totals.remainingAmount) : '—'}</div></div></div></Card>
+          {/* ── OPERATORS TAB ───────────────────────────────────────────────── */}
+          {tab === 'operators' && (<>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <Card className="border-white/10 bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-violet-500/15 p-2 text-violet-300"><CalendarDays className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Смен</div><div className="mt-0.5 text-xl font-semibold text-white">{loading ? '—' : totalShifts}</div></div></div></Card>
+            <Card className="border-white/10 bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-300"><DollarSign className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">К выплате</div><div className="mt-0.5 text-xl font-semibold text-white">{data ? money(data.totals.netAmount) : '—'}</div></div></div></Card>
+            <Card className="border-white/10 bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-blue-500/15 p-2 text-blue-300"><CheckCircle2 className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Выплачено</div><div className="mt-0.5 text-xl font-semibold text-white">{data ? money(data.totals.paidAmount) : '—'}</div></div></div></Card>
+            <Card className="border-white/10 bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-amber-500/15 p-2 text-amber-300"><CreditCard className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Авансы</div><div className="mt-0.5 text-xl font-semibold text-white">{data ? money(data.totals.advanceAmount) : '—'}</div></div></div></Card>
+            <Card className="border-white/10 bg-white/[0.04] p-4"><div className="flex items-center gap-3"><div className="rounded-xl bg-red-500/15 p-2 text-red-300"><TrendingDown className="h-4 w-4" /></div><div><div className="text-[11px] uppercase tracking-wide text-slate-500">Остаток</div><div className="mt-0.5 text-xl font-semibold text-white">{data ? money(data.totals.remainingAmount) : '—'}</div></div></div></Card>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
+            <div className="min-w-0 flex-1 text-xs">{summaryText}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs">
+                {(['all', 'draft', 'partial', 'paid'] as const).map((s) => (
+                  <button key={s} type="button" onClick={() => setStatusFilter(s)} className={`rounded-lg px-3 py-1.5 transition ${statusFilter === s ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                    {s === 'all' ? 'Все' : s === 'draft' ? 'Не выплачено' : s === 'partial' ? 'Частично' : 'Выплачено'}
+                  </button>
+                ))}
+              </div>
+              <Button type="button" variant="outline" className="h-8 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10" onClick={() => setShowZero((v) => !v)}>{showZero ? 'Скрыть пустые' : 'Все строки'}</Button>
+            </div>
           </div>
 
           <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
@@ -384,19 +401,19 @@ export default function SalaryPage() {
               <table className="min-w-full text-sm">
                 <thead className="bg-slate-950/50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="px-4 py-4 text-left">Оператор</th>
-                    <th className="px-4 py-4 text-center">Смен</th>
-                    <th className="px-4 py-4 text-right">Начислено</th>
-                    <th className="px-4 py-4 text-right">Авто-бонус</th>
-                    <th className="px-4 py-4 text-right">Бонусы</th>
-                    <th className="px-4 py-4 text-right">Штрафы</th>
-                    <th className="px-4 py-4 text-right">Долги</th>
-                    <th className="px-4 py-4 text-right">Аванс</th>
-                    <th className="px-4 py-4 text-right">Выплачено</th>
-                    <th className="px-4 py-4 text-right">Остаток</th>
-                    <th className="px-4 py-4 text-center">Статус</th>
-                    <th className="px-4 py-4 text-center">Действия</th>
-                    <th className="px-4 py-4 text-center">Telegram</th>
+                    <th className="px-4 py-3 text-left">Оператор</th>
+                    <th className="px-4 py-3 text-center">Смен</th>
+                    <th className="px-4 py-3 text-right">Начислено</th>
+                    <th className="px-4 py-3 text-right">Авто-бонус</th>
+                    <th className="px-4 py-3 text-right">Бонусы</th>
+                    <th className="px-4 py-3 text-right">Штрафы</th>
+                    <th className="px-4 py-3 text-right">Долги</th>
+                    <th className="px-4 py-3 text-right">Аванс</th>
+                    <th className="px-4 py-3 text-right">Выплачено</th>
+                    <th className="px-4 py-3 text-right">Остаток</th>
+                    <th className="px-4 py-3 text-center">Статус</th>
+                    <th className="px-4 py-3 text-center">Действия</th>
+                    <th className="px-4 py-3 text-center">Telegram</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -505,6 +522,10 @@ export default function SalaryPage() {
             {adjSuccess ? <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />Корректировка сохранена</div> : null}
           </Card>
 
+          </>)}
+
+          {/* ── STAFF TAB ───────────────────────────────────────────────────── */}
+          {tab === 'staff' && (
           <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
             <div className="flex items-center justify-between gap-4 border-b border-white/10 p-5">
               <div className="flex items-center gap-3">
@@ -587,6 +608,8 @@ export default function SalaryPage() {
               </div>
             )}
           </Card>
+          )}
+
         </div>
 
       {advanceTarget ? (
