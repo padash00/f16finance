@@ -1410,6 +1410,12 @@ function HeaderBlock(props: {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-sm">
+            <QuickRangeBtn active={props.rangeType === 'today'} onClick={() => props.onQuickRange('today')} label="Сегодня" />
+            <QuickRangeBtn active={props.rangeType === 'week'} onClick={() => props.onQuickRange('week')} label="Неделя" />
+            <QuickRangeBtn active={props.rangeType === 'month'} onClick={() => props.onQuickRange('month')} label="30 дней" />
+            <QuickRangeBtn active={props.rangeType === 'quarter'} onClick={() => props.onQuickRange('quarter')} label="Квартал" />
+            <QuickRangeBtn active={props.rangeType === 'year'} onClick={() => props.onQuickRange('year')} label="Год" />
+
             <button
               onClick={props.onToggleCalendar}
               className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-purple-500/50 transition-colors"
@@ -1447,15 +1453,7 @@ function HeaderBlock(props: {
       {props.calendarOpen && (
         <div className="absolute top-full left-0 right-0 mt-2 z-[100]">
           <Card className="p-4 bg-gray-900/95 backdrop-blur-xl border border-purple-500/20 rounded-2xl shadow-2xl">
-            <div className="flex flex-wrap gap-2 mb-4">
-              <QuickRangeBtn active={props.rangeType === 'today'} onClick={() => props.onQuickRange('today')} label="Сегодня" />
-              <QuickRangeBtn active={props.rangeType === 'week'} onClick={() => props.onQuickRange('week')} label="Неделя" />
-              <QuickRangeBtn active={props.rangeType === 'month'} onClick={() => props.onQuickRange('month')} label="30 дней" />
-              <QuickRangeBtn active={props.rangeType === 'quarter'} onClick={() => props.onQuickRange('quarter')} label="Квартал" />
-              <QuickRangeBtn active={props.rangeType === 'year'} onClick={() => props.onQuickRange('year')} label="Год" />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-800 pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-xs text-gray-500 uppercase tracking-wider">Начало</label>
                 <input

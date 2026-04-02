@@ -1391,7 +1391,7 @@ export default function AIAnalysisPage() {
                   className="border-gray-700 bg-gray-800/50 hover:bg-gray-700 text-gray-300"
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  Экспорт CSV
+                  Экспорт Excel
                 </Button>
 
                 <div className="flex items-center gap-2 rounded-xl border border-purple-500/20 bg-purple-500/10 px-3 py-2 text-xs text-purple-200">

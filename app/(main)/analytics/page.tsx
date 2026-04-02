@@ -461,6 +461,10 @@ export default function AnalyticsPage() {
               {/* Date range */}
               <div className="flex items-center gap-2 px-2">
                 <span className="text-xs text-muted-foreground">Период</span>
+                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setPreset(1)}>Сегодня</Button>
+                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setPreset(7)}>7 дней</Button>
+                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setPreset(30)}>30 дней</Button>
+                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setPreset('ytd')}>YTD</Button>
                 <Popover open={rangeOpen} onOpenChange={setRangeOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -541,7 +545,7 @@ export default function AnalyticsPage() {
 
               <Button variant="outline" size="sm" onClick={downloadCSV} disabled={rows.length === 0} className="gap-2 ml-auto">
                 <Download className="h-4 w-4" />
-                CSV
+                Excel
               </Button>
             </div>
           </div>

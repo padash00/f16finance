@@ -40,6 +40,7 @@ export default function RatingsPage() {
   const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -29))
   const [dateTo, setDateTo] = useState(() => todayISO())
   const [companyId, setCompanyId] = useState('')
+  const [activePreset, setActivePreset] = useState<'today' | 'week' | 'month' | 'custom'>('month')
 
   const { operators, loading: operatorsLoading } = useOperators({ activeOnly: false })
   const { companies } = useCompanies()
@@ -142,19 +143,35 @@ export default function RatingsPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
+                {/* Quick date presets */}
+                {(['today', 'week', 'month'] as const).map(p => (
+                  <button key={p} onClick={() => {
+                    const t = todayISO()
+                    setActivePreset(p)
+                    if (p === 'today') { setDateFrom(t); setDateTo(t) }
+                    else if (p === 'week') { setDateFrom(addDaysISO(t, -6)); setDateTo(t) }
+                    else { setDateFrom(addDaysISO(t, -29)); setDateTo(t) }
+                  }} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                    activePreset === p
+                      ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+                      : 'bg-gray-800/50 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
+                  }`}>
+                    {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : '30 дней'}
+                  </button>
+                ))}
                 <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
                   <CalendarDays className="w-4 h-4 text-amber-400 shrink-0" />
                   <input
                     type="date"
                     value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
+                    onChange={(e) => { setDateFrom(e.target.value); setActivePreset('custom') }}
                     className="bg-transparent text-sm text-gray-200 outline-none w-[120px]"
                   />
                   <span className="text-gray-500">—</span>
                   <input
                     type="date"
                     value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
+                    onChange={(e) => { setDateTo(e.target.value); setActivePreset('custom') }}
                     className="bg-transparent text-sm text-gray-200 outline-none w-[120px]"
                   />
                 </div>

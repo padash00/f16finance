@@ -2278,12 +2278,8 @@ function ReportsContent() {
                     <ChevronDown className="w-4 h-4 ml-2" />
                   </Button>
                   <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                    <button onClick={handleDownloadCSV} className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
-                      <FileSpreadsheet className="w-4 h-4" />
-                      Скачать CSV
-                    </button>
                     <button onClick={handleDownloadExcel} className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
-                      <Table className="w-4 h-4" />
+                      <FileSpreadsheet className="w-4 h-4" />
                       Скачать Excel
                     </button>
                   </div>

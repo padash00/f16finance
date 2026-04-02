@@ -244,6 +244,29 @@ export default function CashFlowPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  {([
+                    { label: 'Сегодня', days: 0 },
+                    { label: '7 дней', days: 6 },
+                    { label: '30 дней', days: 29 },
+                  ] as const).map(({ label, days }) => {
+                    const from = addDaysISO(todayISO(), -days)
+                    const active = dateFrom === from && dateTo === todayISO()
+                    return (
+                      <button
+                        key={label}
+                        onClick={() => { setDateFrom(from); setDateTo(todayISO()) }}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                          active
+                            ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
+                            : 'bg-gray-800/50 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
                 <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
                   <CalendarDays className="w-4 h-4 text-emerald-400 shrink-0" />
                   <input
@@ -280,7 +303,7 @@ export default function CashFlowPage() {
                   className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-700/50 disabled:opacity-40 border border-gray-700 rounded-xl text-sm text-gray-200 transition-colors"
                 >
                   <Download className="w-4 h-4 text-emerald-400" />
-                  CSV
+                  Excel
                 </button>
               </div>
             </div>

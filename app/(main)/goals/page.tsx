@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { useIncome } from '@/hooks/use-income'
 import { useExpenses } from '@/hooks/use-expenses'
-import { CalendarDays, CheckCircle2, Loader2, Save, Target, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Save, Target, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 
 const fmtMoney = (v: number) => {
   const abs = Math.abs(v)
@@ -226,9 +226,8 @@ export default function GoalsPage() {
   }
 
   const months = useMemo(() => {
-    const cur = currentMonthISO()
-    return [shiftMonth(cur, -3), shiftMonth(cur, -2), shiftMonth(cur, -1), cur, shiftMonth(cur, 1), shiftMonth(cur, 2)]
-  }, [])
+    return [shiftMonth(month, -3), shiftMonth(month, -2), shiftMonth(month, -1), month, shiftMonth(month, 1), shiftMonth(month, 2)]
+  }, [month])
 
   const targetIncome = currentGoal?.target_income ?? 0
   const targetExpense = currentGoal?.target_expense ?? 0
@@ -253,17 +252,31 @@ export default function GoalsPage() {
                   <p className="text-sm text-gray-400">Плановые показатели по выручке и расходам</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
-                <CalendarDays className="w-4 h-4 text-teal-400 shrink-0" />
-                <select
-                  value={month}
-                  onChange={e => setMonth(e.target.value)}
-                  className="bg-transparent text-sm text-gray-200 outline-none"
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setMonth(m => shiftMonth(m, -1))}
+                  className="p-1.5 rounded-lg bg-gray-800/50 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
                 >
-                  {months.map(m => (
-                    <option key={m} value={m}>{monthLabel(m)}</option>
-                  ))}
-                </select>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-xl border border-gray-700">
+                  <CalendarDays className="w-4 h-4 text-teal-400 shrink-0" />
+                  <select
+                    value={month}
+                    onChange={e => setMonth(e.target.value)}
+                    className="bg-transparent text-sm text-gray-200 outline-none"
+                  >
+                    {months.map(m => (
+                      <option key={m} value={m}>{monthLabel(m)}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={() => setMonth(m => shiftMonth(m, 1))}
+                  className="p-1.5 rounded-lg bg-gray-800/50 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>

@@ -203,7 +203,7 @@ function StaffLoading() {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center animate-pulse">
             <Users2 className="w-8 h-8 text-white" />
           </div>
-          <p className="text-gray-400">Загрузка зарплатной ведомости...</p>
+          <p className="text-gray-400">Загрузка сотрудников...</p>
         </div>
     </>
   )
@@ -564,7 +564,7 @@ export default function StaffPageSmart() {
               <option value="name">По имени</option>
               <option value="salary">По окладу</option>
             </select>
-            <button onClick={() => setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')} className="h-9 px-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white hover:bg-white/10 transition-colors">{sortDir === 'asc' ? '↑' : '↓'}</button>
+            <button onClick={() => setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')} className="h-9 px-3 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/10 transition-colors flex items-center">{sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
             <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-400 ml-1">
               <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="rounded border-white/10 text-emerald-500" />
               Архивные

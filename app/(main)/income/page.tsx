@@ -1131,6 +1131,28 @@ export default function IncomePage() {
             </div>
           </div>
 
+          {/* Date presets — always visible */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map(p => (
+              <button
+                key={p}
+                onClick={() => setPreset(p)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                  activePreset === p
+                    ? 'bg-purple-500 text-white shadow-sm shadow-purple-500/30'
+                    : 'bg-gray-800/50 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
+              >
+                {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : p === 'month' ? '30 дней' : 'Все время'}
+              </button>
+            ))}
+            {activePreset !== 'today' && activePreset !== 'week' && activePreset !== 'month' && activePreset !== 'all' && (
+              <span className="px-3 py-1.5 text-xs text-gray-400 border border-gray-700/50 rounded-lg">
+                {dateFrom && dateTo ? `${DateUtils.formatDate(dateFrom)} — ${DateUtils.formatDate(dateTo)}` : 'Весь период'}
+              </span>
+            )}
+          </div>
+
           {/* Табы навигации */}
           <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl w-fit border border-gray-700">
             <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity className="w-4 h-4" />} label="Обзор" />

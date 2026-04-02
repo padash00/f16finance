@@ -182,7 +182,7 @@ export default function MonthlyReportPage() {
           {hasData && totals && (
             <Button variant="outline" size="sm" onClick={() => downloadCSV(daily, totals, year, month)}>
               <Download className="mr-2 h-4 w-4" />
-              Скачать CSV
+              Скачать Excel
             </Button>
           )}
         </div>

@@ -4,7 +4,7 @@ import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from '
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Users, Wallet } from 'lucide-react'
+import { ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Users, Wallet, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -344,7 +344,7 @@ export default function SalaryPage() {
                     {broadcastSending ? `${broadcastDone}/${broadcastTotal}` : 'Всем'}
                   </Button>
                   <Button type="button" variant="outline" onClick={downloadSalaryCSV} disabled={loading || !data} className="h-8 rounded-xl border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 gap-1.5 text-xs">
-                    <Download className="h-3.5 w-3.5" />CSV
+                    <Download className="h-3.5 w-3.5" />Excel
                   </Button>
                   <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs">
                     <button type="button" onClick={() => setWeekStart(addDaysISO(weekStart, -7))} className="rounded-lg px-2.5 py-1.5 text-slate-400 hover:text-white transition">←</button>
@@ -595,7 +595,7 @@ export default function SalaryPage() {
                                 <span className="text-slate-500">{adj.date}</span>
                                 {adj.comment ? <span className="text-slate-400">{adj.comment}</span> : null}
                               </div>
-                              <button type="button" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}>×</button>
+                              <button type="button" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
                             </div>
                           ))}
                         </div>
@@ -607,7 +607,7 @@ export default function SalaryPage() {
                             {recentPayments.map(p => (
                               <div key={p.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300">
                                 <span>{p.pay_date} · {money(p.amount)} · {p.slot === 'first' ? '1–15' : p.slot === 'second' ? '16–конец' : 'разово'}</span>
-                                <button type="button" title="Аннулировать" onClick={() => void deleteStaffPayment(p.id, p.amount)} className="ml-1 text-slate-600 hover:text-rose-400 transition">×</button>
+                                <button type="button" title="Аннулировать" onClick={() => void deleteStaffPayment(p.id, p.amount)} className="ml-1 text-slate-600 hover:text-rose-400 transition"><X className="h-3.5 w-3.5" /></button>
                               </div>
                             ))}
                           </div>

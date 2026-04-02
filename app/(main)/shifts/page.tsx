@@ -893,14 +893,15 @@ export default function ShiftsPage() {
   return (
     <>
         <div className="app-page max-w-7xl">
-          <div className="mb-8 flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
-            <div>
-              <h1 className="flex items-center gap-2 text-3xl font-bold text-foreground">
-                <Users className="h-8 w-8 text-purple-500" /> График смен
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Управление расписанием операторов, контроль конфликтов и быстрые действия по неделе
-              </p>
+          <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-purple-500/15 p-2 text-purple-300">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-white">График смен</h1>
+                <p className="text-xs text-muted-foreground">Расписание операторов, конфликты, быстрые действия</p>
+              </div>
             </div>
 
             <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">

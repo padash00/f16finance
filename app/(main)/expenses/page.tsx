@@ -988,7 +988,7 @@ export default function ExpensesPage() {
                         </button>
                       )}
                       <button onClick={() => setShowFilters(false)} className="text-gray-400 hover:text-white">
-                        <ChevronDown className="w-5 h-5 rotate-180" />
+                        <X className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
@@ -1081,7 +1081,7 @@ export default function ExpensesPage() {
                           onClick={() => setSearchTerm('')}
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
                         >
-                          <ChevronDown className="w-4 h-4 rotate-180" />
+                          <X className="w-4 h-4" />
                         </button>
                       )}
                     </div>
@@ -1096,25 +1096,25 @@ export default function ExpensesPage() {
                       {companyFilter !== 'all' && (
                         <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-lg flex items-center gap-1">
                           Компания: {companyName(companyFilter)}
-                          <button onClick={() => setCompanyFilter('all')} className="hover:text-white"><ChevronDown className="w-3 h-3 rotate-180" /></button>
+                          <button onClick={() => setCompanyFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
                       {categoryFilter !== 'all' && (
                         <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded-lg flex items-center gap-1">
                           Категория: {categoryFilter}
-                          <button onClick={() => setCategoryFilter('all')} className="hover:text-white"><ChevronDown className="w-3 h-3 rotate-180" /></button>
+                          <button onClick={() => setCategoryFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
                       {payFilter !== 'all' && (
                         <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-lg flex items-center gap-1">
                           Оплата: {payFilter === 'cash' ? 'Наличные' : 'Kaspi'}
-                          <button onClick={() => setPayFilter('all')} className="hover:text-white"><ChevronDown className="w-3 h-3 rotate-180" /></button>
+                          <button onClick={() => setPayFilter('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
                       {searchTerm && (
                         <span className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded-lg flex items-center gap-1">
                           Поиск: "{searchTerm}"
-                          <button onClick={() => setSearchTerm('')} className="hover:text-white"><ChevronDown className="w-3 h-3 rotate-180" /></button>
+                          <button onClick={() => setSearchTerm('')} className="hover:text-white"><X className="w-3 h-3" /></button>
                         </span>
                       )}
                     </div>
@@ -1122,6 +1122,26 @@ export default function ExpensesPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Date presets — always visible */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {(['today', 'week', 'month', 'all'] as DateRangePreset[]).map(p => (
+              <button
+                key={p}
+                onClick={() => setPreset(p)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                  activePreset === p
+                    ? 'bg-red-500 text-white shadow-sm shadow-red-500/30'
+                    : 'bg-gray-800/50 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
+              >
+                {p === 'today' ? 'Сегодня' : p === 'week' ? '7 дней' : p === 'month' ? '30 дней' : 'Все время'}
+              </button>
+            ))}
+            {activePreset !== 'today' && activePreset !== 'week' && activePreset !== 'month' && activePreset !== 'all' && (
+              <span className="px-3 py-1.5 text-xs text-gray-400 border border-gray-700/50 rounded-lg">{periodLabel}</span>
+            )}
           </div>
 
           {/* Templates */}
