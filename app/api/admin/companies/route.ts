@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 
-import { assertOrganizationLimitAvailable } from '@/lib/server/organizations'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -9,46 +8,21 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
-type CreateCompanyBody = {
-  name?: string | null
-  code?: string | null
-  organizationId?: string | null
-  showInStructure?: boolean | null
-}
-
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    const activeOrganizationId = access.activeOrganization?.id || null
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
-    const baseQuery = () =>
-      supabase
-        .from('companies')
-        .select('id, name, code')
-        .order('name', { ascending: true })
+    const { data, error } = await supabase
+      .from('companies')
+      .select('id, name, code')
+      .order('name', { ascending: true })
 
-    let data: any[] | null = null
-
-    if (!access.isSuperAdmin && activeOrganizationId) {
-      const scoped = await baseQuery().eq('organization_id', activeOrganizationId)
-      if (scoped.error) throw scoped.error
-      data = scoped.data ?? []
-
-      if (data.length === 0) {
-        const legacy = await baseQuery()
-        if (legacy.error) throw legacy.error
-        data = legacy.data ?? []
-      }
-    } else {
-      const result = await baseQuery()
-      if (result.error) throw result.error
-      data = result.data ?? []
-    }
+    if (error) throw error
 
     return json({ data: data ?? [] })
   } catch (error: any) {
@@ -67,30 +41,14 @@ export async function POST(req: Request) {
       return json({ error: 'forbidden' }, 403)
     }
 
-    const body = (await req.json().catch(() => null)) as CreateCompanyBody | null
+    const body = (await req.json().catch(() => null)) as { name?: string | null; code?: string | null; showInStructure?: boolean | null } | null
     const name = String(body?.name || '').trim()
     const code = String(body?.code || '').trim() || null
-    const requestedOrganizationId = String(body?.organizationId || '').trim() || null
     const showInStructure = body?.showInStructure !== false
 
     if (!name) {
       return json({ error: 'Название точки обязательно' }, 400)
     }
-
-    const targetOrganizationId = access.isSuperAdmin
-      ? requestedOrganizationId || access.activeOrganization?.id || null
-      : access.activeOrganization?.id || null
-
-    if (!access.isSuperAdmin && targetOrganizationId !== access.activeOrganization?.id) {
-      return json({ error: 'forbidden' }, 403)
-    }
-
-    await assertOrganizationLimitAvailable({
-      activeOrganizationId: targetOrganizationId,
-      isSuperAdmin: access.isSuperAdmin,
-      activeSubscription: access.activeSubscription,
-      key: 'companies',
-    })
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
@@ -98,15 +56,8 @@ export async function POST(req: Request) {
 
     const { data, error } = await supabase
       .from('companies')
-      .insert([
-        {
-          name,
-          code,
-          organization_id: targetOrganizationId,
-          show_in_structure: showInStructure,
-        },
-      ])
-      .select('id, name, code, organization_id')
+      .insert([{ name, code, show_in_structure: showInStructure }])
+      .select('id, name, code')
       .single()
 
     if (error) throw error
@@ -117,7 +68,6 @@ export async function POST(req: Request) {
         id: String((data as any).id),
         name: String((data as any).name || ''),
         code: (data as any).code || null,
-        organizationId: String((data as any).organization_id || targetOrganizationId),
       },
     })
   } catch (error: any) {

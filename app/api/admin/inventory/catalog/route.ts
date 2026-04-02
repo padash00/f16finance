@@ -31,17 +31,12 @@ export async function GET(request: Request) {
     if (!canManageCatalog(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
-    const organizationId = access.activeOrganization?.id || null
 
     // Fetch all inventory items with their category
-    let itemsQuery = supabase
+    const { data: items, error: itemsError } = await supabase
       .from('inventory_items')
       .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, category:inventory_categories(id, name)')
       .order('name', { ascending: true })
-    if (organizationId && !access.isSuperAdmin) {
-      itemsQuery = itemsQuery.eq('organization_id', organizationId)
-    }
-    const { data: items, error: itemsError } = await itemsQuery
 
     if (itemsError) throw itemsError
 
@@ -79,7 +74,6 @@ export async function POST(request: Request) {
     if (!canManageCatalog(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
-    const organizationId = access.activeOrganization?.id || null
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'invalid-action' }, 400)
 
@@ -92,14 +86,10 @@ export async function POST(request: Request) {
 
       // Fetch existing items by barcode
       const barcodes = rows.map((r) => r.barcode).filter(Boolean)
-      let existingItemsQuery = supabase
+      const { data: existingItems, error: existingError } = await supabase
         .from('inventory_items')
         .select('id, name, barcode, sale_price, default_purchase_price')
         .in('barcode', barcodes)
-      if (organizationId && !access.isSuperAdmin) {
-        existingItemsQuery = existingItemsQuery.eq('organization_id', organizationId)
-      }
-      const { data: existingItems, error: existingError } = await existingItemsQuery
 
       if (existingError) throw existingError
 
@@ -109,13 +99,9 @@ export async function POST(request: Request) {
       }
 
       // Fetch existing categories
-      let categoriesQuery = supabase
+      const { data: existingCategories, error: catError } = await supabase
         .from('inventory_categories')
         .select('id, name')
-      if (organizationId && !access.isSuperAdmin) {
-        categoriesQuery = categoriesQuery.eq('organization_id', organizationId)
-      }
-      const { data: existingCategories, error: catError } = await categoriesQuery
 
       if (catError) throw catError
 
@@ -172,13 +158,9 @@ export async function POST(request: Request) {
       if (!Array.isArray(rows)) return json({ error: 'rows-required' }, 400)
 
       // Ensure all categories exist
-      let existingCategoriesQuery = supabase
+      const { data: existingCategories, error: catFetchError } = await supabase
         .from('inventory_categories')
         .select('id, name')
-      if (organizationId && !access.isSuperAdmin) {
-        existingCategoriesQuery = existingCategoriesQuery.eq('organization_id', organizationId)
-      }
-      const { data: existingCategories, error: catFetchError } = await existingCategoriesQuery
 
       if (catFetchError) throw catFetchError
 
@@ -196,7 +178,7 @@ export async function POST(request: Request) {
       }
 
       if (missingCats.size > 0) {
-        const newCats = Array.from(missingCats).map((name) => ({ name, organization_id: organizationId }))
+        const newCats = Array.from(missingCats).map((name) => ({ name }))
         const { data: insertedCats, error: insertCatError } = await supabase
           .from('inventory_categories')
           .insert(newCats)
@@ -211,14 +193,10 @@ export async function POST(request: Request) {
 
       // Fetch existing items by barcode to determine create vs update
       const barcodes = rows.map((r) => r.barcode).filter(Boolean)
-      let existingItemsQuery = supabase
+      const { data: existingItems, error: existingError } = await supabase
         .from('inventory_items')
         .select('id, barcode')
         .in('barcode', barcodes)
-      if (organizationId && !access.isSuperAdmin) {
-        existingItemsQuery = existingItemsQuery.eq('organization_id', organizationId)
-      }
-      const { data: existingItems, error: existingError } = await existingItemsQuery
 
       if (existingError) throw existingError
 
@@ -241,7 +219,6 @@ export async function POST(request: Request) {
         item_type: string
         notes: string | null
         is_active: boolean
-        organization_id?: string | null
       }> = []
       const toUpdate: Array<{
         id: string
@@ -282,7 +259,6 @@ export async function POST(request: Request) {
             item_type: itemType,
             notes: row.article || null,
             is_active: true,
-            organization_id: organizationId,
           })
         }
       }
@@ -307,8 +283,6 @@ export async function POST(request: Request) {
           barcode: row.barcode,
           sale_price: row.sale_price,
           is_active: true,
-          organizationId,
-          isSuperAdmin: access.isSuperAdmin,
         })
       }
 
@@ -321,14 +295,6 @@ export async function POST(request: Request) {
     if (body.action === 'deleteItem') {
       const itemId = String(body.item_id || '').trim()
       if (!itemId) return json({ error: 'item-id-required' }, 400)
-
-      let itemQuery = supabase.from('inventory_items').select('id').eq('id', itemId)
-      if (organizationId && !access.isSuperAdmin) {
-        itemQuery = itemQuery.eq('organization_id', organizationId)
-      }
-      const { data: itemRow, error: itemError } = await itemQuery.maybeSingle()
-      if (itemError) throw itemError
-      if (!itemRow) return json({ error: 'item-not-found' }, 404)
 
       // Check if item has non-zero balance
       const { data: balances, error: balanceError } = await supabase
@@ -356,14 +322,6 @@ export async function POST(request: Request) {
       const itemId = String(body.item_id || '').trim()
       if (!itemId) return json({ error: 'item-id-required' }, 400)
 
-      let itemQuery = supabase.from('inventory_items').select('id').eq('id', itemId)
-      if (organizationId && !access.isSuperAdmin) {
-        itemQuery = itemQuery.eq('organization_id', organizationId)
-      }
-      const { data: itemRow, error: itemError } = await itemQuery.maybeSingle()
-      if (itemError) throw itemError
-      if (!itemRow) return json({ error: 'item-not-found' }, 404)
-
       const fields = body.fields || {}
       if (Object.keys(fields).length === 0) return json({ error: 'fields-required' }, 400)
 
@@ -376,8 +334,6 @@ export async function POST(request: Request) {
           barcode: String(fields.barcode || '').trim(),
           sale_price: Number(fields.sale_price || 0),
           is_active: true,
-          organizationId,
-          isSuperAdmin: access.isSuperAdmin,
         })
       }
 

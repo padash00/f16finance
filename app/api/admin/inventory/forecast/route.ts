@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -18,11 +17,6 @@ export async function GET(request: Request) {
     const companyId = url.searchParams.get('company_id') || ''
     const locationId = url.searchParams.get('location_id') || ''
     const days = 30 // analyze last 30 days for velocity
-    const companyScope = await resolveCompanyScope({
-      activeOrganizationId: access.activeOrganization?.id || null,
-      requestedCompanyId: companyId || null,
-      isSuperAdmin: access.isSuperAdmin,
-    })
 
     const dateFrom = new Date()
     dateFrom.setDate(dateFrom.getDate() - days)
@@ -39,7 +33,7 @@ export async function GET(request: Request) {
     // Filter by company/location
     const filtered = (saleItems || []).filter((si: any) => {
       const sale = Array.isArray(si.point_sales) ? si.point_sales[0] : si.point_sales
-      if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length > 0 && !companyScope.allowedCompanyIds.includes(String(sale?.company_id || ''))) return false
+      if (companyId && sale?.company_id !== companyId) return false
       if (locationId && sale?.location_id !== locationId) return false
       return true
     })
@@ -54,17 +48,6 @@ export async function GET(request: Request) {
       velocityMap[id] = velocityMap[id] / days
     }
 
-    const { data: scopedLocations, error: scopedLocationsError } =
-      companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length > 0
-        ? await supabase
-            .from('inventory_locations')
-            .select('id')
-            .eq('organization_id', String(access.activeOrganization?.id || ''))
-        : { data: null, error: null }
-
-    if (scopedLocationsError) throw scopedLocationsError
-    const scopedLocationIds = new Set((scopedLocations || []).map((row: any) => String(row.id)))
-
     // Fetch current balances
     let balanceQuery = supabase
       .from('inventory_balances')
@@ -77,15 +60,13 @@ export async function GET(request: Request) {
     // Sum balance per item
     const balanceMap: Record<string, number> = {}
     for (const b of balances || []) {
-      if (!access.isSuperAdmin && scopedLocationIds.size > 0 && !scopedLocationIds.has(String(b.location_id))) continue
       balanceMap[b.item_id] = (balanceMap[b.item_id] || 0) + Number(b.quantity || 0)
     }
 
     // Fetch item details
     const { data: items, error: itemsError } = await supabase
       .from('inventory_items')
-      .select('id, name, low_stock_threshold, is_active, organization_id, category:inventory_categories(name)')
-      .eq('organization_id', String(access.activeOrganization?.id || ''))
+      .select('id, name, low_stock_threshold, is_active, category:inventory_categories(name)')
       .eq('is_active', true)
     if (itemsError) throw itemsError
 

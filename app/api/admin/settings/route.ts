@@ -63,80 +63,21 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
 
-    const activeOrgId = access.activeOrganization?.id || null
-
     const supabase = createAdminSupabaseClient()
     const [companiesRes, staffRes, categoriesRes] = await Promise.all([
-      access.isSuperAdmin || !activeOrgId
-        ? supabase
-            .from('companies')
-            .select('id, name, code, show_in_structure')
-            .order('name')
-        : supabase
-            .from('companies')
-            .select('id, name, code, show_in_structure')
-            .eq('organization_id', activeOrgId)
-            .order('name'),
-      access.isSuperAdmin || !activeOrgId
-        ? supabase
-            .from('staff')
-            .select('id, full_name, phone, email, role')
-            .order('full_name')
-        : supabase
-            .from('staff')
-            .select('id, full_name, phone, email, role')
-            .eq('organization_id', activeOrgId)
-            .order('full_name'),
-      access.isSuperAdmin || !activeOrgId
-        ? supabase
-            .from('expense_categories')
-            .select('id, name, monthly_budget, accounting_group')
-            .order('name')
-        : supabase
-            .from('expense_categories')
-            .select('id, name, monthly_budget, accounting_group')
-            .order('name'),
+      supabase.from('companies').select('id, name, code, show_in_structure').order('name'),
+      supabase.from('staff').select('id, full_name, phone, email, role').order('full_name'),
+      supabase.from('expense_categories').select('id, name, monthly_budget, accounting_group').order('name'),
     ])
 
     if (companiesRes.error) throw companiesRes.error
     if (staffRes.error) throw staffRes.error
     if (categoriesRes.error) throw categoriesRes.error
 
-    let companies = companiesRes.data || []
-    let staff = staffRes.data || []
-    let categories = categoriesRes.data || []
-
-    if (companies.length === 0) {
-      const legacyCompanies = await supabase
-        .from('companies')
-        .select('id, name, code, show_in_structure')
-        .order('name')
-      if (legacyCompanies.error) throw legacyCompanies.error
-      companies = legacyCompanies.data || []
-    }
-
-    if (staff.length === 0) {
-      const legacyStaff = await supabase
-        .from('staff')
-        .select('id, full_name, phone, email, role')
-        .order('full_name')
-      if (legacyStaff.error) throw legacyStaff.error
-      staff = legacyStaff.data || []
-    }
-
-    if (categories.length === 0) {
-      const legacyCategories = await supabase
-        .from('expense_categories')
-        .select('id, name, monthly_budget, accounting_group')
-        .order('name')
-      if (legacyCategories.error) throw legacyCategories.error
-      categories = legacyCategories.data || []
-    }
-
     return NextResponse.json({
-      companies,
-      staff,
-      categories,
+      companies: companiesRes.data || [],
+      staff: staffRes.data || [],
+      categories: categoriesRes.data || [],
     })
   } catch (error: any) {
     console.error('Admin settings read error', error)
@@ -162,7 +103,6 @@ export async function POST(req: Request) {
 
     const supabase = createAdminSupabaseClient()
     const actorUserId = access.user?.id || null
-    const activeOrgId = access.activeOrganization?.id || null
 
     if (body.entity === 'company') {
       if (body.action === 'create') {
@@ -172,7 +112,6 @@ export async function POST(req: Request) {
             name: body.payload.name.trim(),
             code: body.payload.code?.trim() || null,
             show_in_structure: body.payload.show_in_structure !== false,
-            organization_id: access.isSuperAdmin ? null : activeOrgId,
           },
         ]).select('id,name,code,show_in_structure').single()
         if (error) throw error
@@ -231,7 +170,6 @@ export async function POST(req: Request) {
             phone: body.payload.phone?.trim() || null,
             email: body.payload.email?.trim() || null,
             role: body.payload.role?.trim() || 'operator',
-            organization_id: access.isSuperAdmin ? null : activeOrgId,
           },
         ]).select('id,full_name,email,role').single()
         if (error) throw error

@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -17,11 +16,6 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const companyId = url.searchParams.get('company_id') || ''
     const days = Math.min(365, Math.max(7, parseInt(url.searchParams.get('days') || '30')))
-    const companyScope = await resolveCompanyScope({
-      activeOrganizationId: access.activeOrganization?.id || null,
-      requestedCompanyId: companyId || null,
-      isSuperAdmin: access.isSuperAdmin,
-    })
 
     const dateFrom = new Date()
     dateFrom.setDate(dateFrom.getDate() - days)
@@ -37,11 +31,9 @@ export async function GET(request: Request) {
 
     // Filter by company if provided
     const filtered = (saleItems || []).filter((si: any) => {
+      if (!companyId) return true
       const sale = Array.isArray(si.point_sales) ? si.point_sales[0] : si.point_sales
-      if (companyScope.allowedCompanyIds !== null && companyScope.allowedCompanyIds.length > 0) {
-        return companyScope.allowedCompanyIds.includes(String(sale?.company_id || ''))
-      }
-      return true // null = no restriction, include all
+      return sale?.company_id === companyId
     })
 
     // Aggregate by item_id
@@ -59,8 +51,7 @@ export async function GET(request: Request) {
     if (itemIds.length > 0) {
       const { data, error } = await supabase
         .from('inventory_items')
-        .select('id, name, sale_price, default_purchase_price, category_id, is_active, organization_id, category:inventory_categories(name)')
-        .eq('organization_id', String(access.activeOrganization?.id || ''))
+        .select('id, name, sale_price, default_purchase_price, category_id, is_active, category:inventory_categories(name)')
         .in('id', itemIds)
       if (error) throw error
       items = data || []
@@ -69,8 +60,7 @@ export async function GET(request: Request) {
     // Also fetch items with zero sales (C-class candidates)
     const { data: allItems, error: allItemsError } = await supabase
       .from('inventory_items')
-      .select('id, name, sale_price, default_purchase_price, category_id, is_active, organization_id, category:inventory_categories(name)')
-      .eq('organization_id', String(access.activeOrganization?.id || ''))
+      .select('id, name, sale_price, default_purchase_price, category_id, is_active, category:inventory_categories(name)')
       .eq('is_active', true)
     if (allItemsError) throw allItemsError
 
