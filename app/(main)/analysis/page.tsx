@@ -870,22 +870,27 @@ export default function AIAnalysisPage() {
       const fromDateStr = toISODateLocal(start)
       const toDateStr = toISODateLocal(end)
 
-      const [incRes, expRes] = await Promise.all([
-        supabase
-          .from("incomes")
-          .select("date, cash_amount, kaspi_amount, card_amount, online_amount")
-          .gte("date", fromDateStr)
-          .lte("date", toDateStr)
-          .order("date")
-          .throwOnError(),
-        supabase
-          .from("expenses")
-          .select("date, cash_amount, kaspi_amount, category")
-          .gte("date", fromDateStr)
-          .lte("date", toDateStr)
-          .order("date")
-          .throwOnError(),
-      ])
+      const incomeParams = new URLSearchParams({ from: fromDateStr, to: toDateStr })
+      const incomeApiRes = await fetch(`/api/admin/incomes?${incomeParams}`)
+      if (!incomeApiRes.ok) throw new Error('Ошибка загрузки доходов')
+      const incomeJson = await incomeApiRes.json()
+
+      // Fetch all expense pages (API caps at 500 per page)
+      let expenseRows: any[] = []
+      {
+        const PAGE_SIZE = 500
+        let page = 0
+        while (true) {
+          const expParams = new URLSearchParams({ from: fromDateStr, to: toDateStr, page_size: String(PAGE_SIZE), page: String(page) })
+          const res = await fetch(`/api/admin/expenses?${expParams}`)
+          if (!res.ok) throw new Error('Ошибка загрузки расходов')
+          const j = await res.json()
+          const rows: any[] = j.data ?? []
+          expenseRows = expenseRows.concat(rows)
+          if (rows.length < PAGE_SIZE) break
+          page++
+        }
+      }
 
       let planRows: any[] = []
       if (plansEnabled) {
@@ -922,7 +927,7 @@ export default function AIAnalysisPage() {
       const planMap = new Map<string, { planned_income: number; planned_expense: number }>()
       const catsMap: Record<string, number> = {}
 
-      for (const r of incRes.data ?? []) {
+      for (const r of incomeJson.data ?? []) {
         const date = (r as any).date as string
         const cash = (r as any).cash_amount || 0
         const kaspi = (r as any).kaspi_amount || 0
@@ -946,7 +951,7 @@ export default function AIAnalysisPage() {
         dbMap.set(date, cur)
       }
 
-      for (const r of expRes.data ?? []) {
+      for (const r of expenseRows) {
         const date = (r as any).date as string
         const val = ((r as any).cash_amount || 0) + ((r as any).kaspi_amount || 0)
         const cur = dbMap.get(date) || { 

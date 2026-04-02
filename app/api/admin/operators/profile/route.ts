@@ -75,3 +75,32 @@ export async function GET(req: Request) {
     return json({ error: error?.message || 'Ошибка сервера' }, 500)
   }
 }
+
+export async function PATCH(req: Request) {
+  try {
+    const access = await getRequestAccessContext(req)
+    if ('response' in access) return access.response
+
+    const body = await req.json().catch(() => null)
+    const operatorId = String(body?.operator_id || '').trim()
+    if (!operatorId) return json({ error: 'operator_id required' }, 400)
+
+    const supabase = hasAdminSupabaseCredentials()
+      ? createAdminSupabaseClient()
+      : createRequestSupabaseClient(req)
+
+    const { error } = await supabase
+      .from('operator_profiles')
+      .upsert(
+        { operator_id: operatorId, photo_url: body?.photo_url ?? null, updated_at: new Date().toISOString() },
+        { onConflict: 'operator_id' }
+      )
+
+    if (error) throw error
+
+    return json({ ok: true })
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/operators/profile PATCH', message: error?.message || 'error' })
+    return json({ error: error?.message || 'Ошибка сервера' }, 500)
+  }
+}

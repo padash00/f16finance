@@ -402,15 +402,15 @@ function AvatarUpload({
         .from('operator-files')
         .getPublicUrl(filePath)
 
-      const { error: updateError } = await supabase
-        .from('operator_profiles')
-        .upsert({
-          operator_id: operatorId,
-          photo_url: publicUrl,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'operator_id' })
-
-      if (updateError) throw updateError
+      const patchRes = await fetch('/api/admin/operators/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operator_id: operatorId, photo_url: publicUrl }),
+      })
+      if (!patchRes.ok) {
+        const errJson = await patchRes.json().catch(() => ({}))
+        throw new Error(errJson?.error || 'Ошибка обновления фото')
+      }
 
       onUploadComplete(publicUrl)
       
@@ -429,15 +429,15 @@ function AvatarUpload({
     try {
       setUploading(true)
 
-      const { error: updateError } = await supabase
-        .from('operator_profiles')
-        .upsert({
-          operator_id: operatorId,
-          photo_url: null,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'operator_id' })
-
-      if (updateError) throw updateError
+      const patchRes = await fetch('/api/admin/operators/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operator_id: operatorId, photo_url: null }),
+      })
+      if (!patchRes.ok) {
+        const errJson = await patchRes.json().catch(() => ({}))
+        throw new Error(errJson?.error || 'Ошибка удаления фото')
+      }
 
       setPreviewUrl(null)
       onUploadComplete('')
