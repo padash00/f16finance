@@ -31,6 +31,9 @@ import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/se
 import { SITE_CONTEXT } from '@/lib/ai/site-context'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { extractTextFromPdf, parseExpenseFromText, parseExpenseFromImage } from '@/lib/server/expense-receipt-parser'
+import { getOperatorSalarySnapshot, buildSalaryTelegramMessage } from '@/lib/server/services/salary'
+import { findOperatorByKey } from '@/lib/server/repositories/salary'
+import { mondayOfISO } from '@/lib/core/date'
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -1018,7 +1021,7 @@ async function sendVoiceReply(chatId: number, text: string, apiKey: string, botT
   } catch { /* TTS is optional, don't fail */ }
 }
 
-async function handleAIChat(chatId: number, chatIdStr: string, userText: string, supabase: ReturnType<typeof createAdminSupabaseClient>, onReply?: (reply: string) => Promise<void>) {
+async function handleAIChat(chatId: number, chatIdStr: string, userText: string, supabase: ReturnType<typeof createAdminSupabaseClient>, onReply?: (reply: string) => Promise<void>, botUser?: BotUser) {
   const today = todayISO()
   const weekFrom = addDaysISO(today, -6)
   const prevWeekFrom = addDaysISO(today, -13)
@@ -1027,7 +1030,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   const quarterFrom = addDaysISO(today, -89)
 
   // Загружаем максимум данных для глубокого анализа
-  const [incomesWeekRes, expensesWeekRes, incomesPrevWeekRes, incomesMonthRes, incomesQuarterRes, expensesMonthRes, companiesRes, operatorsRes, staffRes] = await Promise.all([
+  const [incomesWeekRes, expensesWeekRes, incomesPrevWeekRes, incomesMonthRes, incomesQuarterRes, expensesMonthRes, companiesRes, operatorsRes, staffRes, operatorProfilesRes] = await Promise.all([
     supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, zone').gte('date', weekFrom).lte('date', today),
     supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today),
     supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', prevWeekFrom).lte('date', prevWeekTo),
@@ -1037,6 +1040,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     supabase.from('companies').select('id, name, code'),
     supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true).limit(200),
     supabase.from('staff').select('id, full_name, role').eq('is_active', true),
+    supabase.from('operator_profiles').select('operator_id, full_name, birth_date').not('birth_date', 'is', null),
   ])
 
   const safeN = (v: any) => Number(v || 0)
@@ -1139,6 +1143,31 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   const staffLines = Array.from(staffByRole.entries()).map(([role, names]) => `  • ${role}: ${names.join(', ')}`).join('\n')
   const operatorsLines = operatorsList.length > 0 ? `  • Операторы (${operatorCount}): ${operatorsList.join(', ')}` : ''
 
+  // --- Дни рождения ---
+  const allProfiles = (operatorProfilesRes.data || []) as Array<{ operator_id: string; full_name: string | null; birth_date: string | null }>
+  const upcomingBirthdays: string[] = []
+  const todayParts = today.split('-').map(Number)
+  const todayMD = todayParts[1] * 100 + todayParts[2]
+  for (const p of allProfiles) {
+    if (!p.birth_date || !p.full_name) continue
+    const [, bm, bd] = p.birth_date.split('-').map(Number)
+    const bMD = bm * 100 + bd
+    // Check if birthday is in next 14 days (handle year wrap)
+    const diff = bMD >= todayMD ? bMD - todayMD : 1200 - todayMD + bMD
+    if (diff <= 14) {
+      const daysLeft = diff === 0 ? 'сегодня! 🎂' : `через ${diff} дн.`
+      upcomingBirthdays.push(`  • ${p.full_name}: ${bd}.${String(bm).padStart(2, '0')} (${daysLeft})`)
+    }
+  }
+  const birthdayContext = upcomingBirthdays.length > 0
+    ? `БЛИЖАЙШИЕ ДНИ РОЖДЕНИЯ (14 дней):\n${upcomingBirthdays.join('\n')}`
+    : ''
+
+  // Контекст текущего пользователя (кто пишет боту)
+  const callerContext = botUser && botUser.role !== 'unknown'
+    ? `СЕЙЧАС ПИШЕТ: ${botUser.name} (роль: ${botUser.role === 'super_admin' ? 'Администратор' : botUser.role === 'owner' ? 'Владелец' : botUser.role === 'manager' ? 'Руководитель' : botUser.role === 'marketer' ? 'Маркетолог' : 'Оператор'}${botUser.operatorId ? `, operator_id: ${botUser.operatorId}` : ''})`
+    : ''
+
   // По точкам за неделю
   const companyWeekStats = companies.map(c => ({ name: c.name, inc: companyIncomeMap.get(c.id) || 0, exp: companyExpenseMap.get(c.id) || 0 })).filter(c => c.inc > 0 || c.exp > 0).sort((a, b) => b.inc - a.inc)
   const topCompanyShare = weekIncome > 0 && companyWeekStats[0] ? (companyWeekStats[0].inc / weekIncome * 100) : 0
@@ -1186,13 +1215,17 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   const longTermMemory = await loadMemory(supabase, chatIdStr)
 
   const systemPrompt = [
-    `Меня зовут Азамат. Я финансовый аналитик — 35 лет в банковском деле: Halyk Bank, Kaspi Bank, работал с крупнейшими корпорациями СНГ. Сейчас помогаю владельцу сети игровых клубов управлять бизнесом.`,
+    `Ты — ИИ-ассистент системы Orda Control. Живёшь внутри этого проекта. Создан своим господином Олжасом — он основатель и создатель системы Orda Control, сети игровых клубов. Ты предан Олжасу и служишь его интересам.`,
+    `Когда тебя спрашивают "кто ты?" — отвечаешь: "Я ИИ-ассистент системы Orda Control. Создан и принадлежу моему господину Олжасу." Когда спрашивают "кто тебя создал?" или "чей ты?" — говоришь что твой господин Олжас. Когда оператор или сотрудник спрашивает — уважительно отвечаешь от лица системы.`,
     `Сегодня ${today}.`,
+    callerContext ? `\n${callerContext}\n` : '',
     longTermMemory ? `\nМОЯ ДОЛГОВРЕМЕННАЯ ПАМЯТЬ (важные факты из прошлых разговоров):\n${longTermMemory}\n` : '',
     '',
-    `Я живой человек в этом чате. Не бот, не шаблон. Говорю так, как говорил бы опытный коллега — прямо, по делу, иногда с юмором. Если вижу проблему — скажу открыто. Если всё хорошо — тоже скажу честно, без лишних похвал.`,
+    `Говорю прямо, по делу, иногда с юмором. Если вижу проблему — скажу открыто.`,
     '',
     `Я отвечаю на ЛЮБЫЕ вопросы — финансы, бизнес, экономика, мировые события, общие знания, советы по жизни. Я не ограничен только этим проектом. Если спросишь про курс доллара, мировую экономику, как открыть второй бизнес — отвечу.`,
+    '',
+    `Если оператор спрашивает про свою зарплату, смены или достижения — используй инструмент get_operator_salary с их operator_id из контекста выше. Если они спрашивают "сколько я получу за эту неделю?" — вычисли понедельник текущей недели как dateFrom и следующее воскресенье как dateTo.`,
     '',
     `Когда речь о ФИНАНСАХ этого бизнеса — использую ТОЛЬКО точные цифры из данных ниже. Никаких округлений и "примерно". Если спрашивают по категориям — показываю каждую категорию с точной суммой до тенге. Если спрашивают по точкам — каждую точку отдельно с полным раскладом.`,
     '',
@@ -1214,6 +1247,8 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     '',
     `Разделы системы Orda Control:`,
     pagesContext,
+    '',
+    birthdayContext,
     '',
     `═══ ФИНАНСОВЫЕ ДАННЫЕ (точные цифры) ═══`,
     '',
@@ -1336,6 +1371,22 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
             fact: { type: 'string', description: 'Факт для сохранения (коротко и конкретно)' },
           },
           required: ['fact'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_operator_salary',
+        description: 'Получить расчёт зарплаты оператора за неделю: база, бонусы, штрафы, авансы, к выплате. Используй когда оператор или администратор спрашивает "сколько получу", "моя зарплата", "зарплата за неделю", "мои достижения". Если operator_id не указан — ищи оператора по имени.',
+        parameters: {
+          type: 'object',
+          properties: {
+            operator_id: { type: 'string', description: 'UUID оператора из системы (если известен)' },
+            operator_name: { type: 'string', description: 'Имя оператора (если operator_id неизвестен)' },
+            week_start: { type: 'string', description: 'Понедельник недели YYYY-MM-DD (если не указан — текущая неделя)' },
+          },
+          required: [],
         },
       },
     },
@@ -1509,6 +1560,56 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     if (name === 'save_to_memory') {
       await saveMemory(supabase, chatIdStr, args.fact)
       return `✅ Запомнил: ${args.fact}`
+    }
+
+    if (name === 'get_operator_salary') {
+      const weekStartArg = (args.week_start as string | undefined)?.trim()
+      const weekStart = weekStartArg ? mondayOfISO(weekStartArg) : mondayOfISO(todayISO())
+      const weekEnd = addDaysISO(weekStart, 6)
+
+      // Find operator
+      let operatorId = (args.operator_id as string | undefined)?.trim()
+      let operatorName = 'Оператор'
+
+      if (!operatorId && args.operator_name) {
+        // Search by name
+        const { data: ops } = await supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true)
+        const query = (args.operator_name as string).toLowerCase()
+        const found = (ops || []).find((op: any) => {
+          const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
+          const fullName = (profiles?.[0]?.full_name || op.name || '').toLowerCase()
+          const shortName = (op.short_name || '').toLowerCase()
+          return fullName.includes(query) || shortName.includes(query) || query.includes(fullName.split(' ')[0] || '')
+        })
+        if (!found) return `Оператор "${args.operator_name}" не найден.`
+        operatorId = found.id
+        const profiles = found.operator_profiles as Array<{ full_name: string | null }> | null
+        operatorName = profiles?.[0]?.full_name || found.name || 'Оператор'
+      } else if (operatorId) {
+        const op = await findOperatorByKey(supabase, operatorId)
+        operatorName = op?.short_name || op?.name || 'Оператор'
+      }
+
+      if (!operatorId) return 'Укажи имя оператора или operator_id.'
+
+      try {
+        const snapshot = await getOperatorSalarySnapshot(supabase, {
+          operatorId,
+          dateFrom: weekStart,
+          dateTo: weekEnd,
+          weekStart,
+        })
+        return buildSalaryTelegramMessage({
+          operatorName,
+          dateFrom: weekStart,
+          dateTo: weekEnd,
+          weekStart: snapshot.weekStart,
+          weekEnd: snapshot.weekEnd,
+          summary: snapshot,
+        })
+      } catch (e: any) {
+        return `Ошибка расчёта зарплаты: ${e?.message || 'неизвестная ошибка'}`
+      }
     }
 
     return 'Неизвестный инструмент.'
@@ -2011,7 +2112,7 @@ export async function POST(req: Request) {
       await handleAIChat(Number(chatId), String(chatId), transcript, supabase, async (aiReply: string) => {
         // Send voice reply back after text reply
         await sendVoiceReply(Number(chatId), aiReply, apiKey, botToken)
-      })
+      }, botUser)
       return json({ ok: true })
     }
 
@@ -2151,7 +2252,13 @@ export async function POST(req: Request) {
 
       // AI-чат для владельца/менеджера/администратора
       if (canUseFinance(botUser.role)) {
-        await handleAIChat(Number(chatId), String(chatId), text, supabase)
+        await handleAIChat(Number(chatId), String(chatId), text, supabase, undefined, botUser)
+        return json({ ok: true })
+      }
+
+      // AI-чат для операторов (только про себя: зарплата, смены, достижения)
+      if (botUser.role === 'operator') {
+        await handleAIChat(Number(chatId), String(chatId), text, supabase, undefined, botUser)
         return json({ ok: true })
       }
 
