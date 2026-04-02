@@ -149,21 +149,23 @@ export async function POST(req: Request) {
       const payDate = new Date(pay_date)
       const monthLabel = payDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
-      // 1. Create expense record automatically
+      // 1. Try to create expense record (optional — expenses table may require company_id)
       const expenseComment = `Зарплата: ${staffMember?.full_name || 'сотрудник'}${slotLabel ? ` (${slotLabel} ${monthLabel})` : ''}`
-      const { data: expense, error: expErr } = await supabase
-        .from('expenses')
-        .insert({
-          date: pay_date,
-          category: 'Зарплата персонала',
-          cash_amount: Math.round(cash_amount || 0) || null,
-          kaspi_amount: Math.round(kaspi_amount || 0) || null,
-          comment: expenseComment,
-        })
-        .select('id')
-        .single()
-
-      if (expErr) throw expErr
+      let expenseId: string | null = null
+      try {
+        const { data: expense } = await supabase
+          .from('expenses')
+          .insert({
+            date: pay_date,
+            category: 'Зарплата персонала',
+            cash_amount: Math.round(cash_amount || 0) || null,
+            kaspi_amount: Math.round(kaspi_amount || 0) || null,
+            comment: expenseComment,
+          })
+          .select('id')
+          .single()
+        expenseId = expense?.id ?? null
+      } catch {}
 
       // 2. Create salary payment record
       const { data: payment, error: payErr } = await supabase
@@ -187,8 +189,8 @@ export async function POST(req: Request) {
         .eq('staff_id', staff_id)
         .eq('status', 'active')
 
-      await writeAuditLog(supabase, { entityType: 'staff-payment', entityId: String(payment.id), action: 'create', payload: { staff_id, total, pay_date, slot, expense_id: expense.id } })
-      return json({ ok: true, payment, expense_id: expense.id })
+      await writeAuditLog(supabase, { entityType: 'staff-payment', entityId: String(payment.id), action: 'create', payload: { staff_id, total, pay_date, slot, expense_id: expenseId } })
+      return json({ ok: true, payment, expense_id: expenseId })
     }
 
     // ── Delete payment ──────────────────────────────────────────────────────

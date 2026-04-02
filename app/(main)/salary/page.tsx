@@ -238,6 +238,16 @@ export default function SalaryPage() {
     } catch (e: any) { setError(e?.message || 'Ошибка') }
   }
 
+  const deleteStaffPayment = async (id: string, amount: number) => {
+    if (!window.confirm(`Аннулировать выплату ${money(amount)}?`)) return
+    try {
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deletePayment', id }) })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Ошибка')
+      await loadStaffSalary()
+    } catch (e: any) { setError(e?.message || 'Не удалось аннулировать выплату') }
+  }
+
   const markDebtsPaid = async (item: WeeklyOperator) => {
     if (!window.confirm(`Отметить долг ${money(item.week.debtAmount)} оператора ${getOperatorDisplayName(item.operator)} как оплаченный?`)) return
     setMarkDebtId(item.operator.id)
@@ -595,8 +605,9 @@ export default function SalaryPage() {
                           <div className="mb-1 text-xs text-slate-500">Последние выплаты:</div>
                           <div className="flex flex-wrap gap-2">
                             {recentPayments.map(p => (
-                              <div key={p.id} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300">
-                                {p.pay_date} · {money(p.amount)} · {p.slot === 'first' ? '1–15' : p.slot === 'second' ? '16–конец' : 'разово'}
+                              <div key={p.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300">
+                                <span>{p.pay_date} · {money(p.amount)} · {p.slot === 'first' ? '1–15' : p.slot === 'second' ? '16–конец' : 'разово'}</span>
+                                <button type="button" title="Аннулировать" onClick={() => void deleteStaffPayment(p.id, p.amount)} className="ml-1 text-slate-600 hover:text-rose-400 transition">×</button>
                               </div>
                             ))}
                           </div>
