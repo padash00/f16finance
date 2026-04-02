@@ -402,6 +402,7 @@ export async function GET(req: Request) {
         .from('operators')
         .select('id,name,short_name,is_active,telegram_chat_id,operator_profiles(*)')
         .eq('is_active', true)
+        .eq('is_admin_staff', false)
         .order('name')
       if (allowedOperatorIds) activeOperatorsQuery = activeOperatorsQuery.in('id', allowedOperatorIds)
 

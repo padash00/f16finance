@@ -4,7 +4,7 @@ import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from '
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Wallet } from 'lucide-react'
+import { ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Users, Wallet } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -25,6 +25,24 @@ type Payment = {
   created_at?: string | null
 }
 type ShiftBreakdown = { id: string; date: string; shift: string; companyCode: string | null; companyName: string | null; totalIncome: number; baseSalary: number; autoBonus: number; roleBonus: number; salary: number }
+
+// ─── Admin staff salary types ─────────────────────────────────────────────────
+type StaffMember = { id: string; full_name: string; short_name: string | null; role: string; monthly_salary: number; extra_day_company_code: string | null; extra_day_shift_type: string | null; telegram_chat_id: string | null }
+type StaffAdjustment = { id: string; staff_id: string; kind: 'debt' | 'fine' | 'bonus' | 'advance'; amount: number; date: string; comment: string | null; status: string }
+type StaffPayment = { id: string; staff_id: string; pay_date: string; slot: string; amount: number; comment: string | null }
+type StaffSalaryData = { staff: StaffMember[]; adjustments: StaffAdjustment[]; payments: StaffPayment[]; salaryRules: { company_code: string; shift_type: string; base_per_shift: number }[] }
+
+function calcStaffToPay(s: StaffMember, adjs: StaffAdjustment[]) {
+  const active = adjs.filter(a => a.staff_id === s.id && a.status === 'active')
+  const half = Math.round(s.monthly_salary / 2)
+  const bonuses = active.filter(a => a.kind === 'bonus').reduce((sum, a) => sum + a.amount, 0)
+  const debts = active.filter(a => a.kind === 'debt').reduce((sum, a) => sum + a.amount, 0)
+  const fines = active.filter(a => a.kind === 'fine').reduce((sum, a) => sum + a.amount, 0)
+  const advances = active.filter(a => a.kind === 'advance').reduce((sum, a) => sum + a.amount, 0)
+  return { half, bonuses, debts, fines, advances, toPay: half + bonuses - debts - fines - advances }
+}
+
+const roleLabel: Record<string, string> = { owner: 'Владелец', manager: 'Руководитель', marketer: 'Маркетолог', super_admin: 'Супер-админ', other: 'Сотрудник' }
 type WeeklyOperator = {
   operator: { id: string; name: string; short_name: string | null; full_name: string | null; is_active: boolean; telegram_chat_id: string | null; photo_url: string | null; position: string | null; documents_count: number; expiring_documents: number }
   week: { id: string; weekStart: string; weekEnd: string; grossAmount: number; bonusAmount: number; fineAmount: number; debtAmount: number; advanceAmount: number; netAmount: number; paidAmount: number; remainingAmount: number; status: 'draft' | 'partial' | 'paid'; companyAllocations: Allocation[]; payments: Payment[]; shiftsCount: number; autoBonusTotal: number; shifts: ShiftBreakdown[] }
@@ -141,6 +159,83 @@ export default function SalaryPage() {
   const sendAll = async () => { if (loading || broadcastSending || !broadcastTargets.length) return; setBroadcastSending(true); setBroadcastDone(0); setBroadcastTotal(broadcastTargets.length); setBroadcastErrors([]); setError(null); try { for (let i = 0; i < broadcastTargets.length; i += 1) { const item = broadcastTargets[i]; try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId: item.operator.id, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${json?.error || `HTTP ${res.status}`}`]) } catch (e: any) { setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${e?.message || 'ошибка'}`]) } setBroadcastDone(i + 1); await new Promise((r) => setTimeout(r, 250)) } } finally { setBroadcastSending(false) } }
   const [markDebtId, setMarkDebtId] = useState<string | null>(null)
   const [markDebtSaving, setMarkDebtSaving] = useState(false)
+
+  // ─── Admin staff salary state ───────────────────────────────────────────
+  const [staffSalary, setStaffSalary] = useState<StaffSalaryData | null>(null)
+  const [staffSalaryLoading, setStaffSalaryLoading] = useState(false)
+  const [staffAdjModal, setStaffAdjModal] = useState<StaffMember | null>(null)
+  const [staffPayModal, setStaffPayModal] = useState<StaffMember | null>(null)
+  const [staffAdjKind, setStaffAdjKind] = useState<'debt' | 'fine' | 'bonus' | 'advance'>('fine')
+  const [staffAdjAmount, setStaffAdjAmount] = useState('')
+  const [staffAdjDate, setStaffAdjDate] = useState(todayISO())
+  const [staffAdjComment, setStaffAdjComment] = useState('')
+  const [staffAdjSaving, setStaffAdjSaving] = useState(false)
+  const [staffPayDate, setStaffPayDate] = useState(todayISO())
+  const [staffPaySlot, setStaffPaySlot] = useState<'first' | 'second'>('first')
+  const [staffPayCash, setStaffPayCash] = useState('')
+  const [staffPayKaspi, setStaffPayKaspi] = useState('')
+  const [staffPayComment, setStaffPayComment] = useState('')
+  const [staffPaySaving, setStaffPaySaving] = useState(false)
+
+  const loadStaffSalary = useCallback(async () => {
+    setStaffSalaryLoading(true)
+    try {
+      const res = await fetch('/api/admin/staff-salary', { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (res.ok) setStaffSalary(json)
+    } catch {}
+    finally { setStaffSalaryLoading(false) }
+  }, [])
+  useEffect(() => { void loadStaffSalary() }, [loadStaffSalary])
+
+  const submitStaffAdjustment = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!staffAdjModal) return
+    const amount = parseMoney(staffAdjAmount)
+    if (amount <= 0) return setError('Сумма должна быть > 0')
+    setStaffAdjSaving(true); setError(null)
+    try {
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addAdjustment', staff_id: staffAdjModal.id, kind: staffAdjKind, amount, date: staffAdjDate, comment: staffAdjComment.trim() || null }) })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Ошибка')
+      setStaffAdjModal(null); setStaffAdjAmount(''); setStaffAdjComment('')
+      await loadStaffSalary()
+    } catch (e: any) { setError(e?.message || 'Не удалось сохранить') }
+    finally { setStaffAdjSaving(false) }
+  }
+
+  const submitStaffExtraDay = async (staffId: string) => {
+    try {
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addExtraDay', staff_id: staffId, date: todayISO() }) })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Ошибка')
+      await loadStaffSalary()
+    } catch (e: any) { setError(e?.message || 'Не удалось добавить доп. выход') }
+  }
+
+  const submitStaffPayment = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!staffPayModal) return
+    const cash = parseMoney(staffPayCash), kaspi = parseMoney(staffPayKaspi)
+    if (cash + kaspi <= 0) return setError('Сумма выплаты должна быть > 0')
+    setStaffPaySaving(true); setError(null)
+    try {
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'createPayment', staff_id: staffPayModal.id, pay_date: staffPayDate, slot: staffPaySlot, cash_amount: cash, kaspi_amount: kaspi, comment: staffPayComment.trim() || null }) })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Ошибка')
+      setStaffPayModal(null); setStaffPayCash(''); setStaffPayKaspi(''); setStaffPayComment('')
+      await loadStaffSalary()
+    } catch (e: any) { setError(e?.message || 'Не удалось провести выплату') }
+    finally { setStaffPaySaving(false) }
+  }
+
+  const removeStaffAdjustment = async (id: string) => {
+    if (!window.confirm('Аннулировать корректировку?')) return
+    try {
+      await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'removeAdjustment', id }) })
+      await loadStaffSalary()
+    } catch (e: any) { setError(e?.message || 'Ошибка') }
+  }
 
   const markDebtsPaid = async (item: WeeklyOperator) => {
     if (!window.confirm(`Отметить долг ${money(item.week.debtAmount)} оператора ${getOperatorDisplayName(item.operator)} как оплаченный?`)) return
@@ -409,6 +504,89 @@ export default function SalaryPage() {
             </form>
             {adjSuccess ? <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />Корректировка сохранена</div> : null}
           </Card>
+
+          <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
+            <div className="flex items-center justify-between gap-4 border-b border-white/10 p-5">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-violet-500/15 p-3 text-violet-300"><Users className="h-5 w-5" /></div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Зарплатная ведомость Административных сотрудников</h2>
+                  <p className="text-sm text-slate-400">Фиксированный оклад, выплата 1-го и 15-го. Бонусы, штрафы, долги, авансы, доп. выходы.</p>
+                </div>
+              </div>
+              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void loadStaffSalary()}><RefreshCw className="h-4 w-4" /></Button>
+            </div>
+            {staffSalaryLoading ? (
+              <div className="flex items-center justify-center p-12 text-slate-400"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Загрузка...</div>
+            ) : !staffSalary || staffSalary.staff.length === 0 ? (
+              <div className="p-10 text-center text-sm text-slate-500">Нет административных сотрудников. Добавьте записи в таблицу <code className="rounded bg-white/10 px-1">staff</code>.</div>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {staffSalary.staff.map((s) => {
+                  const calc = calcStaffToPay(s, staffSalary.adjustments)
+                  const activeAdjs = staffSalary.adjustments.filter(a => a.staff_id === s.id && a.status === 'active')
+                  const recentPayments = staffSalary.payments.filter(p => p.staff_id === s.id).slice(0, 3)
+                  return (
+                    <div key={s.id} className="p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-sm font-semibold text-white">
+                            {(s.short_name || s.full_name).charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-white">{s.full_name}</div>
+                            <div className="text-xs text-slate-400">{roleLabel[s.role] || s.role} · Оклад: {money(s.monthly_salary)}/мес</div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
+                          <Button type="button" variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
+                          <Button type="button" className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment('') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
+                        </div>
+                      </div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-500">Пол-оклада</div><div className="mt-1 text-sm font-semibold text-white">{money(calc.half)}</div></div>
+                        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-emerald-400/70">Бонусы</div><div className="mt-1 text-sm font-semibold text-emerald-300">+{money(calc.bonuses)}</div></div>
+                        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-rose-400/70">Штрафы / долги</div><div className="mt-1 text-sm font-semibold text-rose-300">−{money(calc.fines + calc.debts)}</div></div>
+                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-amber-400/70">Авансы</div><div className="mt-1 text-sm font-semibold text-amber-300">−{money(calc.advances)}</div></div>
+                        <div className="rounded-2xl border border-white/15 bg-white/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-400">К выплате</div><div className="mt-1 text-base font-bold text-white">{money(calc.toPay)}</div></div>
+                      </div>
+                      {activeAdjs.length > 0 ? (
+                        <div className="mt-3 space-y-1.5">
+                          <div className="mb-1 text-xs text-slate-500">Активные корректировки:</div>
+                          {activeAdjs.map(adj => (
+                            <div key={adj.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${adj.kind === 'bonus' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : adj.kind === 'advance' ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-rose-500/30 bg-rose-500/10 text-rose-300'}`}>
+                                  {adj.kind === 'bonus' ? 'бонус' : adj.kind === 'advance' ? 'аванс' : adj.kind === 'fine' ? 'штраф' : 'долг'}
+                                </span>
+                                <span className="font-medium text-white">{money(adj.amount)}</span>
+                                <span className="text-slate-500">{adj.date}</span>
+                                {adj.comment ? <span className="text-slate-400">{adj.comment}</span> : null}
+                              </div>
+                              <button type="button" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}>×</button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {recentPayments.length > 0 ? (
+                        <div className="mt-3">
+                          <div className="mb-1 text-xs text-slate-500">Последние выплаты:</div>
+                          <div className="flex flex-wrap gap-2">
+                            {recentPayments.map(p => (
+                              <div key={p.id} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300">
+                                {p.pay_date} · {money(p.amount)} · {p.slot === 'first' ? '1–15' : p.slot === 'second' ? '16–конец' : 'разово'}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
         </div>
 
       {advanceTarget ? (
@@ -479,6 +657,71 @@ export default function SalaryPage() {
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setChatTarget(null)}>Отмена</Button>
               <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{chatSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}</Button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {staffAdjModal ? (
+        <Modal title="Корректировка" subtitle={staffAdjModal.full_name} onClose={() => setStaffAdjModal(null)}>
+          <form className="space-y-4" onSubmit={submitStaffAdjustment}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Тип</label>
+                <select className={selectCls} value={staffAdjKind} onChange={e => setStaffAdjKind(e.target.value as any)}>
+                  <option value="fine">Штраф</option>
+                  <option value="debt">Долг</option>
+                  <option value="bonus">Бонус</option>
+                  <option value="advance">Аванс</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Дата</label>
+                <input className={input} type="date" value={staffAdjDate} onChange={e => setStaffAdjDate(e.target.value)} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm text-slate-300">Сумма</label>
+                <input className={input} type="text" placeholder="0" value={staffAdjAmount} onChange={e => setStaffAdjAmount(e.target.value)} />
+              </div>
+            </div>
+            <textarea className={textarea} placeholder="Комментарий" value={staffAdjComment} onChange={e => setStaffAdjComment(e.target.value)} />
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setStaffAdjModal(null)}>Отмена</Button>
+              <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{staffAdjSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}</Button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {staffPayModal ? (
+        <Modal title="Выплата зарплаты" subtitle={`${staffPayModal.full_name} · к выплате ${money(calcStaffToPay(staffPayModal, staffSalary?.adjustments || []).toPay)}`} onClose={() => setStaffPayModal(null)}>
+          <form className="space-y-4" onSubmit={submitStaffPayment}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Слот</label>
+                <select className={selectCls} value={staffPaySlot} onChange={e => setStaffPaySlot(e.target.value as 'first' | 'second')}>
+                  <option value="first">1–15 числа</option>
+                  <option value="second">16 — конец месяца</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Дата выплаты</label>
+                <input className={input} type="date" value={staffPayDate} onChange={e => setStaffPayDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Наличные</label>
+                <input className={input} type="text" placeholder="0" value={staffPayCash} onChange={e => setStaffPayCash(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Kaspi</label>
+                <input className={input} type="text" placeholder="0" value={staffPayKaspi} onChange={e => setStaffPayKaspi(e.target.value)} />
+              </div>
+            </div>
+            <textarea className={textarea} placeholder="Комментарий" value={staffPayComment} onChange={e => setStaffPayComment(e.target.value)} />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">Итого: <span className="font-semibold text-white">{money(parseMoney(staffPayCash) + parseMoney(staffPayKaspi))}</span></div>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setStaffPayModal(null)}>Отмена</Button>
+              <Button type="submit" className="rounded-xl bg-emerald-500 text-white hover:bg-emerald-400">{staffPaySaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Провести выплату'}</Button>
             </div>
           </form>
         </Modal>
