@@ -215,24 +215,19 @@ export default function StaffPageSmart() {
 
   // Data State
   const [staff, setStaff] = useState<Staff[]>([])
-  const [payments, setPayments] = useState<StaffPayment[]>([])
-  
+
   // UI State
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [monthYM, setMonthYM] = useState(initialYM)
   const [isAddStaffOpen, setIsAddStaffOpen] = useState(false)
-  const [paymentModal, setPaymentModal] = useState<{ isOpen: boolean; staffId: string | null }>({
-    isOpen: false,
-    staffId: null,
-  })
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [accountActionBusyKey, setAccountActionBusyKey] = useState<string | null>(null)
   const [accountInfoByStaffId, setAccountInfoByStaffId] = useState<Record<string, StaffAccountInfo>>({})
   const [pageNotice, setPageNotice] = useState<PageNotice | null>(null)
   const [showInactive, setShowInactive] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [sortBy, setSortBy] = useState<'name' | 'salary' | 'progress'>('name')
+  const [sortBy, setSortBy] = useState<'name' | 'salary'>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   // --- Derived Data ---
@@ -241,55 +236,24 @@ export default function StaffPageSmart() {
     return { monthFrom: start, monthTo: end }
   }, [monthYM])
 
-  const paymentsByStaff = useMemo(() => {
-    const map = new Map<string, StaffPayment[]>()
-    payments.forEach((p) => {
-      const arr = map.get(p.staff_id) || []
-      arr.push(p)
-      map.set(p.staff_id, arr)
-    })
-    return map
-  }, [payments])
-
   // Statistics
   const stats = useMemo(() => {
     let totalBudget = 0
-    let totalPaid = 0
     let totalStaff = 0
-    let fullyPaid = 0
-    let partiallyPaid = 0
-    let notPaid = 0
 
     staff.filter(s => s.is_active || showInactive).forEach(s => {
-      const salary = s.monthly_salary || 0
-      const paid = paymentsByStaff.get(s.id)?.reduce((acc, p) => acc + (p.amount || 0), 0) || 0
-      
-      if (s.is_active) {
-        totalBudget += salary
-        totalPaid += paid
-        
-        if (paid === 0) notPaid++
-        else if (paid >= salary) fullyPaid++
-        else partiallyPaid++
-      }
-      
+      if (s.is_active) totalBudget += s.monthly_salary || 0
       totalStaff++
     })
 
     return {
       totalBudget,
-      totalPaid,
-      totalLeft: Math.max(0, totalBudget - totalPaid),
-      progress: totalBudget > 0 ? (totalPaid / totalBudget) * 100 : 0,
       totalStaff,
       activeStaff: staff.filter(s => s.is_active).length,
       inactiveStaff: staff.filter(s => !s.is_active).length,
-      fullyPaid,
-      partiallyPaid,
-      notPaid,
       avgSalary: totalBudget / (staff.filter(s => s.is_active).length || 1),
     }
-  }, [staff, paymentsByStaff, showInactive])
+  }, [staff, showInactive])
 
   // Filtered and sorted staff
   const filteredStaff = useMemo(() => {
@@ -316,12 +280,6 @@ export default function StaffPageSmart() {
           aVal = a.monthly_salary || 0
           bVal = b.monthly_salary || 0
           break
-        case 'progress':
-          const aPaid = paymentsByStaff.get(a.id)?.reduce((acc, p) => acc + p.amount, 0) || 0
-          const bPaid = paymentsByStaff.get(b.id)?.reduce((acc, p) => acc + p.amount, 0) || 0
-          aVal = a.monthly_salary ? (aPaid / a.monthly_salary) : 0
-          bVal = b.monthly_salary ? (bPaid / b.monthly_salary) : 0
-          break
       }
 
       if (typeof aVal === 'string') {
@@ -334,7 +292,7 @@ export default function StaffPageSmart() {
     filtered.sort((a, b) => Number(b.is_active) - Number(a.is_active))
 
     return filtered
-  }, [staff, showInactive, searchTerm, sortBy, sortDir, paymentsByStaff])
+  }, [staff, showInactive, searchTerm, sortBy, sortDir])
 
   // --- Fetching ---
   const loadData = useCallback(async (showRefresh = false) => {
@@ -354,7 +312,6 @@ export default function StaffPageSmart() {
     {
       const staffRows = (body?.staff as Staff[]) || []
       setStaff(staffRows)
-      setPayments((body?.payments as StaffPayment[]) || [])
 
       if (staffRows.length > 0) {
         const response = await fetch(`/api/admin/staff-accounts?staffIds=${encodeURIComponent(staffRows.map((item) => item.id).join(','))}`).catch(() => null)
@@ -412,32 +369,6 @@ export default function StaffPageSmart() {
   }, [])
 
   // --- Actions ---
-  const handleDeletePayment = async (id: number) => {
-    if (!confirm('Удалить эту выплату?')) return
-    const response = await fetch('/api/admin/staff', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'deletePayment',
-        paymentId: id,
-      }),
-    })
-    const json = await response.json().catch(() => null)
-    if (!response.ok) {
-      showPageNotice({
-        tone: 'error',
-        text: json?.error || 'Не удалось удалить выплату',
-      })
-      return
-    }
-
-    setPayments((prev) => prev.filter((p) => p.id !== id))
-    showPageNotice({
-      tone: 'success',
-      text: 'Выплата удалена.',
-    })
-  }
-
   const toggleStaffStatus = async (s: Staff) => {
     const response = await fetch('/api/admin/staff', {
       method: 'POST',
@@ -561,33 +492,21 @@ export default function StaffPageSmart() {
 
   const handleExport = async () => {
     const wb = createWorkbook()
-    const staffRows = filteredStaff.map(s => {
-      const paid = paymentsByStaff.get(s.id)?.reduce((acc, p) => acc + p.amount, 0) || 0
-      const salary = s.monthly_salary || 0
-      const left = salary - paid
-      const progress = salary > 0 ? (paid / salary) * 100 : 0
-      return {
-        name: s.full_name,
-        role: ROLE_LABEL[s.role as StaffRole]?.label || '',
-        salary,
-        paid,
-        left,
-        progress,
-        status: s.is_active ? 'Активен' : 'Архив',
-      }
-    })
-    const totals = staffRows.reduce((acc, r) => ({ salary: acc.salary + r.salary, paid: acc.paid + r.paid, left: acc.left + r.left }), { salary: 0, paid: 0, left: 0 })
-    staffRows.push({ _isTotals: true, name: 'ИТОГО', role: '', salary: totals.salary, paid: totals.paid, left: totals.left, progress: totals.salary > 0 ? (totals.paid / totals.salary) * 100 : 0, status: '' } as any)
-    buildStyledSheet(wb, 'Зарплаты', 'Ведомость зарплат', `Месяц: ${monthYM} | Сотрудников: ${filteredStaff.length}`, [
+    const staffRows = filteredStaff.map(s => ({
+      name: s.full_name,
+      role: ROLE_LABEL[s.role as StaffRole]?.label || '',
+      salary: s.monthly_salary || 0,
+      status: s.is_active ? 'Активен' : 'Архив',
+    }))
+    const total = staffRows.reduce((acc, r) => acc + r.salary, 0)
+    staffRows.push({ _isTotals: true, name: 'ИТОГО', role: '', salary: total, status: '' } as any)
+    buildStyledSheet(wb, 'Сотрудники', 'Административные сотрудники', `Всего: ${filteredStaff.length}`, [
       { header: 'Сотрудник', key: 'name', width: 28, type: 'text' },
       { header: 'Роль', key: 'role', width: 18, type: 'text' },
       { header: 'Оклад', key: 'salary', width: 16, type: 'money' },
-      { header: 'Выплачено', key: 'paid', width: 16, type: 'money' },
-      { header: 'Остаток', key: 'left', width: 16, type: 'money' },
-      { header: 'Прогресс %', key: 'progress', width: 14, type: 'percent' },
       { header: 'Статус', key: 'status', width: 12, type: 'text' },
     ], staffRows)
-    await downloadWorkbook(wb, `salary_${monthYM}.xlsx`)
+    await downloadWorkbook(wb, `staff_${monthYM}.xlsx`)
   }
 
   return (
@@ -696,66 +615,6 @@ export default function StaffPageSmart() {
               </CardContent>
             </Card>
 
-            <Card className="bg-gray-900/40 backdrop-blur-xl border-white/5">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-2 rounded-xl bg-emerald-500/10">
-                    <Wallet className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <span className="text-xs text-gray-500">{stats.fullyPaid} полностью</span>
-                </div>
-                <p className="text-sm text-gray-400 mb-1">Выплачено</p>
-                <p className="text-2xl font-bold text-emerald-400">{money(stats.totalPaid)}</p>
-                <div className="w-full h-1.5 bg-gray-800 rounded-full mt-2 overflow-hidden">
-                  <div 
-                    className="h-full bg-emerald-500 rounded-full"
-                    style={{ width: `${Math.min(stats.progress, 100)}%` }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gray-900/40 backdrop-blur-xl border-white/5">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-2 rounded-xl bg-amber-500/10">
-                    <TrendingUp className="w-5 h-5 text-amber-400" />
-                  </div>
-                  <span className="text-xs text-gray-500">{stats.notPaid} не получали</span>
-                </div>
-                <p className="text-sm text-gray-400 mb-1">Остаток к выплате</p>
-                <p className="text-2xl font-bold text-amber-400">{money(stats.totalLeft)}</p>
-                <p className="text-xs text-gray-500 mt-2">
-                  {stats.progress.toFixed(1)}% от бюджета
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gray-900/40 backdrop-blur-xl border-white/5">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="p-2 rounded-xl bg-purple-500/10">
-                    <PieChart className="w-5 h-5 text-purple-400" />
-                  </div>
-                  <span className="text-xs text-gray-500">{stats.partiallyPaid} частично</span>
-                </div>
-                <p className="text-sm text-gray-400 mb-1">Статистика выплат</p>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Полностью:</span>
-                    <span className="text-emerald-400">{stats.fullyPaid}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Частично:</span>
-                    <span className="text-amber-400">{stats.partiallyPaid}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">Не получали:</span>
-                    <span className="text-red-400">{stats.notPaid}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Filters */}
@@ -789,7 +648,6 @@ export default function StaffPageSmart() {
               >
                 <option value="name">По имени</option>
                 <option value="salary">По окладу</option>
-                <option value="progress">По прогрессу</option>
               </select>
 
               <button
@@ -827,17 +685,14 @@ export default function StaffPageSmart() {
                 <thead>
                   <tr className="border-b border-white/5 bg-gray-900/50">
                     <th className="py-4 px-4 text-left text-xs font-medium text-gray-400">Сотрудник</th>
-                    <th className="py-4 px-4 text-left text-xs font-medium text-gray-400">Прогресс</th>
                     <th className="py-4 px-4 text-right text-xs font-medium text-gray-400">Оклад</th>
-                    <th className="py-4 px-4 text-right text-xs font-medium text-gray-400">Выплачено</th>
-                    <th className="py-4 px-4 text-right text-xs font-medium text-gray-400">Остаток</th>
                     <th className="py-4 px-4 text-center text-xs font-medium text-gray-400">Действия</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {loading && !refreshing && (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-500">
+                      <td colSpan={3} className="py-12 text-center text-gray-500">
                         Загрузка данных...
                       </td>
                     </tr>
@@ -845,7 +700,7 @@ export default function StaffPageSmart() {
 
                   {!loading && filteredStaff.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-500">
+                      <td colSpan={3} className="py-12 text-center text-gray-500">
                         {staff.length === 0 
                           ? 'Список сотрудников пуст. Добавьте первого сотрудника.'
                           : 'Нет сотрудников, соответствующих фильтрам'}
@@ -854,30 +709,14 @@ export default function StaffPageSmart() {
                   )}
 
                   {filteredStaff.map((s) => {
-                    const staffPayments = paymentsByStaff.get(s.id) || []
-                    const paid = staffPayments.reduce((acc, p) => acc + (p.amount || 0), 0)
-                    const salary = s.monthly_salary || 0
-                    const left = salary - paid
-                    const percent = salary > 0 ? Math.min(100, (paid / salary) * 100) : 0
-                    const isOverpaid = left < 0
-                    const isFullyPaid = left <= 0 && salary > 0
                     const roleStyle = ROLE_LABEL[s.role as StaffRole] || ROLE_LABEL.other
                     const RoleIcon = roleStyle.icon
-
                     return (
-                      <StaffRow 
-                        key={s.id} 
-                        staff={s} 
-                        paid={paid} 
-                        left={left} 
-                        percent={percent}
-                        history={staffPayments}
-                        isOverpaid={isOverpaid}
-                        isFullyPaid={isFullyPaid}
+                      <StaffRow
+                        key={s.id}
+                        staff={s}
                         roleStyle={roleStyle}
                         RoleIcon={RoleIcon}
-                        onPay={() => setPaymentModal({ isOpen: true, staffId: s.id })}
-                        onDeletePayment={handleDeletePayment}
                         onToggleStatus={() => toggleStaffStatus(s)}
                         onInviteAccount={() => handleInviteStaffAccount(s)}
                         onResetPassword={() => handleResetStaffPassword(s)}
@@ -965,36 +804,15 @@ export default function StaffPageSmart() {
           }} 
         />
 
-        {paymentModal.staffId && (
-          <AddPaymentDialog
-            isOpen={paymentModal.isOpen}
-            onClose={() => setPaymentModal({ isOpen: false, staffId: null })}
-            staff={staff.find(s => s.id === paymentModal.staffId)!}
-            paidSoFar={paymentsByStaff.get(paymentModal.staffId!)?.reduce((acc, p) => acc + p.amount, 0) || 0}
-            dateDefault={toISODateLocal(new Date())}
-            onSuccess={(newPay) => {
-              setPayments(prev => [...prev, newPay])
-              loadData(true)
-            }}
-          />
-        )}
     </>
   )
 }
 
 // --- Staff Row Component ---
-function StaffRow({ 
-  staff, 
-  paid, 
-  left, 
-  percent, 
-  history, 
-  isOverpaid, 
-  isFullyPaid, 
-  roleStyle, 
+function StaffRow({
+  staff,
+  roleStyle,
   RoleIcon,
-  onPay, 
-  onDeletePayment, 
   onToggleStatus,
   onInviteAccount,
   onResetPassword,
@@ -1003,7 +821,6 @@ function StaffRow({
   inviteBusy,
   resetBusy,
 }: any) {
-  const [showHistory, setShowHistory] = useState(false)
   const effectiveEmail = accountInfo?.email || staff.email || null
   const accountState = (accountInfo?.accountState || (!effectiveEmail ? 'no_email' : 'no_account')) as StaffAccountState
   const accountStateLabel = ACCOUNT_STATE_LABEL[accountState]
@@ -1066,68 +883,12 @@ function StaffRow({
           </div>
         </td>
         
-        <td className="py-4 px-4">
-          <div className="w-full max-w-[140px]">
-            <div className="flex justify-between text-xs mb-1">
-              <span className="text-gray-400">{Math.round(percent)}%</span>
-              {isOverpaid && (
-                <span className="text-red-400 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  Переплата
-                </span>
-              )}
-              {isFullyPaid && !isOverpaid && (
-                <span className="text-emerald-400 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Оплачено
-                </span>
-              )}
-            </div>
-            <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
-              <div 
-                className={cn(
-                  "h-full rounded-full transition-all",
-                  isOverpaid ? "bg-red-500" : isFullyPaid ? "bg-emerald-500" : "bg-blue-500"
-                )} 
-                style={{ width: `${Math.min(percent, 100)}%` }} 
-              />
-            </div>
-          </div>
-        </td>
-
         <td className="py-4 px-4 text-right font-medium text-white">
           {money(staff.monthly_salary || 0)}
-        </td>
-        
-        <td className="py-4 px-4 text-right font-medium text-emerald-400">
-          {paid > 0 ? money(paid) : <span className="text-gray-600">—</span>}
-        </td>
-        
-        <td className="py-4 px-4 text-right font-medium">
-          <span className={cn(
-            left > 0 ? "text-amber-400" : "text-gray-600"
-          )}>
-            {money(Math.max(0, left))}
-          </span>
         </td>
 
         <td className="py-4 px-4">
           <div className="flex items-center justify-center gap-2">
-            <Button 
-              size="sm" 
-              className={cn(
-                "h-8 px-3 text-xs gap-1.5",
-                isFullyPaid 
-                  ? "bg-gray-800 text-gray-400 hover:bg-gray-700" 
-                  : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white"
-              )}
-              onClick={onPay}
-              disabled={!staff.is_active}
-            >
-              <Wallet className="w-3.5 h-3.5" />
-              {isFullyPaid ? 'Выплачено' : 'Выплатить'}
-            </Button>
-
             {canInviteAccount && (
               <Button
                 size="sm"
@@ -1168,16 +929,6 @@ function StaffRow({
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 text-gray-500 hover:text-white hover:bg-white/5"
-              onClick={() => setShowHistory(!showHistory)}
-              title="История выплат"
-            >
-              {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </Button>
-            
-            <Button
-              size="icon"
-              variant="ghost"
               className={cn(
                 "h-8 w-8",
                 staff.is_active 
@@ -1193,60 +944,6 @@ function StaffRow({
         </td>
       </tr>
 
-      {/* History Expandable Row */}
-      {showHistory && (
-        <tr className="bg-gray-900/30">
-          <td colSpan={6} className="p-4 pl-16 border-t border-white/5">
-            {history.length === 0 ? (
-              <div className="text-sm text-gray-500 italic">
-                Выплат в этом месяце не было.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <h4 className="text-xs font-medium text-gray-400 mb-3">История выплат за месяц</h4>
-                {history.map((h: StaffPayment) => {
-                  const slotStyle = PAY_SLOT_LABEL[h.slot]
-                  const SlotIcon = slotStyle.icon
-                  
-                  return (
-                    <div 
-                      key={h.id} 
-                      className="flex items-center gap-4 text-sm bg-black/20 p-3 rounded-lg border border-white/5 max-w-2xl hover:bg-white/5 transition-colors"
-                    >
-                      <div className="flex items-center gap-2 w-32">
-                        <SlotIcon className="w-3.5 h-3.5 text-gray-500" />
-                        <span className="text-gray-400">{h.pay_date}</span>
-                      </div>
-                      <span className="text-emerald-400 font-medium w-24 text-right">
-                        {money(h.amount)}
-                      </span>
-                      <span className={cn(
-                        "text-xs px-2 py-1 rounded-full border",
-                        h.slot === 'first' ? "text-blue-400 bg-blue-500/10 border-blue-500/20" :
-                        h.slot === 'second' ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" :
-                        "text-gray-400 bg-gray-500/10 border-gray-500/20"
-                      )}>
-                        {slotStyle.label}
-                      </span>
-                      {h.comment && (
-                        <span className="text-gray-500 text-sm flex-1 truncate" title={h.comment}>
-                          {h.comment}
-                        </span>
-                      )}
-                      <button 
-                        onClick={() => onDeletePayment(h.id)} 
-                        className="text-gray-600 hover:text-red-400 transition-colors ml-auto"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </td>
-        </tr>
-      )}
     </>
   )
 }
