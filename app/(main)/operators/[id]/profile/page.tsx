@@ -1907,6 +1907,14 @@ export default function OperatorProfilePage() {
                 <div>
                   <p className="text-xs text-gray-500">Отдел</p>
                   <p className="text-sm font-medium">{profile?.department || 'Не указано'}</p>
+                  {companyAssignments.filter(a => a.is_active).length > 0 && (
+                    <p className="text-xs text-violet-400 mt-0.5">
+                      {companyAssignments.filter(a => a.is_active).map((a: any) => {
+                        const co = companies.find((c: any) => c.id === a.company_id)
+                        return co?.name || co?.code || a.company_id
+                      }).join(', ')}
+                    </p>
+                  )}
                 </div>
               </div>
             </Card>
