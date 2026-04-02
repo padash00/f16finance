@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { listOrganizationCompanyIds } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { buildDailyKaspiSeriesFromRows, sumDailyKaspiReports, type DailyKaspiReport } from '@/lib/server/services/daily-kaspi'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
@@ -121,7 +120,6 @@ export async function GET(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
     if (!canManageProfitability(access)) return json({ error: 'forbidden' }, 403)
-    const activeOrganizationId = access.activeOrganization?.id || null
 
     const url = new URL(req.url)
     const from = normalizeMonth(url.searchParams.get('from'))
@@ -130,11 +128,6 @@ export async function GET(req: Request) {
 
     const supabase = createAdminSupabaseClient()
     let query = supabase.from('monthly_profitability_inputs').select('*').order('month', { ascending: true })
-    if (access.isSuperAdmin || !activeOrganizationId) {
-      // no org filter — return all rows
-    } else {
-      query = query.eq('organization_id', activeOrganizationId)
-    }
 
     if (from) query = query.gte('month', from)
     if (to) query = query.lte('month', to)
@@ -150,26 +143,13 @@ export async function GET(req: Request) {
     const dateTo = monthEnd(to)
     const previousDate = prevDayISO(dateFrom)
 
-    const allowedCompanyIds = await listOrganizationCompanyIds({
-      activeOrganizationId,
-      isSuperAdmin: access.isSuperAdmin,
-    })
-
-    let devicesQuery = supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true)
-    let incomesQuery = supabase
-      .from('incomes')
-      .select('company_id,date,shift,kaspi_amount,kaspi_before_midnight')
-      .gte('date', previousDate)
-      .lte('date', dateTo)
-
-    if (allowedCompanyIds !== null) {
-      devicesQuery = devicesQuery.in('company_id', allowedCompanyIds)
-      incomesQuery = incomesQuery.in('company_id', allowedCompanyIds)
-    }
-
     const [{ data: deviceRows, error: devicesError }, { data: incomeRows, error: incomesError }] = await Promise.all([
-      devicesQuery,
-      incomesQuery,
+      supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true),
+      supabase
+        .from('incomes')
+        .select('company_id,date,shift,kaspi_amount,kaspi_before_midnight')
+        .gte('date', previousDate)
+        .lte('date', dateTo),
     ])
 
     if (devicesError) throw devicesError
@@ -250,10 +230,6 @@ export async function POST(req: Request) {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
     if (!canManageProfitability(access)) return json({ error: 'forbidden' }, 403)
-    const activeOrganizationId = access.activeOrganization?.id || null
-    if (!activeOrganizationId) {
-      return json({ error: 'active-organization-required' }, 400)
-    }
 
     const body = (await req.json().catch(() => null)) as MutationBody | null
     const month = normalizeMonth(body?.month)
@@ -267,13 +243,12 @@ export async function POST(req: Request) {
       .upsert(
         [
           {
-            organization_id: activeOrganizationId,
             month,
             ...payload,
             updated_at: new Date().toISOString(),
           },
         ],
-        { onConflict: 'organization_id,month' },
+        { onConflict: 'month' },
       )
       .select('*')
       .single()
