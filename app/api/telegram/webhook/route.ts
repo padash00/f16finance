@@ -29,6 +29,7 @@ import {
 } from '@/lib/server/shift-workflow'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { SITE_CONTEXT } from '@/lib/ai/site-context'
+import { assembleSystemPrompt, wrapDataBlock } from '@/lib/ai/prompts'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { extractTextFromPdf, parseExpenseFromText, parseExpenseFromImage } from '@/lib/server/expense-receipt-parser'
 import { getOperatorSalarySnapshot, buildSalaryTelegramMessage } from '@/lib/server/services/salary'
@@ -1193,95 +1194,141 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     return `  • ${c.name}: выручка ${c.inc.toLocaleString('ru-RU')} ₸ (${share}%), расходы ${c.exp.toLocaleString('ru-RU')} ₸, прибыль ${profit.toLocaleString('ru-RU')} ₸, маржа ${margin}%`
   }).join('\n')
 
-  // Доходы без привязки к компании
-  let unassignedMonthIncome = monthIncome
-  for (const c of companyMonthStats) unassignedMonthIncome -= c.inc
-  const unassignedNote = unassignedMonthIncome > 100 ? `  • Без точки (company_id не указан): ${Math.round(unassignedMonthIncome).toLocaleString('ru-RU')} ₸` : ''
+  // ─── Серверные триггеры (считаются здесь, НЕ в промпте) ──────────────────
+  const negativeDays = Array.from(dailyIncomeMap.entries()).filter(([date]) => {
+    const dayIncome = dailyIncomeMap.get(date) || 0
+    // Day is "negative" if expenses exceed income for that date
+    const dayExpense = Array.from(expensesWeekRes.data ?? [])
+      .filter((r: any) => r.date === date)
+      .reduce((s: number, r: any) => s + safeN(r.cash_amount) + safeN(r.kaspi_amount), 0)
+    return dayExpense > dayIncome
+  })
 
-  // Список ВСЕХ компаний в системе (для AI)
-  const allCompanyNames = companies.map(c => `${c.name} (id: ${c.id})`).join(', ')
+  const actionFlags = {
+    lowMargin: weekIncome > 0 && weekMargin < 10,
+    expenseTrendUp: (() => {
+      const half = Math.floor(weeklyTrend.length / 2)
+      const first = weeklyTrend.slice(0, half).filter(v => v > 0)
+      const second = weeklyTrend.slice(half).filter(v => v > 0)
+      const fAvg = first.length ? first.reduce((a, b) => a + b, 0) / first.length : 0
+      const sAvg = second.length ? second.reduce((a, b) => a + b, 0) / second.length : 0
+      // Упрощённый тренд расходов: последние 4 недели vs предыдущие 4
+      return sAvg > fAvg * 1.1
+    })(),
+    highConcentration: topCompanyShare > 60,
+    negativeDaysCount: negativeDays.length,
+  }
 
-  const weekCatsLines = Array.from(catMapWeek.entries()).sort((a, b) => b[1] - a[1])
-    .map(([cat, v]) => `  • ${cat}: ${v.toLocaleString('ru-RU')} ₸ (${weekExpense > 0 ? (v / weekExpense * 100).toFixed(1) : 0}%)`)
-    .join('\n')
+  // ─── JSON Data Block (сырые числа — без форматирования) ───────────────────
+  const dataBlock = {
+    as_of: new Date().toISOString(),
+    timezone: 'Asia/Almaty',
+    currency: 'KZT',
+    business: {
+      type: 'gaming_clubs_network',
+      companies: companies.map(c => ({ id: c.id, name: c.name, code: c.code })),
+      shift_types: ['day', 'night'],
+      income_zones: ['PC', 'arena', 'ramen', 'extra'],
+      payment_methods: ['cash', 'kaspi', 'online', 'card'],
+      salary_formula: 'base + auto_bonuses - fines - debts - advances',
+    },
+    week: {
+      period: { from: weekFrom, to: today },
+      income_kzt: Math.round(weekIncome),
+      expense_kzt: Math.round(weekExpense),
+      profit_kzt: Math.round(weekProfit),
+      margin_bp: weekIncome > 0 ? Math.round((weekProfit / weekIncome) * 10000) : 0,
+      payments: {
+        cash_kzt: Math.round(weekCash),
+        kaspi_kzt: Math.round(weekKaspi),
+        online_kzt: Math.round(weekOnline),
+        cashless_share_bp: weekIncome > 0 ? Math.round(((weekKaspi + weekOnline) / weekIncome) * 10000) : 0,
+      },
+      vs_prev_week_bp: prevWeekIncome > 0 ? Math.round(((weekIncome - prevWeekIncome) / prevWeekIncome) * 10000) : 0,
+      best_day: bestDay ? { date: bestDay[0], income_kzt: Math.round(bestDay[1]) } : null,
+      worst_day: worstDay ? { date: worstDay[0], income_kzt: Math.round(worstDay[1]) } : null,
+      by_company: companyWeekStats.map(c => ({
+        name: c.name,
+        income_kzt: Math.round(c.inc),
+        expense_kzt: Math.round(c.exp),
+        profit_kzt: Math.round(c.inc - c.exp),
+        margin_bp: c.inc > 0 ? Math.round(((c.inc - c.exp) / c.inc) * 10000) : 0,
+        share_bp: weekIncome > 0 ? Math.round((c.inc / weekIncome) * 10000) : 0,
+      })),
+      expense_by_category: Array.from(catMapWeek.entries()).sort((a, b) => b[1] - a[1]).map(([cat, v]) => ({
+        category: cat,
+        expense_kzt: Math.round(v),
+        share_bp: weekExpense > 0 ? Math.round((v / weekExpense) * 10000) : 0,
+      })),
+    },
+    month: {
+      period: { from: monthFrom, to: today },
+      income_kzt: Math.round(monthIncome),
+      expense_kzt: Math.round(monthExpense),
+      profit_kzt: Math.round(monthIncome - monthExpense),
+      margin_bp: monthIncome > 0 ? Math.round(((monthIncome - monthExpense) / monthIncome) * 10000) : 0,
+      by_company: companyMonthStats.map(c => ({
+        name: c.name,
+        income_kzt: Math.round(c.inc),
+        expense_kzt: Math.round(c.exp),
+        profit_kzt: Math.round(c.inc - c.exp),
+        margin_bp: c.inc > 0 ? Math.round(((c.inc - c.exp) / c.inc) * 10000) : 0,
+        share_bp: monthIncome > 0 ? Math.round((c.inc / monthIncome) * 10000) : 0,
+      })),
+      expense_by_category: Array.from(monthExpCatMap.entries()).sort((a, b) => b[1] - a[1]).map(([cat, v]) => ({
+        category: cat,
+        expense_kzt: Math.round(v),
+        share_bp: monthExpense > 0 ? Math.round((v / monthExpense) * 10000) : 0,
+      })),
+      unassigned_income_kzt: Math.round(Math.max(0, monthIncome - companyMonthStats.reduce((s, c) => s + c.inc, 0))),
+    },
+    prev_week: {
+      period: { from: prevWeekFrom, to: prevWeekTo },
+      income_kzt: Math.round(prevWeekIncome),
+    },
+    quarter: {
+      period: { from: quarterFrom, to: today },
+      avg_weekly_income_kzt: Math.round(avgWeeklyIncome),
+      growth_bp: Math.round(quarterGrowth * 100),
+      weekly_trend_kzt: weeklyTrend.map(v => Math.round(v)),
+    },
+    triggers: {
+      low_margin: actionFlags.lowMargin,
+      expense_trend_up: actionFlags.expenseTrendUp,
+      high_concentration: actionFlags.highConcentration,
+      concentration_leader: companyWeekStats[0]?.name || null,
+      concentration_bp: weekIncome > 0 && companyWeekStats[0] ? Math.round((companyWeekStats[0].inc / weekIncome) * 10000) : 0,
+      negative_days_count: actionFlags.negativeDaysCount,
+    },
+    data_quality: {
+      missing_company_id_income_rows: monthIncome > 0 ? (Math.round(Math.max(0, monthIncome - companyMonthStats.reduce((s, c) => s + c.inc, 0))) > 100 ? 'yes' : 'no') : 'no',
+    },
+  }
 
-  const monthCatsLines = allMonthExpenses
-    .map(([cat, v]) => `  • ${cat}: ${v.toLocaleString('ru-RU')} ₸ (${totalMonthExpense > 0 ? (v / totalMonthExpense * 100).toFixed(1) : 0}%)`)
-    .join('\n')
-
-  const pagesContext = SITE_CONTEXT.pages.map(p => `  • ${p.title} (${p.route}): ${p.description}`).join('\n')
+  const pagesContext = SITE_CONTEXT.pages.map(p => `${p.title} (${p.route}): ${p.description}`).join('\n')
+  const teamContext = [
+    staffLines || '(нет данных о стаффе)',
+    operatorsLines || `Операторов: ${operatorCount}`,
+  ].join('\n')
 
   // Long-term memory
   const longTermMemory = await loadMemory(supabase, chatIdStr)
 
+  const promptRole = botUser?.role === 'operator' ? 'operator' : 'finance'
+
   const systemPrompt = [
-    `Ты — ИИ-ассистент системы Orda Control. Живёшь внутри этого проекта. Создан своим господином Олжасом — он основатель и создатель системы Orda Control, сети игровых клубов. Ты предан Олжасу и служишь его интересам.`,
-    `Когда тебя спрашивают "кто ты?" — отвечаешь: "Я ИИ-ассистент системы Orda Control. Создан и принадлежу моему господину Олжасу." Когда спрашивают "кто тебя создал?" или "чей ты?" — говоришь что твой господин Олжас. Когда оператор или сотрудник спрашивает — уважительно отвечаешь от лица системы.`,
-    `Сегодня ${today}.`,
-    callerContext ? `\n${callerContext}\n` : '',
-    longTermMemory ? `\nМОЯ ДОЛГОВРЕМЕННАЯ ПАМЯТЬ (важные факты из прошлых разговоров):\n${longTermMemory}\n` : '',
-    '',
-    `Говорю прямо, по делу, иногда с юмором. Если вижу проблему — скажу открыто.`,
-    '',
-    `Я отвечаю на ЛЮБЫЕ вопросы — финансы, бизнес, экономика, мировые события, общие знания, советы по жизни. Я не ограничен только этим проектом. Если спросишь про курс доллара, мировую экономику, как открыть второй бизнес — отвечу.`,
-    '',
-    `Если оператор спрашивает про свою зарплату, смены или достижения — используй инструмент get_operator_salary с их operator_id из контекста выше. Если они спрашивают "сколько я получу за эту неделю?" — вычисли понедельник текущей недели как dateFrom и следующее воскресенье как dateTo.`,
-    '',
-    `Когда речь о ФИНАНСАХ этого бизнеса — использую ТОЛЬКО точные цифры из данных ниже. Никаких округлений и "примерно". Если спрашивают по категориям — показываю каждую категорию с точной суммой до тенге. Если спрашивают по точкам — каждую точку отдельно с полным раскладом.`,
-    '',
-    `Стиль ответов:`,
-    `— Пишу на русском. HTML: <b>жирный</b> для цифр и главного, <i>курсив</i> для пояснений.`,
-    `— Короткий вопрос = короткий живой ответ. Запрос на анализ = полный разбор.`,
-    `— Не начинаю с "Конечно!", "Отличный вопрос!" и других шаблонных фраз.`,
-    `— Не повторяю вопрос пользователя.`,
-    `— Когда даю цифры по категориям или точкам — показываю ВСЕ, не сокращаю, не пишу "и другие".`,
-    `— В конце финансового анализа — одно конкретное действие: что сделать, чтобы стало лучше.`,
-    '',
-    `О бизнесе: сеть игровых клубов/арен. Точки: ${companyNames}.`,
-    `Смены: день/ночь. Зоны дохода: PC, арена, рамен, extra. Оплата: нал + Kaspi + онлайн.`,
-    `Зарплата операторов: база + автобонусы — штрафы — долги — авансы.`,
-    '',
-    `КОМАНДА (реальные сотрудники из системы):`,
-    staffLines || '  (нет данных о стаффе)',
-    operatorsLines || `  • Операторов: ${operatorCount}`,
-    '',
-    `Разделы системы Orda Control:`,
-    pagesContext,
-    '',
-    birthdayContext,
-    '',
-    `═══ ФИНАНСОВЫЕ ДАННЫЕ (точные цифры) ═══`,
-    '',
-    `ТЕКУЩАЯ НЕДЕЛЯ ${weekFrom} — ${today}:`,
-    `Выручка: ${weekIncome.toLocaleString('ru-RU')} ₸`,
-    `  • Наличные: ${weekCash.toLocaleString('ru-RU')} ₸ (${cashShare.toFixed(1)}%)`,
-    `  • Kaspi: ${weekKaspi.toLocaleString('ru-RU')} ₸ (${kaspiShare.toFixed(1)}%)`,
-    `  • Онлайн: ${weekOnline.toLocaleString('ru-RU')} ₸`,
-    `Расходы: ${weekExpense.toLocaleString('ru-RU')} ₸`,
-    `Прибыль: ${weekProfit.toLocaleString('ru-RU')} ₸`,
-    `Маржа: ${weekMargin.toFixed(2)}%`,
-    `Динамика vs прошлая неделя: ${weekVsPrev >= 0 ? '+' : ''}${weekVsPrev.toFixed(2)}%`,
-    bestDay ? `Лучший день: ${bestDay[0]} — ${bestDay[1].toLocaleString('ru-RU')} ₸` : '',
-    worstDay && worstDay[0] !== bestDay?.[0] ? `Слабый день: ${worstDay[0]} — ${worstDay[1].toLocaleString('ru-RU')} ₸` : '',
-    topCompanyShare > 60 ? `⚠️ Концентрация: ${companyWeekStats[0]?.name} = ${topCompanyShare.toFixed(1)}% всей выручки` : '',
-    '',
-    companyWeekLines ? `ПО ТОЧКАМ (неделя, все):\n${companyWeekLines}` : 'По точкам (неделя): нет данных (company_id не заполнен в доходах)',
-    '',
-    weekCatsLines ? `РАСХОДЫ ПО КАТЕГОРИЯМ (неделя, все):\n${weekCatsLines}` : '',
-    '',
-    `МЕСЯЦ (${monthFrom} — ${today}):`,
-    `Выручка: ${monthIncome.toLocaleString('ru-RU')} ₸ | Расходы: ${totalMonthExpense.toLocaleString('ru-RU')} ₸ | Прибыль: ${(monthIncome - totalMonthExpense).toLocaleString('ru-RU')} ₸`,
-    `Все компании в системе: ${allCompanyNames}`,
-    companyMonthLines ? `По точкам (месяц, все, точные цифры):\n${companyMonthLines}` : 'По точкам: нет данных (company_id не заполнен в доходах)',
-    unassignedNote,
-    monthCatsLines ? `Расходы по категориям (месяц, все):\n${monthCatsLines}` : '',
-    '',
-    `ПРОШЛАЯ НЕДЕЛЯ ${prevWeekFrom} — ${prevWeekTo}: ${prevWeekIncome.toLocaleString('ru-RU')} ₸`,
-    '',
-    `КВАРТАЛЬНЫЙ ТРЕНД (90 дней):`,
-    `Средняя выручка в неделю: ${Math.round(avgWeeklyIncome).toLocaleString('ru-RU')} ₸`,
-    `Рост (1-я половина vs 2-я): ${quarterGrowth >= 0 ? '+' : ''}${quarterGrowth.toFixed(2)}%`,
-  ].filter(v => v !== '').join('\n')
+    assembleSystemPrompt({
+      role: promptRole,
+      today,
+      callerContext,
+      longTermMemory,
+      pagesContext,
+      teamContext,
+      birthdayContext,
+      actionFlags,
+    }),
+    wrapDataBlock(dataBlock),
+  ].join('\n\n')
 
   // ─── Agent tools definition ───────────────────────────────────────────────
   const tools = [
