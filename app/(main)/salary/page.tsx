@@ -418,7 +418,7 @@ export default function SalaryPage() {
               <div>
                 <label className="mb-2 block text-sm text-slate-300">Точка</label>
                 <select className={selectCls} value={advanceCompanyId} onChange={(e) => setAdvanceCompanyId(e.target.value)}>
-                  {(advanceTarget.week.companyAllocations.length ? advanceTarget.week.companyAllocations.map((a) => ({ id: a.companyId, label: a.companyName || a.companyCode || a.companyId })) : (data?.companies || []).map((c) => ({ id: c.id, label: c.name || c.code || c.id }))).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  {(data?.companies || []).map((c) => <option key={c.id} value={c.id}>{c.name || c.code || c.id}</option>)}
                 </select>
               </div>
               <div>

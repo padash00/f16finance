@@ -387,7 +387,7 @@ export default function OperatorsPage() {
         (profiles.get(op.id)?.position?.toLowerCase() || '').includes(search.toLowerCase()) ||
         (profiles.get(op.id)?.email?.toLowerCase() || '').includes(search.toLowerCase())
 
-      const matchesActive = op.is_active
+      const matchesActive = showInactive || op.is_active
 
       return matchesSearch && matchesActive
     })

@@ -77,7 +77,7 @@ export async function GET(req: Request) {
     const search = url.searchParams.get('search')
     const sort = (url.searchParams.get('sort') || 'date_desc') as 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'
     const page = Math.max(0, parseInt(url.searchParams.get('page') || '0', 10))
-    const pageSize = Math.min(500, Math.max(1, parseInt(url.searchParams.get('page_size') || '200', 10)))
+    const pageSize = Math.min(2000, Math.max(1, parseInt(url.searchParams.get('page_size') || '200', 10)))
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()

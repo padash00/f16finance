@@ -1685,6 +1685,10 @@ async function handleDetailedReport(chatId: number) {
 
 export const runtime = 'nodejs'
 
+export async function GET() {
+  return json({ ok: true })
+}
+
 export async function POST(req: Request) {
   try {
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET

@@ -89,12 +89,16 @@ export async function PATCH(req: Request) {
       ? createAdminSupabaseClient()
       : createRequestSupabaseClient(req)
 
-    const profilePayload = body?.profile && typeof body.profile === 'object'
+    const profilePayload: Record<string, unknown> = body?.profile && typeof body.profile === 'object'
       ? { ...(body.profile as Record<string, unknown>) }
       : {}
-    delete (profilePayload as any).id
-    delete (profilePayload as any).operator_id
-    delete (profilePayload as any).created_at
+    // also accept top-level photo_url (sent by AvatarUpload)
+    if ('photo_url' in (body ?? {})) {
+      profilePayload.photo_url = body.photo_url ?? null
+    }
+    delete profilePayload.id
+    delete profilePayload.operator_id
+    delete profilePayload.created_at
 
     const telegramChatId =
       typeof body?.telegram_chat_id === 'string' && body.telegram_chat_id.trim()

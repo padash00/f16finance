@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
@@ -56,15 +57,17 @@ export async function POST(request: Request) {
     const dateTo = todayISO()
     const dateFrom = addDaysISO(dateTo, -89) // 90 days of history
 
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+
     const [incomesRes, expensesRes] = await Promise.all([
-      access.supabase
+      supabase
         .from('incomes')
         .select('date, cash_amount, kaspi_amount, online_amount, card_amount')
         .gte('date', dateFrom)
         .lte('date', dateTo)
         .order('date', { ascending: true })
         .range(0, 4999),
-      access.supabase
+      supabase
         .from('expenses')
         .select('date, cash_amount, kaspi_amount')
         .gte('date', dateFrom)
