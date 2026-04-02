@@ -54,12 +54,25 @@ function VarianceTable({ goals }: { goals: Goal[] }) {
       const d = new Date(`${g.period}-01T12:00:00`)
       d.setMonth(d.getMonth()+1, 0)
       const end = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-      const [incRes, expRes] = await Promise.all([
-        fetch(`/api/admin/incomes?from=${start}&to=${end}&page_size=5000`).then(r=>r.json()),
-        fetch(`/api/admin/expenses?from=${start}&to=${end}&page_size=5000`).then(r=>r.json()),
+      // Paginate to get all records regardless of volume
+      const fetchAll = async (base: string) => {
+        let rows: any[] = [], page = 0
+        const PAGE = 500
+        while (true) {
+          const r = await fetch(`${base}&page_size=${PAGE}&page=${page}`).then(r => r.json())
+          const chunk: any[] = r.data ?? []
+          rows = rows.concat(chunk)
+          if (chunk.length < PAGE) break
+          page++
+        }
+        return rows
+      }
+      const [incRows, expRows] = await Promise.all([
+        fetchAll(`/api/admin/incomes?from=${start}&to=${end}`),
+        fetchAll(`/api/admin/expenses?from=${start}&to=${end}`),
       ])
-      const income = (incRes.data ?? []).reduce((s:number,r:any) => s+(r.cash_amount||0)+(r.kaspi_amount||0)+(r.online_amount||0)+(r.card_amount||0), 0)
-      const expense = (expRes.data ?? []).reduce((s:number,r:any) => s+(r.cash_amount||0)+(r.kaspi_amount||0), 0)
+      const income = incRows.reduce((s:number,r:any) => s+(r.cash_amount||0)+(r.kaspi_amount||0)+(r.online_amount||0)+(r.card_amount||0), 0)
+      const expense = expRows.reduce((s:number,r:any) => s+(r.cash_amount||0)+(r.kaspi_amount||0), 0)
       return [g.period, {income, expense}] as const
     })).then(results => {
       setActuals(Object.fromEntries(results))

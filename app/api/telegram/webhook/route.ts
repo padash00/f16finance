@@ -923,6 +923,30 @@ async function handleInvoiceCancel(
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 const MAX_HISTORY = 12
 
+// ─── Snapshot cache (in-memory, TTL 3 min) ───────────────────────────────────
+type SnapshotCache = { data: any; expires: number }
+const snapshotCache = new Map<string, SnapshotCache>()
+const SNAPSHOT_TTL = 3 * 60 * 1000
+
+function getCachedSnapshot(key: string) {
+  const entry = snapshotCache.get(key)
+  if (entry && entry.expires > Date.now()) return entry.data
+  return null
+}
+function setCachedSnapshot(key: string, data: any) {
+  snapshotCache.set(key, { data, expires: Date.now() + SNAPSHOT_TTL })
+}
+
+// ─── AI response validation ───────────────────────────────────────────────────
+// Checks for wrong currency symbols ($/€/₽) in final reply and warns the user
+function validateAIReply(reply: string): string {
+  const wrongCurrency = /\$\s?\d|\d\s?\$|€\s?\d|\d\s?€|₽\s?\d|\d\s?₽/
+  if (wrongCurrency.test(reply)) {
+    return reply + '\n\n<i>⚠️ Замечена нестандартная валюта в ответе — все суммы должны быть в ₸.</i>'
+  }
+  return reply
+}
+
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
 async function loadChatHistory(supabase: ReturnType<typeof createAdminSupabaseClient>, chatId: string): Promise<ChatMessage[]> {
@@ -1030,19 +1054,25 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
   const monthFrom = addDaysISO(today, -29)
   const quarterFrom = addDaysISO(today, -89)
 
-  // Загружаем максимум данных для глубокого анализа
-  const [incomesWeekRes, expensesWeekRes, incomesPrevWeekRes, incomesMonthRes, incomesQuarterRes, expensesMonthRes, companiesRes, operatorsRes, staffRes, operatorProfilesRes] = await Promise.all([
-    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, zone').gte('date', weekFrom).lte('date', today),
-    supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today),
-    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', prevWeekFrom).lte('date', prevWeekTo),
-    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', monthFrom).lte('date', today),
-    supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', quarterFrom).lte('date', today),
-    supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', monthFrom).lte('date', today),
-    supabase.from('companies').select('id, name, code'),
-    supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true).limit(200),
-    supabase.from('staff').select('id, full_name, role').eq('is_active', true),
-    supabase.from('operator_profiles').select('operator_id, full_name, birth_date').not('birth_date', 'is', null),
-  ])
+  // Загружаем максимум данных для глубокого анализа (с кэшем 3 мин)
+  const cacheKey = `ai_snapshot_${today}`
+  const cached = getCachedSnapshot(cacheKey)
+  const [incomesWeekRes, expensesWeekRes, incomesPrevWeekRes, incomesMonthRes, incomesQuarterRes, expensesMonthRes, companiesRes, operatorsRes, staffRes, operatorProfilesRes] = cached ?? await (async () => {
+    const results = await Promise.all([
+      supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id, zone').gte('date', weekFrom).lte('date', today),
+      supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', weekFrom).lte('date', today),
+      supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', prevWeekFrom).lte('date', prevWeekTo),
+      supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date, company_id').gte('date', monthFrom).lte('date', today),
+      supabase.from('incomes').select('cash_amount, kaspi_amount, online_amount, card_amount, date').gte('date', quarterFrom).lte('date', today),
+      supabase.from('expenses').select('cash_amount, kaspi_amount, category, date, company_id').gte('date', monthFrom).lte('date', today),
+      supabase.from('companies').select('id, name, code'),
+      supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true).limit(200),
+      supabase.from('staff').select('id, full_name, role').eq('is_active', true),
+      supabase.from('operator_profiles').select('operator_id, full_name, birth_date').not('birth_date', 'is', null),
+    ])
+    setCachedSnapshot(cacheKey, results)
+    return results
+  })()
 
   const safeN = (v: any) => Number(v || 0)
   const rowTotal = (r: any) => safeN(r.cash_amount) + safeN(r.kaspi_amount) + safeN(r.online_amount) + safeN(r.card_amount)
@@ -1733,10 +1763,11 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       }
 
       // Final text response
-      const reply = msg.content?.trim() || ''
-      if (!reply) { await editOrSend('❌ Не удалось получить ответ.'); return }
+      const rawReply = msg.content?.trim() || ''
+      if (!rawReply) { await editOrSend('❌ Не удалось получить ответ.'); return }
+      const reply = validateAIReply(rawReply)
 
-      history.push({ role: 'assistant', content: reply })
+      history.push({ role: 'assistant', content: rawReply })
       await Promise.all([
         editOrSend(reply),
         saveChatHistory(supabase, chatIdStr, history),

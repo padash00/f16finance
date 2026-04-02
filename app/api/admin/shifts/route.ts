@@ -126,7 +126,7 @@ async function findOperatorForShiftName(
 
   let query = supabase
     .from('operators')
-    .select('id, name, short_name, telegram_chat_id, operator_profiles(*)')
+    .select('id, name, short_name, telegram_chat_id, operator_profiles(full_name)')
     .eq('is_active', true)
 
   if (companyId) {
@@ -296,7 +296,7 @@ async function getOperatorById(
 ) {
   const { data, error } = await supabase
     .from('operators')
-    .select('id, name, short_name, telegram_chat_id, operator_profiles(*)')
+    .select('id, name, short_name, telegram_chat_id, operator_profiles(full_name)')
     .eq('id', operatorId)
     .maybeSingle()
 
@@ -969,12 +969,14 @@ export async function GET(req: Request) {
 
     const requestClient = createRequestSupabaseClient(req)
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : requestClient
-    const workflow = await loadShiftWeekWorkflow(supabase, weekStart)
     const weekEnd = shiftIsoDate(weekStart, 6)
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
     })
+
+    // Load workflow data (publications, responses, requests)
+    const workflow = await loadShiftWeekWorkflow(supabase, weekStart)
 
     if (companyScope.allowedCompanyIds !== null) {
       if (companyScope.allowedCompanyIds.length === 0) {
@@ -1001,7 +1003,7 @@ export async function GET(req: Request) {
       .lte('date', weekEnd)
     let operatorsQuery = supabase
       .from('operators')
-      .select('id, name, short_name, is_active, operator_profiles(*)')
+      .select('id, name, short_name, is_active, operator_profiles(full_name, photo_url)')
       .eq('is_active', true)
       .order('name')
 
