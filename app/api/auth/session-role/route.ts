@@ -7,6 +7,7 @@ import {
   getRequestAccessContext,
   listActiveOperatorLeadAssignments,
 } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function getRoleLabel(params: {
   isSuperAdmin: boolean
@@ -32,6 +33,8 @@ export async function GET(req: Request) {
     if ('response' in access) return access.response
 
     const supabase = createRequestSupabaseClient(req)
+    const adminSupabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : supabase
+
     const user = access.user!
     const isSuperAdmin = access.isSuperAdmin
     const staffMember = access.staffMember
@@ -62,7 +65,7 @@ export async function GET(req: Request) {
     let rolePermissionOverrides: Array<{ path: string; enabled: boolean }> = []
 
     if (!isSuperAdmin && (staffRole === 'manager' || staffRole === 'marketer' || staffRole === 'owner')) {
-      const { data: rolePermissions, error: rolePermissionsError } = await supabase
+      const { data: rolePermissions, error: rolePermissionsError } = await adminSupabase
         .from('role_permissions')
         .select('path, enabled')
         .eq('role', staffRole)
