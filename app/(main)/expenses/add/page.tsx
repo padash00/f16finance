@@ -122,44 +122,94 @@ export default function AddExpensePage() {
 
   // load catalogs
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      setError(null)
+  const load = async () => {
+    setLoading(true)
+    setError(null)
 
-      const [catRes, compRes, opRes] = await Promise.all([
+    try {
+      const [catRes, compRes, opRes] = await Promise.allSettled([
         fetch('/api/admin/expense-categories', { cache: 'no-store' }),
         fetch('/api/admin/companies', { cache: 'no-store' }),
         fetch('/api/admin/operators?active_only=true', { cache: 'no-store' }),
       ])
 
-      if (!catRes.ok || !compRes.ok || !opRes.ok) {
-        setError('Ошибка загрузки справочников')
-        setLoading(false)
-        return
+      let cats: ExpenseCategory[] = []
+      let comps: Company[] = []
+      let ops: Operator[] = []
+
+      let hasFatalError = false
+      const warnings: string[] = []
+
+      // categories
+      if (catRes.status === 'fulfilled') {
+        if (catRes.value.ok) {
+          const catsBody = await catRes.value.json().catch(() => ({ data: [] }))
+          cats = (catsBody.data || []) as ExpenseCategory[]
+          setCategories(cats)
+        } else {
+          hasFatalError = true
+          warnings.push('не загрузились категории')
+        }
+      } else {
+        hasFatalError = true
+        warnings.push('не загрузились категории')
       }
 
-      const [catsBody, compsBody, opsBody] = await Promise.all([catRes.json(), compRes.json(), opRes.json()])
-      const cats = (catsBody.data || []) as ExpenseCategory[]
-      const comps = (compsBody.data || []) as Company[]
-      const ops = (opsBody.data || []) as Operator[]
+      // companies
+      if (compRes.status === 'fulfilled') {
+        if (compRes.value.ok) {
+          const compsBody = await compRes.value.json().catch(() => ({ data: [] }))
+          comps = (compsBody.data || []) as Company[]
+          setCompanies(comps)
+        } else {
+          hasFatalError = true
+          warnings.push('не загрузились точки')
+        }
+      } else {
+        hasFatalError = true
+        warnings.push('не загрузились точки')
+      }
 
-      setCategories(cats)
-      setCompanies(comps)
-      setOperators(ops)
+      // operators
+      if (opRes.status === 'fulfilled') {
+        if (opRes.value.ok) {
+          const opsBody = await opRes.value.json().catch(() => ({ data: [] }))
+          ops = (opsBody.data || []) as Operator[]
+          setOperators(ops)
+        } else {
+          warnings.push('не загрузились операторы')
+        }
+      } else {
+        warnings.push('не загрузились операторы')
+      }
 
-      // авто-выбор
       if (!companyId) {
         const preferred = comps.find((c) => c.code === 'arena') || comps[0]
         if (preferred) setCompanyId(preferred.id)
       }
-      if (!operatorId && ops.length === 1) setOperatorId(ops[0].id)
-      if (!categoryName && cats.length === 1) setCategoryName(cats[0].name)
 
+      if (!operatorId && ops.length === 1) {
+        setOperatorId(ops[0].id)
+      }
+
+      if (!categoryName && cats.length === 1) {
+        setCategoryName(cats[0].name)
+      }
+
+      if (hasFatalError) {
+        setError('Ошибка загрузки справочников: ' + warnings.join(', '))
+      } else if (warnings.length > 0) {
+        setError('Частично не загрузились данные: ' + warnings.join(', '))
+      }
+    } catch {
+      setError('Ошибка загрузки справочников')
+    } finally {
       setLoading(false)
     }
+  }
 
-    load()
-  }, [])
+  load()
+}, [])
 
   // Budget tracking effect
   useEffect(() => {
