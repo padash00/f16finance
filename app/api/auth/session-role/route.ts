@@ -9,6 +9,11 @@ import {
 } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
+type RolePermissionOverride = {
+  path: string
+  enabled: boolean
+}
+
 function getRoleLabel(params: {
   isSuperAdmin: boolean
   staffRole: ReturnType<typeof normalizeStaffRole>
@@ -33,7 +38,9 @@ export async function GET(req: Request) {
     if ('response' in access) return access.response
 
     const supabase = createRequestSupabaseClient(req)
-    const adminSupabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : supabase
+    const adminSupabase = hasAdminSupabaseCredentials()
+      ? createAdminSupabaseClient()
+      : supabase
 
     const user = access.user!
     const isSuperAdmin = access.isSuperAdmin
@@ -45,7 +52,7 @@ export async function GET(req: Request) {
     const leadAssignments = operatorAuth
       ? await listActiveOperatorLeadAssignments(
           supabase,
-          String((operatorAuth as any).operator_id || ''),
+          String((operatorAuth as any)?.operator_id || ''),
         ).catch(() => [])
       : []
 
@@ -62,19 +69,21 @@ export async function GET(req: Request) {
       user.email ||
       null
 
-    let rolePermissionOverrides: Array<{ path: string; enabled: boolean }> = []
+    let rolePermissionOverrides: RolePermissionOverride[] = []
 
     if (!isSuperAdmin && (staffRole === 'manager' || staffRole === 'marketer' || staffRole === 'owner')) {
-      const { data: rolePermissions, error: rolePermissionsError } = await adminSupabase
+      const { data, error } = await adminSupabase
         .from('role_permissions')
         .select('path, enabled')
         .eq('role', staffRole)
 
-      if (!rolePermissionsError) {
-        rolePermissionOverrides = (rolePermissions || []).map((item: any) => ({
-          path: String(item.path || ''),
-          enabled: item.enabled !== false,
-        }))
+      if (!error) {
+        rolePermissionOverrides = (data || [])
+          .filter((item: any) => item?.path)
+          .map((item: any) => ({
+            path: String(item.path),
+            enabled: item.enabled !== false,
+          }))
       }
     }
 
@@ -125,6 +134,9 @@ export async function GET(req: Request) {
       area: 'api/auth/session-role',
       message: error?.message || 'Session role route error',
     })
-    return NextResponse.json({ error: error?.message || 'Ошибка сервера' }, { status: 500 })
+    return NextResponse.json(
+      { error: error?.message || 'Ошибка сервера' },
+      { status: 500 },
+    )
   }
 }
