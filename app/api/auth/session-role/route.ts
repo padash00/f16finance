@@ -1,130 +1,201 @@
-import { NextResponse } from 'next/server'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
-import { getDefaultAppPath, normalizeStaffRole } from '@/lib/core/access'
-import { writeSystemErrorLogSafe } from '@/lib/server/audit'
-import {
-  createRequestSupabaseClient,
-  getRequestAccessContext,
-  listActiveOperatorLeadAssignments,
-} from '@/lib/server/request-auth'
+import { canAccessPath, getDefaultAppPath, normalizeStaffRole, isPublicPath } from '@/lib/core/access'
+import { SITE_URL } from '@/lib/core/site'
+import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
-function getRoleLabel(params: {
-  isSuperAdmin: boolean
-  staffRole: ReturnType<typeof normalizeStaffRole>
-  isOperator: boolean
-  leadAssignmentsCount: number
-  leadRoleLabel: string | null
-}) {
-  const { isSuperAdmin, staffRole, isOperator, leadAssignmentsCount, leadRoleLabel } = params
+const AUTH_SELF_SERVICE_PATHS = [
+  '/forgot-password',
+  '/reset-password',
+  '/set-password',
+  '/auth/callback',
+  '/auth/complete',
+] as const
 
-  if (isSuperAdmin) return 'Супер-администратор'
-  if (staffRole === 'manager') return 'Руководитель'
-  if (staffRole === 'marketer') return 'Маркетолог'
-  if (staffRole === 'owner') return 'Владелец'
-  if (leadAssignmentsCount > 0 && leadRoleLabel) return leadRoleLabel
-  if (isOperator) return 'Оператор'
-  return 'Пользователь'
+function normalizeHost(hostHeader: string | null) {
+  return String(hostHeader || '')
+    .trim()
+    .toLowerCase()
+    .split(':')[0]
 }
 
-export async function GET(req: Request) {
-  try {
-    const access = await getRequestAccessContext(req)
-    if ('response' in access) return access.response
+export async function proxy(request: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    const supabase = createRequestSupabaseClient(req)
-    const adminSupabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : supabase
+  if (!supabaseUrl || !supabaseAnonKey) {
+    const url = request.nextUrl.clone()
 
-    const user = access.user!
-    const isSuperAdmin = access.isSuperAdmin
-    const staffMember = access.staffMember
-    const staffRole = normalizeStaffRole(staffMember?.role)
-    const operatorAuth = access.operatorAuth
-    const isOperator = !!operatorAuth
-
-    const leadAssignments = operatorAuth
-      ? await listActiveOperatorLeadAssignments(
-          supabase,
-          String((operatorAuth as any).operator_id || ''),
-        ).catch(() => [])
-      : []
-
-    const leadRoleLabel =
-      leadAssignments[0]?.role_in_company === 'senior_cashier'
-        ? 'Старший кассир'
-        : leadAssignments[0]?.role_in_company === 'senior_operator'
-          ? 'Старший оператор'
-          : null
-
-    const displayName =
-      (isSuperAdmin ? null : staffMember?.full_name || staffMember?.short_name) ||
-      user.user_metadata?.name ||
-      user.email ||
-      null
-
-    let rolePermissionOverrides: Array<{ path: string; enabled: boolean }> = []
-
-    if (!isSuperAdmin && (staffRole === 'manager' || staffRole === 'marketer' || staffRole === 'owner')) {
-      const { data: rolePermissions, error: rolePermissionsError } = await adminSupabase
-        .from('role_permissions')
-        .select('path, enabled')
-        .eq('role', staffRole)
-
-      if (!rolePermissionsError) {
-        rolePermissionOverrides = (rolePermissions || []).map((item: any) => ({
-          path: String(item.path || ''),
-          enabled: item.enabled !== false,
-        }))
-      }
+    if (url.pathname.startsWith('/api/')) {
+      return NextResponse.next()
     }
 
-    return NextResponse.json({
-      ok: true,
-      email: user.email || null,
-      displayName,
-      isSuperAdmin,
-      isStaff: isSuperAdmin || !!staffMember,
-      isOperator,
-      isLeadOperator: leadAssignments.length > 0,
-      leadAssignments: leadAssignments.map((assignment) => ({
-        id: assignment.id,
-        companyId: assignment.company_id,
-        companyName: assignment.company?.name || null,
-        companyCode: assignment.company?.code || null,
-        roleInCompany: assignment.role_in_company,
-        isPrimary: assignment.is_primary,
-      })),
-      staffRole,
-      roleLabel: getRoleLabel({
-        isSuperAdmin,
-        staffRole,
-        isOperator,
-        leadAssignmentsCount: leadAssignments.length,
-        leadRoleLabel,
-      }),
-      isTenantContext: false,
-      isPlatformContext: false,
-      organizationHubRequired: access.organizationHubRequired,
-      organizationSelectionRequired: access.organizationSelectionRequired,
-      organizations: access.organizations,
-      activeOrganization: access.activeOrganization,
-      activeSubscription: access.activeSubscription,
-      rolePermissionOverrides,
-      defaultPath: getDefaultAppPath({
-        isSuperAdmin,
-        isStaff: isSuperAdmin || !!staffMember,
-        isOperator,
-        staffRole,
-        rolePermissionOverrides,
-      }),
-    })
-  } catch (error: any) {
-    console.error('Session role route error', error)
-    await writeSystemErrorLogSafe({
-      scope: 'server',
-      area: 'api/auth/session-role',
-      message: error?.message || 'Session role route error',
-    })
-    return NextResponse.json({ error: error?.message || 'Ошибка сервера' }, { status: 500 })
+    if (url.pathname !== '/setup-required') {
+      url.pathname = '/setup-required'
+      return NextResponse.redirect(url)
+    }
+
+    return NextResponse.next()
   }
+
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string) {
+        return request.cookies.get(name)?.value
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        request.cookies.set({ name, value, ...options })
+        response = NextResponse.next({
+          request: { headers: request.headers },
+        })
+        response.cookies.set({ name, value, ...options })
+      },
+      remove(name: string, options: CookieOptions) {
+        request.cookies.set({ name, value: '', ...options })
+        response = NextResponse.next({
+          request: { headers: request.headers },
+        })
+        response.cookies.set({ name, value: '', ...options })
+      },
+    },
+  })
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const url = request.nextUrl.clone()
+  const apexHost = new URL(SITE_URL).hostname.toLowerCase()
+  const requestHost = normalizeHost(request.headers.get('host'))
+
+  if (requestHost && requestHost !== apexHost && requestHost !== `www.${apexHost}`) {
+    url.protocol = new URL(SITE_URL).protocol
+    url.host = apexHost
+    return NextResponse.redirect(url)
+  }
+
+  if (url.pathname.startsWith('/api/')) {
+    return response
+  }
+
+  if (!user) {
+    if (isPublicPath(url.pathname)) {
+      return response
+    }
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  const isSuperAdmin = isAdminEmail(user.email)
+  const staffMember = isSuperAdmin ? null : await resolveStaffByUser(supabase, user)
+  const staffRole = normalizeStaffRole(staffMember?.role)
+
+  const { data: operatorAuth } = await supabase
+    .from('operator_auth')
+    .select(
+      `
+      operator_id,
+      role,
+      operators (
+        id,
+        name,
+        is_active
+      )
+    `,
+    )
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  const isStaff = isSuperAdmin || !!staffMember
+  const isOperator = !!operatorAuth
+
+  let rolePermissionOverrides: Array<{ path: string; enabled: boolean }> = []
+
+  const adminSupabase = hasAdminSupabaseCredentials()
+    ? createAdminSupabaseClient()
+    : supabase
+
+  if (!isSuperAdmin && (staffRole === 'manager' || staffRole === 'marketer' || staffRole === 'owner')) {
+    const { data: rolePermissions } = await adminSupabase
+      .from('role_permissions')
+      .select('path, enabled')
+      .eq('role', staffRole)
+
+    rolePermissionOverrides = (rolePermissions || []).map((item: any) => ({
+      path: String(item.path || ''),
+      enabled: item.enabled !== false,
+    }))
+  }
+
+  const defaultPath = getDefaultAppPath({
+    isSuperAdmin,
+    isStaff,
+    isOperator,
+    staffRole,
+    rolePermissionOverrides,
+  })
+
+  if (AUTH_SELF_SERVICE_PATHS.some((path) => url.pathname.startsWith(path))) {
+    return response
+  }
+
+  if (
+    url.pathname === '/platform' ||
+    url.pathname.startsWith('/platform/') ||
+    url.pathname === '/select-organization'
+  ) {
+    url.pathname = defaultPath
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
+
+  if (url.pathname.startsWith('/login') || url.pathname.startsWith('/operator-login')) {
+    if (defaultPath === '/login' || defaultPath.startsWith('/login')) {
+      return response
+    }
+    url.pathname = defaultPath
+    return NextResponse.redirect(url)
+  }
+
+  const requestedPath = url.pathname
+  const hasAccess = canAccessPath({
+    pathname: requestedPath,
+    isStaff,
+    isOperator,
+    staffRole,
+    isSuperAdmin,
+    rolePermissionOverrides,
+  })
+
+  if (requestedPath === '/') {
+    url.pathname = defaultPath
+    return NextResponse.redirect(url)
+  }
+
+  if (!hasAccess) {
+    if (!requestedPath.startsWith('/unauthorized')) {
+      url.pathname = '/unauthorized'
+      return NextResponse.redirect(url)
+    }
+    return response
+  }
+
+  if (requestedPath.startsWith('/unauthorized') && hasAccess) {
+    url.pathname = defaultPath
+    return NextResponse.redirect(url)
+  }
+
+  return response
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }
