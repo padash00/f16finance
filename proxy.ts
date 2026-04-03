@@ -21,7 +21,20 @@ function normalizeHost(hostHeader: string | null) {
     .split(':')[0]
 }
 
+function isStaticAsset(pathname: string) {
+  if (pathname.startsWith('/_next/')) return true
+  if (pathname === '/favicon.ico') return true
+  return /\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|txt|xml|woff|woff2|ttf|eot)$/i.test(pathname)
+}
+
 export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  // Не трогаем статику и внутренние next-файлы, чтобы не ломать дизайн
+  if (isStaticAsset(pathname)) {
+    return NextResponse.next()
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -131,10 +144,12 @@ export async function proxy(request: NextRequest) {
         .eq('role', staffRole)
 
       rolePermissionOverrides = Array.isArray(data)
-        ? data.map((item: any) => ({
-            path: String(item.path || ''),
-            enabled: item.enabled !== false,
-          }))
+        ? data
+            .filter((item: any) => item?.path)
+            .map((item: any) => ({
+              path: String(item.path),
+              enabled: item.enabled !== false,
+            }))
         : []
     } catch {
       rolePermissionOverrides = []
