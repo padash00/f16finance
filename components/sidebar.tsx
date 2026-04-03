@@ -676,6 +676,9 @@ export function Sidebar() {
   const [organizations, setOrganizations] = useState<NonNullable<SessionRoleInfo['organizations']>>([])
   const [activeOrganization, setActiveOrganization] = useState<SessionRoleInfo['activeOrganization']>(null)
   const [subscriptionFeatures, setSubscriptionFeatures] = useState<Partial<Record<SubscriptionFeature, boolean>>>({})
+  const [rolePermissionOverrides, setRolePermissionOverrides] = useState<
+  Array<{ path: string; enabled: boolean }>
+>([])
   const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
@@ -729,6 +732,7 @@ export function Sidebar() {
         setSubscriptionFeatures(
           ((json?.activeSubscription as SessionRoleInfo['activeSubscription'] | null)?.plan?.features as Partial<Record<SubscriptionFeature, boolean>> | undefined) || {},
         )
+        setRolePermissionOverrides(Array.isArray(json?.rolePermissionOverrides) ? json.rolePermissionOverrides : [])
         // Super admin sees all sections expanded
         if (superAdmin) {
           setOpenSections(Object.fromEntries(navSections.map((s) => [s.id, true])))
@@ -787,6 +791,7 @@ export function Sidebar() {
               staffRole,
               isSuperAdmin,
               subscriptionFeatures,
+              rolePermissionOverrides,
             })
           })
           .filter((item) => {
@@ -801,7 +806,7 @@ export function Sidebar() {
         const sectionText = `${section.title} ${section.subtitle}`.toLowerCase()
         return sectionText.includes(query)
       })
-  }, [baseSections, isLeadOperator, isOperator, isStaff, isSuperAdmin, searchQuery, staffRole, subscriptionFeatures])
+  }, [baseSections, isLeadOperator, isOperator, isStaff, isSuperAdmin, searchQuery, staffRole, subscriptionFeatures, rolePermissionOverrides])
 
   useEffect(() => {
     if (!searchQuery.trim()) return
