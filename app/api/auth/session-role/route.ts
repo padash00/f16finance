@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server'
 
 import { getDefaultAppPath, normalizeStaffRole } from '@/lib/core/access'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { createRequestSupabaseClient, getRequestAccessContext, listActiveOperatorLeadAssignments } from '@/lib/server/request-auth'
+import {
+  createRequestSupabaseClient,
+  getRequestAccessContext,
+  listActiveOperatorLeadAssignments,
+} from '@/lib/server/request-auth'
 
 function getRoleLabel(params: {
   isSuperAdmin: boolean
@@ -34,17 +38,42 @@ export async function GET(req: Request) {
     const staffRole = normalizeStaffRole(staffMember?.role)
     const operatorAuth = access.operatorAuth
     const isOperator = !!operatorAuth
+
     const leadAssignments = operatorAuth
-      ? await listActiveOperatorLeadAssignments(supabase, String((operatorAuth as any).operator_id || '')).catch(() => [])
+      ? await listActiveOperatorLeadAssignments(
+          supabase,
+          String((operatorAuth as any).operator_id || ''),
+        ).catch(() => [])
       : []
+
     const leadRoleLabel =
       leadAssignments[0]?.role_in_company === 'senior_cashier'
         ? 'Старший кассир'
         : leadAssignments[0]?.role_in_company === 'senior_operator'
           ? 'Старший оператор'
           : null
+
     const displayName =
-      (isSuperAdmin ? null : staffMember?.full_name || staffMember?.short_name) || user.user_metadata?.name || user.email || null
+      (isSuperAdmin ? null : staffMember?.full_name || staffMember?.short_name) ||
+      user.user_metadata?.name ||
+      user.email ||
+      null
+
+    let rolePermissionOverrides: Array<{ path: string; enabled: boolean }> = []
+
+    if (!isSuperAdmin && (staffRole === 'manager' || staffRole === 'marketer' || staffRole === 'owner')) {
+      const { data: rolePermissions, error: rolePermissionsError } = await supabase
+        .from('role_permissions')
+        .select('path, enabled')
+        .eq('role', staffRole)
+
+      if (!rolePermissionsError) {
+        rolePermissionOverrides = (rolePermissions || []).map((item: any) => ({
+          path: String(item.path || ''),
+          enabled: item.enabled !== false,
+        }))
+      }
+    }
 
     return NextResponse.json({
       ok: true,
@@ -77,11 +106,13 @@ export async function GET(req: Request) {
       organizations: access.organizations,
       activeOrganization: access.activeOrganization,
       activeSubscription: access.activeSubscription,
+      rolePermissionOverrides,
       defaultPath: getDefaultAppPath({
         isSuperAdmin,
         isStaff: isSuperAdmin || !!staffMember,
         isOperator,
         staffRole,
+        rolePermissionOverrides,
       }),
     })
   } catch (error: any) {
