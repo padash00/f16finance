@@ -54,6 +54,18 @@ export type RoleMatrixEntry = {
   summary: string
   actions: readonly string[]
 }
+export type RolePermissionOverride = {
+  path: string
+  enabled: boolean
+}
+export type AccessPage = {
+  path: string
+  label: string
+}
+export type AccessPageGroup = {
+  group: string
+  pages: readonly AccessPage[]
+}
 
 export const ADMIN_PATHS = [
   '/platform',
@@ -65,6 +77,7 @@ export const ADMIN_PATHS = [
   '/income',
   '/income/add',
   '/income/analytics',
+  '/analytics',
   '/expenses',
   '/expenses/add',
   '/expenses/analysis',
@@ -123,6 +136,7 @@ const MANAGER_PATHS = [
   '/income',
   '/income/add',
   '/income/analytics',
+  '/analytics',
   '/expenses',
   '/expenses/add',
   '/expenses/analysis',
@@ -161,6 +175,7 @@ const OWNER_PATHS = [
   '/income',
   '/income/add',
   '/income/analytics',
+  '/analytics',
   '/expenses',
   '/expenses/add',
   '/expenses/analysis',
@@ -296,6 +311,153 @@ export const OPERATOR_PATHS = [
   '/operator-achievements/*',
 ] as const
 
+export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
+  {
+    group: 'Центр управления',
+    pages: [
+      { path: '/welcome', label: 'Главный вход' },
+      { path: '/dashboard', label: 'Главная панель' },
+      { path: '/workspace', label: 'Рабочее пространство' },
+      { path: '/analysis', label: 'AI Разбор' },
+      { path: '/forecast', label: 'AI Прогноз' },
+      { path: '/goals', label: 'Цели и план' },
+      { path: '/reports', label: 'Отчёты' },
+      { path: '/reports/monthly', label: 'Ежемесячный отчёт' },
+      { path: '/weekly-report', label: 'Недельный отчёт' },
+    ],
+  },
+  {
+    group: 'Финансы',
+    pages: [
+      { path: '/income', label: 'Доходы' },
+      { path: '/income/add', label: 'Добавить доход' },
+      { path: '/income/analytics', label: 'Аналитика доходов (старый маршрут)' },
+      { path: '/analytics', label: 'Аналитика доходов' },
+      { path: '/expenses', label: 'Расходы' },
+      { path: '/expenses/add', label: 'Добавить расход' },
+      { path: '/expenses/analysis', label: 'Анализ расходов' },
+      { path: '/cashflow', label: 'Cash Flow' },
+      { path: '/salary', label: 'Зарплата' },
+      { path: '/salary/rules', label: 'Правила зарплаты' },
+      { path: '/kaspi-terminal', label: 'Kaspi терминал' },
+      { path: '/categories', label: 'Категории расходов' },
+      { path: '/tax', label: 'Налоги' },
+      { path: '/profitability', label: 'ОПиУ и EBITDA' },
+      { path: '/customers', label: 'Клиенты' },
+      { path: '/discounts', label: 'Скидки и промокоды' },
+    ],
+  },
+  {
+    group: 'Магазин и POS',
+    pages: [
+      { path: '/inventory', label: 'Склад' },
+      { path: '/store', label: 'Обзор магазина' },
+      { path: '/store/catalog', label: 'Каталог' },
+      { path: '/store/receipts', label: 'Приёмка' },
+      { path: '/store/requests', label: 'Заявки' },
+      { path: '/store/analytics', label: 'Аналитика точек' },
+      { path: '/store/consumables', label: 'Расходники' },
+      { path: '/store/writeoffs', label: 'Списания' },
+      { path: '/store/revisions', label: 'Ревизия' },
+      { path: '/store/movements', label: 'Движения' },
+      { path: '/store/abc', label: 'ABC-анализ' },
+      { path: '/store/forecast', label: 'Прогноз остатков' },
+      { path: '/pos', label: 'Касса (Web POS)' },
+      { path: '/pos-receipts', label: 'История чеков' },
+      { path: '/pos-returns', label: 'Возвраты POS' },
+    ],
+  },
+  {
+    group: 'Склад (legacy-маршруты)',
+    pages: [
+      { path: '/inventory', label: 'Склад (legacy)' },
+      { path: '/inventory/catalog', label: 'Каталог склада (legacy)' },
+      { path: '/inventory/receipts', label: 'Приёмка склада (legacy)' },
+      { path: '/inventory/requests', label: 'Заявки склада (legacy)' },
+      { path: '/inventory/analytics', label: 'Аналитика склада (legacy)' },
+      { path: '/inventory/consumables', label: 'Расходники склада (legacy)' },
+      { path: '/inventory/writeoffs', label: 'Списания склада (legacy)' },
+      { path: '/inventory/revisions', label: 'Ревизия склада (legacy)' },
+      { path: '/inventory/movements', label: 'Движения склада (legacy)' },
+      { path: '/inventory/abc', label: 'ABC-анализ склада (legacy)' },
+      { path: '/inventory/forecast', label: 'Прогноз склада (legacy)' },
+      { path: '/inventory/stocktakes', label: 'Инвентаризации склада (legacy)' },
+    ],
+  },
+  {
+    group: 'Операционная работа',
+    pages: [
+      { path: '/tasks', label: 'Задачи' },
+      { path: '/shifts', label: 'Смены' },
+      { path: '/shifts/add', label: 'Добавить смены' },
+      { path: '/shifts/report', label: 'Отчёт по сменам' },
+      { path: '/operators', label: 'Операторы' },
+      { path: '/operators/*', label: 'Профиль оператора' },
+      { path: '/operator-analytics', label: 'Аналитика операторов' },
+      { path: '/ratings', label: 'Рейтинг операторов' },
+      { path: '/kpi', label: 'KPI' },
+      { path: '/kpi/plans', label: 'Планы KPI' },
+      { path: '/birthdays', label: 'Дни рождения' },
+      { path: '/stations/*', label: 'Станции проекта' },
+    ],
+  },
+  {
+    group: 'Команда',
+    pages: [
+      { path: '/staff', label: 'Сотрудники' },
+      { path: '/salary/*', label: 'Карточка зарплаты сотрудника' },
+      { path: '/structure', label: 'Структура' },
+      { path: '/pass', label: 'Доступы' },
+    ],
+  },
+  {
+    group: 'Операторское пространство',
+    pages: [
+      { path: '/operator', label: 'Старый кабинет оператора' },
+      { path: '/operator-dashboard', label: 'Мой кабинет оператора' },
+      { path: '/operator-lead', label: 'Моя точка' },
+      { path: '/operator-schedule', label: 'График оператора' },
+      { path: '/operator-tasks', label: 'Мои задачи' },
+      { path: '/operator-chat', label: 'Чат операторов' },
+      { path: '/operator-achievements', label: 'Достижения' },
+      { path: '/operator-achievements-all', label: 'Общий рейтинг достижений' },
+      { path: '/operator-settings', label: 'Настройки операторов' },
+      { path: '/operator/profile', label: 'Профиль оператора (legacy)' },
+      { path: '/operator/salary', label: 'Зарплата оператора (legacy)' },
+      { path: '/operator/shifts', label: 'Смены оператора (legacy)' },
+      { path: '/operator/tasks', label: 'Задачи оператора (legacy)' },
+    ],
+  },
+  {
+    group: 'Система',
+    pages: [
+      { path: '/settings', label: 'Настройки системы' },
+      { path: '/access', label: 'Права и пароли' },
+      { path: '/telegram', label: 'Telegram Bot' },
+      { path: '/point-devices', label: 'Точки и устройства' },
+      { path: '/logs', label: 'Логирование' },
+      { path: '/debug', label: 'Диагностика' },
+    ],
+  },
+  {
+    group: 'SaaS и платформа',
+    pages: [
+      { path: '/platform', label: 'Платформа SaaS' },
+      { path: '/platform/billing', label: 'Биллинг платформы' },
+      { path: '/platform/new', label: 'Создание организации' },
+      { path: '/platform/organizations', label: 'Список организаций' },
+      { path: '/platform/organizations/*', label: 'Карточка организации' },
+      { path: '/select-organization', label: 'Выбор организации' },
+      { path: '/setup-required', label: 'Требуется настройка' },
+      { path: '/unauthorized', label: 'Нет доступа' },
+    ],
+  },
+] as const
+
+export function getConfigurablePagePaths(): string[] {
+  return Array.from(new Set(ACCESS_PAGE_GROUPS.flatMap((group) => group.pages.map((page) => page.path))))
+}
+
 export function normalizeStaffRole(role: string | null | undefined): StaffRole {
   if (role === 'manager' || role === 'marketer' || role === 'owner') {
     return role
@@ -332,7 +494,36 @@ export function getAllowedStaffPaths(role: StaffRole): readonly string[] {
   return STAFF_ROLE_MATRIX[role].paths
 }
 
-export function canStaffRoleAccessPath(role: StaffRole, pathname: string): boolean {
+function matchesConfiguredPath(pathname: string, configuredPath: string): boolean {
+  return pathname === configuredPath || pathname.startsWith(`${configuredPath}/`) || matchesPath(pathname, configuredPath)
+}
+
+function findRolePermissionOverride(
+  pathname: string,
+  overrides: readonly RolePermissionOverride[] | null | undefined,
+): RolePermissionOverride | null {
+  if (!overrides?.length) return null
+
+  let bestMatch: RolePermissionOverride | null = null
+
+  for (const override of overrides) {
+    if (!matchesConfiguredPath(pathname, override.path)) continue
+    if (!bestMatch || override.path.length > bestMatch.path.length) {
+      bestMatch = override
+    }
+  }
+
+  return bestMatch
+}
+
+export function canStaffRoleAccessPath(
+  role: StaffRole,
+  pathname: string,
+  rolePermissionOverrides?: readonly RolePermissionOverride[] | null,
+): boolean {
+  const override = findRolePermissionOverride(pathname, rolePermissionOverrides)
+  if (override) return override.enabled
+
   return getAllowedStaffPaths(role).some((rule) => matchesPath(pathname, rule))
 }
 
@@ -343,15 +534,16 @@ export function canAccessPath(params: {
   staffRole?: StaffRole | null
   isSuperAdmin?: boolean
   subscriptionFeatures?: Partial<Record<SubscriptionFeature, boolean>> | null
+  rolePermissionOverrides?: readonly RolePermissionOverride[] | null
 }): boolean {
-  const { pathname, isStaff, isOperator, staffRole, isSuperAdmin, subscriptionFeatures } = params
+  const { pathname, isStaff, isOperator, staffRole, isSuperAdmin, subscriptionFeatures, rolePermissionOverrides } = params
 
   if (isSuperAdmin) {
     // Super admin has access to everything except public/auth-only paths
     return true
   }
 
-  const staffAllowed = isStaff && canStaffRoleAccessPath(normalizeStaffRole(staffRole), pathname)
+  const staffAllowed = isStaff && canStaffRoleAccessPath(normalizeStaffRole(staffRole), pathname, rolePermissionOverrides)
   const operatorAllowed = isOperator && OPERATOR_PATHS.some((rule) => matchesPath(pathname, rule))
 
   if (isStaff) {
@@ -361,8 +553,21 @@ export function canAccessPath(params: {
   return operatorAllowed && canUsePathForSubscription(pathname, subscriptionFeatures)
 }
 
-export function getDefaultPathForStaffRole(role: StaffRole) {
-  return STAFF_ROLE_MATRIX[role].home
+export function getBuiltinRoleDefaultPaths(role: StaffRole): string[] {
+  return getConfigurablePagePaths().filter((path) => canStaffRoleAccessPath(role, path))
+}
+
+export function getDefaultPathForStaffRole(
+  role: StaffRole,
+  rolePermissionOverrides?: readonly RolePermissionOverride[] | null,
+) {
+  const home = STAFF_ROLE_MATRIX[role].home
+  if (canStaffRoleAccessPath(role, home, rolePermissionOverrides)) {
+    return home
+  }
+
+  const fallbackPath = getConfigurablePagePaths().find((path) => canStaffRoleAccessPath(role, path, rolePermissionOverrides))
+  return fallbackPath || home
 }
 
 export function getDefaultAppPath(params: {
@@ -370,11 +575,12 @@ export function getDefaultAppPath(params: {
   isStaff?: boolean
   isOperator?: boolean
   staffRole?: StaffRole | null
+  rolePermissionOverrides?: readonly RolePermissionOverride[] | null
 }) {
-  const { isSuperAdmin, isStaff, isOperator, staffRole } = params
+  const { isSuperAdmin, isStaff, isOperator, staffRole, rolePermissionOverrides } = params
 
   if (isSuperAdmin) return '/dashboard'
-  if (isStaff) return getDefaultPathForStaffRole(normalizeStaffRole(staffRole))
+  if (isStaff) return getDefaultPathForStaffRole(normalizeStaffRole(staffRole), rolePermissionOverrides)
   if (isOperator) return '/operator'
   return '/unauthorized'
 }
