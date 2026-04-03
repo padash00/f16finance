@@ -5,7 +5,13 @@ import { canAccessPath, getDefaultAppPath, normalizeStaffRole, isPublicPath } fr
 import { SITE_URL } from '@/lib/core/site'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 
-const AUTH_SELF_SERVICE_PATHS = ['/forgot-password', '/reset-password', '/set-password', '/auth/callback', '/auth/complete'] as const
+const AUTH_SELF_SERVICE_PATHS = [
+  '/forgot-password',
+  '/reset-password',
+  '/set-password',
+  '/auth/callback',
+  '/auth/complete',
+] as const
 
 function normalizeHost(hostHeader: string | null) {
   return String(hostHeader || '')
@@ -109,7 +115,28 @@ export async function proxy(request: NextRequest) {
 
   const isStaff = isSuperAdmin || !!staffMember
   const isOperator = !!operatorAuth
-  const defaultPath = getDefaultAppPath({ isSuperAdmin, isStaff, isOperator, staffRole })
+
+  let rolePermissionOverrides: Array<{ path: string; enabled: boolean }> = []
+
+  if (!isSuperAdmin && (staffRole === 'manager' || staffRole === 'marketer' || staffRole === 'owner')) {
+    const { data: rolePermissions } = await supabase
+      .from('role_permissions')
+      .select('path, enabled')
+      .eq('role', staffRole)
+
+    rolePermissionOverrides = (rolePermissions || []).map((item: any) => ({
+      path: String(item.path || ''),
+      enabled: item.enabled !== false,
+    }))
+  }
+
+  const defaultPath = getDefaultAppPath({
+    isSuperAdmin,
+    isStaff,
+    isOperator,
+    staffRole,
+    rolePermissionOverrides,
+  })
 
   if (AUTH_SELF_SERVICE_PATHS.some((path) => url.pathname.startsWith(path))) {
     return response
@@ -136,6 +163,7 @@ export async function proxy(request: NextRequest) {
     isOperator,
     staffRole,
     isSuperAdmin,
+    rolePermissionOverrides,
   })
 
   if (requestedPath === '/') {
