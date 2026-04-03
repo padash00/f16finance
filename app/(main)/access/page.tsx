@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
 import {
+  ACCESS_PAGE_GROUPS,
+  getBuiltinRoleDefaultPaths,
+} from '@/lib/core/access'
+import {
   CheckCircle2, Copy, Eye, EyeOff, KeyRound, Loader2,
   Lock, LockOpen, Pencil, Plus, RefreshCw, Shield, Trash2, Users, X, Briefcase, Save,
 } from 'lucide-react'
@@ -39,73 +43,14 @@ const BUILTIN_LABELS: Record<string, string> = {
   owner: 'Владелец',
   other: 'Прочие',
 }
+const PAGE_GROUPS = ACCESS_PAGE_GROUPS.map((group) => ({
+  group: group.group,
+  pages: group.pages.map((page) => ({
+    path: page.path,
+    label: page.label,
+  })),
+}))
 
-// Default paths for built-in roles (fallback when DB has no override)
-const BUILTIN_DEFAULTS: Record<string, string[]> = {
-  manager: [
-    '/income', '/income/add', '/income/analytics', '/expenses', '/expenses/add',
-    '/expenses/analysis', '/cashflow', '/forecast', '/ratings', '/goals',
-    '/weekly-report', '/birthdays', '/structure', '/operators', '/shifts',
-    '/salary', '/tasks',
-  ],
-  marketer: ['/tasks'],
-  owner: [
-    '/income', '/income/add', '/income/analytics', '/expenses', '/expenses/add',
-    '/expenses/analysis', '/cashflow', '/forecast', '/ratings', '/goals',
-    '/categories', '/tax', '/profitability', '/reports', '/analysis',
-    '/weekly-report', '/birthdays', '/structure', '/salary', '/operators',
-    '/operator-analytics', '/staff', '/kpi', '/tasks', '/shifts',
-  ],
-}
-
-// All pages grouped
-const PAGE_GROUPS: { group: string; pages: { path: string; label: string }[] }[] = [
-  {
-    group: 'Финансы',
-    pages: [
-      { path: '/income', label: 'Доходы' },
-      { path: '/income/add', label: 'Добавить доход' },
-      { path: '/income/analytics', label: 'Аналитика доходов' },
-      { path: '/expenses', label: 'Расходы' },
-      { path: '/expenses/add', label: 'Добавить расход' },
-      { path: '/expenses/analysis', label: 'Анализ расходов' },
-      { path: '/cashflow', label: 'Cash Flow' },
-      { path: '/salary', label: 'Зарплата' },
-      { path: '/reports', label: 'Отчёты' },
-      { path: '/analysis', label: 'Аналитика' },
-      { path: '/weekly-report', label: 'Недельный отчёт' },
-      { path: '/tax', label: 'Налоги' },
-      { path: '/profitability', label: 'Рентабельность' },
-      { path: '/categories', label: 'Категории расходов' },
-    ],
-  },
-  {
-    group: 'AI и прогнозы',
-    pages: [
-      { path: '/forecast', label: 'AI Прогноз' },
-      { path: '/ratings', label: 'Рейтинг операторов' },
-      { path: '/goals', label: 'Цели и план' },
-    ],
-  },
-  {
-    group: 'Операторы',
-    pages: [
-      { path: '/operators', label: 'Операторы' },
-      { path: '/operator-analytics', label: 'Аналитика операторов' },
-      { path: '/kpi', label: 'KPI' },
-      { path: '/tasks', label: 'Задачи' },
-      { path: '/shifts', label: 'Смены' },
-    ],
-  },
-  {
-    group: 'Команда',
-    pages: [
-      { path: '/staff', label: 'Сотрудники' },
-      { path: '/structure', label: 'Структура' },
-      { path: '/birthdays', label: 'Дни рождения' },
-    ],
-  },
-]
 
 const SQL_POSITIONS = `create table if not exists positions (
   id uuid primary key default gen_random_uuid(),
@@ -313,12 +258,16 @@ export default function AccessPage() {
     setDeletingId(null)
   }
 
-  // ---- Permission helpers ----
   const isEnabled = useCallback((role: string, path: string): boolean => {
-    const override = permissions.find(p => p.role === role && p.path === path)
-    if (override) return override.enabled
-    return BUILTIN_DEFAULTS[role]?.includes(path) ?? false
-  }, [permissions])
+  const override = permissions.find(p => p.role === role && p.path === path)
+  if (override) return override.enabled
+
+  if (role === 'manager' || role === 'marketer' || role === 'owner') {
+    return getBuiltinRoleDefaultPaths(role).includes(path)
+  }
+
+  return false
+}, [permissions])
 
   const togglePermission = useCallback(async (role: string, path: string) => {
     const current = isEnabled(role, path)
@@ -360,20 +309,27 @@ export default function AccessPage() {
   }, [])
 
   const resetToDefault = useCallback(async (role: string) => {
-    const allPaths = PAGE_GROUPS.flatMap(g => g.pages.map(p => p.path))
-    const defaults = BUILTIN_DEFAULTS[role] ?? []
-    setPermissions(prev => {
-      const filtered = prev.filter(p => p.role !== role)
-      return [...filtered, ...allPaths.map(path => ({ role, path, enabled: defaults.includes(path) }))]
-    })
-    await Promise.all(allPaths.map(path =>
+  const allPaths = PAGE_GROUPS.flatMap(g => g.pages.map(p => p.path))
+  const defaults =
+    role === 'manager' || role === 'marketer' || role === 'owner'
+      ? getBuiltinRoleDefaultPaths(role)
+      : []
+
+  setPermissions(prev => {
+    const filtered = prev.filter(p => p.role !== role)
+    return [...filtered, ...allPaths.map(path => ({ role, path, enabled: defaults.includes(path) }))]
+  })
+
+  await Promise.all(
+    allPaths.map(path =>
       fetch('/api/admin/role-permissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role, path, enabled: defaults.includes(path) }),
       })
-    ))
-  }, [])
+    )
+  )
+}, [])
 
   // ---- Staff role change ----
   const saveStaffRole = useCallback(async (staffId: string, newRole: string) => {
@@ -734,14 +690,14 @@ export default function AccessPage() {
                       >
                         <Lock className="w-3.5 h-3.5" /> Выключить всё
                       </button>
-                      {BUILTIN_DEFAULTS[selectedRole] && (
-                        <button
-                          onClick={() => resetToDefault(selectedRole)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" /> Сбросить к стандарту
-                        </button>
-                      )}
+                      {(selectedRole === 'manager' || selectedRole === 'marketer' || selectedRole === 'owner') && (
+  <button
+    onClick={() => resetToDefault(selectedRole)}
+    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
+  >
+    <RefreshCw className="w-3.5 h-3.5" /> Сбросить к стандарту
+  </button>
+)}
                     </span>
                   </div>
 
