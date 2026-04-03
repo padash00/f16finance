@@ -214,7 +214,7 @@ export const STAFF_ROLE_MATRIX: Record<StaffRole, RoleMatrixEntry> = {
     label: 'Руководитель',
     home: '/welcome',
     paths: MANAGER_PATHS,
-    capabilities: ['tasks', 'shifts', 'salary', 'operator_structure', 'finance_create'],
+    capabilities: ['tasks', 'shifts', 'salary', 'operator_structure', 'finance_create', 'operators'],
     summary:
       'Контролирует задачи, смены, зарплату и назначает операторов по точкам. Может добавлять доходы и расходы.',
     actions: [
