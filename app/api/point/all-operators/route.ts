@@ -26,27 +26,44 @@ export async function GET(request: Request) {
     const { supabase } = point
 
     const orgIds: string[] = []
+    /** Все компании той же организации — чтобы показать операторов, закреплённых за другой точкой орг., не только за компаниями проекта. */
+    const assignmentCompanyIdSet = new Set<string>(point.device.company_ids.map((id) => String(id)))
+
     if (point.device.company_ids.length > 0) {
       const { data: companies, error: companiesError } = await supabase
         .from('companies')
-        .select('organization_id')
+        .select('id, organization_id')
         .in('id', point.device.company_ids)
 
       if (companiesError) throw companiesError
-      const seen = new Set<string>()
+      const seenOrg = new Set<string>()
       for (const row of companies || []) {
         const oid = (row as any)?.organization_id
-        if (oid && !seen.has(String(oid))) {
-          seen.add(String(oid))
+        if (oid && !seenOrg.has(String(oid))) {
+          seenOrg.add(String(oid))
           orgIds.push(String(oid))
+        }
+      }
+
+      if (orgIds.length > 0) {
+        const { data: orgCompanies, error: orgCoErr } = await supabase
+          .from('companies')
+          .select('id')
+          .in('organization_id', orgIds)
+
+        if (orgCoErr) throw orgCoErr
+        for (const c of orgCompanies || []) {
+          if ((c as any)?.id) assignmentCompanyIdSet.add(String((c as any).id))
         }
       }
     }
 
+    const assignmentCompanyIds = [...assignmentCompanyIdSet]
+
     const { data: assignments, error: assignmentsError } = await supabase
       .from('operator_company_assignments')
       .select('operator_id')
-      .in('company_id', point.device.company_ids)
+      .in('company_id', assignmentCompanyIds.length > 0 ? assignmentCompanyIds : ['__none__'])
       .eq('is_active', true)
 
     if (assignmentsError) throw assignmentsError
@@ -69,17 +86,43 @@ export async function GET(request: Request) {
       }
     >()
 
+    /** staff_id → operator_id: если оператор уже в списке, строку staff: не показываем (иначе дубль ФИО + «Руководитель»). */
+    const staffIdToOperatorId = new Map<string, string>()
+    /** user_id (Supabase) → operator_id из operator_auth */
+    const userIdToOperatorId = new Map<string, string>()
+
     let members: any[] = []
     if (orgIds.length > 0) {
       const { data: membersRaw, error: membersError } = await supabase
         .from('organization_members')
-        .select('id, staff_id, email, role')
+        .select('id, staff_id, user_id, email, role')
         .eq('status', 'active')
         .in('organization_id', orgIds)
         .in('role', ['owner', 'manager', 'marketer'])
 
       if (membersError) throw membersError
       members = membersRaw || []
+
+      const memberUserIds = [
+        ...new Set(
+          members.map((m: any) => m.user_id).filter(Boolean).map((id: unknown) => String(id)),
+        ),
+      ]
+      if (memberUserIds.length > 0) {
+        const { data: authByUser, error: authByUserErr } = await supabase
+          .from('operator_auth')
+          .select('operator_id, user_id')
+          .in('user_id', memberUserIds)
+          .eq('is_active', true)
+
+        if (authByUserErr) throw authByUserErr
+        for (const row of authByUser || []) {
+          const opid = (row as any)?.operator_id
+          const uid = (row as any)?.user_id
+          if (opid) allowedOperatorIdSet.add(String(opid))
+          if (opid && uid) userIdToOperatorId.set(String(uid), String(opid))
+        }
+      }
 
       const staffIdsForOrgRoles = [
         ...new Set(
@@ -90,13 +133,15 @@ export async function GET(request: Request) {
       if (staffIdsForOrgRoles.length > 0) {
         const { data: staffOperatorLinks, error: linkErr } = await supabase
           .from('operator_staff_links')
-          .select('operator_id')
+          .select('operator_id, staff_id')
           .in('staff_id', staffIdsForOrgRoles)
 
         if (linkErr) throw linkErr
         for (const row of staffOperatorLinks || []) {
           const oid = (row as any)?.operator_id
+          const sid = (row as any)?.staff_id
           if (oid) allowedOperatorIdSet.add(String(oid))
+          if (oid && sid) staffIdToOperatorId.set(String(sid), String(oid))
         }
       }
 
@@ -189,6 +234,22 @@ export async function GET(request: Request) {
         }
       })
       .filter(Boolean)
+
+    const operatorIdsInResponse = new Set(operators.map((o: any) => String(o.id)))
+    for (const [staffId, opId] of staffIdToOperatorId) {
+      if (operatorIdsInResponse.has(opId)) {
+        staffDebtors.delete(`staff:${staffId}`)
+      }
+    }
+    for (const m of members) {
+      const mid = String((m as any).id || '')
+      const uid = (m as any).user_id
+      if (!mid || !uid) continue
+      const opId = userIdToOperatorId.get(String(uid))
+      if (opId && operatorIdsInResponse.has(opId)) {
+        staffDebtors.delete(`orgmember:${mid}`)
+      }
+    }
 
     const combined = [...operators, ...staffDebtors.values()].sort((a: any, b: any) =>
       String(a.name || '').localeCompare(String(b.name || ''), 'ru'),
