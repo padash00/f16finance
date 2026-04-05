@@ -12,7 +12,8 @@ export default function manifest(): MetadataRoute.Manifest {
     name: SITE_NAME,
     short_name: shortName(),
     description: SITE_DESCRIPTION,
-    start_url: '/',
+    /** Ярлык PWA открывает кабинет оператора (смартфон). Админка доступна по обычному URL в браузере. */
+    start_url: '/operator',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait-primary',
