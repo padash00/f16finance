@@ -140,7 +140,7 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,165,80,0.16),transparent_26%),linear-gradient(180deg,#07101c_0%,#0b1324_48%,#040814_100%)] text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col px-3 pb-28 pt-3 sm:px-5 sm:pt-5">
+      <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] pt-[calc(0.75rem+env(safe-area-inset-top,0px))] sm:px-5 sm:pt-[calc(1.25rem+env(safe-area-inset-top,0px))]">
         <div className="overflow-hidden rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-4 shadow-[0_30px_90px_rgba(0,0,0,0.34)] backdrop-blur-2xl sm:rounded-[2rem] sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
@@ -182,8 +182,18 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
         <div className="mt-4 flex-1">{children}</div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-3 pt-2">
-        <div className="mx-auto flex max-w-xl items-stretch gap-1 overflow-x-auto rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-2 shadow-[0_22px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <nav
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4"
+        style={{ paddingBottom: 'max(0.65rem, env(safe-area-inset-bottom, 0px))' }}
+        aria-label="Основная навигация"
+      >
+        <div
+          className={cn(
+            'pointer-events-auto flex w-full max-w-md items-stretch gap-0.5 overflow-x-auto rounded-[2.25rem] border border-white/[0.14]',
+            'bg-[linear-gradient(180deg,rgba(255,255,255,0.12)_0%,rgba(15,23,42,0.55)_100%)] p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.45),0_1px_0_rgba(255,255,255,0.06)_inset]',
+            'backdrop-blur-2xl backdrop-saturate-150 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
+          )}
+        >
           {navItems.map((item) => {
             const active = isActivePath(pathname, item.href)
             const Icon = item.icon
@@ -192,15 +202,26 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'group flex min-w-[3.65rem] shrink-0 flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 text-[10px] font-medium leading-none transition sm:min-w-[4.25rem] sm:flex-row sm:gap-2 sm:px-2.5 sm:py-3 sm:text-xs',
+                  'group relative flex min-w-[3.35rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-[1.35rem] px-1 py-2 text-[10px] font-semibold leading-none tracking-tight transition sm:min-w-[3.85rem] sm:gap-1 sm:px-1.5 sm:py-2.5 sm:text-[11px]',
                   active
-                    ? 'bg-[linear-gradient(135deg,rgba(255,179,107,0.96),rgba(255,122,89,0.94))] text-slate-950 shadow-[0_16px_34px_rgba(255,140,88,0.28)]'
-                    : 'text-slate-400 hover:bg-white/[0.05] hover:text-white',
+                    ? 'text-slate-950'
+                    : 'text-slate-400 hover:text-white',
                 )}
                 aria-label={item.description}
               >
-                <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-slate-950' : 'text-slate-400 group-hover:text-white')} />
-                <span className="max-w-[4.5rem] truncate text-center">{item.shortLabel}</span>
+                {active ? (
+                  <span
+                    className="absolute inset-0 rounded-[1.35rem] bg-[linear-gradient(145deg,rgba(255,200,140,0.98),rgba(255,130,95,0.95))] shadow-[0_10px_28px_rgba(255,140,88,0.35)]"
+                    aria-hidden
+                  />
+                ) : null}
+                <Icon
+                  className={cn(
+                    'relative z-[1] h-[1.15rem] w-[1.15rem] shrink-0 sm:h-5 sm:w-5',
+                    active ? 'text-slate-950' : 'text-slate-400 group-hover:text-white',
+                  )}
+                />
+                <span className="relative z-[1] max-w-[4.25rem] truncate text-center">{item.shortLabel}</span>
               </Link>
             )
           })}
