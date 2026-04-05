@@ -704,6 +704,85 @@ export async function syncInventoryItemToPointProducts(
   return { syncedCompanyIds: companyIds }
 }
 
+const POINT_PRODUCTS_UPSERT_CHUNK = 800
+
+/**
+ * Одна выборка витрин + пакетные upsert в point_products (для импорта каталога без N+1 запросов).
+ */
+export async function bulkSyncInventoryItemsToPointProducts(
+  supabase: AnySupabase,
+  items: Array<{ name: string; barcode: string; sale_price: number; is_active?: boolean }>,
+  scope?: Pick<InventoryScope, 'organizationId' | 'isSuperAdmin'>,
+) {
+  const byBarcode = new Map<string, { name: string; barcode: string; sale_price: number; is_active: boolean }>()
+  for (const it of items) {
+    const barcode = String(it.barcode || '').trim()
+    const name = String(it.name || '').trim()
+    if (!barcode || !name) continue
+    byBarcode.set(barcode, {
+      name,
+      barcode,
+      sale_price: it.sale_price,
+      is_active: it.is_active !== false,
+    })
+  }
+  const unique = Array.from(byBarcode.values())
+  if (!unique.length) return { pointProductRows: 0 }
+
+  let locationsQuery = supabase
+    .from('inventory_locations')
+    .select('company_id')
+    .eq('location_type', 'point_display')
+    .eq('is_active', true)
+    .not('company_id', 'is', null)
+
+  if (scope?.organizationId && !scope?.isSuperAdmin) {
+    locationsQuery = locationsQuery.eq('organization_id', String(scope.organizationId))
+  }
+
+  const { data: locations, error: locationsError } = await locationsQuery
+  if (locationsError) throw locationsError
+
+  const companyIds = Array.from(
+    new Set(
+      (locations || [])
+        .map((row: any) => row.company_id)
+        .filter((value: string | null | undefined): value is string => !!value),
+    ),
+  )
+  if (!companyIds.length) return { pointProductRows: 0 }
+
+  const rows: Array<{
+    company_id: string
+    name: string
+    barcode: string
+    price: number
+    is_active: boolean
+  }> = []
+  for (const it of unique) {
+    const price = Math.max(0, Math.round(Number(it.sale_price || 0)))
+    for (const companyId of companyIds) {
+      rows.push({
+        company_id: companyId,
+        name: it.name,
+        barcode: it.barcode,
+        price,
+        is_active: it.is_active,
+      })
+    }
+  }
+
+  for (let i = 0; i < rows.length; i += POINT_PRODUCTS_UPSERT_CHUNK) {
+    const slice = rows.slice(i, i + POINT_PRODUCTS_UPSERT_CHUNK)
+    const { error } = await supabase.from('point_products').upsert(slice, {
+      onConflict: 'company_id,barcode',
+    })
+    if (error) throw error
+  }
+
+  return { pointProductRows: rows.length }
+}
+
 export async function updateInventoryCategory(
   supabase: AnySupabase,
   id: string,

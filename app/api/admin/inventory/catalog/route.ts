@@ -3,8 +3,20 @@ import { NextResponse } from 'next/server'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveEffectiveOrganizationId } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
-import { syncInventoryItemToPointProducts } from '@/lib/server/repositories/inventory'
+import { bulkSyncInventoryItemsToPointProducts, syncInventoryItemToPointProducts } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+
+/** Импорт больших каталогов может занимать десятки секунд — поднимаем лимит на Vercel. */
+export const maxDuration = 300
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr]
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size))
+  }
+  return out
+}
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -101,19 +113,21 @@ export async function POST(request: Request) {
         )
       }
 
-      // Fetch existing items by barcode (в рамках организации)
+      // Fetch existing items by barcode (чанки — лимит длины IN в PostgREST)
       const barcodes = rows.map((r) => r.barcode).filter(Boolean)
-      const { data: existingItems, error: existingError } = await supabase
-        .from('inventory_items')
-        .select('id, name, barcode, sale_price, default_purchase_price')
-        .eq('organization_id', orgId)
-        .in('barcode', barcodes)
-
-      if (existingError) throw existingError
-
       const existingMap: Record<string, { id: string; name: string; barcode: string; sale_price: number; default_purchase_price: number }> = {}
-      for (const item of existingItems || []) {
-        existingMap[item.barcode] = item
+      for (const bcChunk of chunkArray(barcodes, 200)) {
+        if (!bcChunk.length) continue
+        const { data: part, error: existingError } = await supabase
+          .from('inventory_items')
+          .select('id, name, barcode, sale_price, default_purchase_price')
+          .eq('organization_id', orgId)
+          .in('barcode', bcChunk)
+
+        if (existingError) throw existingError
+        for (const item of part || []) {
+          existingMap[item.barcode] = item
+        }
       }
 
       // Fetch existing categories этой организации
@@ -230,19 +244,21 @@ export async function POST(request: Request) {
         }
       }
 
-      // Fetch existing items by barcode to determine create vs update (в организации)
+      // Fetch existing items by barcode (в организации), чанками
       const barcodes = rows.map((r) => r.barcode).filter(Boolean)
-      const { data: existingItems, error: existingError } = await supabase
-        .from('inventory_items')
-        .select('id, barcode')
-        .eq('organization_id', orgId)
-        .in('barcode', barcodes)
-
-      if (existingError) throw existingError
-
       const existingBarcodeToId: Record<string, string> = {}
-      for (const item of existingItems || []) {
-        existingBarcodeToId[item.barcode] = item.id
+      for (const bcChunk of chunkArray(barcodes, 200)) {
+        if (!bcChunk.length) continue
+        const { data: part, error: existingError } = await supabase
+          .from('inventory_items')
+          .select('id, barcode')
+          .eq('organization_id', orgId)
+          .in('barcode', bcChunk)
+
+        if (existingError) throw existingError
+        for (const item of part || []) {
+          existingBarcodeToId[item.barcode] = item.id
+        }
       }
 
       let created = 0
@@ -306,26 +322,39 @@ export async function POST(request: Request) {
       }
 
       if (toInsert.length > 0) {
-        const { error: insertError } = await supabase.from('inventory_items').insert(toInsert)
-        if (insertError) throw insertError
-        created = toInsert.length
+        for (const slice of chunkArray(toInsert, 400)) {
+          const { error: insertError } = await supabase.from('inventory_items').insert(slice)
+          if (insertError) throw insertError
+          created += slice.length
+        }
       }
 
-      for (const item of toUpdate) {
-        const { id, ...fields } = item
-        const { error: updateError } = await supabase.from('inventory_items').update(fields).eq('id', id)
-        if (updateError) throw updateError
-        updated++
+      const UPDATE_PARALLEL = 32
+      for (const slice of chunkArray(toUpdate, UPDATE_PARALLEL)) {
+        const results = await Promise.all(
+          slice.map((item) => {
+            const { id, ...fields } = item
+            return supabase.from('inventory_items').update(fields).eq('id', id)
+          }),
+        )
+        for (const r of results) {
+          if (r.error) throw r.error
+        }
+        updated += slice.length
       }
 
       const syncRows = rows.filter((row) => row.item_type !== 'consumable')
-      for (const row of syncRows) {
-        await syncInventoryItemToPointProducts(supabase as any, {
-          name: row.name,
-          barcode: row.barcode,
-          sale_price: row.sale_price,
-          is_active: true,
-        })
+      if (syncRows.length > 0) {
+        await bulkSyncInventoryItemsToPointProducts(
+          supabase as any,
+          syncRows.map((row) => ({
+            name: row.name,
+            barcode: row.barcode,
+            sale_price: row.sale_price,
+            is_active: true,
+          })),
+          { organizationId: orgId, isSuperAdmin: access.isSuperAdmin },
+        )
       }
 
       let stock_updated = 0
@@ -346,14 +375,20 @@ export async function POST(request: Request) {
         const warehouseId = whList?.[0]?.id as string | undefined
         if (warehouseId) {
           const bc = rowsWithStock.map((r) => r.barcode)
-          const { data: idRows, error: idErr } = await supabase
-            .from('inventory_items')
-            .select('id, barcode')
-            .eq('organization_id', orgId)
-            .in('barcode', bc)
+          const barcodeToId = new Map<string, string>()
+          for (const bcChunk of chunkArray(bc, 200)) {
+            if (!bcChunk.length) continue
+            const { data: idRows, error: idErr } = await supabase
+              .from('inventory_items')
+              .select('id, barcode')
+              .eq('organization_id', orgId)
+              .in('barcode', bcChunk)
 
-          if (idErr) throw idErr
-          const barcodeToId = new Map((idRows || []).map((r: { id: string; barcode: string }) => [r.barcode, r.id]))
+            if (idErr) throw idErr
+            for (const r of idRows || []) {
+              barcodeToId.set((r as { barcode: string }).barcode, (r as { id: string }).id)
+            }
+          }
           const upserts: Array<{ location_id: string; item_id: string; quantity: number }> = []
           for (const row of rowsWithStock) {
             const itemId = barcodeToId.get(row.barcode)
@@ -365,11 +400,13 @@ export async function POST(request: Request) {
             })
           }
           if (upserts.length > 0) {
-            const { error: balErr } = await supabase.from('inventory_balances').upsert(upserts, {
-              onConflict: 'location_id,item_id',
-            })
-            if (balErr) throw balErr
-            stock_updated = upserts.length
+            for (const slice of chunkArray(upserts, 500)) {
+              const { error: balErr } = await supabase.from('inventory_balances').upsert(slice, {
+                onConflict: 'location_id,item_id',
+              })
+              if (balErr) throw balErr
+              stock_updated += slice.length
+            }
           }
         }
       }
