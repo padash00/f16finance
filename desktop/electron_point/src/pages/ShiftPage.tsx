@@ -177,8 +177,13 @@ export default function ShiftPage({
   const isNightKaspiSplit = kaspiDailySplitEnabled && form.shift === 'night'
 
   const isArena = bootstrap.device.feature_flags?.arena_enabled === true
-  const wiponLabel = isArena ? 'Senet (система)' : 'Wipon (система)'
-  const kaspiLabel = isArena ? 'Kaspi POS' : 'Kaspi'
+  /** F16 Ramen: классическая смена с ручным налом/Kaspi; витрина только для учёта товара, не в ФАКТ смены. */
+  const isRamenCompany = (session.company.code || '').trim().toLowerCase() === 'ramen'
+  const mergeInventorySalesIntoShift = hasInventorySale && !isRamenCompany
+  /** Не показывать «смену арены» вместо калькулятора, если случайно включили арену на раменной точке. */
+  const useArenaShiftDashboard = isArena && !isRamenCompany
+  const wiponLabel = useArenaShiftDashboard ? 'Senet (система)' : 'Wipon (система)'
+  const kaspiLabel = useArenaShiftDashboard ? 'Kaspi POS' : 'Kaspi'
 
   useEffect(() => {
     // Устанавливаем время смены только при свежей форме (нет значимого черновика)
@@ -266,7 +271,7 @@ export default function ShiftPage({
   }, [dailyDate, kaspiDailySplitEnabled, loadDailyReport, viewMode])
 
   const loadSalesSummary = useCallback(async (date: string, shift: 'day' | 'night') => {
-    if (!hasInventorySale) {
+    if (!mergeInventorySalesIntoShift) {
       setSalesSummary(null)
       return
     }
@@ -280,7 +285,7 @@ export default function ShiftPage({
     } finally {
       setSalesSummaryLoading(false)
     }
-  }, [config, hasInventorySale])
+  }, [config, mergeInventorySalesIntoShift, session.company.id])
 
   useEffect(() => {
     if (viewMode !== 'shift') return
@@ -290,7 +295,7 @@ export default function ShiftPage({
   }, [form.date, form.shift, loadSalesSummary, viewMode])
 
   const loadArenaIncome = useCallback(async () => {
-    if (!isArena) return
+    if (!useArenaShiftDashboard) return
     setArenaIncomeLoading(true)
     try {
       const data = await api.getArena(config, session)
@@ -299,23 +304,23 @@ export default function ShiftPage({
     } catch { /* ignore */ } finally {
       setArenaIncomeLoading(false)
     }
-  }, [config, session, isArena])
+  }, [config, session, useArenaShiftDashboard])
 
   useEffect(() => {
-    if (!isArena) return
+    if (!useArenaShiftDashboard) return
     void loadArenaIncome()
     const id = setInterval(() => void loadArenaIncome(), 10000)
     return () => clearInterval(id)
-  }, [isArena, loadArenaIncome])
+  }, [useArenaShiftDashboard, loadArenaIncome])
 
   const vCash = parseMoney(form.cash)
   const vCoins = parseMoney(form.coins)
   const vKaspi = parseMoney(form.kaspi_pos)
   const vKaspiBeforeMidnight = parseMoney(form.kaspi_before_midnight)
-  const autoSalesCash = salesSummary?.cash_amount || 0
-  const autoSalesKaspiBeforeMidnight = salesSummary?.kaspi_before_midnight_amount || 0
-  const autoSalesKaspiAfterMidnight = salesSummary?.kaspi_after_midnight_amount || 0
-  const autoSalesKaspiTotal = salesSummary?.kaspi_amount || 0
+  const autoSalesCash = mergeInventorySalesIntoShift ? salesSummary?.cash_amount || 0 : 0
+  const autoSalesKaspiBeforeMidnight = mergeInventorySalesIntoShift ? salesSummary?.kaspi_before_midnight_amount || 0 : 0
+  const autoSalesKaspiAfterMidnight = mergeInventorySalesIntoShift ? salesSummary?.kaspi_after_midnight_amount || 0 : 0
+  const autoSalesKaspiTotal = mergeInventorySalesIntoShift ? salesSummary?.kaspi_amount || 0 : 0
   const vKaspiTotal = isNightKaspiSplit
     ? vKaspiBeforeMidnight + vKaspi + autoSalesKaspiBeforeMidnight + autoSalesKaspiAfterMidnight
     : vKaspi + autoSalesKaspiTotal
@@ -396,7 +401,7 @@ export default function ShiftPage({
       return
     }
 
-    if (!kaspiDailySplitEnabled && isArena && form.shift === 'night' && isLastDayOfMonth(form.date)) {
+    if (!kaspiDailySplitEnabled && useArenaShiftDashboard && form.shift === 'night' && isLastDayOfMonth(form.date)) {
       setSplitAfter({ cash: '', kaspi_pos: '', kaspi_online: '' })
       setSplitDialog(true)
       return
@@ -786,7 +791,7 @@ export default function ShiftPage({
           ) : null}
 
           {/* ─── Arena shift view ─────────────────────────────────────── */}
-          {isArena && viewMode === 'shift' && (
+          {useArenaShiftDashboard && viewMode === 'shift' && (
             <div className="space-y-4">
               <Card className="overflow-hidden border-primary/10 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]">
                 <CardContent className="p-5 space-y-4">
@@ -1012,7 +1017,7 @@ export default function ShiftPage({
             )
           })()}
 
-          <div className={!isArena && viewMode === 'shift' ? 'grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]' : 'hidden'}>
+          <div className={viewMode === 'shift' && !useArenaShiftDashboard ? 'grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]' : 'hidden'}>
             <form id="shift-report-form" onSubmit={handleSubmit} className="space-y-4 no-drag">
               <Card className="overflow-hidden border-primary/10 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]">
                 <CardContent className="space-y-5 p-5">
@@ -1084,7 +1089,7 @@ export default function ShiftPage({
                     />
                   </div>
 
-                  {hasInventorySale ? (
+                  {mergeInventorySalesIntoShift ? (
                     <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div>
@@ -1154,6 +1159,11 @@ export default function ShiftPage({
                         />
                       </div>
                     </div>
+                  ) : hasInventorySale && isRamenCompany ? (
+                    <div className="rounded-2xl border border-border/70 bg-muted/25 px-4 py-3 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">Ручной отчёт по смене.</span>{' '}
+                      Введите наличные, Kaspi и остальное по факту кассы. Суммы с вкладки «Продажи» в ФАКТ смены не подмешиваются.
+                    </div>
                   ) : null}
 
                   <div className="grid gap-3 md:grid-cols-2">
@@ -1220,7 +1230,7 @@ export default function ShiftPage({
                         labelWidth="w-32"
                       />
                     )}
-                    {isArena ? (
+                    {useArenaShiftDashboard ? (
                       <MoneyInput label="Kaspi Online" value={form.kaspi_online} onChange={(value) => setField('kaspi_online', value)} disabled={submitting} labelWidth="w-32" note="не входит в ФАКТ" />
                     ) : null}
                     <MoneyInput label="Тех. компенс." value={form.debts} onChange={(value) => setField('debts', value)} disabled={submitting} labelWidth="w-32" />
@@ -1260,7 +1270,7 @@ export default function ShiftPage({
                           </div>
                         </div>
                       ) : null}
-                      {isArena && !kaspiDailySplitEnabled && form.shift === 'night' && isLastDayOfMonth(form.date) ? (
+                      {useArenaShiftDashboard && !kaspiDailySplitEnabled && form.shift === 'night' && isLastDayOfMonth(form.date) ? (
                         <div className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-primary">
                           <div className="flex items-start gap-2">
                             <SplitSquareVertical className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -1396,7 +1406,7 @@ export default function ShiftPage({
                   <SummaryRow label={kaspiLabel} value={vKaspiTotal} />
                   {isNightKaspiSplit ? <SummaryRow label="до 00:00" value={vKaspiBeforeMidnight} dim /> : null}
                   {isNightKaspiSplit ? <SummaryRow label="после 00:00" value={vKaspi} dim /> : null}
-                  {isArena ? <SummaryRow label="Kaspi Online" value={vKaspiOnline} dim /> : null}
+                  {useArenaShiftDashboard ? <SummaryRow label="Kaspi Online" value={vKaspiOnline} dim /> : null}
                   <SummaryRow label="Тех. компенс." value={vDebts} />
                   <SummaryRow label="− Старт кассы" value={-vStart} highlight={vStart > 0} />
                   <div className="my-2 border-t border-border/70" />
@@ -1423,7 +1433,7 @@ export default function ShiftPage({
                   <div className="rounded-xl border border-white/10 bg-black/20 p-3">
                     <div className="text-xs uppercase tracking-wide text-muted-foreground">Режим точки</div>
                     <div className="mt-1 text-sm text-foreground/90">
-                      {isArena
+                      {useArenaShiftDashboard
                         ? 'Arena: учитываем Kaspi Online и сценарий разбивки ночной смены на две даты.'
                         : 'Стандартный режим: быстрый отчёт без разбивки по датам.'}
                     </div>
@@ -1507,7 +1517,7 @@ export default function ShiftPage({
                 {vKaspiTotal > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">{kaspiLabel}</span><span>{formatMoney(vKaspiTotal)} ₸</span></div> : null}
                 {isNightKaspiSplit && vKaspiBeforeMidnight > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">до 00:00</span><span>{formatMoney(vKaspiBeforeMidnight)} ₸</span></div> : null}
                 {isNightKaspiSplit && vKaspi > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">после 00:00</span><span>{formatMoney(vKaspi)} ₸</span></div> : null}
-                {isArena && vKaspiOnline > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Kaspi Online</span><span>{formatMoney(vKaspiOnline)} ₸</span></div> : null}
+                {useArenaShiftDashboard && vKaspiOnline > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Kaspi Online</span><span>{formatMoney(vKaspiOnline)} ₸</span></div> : null}
                 {vDebts > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Тех</span><span>{formatMoney(vDebts)} ₸</span></div> : null}
                 {vStart > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">Старт</span><span>−{formatMoney(vStart)} ₸</span></div> : null}
                 {vWipon > 0 ? <div className="flex justify-between"><span className="text-muted-foreground">{wiponLabel}</span><span>−{formatMoney(vWipon)} ₸</span></div> : null}
