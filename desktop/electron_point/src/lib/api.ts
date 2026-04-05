@@ -204,9 +204,9 @@ export async function changeOperatorPassword(
   })
 }
 
-export async function getAllOperators(config: AppConfig): Promise<OperatorBasic[]> {
+export async function getAllOperators(config: AppConfig, companyId?: string | null): Promise<OperatorBasic[]> {
   const data = await request<{ ok: boolean; operators: OperatorBasic[] }>(
-    config, 'GET', '/api/point/all-operators',
+    config, 'GET', '/api/point/all-operators', undefined, companyHeader(companyId),
   )
   return data.operators ?? []
 }

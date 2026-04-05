@@ -42,6 +42,15 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+/** Map Postgres/Supabase messages to stable client-facing codes for point debts. */
+function mapPointDebtErrorMessage(raw: string | undefined): string {
+  const m = (raw || '').toLowerCase()
+  if (m.includes('inventory_balances_quantity_check') || m.includes('inventory-insufficient-stock')) {
+    return 'inventory-insufficient-stock'
+  }
+  return raw || 'Не удалось обработать долг точки'
+}
+
 function canDebtReport(input: Record<string, unknown> | null | undefined) {
   return input?.debt_report === true
 }
@@ -82,21 +91,6 @@ async function resolveOperator(params: {
     .maybeSingle()
 
   if (error) throw error
-  return data
-}
-
-async function resolvePointDebtLocation(supabase: any, companyId: string) {
-  const { data, error } = await supabase
-    .from('inventory_locations')
-    .select('id, name, code, location_type')
-    .eq('company_id', companyId)
-    .eq('location_type', 'point_display')
-    .eq('is_active', true)
-    .limit(1)
-    .maybeSingle()
-
-  if (error) throw error
-  if (!data?.id) throw new Error('inventory-debt-location-not-found')
   return data
 }
 
@@ -314,7 +308,6 @@ export async function POST(request: Request) {
       }
 
       if (!clientName) return json({ error: 'client-name-required' }, 400)
-      const inventoryLocation = await resolvePointDebtLocation(supabase, device.company_id)
 
       if (payload.local_ref?.trim()) {
         const { data: existing, error: existingError } = await supabase
@@ -341,7 +334,7 @@ export async function POST(request: Request) {
       const commentLine = `${itemName} x${quantity} = ${totalAmount} ₸`
       const { data: createdRpc, error: insertError } = await supabase.rpc('inventory_create_point_debt', {
         p_company_id: device.company_id,
-        p_location_id: inventoryLocation.id,
+        p_location_id: null,
         p_point_device_id: device.id,
         p_operator_id: operatorId,
         p_client_name: clientName,
@@ -399,7 +392,7 @@ export async function POST(request: Request) {
           week_start: weekStart,
           aggregate_debt_id: aggregateId,
           inventory_item_id: createdInventoryItemId || created.inventory_item_id || null,
-          inventory_location_id: inventoryLocation.id,
+          inventory_location_id: null,
         },
       })
 
@@ -487,21 +480,19 @@ export async function POST(request: Request) {
 
       if (payUpdateError) throw payUpdateError
 
-      if (payItem.operator_id) {
-        const aggDebt = await findAggregateDebt({
-          supabase,
-          companyId: device.company_id,
-          operatorId: payItem.operator_id,
-          clientName: payItem.client_name || '',
-          weekStart: payItem.week_start,
-        })
-        if (aggDebt) {
-          const next = Math.max(0, normalizeMoney(aggDebt.amount) - normalizeMoney(payItem.total_amount))
-          if (next <= 0) {
-            await supabase.from('debts').update({ status: 'paid' }).eq('id', aggDebt.id)
-          } else {
-            await supabase.from('debts').update({ amount: next }).eq('id', aggDebt.id)
-          }
+      const aggDebt = await findAggregateDebt({
+        supabase,
+        companyId: device.company_id,
+        operatorId: payItem.operator_id || null,
+        clientName: (payItem.client_name || 'Должник').trim() || 'Должник',
+        weekStart: payItem.week_start,
+      })
+      if (aggDebt) {
+        const next = Math.max(0, normalizeMoney(aggDebt.amount) - normalizeMoney(payItem.total_amount))
+        if (next <= 0) {
+          await supabase.from('debts').update({ status: 'paid' }).eq('id', aggDebt.id)
+        } else {
+          await supabase.from('debts').update({ amount: next }).eq('id', aggDebt.id)
         }
       }
 
@@ -594,6 +585,6 @@ export async function POST(request: Request) {
       area: 'point-debts:post',
       message: error?.message || 'Point debts POST error',
     })
-    return json({ error: error?.message || 'Не удалось обработать долг точки' }, 500)
+    return json({ error: mapPointDebtErrorMessage(error?.message) }, 500)
   }
 }

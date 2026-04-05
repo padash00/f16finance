@@ -19,6 +19,18 @@ import { getCachedProducts, saveProductsCache } from '@/lib/cache'
 import QueueViewer from '@/components/QueueViewer'
 import type { AppConfig, BootstrapData, OperatorBasic, OperatorSession, Product, DebtItem } from '@/types'
 
+function debtDebtorPayload(
+  selectedId: string,
+  list: OperatorBasic[],
+): { operator_id: string | null; client_name: string | null } {
+  if (selectedId.startsWith('staff:') || selectedId.startsWith('orgmember:')) {
+    const row = list.find((o) => o.id === selectedId)
+    const clientName = (row?.short_name || row?.full_name || row?.name || '').trim()
+    return { operator_id: null, client_name: clientName || null }
+  }
+  return { operator_id: selectedId?.trim() || null, client_name: null }
+}
+
 interface Props {
   config: AppConfig
   bootstrap: BootstrapData
@@ -90,7 +102,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
     try {
       const [prodsResult, opsResult, debtsResult] = await Promise.allSettled([
         api.getProducts(config, session.company.id),
-        api.getAllOperators(config),
+        api.getAllOperators(config, session.company.id),
         api.getDebts(config, session.company.id),
       ])
 
@@ -193,8 +205,10 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
 
     setSubmitting(true)
     try {
+      const debtor = debtDebtorPayload(operatorId, allOperators)
       await api.createDebt(config, {
-        operator_id: operatorId || null,
+        operator_id: debtor.operator_id,
+        client_name: debtor.client_name,
         item_name: foundProduct.name,
         barcode: foundProduct.barcode,
         quantity: qty,
@@ -226,16 +240,26 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
           'inventory-debt-item-not-found': 'Товар не найден в инвентаре — добавьте его на сайте Orda',
           'inventory-debt-quantity-invalid': 'Неверное количество',
           'inventory-debt-location-not-found': 'Склад точки не настроен — обратитесь к администратору',
+          'inventory-insufficient-stock':
+            'На витрине точки нет столько товара — переместите со склада в Orda или уменьшите количество',
+          'debt-report-disabled-for-device':
+            'Долги для этой точки отключены — включите «Долги и сканер» в настройках проекта Orda (или для компании)',
           'operator-not-found': 'Оператор не найден или неактивен',
           'debt-delete-window-expired': 'Удалить можно только в течение 15 минут',
         }
-        const friendlyMsg = errorMap[message] || message
+        const friendlyMsg =
+          errorMap[message] ||
+          (message.includes('inventory_balances_quantity_check')
+            ? errorMap['inventory-insufficient-stock']
+            : message)
         flash('err', friendlyMsg)
         return
       }
 
+      const debtorQ = debtDebtorPayload(operatorId, allOperators)
       await queueCreateDebt({
-        operator_id: operatorId || null,
+        operator_id: debtorQ.operator_id,
+        client_name: debtorQ.client_name,
         item_name: foundProduct.name,
         barcode: foundProduct.barcode,
         quantity: qty,

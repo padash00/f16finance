@@ -80,6 +80,8 @@ export interface OperatorBasic {
   name: string
   short_name: string | null
   full_name: string | null
+  /** Сотрудник орг. (владелец/руководитель/маркетолог) без записи в `operators` — в долгах передаётся `client_name`. */
+  kind?: 'operator' | 'staff'
 }
 
 export interface CompanyOption {

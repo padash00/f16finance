@@ -28,6 +28,25 @@ export type PointDeviceContext = {
 const POINT_PROJECT_SELECT =
   'id, name, project_token, shift_report_chat_id, point_mode, feature_flags, is_active, notes, point_project_companies(company_id, point_mode, feature_flags, company:company_id(id, name, code))'
 
+/** Company JSONB flags override project; `null` / missing per key inherits from project (empty `{}` does not wipe project). */
+function mergePointFeatureFlags(
+  projectFlags: Record<string, unknown>,
+  companyFlagsRaw: unknown,
+): Record<string, unknown> {
+  const base =
+    projectFlags && typeof projectFlags === 'object' && !Array.isArray(projectFlags) ? { ...projectFlags } : {}
+  if (!companyFlagsRaw || typeof companyFlagsRaw !== 'object' || Array.isArray(companyFlagsRaw)) {
+    return base
+  }
+  const company = companyFlagsRaw as Record<string, unknown>
+  const out = { ...base }
+  for (const [k, v] of Object.entries(company)) {
+    if (v === null || v === undefined) continue
+    out[k] = v
+  }
+  return out
+}
+
 function deviceFromPointProjectRow(data: any, requestedCompanyId: string): PointDeviceContext['device'] {
   const projectCompanies = Array.isArray(data.point_project_companies) ? (data.point_project_companies as any[]) : []
   const company_ids: string[] = projectCompanies.map((c: any) => c.company_id).filter(Boolean)
@@ -61,10 +80,7 @@ function deviceFromPointProjectRow(data: any, requestedCompanyId: string): Point
 
   const effectivePointMode: string = selectedCompanyRow?.point_mode || data.point_mode
 
-  const effectiveFeatureFlags: Record<string, unknown> =
-    selectedCompanyRow?.feature_flags && typeof selectedCompanyRow.feature_flags === 'object'
-      ? (selectedCompanyRow.feature_flags as Record<string, unknown>)
-      : projectFlags
+  const effectiveFeatureFlags = mergePointFeatureFlags(projectFlags, selectedCompanyRow?.feature_flags)
 
   return {
     id: data.id,
