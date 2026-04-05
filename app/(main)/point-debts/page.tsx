@@ -2,9 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
-import Link from 'next/link'
 import {
-  ArrowLeft,
   CalendarDays,
   CheckSquare,
   Download,
@@ -14,6 +12,11 @@ import {
   Square,
 } from 'lucide-react'
 
+import {
+  AdminPageHeader,
+  AdminTableViewport,
+  adminTableStickyTheadClass,
+} from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { addDaysISO, formatRuDate, weekStartUtcISO } from '@/lib/core/date'
@@ -252,21 +255,13 @@ export default function PointDebtsPage() {
 
   return (
     <div className="mx-auto max-w-[1800px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6 xl:px-8">
-      <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.12),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.98))] p-4 md:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="text-slate-400 transition hover:text-white">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-            <div className="rounded-xl bg-amber-500/15 p-2 text-amber-300">
-              <Receipt className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-white">Долги с точки</h1>
-              <p className="text-xs text-slate-500">Позиции по неделям, выгрузка и списание</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+      <AdminPageHeader
+        title="Долги с точки"
+        description="Позиции по неделям, выгрузка и списание"
+        accent="amber"
+        icon={<Receipt className="h-5 w-5" aria-hidden />}
+        actions={
+          <>
             <Button
               type="button"
               variant="outline"
@@ -286,7 +281,7 @@ export default function PointDebtsPage() {
               {settling ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
               Списать выбранные ({selectedIds.length})
             </Button>
-            <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs">
+            <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs" role="group" aria-label="Неделя">
               <button
                 type="button"
                 onClick={() => setWeekStart(addDaysISO(weekStart, -7))}
@@ -314,55 +309,61 @@ export default function PointDebtsPage() {
               variant="outline"
               className="h-8 w-8 rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
               onClick={() => void load()}
+              aria-label="Обновить"
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
+          </>
+        }
+        toolbar={
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+              Неделя:{' '}
+              <span className="font-semibold text-white">
+                {formatRuDate(weekStart)} — {formatRuDate(weekEnd)}
+              </span>
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="point-debts-company" className="text-slate-500">
+                Компания:
+              </label>
+              <select
+                id="point-debts-company"
+                className="h-9 min-w-[200px] rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30 [color-scheme:dark]"
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+              >
+                <option value="">Все доступные</option>
+                {(data?.companies || []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name || c.code || c.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {data ? (
+              <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-amber-200">
+                Позиций: <span className="font-semibold text-white">{data.totals.count}</span> · на сумму{' '}
+                <span className="font-semibold text-white">{money(data.totals.amount)}</span>
+              </span>
+            ) : null}
+            {data && (data.legacyTotals?.count ?? 0) > 0 ? (
+              <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-violet-200">
+                Агрегат debts: <span className="font-semibold text-white">{data.legacyTotals.count}</span> ·{' '}
+                <span className="font-semibold text-white">{money(data.legacyTotals.amount)}</span>
+              </span>
+            ) : null}
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-500">
+              Неделя = понедельник по UTC (как <code className="text-slate-400">week_start</code> на точке)
+            </span>
+            {someSelected ? (
+              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-200">
+                Выбрано: {money(selectedTotal)}
+              </span>
+            ) : null}
           </div>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-400">
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
-            Неделя:{' '}
-            <span className="font-semibold text-white">
-              {formatRuDate(weekStart)} — {formatRuDate(weekEnd)}
-            </span>
-          </span>
-          <div className="flex items-center gap-2">
-            <span className="text-slate-500">Фильтр компании:</span>
-            <select
-              className="h-9 min-w-[200px] rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-amber-400/40 focus:outline-none [color-scheme:dark]"
-              value={companyId}
-              onChange={(e) => setCompanyId(e.target.value)}
-            >
-              <option value="">Все доступные</option>
-              {(data?.companies || []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name || c.code || c.id}
-                </option>
-              ))}
-            </select>
-          </div>
-          {data ? (
-            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-amber-200">
-              Позиций: <span className="font-semibold text-white">{data.totals.count}</span> · на сумму{' '}
-              <span className="font-semibold text-white">{money(data.totals.amount)}</span>
-            </span>
-          ) : null}
-          {data && (data.legacyTotals?.count ?? 0) > 0 ? (
-            <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-violet-200">
-              Агрегат debts: <span className="font-semibold text-white">{data.legacyTotals.count}</span> ·{' '}
-              <span className="font-semibold text-white">{money(data.legacyTotals.amount)}</span>
-            </span>
-          ) : null}
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-500">
-            Неделя = понедельник по UTC (как <code className="text-slate-400">week_start</code> на точке)
-          </span>
-          {someSelected ? (
-            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-200">
-              Выбрано: {money(selectedTotal)}
-            </span>
-          ) : null}
-        </div>
-      </Card>
+        }
+      />
 
       {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
 
@@ -377,13 +378,18 @@ export default function PointDebtsPage() {
         </Card>
       ) : null}
 
-      <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
-        <div className="overflow-x-auto">
+      <AdminTableViewport maxHeight="min(70vh, 40rem)">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-950/50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className={adminTableStickyTheadClass}>
               <tr>
                 <th className="px-2 py-3 text-center w-10">
-                  <button type="button" className="text-slate-400 hover:text-white" onClick={toggleAll} title="Выбрать все">
+                  <button
+                    type="button"
+                    className="text-slate-400 hover:text-white"
+                    onClick={toggleAll}
+                    title="Выбрать все"
+                    aria-label="Выбрать все строки"
+                  >
                     {allSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                   </button>
                 </th>
@@ -457,8 +463,7 @@ export default function PointDebtsPage() {
                 : null}
             </tbody>
           </table>
-        </div>
-      </Card>
+      </AdminTableViewport>
 
       {legacyRows.length > 0 ? (
         <Card className="overflow-hidden border-violet-500/20 bg-violet-950/20">
@@ -469,9 +474,9 @@ export default function PointDebtsPage() {
               строки сканера; списание здесь через отчётность / зарплату, не галочками на этой странице.
             </p>
           </div>
-          <div className="overflow-x-auto">
+          <AdminTableViewport maxHeight="min(50vh, 22rem)">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-950/50 text-xs uppercase tracking-wide text-slate-500">
+              <thead className={adminTableStickyTheadClass}>
                 <tr>
                   <th className="px-4 py-3 text-left">Должник</th>
                   <th className="px-4 py-3 text-left">Компания</th>
@@ -498,7 +503,7 @@ export default function PointDebtsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </AdminTableViewport>
         </Card>
       ) : null}
 

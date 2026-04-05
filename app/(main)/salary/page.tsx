@@ -4,8 +4,9 @@ import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from '
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Users, Wallet, X } from 'lucide-react'
+import { Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, CreditCard, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, RefreshCw, Send, TrendingDown, Users, Wallet, X } from 'lucide-react'
 
+import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from '@/lib/core/date'
@@ -326,58 +327,125 @@ export default function SalaryPage() {
     <>
         <div className="mx-auto max-w-[1600px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6 xl:px-8">
 
-          {/* ── Compact header ─────────────────────────────────────────────── */}
-          <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(2,6,23,0.98))] p-4 md:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <Link href="/" className="text-slate-400 hover:text-white transition"><ArrowLeft className="h-4 w-4" /></Link>
-                <div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-300"><Wallet className="h-5 w-5" /></div>
-                <div>
-                  <h1 className="text-lg font-semibold text-white">Зарплата</h1>
-                  <p className="text-xs text-slate-500">Выплаты, авансы, административный персонал</p>
-                </div>
-              </div>
-              {tab === 'operators' && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button type="button" onClick={() => setBroadcastConfirm(true)} disabled={loading || broadcastSending || !broadcastTargets.length} className="h-8 rounded-xl bg-blue-500 text-xs text-white hover:bg-blue-400 disabled:opacity-50 gap-1.5">
+          <AdminPageHeader
+            title="Зарплата"
+            description="Выплаты, авансы, административный персонал"
+            accent="emerald"
+            icon={<Wallet className="h-5 w-5" aria-hidden />}
+            actions={
+              tab === 'operators' ? (
+                <>
+                  <Button
+                    type="button"
+                    onClick={() => setBroadcastConfirm(true)}
+                    disabled={loading || broadcastSending || !broadcastTargets.length}
+                    className="h-8 gap-1.5 rounded-xl bg-blue-500 text-xs text-white hover:bg-blue-400 disabled:opacity-50"
+                  >
                     {broadcastSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                     {broadcastSending ? `${broadcastDone}/${broadcastTotal}` : 'Всем'}
                   </Button>
-                  <Button type="button" variant="outline" onClick={downloadSalaryCSV} disabled={loading || !data} className="h-8 rounded-xl border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 gap-1.5 text-xs">
-                    <Download className="h-3.5 w-3.5" />Excel
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={downloadSalaryCSV}
+                    disabled={loading || !data}
+                    className="h-8 gap-1.5 rounded-xl border-white/10 bg-white/5 text-xs text-slate-300 hover:bg-white/10"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Excel
                   </Button>
-                  <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs">
-                    <button type="button" onClick={() => setWeekStart(addDaysISO(weekStart, -7))} className="rounded-lg px-2.5 py-1.5 text-slate-400 hover:text-white transition">←</button>
-                    <button type="button" onClick={() => setWeekStart(currentWeek)} className="rounded-lg px-2.5 py-1.5 text-slate-300 hover:text-white transition">Сейчас</button>
-                    <button type="button" onClick={() => setWeekStart(addDaysISO(weekStart, 7))} className="rounded-lg px-2.5 py-1.5 text-slate-400 hover:text-white transition">→</button>
+                  <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5 text-xs" role="group" aria-label="Неделя">
+                    <button
+                      type="button"
+                      onClick={() => setWeekStart(addDaysISO(weekStart, -7))}
+                      className="rounded-lg px-2.5 py-1.5 text-slate-400 transition hover:text-white"
+                    >
+                      ←
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWeekStart(currentWeek)}
+                      className="rounded-lg px-2.5 py-1.5 text-slate-300 transition hover:text-white"
+                    >
+                      Сейчас
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWeekStart(addDaysISO(weekStart, 7))}
+                      className="rounded-lg px-2.5 py-1.5 text-slate-400 transition hover:text-white"
+                    >
+                      →
+                    </button>
                   </div>
-                  <Button type="button" variant="outline" className="h-8 w-8 rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void load()}><RefreshCw className="h-3.5 w-3.5" /></Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 w-8 rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                    onClick={() => void load()}
+                    aria-label="Обновить"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-8 w-8 rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                  onClick={() => void loadStaffSalary()}
+                  aria-label="Обновить"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </Button>
+              )
+            }
+            toolbar={
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5" role="tablist" aria-label="Раздел зарплаты">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === 'operators'}
+                    onClick={() => setTab('operators')}
+                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'operators' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    Операторы
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === 'staff'}
+                    onClick={() => setTab('staff')}
+                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'staff' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    Административные сотрудники
+                  </button>
                 </div>
-              )}
-              {tab === 'staff' && (
-                <Button type="button" variant="outline" className="h-8 w-8 rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void loadStaffSalary()}><RefreshCw className="h-3.5 w-3.5" /></Button>
-              )}
-            </div>
-
-            {/* Tabs */}
-            <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex rounded-xl border border-white/10 bg-black/20 p-0.5">
-                <button type="button" onClick={() => setTab('operators')} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'operators' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-                  Операторы
-                </button>
-                <button type="button" onClick={() => setTab('staff')} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'staff' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-                  Административные сотрудники
-                </button>
+                {tab === 'operators' ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                      Неделя:{' '}
+                      <span className="font-semibold text-white">
+                        {formatRuDate(weekStart)} — {formatRuDate(weekEnd)}
+                      </span>
+                    </span>
+                    {data ? (
+                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-300">
+                        Выплачено: <span className="font-semibold">{data.totals.paidOperators}</span>
+                      </span>
+                    ) : null}
+                    {broadcastTotal > 0 && !broadcastSending ? (
+                      <span
+                        className={`rounded-full border px-3 py-1 ${broadcastErrors.length ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}
+                      >
+                        {broadcastDone}/{broadcastTotal}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
-              {tab === 'operators' && (
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">Неделя: <span className="font-semibold text-white">{formatRuDate(weekStart)} — {formatRuDate(weekEnd)}</span></span>
-                  {data ? <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-300">Выплачено: <span className="font-semibold">{data.totals.paidOperators}</span></span> : null}
-                  {broadcastTotal > 0 && !broadcastSending ? <span className={`rounded-full border px-3 py-1 ${broadcastErrors.length ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}>{broadcastDone}/{broadcastTotal}</span> : null}
-                </div>
-              )}
-            </div>
-          </Card>
+            }
+          />
 
           {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
 
@@ -406,10 +474,9 @@ export default function SalaryPage() {
             </div>
           </div>
 
-          <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
-            <div className="overflow-x-auto">
+          <AdminTableViewport maxHeight="min(70vh, 40rem)">
               <table className="min-w-full text-sm">
-                <thead className="bg-slate-950/50 text-xs uppercase tracking-wide text-slate-500">
+                <thead className={adminTableStickyTheadClass}>
                   <tr>
                     <th className="px-4 py-3 text-left">Оператор</th>
                     <th className="px-4 py-3 text-center">Смен</th>
@@ -496,8 +563,7 @@ export default function SalaryPage() {
                   }) : null}
                 </tbody>
               </table>
-            </div>
-          </Card>
+          </AdminTableViewport>
 
           <Card className="border-white/10 bg-white/[0.04] p-5">
             <div className="mb-5 flex items-center gap-3">
