@@ -94,6 +94,62 @@ async function resolveOperator(params: {
   return data
 }
 
+const DEBTOR_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+/**
+ * UI uses synthetic ids `staff:<uuid>` / `orgmember:<uuid>` for non-operator debtors.
+ * They must never be sent to uuid columns — convert to operator_id null + client_name.
+ */
+async function normalizePointDebtDebtor(params: {
+  supabase: any
+  rawOperatorId: string | null
+  payloadClientName: string | null
+}): Promise<{ operatorId: string | null; clientName: string | null }> {
+  const raw = params.rawOperatorId?.trim() || null
+  let clientName = params.payloadClientName?.trim() || null
+
+  if (!raw) {
+    return { operatorId: null, clientName }
+  }
+
+  if (raw.startsWith('staff:')) {
+    const staffId = raw.slice('staff:'.length)
+    if (!DEBTOR_UUID_RE.test(staffId)) {
+      return { operatorId: null, clientName }
+    }
+    if (!clientName) {
+      const { data: st, error } = await params.supabase
+        .from('staff')
+        .select('full_name, short_name')
+        .eq('id', staffId)
+        .maybeSingle()
+      if (error) throw error
+      clientName = (st?.short_name || st?.full_name || '').trim() || null
+    }
+    return { operatorId: null, clientName }
+  }
+
+  if (raw.startsWith('orgmember:')) {
+    const omId = raw.slice('orgmember:'.length)
+    if (!DEBTOR_UUID_RE.test(omId)) {
+      return { operatorId: null, clientName }
+    }
+    if (!clientName) {
+      const { data: om, error } = await params.supabase
+        .from('organization_members')
+        .select('email')
+        .eq('id', omId)
+        .maybeSingle()
+      if (error) throw error
+      clientName = om?.email?.trim() || null
+    }
+    return { operatorId: null, clientName }
+  }
+
+  return { operatorId: raw, clientName }
+}
+
 async function findAggregateDebt(params: {
   supabase: any
   companyId: string
@@ -287,7 +343,6 @@ export async function POST(request: Request) {
       const quantity = Math.max(1, Number(payload.quantity || 1))
       const unitPrice = normalizeMoney(payload.unit_price)
       const totalAmount = normalizeMoney(payload.total_amount) || normalizeMoney(quantity * unitPrice)
-      const operatorId = payload.operator_id?.trim() || null
       const barcode = payload.barcode?.trim() || null
       const weekStart = startOfWeekISO(payload.occurred_at || null)
       const createdByOperatorId = payload.created_by_operator_id?.trim() || null
@@ -295,7 +350,12 @@ export async function POST(request: Request) {
       if (!itemName) return json({ error: 'item-name-required' }, 400)
       if (totalAmount <= 0) return json({ error: 'amount-required' }, 400)
 
-      let clientName = payload.client_name?.trim() || null
+      let { operatorId, clientName } = await normalizePointDebtDebtor({
+        supabase,
+        rawOperatorId: payload.operator_id?.trim() || null,
+        payloadClientName: payload.client_name?.trim() || null,
+      })
+
       let operator: any = null
 
       if (operatorId) {
