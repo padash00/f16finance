@@ -119,14 +119,14 @@ type WeekTotals = {
     expenseCash: number;
     expenseKaspi: number;
     expenseTotal: number;
-    expenseByCategory: Record<string, number>;
+    expenseByCategory: Record<string, { cash: number; kaspi: number }>;
     netCash: number;
     netNonCash: number;
     profit: number;
   }>
 
-  // Категории расходов
-  expenseCategories: { name: string; value: number; percentage: number }[]
+  // Категории расходов (value = cash + kaspi)
+  expenseCategories: { name: string; value: number; cash: number; kaspi: number; percentage: number }[]
 
   // Предыдущий период
   prev: {
@@ -490,7 +490,8 @@ const MemoizedBalanceChart = memo(({ data }: { data: BalancePoint[] }) => {
 MemoizedBalanceChart.displayName = 'MemoizedBalanceChart'
 
 // Круговая диаграмма расходов
-const MemoizedPieChart = memo(({ data }: { data: { name: string; value: number; percentage: number }[] }) => {
+const MemoizedPieChart = memo(
+  ({ data }: { data: { name: string; value: number; cash?: number; kaspi?: number; percentage: number }[] }) => {
   return (
     <ResponsiveContainer width="100%" height="100%">
       <RechartsPieChart>
@@ -507,16 +508,20 @@ const MemoizedPieChart = memo(({ data }: { data: { name: string; value: number; 
             <Cell key={`cell-${idx}`} fill={PIE_COLORS[idx % PIE_COLORS.length]} stroke="transparent" />
           ))}
         </Pie>
-        <Tooltip 
-          contentStyle={{ 
-            background: 'rgba(17, 24, 39, 0.95)', 
-            border: '1px solid rgba(255,255,255,0.1)', 
-            borderRadius: '12px' 
+        <Tooltip
+          contentStyle={{
+            background: 'rgba(17, 24, 39, 0.95)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '12px',
           }}
-          formatter={(v: number, _n: string, p: { payload?: { percentage?: number } }) => [
-            `${formatMoneyFull(v)} (${p?.payload?.percentage?.toFixed(1)}%)`,
-            'Сумма'
-          ]}
+          formatter={(v: number, _n: string, p: { payload?: { percentage?: number; cash?: number; kaspi?: number } }) => {
+            const pl = p?.payload
+            const parts = [`${formatMoneyFull(v)} (${pl?.percentage?.toFixed(1)}%)`]
+            if (pl && (pl.cash != null || pl.kaspi != null)) {
+              parts.push(`Нал: ${formatMoneyFull(pl.cash ?? 0)} · Kaspi: ${formatMoneyFull(pl.kaspi ?? 0)}`)
+            }
+            return [parts.join(' · '), 'Сумма']
+          }}
         />
       </RechartsPieChart>
     </ResponsiveContainer>
@@ -820,7 +825,7 @@ function WeeklyReportContent() {
     const statsByCompany: Record<string, {
       cash: number; kaspi: number; online: number; card: number; nonCash: number; total: number;
       expenseCash: number; expenseKaspi: number; expenseTotal: number;
-      expenseByCategory: Record<string, number>;
+      expenseByCategory: Record<string, { cash: number; kaspi: number }>;
       netCash: number; netNonCash: number; profit: number;
     }> = {}
     
@@ -833,7 +838,7 @@ function WeeklyReportContent() {
       }
     }
 
-    const catMap = new Map<string, number>()
+    const catMap = new Map<string, { cash: number; kaspi: number }>()
     
     // Данные по дням
     const dailyMap = new Map<string, DailyDataPoint>()
@@ -1024,7 +1029,8 @@ function WeeklyReportContent() {
         sc.expenseCash += cash
         sc.expenseKaspi += kaspi
         sc.expenseTotal += total
-        sc.expenseByCategory[catName] = (sc.expenseByCategory[catName] || 0) + total
+        const prevCat = sc.expenseByCategory[catName] || { cash: 0, kaspi: 0 }
+        sc.expenseByCategory[catName] = { cash: prevCat.cash + cash, kaspi: prevCat.kaspi + kaspi }
       }
 
       if (extra && !includeExtraInTotals) continue
@@ -1032,7 +1038,10 @@ function WeeklyReportContent() {
       eCash += cash
       eKaspi += kaspi
 
-      catMap.set(catName, (catMap.get(catName) || 0) + total)
+      {
+        const prevG = catMap.get(catName) || { cash: 0, kaspi: 0 }
+        catMap.set(catName, { cash: prevG.cash + cash, kaspi: prevG.kaspi + kaspi })
+      }
 
       // Добавляем к дневным данным
       const day = dailyMap.get(r.date)
@@ -1106,11 +1115,16 @@ function WeeklyReportContent() {
 
     // Категории расходов
     const expenseCategories = Array.from(catMap.entries())
-      .map(([name, value]) => ({ 
-        name, 
-        value,
-        percentage: expenseTotal > 0 ? (value / expenseTotal) * 100 : 0
-      }))
+      .map(([name, splits]) => {
+        const value = splits.cash + splits.kaspi
+        return {
+          name,
+          value,
+          cash: splits.cash,
+          kaspi: splits.kaspi,
+          percentage: expenseTotal > 0 ? (value / expenseTotal) * 100 : 0,
+        }
+      })
       .sort((a, b) => b.value - a.value)
       .slice(0, 10)
 
@@ -1521,16 +1535,28 @@ function WeeklyReportContent() {
     ], companyRows)
 
     // ─── Лист 4: Расходы по категориям ───────────────────────────────────────
-    const expRows: any[] = totals.expenseCategories.map(cat => ({
+    const expRows: any[] = totals.expenseCategories.map((cat) => ({
       name: cat.name,
+      cash: cat.cash,
+      kaspi: cat.kaspi,
       value: cat.value,
       pctExpense: cat.percentage,
-      pctIncome: totals.incomeTotal > 0 ? cat.value / totals.incomeTotal * 100 : 0,
+      pctIncome: totals.incomeTotal > 0 ? (cat.value / totals.incomeTotal) * 100 : 0,
     }))
-    expRows.push({ _isTotals: true, name: 'ИТОГО', value: totals.expenseTotal, pctExpense: 100, pctIncome: totals.metrics.expenseRate })
+    expRows.push({
+      _isTotals: true,
+      name: 'ИТОГО',
+      cash: totals.expenseCash,
+      kaspi: totals.expenseKaspi,
+      value: totals.expenseTotal,
+      pctExpense: 100,
+      pctIncome: totals.metrics.expenseRate,
+    })
     buildStyledSheet(wb, 'Расходы', 'Расходы по категориям', `Период: ${period}`, [
       { header: 'Категория', key: 'name', width: 32, type: 'text' },
-      { header: 'Сумма', key: 'value', width: 18, type: 'money' },
+      { header: 'Нал', key: 'cash', width: 14, type: 'money' },
+      { header: 'Kaspi', key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Всего', key: 'value', width: 16, type: 'money' },
       { header: '% от расходов', key: 'pctExpense', width: 16, type: 'percent' },
       { header: '% от выручки', key: 'pctIncome', width: 16, type: 'percent' },
     ], expRows)
@@ -1541,17 +1567,36 @@ function WeeklyReportContent() {
       const sc = totals.statsByCompany[c.id]
       if (!sc || Object.keys(sc.expenseByCategory).length === 0) continue
       catByCompRows.push({ _isSection: true, _sectionLabel: c.name })
-      const cats = Object.entries(sc.expenseByCategory).sort((a, b) => b[1] - a[1])
-      for (const [cat, amt] of cats) {
-        const pct = sc.expenseTotal > 0 ? amt / sc.expenseTotal * 100 : 0
-        catByCompRows.push({ company: c.name, category: cat, amount: amt, pct })
+      const cats = Object.entries(sc.expenseByCategory)
+        .map(([cat, sp]) => ({ cat, cash: sp.cash, kaspi: sp.kaspi, total: sp.cash + sp.kaspi }))
+        .sort((a, b) => b.total - a.total)
+      for (const row of cats) {
+        const pct = sc.expenseTotal > 0 ? row.total / sc.expenseTotal * 100 : 0
+        catByCompRows.push({
+          company: c.name,
+          category: row.cat,
+          amountCash: row.cash,
+          amountKaspi: row.kaspi,
+          amount: row.total,
+          pct,
+        })
       }
-      catByCompRows.push({ _isTotals: true, company: c.name, category: 'ИТОГО', amount: sc.expenseTotal, pct: 100 })
+      catByCompRows.push({
+        _isTotals: true,
+        company: c.name,
+        category: 'ИТОГО',
+        amountCash: sc.expenseCash,
+        amountKaspi: sc.expenseKaspi,
+        amount: sc.expenseTotal,
+        pct: 100,
+      })
     }
     buildStyledSheet(wb, 'Расходы по точкам', 'Расходы по категориям по точкам', `Период: ${period}`, [
       { header: 'Точка', key: 'company', width: 22, type: 'text' },
       { header: 'Категория', key: 'category', width: 30, type: 'text' },
-      { header: 'Сумма', key: 'amount', width: 18, type: 'money' },
+      { header: 'Нал', key: 'amountCash', width: 14, type: 'money' },
+      { header: 'Kaspi', key: 'amountKaspi', width: 14, type: 'money' },
+      { header: 'Всего', key: 'amount', width: 16, type: 'money' },
       { header: '% в точке', key: 'pct', width: 14, type: 'percent' },
     ], catByCompRows)
 
@@ -2006,17 +2051,24 @@ function WeeklyReportContent() {
 
                   <div className="mt-4 space-y-2 max-h-48 overflow-auto">
                     {totals.expenseCategories.map((cat, idx) => (
-                      <div key={cat.name} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <span 
-                            className="w-3 h-3 rounded-full" 
+                      <div key={cat.name} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 text-sm items-start">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="w-3 h-3 rounded-full shrink-0"
                             style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
                           />
-                          <span className="text-gray-300 truncate max-w-[120px]">{cat.name}</span>
+                          <span className="text-gray-300 truncate">{cat.name}</span>
                         </div>
-                        <div className="text-right">
-                          <span className="text-white font-medium">{formatMoneyCompact(cat.value)}</span>
-                          <span className="text-gray-500 text-xs ml-2">{cat.percentage.toFixed(1)}%</span>
+                        <div className="text-right shrink-0">
+                          <div>
+                            <span className="text-white font-medium">{formatMoneyCompact(cat.value)}</span>
+                            <span className="text-gray-500 text-xs ml-2">{cat.percentage.toFixed(1)}%</span>
+                          </div>
+                          <div className="text-[11px] text-gray-500 whitespace-nowrap">
+                            <span className="text-emerald-400/90">нал {formatMoneyCompact(cat.cash)}</span>
+                            <span className="text-gray-600 mx-1">·</span>
+                            <span className="text-blue-400/90">kaspi {formatMoneyCompact(cat.kaspi)}</span>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -2175,10 +2227,12 @@ function WeeklyReportContent() {
                   const s = totals.statsByCompany[c.id] || {
                     cash: 0, kaspi: 0, online: 0, card: 0, nonCash: 0, total: 0,
                     expenseCash: 0, expenseKaspi: 0, expenseTotal: 0,
-                    expenseByCategory: {} as Record<string, number>,
+                    expenseByCategory: {} as Record<string, { cash: number; kaspi: number }>,
                     netCash: 0, netNonCash: 0, profit: 0,
                   }
-                  const sortedCats = Object.entries(s.expenseByCategory).sort((a, b) => b[1] - a[1])
+                  const sortedCats = Object.entries(s.expenseByCategory)
+                    .map(([cat, sp]) => ({ cat, cash: sp.cash, kaspi: sp.kaspi, total: sp.cash + sp.kaspi }))
+                    .sort((a, b) => b.total - a.total)
                   return (
                     <div key={c.id} className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-5">
                       {/* Заголовок точки */}
@@ -2234,18 +2288,32 @@ function WeeklyReportContent() {
                           <p className="text-xs text-gray-600">Нет расходов</p>
                         ) : (
                           <div className="space-y-1">
-                            {sortedCats.map(([cat, amt]) => (
-                              <div key={cat} className="flex justify-between items-center text-xs">
+                            {sortedCats.map((row) => (
+                              <div key={row.cat} className="flex justify-between items-start gap-2 text-xs">
                                 <div className="flex items-center gap-1.5 min-w-0">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500/60 shrink-0" />
-                                  <span className="text-gray-400 truncate">{cat}</span>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500/60 shrink-0 mt-1" />
+                                  <span className="text-gray-400 truncate">{row.cat}</span>
                                 </div>
-                                <span className="text-rose-300 font-medium ml-2 shrink-0">{formatMoneyCompact(amt)}</span>
+                                <div className="text-right shrink-0">
+                                  <div className="text-rose-300 font-medium">{formatMoneyCompact(row.total)}</div>
+                                  <div className="text-[10px] text-gray-500 whitespace-nowrap">
+                                    <span className="text-emerald-400/80">нал {formatMoneyCompact(row.cash)}</span>
+                                    <span className="text-gray-600 mx-0.5">·</span>
+                                    <span className="text-blue-400/80">kaspi {formatMoneyCompact(row.kaspi)}</span>
+                                  </div>
+                                </div>
                               </div>
                             ))}
-                            <div className="flex justify-between items-center text-xs border-t border-white/5 pt-1 mt-1">
+                            <div className="flex justify-between items-start gap-2 text-xs border-t border-white/5 pt-1 mt-1">
                               <span className="text-gray-300 font-medium">Итого расход</span>
-                              <span className="text-rose-400 font-bold">{formatMoneyCompact(s.expenseTotal)}</span>
+                              <div className="text-right shrink-0">
+                                <div className="text-rose-400 font-bold">{formatMoneyCompact(s.expenseTotal)}</div>
+                                <div className="text-[10px] text-gray-500 whitespace-nowrap">
+                                  <span className="text-emerald-400/80">нал {formatMoneyCompact(s.expenseCash)}</span>
+                                  <span className="text-gray-600 mx-0.5">·</span>
+                                  <span className="text-blue-400/80">kaspi {formatMoneyCompact(s.expenseKaspi)}</span>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -2275,7 +2343,9 @@ function WeeklyReportContent() {
                   const extraCompany = companies.find(c => c.id === extraCompanyId)
                   const s = totals.statsByCompany[extraCompanyId]
                   if (!extraCompany || !s) return null
-                  const sortedCats = Object.entries(s.expenseByCategory).sort((a, b) => b[1] - a[1])
+                  const sortedCats = Object.entries(s.expenseByCategory)
+                    .map(([cat, sp]) => ({ cat, cash: sp.cash, kaspi: sp.kaspi, total: sp.cash + sp.kaspi }))
+                    .sort((a, b) => b.total - a.total)
                   return (
                     <div className="rounded-2xl bg-purple-950/30 backdrop-blur-xl border border-purple-500/20 p-5">
                       <div className="flex items-center justify-between mb-4">
@@ -2305,15 +2375,32 @@ function WeeklyReportContent() {
                         <p className="text-xs text-rose-400 font-medium mb-2 uppercase tracking-wide">Расходы по категориям</p>
                         {sortedCats.length === 0 ? <p className="text-xs text-gray-600">Нет расходов</p> : (
                           <div className="space-y-1">
-                            {sortedCats.map(([cat, amt]) => (
-                              <div key={cat} className="flex justify-between items-center text-xs">
-                                <div className="flex items-center gap-1.5 min-w-0"><span className="w-1.5 h-1.5 rounded-full bg-rose-500/60 shrink-0" /><span className="text-gray-400 truncate">{cat}</span></div>
-                                <span className="text-rose-300 font-medium ml-2 shrink-0">{formatMoneyCompact(amt)}</span>
+                            {sortedCats.map((row) => (
+                              <div key={row.cat} className="flex justify-between items-start gap-2 text-xs">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500/60 shrink-0 mt-1" />
+                                  <span className="text-gray-400 truncate">{row.cat}</span>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <div className="text-rose-300 font-medium">{formatMoneyCompact(row.total)}</div>
+                                  <div className="text-[10px] text-gray-500 whitespace-nowrap">
+                                    <span className="text-emerald-400/80">нал {formatMoneyCompact(row.cash)}</span>
+                                    <span className="text-gray-600 mx-0.5">·</span>
+                                    <span className="text-blue-400/80">kaspi {formatMoneyCompact(row.kaspi)}</span>
+                                  </div>
+                                </div>
                               </div>
                             ))}
-                            <div className="flex justify-between text-xs border-t border-white/5 pt-1 mt-1">
+                            <div className="flex justify-between items-start gap-2 text-xs border-t border-white/5 pt-1 mt-1">
                               <span className="text-gray-300 font-medium">Итого расход</span>
-                              <span className="text-rose-400 font-bold">{formatMoneyCompact(s.expenseTotal)}</span>
+                              <div className="text-right shrink-0">
+                                <div className="text-rose-400 font-bold">{formatMoneyCompact(s.expenseTotal)}</div>
+                                <div className="text-[10px] text-gray-500 whitespace-nowrap">
+                                  <span className="text-emerald-400/80">нал {formatMoneyCompact(s.expenseCash)}</span>
+                                  <span className="text-gray-600 mx-0.5">·</span>
+                                  <span className="text-blue-400/80">kaspi {formatMoneyCompact(s.expenseKaspi)}</span>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         )}
