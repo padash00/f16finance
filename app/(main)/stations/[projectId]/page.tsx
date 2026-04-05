@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { formatTariffWindowLabel, parseTimeToMinutes } from '@/lib/core/arena-tariff-window'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -27,7 +28,17 @@ type Station = {
   id: string; zone_id: string | null; name: string; order_index: number; is_active: boolean
   grid_x: number | null; grid_y: number | null
 }
-type Tariff = { id: string; zone_id: string; name: string; duration_minutes: number; price: number; is_active: boolean; tariff_type: 'fixed' | 'time_window'; window_end_time: string | null }
+type Tariff = {
+  id: string
+  zone_id: string
+  name: string
+  duration_minutes: number
+  price: number
+  is_active: boolean
+  tariff_type: 'fixed' | 'time_window'
+  window_start_time: string | null
+  window_end_time: string | null
+}
 type Decoration = {
   id: string; type: string; grid_x: number; grid_y: number; grid_w: number; grid_h: number
   label: string | null; rotation: number
@@ -94,6 +105,7 @@ function arenaRowToTariff(row: Record<string, unknown>): Tariff {
     price: Number(row.price ?? 0),
     is_active: Boolean(row.is_active ?? true),
     tariff_type: tt,
+    window_start_time: row.window_start_time != null ? String(row.window_start_time) : null,
     window_end_time: row.window_end_time != null ? String(row.window_end_time) : null,
   }
 }
@@ -120,6 +132,7 @@ function validateTariffInput(t: {
   duration_minutes: string | number
   price: string | number
   tariff_type: string
+  window_start_time: string
   window_end_time: string
 }): string | null {
   if (!String(t.name).trim()) return 'Введите название тарифа'
@@ -127,10 +140,30 @@ function validateTariffInput(t: {
   const dur = Number(t.duration_minutes)
   if (!Number.isFinite(price) || price < 0) return 'Укажите корректную цену (≥ 0)'
   if (!Number.isFinite(dur) || dur < 1) return 'Длительность не менее 1 минуты'
-  if (t.tariff_type === 'time_window' && !String(t.window_end_time || '').trim()) {
-    return 'Для пакета по времени укажите время окончания'
+  if (t.tariff_type === 'time_window') {
+    if (!String(t.window_end_time || '').trim()) return 'Для пакета укажите время окончания окна'
+    if (parseTimeToMinutes(String(t.window_end_time).trim()) === null) return 'Окончание окна: формат ЧЧ:ММ (например 16:00)'
+    const ws = String(t.window_start_time || '').trim()
+    if (!ws) return 'Укажите начало окна (кнопки «День» / «Ночь» или поля времени). Иначе на точке не будет ограничения по часам.'
+    if (parseTimeToMinutes(ws) === null) return 'Начало окна: формат ЧЧ:ММ (например 10:00)'
   }
   return null
+}
+
+const EMPTY_NEW_TARIFF: {
+  name: string
+  duration_minutes: string
+  price: string
+  tariff_type: 'fixed' | 'time_window'
+  window_start_time: string
+  window_end_time: string
+} = {
+  name: '',
+  duration_minutes: '60',
+  price: '',
+  tariff_type: 'fixed',
+  window_start_time: '',
+  window_end_time: '',
 }
 
 // ─── Inline edit input ───────────────────────────────────────────────────────
@@ -829,7 +862,7 @@ export default function StationsPage() {
   const [newStationName, setNewStationName] = useState('')
   const [editingStationId, setEditingStationId] = useState<string | null>(null)
 
-  const [newTariff, setNewTariff] = useState({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' })
+  const [newTariff, setNewTariff] = useState(() => ({ ...EMPTY_NEW_TARIFF }))
   const [editingTariff, setEditingTariff] = useState<Tariff | null>(null)
 
   const [manageQuery, setManageQuery] = useState('')
@@ -1116,12 +1149,13 @@ export default function StationsPage() {
         duration_minutes: Number(newTariff.duration_minutes),
         price: Number(newTariff.price),
         tariff_type: newTariff.tariff_type || 'fixed',
+        window_start_time: newTariff.tariff_type === 'time_window' ? (newTariff.window_start_time || null) : null,
         window_end_time: newTariff.tariff_type === 'time_window' ? (newTariff.window_end_time || null) : null,
       })
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных тарифа')
       const t = arenaRowToTariff(out.data as Record<string, unknown>)
       setTariffs(prev => [...prev, t].sort(sortTariffsByPrice))
-      setNewTariff({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' })
+      setNewTariff({ ...EMPTY_NEW_TARIFF })
       setCrudDialog(null)
       showFlash('ok', 'Тариф добавлен')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
@@ -1134,6 +1168,7 @@ export default function StationsPage() {
       duration_minutes: editingTariff.duration_minutes,
       price: editingTariff.price,
       tariff_type: editingTariff.tariff_type,
+      window_start_time: editingTariff.window_start_time || '',
       window_end_time: editingTariff.window_end_time || '',
     })
     if (err) {
@@ -1150,6 +1185,7 @@ export default function StationsPage() {
         duration_minutes: editingTariff.duration_minutes,
         price: editingTariff.price,
         tariff_type: editingTariff.tariff_type || 'fixed',
+        window_start_time: editingTariff.tariff_type === 'time_window' ? (editingTariff.window_start_time || null) : null,
         window_end_time: editingTariff.tariff_type === 'time_window' ? (editingTariff.window_end_time || null) : null,
       })
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных тарифа')
@@ -1532,7 +1568,7 @@ export default function StationsPage() {
                           <button
                             type="button"
                             onClick={() => {
-                              setNewTariff({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' })
+                              setNewTariff({ ...EMPTY_NEW_TARIFF })
                               setCrudDialog({ kind: 'tariff', zoneId: zone.id, zoneLabel: zone.name })
                             }}
                             className="flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
@@ -1552,14 +1588,44 @@ export default function StationsPage() {
                                     <input value={editingTariff.price} onChange={e => setEditingTariff(p => p ? ({ ...p, price: Number(e.target.value) }) : p)} type="number" min={0} step="1" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
                                   </div>
                                   <div className="grid grid-cols-2 gap-1">
-                                    <select value={editingTariff.tariff_type || 'fixed'} onChange={e => setEditingTariff(p => p ? ({ ...p, tariff_type: e.target.value as 'fixed' | 'time_window' }) : p)} className="rounded border border-white/20 bg-background px-2 py-1 text-xs">
-                                      <option value="fixed">Фиксированный</option>
-                                      <option value="time_window">Пакет по времени</option>
+                                    <select
+                                      value={editingTariff.tariff_type || 'fixed'}
+                                      onChange={e => {
+                                        const v = e.target.value as 'fixed' | 'time_window'
+                                        setEditingTariff(p => p
+                                          ? {
+                                              ...p,
+                                              tariff_type: v,
+                                              ...(v === 'fixed'
+                                                ? { window_start_time: null, window_end_time: null }
+                                                : {}),
+                                            }
+                                          : p)
+                                      }}
+                                      className="rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                    >
+                                      <option value="fixed">Фикс. длительность</option>
+                                      <option value="time_window">Пакет по окну</option>
                                     </select>
-                                    {editingTariff.tariff_type === 'time_window' && (
-                                      <input value={editingTariff.window_end_time || ''} onChange={e => setEditingTariff(p => p ? ({ ...p, window_end_time: e.target.value }) : p)} type="time" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
-                                    )}
                                   </div>
+                                  {editingTariff.tariff_type === 'time_window' && (
+                                    <div className="grid grid-cols-2 gap-1">
+                                      <input
+                                        value={editingTariff.window_start_time || ''}
+                                        onChange={e => setEditingTariff(p => p ? ({ ...p, window_start_time: e.target.value }) : p)}
+                                        type="time"
+                                        className="rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                        title="Начало окна"
+                                      />
+                                      <input
+                                        value={editingTariff.window_end_time || ''}
+                                        onChange={e => setEditingTariff(p => p ? ({ ...p, window_end_time: e.target.value }) : p)}
+                                        type="time"
+                                        className="rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                        title="Конец окна"
+                                      />
+                                    </div>
+                                  )}
                                   <div className="flex gap-1">
                                     <button type="button" onClick={handleUpdateTariff} className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground">Сохранить</button>
                                     <button type="button" onClick={() => setEditingTariff(null)} className="rounded bg-white/10 px-2 py-1 text-xs">Отмена</button>
@@ -1571,12 +1637,12 @@ export default function StationsPage() {
                                     <span className="text-sm">{t.name}</span>
                                     <span className="ml-2 text-xs text-muted-foreground">
                                       {t.tariff_type === 'time_window' && t.window_end_time
-                                        ? `до ${t.window_end_time}`
+                                        ? formatTariffWindowLabel(t.window_start_time, t.window_end_time)
                                         : formatMinutes(t.duration_minutes)}
                                       {' · '}{formatPrice(t.price)}
                                     </span>
                                     {t.tariff_type === 'time_window' && (
-                                      <span className="ml-1.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-semibold text-amber-400">Пакет</span>
+                                      <span className="ml-1.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-semibold text-amber-400">Окно</span>
                                     )}
                                   </div>
                                   <div className="hidden shrink-0 items-center gap-1 group-hover:flex">
@@ -1868,18 +1934,20 @@ export default function StationsPage() {
             <>
               <DialogHeader>
                 <DialogTitle>Новый тариф</DialogTitle>
-                <DialogDescription>Зона «{crudDialog.zoneLabel}». Проверьте длительность, цену и тип.</DialogDescription>
+                <DialogDescription>
+                  Зона «{crudDialog.zoneLabel}». <strong>Фикс</strong> — сеанс на N минут в любое время. <strong>Пакет по окну</strong> — старт только внутри интервала, окончание в конце окна (день 10–16 или ночь 22–10).
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
                 <input
                   value={newTariff.name}
                   onChange={e => setNewTariff(p => ({ ...p, name: e.target.value }))}
-                  placeholder="Название (напр. 1 час)"
+                  placeholder="Название (напр. 1 час, День пакет)"
                   className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <label className="text-xs text-muted-foreground">
-                    <span className="mb-1 block">Минуты</span>
+                    <span className="mb-1 block">Минуты (для справки / продлений)</span>
                     <input value={newTariff.duration_minutes} onChange={e => setNewTariff(p => ({ ...p, duration_minutes: e.target.value }))} type="number" min={1} className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
                   </label>
                   <label className="text-xs text-muted-foreground">
@@ -1887,21 +1955,88 @@ export default function StationsPage() {
                     <input value={newTariff.price} onChange={e => setNewTariff(p => ({ ...p, price: e.target.value }))} type="number" min={0} step="1" className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
                   </label>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-xs text-muted-foreground">
-                    <span className="mb-1 block">Тип</span>
-                    <select value={newTariff.tariff_type} onChange={e => setNewTariff(p => ({ ...p, tariff_type: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm">
-                      <option value="fixed">Фиксированный</option>
-                      <option value="time_window">Пакет по времени</option>
-                    </select>
-                  </label>
-                  {newTariff.tariff_type === 'time_window' && (
-                    <label className="text-xs text-muted-foreground">
-                      <span className="mb-1 block">До времени</span>
-                      <input value={newTariff.window_end_time} onChange={e => setNewTariff(p => ({ ...p, window_end_time: e.target.value }))} type="time" className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
-                    </label>
-                  )}
-                </div>
+
+                <label className="block text-xs font-medium text-muted-foreground">Режим</label>
+                <select
+                  value={newTariff.tariff_type}
+                  onChange={e => {
+                    const v = e.target.value as 'fixed' | 'time_window'
+                    setNewTariff(p => ({
+                      ...p,
+                      tariff_type: v,
+                      ...(v === 'fixed' ? { window_start_time: '', window_end_time: '' } : {}),
+                    }))
+                  }}
+                  className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                >
+                  <option value="fixed">Фиксированная длительность — доступно в любое время</option>
+                  <option value="time_window">Пакет по окну времени (день / ночь / свой интервал)</option>
+                </select>
+
+                {newTariff.tariff_type === 'fixed' && (
+                  <p className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+                    На точке оператор сможет начать сеанс в любой момент. Длительность = поле «Минуты» (например 60, 180, 300).
+                  </p>
+                )}
+
+                {newTariff.tariff_type === 'time_window' && (
+                  <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                    <p className="text-xs text-amber-200/90">
+                      Старт сессии только если текущее время внутри окна. Конец сессии — в указанное «до» (для ночи 22–10 конец до 10:00 следующего утра).
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewTariff(p => ({
+                          ...p,
+                          tariff_type: 'time_window',
+                          window_start_time: '10:00',
+                          window_end_time: '16:00',
+                          name: p.name.trim() ? p.name : 'День пакет',
+                        }))}
+                        className="rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-white/15"
+                      >
+                        День 10:00–16:00
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewTariff(p => ({
+                          ...p,
+                          tariff_type: 'time_window',
+                          window_start_time: '22:00',
+                          window_end_time: '10:00',
+                          name: p.name.trim() ? p.name : 'Ночь пакет',
+                        }))}
+                        className="rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-white/15"
+                      >
+                        Ночь 22:00–10:00
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-xs text-muted-foreground">
+                        <span className="mb-1 block">Окно с</span>
+                        <input
+                          value={newTariff.window_start_time}
+                          onChange={e => setNewTariff(p => ({ ...p, window_start_time: e.target.value }))}
+                          type="time"
+                          className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                        />
+                      </label>
+                      <label className="text-xs text-muted-foreground">
+                        <span className="mb-1 block">Окно до</span>
+                        <input
+                          value={newTariff.window_end_time}
+                          onChange={e => setNewTariff(p => ({ ...p, window_end_time: e.target.value }))}
+                          type="time"
+                          className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                        />
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Если «с» позже «до» по часам (например 22 и 10) — это ночное окно через полночь.
+                    </p>
+                  </div>
+                )}
               </div>
               <DialogFooter className="gap-2 sm:gap-0">
                 <button type="button" onClick={() => setCrudDialog(null)} className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-white/10">

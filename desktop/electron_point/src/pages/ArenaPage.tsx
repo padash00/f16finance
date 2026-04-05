@@ -44,6 +44,21 @@ function formatMoney(n: number) {
   return n.toLocaleString('ru-RU') + ' ₸'
 }
 
+function formatArenaTariffSchedule(t: ArenaTariff): string {
+  if (t.tariff_type !== 'time_window' || !t.window_end_time) {
+    return `${t.duration_minutes} мин`
+  }
+  if (t.window_start_time) {
+    const pa = t.window_start_time.split(':').map(Number)
+    const pb = t.window_end_time.split(':').map(Number)
+    const ma = (pa[0] ?? 0) * 60 + (pa[1] ?? 0)
+    const mb = (pb[0] ?? 0) * 60 + (pb[1] ?? 0)
+    if (ma > mb) return `${t.window_start_time}–${t.window_end_time} · ночь`
+    return `${t.window_start_time}–${t.window_end_time} · день`
+  }
+  return `до ${t.window_end_time}`
+}
+
 function getRemainingMs(endsAt: string): number {
   return new Date(endsAt).getTime() - Date.now()
 }
@@ -118,17 +133,10 @@ function StartSessionModal({
             >
               <span className="font-medium">{t.name}</span>
               <span className="flex items-center gap-3 text-xs">
-                {t.tariff_type === 'time_window' && t.window_end_time ? (
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    до {t.window_end_time}
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {t.duration_minutes} мин
-                  </span>
-                )}
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {formatArenaTariffSchedule(t)}
+                </span>
                 <span className="font-semibold text-foreground">{formatMoney(t.price)}</span>
               </span>
             </button>
@@ -338,7 +346,7 @@ function ManageSessionModal({
                   <span className="flex items-center gap-3 text-xs">
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {t.duration_minutes} мин
+                      {formatArenaTariffSchedule(t)}
                     </span>
                     <span className="font-semibold text-foreground">{formatMoney(t.price)}</span>
                   </span>
@@ -538,7 +546,7 @@ function MassZoneStartModal({
               <span className="flex items-center gap-3 text-xs">
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {t.duration_minutes} мин
+                  {formatArenaTariffSchedule(t)}
                 </span>
                 <span className="font-semibold text-foreground">{formatMoney(t.price)}</span>
               </span>

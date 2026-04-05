@@ -445,7 +445,9 @@ export interface ArenaTariff {
   price: number
   is_active: boolean
   tariff_type: 'fixed' | 'time_window'
-  window_end_time: string | null  // e.g. '16:00'
+  /** Начало окна HH:MM; вместе с window_end_time задаёт день/ночь */
+  window_start_time: string | null
+  window_end_time: string | null
 }
 
 export interface ArenaSession {

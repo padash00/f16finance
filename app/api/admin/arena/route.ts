@@ -242,7 +242,7 @@ export async function POST(request: Request) {
 
     // ─── TARIFFS ─────────────────────────────────────────────────────
     if (body.action === 'createTariff') {
-      const { projectId, zoneId, name, duration_minutes, price, tariff_type, window_end_time } = body
+      const { projectId, zoneId, name, duration_minutes, price, tariff_type, window_end_time, window_start_time } = body
       if (!projectId || !zoneId || !name?.trim()) return json({ error: 'projectId, zoneId and name required' }, 400)
       await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
       const { data, error } = await supabase.from('arena_tariffs').insert({
@@ -253,6 +253,7 @@ export async function POST(request: Request) {
         duration_minutes: Number(duration_minutes) || 60,
         price: Number(price) || 0,
         tariff_type: tariff_type || 'fixed',
+        window_start_time: window_start_time || null,
         window_end_time: window_end_time || null,
       }).select().single()
       if (error) throw error
@@ -260,7 +261,7 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'updateTariff') {
-      const { tariffId, name, duration_minutes, price, is_active, tariff_type, window_end_time } = body
+      const { tariffId, name, duration_minutes, price, is_active, tariff_type, window_end_time, window_start_time } = body
       if (!tariffId) return json({ error: 'tariffId required' }, 400)
       await ensureArenaEntityAccess(supabase, 'arena_tariffs', tariffId, companyScope.allowedCompanyIds)
       const update: any = {}
@@ -269,6 +270,7 @@ export async function POST(request: Request) {
       if (price !== undefined) update.price = Number(price)
       if (is_active !== undefined) update.is_active = is_active
       if (tariff_type !== undefined) update.tariff_type = tariff_type
+      if (window_start_time !== undefined) update.window_start_time = window_start_time || null
       if (window_end_time !== undefined) update.window_end_time = window_end_time || null
       const { data, error } = await supabase.from('arena_tariffs').update(update).eq('id', tariffId).select().single()
       if (error) throw error

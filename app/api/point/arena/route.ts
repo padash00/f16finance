@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { computeTimeWindowEndsAt, isNowInTariffWindow } from '@/lib/core/arena-tariff-window'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
@@ -152,10 +153,27 @@ export async function POST(request: Request) {
       let endsAt: Date
 
       if (tariff.tariff_type === 'time_window' && tariff.window_end_time) {
-        const [endHour, endMin] = (tariff.window_end_time as string).split(':').map(Number)
-        endsAt = new Date()
-        endsAt.setHours(endHour, endMin, 0, 0)
-        if (endsAt <= startedAt) endsAt.setDate(endsAt.getDate() + 1)
+        const windowCheck = isNowInTariffWindow(
+          startedAt,
+          String(tariff.tariff_type),
+          tariff.window_start_time as string | null | undefined,
+          tariff.window_end_time as string | null | undefined,
+        )
+        if (!windowCheck.ok) {
+          return json(
+            {
+              error: 'Этот тариф сейчас недоступен: вне окна времени (настройки тарифа на сайте).',
+              code: 'outside-tariff-window',
+            },
+            403,
+          )
+        }
+        const computed = computeTimeWindowEndsAt(
+          startedAt,
+          tariff.window_start_time as string | null | undefined,
+          tariff.window_end_time as string | null | undefined,
+        )
+        endsAt = computed ?? new Date(startedAt.getTime() + Number(tariff.duration_minutes) * 60_000)
       } else {
         endsAt = new Date(startedAt.getTime() + Number(tariff.duration_minutes) * 60_000)
       }
