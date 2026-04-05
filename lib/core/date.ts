@@ -43,6 +43,20 @@ export function mondayOfISO(iso: string): string {
   return toISODateLocal(mondayOfDate(parseISODate(iso)))
 }
 
+/**
+ * Понедельник недели в UTC (ISO-стиль), как при записи долгов с точки (`point/debts` → week_start).
+ * Отличается от `mondayOfDate` (локальный TZ): иначе на границе суток список на /point-debts пустой.
+ */
+export function weekStartUtcISO(from: Date | string = new Date()): string {
+  const base = typeof from === 'string' ? new Date(from) : from
+  const date = Number.isNaN(base.getTime()) ? new Date() : base
+  const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+  const day = copy.getUTCDay()
+  const offset = day === 0 ? -6 : 1 - day
+  copy.setUTCDate(copy.getUTCDate() + offset)
+  return copy.toISOString().slice(0, 10)
+}
+
 export function getWeekRange(input = new Date()): DateRange {
   const monday = mondayOfDate(input)
   return {

@@ -141,35 +141,54 @@ export async function GET(req: Request) {
           companies: [],
           items: [],
           totals: { count: 0, amount: 0 },
+          legacyAggregates: [],
+          legacyTotals: { count: 0, amount: 0 },
+          pointClientAggregateHint: null,
         },
       })
     }
 
     const supabase = createAdminSupabaseClient()
 
-    const [{ data: companyRows }, { data: rawItems, error: itemsError }] = await Promise.all([
-      supabase.from('companies').select('id, name, code').in('id', companyIds),
-      supabase
-        .from('point_debt_items')
-        .select(
-          'id, company_id, operator_id, created_by_operator_id, point_device_id, client_name, item_name, barcode, quantity, unit_price, total_amount, comment, week_start, source, local_ref, status, created_at',
-        )
-        .eq('week_start', weekStart)
-        .eq('status', 'active')
-        .in('company_id', companyIds)
-        .order('created_at', { ascending: false })
-        .limit(3000),
-    ])
+    const [{ data: companyRows }, { data: rawItems, error: itemsError }, { data: rawDebts, error: debtsError }] =
+      await Promise.all([
+        supabase.from('companies').select('id, name, code').in('id', companyIds),
+        supabase
+          .from('point_debt_items')
+          .select(
+            'id, company_id, operator_id, created_by_operator_id, point_device_id, client_name, item_name, barcode, quantity, unit_price, total_amount, comment, week_start, source, local_ref, status, created_at',
+          )
+          .eq('week_start', weekStart)
+          .eq('status', 'active')
+          .in('company_id', companyIds)
+          .order('created_at', { ascending: false })
+          .limit(3000),
+        supabase
+          .from('debts')
+          .select('id, company_id, operator_id, client_name, amount, comment, week_start, status, source, created_at')
+          .eq('week_start', weekStart)
+          .eq('status', 'active')
+          .in('company_id', companyIds),
+      ])
 
     if (itemsError) throw itemsError
+    if (debtsError) throw debtsError
 
     const items = (rawItems || []) as any[]
+    /** Строки `debts` не из сканера: `point-client` — это зеркало суммы `point_debt_items`, не показываем второй раз. */
+    const legacyDebtRows = ((rawDebts || []) as any[]).filter(
+      (d) => String(d.source || '').trim().toLowerCase() !== 'point-client',
+    )
+
     const opIds = new Set<string>()
     const devIds = new Set<string>()
     for (const row of items) {
       if (row.operator_id) opIds.add(String(row.operator_id))
       if (row.created_by_operator_id) opIds.add(String(row.created_by_operator_id))
       if (row.point_device_id) devIds.add(String(row.point_device_id))
+    }
+    for (const d of legacyDebtRows) {
+      if (d.operator_id) opIds.add(String(d.operator_id))
     }
 
     const [opsRes, devRes] = await Promise.all([
@@ -240,6 +259,50 @@ export async function GET(req: Request) {
       { count: 0, amount: 0 },
     )
 
+    const legacyAggregates = legacyDebtRows.map((d: any) => {
+      const debtorOp = d.operator_id ? opMap.get(String(d.operator_id)) : null
+      const debtorName =
+        debtorOp?.short_name?.trim() ||
+        debtorOp?.name?.trim() ||
+        (d.client_name || '').trim() ||
+        'Должник'
+      const co = d.company_id ? companyMap.get(String(d.company_id)) : null
+      return {
+        id: d.id,
+        company_id: d.company_id || null,
+        company_name: co?.name || co?.code || d.company_id || '—',
+        company_code: co?.code || null,
+        operator_id: d.operator_id || null,
+        client_name: d.client_name || null,
+        debtor_name: debtorName,
+        amount: Number(d.amount || 0),
+        comment: d.comment || null,
+        source: d.source || null,
+        week_start: d.week_start,
+        created_at: d.created_at || null,
+      }
+    })
+
+    const legacyTotals = legacyAggregates.reduce(
+      (acc, r) => {
+        acc.count += 1
+        acc.amount += normalizeMoney(r.amount)
+        return acc
+      },
+      { count: 0, amount: 0 },
+    )
+
+    const pointClientDebtRows = ((rawDebts || []) as any[]).filter(
+      (d) => String(d.source || '').trim().toLowerCase() === 'point-client',
+    )
+    const pointClientAggregateHint =
+      mapped.length === 0 && pointClientDebtRows.length > 0
+        ? {
+            count: pointClientDebtRows.length,
+            amount: pointClientDebtRows.reduce((s, d) => s + normalizeMoney(d.amount), 0),
+          }
+        : null
+
     const companies = (companyRows || []).map((c: any) => ({
       id: String(c.id),
       name: c.name || null,
@@ -254,6 +317,9 @@ export async function GET(req: Request) {
         companies,
         items: mapped,
         totals,
+        legacyAggregates,
+        legacyTotals,
+        pointClientAggregateHint,
       },
     })
   } catch (error: any) {

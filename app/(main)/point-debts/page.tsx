@@ -16,7 +16,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal } from '@/lib/core/date'
+import { addDaysISO, formatRuDate, weekStartUtcISO } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
 
 type CompanyOpt = { id: string; name: string | null; code: string | null }
@@ -44,18 +44,38 @@ type DebtRow = {
   created_at: string
 }
 
+type LegacyDebtRow = {
+  id: string
+  company_id: string | null
+  company_name: string
+  company_code: string | null
+  operator_id: string | null
+  client_name: string | null
+  debtor_name: string
+  amount: number
+  comment: string | null
+  source: string | null
+  week_start: string
+  created_at: string | null
+}
+
 type LoadData = {
   weekStart: string
   weekEnd: string
   companies: CompanyOpt[]
   items: DebtRow[]
   totals: { count: number; amount: number }
+  legacyAggregates: LegacyDebtRow[]
+  legacyTotals: { count: number; amount: number }
+  /** Есть активные debts с source point-client, но нет строк point_debt_items — проверьте неделю или списания. */
+  pointClientAggregateHint: { count: number; amount: number } | null
 }
 
 const money = formatMoney
 
 export default function PointDebtsPage() {
-  const currentWeek = toISODateLocal(mondayOfDate(new Date()))
+  /** Как на точке при создании долга (UTC-понедельник), иначе список пустой при сдвиге TZ. */
+  const currentWeek = weekStartUtcISO(new Date())
   const [weekStart, setWeekStart] = useState(currentWeek)
   const [companyId, setCompanyId] = useState<string>('')
   const [data, setData] = useState<LoadData | null>(null)
@@ -76,7 +96,17 @@ export default function PointDebtsPage() {
       const res = await fetch(`/api/admin/point-debts?${q.toString()}`, { cache: 'no-store' })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || `Ошибка ${res.status}`)
-      setData(json.data as LoadData)
+      const d = json.data as Partial<LoadData>
+      setData({
+        weekStart: d.weekStart || '',
+        weekEnd: d.weekEnd || '',
+        companies: d.companies || [],
+        items: d.items || [],
+        totals: d.totals || { count: 0, amount: 0 },
+        legacyAggregates: d.legacyAggregates ?? [],
+        legacyTotals: d.legacyTotals ?? { count: 0, amount: 0 },
+        pointClientAggregateHint: d.pointClientAggregateHint ?? null,
+      })
     } catch (e: any) {
       setData(null)
       setError(e?.message || 'Не удалось загрузить')
@@ -96,6 +126,7 @@ export default function PointDebtsPage() {
   }, [error])
 
   const items = data?.items || []
+  const legacyRows = data?.legacyAggregates ?? []
   const allSelected = items.length > 0 && items.every((r) => selected[r.id])
   const someSelected = items.some((r) => selected[r.id])
   const selectedIds = useMemo(() => items.filter((r) => selected[r.id]).map((r) => r.id), [items, selected])
@@ -158,6 +189,33 @@ export default function PointDebtsPage() {
       ],
       rows,
     )
+    if (legacyRows.length > 0) {
+      const leg = legacyRows.map((r) => ({
+        id: r.id,
+        debtor: r.debtor_name,
+        company: r.company_name,
+        amount: Math.round(r.amount * 100) / 100,
+        source: r.source || '—',
+        comment: r.comment || '—',
+        created: r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '—',
+      }))
+      buildStyledSheet(
+        wb,
+        'debts агрегат',
+        'Таблица debts (не point-client)',
+        `Неделя ${data.weekStart}: PyQt и прочие источники без строк point_debt_items · ${legacyRows.length} шт. · ${money(data.legacyTotals?.amount ?? 0)}`,
+        [
+          { header: 'ID debts', key: 'id', width: 38, type: 'text' },
+          { header: 'Должник', key: 'debtor', width: 22, type: 'text' },
+          { header: 'Компания', key: 'company', width: 20, type: 'text' },
+          { header: 'Сумма', key: 'amount', width: 14, type: 'money' },
+          { header: 'Источник', key: 'source', width: 14, type: 'text' },
+          { header: 'Комментарий', key: 'comment', width: 28, type: 'text' },
+          { header: 'Создано', key: 'created', width: 20, type: 'text' },
+        ],
+        leg,
+      )
+    }
     await downloadWorkbook(wb, `point_debts_${data.weekStart}.xlsx`)
   }
 
@@ -212,7 +270,7 @@ export default function PointDebtsPage() {
             <Button
               type="button"
               variant="outline"
-              disabled={loading || !items.length}
+              disabled={loading || (!items.length && !legacyRows.length)}
               className="h-8 rounded-xl border-white/10 bg-white/5 text-xs text-slate-300 hover:bg-white/10"
               onClick={() => void downloadExcel()}
             >
@@ -289,6 +347,15 @@ export default function PointDebtsPage() {
               <span className="font-semibold text-white">{money(data.totals.amount)}</span>
             </span>
           ) : null}
+          {data && (data.legacyTotals?.count ?? 0) > 0 ? (
+            <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-violet-200">
+              Агрегат debts: <span className="font-semibold text-white">{data.legacyTotals.count}</span> ·{' '}
+              <span className="font-semibold text-white">{money(data.legacyTotals.amount)}</span>
+            </span>
+          ) : null}
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-500">
+            Неделя = понедельник по UTC (как <code className="text-slate-400">week_start</code> на точке)
+          </span>
           {someSelected ? (
             <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-200">
               Выбрано: {money(selectedTotal)}
@@ -298,6 +365,17 @@ export default function PointDebtsPage() {
       </Card>
 
       {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
+
+      {data?.pointClientAggregateHint ? (
+        <Card className="border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          В <code className="rounded bg-black/20 px-1">debts</code> за эту неделю есть{' '}
+          <span className="font-semibold">{data.pointClientAggregateHint.count}</span> активных агрегатов на сумму{' '}
+          <span className="font-semibold">{money(data.pointClientAggregateHint.amount)}</span> (
+          <code className="rounded bg-black/20 px-1">point-client</code>), но позиций сканера нет. Обычно это уже исправлено
+          выравниванием недели (UTC); если снова пусто — проверьте, что позиции не списаны и{' '}
+          <code className="rounded bg-black/20 px-1">week_start</code> в БД совпадает с выбранной неделей.
+        </Card>
+      ) : null}
 
       <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
         <div className="overflow-x-auto">
@@ -341,7 +419,13 @@ export default function PointDebtsPage() {
               {!loading && items.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="px-4 py-16 text-center text-slate-400">
-                    За эту неделю активных позиций нет.
+                    Нет активных позиций сканера (<code className="text-slate-500">point_debt_items</code>) за эту
+                    неделю.
+                    {legacyRows.length > 0 ? (
+                      <span className="mt-2 block text-slate-500">
+                        Смотрите блок ниже — есть строки в <code className="text-slate-500">debts</code> (PyQt и др.).
+                      </span>
+                    ) : null}
                   </td>
                 </tr>
               ) : null}
@@ -375,6 +459,48 @@ export default function PointDebtsPage() {
           </table>
         </div>
       </Card>
+
+      {legacyRows.length > 0 ? (
+        <Card className="overflow-hidden border-violet-500/20 bg-violet-950/20">
+          <div className="border-b border-white/10 px-4 py-3">
+            <h2 className="text-sm font-semibold text-white">Агрегат в учёте (таблица debts)</h2>
+            <p className="mt-1 text-xs text-slate-400">
+              Источники кроме <code className="rounded bg-white/10 px-1">point-client</code> — например PyQt. Это не
+              строки сканера; списание здесь через отчётность / зарплату, не галочками на этой странице.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-950/50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 text-left">Должник</th>
+                  <th className="px-4 py-3 text-left">Компания</th>
+                  <th className="px-4 py-3 text-right">Сумма</th>
+                  <th className="px-4 py-3 text-left">Источник</th>
+                  <th className="px-4 py-3 text-left">Комментарий</th>
+                  <th className="px-4 py-3 text-left">Создано</th>
+                </tr>
+              </thead>
+              <tbody>
+                {legacyRows.map((r) => (
+                  <tr key={r.id} className="border-t border-white/5 text-slate-200">
+                    <td className="px-4 py-3 font-medium text-white">{r.debtor_name}</td>
+                    <td className="px-4 py-3 text-slate-300">{r.company_name}</td>
+                    <td className="px-4 py-3 text-right font-medium text-violet-200 tabular-nums">{money(r.amount)}</td>
+                    <td className="px-4 py-3 text-xs text-slate-400">{r.source || '—'}</td>
+                    <td className="max-w-[240px] truncate px-4 py-3 text-xs text-slate-400" title={r.comment || ''}>
+                      {r.comment || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-500">
+                      {r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ) : null}
 
       <Card className="border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
         <p>

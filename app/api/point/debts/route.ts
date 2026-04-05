@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { weekStartUtcISO } from '@/lib/core/date'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
@@ -56,13 +57,11 @@ function canDebtReport(input: Record<string, unknown> | null | undefined) {
 }
 
 function startOfWeekISO(dateLike?: string | null) {
-  const base = dateLike ? new Date(dateLike) : new Date()
-  const date = Number.isNaN(base.getTime()) ? new Date() : base
-  const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
-  const day = copy.getUTCDay()
-  const offset = day === 0 ? -6 : 1 - day
-  copy.setUTCDate(copy.getUTCDate() + offset)
-  return copy.toISOString().slice(0, 10)
+  if (dateLike) {
+    const base = new Date(dateLike)
+    return weekStartUtcISO(Number.isNaN(base.getTime()) ? new Date() : base)
+  }
+  return weekStartUtcISO(new Date())
 }
 
 function appendComment(base: string | null | undefined, line: string | null | undefined) {
