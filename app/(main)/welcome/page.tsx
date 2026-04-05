@@ -22,9 +22,11 @@ import {
   Wallet,
 } from 'lucide-react'
 
+import { AppLogoMark } from '@/components/app-brand-mark'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import type { StaffRole } from '@/lib/core/access'
+import { SITE_NAME } from '@/lib/core/site'
 import { getTenantBaseHost } from '@/lib/core/tenant-domain'
 
 type SessionRoleResponse = {
@@ -199,6 +201,13 @@ export default function WelcomePage() {
           }`}>
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-3xl">
+                <div className="mb-5 flex flex-wrap items-center gap-4">
+                  <AppLogoMark size="lg" />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">{SITE_NAME}</p>
+                    <p className="mt-0.5 text-sm text-slate-500">Рабочий кабинет</p>
+                  </div>
+                </div>
                 <div className="mb-4 flex flex-wrap items-center gap-2">
                   <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
                     staffRole === 'owner'

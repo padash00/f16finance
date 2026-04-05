@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { normalizeOperatorUsername, toOperatorAuthEmail } from '@/lib/core/auth'
+import { SITE_NAME } from '@/lib/core/site'
 import {
   AlertCircle,
   ArrowRight,
@@ -396,7 +397,7 @@ export default function LoginForm({
                 <Brain className="h-8 w-8 text-white" />
               </div>
               <h1 className="max-w-md text-4xl font-semibold leading-tight text-white">
-                Orda Control для команды, точек и ежедневного ритма работы.
+                {SITE_NAME} для команды, точек и ежедневного ритма работы.
               </h1>
               <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300">
                 Платформа владельца, tenant-контуры клиентов, роли команды, операторский кабинет и рабочие данные в одном SaaS-слое.
@@ -423,7 +424,7 @@ export default function LoginForm({
               <div className="mb-4 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 p-4 shadow-lg shadow-violet-500/20">
                 <Brain className="h-7 w-7 text-white" />
               </div>
-              <h2 className="text-2xl font-semibold">Вход в Orda Control</h2>
+              <h2 className="text-2xl font-semibold">Вход в {SITE_NAME}</h2>
               <p className="mt-2 max-w-sm text-sm text-slate-400">
                 Общий вход платформы для владельца системы и административной команды.
               </p>
@@ -535,7 +536,7 @@ export default function LoginForm({
               </Link>
               <span className="text-slate-500">Нет доступа? Обратитесь к администратору</span>
             </div>
-            <p className="mt-6 text-center text-[11px] text-slate-600">Orda Control · Platform access</p>
+            <p className="mt-6 text-center text-[11px] text-slate-600">{SITE_NAME} · Platform access</p>
           </div>
         </div>
       </div>

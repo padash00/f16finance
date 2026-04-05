@@ -50,7 +50,6 @@ import {
   Search,
   Settings2,
   Shield,
-  Sparkles,
   Store,
   Target,
   Tags,
@@ -67,7 +66,9 @@ import {
   Zap,
 } from 'lucide-react'
 
+import { AppLogoMark } from '@/components/app-brand-mark'
 import { Button } from '@/components/ui/button'
+import { SITE_NAME } from '@/lib/core/site'
 
 type NavItem = {
   href: string
@@ -326,18 +327,6 @@ const sectionStyles: Record<
     gradient: 'from-slate-500/20 to-slate-600/20',
     activeRing: 'ring-slate-500/40',
   },
-}
-
-function LogoMark() {
-  return (
-    <div className="relative group">
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 blur-lg opacity-50 transition-opacity duration-500 group-hover:opacity-80" />
-      <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl">
-        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/10 to-transparent" />
-        <Sparkles className="relative z-10 h-5 w-5 text-amber-300" />
-      </div>
-    </div>
-  )
 }
 
 function SidebarItem({
@@ -873,10 +862,10 @@ export function Sidebar() {
     <div className="flex h-full flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
       <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
         <div className="flex items-center gap-3">
-          <LogoMark />
+          <AppLogoMark />
           <div>
             <h1 className="bg-gradient-to-r from-white to-slate-300 bg-clip-text text-lg font-bold text-transparent">
-              Orda Control
+              {SITE_NAME}
             </h1>
             <p className="text-xs text-slate-500">v2.0.1</p>
           </div>
@@ -943,9 +932,9 @@ export function Sidebar() {
     <>
       <div className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-between border-b border-white/5 bg-slate-950/80 px-4 backdrop-blur-xl md:hidden">
         <div className="flex items-center gap-3">
-          <LogoMark />
+          <AppLogoMark />
           <div>
-            <p className="text-sm font-semibold text-white">Orda Control</p>
+            <p className="text-sm font-semibold text-white">{SITE_NAME}</p>
             <p className="text-xs text-slate-500">workspace</p>
           </div>
         </div>
