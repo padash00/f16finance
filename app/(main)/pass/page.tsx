@@ -86,7 +86,8 @@ export default function AccessPage() {
           id: op.id,
           name: op.name,
           short_name: op.short_name,
-          username: auth.username || op.name?.toLowerCase().replace(/\s+/g, '.'),
+          // Только реальный логин из operator_auth; без аккаунта — null (не подставляем имя)
+          username: auth.username ?? null,
           email: profile.email || null,
           role: auth.role || 'operator',
           photo_url: profile.photo_url || null,
@@ -234,7 +235,7 @@ export default function AccessPage() {
     const password = newPasswords[op.id] || '••••••••'
     
     const text = `👤 Оператор: ${op.short_name || op.name}
-🔑 Логин: ${op.username}
+🔑 Логин: ${op.username ?? 'нет (аккаунт входа не создан)'}
 🔐 Пароль: ${password}
 📞 Телефон: ${op.phone || 'не указан'}
 📧 Email: ${op.email || 'не указан'}
@@ -257,7 +258,7 @@ export default function AccessPage() {
       const password = newPasswords[op.id] || '••••••••'
       
       text += `👤 ${op.short_name || op.name}\n`
-      text += `   🔑 Логин: ${op.username}\n`
+      text += `   🔑 Логин: ${op.username ?? 'нет (аккаунт входа не создан)'}\n`
       text += `   🔐 Пароль: ${password}\n`
       text += `   📞 Телефон: ${op.phone || 'не указан'}\n`
       text += `   💬 Telegram: ${op.telegram_chat_id || 'не указан'}\n`
@@ -283,7 +284,7 @@ export default function AccessPage() {
       { header: 'Ссылка для входа', key: 'link', width: 30, type: 'text' },
     ], operators.map(op => ({
       name: op.short_name || op.name,
-      username: op.username || '',
+      username: op.username ?? '',
       password: newPasswords[op.id] || '••••••••',
       phone: op.phone || '',
       email: op.email || '',
@@ -360,6 +361,12 @@ export default function AccessPage() {
   }
 
   const saveLogin = async (operatorId: string) => {
+    const op = operators.find(o => o.id === operatorId)
+    if (!op?.user_id) {
+      setError('У оператора нет аккаунта входа — сначала создайте аккаунт (супер-админ).')
+      setTimeout(() => setError(null), 5000)
+      return
+    }
     const newUsername = editingLoginValue.trim().toLowerCase()
     if (!newUsername) return
     setSavingLoginId(operatorId)
@@ -369,15 +376,15 @@ export default function AccessPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operatorId, username: newUsername }),
       })
-      const data = await res.json()
-      if (data.ok) {
-        setOperators(prev => prev.map(op => op.id === operatorId ? { ...op, username: data.username } : op))
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.ok) {
+        setOperators(prev => prev.map(o => o.id === operatorId ? { ...o, username: data.username } : o))
         setEditingLoginId(null)
         setSuccess('Логин успешно изменён')
         setTimeout(() => setSuccess(null), 3000)
       } else {
-        setError(data.error || 'Ошибка')
-        setTimeout(() => setError(null), 4000)
+        setError(typeof data.error === 'string' ? data.error : 'Ошибка')
+        setTimeout(() => setError(null), 5000)
       }
     } catch {
       setError('Ошибка сети')
@@ -579,7 +586,14 @@ export default function AccessPage() {
                         </td>
 
                         <td className="py-4 px-4">
-                          {editingLoginId === op.id ? (
+                          {!op.user_id ? (
+                            <div className="text-sm">
+                              <span className="text-amber-400/90">Нет аккаунта входа</span>
+                              <p className="text-xs text-gray-500 mt-0.5 max-w-[14rem]">
+                                Создайте аккаунт оператора (супер-админ), затем можно задать логин.
+                              </p>
+                            </div>
+                          ) : editingLoginId === op.id ? (
                             <div className="flex items-center gap-1.5">
                               <input
                                 type="text"
@@ -602,11 +616,12 @@ export default function AccessPage() {
                             </div>
                           ) : (
                             <button
+                              type="button"
                               onClick={() => { setEditingLoginId(op.id); setEditingLoginValue(op.username || '') }}
-                              className="flex items-center gap-1.5 font-mono text-sm text-gray-300 hover:text-white group"
+                              className="flex items-center gap-1.5 font-mono text-sm text-gray-300 hover:text-white group text-left"
                             >
-                              {op.username}
-                              <Pencil className="w-3 h-3 text-gray-600 group-hover:text-gray-400 transition-colors" />
+                              <span>{op.username || '—'}</span>
+                              <Pencil className="w-3 h-3 text-gray-600 group-hover:text-gray-400 transition-colors shrink-0" />
                             </button>
                           )}
                         </td>

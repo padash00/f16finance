@@ -30,6 +30,17 @@ export async function POST(request: Request) {
 
     const supabaseAdmin = createAdminSupabaseClient()
 
+    const { data: operatorRow, error: opErr } = await supabaseAdmin
+      .from('operators')
+      .select('id')
+      .eq('id', operatorId)
+      .maybeSingle()
+
+    if (opErr) throw opErr
+    if (!operatorRow) {
+      return NextResponse.json({ error: 'Оператор не найден в базе', code: 'OPERATOR_NOT_FOUND' }, { status: 404 })
+    }
+
     // Check uniqueness
     const { data: existing } = await supabaseAdmin
       .from('operator_auth')
@@ -50,8 +61,25 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (fetchError) throw fetchError
-    if (!authRow?.user_id) {
-      return NextResponse.json({ error: 'Аккаунт оператора не найден' }, { status: 404 })
+    if (!authRow) {
+      return NextResponse.json(
+        {
+          error:
+            'У этого оператора ещё нет аккаунта входа (нет записи operator_auth). Сначала создайте аккаунт оператора (супер-админ: раздел создания аккаунта / API create-operator-account).',
+          code: 'NO_OPERATOR_AUTH',
+        },
+        { status: 422 },
+      )
+    }
+    if (!authRow.user_id) {
+      return NextResponse.json(
+        {
+          error:
+            'Запись входа оператора не привязана к Supabase Auth (нет user_id). Создайте аккаунт заново или обратитесь к администратору.',
+          code: 'NO_AUTH_USER_ID',
+        },
+        { status: 422 },
+      )
     }
 
     // Обновляем email в Supabase Auth (логин → email формат)

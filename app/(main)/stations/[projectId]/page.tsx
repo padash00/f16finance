@@ -13,7 +13,7 @@ import Link from 'next/link'
 
 type Zone = {
   id: string; name: string; is_active: boolean
-  grid_x: number | null; grid_y: number | null; grid_w: number; grid_h: number; color: string | null
+  grid_x: number | null; grid_y: number | null; grid_w: number | null; grid_h: number | null; color: string | null
 }
 type Station = {
   id: string; zone_id: string | null; name: string; order_index: number; is_active: boolean
@@ -43,6 +43,59 @@ function formatMinutes(m: number) {
   const h = Math.floor(m / 60)
   const rem = m % 60
   return rem > 0 ? `${h} ч ${rem} мин` : `${h} ч`
+}
+
+/** Строки из POST /api/admin/arena (.select().single()) → типы экрана */
+function arenaRowToZone(row: Record<string, unknown>): Zone {
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ''),
+    is_active: Boolean(row.is_active),
+    grid_x: row.grid_x != null ? Number(row.grid_x) : null,
+    grid_y: row.grid_y != null ? Number(row.grid_y) : null,
+    grid_w: row.grid_w != null ? Number(row.grid_w) : null,
+    grid_h: row.grid_h != null ? Number(row.grid_h) : null,
+    color: row.color != null ? String(row.color) : null,
+  }
+}
+
+function arenaRowToStation(row: Record<string, unknown>): Station {
+  return {
+    id: String(row.id),
+    zone_id: row.zone_id != null ? String(row.zone_id) : null,
+    name: String(row.name ?? ''),
+    order_index: Number(row.order_index ?? 0),
+    is_active: Boolean(row.is_active),
+    grid_x: row.grid_x != null ? Number(row.grid_x) : null,
+    grid_y: row.grid_y != null ? Number(row.grid_y) : null,
+  }
+}
+
+function arenaRowToTariff(row: Record<string, unknown>): Tariff {
+  const tt = row.tariff_type === 'time_window' ? 'time_window' : 'fixed'
+  return {
+    id: String(row.id),
+    zone_id: String(row.zone_id ?? ''),
+    name: String(row.name ?? ''),
+    duration_minutes: Number(row.duration_minutes ?? 0),
+    price: Number(row.price ?? 0),
+    is_active: Boolean(row.is_active ?? true),
+    tariff_type: tt,
+    window_end_time: row.window_end_time != null ? String(row.window_end_time) : null,
+  }
+}
+
+function sortZonesByName(a: Zone, b: Zone) {
+  return a.name.localeCompare(b.name, 'ru')
+}
+
+function sortStationsByOrder(a: Station, b: Station) {
+  if (a.order_index !== b.order_index) return a.order_index - b.order_index
+  return a.name.localeCompare(b.name, 'ru')
+}
+
+function sortTariffsByPrice(a: Tariff, b: Tariff) {
+  return a.price - b.price
 }
 
 // ─── Inline edit input ───────────────────────────────────────────────────────
@@ -685,6 +738,7 @@ export default function StationsPage() {
   const [tariffs, setTariffs] = useState<Tariff[]>([])
   const [decorations, setDecorations] = useState<Decoration[]>([])
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics'>('manage')
 
@@ -718,19 +772,25 @@ export default function StationsPage() {
   const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
 
-  const showFlash = (type: 'ok' | 'err', msg: string) => {
+  const showFlash = useCallback((type: 'ok' | 'err', msg: string) => {
     setFlash({ type, msg })
     setTimeout(() => setFlash(null), 3000)
-  }
+  }, [])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  /** silent: обновить данные без полноэкранного лоадера (после CRUD и т.п.) */
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true
+    if (silent) {
+      setSyncing(true)
+    } else {
+      setLoading(true)
+      setError(null)
+    }
     try {
       const url = companyId
         ? `/api/admin/arena?projectId=${projectId}&companyId=${companyId}`
         : `/api/admin/arena?projectId=${projectId}`
-      const res = await fetch(url)
+      const res = await fetch(url, { cache: 'no-store' })
       const data = await res.json()
       if (!data.ok) throw new Error(data.error)
       setProjectName(data.data.project?.name || '')
@@ -739,11 +799,20 @@ export default function StationsPage() {
       setTariffs(data.data.tariffs)
       setDecorations(data.data.decorations || [])
     } catch (e: any) {
-      setError(e.message)
+      const msg = e?.message || 'Ошибка загрузки'
+      if (silent) {
+        showFlash('err', msg)
+      } else {
+        setError(msg)
+      }
     } finally {
-      setLoading(false)
+      if (silent) {
+        setSyncing(false)
+      } else {
+        setLoading(false)
+      }
     }
-  }, [projectId, companyId])
+  }, [projectId, companyId, showFlash])
 
   useEffect(() => { void load() }, [load])
 
@@ -790,7 +859,7 @@ export default function StationsPage() {
     if (activeTab === 'analytics') void loadAnalytics()
   }, [activeTab, loadAnalytics])
 
-  async function apiPost(body: object) {
+  async function apiPost(body: object): Promise<{ ok: true; data?: unknown }> {
     const res = await fetch('/api/admin/arena', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -806,17 +875,24 @@ export default function StationsPage() {
     if (!newZoneName.trim()) return
     setSaving(true)
     try {
-      await apiPost({ action: 'createZone', projectId, companyId, name: newZoneName })
+      const out = await apiPost({ action: 'createZone', projectId, companyId, name: newZoneName })
+      if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных зоны')
+      const z = arenaRowToZone(out.data as Record<string, unknown>)
+      setZones(prev => [...prev, z].sort(sortZonesByName))
       setNewZoneName(''); setAddingZone(false)
-      await load(); showFlash('ok', 'Зона создана')
+      showFlash('ok', 'Зона создана')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
   async function handleUpdateZone(zoneId: string, name: string) {
     setSaving(true)
     try {
-      await apiPost({ action: 'updateZone', zoneId, name })
-      setEditingZoneId(null); await load(); showFlash('ok', 'Зона обновлена')
+      const out = await apiPost({ action: 'updateZone', zoneId, name })
+      if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных зоны')
+      const z = arenaRowToZone(out.data as Record<string, unknown>)
+      setZones(prev => prev.map(x => x.id === zoneId ? z : x))
+      setEditingZoneId(null)
+      showFlash('ok', 'Зона обновлена')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
@@ -825,7 +901,9 @@ export default function StationsPage() {
     setSaving(true)
     try {
       await apiPost({ action: 'deleteZone', zoneId })
-      await load(); showFlash('ok', 'Зона удалена')
+      // На сервере каскад/связанные строки — один запрос надёжнее локального guess
+      await load({ silent: true })
+      showFlash('ok', 'Зона удалена')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
@@ -834,17 +912,24 @@ export default function StationsPage() {
     if (!newStationName.trim()) return
     setSaving(true)
     try {
-      await apiPost({ action: 'createStation', projectId, companyId, zoneId, name: newStationName })
+      const out = await apiPost({ action: 'createStation', projectId, companyId, zoneId, name: newStationName })
+      if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных станции')
+      const s = arenaRowToStation(out.data as Record<string, unknown>)
+      setStations(prev => [...prev, s].sort(sortStationsByOrder))
       setNewStationName(''); setAddingStationZone(null)
-      await load(); showFlash('ok', 'Станция добавлена')
+      showFlash('ok', 'Станция добавлена')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
   async function handleUpdateStation(stationId: string, name: string) {
     setSaving(true)
     try {
-      await apiPost({ action: 'updateStation', stationId, name })
-      setEditingStationId(null); await load(); showFlash('ok', 'Станция обновлена')
+      const out = await apiPost({ action: 'updateStation', stationId, name })
+      if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных станции')
+      const s = arenaRowToStation(out.data as Record<string, unknown>)
+      setStations(prev => prev.map(x => x.id === stationId ? s : x))
+      setEditingStationId(null)
+      showFlash('ok', 'Станция обновлена')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
@@ -853,7 +938,8 @@ export default function StationsPage() {
     setSaving(true)
     try {
       await apiPost({ action: 'deleteStation', stationId })
-      await load(); showFlash('ok', 'Станция удалена')
+      setStations(prev => prev.filter(s => s.id !== stationId))
+      showFlash('ok', 'Станция удалена')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
@@ -862,7 +948,7 @@ export default function StationsPage() {
     if (!newTariff.name.trim() || !newTariff.price) return
     setSaving(true)
     try {
-      await apiPost({
+      const out = await apiPost({
         action: 'createTariff',
         projectId,
         companyId,
@@ -873,25 +959,33 @@ export default function StationsPage() {
         tariff_type: newTariff.tariff_type || 'fixed',
         window_end_time: newTariff.tariff_type === 'time_window' ? (newTariff.window_end_time || null) : null,
       })
+      if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных тарифа')
+      const t = arenaRowToTariff(out.data as Record<string, unknown>)
+      setTariffs(prev => [...prev, t].sort(sortTariffsByPrice))
       setNewTariff({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' }); setAddingTariffZone(null)
-      await load(); showFlash('ok', 'Тариф добавлен')
+      showFlash('ok', 'Тариф добавлен')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
   async function handleUpdateTariff() {
     if (!editingTariff) return
+    const tariffId = editingTariff.id
     setSaving(true)
     try {
-      await apiPost({
+      const out = await apiPost({
         action: 'updateTariff',
-        tariffId: editingTariff.id,
+        tariffId,
         name: editingTariff.name,
         duration_minutes: editingTariff.duration_minutes,
         price: editingTariff.price,
         tariff_type: editingTariff.tariff_type || 'fixed',
         window_end_time: editingTariff.tariff_type === 'time_window' ? (editingTariff.window_end_time || null) : null,
       })
-      setEditingTariff(null); await load(); showFlash('ok', 'Тариф обновлён')
+      if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных тарифа')
+      const t = arenaRowToTariff(out.data as Record<string, unknown>)
+      setTariffs(prev => prev.map(x => x.id === tariffId ? t : x))
+      setEditingTariff(null)
+      showFlash('ok', 'Тариф обновлён')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
@@ -900,7 +994,8 @@ export default function StationsPage() {
     setSaving(true)
     try {
       await apiPost({ action: 'deleteTariff', tariffId })
-      await load(); showFlash('ok', 'Тариф удалён')
+      setTariffs(prev => prev.filter(t => t.id !== tariffId))
+      showFlash('ok', 'Тариф удалён')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
@@ -1007,6 +1102,15 @@ export default function StationsPage() {
         <Link href="/point-devices" className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground hover:text-foreground transition">
           <ArrowLeft className="h-5 w-5" />
         </Link>
+        <button
+          type="button"
+          title="Обновить данные с сервера"
+          onClick={() => void load({ silent: true })}
+          disabled={syncing || loading}
+          className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground hover:text-foreground transition disabled:opacity-40"
+        >
+          <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
+        </button>
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-2.5">
           <Monitor className="h-6 w-6 text-cyan-300" />
         </div>
@@ -1058,6 +1162,12 @@ export default function StationsPage() {
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Станций</span>
           <span className="text-lg font-bold">{stations.length}</span>
         </div>
+        {syncing && (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+            Синхронизация…
+          </span>
+        )}
       </div>
 
       {/* Flash */}
