@@ -82,6 +82,8 @@ export interface OperatorBasic {
   full_name: string | null
   /** Сотрудник орг. (владелец/руководитель/маркетолог) без записи в `operators` — в долгах передаётся `client_name`. */
   kind?: 'operator' | 'staff'
+  /** Подпись роли в орг. (для списка должников); не дублируем, если уже есть в ФИО. */
+  role_label?: string | null
 }
 
 export interface CompanyOption {

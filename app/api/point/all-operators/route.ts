@@ -7,6 +7,17 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+const ORG_MEMBER_ROLE_RU: Record<string, string> = {
+  owner: 'Владелец',
+  manager: 'Руководитель',
+  marketer: 'Маркетолог',
+}
+
+function orgRoleLabel(role: string | null | undefined): string | null {
+  if (!role) return null
+  return ORG_MEMBER_ROLE_RU[String(role)] || null
+}
+
 export async function GET(request: Request) {
   try {
     const point = await requirePointDevice(request)
@@ -48,7 +59,14 @@ export async function GET(request: Request) {
 
     const staffDebtors = new Map<
       string,
-      { id: string; name: string; short_name: string | null; full_name: string | null; kind: 'staff' }
+      {
+        id: string
+        name: string
+        short_name: string | null
+        full_name: string | null
+        kind: 'staff'
+        role_label: string | null
+      }
     >()
 
     let members: any[] = []
@@ -101,6 +119,8 @@ export async function GET(request: Request) {
         const memberId = String((m as any).id || '')
         const staffIdRaw = (m as any).staff_id
         const emailRaw = typeof (m as any).email === 'string' ? (m as any).email.trim() : ''
+        const memberRole = String((m as any).role || '')
+        const roleLabel = orgRoleLabel(memberRole)
 
         const addOrgMemberByEmail = () => {
           if (!memberId || !emailRaw) return
@@ -112,6 +132,7 @@ export async function GET(request: Request) {
             short_name: null,
             full_name: null,
             kind: 'staff' as const,
+            role_label: roleLabel,
           })
         }
 
@@ -132,6 +153,7 @@ export async function GET(request: Request) {
                 short_name: s.short_name || null,
                 full_name: s.full_name || null,
                 kind: 'staff' as const,
+                role_label: roleLabel,
               })
             }
           } else {

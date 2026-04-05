@@ -19,6 +19,17 @@ import { getCachedProducts, saveProductsCache } from '@/lib/cache'
 import QueueViewer from '@/components/QueueViewer'
 import type { AppConfig, BootstrapData, OperatorBasic, OperatorSession, Product, DebtItem } from '@/types'
 
+/** Подпись в списке должников: роль не дублируем, если уже есть в ФИО (напр. «Руководитель Иванов»). */
+function debtorSelectDisplay(op: OperatorBasic): string {
+  const primary = (op.short_name || op.full_name || op.name || '').trim() || '—'
+  const role = (op.role_label || '').trim()
+  if (!role) return primary
+  const p = primary.toLowerCase()
+  const r = role.toLowerCase()
+  if (p.includes(r)) return primary
+  return `${primary} · ${role}`
+}
+
 function debtDebtorPayload(
   selectedId: string,
   list: OperatorBasic[],
@@ -116,20 +127,27 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
         setOffline(true)
       }
 
-      const sessionOpEntry = {
+      const sessionOpEntry: OperatorBasic = {
         id: session.operator.operator_id,
         name: session.operator.name || session.operator.username,
         short_name: session.operator.short_name || null,
         full_name: session.operator.full_name || null,
+        role_label: null,
       }
       if (opsResult.status === 'fulfilled') {
         const ops = opsResult.value
         const alreadyIn = ops.some(o => o.id === sessionOpEntry.id)
         setAllOperators(alreadyIn ? ops : [sessionOpEntry, ...ops])
       } else {
-        const fallback = bootstrap.operators.map(o => ({
-          id: o.id, name: o.name, short_name: o.short_name, full_name: o.full_name,
-        }))
+        const fallback = bootstrap.operators.map(
+          (o): OperatorBasic => ({
+            id: o.id,
+            name: o.name,
+            short_name: o.short_name,
+            full_name: o.full_name,
+            role_label: null,
+          }),
+        )
         if (!fallback.some(o => o.id === sessionOpEntry.id)) {
           fallback.unshift(sessionOpEntry)
         }
@@ -527,7 +545,7 @@ export default function ScannerPage({ config, bootstrap, session, isOffline: ini
                         <SelectContent>
                           {allOperators.map(op => (
                             <SelectItem key={op.id} value={op.id}>
-                              {op.short_name || op.full_name || op.name}
+                              {debtorSelectDisplay(op)}
                             </SelectItem>
                           ))}
                         </SelectContent>
