@@ -7,6 +7,13 @@ const { autoUpdater } = require('electron-updater')
 const isDev = !app.isPackaged
 const releasePageUrl = 'https://github.com/padash00/f16finance/releases'
 
+/** Один запуск: повторный клик по ярлыку поднимает уже открытое окно (Windows/Linux; на macOS нужен подписанный билд). */
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+  process.exit(0)
+}
+
 /** Явный feed: старые сборки могли попасть без корректного app-update.yml в resources. */
 const GITHUB_UPDATES = {
   provider: 'github',
@@ -303,6 +310,14 @@ function createWindow() {
     broadcastUpdaterState()
   })
 }
+
+app.on('second-instance', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  }
+})
 
 app.whenReady().then(() => {
   // Inject CORS headers so renderer can make API requests without webSecurity: false
