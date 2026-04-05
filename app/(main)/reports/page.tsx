@@ -1,0 +1,3199 @@
+'use client'
+export const dynamic = 'force-dynamic'
+
+import { 
+  Suspense, 
+  useCallback, 
+  useEffect, 
+  useMemo, 
+  useRef, 
+  useState,
+  memo
+} from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { buildDashboardSheet, buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { useVirtualizer } from '@tanstack/react-virtual'
+
+import { FloatingAssistant } from '@/components/ai/floating-assistant'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import type { PageSnapshot } from '@/lib/ai/types'
+import { supabase } from '@/lib/supabaseClient'
+
+import {
+  Activity,
+  AlertTriangle,
+  ArrowUpDown,
+  BarChart3,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  DollarSign,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Filter,
+  Lightbulb,
+  PieChart as PieChartIcon,
+  RefreshCw,
+  Search,
+  Share2,
+  Store,
+  Table,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+  X,
+  Zap,
+} from 'lucide-react'
+
+import {
+  ResponsiveContainer,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  ComposedChart,
+  Line,
+  Area,
+} from 'recharts'
+
+// =====================
+// TYPES
+// =====================
+type Shift = 'day' | 'night'
+
+interface IncomeRow {
+  id: string
+  date: string
+  company_id: string
+  shift: Shift
+  zone: string | null
+  cash_amount: number | null
+  kaspi_amount: number | null
+  online_amount: number | null
+  card_amount: number | null
+  comment: string | null
+  created_at?: string
+}
+
+interface ExpenseRow {
+  id: string
+  date: string
+  company_id: string
+  category: string | null
+  cash_amount: number | null
+  kaspi_amount: number | null
+  comment: string | null
+  created_at?: string
+  operator_id?: string | null
+}
+
+interface Company {
+  id: string
+  name: string
+  code?: string | null
+}
+
+type GroupMode = 'day' | 'week' | 'month' | 'year'
+type DatePreset = 'custom' | 'today' | 'yesterday' | 'last7' | 'prevWeek' | 'last30' | 'currentMonth' | 'prevMonth' | 'last90' | 'currentQuarter' | 'prevQuarter' | 'currentYear' | 'prevYear'
+
+type SortDirection = 'asc' | 'desc'
+type SortField = 'date' | 'company' | 'amount' | 'category' | 'shift' | 'zone'
+
+interface FinancialTotals {
+  incomeCash: number
+  incomeKaspi: number
+  incomeOnline: number
+  incomeCard: number
+  incomeNonCash: number
+  expenseCash: number
+  expenseKaspi: number
+  totalIncome: number
+  totalExpense: number
+  profit: number
+  remainingCash: number
+  remainingKaspi: number
+  totalBalance: number
+  transactionCount: number
+  avgTransaction: number
+}
+
+interface TimeAggregation {
+  label: string
+  sortISO: string
+  income: number
+  expense: number
+  profit: number
+  incomeCash: number
+  incomeKaspi: number
+  incomeOnline: number
+  incomeCard: number
+  incomeNonCash: number
+  expenseCash: number
+  expenseKaspi: number
+  count: number
+}
+
+type InsightType = 'warning' | 'success' | 'info' | 'opportunity' | 'danger'
+
+interface AIInsight {
+  type: InsightType
+  title: string
+  description: string
+  metric?: string
+  trend?: 'up' | 'down' | 'neutral'
+}
+
+type Severity = 'low' | 'medium' | 'high' | 'critical'
+type AnomalyType = 'income_spike' | 'expense_spike' | 'low_profit' | 'no_data' | 'high_cash_ratio'
+
+interface Anomaly {
+  type: AnomalyType
+  date: string
+  description: string
+  severity: Severity
+  value: number
+  companyId?: string
+}
+
+interface DetailedRow {
+  id: string
+  date: string
+  type: 'income' | 'expense'
+  companyId: string
+  companyName: string
+  amount: number
+  cashAmount: number
+  kaspiAmount: number
+  onlineAmount?: number
+  cardAmount?: number
+  category?: string
+  shift?: Shift
+  zone?: string | null
+  comment?: string | null
+}
+
+interface CompanyStat {
+  income: number
+  expense: number
+  profit: number
+  cashIncome: number
+  kaspiIncome: number
+  onlineIncome: number
+  cardIncome: number
+  cashExpense: number
+  kaspiExpense: number
+  transactions: number
+}
+
+// =====================
+// CONSTANTS
+// =====================
+const PIE_COLORS = [
+  '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', 
+  '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'
+] as const
+
+const SHIFT_LABELS: Record<Shift, string> = {
+  day: 'День',
+  night: 'Ночь',
+}
+
+const PRESET_LABELS: Record<DatePreset, string> = {
+  today: 'Сегодня',
+  yesterday: 'Вчера',
+  last7: 'Последние 7 дней',
+  prevWeek: 'Прошлая неделя',
+  last30: 'Последние 30 дней',
+  currentMonth: 'Текущий месяц',
+  prevMonth: 'Прошлый месяц',
+  last90: 'Последние 90 дней',
+  currentQuarter: 'Текущий квартал',
+  prevQuarter: 'Прошлый квартал',
+  currentYear: 'Текущий год',
+  prevYear: 'Прошлый год',
+  custom: 'Произвольный период',
+}
+
+const INSIGHT_STYLES: Record<InsightType, { bg: string; border: string; text: string; icon: typeof TrendingUp }> = {
+  success: { bg: 'bg-emerald-500/5', border: 'border-emerald-500/20', text: 'text-emerald-400', icon: TrendingUp },
+  warning: { bg: 'bg-amber-500/5', border: 'border-amber-500/20', text: 'text-amber-400', icon: AlertTriangle },
+  danger: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400', icon: AlertTriangle },
+  opportunity: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400', icon: Lightbulb },
+  info: { bg: 'bg-gray-800/30', border: 'border-white/5', text: 'text-gray-400', icon: Activity },
+}
+
+const SEVERITY_STYLES: Record<Severity, { bg: string; border: string; text: string }> = {
+  critical: { bg: 'bg-rose-500/10', border: 'border-rose-500/30', text: 'text-rose-400' },
+  high: { bg: 'bg-rose-500/5', border: 'border-rose-500/20', text: 'text-rose-400' },
+  medium: { bg: 'bg-amber-500/5', border: 'border-amber-500/20', text: 'text-amber-400' },
+  low: { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400' },
+}
+
+const SEVERITY_LABELS: Record<Severity, string> = {
+  critical: 'Критично',
+  high: 'Высокий',
+  medium: 'Средний',
+  low: 'Низкий',
+}
+
+// =====================
+// UTILITY FUNCTIONS
+// =====================
+const toISODateLocal = (d: Date): string => {
+  const t = d.getTime() - d.getTimezoneOffset() * 60_000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+const fromISO = (iso: string): Date => {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
+}
+
+const todayISO = (): string => toISODateLocal(new Date())
+
+const addDaysISO = (iso: string, diff: number): string => {
+  const d = fromISO(iso)
+  d.setDate(d.getDate() + diff)
+  return toISODateLocal(d)
+}
+
+const calculatePrevPeriod = (dateFrom: string, dateTo: string) => {
+  const dFrom = fromISO(dateFrom)
+  const dTo = fromISO(dateTo)
+  const durationDays = Math.floor((dTo.getTime() - dFrom.getTime()) / 86400000) + 1
+  const prevTo = addDaysISO(dateFrom, -1)
+  const prevFrom = addDaysISO(prevTo, -(durationDays - 1))
+  return { prevFrom, prevTo, durationDays }
+}
+
+const getISOWeekKey = (isoDate: string): string => {
+  const d = fromISO(isoDate)
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7))
+  const isoYear = d.getFullYear()
+  const week1 = new Date(isoYear, 0, 4)
+  week1.setHours(0, 0, 0, 0)
+  const week1Thursday = new Date(week1)
+  week1Thursday.setDate(week1.getDate() + 3 - ((week1.getDay() + 6) % 7))
+  const diffDays = Math.round((d.getTime() - week1Thursday.getTime()) / 86400000)
+  const weekNo = 1 + Math.floor(diffDays / 7)
+  return `${isoYear}-W${String(weekNo).padStart(2, '0')}`
+}
+
+const getISOWeekStartISO = (isoDate: string): string => {
+  const d = fromISO(isoDate)
+  d.setHours(0, 0, 0, 0)
+  const day = d.getDay()
+  const diffToMonday = (day + 6) % 7
+  d.setDate(d.getDate() - diffToMonday)
+  return toISODateLocal(d)
+}
+
+const getMonthKey = (isoDate: string): string => isoDate.slice(0, 7)
+const getYearKey = (isoDate: string): string => isoDate.slice(0, 4)
+
+const formatDateRange = (from: string, to: string): string => {
+  const d1 = fromISO(from)
+  const d2 = fromISO(to)
+  const sameMonth = d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear()
+  
+  if (sameMonth) {
+    return `${d1.getDate()}–${d2.getDate()} ${d1.toLocaleDateString('ru-RU', { month: 'long' })} ${d1.getFullYear()}`
+  }
+  return `${d1.toLocaleDateString('ru-RU')} – ${d2.toLocaleDateString('ru-RU')}`
+}
+
+const formatMoneyFull = (n: number): string => {
+  if (!Number.isFinite(n)) return '0 ₸'
+  return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
+}
+
+const formatMoneyCompact = (n: number): string => {
+  const abs = Math.abs(n)
+  if (abs >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + ' млрд'
+  if (abs >= 1_000_000) return (n / 1_000_000).toFixed(1) + ' млн'
+  if (abs >= 1_000) return (n / 1_000).toFixed(1) + ' тыс'
+  return String(Math.round(n))
+}
+
+const formatCompact = (n: number): string => {
+  const abs = Math.abs(n)
+  if (abs >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (abs >= 1_000) return (n / 1_000).toFixed(0) + 'k'
+  return String(Math.round(n))
+}
+
+const getPercentageChange = (current: number, previous: number): string => {
+  if (previous === 0) return current > 0 ? '+100%' : '—'
+  if (current === 0) return '-100%'
+  const change = ((current - previous) / previous) * 100
+  return `${change > 0 ? '+' : ''}${change.toFixed(1)}%`
+}
+
+const safeNumber = (v: unknown): number => {
+  if (v === null || v === undefined) return 0
+  const num = Number(v)
+  return Number.isFinite(num) ? num : 0
+}
+
+// =====================
+// CSV & EXPORT UTILITIES
+// =====================
+const csvEscape = (v: string): string => {
+  const s = String(v).replaceAll('"', '""')
+  if (/[",\n\r;]/.test(s)) return `"${s}"`
+  return s
+}
+
+const toCSV = (rows: string[][], sep = ';'): string => 
+  rows.map((r) => r.map((c) => csvEscape(c)).join(sep)).join('\n') + '\n'
+
+const downloadTextFile = (filename: string, content: string, mime = 'text/csv'): void => {
+  const blob = new Blob(['\uFEFF' + content], { type: `${mime};charset=utf-8` })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+const generateExcelXML = (title: string, headers: string[], rows: (string | number)[][]): string => {
+  const escapeXml = (str: string) => str.replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c] || c))
+  
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Worksheet ss:Name="${escapeXml(title)}">
+    <Table>`
+  
+  xml += `
+      <Row>
+        ${headers.map(h => `<Cell><Data ss:Type="String">${escapeXml(h)}</Data></Cell>`).join('')}
+      </Row>`
+  
+  for (const row of rows) {
+    xml += `
+      <Row>
+        ${row.map(cell => {
+          const type = typeof cell === 'number' ? 'Number' : 'String'
+          return `<Cell><Data ss:Type="${type}">${escapeXml(String(cell))}</Data></Cell>`
+        }).join('')}
+      </Row>`
+  }
+  
+  xml += `
+    </Table>
+  </Worksheet>
+</Workbook>`
+  
+  return xml
+}
+
+// =====================
+// URL PARAMS PARSING
+// =====================
+const parseBool = (v: string | null): boolean => v === '1' || v === 'true'
+const parseGroup = (v: string | null): GroupMode | null => 
+  (v === 'day' || v === 'week' || v === 'month' || v === 'year') ? v : null
+const parseTab = (v: string | null) => 
+  (v === 'overview' || v === 'analytics' || v === 'details' || v === 'companies') ? v : null
+const isISODate = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s)
+
+// =====================
+// MEMOIZED CHART COMPONENTS
+// =====================
+
+const MemoizedComposedChart = memo(({ data }: { data: TimeAggregation[] }) => {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
+        <defs>
+          <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+          </linearGradient>
+          <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
+            <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} vertical={false} />
+        <XAxis 
+          dataKey="label" 
+          stroke="#6b7280" 
+          fontSize={12} 
+          tickLine={false} 
+          axisLine={false}
+          tickMargin={10}
+        />
+        <YAxis 
+          stroke="#6b7280" 
+          fontSize={12} 
+          tickLine={false} 
+          axisLine={false} 
+          tickFormatter={formatCompact}
+          width={60}
+        />
+        <Tooltip 
+          contentStyle={{ 
+            background: 'rgba(17, 24, 39, 0.95)', 
+            border: '1px solid rgba(255,255,255,0.1)', 
+            borderRadius: '12px',
+            backdropFilter: 'blur(10px)'
+          }}
+          formatter={(value: number, name: string) => [formatMoneyFull(value), name]}
+        />
+        <Area 
+          type="monotone" 
+          dataKey="income" 
+          stroke="#10b981" 
+          strokeWidth={2}
+          fill="url(#colorIncome)" 
+        />
+        <Area 
+          type="monotone" 
+          dataKey="expense" 
+          stroke="#f43f5e" 
+          strokeWidth={2}
+          fill="url(#colorExpense)" 
+        />
+        <Line 
+          type="monotone" 
+          dataKey="profit" 
+          stroke="#fbbf24" 
+          strokeWidth={3}
+          dot={{ fill: '#fbbf24', strokeWidth: 2, r: 4 }}
+          activeDot={{ r: 6, strokeWidth: 0 }}
+        />
+      </ComposedChart>
+    </ResponsiveContainer>
+  )
+})
+MemoizedComposedChart.displayName = 'MemoizedComposedChart'
+
+const MemoizedPieChart = memo(({ data }: { data: Array<{ name: string; amount: number; percentage: number }> }) => {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <PieChart>
+        <Pie 
+          data={data} 
+          cx="50%" 
+          cy="50%" 
+          innerRadius={60} 
+          outerRadius={80}
+          paddingAngle={3}
+          dataKey="amount"
+        >
+          {data.map((_, idx) => (
+            <Cell key={`cell-${idx}`} fill={PIE_COLORS[idx % PIE_COLORS.length]} stroke="transparent" />
+          ))}
+        </Pie>
+        <Tooltip 
+          contentStyle={{ 
+            background: 'rgba(17, 24, 39, 0.95)', 
+            border: '1px solid rgba(255,255,255,0.1)', 
+            borderRadius: '12px' 
+          }}
+          formatter={(v: number, _n: string, p: { payload?: { percentage?: number; name?: string } }) => [
+            `${formatMoneyFull(v)} (${p?.payload?.percentage?.toFixed(1)}%)`,
+            p?.payload?.name
+          ]}
+        />
+      </PieChart>
+    </ResponsiveContainer>
+  )
+})
+MemoizedPieChart.displayName = 'MemoizedPieChart'
+
+const MemoizedBarChart = memo(({ data }: { data: Array<{ name: string; value: number; fill: string; percentage: number }> }) => {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} layout="vertical" margin={{ left: 20 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} horizontal={false} />
+        <XAxis type="number" hide />
+        <YAxis 
+          type="category" 
+          dataKey="name" 
+          width={100}
+          stroke="#6b7280" 
+          fontSize={11} 
+          tickLine={false} 
+          axisLine={false}
+        />
+        <Tooltip 
+          contentStyle={{ 
+            background: 'rgba(17, 24, 39, 0.95)', 
+            border: '1px solid rgba(255,255,255,0.1)', 
+            borderRadius: '12px' 
+          }}
+          formatter={(v: number, _n: string, p: { payload?: { percentage?: number } }) => [
+            formatMoneyFull(v),
+            `${p?.payload?.percentage?.toFixed(1)}% от общей`
+          ]}
+        />
+        <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+          {data.map((entry, idx) => (
+            <Cell key={`bar-${idx}`} fill={entry.fill} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+})
+MemoizedBarChart.displayName = 'MemoizedBarChart'
+
+// =====================
+// UI COMPONENTS
+// =====================
+
+const ChartShell = memo(({ children, className = '', height = 'h-80' }: { 
+  children: React.ReactNode; 
+  className?: string; 
+  height?: string 
+}) => (
+  <div className={`min-w-0 ${height} min-h-[320px] ${className}`}>
+    {children}
+  </div>
+))
+ChartShell.displayName = 'ChartShell'
+
+const StatCard = memo(({ title, value, subValue, icon: Icon, trend, color = 'blue', onClick }: {
+  title: string
+  value: string
+  subValue?: string
+  icon: React.ElementType
+  trend?: number
+  color?: 'blue' | 'green' | 'red' | 'amber' | 'violet'
+  onClick?: () => void
+}) => {
+  const colors: Record<string, string> = {
+    blue: 'from-blue-500 to-cyan-500',
+    green: 'from-emerald-500 to-teal-500',
+    red: 'from-rose-500 to-pink-500',
+    amber: 'from-amber-500 to-orange-500',
+    violet: 'from-violet-500 to-purple-500',
+  }
+  
+  return (
+    <div 
+      onClick={onClick}
+      className={`relative overflow-hidden rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6 hover:bg-gray-800/50 transition-all ${onClick ? 'cursor-pointer' : ''}`}
+    >
+      <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colors[color]} opacity-10 rounded-full blur-3xl translate-x-8 -translate-y-8`} />
+      <div className="relative z-10">
+        <div className="flex items-center justify-between mb-4">
+          <div className={`p-2.5 rounded-xl bg-gradient-to-br ${colors[color]} bg-opacity-20`}>
+            <Icon className="w-5 h-5 text-white" />
+          </div>
+          {trend !== undefined && (
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${trend > 0 ? 'bg-emerald-500/20 text-emerald-400' : trend < 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-gray-500/20 text-gray-400'}`}>
+              {trend > 0 ? '+' : ''}{trend}%
+            </span>
+          )}
+        </div>
+        <p className="text-gray-400 text-sm mb-1">{title}</p>
+        <p className="text-2xl font-bold text-white mb-1">{value}</p>
+        {subValue && <p className="text-xs text-gray-500">{subValue}</p>}
+      </div>
+    </div>
+  )
+})
+StatCard.displayName = 'StatCard'
+
+const InsightCard = memo(({ insight }: { insight: AIInsight }) => {
+  const styles = INSIGHT_STYLES[insight.type]
+  const Icon = styles.icon
+  
+  return (
+    <div 
+      className={`relative overflow-hidden rounded-2xl border p-4 ${styles.bg} ${styles.border}`}
+    >
+      <div className="flex items-start gap-3">
+        <div className={`p-2 rounded-lg ${styles.bg.replace('/5', '/20')} ${styles.text}`}>
+          <Icon className="w-4 h-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-white mb-1">{insight.title}</p>
+          <p className="text-xs text-gray-400 line-clamp-2">{insight.description}</p>
+          {insight.metric && (
+            <p className={`text-lg font-bold mt-2 ${styles.text}`}>{insight.metric}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+})
+InsightCard.displayName = 'InsightCard'
+
+const AnomalyCard = memo(({ anomaly }: { anomaly: Anomaly }) => {
+  const styles = SEVERITY_STYLES[anomaly.severity]
+  
+  return (
+    <div 
+      className={`flex items-center gap-4 p-4 rounded-xl border ${styles.bg} ${styles.border}`}
+    >
+      <div className={`p-2 rounded-lg ${styles.bg.replace('/5', '/20').replace('/10', '/20')} ${styles.text}`}>
+        {anomaly.severity === 'critical' || anomaly.severity === 'high' ? 
+          <AlertTriangle className="w-5 h-5" /> : 
+          <Lightbulb className="w-5 h-5" />
+        }
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-white font-medium">{anomaly.description}</p>
+        <p className="text-xs text-gray-500 mt-1">{anomaly.date}</p>
+      </div>
+      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${styles.bg.replace('/5', '/20').replace('/10', '/20')} ${styles.text}`}>
+        {SEVERITY_LABELS[anomaly.severity]}
+      </span>
+    </div>
+  )
+})
+AnomalyCard.displayName = 'AnomalyCard'
+
+// =====================
+// DRILL-DOWN MODAL
+// =====================
+
+type DrillDownType = 'income' | 'expense' | 'profit'
+
+const DRILL_TITLES: Record<DrillDownType, string> = {
+  income: 'Доходы — детализация',
+  expense: 'Расходы — детализация',
+  profit: 'Доходы и расходы — детализация',
+}
+
+function SortIcon({ f, sortField, sortDir }: { f: string; sortField: string; sortDir: string }) {
+  return sortField === f ? (
+    <span className="ml-1 text-violet-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
+  ) : (
+    <span className="ml-1 text-gray-600">↕</span>
+  )
+}
+
+function DrillDownModal({
+  type,
+  incomes,
+  expenses,
+  companies,
+  companyName,
+  dateFrom,
+  dateTo,
+  onClose,
+}: {
+  type: DrillDownType
+  incomes: IncomeRow[]
+  expenses: ExpenseRow[]
+  companies: Company[]
+  companyName: (id: string) => string
+  dateFrom: string
+  dateTo: string
+  onClose: () => void
+}) {
+  const [filterCompany, setFilterCompany] = useState<'all' | string>('all')
+  const [sortField, setSortField] = useState<'date' | 'company' | 'amount'>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [search, setSearch] = useState('')
+
+  const rows = useMemo(() => {
+    const result: Array<{
+      id: string
+      date: string
+      type: 'income' | 'expense'
+      companyId: string
+      companyName: string
+      amount: number
+      cash: number
+      kaspi: number
+      label: string
+    }> = []
+
+    if (type === 'income' || type === 'profit') {
+      for (const r of incomes) {
+        if (r.date < dateFrom || r.date > dateTo) continue // только текущий период
+        const amount = (r.cash_amount ?? 0) + (r.kaspi_amount ?? 0) + (r.online_amount ?? 0) + (r.card_amount ?? 0)
+        result.push({
+          id: r.id,
+          date: r.date,
+          type: 'income',
+          companyId: r.company_id,
+          companyName: companyName(r.company_id),
+          amount,
+          cash: r.cash_amount ?? 0,
+          kaspi: r.kaspi_amount ?? 0,
+          label: [r.zone, r.shift ? SHIFT_LABELS[r.shift] : null, r.comment].filter(Boolean).join(' · ') || '—',
+        })
+      }
+    }
+
+    if (type === 'expense' || type === 'profit') {
+      for (const r of expenses) {
+        if (r.date < dateFrom || r.date > dateTo) continue // только текущий период
+        const amount = (r.cash_amount ?? 0) + (r.kaspi_amount ?? 0)
+        result.push({
+          id: r.id,
+          date: r.date,
+          type: 'expense',
+          companyId: r.company_id,
+          companyName: companyName(r.company_id),
+          amount,
+          cash: r.cash_amount ?? 0,
+          kaspi: r.kaspi_amount ?? 0,
+          label: r.category || r.comment || '—',
+        })
+      }
+    }
+
+    return result
+  }, [type, incomes, expenses, companyName, dateFrom, dateTo])
+
+  const filtered = useMemo(() => {
+    let r = rows
+    if (filterCompany !== 'all') r = r.filter((x) => x.companyId === filterCompany)
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      r = r.filter((x) =>
+        x.companyName.toLowerCase().includes(q) ||
+        x.label.toLowerCase().includes(q) ||
+        x.date.includes(q)
+      )
+    }
+    return [...r].sort((a, b) => {
+      let v = 0
+      if (sortField === 'date') v = a.date.localeCompare(b.date)
+      else if (sortField === 'company') v = a.companyName.localeCompare(b.companyName)
+      else if (sortField === 'amount') v = a.amount - b.amount
+      return sortDir === 'asc' ? v : -v
+    })
+  }, [rows, filterCompany, search, sortField, sortDir])
+
+  const totalIncome = filtered.filter((r) => r.type === 'income').reduce((s, r) => s + r.amount, 0)
+  const totalExpense = filtered.filter((r) => r.type === 'expense').reduce((s, r) => s + r.amount, 0)
+
+  const toggleSort = (f: typeof sortField) => {
+    if (sortField === f) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortField(f); setSortDir('desc') }
+  }
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative z-10 w-full max-w-5xl max-h-[90vh] flex flex-col rounded-2xl bg-gray-900 border border-white/10 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 flex-shrink-0">
+          <h2 className="text-lg font-semibold text-white">{DRILL_TITLES[type]}</h2>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-3 px-6 py-3 border-b border-white/5 flex-shrink-0">
+          {/* Company filter */}
+          <select
+            value={filterCompany}
+            onChange={(e) => setFilterCompany(e.target.value)}
+            className="h-9 rounded-lg bg-gray-800 border border-white/10 text-sm text-white px-3 focus:outline-none focus:ring-1 focus:ring-violet-500"
+          >
+            <option value="all">Все компании</option>
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+
+          {/* Search */}
+          <div className="relative flex-1 min-w-[180px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Поиск по компании, категории…"
+              className="w-full h-9 pl-9 pr-3 rounded-lg bg-gray-800 border border-white/10 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
+          </div>
+
+          {/* Row count */}
+          <span className="text-xs text-gray-500 ml-auto">{filtered.length} записей</span>
+        </div>
+
+        {/* Totals bar */}
+        <div className="flex gap-6 px-6 py-2.5 bg-gray-800/30 border-b border-white/5 flex-shrink-0 text-sm">
+          {(type === 'income' || type === 'profit') && (
+            <span>Доходы: <span className="font-semibold text-emerald-400">{formatMoneyFull(totalIncome)}</span></span>
+          )}
+          {(type === 'expense' || type === 'profit') && (
+            <span>Расходы: <span className="font-semibold text-rose-400">{formatMoneyFull(totalExpense)}</span></span>
+          )}
+          {type === 'profit' && (
+            <span>Прибыль: <span className={`font-semibold ${totalIncome - totalExpense >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>{formatMoneyFull(totalIncome - totalExpense)}</span></span>
+          )}
+        </div>
+
+        {/* Table */}
+        <div className="overflow-auto flex-1 min-h-0">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-gray-900/95 backdrop-blur-sm z-10">
+              <tr className="text-gray-400 border-b border-white/5">
+                <th
+                  className="text-left px-4 py-3 font-medium cursor-pointer hover:text-white select-none whitespace-nowrap"
+                  onClick={() => toggleSort('date')}
+                >
+                  Дата <SortIcon f="date" sortField={sortField} sortDir={sortDir} />
+                </th>
+                <th
+                  className="text-left px-4 py-3 font-medium cursor-pointer hover:text-white select-none"
+                  onClick={() => toggleSort('company')}
+                >
+                  Компания <SortIcon f="company" sortField={sortField} sortDir={sortDir} />
+                </th>
+                {type === 'profit' && (
+                  <th className="text-left px-4 py-3 font-medium">Тип</th>
+                )}
+                <th className="text-left px-4 py-3 font-medium">Категория / смена</th>
+                <th className="text-right px-4 py-3 font-medium">Нал</th>
+                <th className="text-right px-4 py-3 font-medium">Kaspi</th>
+                <th
+                  className="text-right px-4 py-3 font-medium cursor-pointer hover:text-white select-none"
+                  onClick={() => toggleSort('amount')}
+                >
+                  Итого <SortIcon f="amount" sortField={sortField} sortDir={sortDir} />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={type === 'profit' ? 7 : 6} className="text-center py-16 text-gray-500">
+                    Нет данных
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((row) => (
+                  <tr
+                    key={`${row.type}-${row.id}`}
+                    className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                  >
+                    <td className="px-4 py-2.5 text-gray-300 whitespace-nowrap">
+                      {fromISO(row.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td className="px-4 py-2.5 text-white font-medium">{row.companyName}</td>
+                    {type === 'profit' && (
+                      <td className="px-4 py-2.5">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          row.type === 'income'
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-rose-500/20 text-rose-400'
+                        }`}>
+                          {row.type === 'income' ? 'Доход' : 'Расход'}
+                        </span>
+                      </td>
+                    )}
+                    <td className="px-4 py-2.5 text-gray-400 max-w-[200px] truncate">{row.label}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-300">{row.cash > 0 ? formatMoneyCompact(row.cash) : '—'}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-300">{row.kaspi > 0 ? formatMoneyCompact(row.kaspi) : '—'}</td>
+                    <td className={`px-4 py-2.5 text-right font-semibold ${
+                      row.type === 'income' ? 'text-emerald-400' : 'text-rose-400'
+                    }`}>
+                      {row.type === 'expense' ? '−' : ''}{formatMoneyFull(row.amount)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =====================
+// MAIN CONTENT COMPONENT
+// =====================
+
+function ReportsContent() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  // Mount state for charts
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  // Inject print styles
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.id = 'print-styles'
+    style.innerHTML = `
+      @media print {
+        body { background: white !important; color: black !important; }
+        .no-print { display: none !important; }
+        .print-card { background: white !important; border: 1px solid #ddd !important; color: black !important; }
+        .print-summary { display: block !important; }
+      }
+      .print-summary { display: none; }
+    `
+    document.head.appendChild(style)
+    return () => { document.getElementById('print-styles')?.remove() }
+  }, [])
+
+  // Data states
+  const [incomes, setIncomes] = useState<IncomeRow[]>([])
+  const [expenses, setExpenses] = useState<ExpenseRow[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [companiesLoaded, setCompaniesLoaded] = useState(false)
+
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Filter states
+  const [dateFrom, setDateFrom] = useState(() => addDaysISO(todayISO(), -6))
+  const [dateTo, setDateTo] = useState(() => todayISO())
+  const [datePreset, setDatePreset] = useState<DatePreset>('last7')
+
+  const [companyFilter, setCompanyFilter] = useState<'all' | string>('all')
+  const [shiftFilter, setShiftFilter] = useState<'all' | Shift>('all')
+  const [groupMode, setGroupMode] = useState<GroupMode>('day')
+  const [includeExtraInTotals, setIncludeExtraInTotals] = useState(false)
+  const [minAmountFilter, setMinAmountFilter] = useState<string>('')
+  const [maxAmountFilter, setMaxAmountFilter] = useState<string>('')
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'details' | 'companies'>('overview')
+
+  // Table states
+  const [sortField, setSortField] = useState<SortField>('date')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(25)
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+
+  // UI states
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null)
+  const [showFilters, setShowFilters] = useState(false)
+  const [comparisonMode, setComparisonMode] = useState(false)
+  const [drillDown, setDrillDown] = useState<DrillDownType | null>(null)
+  
+  const toastTimer = useRef<number | null>(null)
+  const reqIdRef = useRef(0)
+  const didInitFromUrl = useRef(false)
+  const realtimeChannel = useRef<ReturnType<typeof supabase.channel> | null>(null)
+
+  // Virtual list ref for table
+  const tableContainerRef = useRef<HTMLDivElement>(null)
+
+  const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message: msg, type })
+    if (toastTimer.current) window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  // =====================
+  // COMPUTED VALUES
+  // =====================
+  const companyById = useMemo(() => {
+    const m = new Map<string, Company>()
+    for (const c of companies) m.set(c.id, c)
+    return m
+  }, [companies])
+
+  const extraCompanyId = useMemo(() => {
+    for (const c of companies) {
+      const code = (c.code || '').toLowerCase()
+      if (code === 'extra' || c.name?.toLowerCase().includes('extra')) return c.id
+    }
+    return null
+  }, [companies])
+
+  const companyName = useCallback((id: string) => companyById.get(id)?.name ?? 'Неизвестно', [companyById])
+
+  // =====================
+  // PRESET HANDLERS
+  // =====================
+  const applyPreset = useCallback((preset: DatePreset) => {
+    const today = todayISO()
+    const todayDate = fromISO(today)
+    let from = today
+    let to = today
+
+    switch (preset) {
+      case 'today': break
+      case 'yesterday':
+        from = addDaysISO(today, -1)
+        to = from
+        break
+      case 'last7':
+        from = addDaysISO(today, -6)
+        break
+      case 'last30':
+        from = addDaysISO(today, -29)
+        break
+      case 'last90':
+        from = addDaysISO(today, -89)
+        break
+      case 'prevWeek': {
+        const d = new Date(todayDate)
+        const diffToMonday = (d.getDay() + 6) % 7
+        const currentMonday = new Date(d)
+        currentMonday.setDate(d.getDate() - diffToMonday)
+        const prevMonday = new Date(currentMonday)
+        prevMonday.setDate(currentMonday.getDate() - 7)
+        const prevSunday = new Date(prevMonday)
+        prevSunday.setDate(prevMonday.getDate() + 6)
+        from = toISODateLocal(prevMonday)
+        to = toISODateLocal(prevSunday)
+        break
+      }
+      case 'currentMonth': {
+        const y = todayDate.getFullYear()
+        const m = todayDate.getMonth()
+        from = toISODateLocal(new Date(y, m, 1))
+        to = toISODateLocal(new Date(y, m + 1, 0))
+        break
+      }
+      case 'prevMonth': {
+        const y = todayDate.getFullYear()
+        const m = todayDate.getMonth() - 1
+        from = toISODateLocal(new Date(y, m, 1))
+        to = toISODateLocal(new Date(y, m + 1, 0))
+        break
+      }
+      case 'currentQuarter': {
+        const y = todayDate.getFullYear()
+        const m = todayDate.getMonth()
+        const qStart = Math.floor(m / 3) * 3
+        from = toISODateLocal(new Date(y, qStart, 1))
+        to = toISODateLocal(new Date(y, qStart + 3, 0))
+        break
+      }
+      case 'prevQuarter': {
+        const y = todayDate.getFullYear()
+        const m = todayDate.getMonth()
+        const qStart = Math.floor(m / 3) * 3 - 3
+        from = toISODateLocal(new Date(y, qStart, 1))
+        to = toISODateLocal(new Date(y, qStart + 3, 0))
+        break
+      }
+      case 'currentYear': {
+        const y = todayDate.getFullYear()
+        from = `${y}-01-01`
+        to = `${y}-12-31`
+        break
+      }
+      case 'prevYear': {
+        const y = todayDate.getFullYear() - 1
+        from = `${y}-01-01`
+        to = `${y}-12-31`
+        break
+      }
+      case 'custom': return
+    }
+
+    setDateFrom(from)
+    setDateTo(to)
+  }, [])
+
+  const handlePresetChange = useCallback((value: DatePreset) => {
+    setDatePreset(value)
+    if (value !== 'custom') applyPreset(value)
+  }, [applyPreset])
+
+  const resetFilters = useCallback(() => {
+    setDatePreset('last7')
+    applyPreset('last7')
+    setCompanyFilter('all')
+    setShiftFilter('all')
+    setGroupMode('day')
+    setIncludeExtraInTotals(false)
+    setMinAmountFilter('')
+    setMaxAmountFilter('')
+    setSearchQuery('')
+    setSortField('date')
+    setSortDirection('desc')
+    setCurrentPage(1)
+    setActiveTab('overview')
+    showToast('Фильтры сброшены', 'success')
+  }, [applyPreset, showToast])
+
+  // =====================
+  // DATA LOADING
+  // =====================
+  useEffect(() => {
+  let alive = true
+
+  const loadCompanies = async () => {
+    setError(null)
+
+    const resp = await fetch('/api/admin/companies').catch(() => null)
+    const json = await resp?.json().catch(() => null)
+
+    if (!alive) return
+
+    if (!resp?.ok || json?.error) {
+      console.error('loadCompanies error:', json?.error)
+      setError('Не удалось загрузить список компаний')
+      setCompaniesLoaded(true)
+      setLoading(false)
+      return
+    }
+
+    setCompanies((json?.data || []) as Company[])
+    setCompaniesLoaded(true)
+  }
+
+  loadCompanies()
+  return () => { alive = false }
+}, [])
+
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (!companiesLoaded) return
+
+    const myReqId = ++reqIdRef.current
+
+    if (isRefresh) setRefreshing(true)
+    else setLoading(true)
+
+    setError(null)
+
+    try {
+      const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
+
+      const incomeParams = new URLSearchParams({ from: prevFrom, to: dateTo })
+      const expenseCurParams = new URLSearchParams({ from: dateFrom, to: dateTo, page_size: '2000', page: '0' })
+      const expensePrevParams = new URLSearchParams({ from: prevFrom, to: prevTo, page_size: '2000', page: '0' })
+      if (companyFilter !== 'all') {
+        incomeParams.set('company_id', companyFilter)
+        expenseCurParams.set('company_id', companyFilter)
+        expensePrevParams.set('company_id', companyFilter)
+      }
+      if (shiftFilter !== 'all') {
+        incomeParams.set('shift', shiftFilter)
+      }
+
+      const [incomeResp, expenseCurResp, expensePrevResp] = await Promise.all([
+        fetch(`/api/admin/incomes?${incomeParams}`),
+        fetch(`/api/admin/expenses?${expenseCurParams}`),
+        fetch(`/api/admin/expenses?${expensePrevParams}`),
+      ])
+
+      if (myReqId !== reqIdRef.current) return
+
+      const incomeJson = await incomeResp.json()
+      const expenseCurJson = await expenseCurResp.json()
+      const expensePrevJson = await expensePrevResp.json()
+
+      if (incomeJson.error) throw new Error(incomeJson.error)
+      if (expenseCurJson.error) throw new Error(expenseCurJson.error)
+      if (expensePrevJson.error) throw new Error(expensePrevJson.error)
+
+      let incomes: IncomeRow[] = incomeJson.data || []
+      let expenses: ExpenseRow[] = [...(expenseCurJson.data || []), ...(expensePrevJson.data || [])]
+
+      // Client-side extra company exclusion (when no specific company selected)
+      if (companyFilter === 'all' && !includeExtraInTotals && extraCompanyId) {
+        incomes = incomes.filter((r) => r.company_id !== extraCompanyId)
+        expenses = expenses.filter((r) => r.company_id !== extraCompanyId)
+      }
+
+      setIncomes(incomes)
+      setExpenses(expenses)
+
+      if (isRefresh) showToast('Данные обновлены', 'success')
+    } catch (err) {
+      if (myReqId === reqIdRef.current) {
+        setError('Ошибка загрузки данных')
+        showToast('Ошибка загрузки данных', 'error')
+        console.error(err)
+      }
+    } finally {
+      if (myReqId === reqIdRef.current) {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    }
+  }, [
+    companiesLoaded,
+    dateFrom,
+    dateTo,
+    companyFilter,
+    shiftFilter,
+    includeExtraInTotals,
+    extraCompanyId,
+    showToast,
+  ])
+
+  useEffect(() => {
+    if (!companiesLoaded) return
+    loadData(false)
+  }, [companiesLoaded, loadData])
+
+  // =====================
+  // REALTIME SUBSCRIPTION
+  // =====================
+  useEffect(() => {
+    if (!companiesLoaded) return
+
+    // Setup realtime subscription for live updates
+    const channel = supabase
+      .channel('financial-reports')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incomes' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            // Refresh data if the new record is in our date range
+            const newDate = (payload.new as IncomeRow).date
+            if (newDate >= dateFrom && newDate <= dateTo) {
+              loadData(true)
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'expenses' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const newDate = (payload.new as ExpenseRow).date
+            if (newDate >= dateFrom && newDate <= dateTo) {
+              loadData(true)
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    realtimeChannel.current = channel
+
+    return () => {
+      if (realtimeChannel.current) {
+        supabase.removeChannel(realtimeChannel.current)
+      }
+    }
+  }, [companiesLoaded, dateFrom, dateTo, loadData])
+
+  // =====================
+  // URL SYNC
+  // =====================
+  useEffect(() => {
+    if (didInitFromUrl.current || !companiesLoaded) return
+
+    const sp = searchParams
+    const pFrom = sp.get('from')
+    const pTo = sp.get('to')
+    const pPreset = sp.get('preset') as DatePreset | null
+    const pCompany = sp.get('company')
+    const pShift = sp.get('shift') as Shift | 'all' | null
+    const pGroup = parseGroup(sp.get('group'))
+    const pExtra = parseBool(sp.get('extra'))
+    const pTab = parseTab(sp.get('tab'))
+
+    if (pFrom && isISODate(pFrom)) setDateFrom(pFrom)
+    if (pTo && isISODate(pTo)) setDateTo(pTo)
+
+    if (pPreset && PRESET_LABELS[pPreset]) {
+      setDatePreset(pPreset)
+      if (pPreset !== 'custom' && !pFrom && !pTo) applyPreset(pPreset)
+    }
+
+    if (pCompany) {
+      if (pCompany === 'all') setCompanyFilter('all')
+      else if (companies.some((c) => c.id === pCompany)) setCompanyFilter(pCompany)
+    }
+
+    if (pShift && (pShift === 'all' || pShift === 'day' || pShift === 'night')) {
+      setShiftFilter(pShift)
+    }
+
+    if (pGroup) setGroupMode(pGroup)
+    if (pExtra) setIncludeExtraInTotals(true)
+    if (pTab) setActiveTab(pTab)
+
+    didInitFromUrl.current = true
+  }, [companiesLoaded, companies, searchParams, applyPreset])
+
+  useEffect(() => {
+    if (!didInitFromUrl.current) return
+
+    const timeoutId = setTimeout(() => {
+      const params = new URLSearchParams()
+      params.set('from', dateFrom)
+      params.set('to', dateTo)
+      params.set('preset', datePreset)
+      params.set('company', companyFilter)
+      params.set('shift', shiftFilter)
+      params.set('group', groupMode)
+      params.set('extra', includeExtraInTotals ? '1' : '0')
+      params.set('tab', activeTab)
+
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    }, 250)
+
+    return () => clearTimeout(timeoutId)
+  }, [dateFrom, dateTo, datePreset, companyFilter, shiftFilter, groupMode, includeExtraInTotals, activeTab, pathname, router])
+
+  // =====================
+  // DATA PROCESSING (MEMOIZED)
+  // =====================
+  const processed = useMemo(() => {
+    const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
+
+    const totalsCur: FinancialTotals = {
+      incomeCash: 0, incomeKaspi: 0, incomeOnline: 0, incomeCard: 0, incomeNonCash: 0,
+      expenseCash: 0, expenseKaspi: 0, totalIncome: 0, totalExpense: 0,
+      profit: 0, remainingCash: 0, remainingKaspi: 0, totalBalance: 0,
+      transactionCount: 0, avgTransaction: 0
+    }
+    const totalsPrev: FinancialTotals = { ...totalsCur }
+
+    const expenseByCategoryMap = new Map<string, number>()
+    const incomeByCompanyMap = new Map<string, { 
+      companyId: string; name: string; value: number; cash: number; 
+      kaspi: number; online: number; card: number; count: number 
+    }>()
+    const chartDataMap = new Map<string, TimeAggregation>()
+    const anomalies: Anomaly[] = []
+    const companyStats = new Map<string, CompanyStat>()
+
+    const dailyIncome = new Map<string, number>()
+    const dailyExpense = new Map<string, number>()
+
+    const getRangeBucket = (iso: string): 'current' | 'previous' | null => {
+      if (iso >= dateFrom && iso <= dateTo) return 'current'
+      if (iso >= prevFrom && iso <= prevTo) return 'previous'
+      return null
+    }
+
+    const getKey = (iso: string) => {
+      if (groupMode === 'day') return { key: iso, label: iso.slice(5), sortISO: iso }
+      if (groupMode === 'week') {
+        const wk = getISOWeekKey(iso)
+        return { key: wk, label: wk, sortISO: getISOWeekStartISO(iso) }
+      }
+      if (groupMode === 'month') {
+        const mk = getMonthKey(iso)
+        return { key: mk, label: mk, sortISO: `${mk}-01` }
+      }
+      const y = getYearKey(iso)
+      return { key: y, label: y, sortISO: `${y}-01-01` }
+    }
+
+    const ensureBucket = (key: string, label: string, sortISO: string): TimeAggregation => {
+      const b = chartDataMap.get(key)
+      if (b) return b
+      
+      const newBucket: TimeAggregation = {
+        label, sortISO, income: 0, expense: 0, profit: 0,
+        incomeCash: 0, incomeKaspi: 0, incomeOnline: 0, incomeCard: 0, incomeNonCash: 0,
+        expenseCash: 0, expenseKaspi: 0, count: 0
+      }
+      chartDataMap.set(key, newBucket)
+      return newBucket
+    }
+
+    // Process incomes
+    for (const r of incomes) {
+      const range = getRangeBucket(r.date)
+      if (!range) continue
+
+      const cash = safeNumber(r.cash_amount)
+      const kaspi = safeNumber(r.kaspi_amount)
+      const online = safeNumber(r.online_amount)
+      const card = safeNumber(r.card_amount)
+      const nonCash = kaspi + online + card
+      const total = cash + nonCash
+      
+      if (total <= 0 && cash === 0 && kaspi === 0 && online === 0) continue
+
+      const tgt = range === 'current' ? totalsCur : totalsPrev
+      tgt.incomeCash += cash
+      tgt.incomeKaspi += kaspi
+      tgt.incomeOnline += online
+      tgt.incomeCard += card
+      tgt.incomeNonCash += nonCash
+      tgt.totalIncome += total
+      tgt.transactionCount += 1
+
+      if (range === 'current') {
+        dailyIncome.set(r.date, (dailyIncome.get(r.date) || 0) + total)
+
+        const { key, label, sortISO } = getKey(r.date)
+        const bucket = ensureBucket(key, label, sortISO)
+        bucket.income += total
+        bucket.incomeCash += cash
+        bucket.incomeKaspi += kaspi
+        bucket.incomeOnline += online
+        bucket.incomeCard += card
+        bucket.incomeNonCash += nonCash
+        bucket.count += 1
+
+        const existing = incomeByCompanyMap.get(r.company_id)
+        if (!existing) {
+          incomeByCompanyMap.set(r.company_id, {
+            companyId: r.company_id,
+            name: companyName(r.company_id),
+            value: total, cash, kaspi, online, card, count: 1
+          })
+        } else {
+          existing.value += total
+          existing.cash += cash
+          existing.kaspi += kaspi
+          existing.online += online
+          existing.card += card
+          existing.count += 1
+        }
+
+        const cs = companyStats.get(r.company_id) || { 
+          income: 0, expense: 0, profit: 0,
+          cashIncome: 0, kaspiIncome: 0, onlineIncome: 0, cardIncome: 0,
+          cashExpense: 0, kaspiExpense: 0, transactions: 0
+        }
+        cs.income += total
+        cs.cashIncome += cash
+        cs.kaspiIncome += kaspi
+        cs.onlineIncome += online
+        cs.cardIncome += card
+        cs.transactions += 1
+        companyStats.set(r.company_id, cs)
+      }
+    }
+
+    // Process expenses
+    for (const r of expenses) {
+      const range = getRangeBucket(r.date)
+      if (!range) continue
+
+      const cash = safeNumber(r.cash_amount)
+      const kaspi = safeNumber(r.kaspi_amount)
+      const total = cash + kaspi
+      
+      if (total <= 0 && cash === 0 && kaspi === 0) continue
+
+      const tgt = range === 'current' ? totalsCur : totalsPrev
+      tgt.expenseCash += cash
+      tgt.expenseKaspi += kaspi
+      tgt.totalExpense += total
+      tgt.transactionCount += 1
+
+      if (range === 'current') {
+        dailyExpense.set(r.date, (dailyExpense.get(r.date) || 0) + total)
+
+        const category = r.category || 'Без категории'
+        expenseByCategoryMap.set(category, (expenseByCategoryMap.get(category) || 0) + total)
+
+        const { key, label, sortISO } = getKey(r.date)
+        const bucket = ensureBucket(key, label, sortISO)
+        bucket.expense += total
+        bucket.expenseCash += cash
+        bucket.expenseKaspi += kaspi
+
+        const cs = companyStats.get(r.company_id) || { 
+          income: 0, expense: 0, profit: 0,
+          cashIncome: 0, kaspiIncome: 0, onlineIncome: 0, cardIncome: 0,
+          cashExpense: 0, kaspiExpense: 0, transactions: 0
+        }
+        cs.expense += total
+        cs.cashExpense += cash
+        cs.kaspiExpense += kaspi
+        companyStats.set(r.company_id, cs)
+      }
+    }
+
+    // Finalize totals
+    const finalize = (t: FinancialTotals) => {
+      t.profit = t.totalIncome - t.totalExpense
+      t.remainingCash = t.incomeCash - t.expenseCash
+      t.remainingKaspi = t.incomeNonCash - t.expenseKaspi
+      t.totalBalance = t.profit
+      t.avgTransaction = t.transactionCount > 0 ? t.totalIncome / t.transactionCount : 0
+      return t
+    }
+
+    finalize(totalsCur)
+    finalize(totalsPrev)
+
+    for (const [, stats] of companyStats) {
+      stats.profit = stats.income - stats.expense
+    }
+
+    // Anomaly detection
+    const avgIncome = totalsCur.totalIncome / (dailyIncome.size || 1)
+    const avgExpense = totalsCur.totalExpense / (dailyExpense.size || 1)
+
+    for (const [date, amount] of dailyIncome) {
+      if (amount > avgIncome * 2.5) {
+        anomalies.push({ 
+          type: 'income_spike', date, 
+          description: `Всплеск выручки: ${formatMoneyFull(amount)}`, 
+          severity: 'medium', value: amount 
+        })
+      }
+    }
+    
+    for (const [date, amount] of dailyExpense) {
+      if (amount > avgExpense * 2.5) {
+        anomalies.push({ 
+          type: 'expense_spike', date, 
+          description: `Аномальный расход: ${formatMoneyFull(amount)}`, 
+          severity: 'high', value: amount 
+        })
+      }
+    }
+
+    for (const agg of chartDataMap.values()) {
+      agg.profit = agg.income - agg.expense
+      if (agg.income > 0) {
+        const margin = agg.profit / agg.income
+        if (margin < 0.05) {
+          anomalies.push({ 
+            type: 'low_profit', date: agg.label, 
+            description: `Критически низкая маржа: ${(margin * 100).toFixed(1)}%`, 
+            severity: 'critical', value: agg.profit 
+          })
+        } else if (margin < 0.15) {
+          anomalies.push({ 
+            type: 'low_profit', date: agg.label, 
+            description: `Низкая маржа: ${(margin * 100).toFixed(1)}%`, 
+            severity: 'medium', value: agg.profit 
+          })
+        }
+      }
+    }
+
+    if (totalsCur.totalIncome > 0) {
+      const cashRatio = totalsCur.incomeCash / totalsCur.totalIncome
+      if (cashRatio > 0.8) {
+        anomalies.push({
+          type: 'high_cash_ratio',
+          date: dateTo,
+          description: `Высокая доля наличных: ${(cashRatio * 100).toFixed(0)}%`,
+          severity: 'low',
+          value: cashRatio
+        })
+      }
+    }
+
+    return { 
+      totalsCur, totalsPrev, chartDataMap, expenseByCategoryMap, 
+      incomeByCompanyMap, anomalies, companyStats, prevFrom, prevTo,
+      dailyIncome, dailyExpense
+    }
+  }, [incomes, expenses, dateFrom, dateTo, groupMode, companyName])
+
+  const totals = processed.totalsCur
+  const totalsPrev = processed.totalsPrev
+  const dailyIncome = processed.dailyIncome
+  const dailyExpense = processed.dailyExpense
+
+  const chartData = useMemo(() => 
+    Array.from(processed.chartDataMap.values())
+      .sort((a, b) => a.sortISO.localeCompare(b.sortISO)),
+    [processed.chartDataMap]
+  )
+
+  const expenseByCategoryData = useMemo(() =>
+    Array.from(processed.expenseByCategoryMap.entries())
+      .map(([name, amount]) => ({ name, amount, percentage: 0 }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 10)
+      .map((item) => ({
+        ...item,
+        percentage: totals.totalExpense > 0 ? (item.amount / totals.totalExpense) * 100 : 0
+      })),
+    [processed.expenseByCategoryMap, totals.totalExpense]
+  )
+
+  const incomeByCompanyData = useMemo(() =>
+    Array.from(processed.incomeByCompanyMap.values())
+      .map((x, idx) => ({ 
+        ...x, 
+        fill: PIE_COLORS[idx % PIE_COLORS.length],
+        percentage: totals.totalIncome > 0 ? (x.value / totals.totalIncome) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value),
+    [processed.incomeByCompanyMap, totals.totalIncome]
+  )
+
+  const companyComparisonData = useMemo(() => 
+    Array.from(processed.companyStats.entries())
+      .map(([id, stats]) => ({
+        id,
+        name: companyName(id),
+        ...stats,
+        margin: stats.income > 0 ? (stats.profit / stats.income) * 100 : 0
+      }))
+      .sort((a, b) => b.income - a.income),
+    [processed.companyStats, companyName]
+  )
+
+  // =====================
+  // DETAILED ROWS
+  // =====================
+  const detailedRows = useMemo((): DetailedRow[] => {
+    const rows: DetailedRow[] = []
+    const min = minAmountFilter ? parseFloat(minAmountFilter) : 0
+    const max = maxAmountFilter ? parseFloat(maxAmountFilter) : Infinity
+    
+    for (const r of incomes) {
+      if (r.date < dateFrom || r.date > dateTo) continue
+      
+      const cash = safeNumber(r.cash_amount)
+      const kaspi = safeNumber(r.kaspi_amount)
+      const online = safeNumber(r.online_amount)
+      const card = safeNumber(r.card_amount)
+      const total = cash + kaspi + online + card
+      
+      if (total === 0) continue
+      if (total < min || total > max) continue
+
+      rows.push({
+        id: r.id,
+        date: r.date,
+        type: 'income',
+        companyId: r.company_id,
+        companyName: companyName(r.company_id),
+        amount: total,
+        cashAmount: cash,
+        kaspiAmount: kaspi,
+        onlineAmount: online,
+        cardAmount: card,
+        shift: r.shift,
+        zone: r.zone,
+      })
+    }
+
+    for (const r of expenses) {
+      if (r.date < dateFrom || r.date > dateTo) continue
+      
+      const cash = safeNumber(r.cash_amount)
+      const kaspi = safeNumber(r.kaspi_amount)
+      const total = cash + kaspi
+      
+      if (total === 0) continue
+      if (total < min || total > max) continue
+
+      rows.push({
+        id: r.id,
+        date: r.date,
+        type: 'expense',
+        companyId: r.company_id,
+        companyName: companyName(r.company_id),
+        amount: total,
+        cashAmount: cash,
+        kaspiAmount: kaspi,
+        category: r.category || 'Без категории',
+        comment: r.comment,
+      })
+    }
+
+    return rows
+  }, [incomes, expenses, dateFrom, dateTo, companyName, minAmountFilter, maxAmountFilter])
+
+  const filteredRows = useMemo(() => {
+    let result = [...detailedRows]
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter(r => 
+        r.companyName.toLowerCase().includes(q) ||
+        r.date.includes(q) ||
+        (r.category && r.category.toLowerCase().includes(q)) ||
+        (r.zone && r.zone.toLowerCase().includes(q)) ||
+        (r.comment && r.comment.toLowerCase().includes(q)) ||
+        String(r.amount).includes(q)
+      )
+    }
+
+    result.sort((a, b) => {
+      let aVal: string | number = ''
+      let bVal: string | number = ''
+
+      switch (sortField) {
+        case 'date':
+          aVal = a.date + (a.type === 'income' ? '1' : '2')
+          bVal = b.date + (b.type === 'income' ? '1' : '2')
+          break
+        case 'company':
+          aVal = a.companyName
+          bVal = b.companyName
+          break
+        case 'amount':
+          aVal = a.amount
+          bVal = b.amount
+          break
+        case 'category':
+          aVal = a.category || a.shift || ''
+          bVal = b.category || b.shift || ''
+          break
+        case 'shift':
+          aVal = a.shift || ''
+          bVal = b.shift || ''
+          break
+        case 'zone':
+          aVal = a.zone || a.comment || ''
+          bVal = b.zone || b.comment || ''
+          break
+      }
+
+      if (typeof aVal === 'string') {
+        const cmp = aVal.localeCompare(String(bVal))
+        return sortDirection === 'asc' ? cmp : -cmp
+      }
+      
+      return sortDirection === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number)
+    })
+
+    return result
+  }, [detailedRows, searchQuery, sortField, sortDirection])
+
+  // Virtualization for large tables
+  const virtualizer = useVirtualizer({
+    count: filteredRows.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 60,
+    overscan: 5,
+  })
+
+  const virtualRows = virtualizer.getVirtualItems()
+
+  // Pagination for non-virtualized view (fallback)
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage
+    return filteredRows.slice(start, start + itemsPerPage)
+  }, [filteredRows, currentPage, itemsPerPage])
+
+  const totalPages = Math.ceil(filteredRows.length / itemsPerPage)
+  const useVirtualization = filteredRows.length > 100
+
+  // =====================
+  // AI INSIGHTS
+  // =====================
+  const aiInsights = useMemo((): AIInsight[] => {
+    const insights: AIInsight[] = []
+    const profitMargin = totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0
+
+    if (profitMargin < 10) {
+      insights.push({ 
+        type: 'danger', 
+        title: 'Критически низкая маржинальность', 
+        description: `Маржа ${profitMargin.toFixed(1)}% требует немедленного внимания. Проверьте операционные расходы.`,
+        metric: `${profitMargin.toFixed(1)}%`,
+        trend: 'down'
+      })
+    } else if (profitMargin < 20) {
+      insights.push({ 
+        type: 'warning', 
+        title: 'Низкая маржинальность', 
+        description: `Маржа ${profitMargin.toFixed(1)}% ниже рекомендуемой нормы (25-35%).`,
+        metric: `${profitMargin.toFixed(1)}%`,
+        trend: 'down'
+      })
+    } else if (profitMargin > 40) {
+      insights.push({ 
+        type: 'success', 
+        title: 'Отличная маржа', 
+        description: `Маржа ${profitMargin.toFixed(1)}% — значительно выше среднерыночной.`,
+        metric: `${profitMargin.toFixed(1)}%`,
+        trend: 'up'
+      })
+    }
+
+    const cashRatio = totals.totalIncome > 0 ? totals.incomeCash / totals.totalIncome : 0
+    if (cashRatio < 0.2) {
+      insights.push({ 
+        type: 'opportunity', 
+        title: 'Высокая доля безнала', 
+        description: 'Рассмотрите стимулирование наличных платежей (скидки/бонусы).',
+        metric: `${((1 - cashRatio) * 100).toFixed(0)}% безнал`,
+        trend: 'neutral'
+      })
+    }
+
+    const topExpense = expenseByCategoryData[0]
+    if (topExpense && totals.totalExpense > 0) {
+      const share = (topExpense.amount / totals.totalExpense) * 100
+      if (share > 50) {
+        insights.push({ 
+          type: 'warning', 
+          title: 'Критическая концентрация расходов', 
+          description: `"${topExpense.name}" составляет ${share.toFixed(0)}% всех расходов.`,
+          metric: `${share.toFixed(0)}%`,
+          trend: 'down'
+        })
+      } else if (share > 30) {
+        insights.push({ 
+          type: 'info', 
+          title: 'Высокая концентрация расходов', 
+          description: `"${topExpense.name}" — ${share.toFixed(0)}% расходов.`,
+          metric: `${share.toFixed(0)}%`
+        })
+      }
+    }
+
+    if (totalsPrev.totalIncome > 0) {
+      const incomeChange = ((totals.totalIncome - totalsPrev.totalIncome) / totalsPrev.totalIncome) * 100
+      if (Math.abs(incomeChange) > 15) {
+        insights.push({
+          type: incomeChange > 0 ? 'success' : 'warning',
+          title: incomeChange > 0 ? 'Значительный рост выручки' : 'Падение выручки',
+          description: `${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(1)}% к прошлому периоду`,
+          metric: `${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(1)}%`,
+          trend: incomeChange > 0 ? 'up' : 'down'
+        })
+      }
+    }
+
+    const critical = processed.anomalies.filter((a) => a.severity === 'critical').length
+    const high = processed.anomalies.filter((a) => a.severity === 'high').length
+    
+    if (critical > 0) {
+      insights.push({ 
+        type: 'danger', 
+        title: 'Критические аномалии', 
+        description: 'Требуется немедленная проверка данных и операций.',
+        metric: `${critical} крит.`,
+        trend: 'down'
+      })
+    } else if (high > 0) {
+      insights.push({ 
+        type: 'warning', 
+        title: 'Выявлены риски', 
+        description: 'Обнаружены аномалии, требующие внимания.',
+        metric: `${high} высок.`
+      })
+    }
+
+    if (totals.transactionCount > 0 && totals.avgTransaction < 5000) {
+      insights.push({
+        type: 'info',
+        title: 'Низкий средний чек',
+        description: `Средняя транзакция ${formatMoneyFull(totals.avgTransaction)}. Возможен апселл.`,
+        metric: formatMoneyFull(totals.avgTransaction)
+      })
+    }
+
+    return insights.slice(0, 5)
+  }, [totals, totalsPrev, expenseByCategoryData, processed.anomalies])
+
+  // =====================
+  // FORECAST
+  // =====================
+  const forecast = useMemo(() => {
+    if (!['currentMonth', 'currentQuarter', 'currentYear'].includes(datePreset)) return null
+    
+    const startDate = fromISO(dateFrom)
+    const today = new Date()
+    const lastDay = fromISO(dateTo)
+    
+    const daysPassed = Math.max(1, Math.floor((today.getTime() - startDate.getTime()) / 86400000) + 1)
+    const totalDays = Math.floor((lastDay.getTime() - startDate.getTime()) / 86400000) + 1
+    const remainingDays = Math.max(0, totalDays - daysPassed)
+    
+    if (remainingDays <= 0) return null
+
+    const avgIncome = totals.totalIncome / daysPassed
+    const avgExpense = totals.totalExpense / daysPassed
+    const avgProfit = totals.profit / daysPassed
+
+    return {
+      remainingDays,
+      forecastIncome: Math.round(totals.totalIncome + avgIncome * remainingDays),
+      forecastExpense: Math.round(totals.totalExpense + avgExpense * remainingDays),
+      forecastProfit: Math.round(totals.profit + avgProfit * remainingDays),
+      confidence: Math.min(95, Math.max(50, 60 + (daysPassed / totalDays) * 40)),
+    }
+  }, [datePreset, dateFrom, dateTo, totals])
+
+  const assistantSnapshot = useMemo<PageSnapshot>(() => {
+    const profitMargin = totals.totalIncome > 0 ? (totals.profit / totals.totalIncome) * 100 : 0
+
+    return {
+      page: 'reports',
+      title: 'Срез данных по отчётам',
+      generatedAt: new Date().toISOString(),
+      route: '/reports',
+      period: {
+        from: dateFrom,
+        to: dateTo,
+        label: `${dateFrom} -> ${dateTo}`,
+      },
+      summary: [
+        `Выручка ${formatMoneyFull(totals.totalIncome)}`,
+        `Расходы ${formatMoneyFull(totals.totalExpense)}`,
+        `Прибыль ${formatMoneyFull(totals.profit)}`,
+        `Маржа ${profitMargin.toFixed(1)}%`,
+      ],
+      sections: [
+        {
+          title: 'Сводка периода',
+          metrics: [
+            { label: 'Выручка', value: formatMoneyFull(totals.totalIncome) },
+            { label: 'Расходы', value: formatMoneyFull(totals.totalExpense) },
+            { label: 'Прибыль', value: formatMoneyFull(totals.profit) },
+            { label: 'Маржа', value: `${profitMargin.toFixed(1)}%` },
+            { label: 'Средний чек', value: formatMoneyFull(totals.avgTransaction) },
+          ],
+        },
+        {
+          title: 'Сравнение и прогноз',
+          metrics: [
+            { label: 'Выручка прошлого периода', value: formatMoneyFull(totalsPrev.totalIncome) },
+            { label: 'Прибыль прошлого периода', value: formatMoneyFull(totalsPrev.profit) },
+            { label: 'Прогноз дохода', value: forecast ? formatMoneyFull(forecast.forecastIncome) : 'Нет активного прогноза' },
+            { label: 'Прогноз прибыли', value: forecast ? formatMoneyFull(forecast.forecastProfit) : 'Нет активного прогноза' },
+            { label: 'Доверие прогноза', value: forecast ? `${forecast.confidence.toFixed(0)}%` : '—' },
+          ],
+        },
+        {
+          title: 'Концентрация и сигналы',
+          metrics: [
+            {
+              label: 'Топ-расходы',
+              value: expenseByCategoryData.slice(0, 3).map((item) => `${item.name} ${formatMoneyFull(item.amount)}`).join(' | ') || 'Нет данных',
+            },
+            {
+              label: 'Топ-компании',
+              value: incomeByCompanyData.slice(0, 3).map((item) => `${item.name} ${formatMoneyFull(item.value)}`).join(' | ') || 'Нет данных',
+            },
+            {
+              label: 'Аномалии',
+              value:
+                processed.anomalies
+                  .slice(0, 3)
+                  .map((item) => item.description)
+                  .join(' | ') || 'Сильных аномалий не найдено',
+            },
+          ],
+        },
+      ],
+    }
+  }, [dateFrom, dateTo, expenseByCategoryData, forecast, incomeByCompanyData, processed.anomalies, totals, totalsPrev])
+
+  // =====================
+  // HANDLERS
+  // =====================
+  const handleShare = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      showToast('Ссылка скопирована в буфер обмена', 'success')
+    } catch {
+      showToast('Не удалось скопировать ссылку', 'error')
+    }
+  }, [showToast])
+
+  const handleDownloadCSV = useCallback(async () => {
+    const companyLabel = companyFilter === 'all'
+      ? (includeExtraInTotals ? 'Все компании (включая Extra)' : 'Все компании (без Extra)')
+      : companyName(companyFilter)
+    const period = `${dateFrom} — ${dateTo}`
+    const wb = createWorkbook()
+    const topCompany = incomeByCompanyData[0]
+    const topExpense = expenseByCategoryData[0]
+
+    await buildDashboardSheet(wb, {
+      sheetName: 'Дашборд',
+      title: 'Финансовый дашборд',
+      subtitle: `Период: ${period} | Компания: ${companyLabel}`,
+      metrics: [
+        { label: 'Выручка', value: formatMoneyFull(totals.totalIncome), hint: `Было ${formatMoneyCompact(totalsPrev.totalIncome)}`, tone: 'good' },
+        { label: 'Расходы', value: formatMoneyFull(totals.totalExpense), hint: `Было ${formatMoneyCompact(totalsPrev.totalExpense)}`, tone: 'warn' },
+        { label: 'Прибыль', value: formatMoneyFull(totals.profit), hint: getPercentageChange(totals.profit, totalsPrev.profit), tone: totals.profit >= 0 ? 'good' : 'danger' },
+        { label: 'Средний чек', value: formatMoneyFull(totals.avgTransaction), hint: `${totals.transactionCount} транзакций`, tone: 'neutral' },
+      ],
+      charts: [
+        {
+          title: 'Выручка по компаниям',
+          subtitle: 'Топ компаний за период',
+          type: 'bar',
+          tone: 'good',
+          valueFormat: 'money',
+          points: incomeByCompanyData.slice(0, 6).map((item) => ({
+            label: item.name,
+            value: item.value,
+          })),
+        },
+        {
+          title: 'Расходы по категориям',
+          subtitle: 'Ключевые статьи затрат',
+          type: 'bar',
+          tone: 'warn',
+          valueFormat: 'money',
+          points: expenseByCategoryData.slice(0, 6).map((item) => ({
+            label: item.name,
+            value: item.amount,
+          })),
+        },
+      ],
+      highlights: [
+        `Сравнение с прошлым периодом: выручка ${getPercentageChange(totals.totalIncome, totalsPrev.totalIncome)}, прибыль ${getPercentageChange(totals.profit, totalsPrev.profit)}.`,
+        topCompany ? `Лидер по выручке: ${topCompany.name} (${formatMoneyCompact(topCompany.value)}).` : 'Лидер по выручке не определён: нет данных по компаниям.',
+        topExpense ? `Главная статья расходов: ${topExpense.name} (${formatMoneyCompact(topExpense.amount)}).` : 'Главная статья расходов не определена: нет данных по расходам.',
+      ],
+    })
+
+    // Sheet 1: Summary
+    buildStyledSheet(wb, 'Сводка', 'Финансовый отчёт', `Период: ${period} | Компания: ${companyLabel}`, [
+      { header: 'Показатель', key: 'label', width: 28, type: 'text' },
+      { header: 'Текущий период', key: 'current', width: 20, type: 'money' },
+      { header: 'Прошлый период', key: 'prev', width: 20, type: 'money' },
+      { header: 'Изменение', key: 'change', width: 14, type: 'text', align: 'right' },
+    ], [
+      { _isSection: true, _sectionLabel: 'ОСНОВНЫЕ ПОКАЗАТЕЛИ' },
+      { label: 'Выручка', current: totals.totalIncome, prev: totalsPrev.totalIncome, change: getPercentageChange(totals.totalIncome, totalsPrev.totalIncome) },
+      { label: 'Расходы', current: totals.totalExpense, prev: totalsPrev.totalExpense, change: getPercentageChange(totals.totalExpense, totalsPrev.totalExpense) },
+      { label: 'Прибыль', current: totals.profit, prev: totalsPrev.profit, change: getPercentageChange(totals.profit, totalsPrev.profit) },
+      { _isTotals: true, label: 'ИТОГО ПРИБЫЛЬ', current: totals.profit, prev: totalsPrev.profit, change: getPercentageChange(totals.profit, totalsPrev.profit) },
+      { _isSection: true, _sectionLabel: 'СТРУКТУРА ДОХОДОВ' },
+      { label: 'Наличные (доход)', current: totals.incomeCash, prev: totalsPrev.incomeCash, change: getPercentageChange(totals.incomeCash, totalsPrev.incomeCash) },
+      { label: 'Kaspi (доход)', current: totals.incomeKaspi, prev: totalsPrev.incomeKaspi, change: getPercentageChange(totals.incomeKaspi, totalsPrev.incomeKaspi) },
+      { label: 'Online (доход)', current: totals.incomeOnline, prev: totalsPrev.incomeOnline, change: getPercentageChange(totals.incomeOnline, totalsPrev.incomeOnline) },
+      { label: 'Card (доход)', current: totals.incomeCard, prev: totalsPrev.incomeCard, change: getPercentageChange(totals.incomeCard, totalsPrev.incomeCard) },
+      { label: 'Безнал (доход)', current: totals.incomeNonCash, prev: totalsPrev.incomeNonCash, change: getPercentageChange(totals.incomeNonCash, totalsPrev.incomeNonCash) },
+    ])
+
+    // Sheet 2: By company
+    const coRows = incomeByCompanyData.map(c => ({ name: c.name, value: c.value, cash: c.cash, kaspi: c.kaspi, online: c.online, card: c.card, count: c.count }))
+    const coTot = coRows.reduce((a, r) => ({ value: a.value + r.value, cash: a.cash + r.cash, kaspi: a.kaspi + r.kaspi, online: a.online + r.online, card: a.card + r.card, count: a.count + r.count }), { value: 0, cash: 0, kaspi: 0, online: 0, card: 0, count: 0 })
+    coRows.push({ _isTotals: true, name: 'ИТОГО', ...coTot } as any)
+    buildStyledSheet(wb, 'По компаниям', 'Доходы по компаниям', `Период: ${period}`, [
+      { header: 'Компания', key: 'name', width: 24, type: 'text' },
+      { header: 'Выручка', key: 'value', width: 18, type: 'money' },
+      { header: 'Наличные', key: 'cash', width: 16, type: 'money' },
+      { header: 'Kaspi', key: 'kaspi', width: 16, type: 'money' },
+      { header: 'Online', key: 'online', width: 16, type: 'money' },
+      { header: 'Card', key: 'card', width: 16, type: 'money' },
+      { header: 'Транзакций', key: 'count', width: 13, type: 'number', align: 'right' },
+    ], coRows)
+
+    // Sheet 3: Expenses by category
+    const expRows = expenseByCategoryData.map(c => ({ name: c.name, amount: c.amount, pct: c.percentage }))
+    expRows.push({ _isTotals: true, name: 'ИТОГО', amount: totals.totalExpense, pct: 100 } as any)
+    buildStyledSheet(wb, 'Расходы', 'Расходы по категориям', `Период: ${period}`, [
+      { header: 'Категория', key: 'name', width: 30, type: 'text' },
+      { header: 'Сумма', key: 'amount', width: 18, type: 'money' },
+      { header: '% от общих', key: 'pct', width: 14, type: 'percent' },
+    ], expRows)
+
+    // Sheet 4: Detailed operations
+    const detailRows = filteredRows.map(r => ({
+      date: r.date,
+      type: r.type === 'income' ? 'Доход' : 'Расход',
+      company: r.companyName,
+      category: r.category || r.shift || '',
+      amount: Math.round(r.amount),
+      cash: Math.round(r.cashAmount),
+      kaspi: Math.round(r.kaspiAmount),
+      online: r.type === 'income' ? Math.round(r.onlineAmount || 0) : 0,
+      card: r.type === 'income' ? Math.round(r.cardAmount || 0) : 0,
+      note: r.zone || r.comment || '',
+    }))
+    buildStyledSheet(wb, 'Операции', 'Детальные операции', `Период: ${period} | Строк: ${detailRows.length}`, [
+      { header: 'Дата', key: 'date', width: 12, type: 'text' },
+      { header: 'Тип', key: 'type', width: 10, type: 'text' },
+      { header: 'Компания', key: 'company', width: 20, type: 'text' },
+      { header: 'Категория/Смена', key: 'category', width: 22, type: 'text' },
+      { header: 'Сумма', key: 'amount', width: 16, type: 'money' },
+      { header: 'Наличные', key: 'cash', width: 14, type: 'money' },
+      { header: 'Kaspi', key: 'kaspi', width: 14, type: 'money' },
+      { header: 'Online', key: 'online', width: 14, type: 'money' },
+      { header: 'Card', key: 'card', width: 14, type: 'money' },
+      { header: 'Примечание', key: 'note', width: 22, type: 'text' },
+    ], detailRows)
+
+    await downloadWorkbook(wb, `financial_report_${dateFrom}_${dateTo}.xlsx`)
+    showToast('Excel отчёт скачан', 'success')
+  }, [companyFilter, includeExtraInTotals, companyName, dateFrom, dateTo, groupMode, totals, totalsPrev, incomeByCompanyData, expenseByCategoryData, filteredRows, showToast])
+
+  const handleDownloadExcel = handleDownloadCSV
+
+  const handlePrintPDF = useCallback(() => {
+    window.print()
+  }, [])
+
+  const handleSort = useCallback((field: SortField) => {
+    setSortDirection(current => sortField === field ? (current === 'asc' ? 'desc' : 'asc') : 'desc')
+    setSortField(field)
+    setCurrentPage(1)
+  }, [sortField])
+
+  const toggleRowSelection = useCallback((id: string) => {
+    setSelectedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const selectAllRows = useCallback(() => {
+    const targetRows = useVirtualization ? filteredRows : paginatedRows
+    if (selectedRows.size === targetRows.length) {
+      setSelectedRows(new Set())
+    } else {
+      setSelectedRows(new Set(targetRows.map(r => r.id)))
+    }
+  }, [filteredRows, paginatedRows, selectedRows.size, useVirtualization])
+
+  // =====================
+  // LOADING & ERROR STATES
+  // =====================
+  if (loading && companies.length === 0) {
+    return (
+      <>
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
+              <BarChart3 className="w-8 h-8 text-white" />
+            </div>
+            <p className="text-gray-400">Загрузка аналитики...</p>
+          </div>
+      </>
+    )
+  }
+
+  if (error) {
+    return (
+      <>
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-rose-500/20 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-8 h-8 text-rose-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-white">Ошибка загрузки</h2>
+            <p className="text-gray-400 max-w-md">{error}</p>
+            <Button onClick={() => loadData(true)} variant="outline" className="border-white/10">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Повторить
+            </Button>
+          </div>
+      </>
+    )
+  }
+
+  // =====================
+  // MAIN RENDER
+  // =====================
+  return (
+    <>
+        <div className="app-page-ultra max-w-[1800px] space-y-6">
+          {/* Toast */}
+          {toast && (
+            <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl border backdrop-blur-xl shadow-xl animate-in slide-in-from-top-2 ${
+              toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+              toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
+              'bg-gray-900/80 border-white/10 text-white'
+            }`}>
+              <div className="text-sm font-medium">{toast.message}</div>
+            </div>
+          )}
+
+          {/* Header */}
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+
+            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-violet-500/25">
+                  <BarChart3 className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                    AI Финансовая Аналитика
+                  </h1>
+                  <p className="text-gray-400 mt-1 flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    {formatDateRange(dateFrom, dateTo)}
+                    {comparisonMode && <span className="text-violet-400">(сравнение с прошлым периодом)</span>}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex bg-gray-900/50 backdrop-blur-xl rounded-2xl p-1 border border-white/10">
+                  {(['overview', 'analytics', 'details', 'companies'] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-3 lg:px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                        activeTab === tab ? 'bg-white/10 text-white shadow-lg' : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {tab === 'overview' && 'Обзор'}
+                      {tab === 'analytics' && 'Аналитика'}
+                      {tab === 'details' && 'Детали'}
+                      {tab === 'companies' && 'Компании'}
+                    </button>
+                  ))}
+                </div>
+
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  className={`rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 ${comparisonMode ? 'bg-violet-500/20 text-violet-400 border-violet-500/50' : ''}`}
+                  onClick={() => setComparisonMode(!comparisonMode)}
+                  title="Режим сравнения"
+                >
+                  <ArrowUpDown className="w-4 h-4" />
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  className={`rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
+                  onClick={() => loadData(true)}
+                  title="Обновить"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+
+                <div className="relative group">
+                  <Button 
+                    variant="outline" 
+                    className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Экспорт
+                    <ChevronDown className="w-4 h-4 ml-2" />
+                  </Button>
+                  <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                    <button onClick={handleDownloadExcel} className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
+                      <FileSpreadsheet className="w-4 h-4" />
+                      Скачать Excel
+                    </button>
+                  </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
+                  onClick={handleShare}
+                  title="Поделиться"
+                >
+                  <Share2 className="w-4 h-4" />
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="no-print rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 gap-2"
+                  onClick={handlePrintPDF}
+                  title="PDF / Печать"
+                >
+                  <FileText className="w-4 h-4" />
+                  PDF / Печать
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Print-only summary */}
+          <div className="print-summary rounded-2xl border border-gray-200 bg-white p-6 print-card">
+            <h2 className="text-lg font-bold text-black mb-4">Финансовая сводка: {formatDateRange(dateFrom, dateTo)}</h2>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-gray-300">
+                  <th className="text-left py-2 pr-4 text-black font-semibold">Показатель</th>
+                  <th className="text-right py-2 text-black font-semibold">Значение</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1.5 text-gray-700">Выручка</td>
+                  <td className="py-1.5 text-right text-green-700 font-medium">{formatMoneyFull(totals.totalIncome)}</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1.5 text-gray-700">Расходы</td>
+                  <td className="py-1.5 text-right text-red-700 font-medium">{formatMoneyFull(totals.totalExpense)}</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 text-gray-700 font-semibold">Прибыль</td>
+                  <td className={`py-1.5 text-right font-bold ${totals.profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatMoneyFull(totals.profit)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* AI Insights */}
+          {aiInsights.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {aiInsights.map((insight, idx) => (
+                <InsightCard key={idx} insight={insight} />
+              ))}
+            </div>
+          )}
+
+          <FloatingAssistant
+            page="reports"
+            title="Отчёты и аналитика"
+            snapshot={assistantSnapshot}
+            suggestedPrompts={[
+              'Сводка для руководителя',
+              'Где самый слабый участок?',
+              'С чем сравнить этот период?',
+            ]}
+          />
+
+          {/* Filters Bar */}
+          <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4 space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-gray-400" />
+                <span className="text-sm text-gray-400">Быстрые фильтры:</span>
+              </div>
+              
+              <select 
+                value={datePreset}
+                onChange={(e) => handlePresetChange(e.target.value as DatePreset)}
+                className="bg-gray-800/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500/50"
+              >
+                {Object.entries(PRESET_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+
+              <input 
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  setDateFrom(e.target.value)
+                  setDatePreset('custom')
+                }}
+                className="bg-gray-800/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500/50"
+              />
+              <span className="text-gray-500">—</span>
+              <input 
+                type="date"
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value)
+                  setDatePreset('custom')
+                }}
+                className="bg-gray-800/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500/50"
+              />
+
+              <select 
+                value={companyFilter}
+                onChange={(e) => setCompanyFilter(e.target.value)}
+                className="bg-gray-800/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500/50"
+              >
+                <option value="all">Все компании</option>
+                {companies.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+
+              <select 
+                value={groupMode}
+                onChange={(e) => setGroupMode(e.target.value as GroupMode)}
+                className="bg-gray-800/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500/50"
+              >
+                <option value="day">По дням</option>
+                <option value="week">По неделям</option>
+                <option value="month">По месяцам</option>
+                <option value="year">По годам</option>
+              </select>
+
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800/50 border border-white/10 text-sm hover:bg-gray-700/50 transition-colors"
+              >
+                <Filter className="w-4 h-4" />
+                Расширенные
+                <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+              </button>
+
+              <button 
+                onClick={resetFilters}
+                className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                title="Сбросить фильтры"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {showFilters && (
+              <div className="pt-4 border-t border-white/5 grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1.5 block">Смена</label>
+                  <select 
+                    value={shiftFilter}
+                    onChange={(e) => setShiftFilter(e.target.value as 'all' | Shift)}
+                    className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500/50"
+                  >
+                    <option value="all">Все смены</option>
+                    <option value="day">День</option>
+                    <option value="night">Ночь</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-500 mb-1.5 block">Сумма от</label>
+                  <Input 
+                    type="number"
+                    placeholder="0"
+                    value={minAmountFilter}
+                    onChange={(e) => setMinAmountFilter(e.target.value)}
+                    className="bg-gray-800/50 border-white/10"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-500 mb-1.5 block">Сумма до</label>
+                  <Input 
+                    type="number"
+                    placeholder="∞"
+                    value={maxAmountFilter}
+                    onChange={(e) => setMaxAmountFilter(e.target.value)}
+                    className="bg-gray-800/50 border-white/10"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox"
+                      checked={includeExtraInTotals}
+                      onChange={(e) => setIncludeExtraInTotals(e.target.checked)}
+                      className="rounded border-white/10 bg-gray-800/50 text-violet-500 focus:ring-violet-500/20"
+                    />
+                    <span className="text-sm text-gray-300">Включить F16 Extra</span>
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Forecast Banner */}
+          {forecast && (
+            <div className="rounded-2xl bg-gradient-to-r from-blue-600/20 to-violet-600/20 border border-blue-500/20 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-xl bg-blue-500/20 text-blue-400">
+                  <TrendingUp className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-sm text-blue-200">Прогноз на конец периода (точность {forecast.confidence.toFixed(0)}%)</p>
+                  <div className="flex items-center gap-6 mt-1">
+                    <span className="text-lg font-semibold text-white">
+                      Выручка: <span className="text-emerald-400">{formatMoneyFull(forecast.forecastIncome)}</span>
+                    </span>
+                    <span className="text-lg font-semibold text-white">
+                      Прибыль: <span className={forecast.forecastProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                        {formatMoneyFull(forecast.forecastProfit)}
+                      </span>
+                    </span>
+                    <span className="text-sm text-gray-400">Осталось {forecast.remainingDays} дн.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: OVERVIEW */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* Stats Grid */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard
+                  title="Общая выручка"
+                  value={formatMoneyFull(totals.totalIncome)}
+                  subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.totalIncome)}` : `${formatMoneyCompact(totals.incomeCash)} нал / ${formatMoneyCompact(totals.incomeNonCash)} безнал`}
+                  icon={DollarSign}
+                  trend={totalsPrev.totalIncome > 0 ? Number(((totals.totalIncome - totalsPrev.totalIncome) / totalsPrev.totalIncome * 100).toFixed(1)) : undefined}
+                  color="green"
+                  onClick={() => setDrillDown('income')}
+                />
+                <StatCard
+                  title="Расходы"
+                  value={formatMoneyFull(totals.totalExpense)}
+                  subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.totalExpense)}` : `${formatMoneyCompact(totals.expenseCash)} нал / ${formatMoneyCompact(totals.expenseKaspi)} Kaspi`}
+                  icon={TrendingDown}
+                  trend={totalsPrev.totalExpense > 0 ? Number(((totals.totalExpense - totalsPrev.totalExpense) / totalsPrev.totalExpense * 100).toFixed(1)) : undefined}
+                  color="red"
+                  onClick={() => setDrillDown('expense')}
+                />
+                <StatCard
+                  title="Чистая прибыль"
+                  value={formatMoneyFull(totals.profit)}
+                  subValue={comparisonMode ? `было ${formatMoneyFull(totalsPrev.profit)}` : `Маржа ${totals.totalIncome > 0 ? (totals.profit / totals.totalIncome * 100).toFixed(1) : 0}%`}
+                  icon={Wallet}
+                  trend={totalsPrev.profit !== 0 ? Number(((totals.profit - totalsPrev.profit) / Math.abs(totalsPrev.profit) * 100).toFixed(1)) : undefined}
+                  color={totals.profit >= 0 ? 'blue' : 'red'}
+                  onClick={() => setDrillDown('profit')}
+                />
+                <StatCard 
+                  title="Остаток средств"
+                  value={formatMoneyFull(totals.totalBalance)}
+                  subValue={`Нал: ${formatMoneyCompact(totals.remainingCash)} | Безнал: ${formatMoneyCompact(totals.remainingKaspi)}`}
+                  icon={Building2}
+                  color="violet"
+                />
+              </div>
+
+              {/* Payment Types Breakdown */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  { label: 'Наличные', value: totals.incomeCash, color: 'text-emerald-400' },
+                  { label: 'Kaspi', value: totals.incomeKaspi, color: 'text-blue-400' },
+                  { label: 'Online', value: totals.incomeOnline, color: 'text-violet-400' },
+                  { label: 'Card', value: totals.incomeCard, color: 'text-amber-400' },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-4">
+                    <p className="text-xs text-gray-500 mb-1">{item.label}</p>
+                    <p className={`text-xl font-bold ${item.color}`}>{formatMoneyFull(item.value)}</p>
+                    <p className="text-xs text-gray-500 mt-1">{totals.totalIncome > 0 ? ((item.value / totals.totalIncome) * 100).toFixed(1) : 0}%</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-violet-400" />
+                      Динамика финансовых показателей
+                    </h3>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-emerald-500" />
+                        Доходы
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-rose-500" />
+                        Расходы
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-amber-400" />
+                        Прибыль
+                      </span>
+                    </div>
+                  </div>
+
+                  <ChartShell height="h-96">
+                    {mounted && <MemoizedComposedChart data={chartData} />}
+                  </ChartShell>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                    <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                      <PieChartIcon className="w-5 h-5 text-rose-400" />
+                      Структура расходов
+                    </h3>
+                    
+                    <ChartShell height="h-64">
+                      {mounted && <MemoizedPieChart data={expenseByCategoryData} />}
+                    </ChartShell>
+
+                    <div className="mt-4 space-y-2 max-h-48 overflow-auto">
+                      {expenseByCategoryData.map((cat, idx) => (
+                        <div key={cat.name} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <span 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
+                            />
+                            <span className="text-gray-300 truncate max-w-[120px]">{cat.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-white font-medium">{formatMoneyCompact(cat.amount)}</span>
+                            <span className="text-gray-500 text-xs ml-2">{cat.percentage.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                  <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                    <Store className="w-5 h-5 text-blue-400" />
+                    Выручка по компаниям
+                  </h3>
+                  
+                  <ChartShell height="h-80">
+                    {mounted && <MemoizedBarChart data={incomeByCompanyData} />}
+                  </ChartShell>
+                </div>
+
+                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                  <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-400" />
+                    Аномалии и рекомендации
+                  </h3>
+
+                  {processed.anomalies.length > 0 ? (
+                    <div className="space-y-3 max-h-80 overflow-auto">
+                      {processed.anomalies
+                        .sort((a, b) => {
+                          const severityOrder: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+                          return severityOrder[a.severity] - severityOrder[b.severity]
+                        })
+                        .map((a, i) => (
+                          <AnomalyCard key={i} anomaly={a} />
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                      <CheckCircle2 className="w-16 h-16 mb-4 text-emerald-500/30" />
+                      <p>Аномалий не обнаружено</p>
+                      <p className="text-sm text-gray-600 mt-1">Все показатели в норме</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: ANALYTICS */}
+          {activeTab === 'analytics' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                  <h3 className="text-lg font-semibold mb-6">Сравнение периодов</h3>
+                  <div className="space-y-6">
+                    {[
+                      { label: 'Выручка', current: totals.totalIncome, previous: totalsPrev.totalIncome, color: 'bg-emerald-500' },
+                      { label: 'Расходы', current: totals.totalExpense, previous: totalsPrev.totalExpense, color: 'bg-rose-500' },
+                      { label: 'Прибыль', current: totals.profit, previous: totalsPrev.profit, color: 'bg-blue-500' },
+                    ].map((item) => {
+                      const change = item.previous > 0 ? ((item.current - item.previous) / item.previous) * 100 : 0
+                      const max = Math.max(item.current, item.previous, 1)
+                      
+                      return (
+                        <div key={item.label} className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">{item.label}</span>
+                            <div className="flex gap-4">
+                              <span className="text-gray-500">Было: {formatMoneyFull(item.previous)}</span>
+                              <span className="text-white font-medium">Сейчас: {formatMoneyFull(item.current)}</span>
+                            </div>
+                          </div>
+                          <div className="h-8 bg-gray-800/50 rounded-lg overflow-hidden flex">
+                            <div 
+                              className={`${item.color} opacity-60 flex items-center justify-end px-2 text-xs text-white font-medium transition-all duration-500`}
+                              style={{ width: `${(item.previous / max) * 100}%` }}
+                            >
+                              {item.previous > max * 0.15 && formatMoneyCompact(item.previous)}
+                            </div>
+                            <div 
+                              className={`${item.color} flex items-center justify-end px-2 text-xs text-white font-medium transition-all duration-500`}
+                              style={{ width: `${(item.current / max) * 100}%` }}
+                            >
+                              {formatMoneyCompact(item.current)}
+                            </div>
+                          </div>
+                          <div className="flex justify-end">
+                            <span className={`text-sm font-medium ${change > 0 ? 'text-emerald-400' : change < 0 ? 'text-rose-400' : 'text-gray-400'}`}>
+                              {change > 0 ? '+' : ''}{change.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                  <h3 className="text-lg font-semibold mb-6">Распределение по типам платежей</h3>
+                  <div className="space-y-4">
+                    {[
+                      { label: 'Наличные', value: totals.incomeCash, color: 'bg-emerald-500' },
+                      { label: 'Kaspi', value: totals.incomeKaspi, color: 'bg-blue-500' },
+                      { label: 'Online', value: totals.incomeOnline, color: 'bg-violet-500' },
+                      { label: 'Карта', value: totals.incomeCard, color: 'bg-amber-500' },
+                    ].map((item) => {
+                      const pct = totals.totalIncome > 0 ? (item.value / totals.totalIncome) * 100 : 0
+                      return (
+                        <div key={item.label} className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-300">{item.label}</span>
+                            <span className="text-white font-medium">{formatMoneyFull(item.value)} ({pct.toFixed(1)}%)</span>
+                          </div>
+                          <div className="h-3 bg-gray-800/50 rounded-full overflow-hidden">
+                            <div 
+                              className={`${item.color} h-full rounded-full transition-all duration-500`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                <h3 className="text-lg font-semibold mb-6">Тепловая карта активности</h3>
+                <div className="grid grid-cols-7 gap-2">
+                  {Array.from({ length: 35 }, (_, i) => {
+                    const date = addDaysISO(dateFrom, i)
+                    if (date > dateTo) return <div key={i} className="aspect-square rounded-lg bg-gray-800/30" />
+                    
+                    const income = dailyIncome.get(date) || 0
+                    const expense = dailyExpense.get(date) || 0
+                    const profit = income - expense
+                    
+                    let intensity = 0
+                    if (profit > 0) intensity = Math.min(1, profit / (totals.profit / 7 + 1))
+                    else if (profit < 0) intensity = -Math.min(1, Math.abs(profit) / (totals.totalExpense / 7 + 1))
+                    
+                    return (
+                      <div 
+                        key={i}
+                        className={`aspect-square rounded-lg flex flex-col items-center justify-center text-xs cursor-pointer hover:scale-110 transition-transform ${
+                          intensity > 0 ? `bg-emerald-500/${Math.round(intensity * 40)}` :
+                          intensity < 0 ? `bg-rose-500/${Math.round(Math.abs(intensity) * 40)}` :
+                          'bg-gray-800/50'
+                        }`}
+                        title={`${date}: Доход ${formatMoneyFull(income)}, Расход ${formatMoneyFull(expense)}`}
+                      >
+                        <span className="text-gray-500 text-[10px]">{date.slice(8)}</span>
+                        {profit !== 0 && (
+                          <span className={profit > 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                            {formatMoneyCompact(profit)}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center justify-center gap-4 mt-4 text-xs text-gray-500">
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-rose-500/40" /> Убыток</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-800" /> Нейтрально</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500/40" /> Прибыль</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: DETAILS */}
+          {activeTab === 'details' && (
+            <div className="space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <Input 
+                    placeholder="Поиск по компании, дате, сумме..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      setCurrentPage(1)
+                    }}
+                    className="pl-10 bg-gray-900/40 border-white/10"
+                  />
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">Показать:</span>
+                  <select 
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value))
+                      setCurrentPage(1)
+                    }}
+                    className="bg-gray-900/40 border border-white/10 rounded-lg px-3 py-1.5 text-sm"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <span className="text-sm text-gray-500">записей</span>
+                  {useVirtualization && (
+                    <span className="text-xs text-violet-400 flex items-center gap-1">
+                      <Zap className="w-3 h-3" />
+                      Виртуализация активна
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 overflow-hidden">
+                <div className="overflow-x-auto" ref={tableContainerRef}>
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-gray-800/30">
+                        <th className="px-4 py-3 text-left">
+                          <input 
+                            type="checkbox"
+                            checked={selectedRows.size === (useVirtualization ? filteredRows.length : paginatedRows.length) && (useVirtualization ? filteredRows.length : paginatedRows.length) > 0}
+                            onChange={selectAllRows}
+                            className="rounded border-white/10 bg-gray-800 text-violet-500"
+                          />
+                        </th>
+                        {[
+                          { key: 'date', label: 'Дата' },
+                          { key: 'type', label: 'Тип' },
+                          { key: 'company', label: 'Компания' },
+                          { key: 'category', label: 'Категория/Смена' },
+                          { key: 'amount', label: 'Сумма', align: 'right' },
+                          { key: 'zone', label: 'Зона/Комментарий' },
+                        ].map((col) => (
+                          <th 
+                            key={col.key}
+                            className={`px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white transition-colors ${col.align === 'right' ? 'text-right' : 'text-left'}`}
+                            onClick={() => handleSort(col.key as SortField)}
+                          >
+                            <div className={`flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : ''}`}>
+                              {col.label}
+                              {sortField === col.key && (
+                                sortDirection === 'asc' ? <ArrowUpDown className="w-3 h-3 rotate-180" /> : <ArrowUpDown className="w-3 h-3" />
+                              )}
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {useVirtualization ? (
+                        // Virtualized rendering for large datasets
+                        <tr style={{ height: `${virtualizer.getTotalSize()}px` }}>
+                          <td colSpan={7} className="p-0 relative">
+                            {virtualRows.map((virtualRow) => {
+                              const row = filteredRows[virtualRow.index]
+                              return (
+                                <div
+                                  key={row.id}
+                                  style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: `${virtualRow.size}px`,
+                                    transform: `translateY(${virtualRow.start}px)`,
+                                  }}
+                                  className="flex items-center px-4 hover:bg-white/5 transition-colors"
+                                >
+                                  <div className="w-8">
+                                    <input 
+                                      type="checkbox"
+                                      checked={selectedRows.has(row.id)}
+                                      onChange={() => toggleRowSelection(row.id)}
+                                      className="rounded border-white/10 bg-gray-800 text-violet-500"
+                                    />
+                                  </div>
+                                  <div className="flex-1 px-4 text-sm text-gray-300 whitespace-nowrap">{row.date}</div>
+                                  <div className="flex-1 px-4">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                      row.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                                    }`}>
+                                      {row.type === 'income' ? 'Доход' : 'Расход'}
+                                    </span>
+                                  </div>
+                                  <div className="flex-1 px-4 text-sm text-white">{row.companyName}</div>
+                                  <div className="flex-1 px-4 text-sm text-gray-300">{row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}</div>
+                                  <div className="flex-1 px-4 text-sm text-right">
+                                    <div className={`font-medium ${row.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                      {row.type === 'income' ? '+' : '-'}{formatMoneyFull(row.amount)}
+                                    </div>
+                                  </div>
+                                  <div className="flex-1 px-4 text-sm text-gray-400 truncate">{row.zone || row.comment || '—'}</div>
+                                </div>
+                              )
+                            })}
+                          </td>
+                        </tr>
+                      ) : (
+                        // Regular pagination for smaller datasets
+                        paginatedRows.map((row) => (
+                          <tr 
+                            key={row.id} 
+                            className={`hover:bg-white/5 transition-colors ${selectedRows.has(row.id) ? 'bg-violet-500/10' : ''}`}
+                          >
+                            <td className="px-4 py-3">
+                              <input 
+                                type="checkbox"
+                                checked={selectedRows.has(row.id)}
+                                onChange={() => toggleRowSelection(row.id)}
+                                className="rounded border-white/10 bg-gray-800 text-violet-500"
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-300 whitespace-nowrap">{row.date}</td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                row.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                              }`}>
+                                {row.type === 'income' ? 'Доход' : 'Расход'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-white">{row.companyName}</td>
+                            <td className="px-4 py-3 text-sm text-gray-300">
+                              {row.category || (row.shift ? SHIFT_LABELS[row.shift] : '—')}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-right">
+                              <div className={`font-medium ${row.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {row.type === 'income' ? '+' : '-'}{formatMoneyFull(row.amount)}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                Нал: {formatMoneyCompact(row.cashAmount)} | Kaspi: {formatMoneyCompact(row.kaspiAmount)}
+                                {row.onlineAmount ? ` | Online: ${formatMoneyCompact(row.onlineAmount)}` : ''}
+                                {row.cardAmount ? ` | Card: ${formatMoneyCompact(row.cardAmount)}` : ''}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-400 max-w-xs truncate">
+                              {row.zone || row.comment || '—'}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {filteredRows.length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>Записи не найдены</p>
+                    <p className="text-sm mt-1">Попробуйте изменить фильтры</p>
+                  </div>
+                )}
+
+                {/* Pagination - only show if not using virtualization */}
+                {!useVirtualization && totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-white/5">
+                    <div className="text-sm text-gray-500">
+                      Показано {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, filteredRows.length)} из {filteredRows.length}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span className="text-sm text-gray-400">
+                        Страница {currentPage} из {totalPages}
+                      </span>
+                      <button 
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {selectedRows.size > 0 && (
+                <div className="flex items-center justify-between p-4 rounded-xl bg-violet-500/10 border border-violet-500/20">
+                  <span className="text-sm text-violet-200">Выбрано: {selectedRows.size} записей</span>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="border-violet-500/30 text-violet-300 hover:bg-violet-500/20"
+                      onClick={() => {
+                        const selectedData = detailedRows.filter(r => selectedRows.has(r.id))
+                        const rows = selectedData.map(r => [
+                          r.date,
+                          r.type === 'income' ? 'Доход' : 'Расход',
+                          r.companyName,
+                          r.category || r.shift || '',
+                          String(r.amount),
+                          r.zone || r.comment || ''
+                        ])
+                        downloadTextFile('selected_rows.csv', toCSV([['Дата', 'Тип', 'Компания', 'Категория', 'Сумма', 'Примечание'], ...rows]))
+                        showToast('Выбранные строки экспортированы', 'success')
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Экспорт выбранных
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="border-white/10"
+                      onClick={() => setSelectedRows(new Set())}
+                    >
+                      Снять выделение
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB: COMPANIES */}
+          {activeTab === 'companies' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {companyComparisonData.map((company) => (
+                  <div 
+                    key={company.id} 
+                    className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6 hover:border-white/10 transition-all cursor-pointer group"
+                    onClick={() => {
+                      setCompanyFilter(company.id)
+                      setActiveTab('overview')
+                    }}
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <h4 className="text-lg font-semibold text-white group-hover:text-violet-400 transition-colors">{company.name}</h4>
+                        <p className="text-sm text-gray-500">{company.transactions} операций</p>
+                      </div>
+                      <div className={`p-2 rounded-lg ${
+                        company.profit >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                      }`}>
+                        {company.profit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Выручка</span>
+                        <span className="text-white font-medium">{formatMoneyFull(company.income)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Расходы</span>
+                        <span className="text-rose-400">{formatMoneyFull(company.expense)}</span>
+                      </div>
+                      <div className="h-px bg-white/5 my-3" />
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Прибыль</span>
+                        <span className={`text-lg font-bold ${company.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {formatMoneyFull(company.profit)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Маржа</span>
+                        <span className={`font-medium ${
+                          company.margin >= 30 ? 'text-emerald-400' : 
+                          company.margin >= 15 ? 'text-amber-400' : 'text-rose-400'
+                        }`}>
+                          {company.margin.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <span className="text-gray-500 block">Наличные</span>
+                        <span className="text-white">+{formatMoneyCompact(company.cashIncome)} / -{formatMoneyCompact(company.cashExpense)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block">Безналичные</span>
+                        <span className="text-white">+{formatMoneyCompact(company.kaspiIncome + company.onlineIncome + company.cardIncome)} / -{formatMoneyCompact(company.kaspiExpense)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-2xl bg-gray-900/40 backdrop-blur-xl border border-white/5 p-6">
+                <h3 className="text-lg font-semibold mb-6">Сравнительная таблица</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-white/5 text-left text-xs text-gray-500 uppercase">
+                        <th className="pb-3 pl-4">Компания</th>
+                        <th className="pb-3 text-right">Выручка</th>
+                        <th className="pb-3 text-right">Расходы</th>
+                        <th className="pb-3 text-right">Прибыль</th>
+                        <th className="pb-3 text-right">Маржа</th>
+                        <th className="pb-3 text-right">Наличные</th>
+                        <th className="pb-3 text-right">Безнал</th>
+                        <th className="pb-3 text-center">Операций</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {companyComparisonData.map((c) => (
+                        <tr key={c.id} className="hover:bg-white/5">
+                          <td className="py-4 pl-4 font-medium text-white">{c.name}</td>
+                          <td className="py-4 text-right text-emerald-400">{formatMoneyFull(c.income)}</td>
+                          <td className="py-4 text-right text-rose-400">{formatMoneyFull(c.expense)}</td>
+                          <td className={`py-4 text-right font-bold ${c.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {formatMoneyFull(c.profit)}
+                          </td>
+                          <td className="py-4 text-right">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              c.margin >= 30 ? 'bg-emerald-500/20 text-emerald-400' :
+                              c.margin >= 15 ? 'bg-amber-500/20 text-amber-400' :
+                              'bg-rose-500/20 text-rose-400'
+                            }`}>
+                              {c.margin.toFixed(1)}%
+                            </span>
+                          </td>
+                          <td className="py-4 text-right text-gray-300">
+                            {formatMoneyCompact(c.cashIncome - c.cashExpense)}
+                          </td>
+                          <td className="py-4 text-right text-gray-300">
+                            {formatMoneyCompact((c.kaspiIncome + c.onlineIncome + c.cardIncome) - c.kaspiExpense)}
+                          </td>
+                          <td className="py-4 text-center text-gray-400">{c.transactions}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+      {/* Drill-down modal */}
+      {drillDown && (
+        <DrillDownModal
+          type={drillDown}
+          incomes={incomes}
+          expenses={expenses}
+          companies={companies}
+          companyName={companyName}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onClose={() => setDrillDown(null)}
+        />
+      )}
+    </>
+  )
+}
+
+// =====================
+// EXPORT with Suspense
+// =====================
+export default function ReportsPage() {
+  return (
+    <Suspense
+      fallback={
+        <>
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center animate-pulse">
+                <BarChart3 className="w-8 h-8 text-white" />
+              </div>
+              <p className="text-gray-400">Загрузка аналитики...</p>
+            </div>
+        </>
+      }
+    >
+      <ReportsContent />
+    </Suspense>
+  )
+}

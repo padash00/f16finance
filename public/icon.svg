@@ -1,0 +1,39 @@
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(58 42) rotate(43.1524) scale(88.2321)">
+      <stop stop-color="#FFF2AA" stop-opacity="0.42" />
+      <stop offset="0.35" stop-color="#F6D84D" stop-opacity="0.18" />
+      <stop offset="1" stop-color="#C28A0F" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="bgGold" x1="90" y1="0" x2="90" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7D452" />
+      <stop offset="0.46" stop-color="#D7A71A" />
+      <stop offset="1" stop-color="#AF780C" />
+    </linearGradient>
+    <linearGradient id="strokeGold" x1="23" y1="16" x2="150" y2="161" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF1A6" />
+      <stop offset="0.48" stop-color="#EAC13E" />
+      <stop offset="1" stop-color="#845A00" />
+    </linearGradient>
+    <linearGradient id="fillGold" x1="58" y1="74" x2="121" y2="130" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FCE27A" />
+      <stop offset="1" stop-color="#D39E10" />
+    </linearGradient>
+  </defs>
+
+  <rect width="180" height="180" rx="28" fill="url(#bgGold)" />
+  <rect width="180" height="180" rx="28" fill="url(#bgGlow)" />
+
+  <circle cx="90" cy="92" r="67" stroke="url(#strokeGold)" stroke-width="6.5" />
+
+  <path d="M45 37C57.6 27.4 72.4 22 89 22C105.6 22 120.4 27.4 133 37" stroke="url(#strokeGold)" stroke-width="5.4" stroke-linecap="round" />
+  <path d="M59 38.5L80 29.5L69.5 46.5" stroke="url(#strokeGold)" stroke-width="4.6" stroke-linejoin="round" />
+  <path d="M121 38.5L100 29.5L110.5 46.5" stroke="url(#strokeGold)" stroke-width="4.6" stroke-linejoin="round" />
+
+  <rect x="58" y="100" width="12" height="28" rx="2.5" fill="url(#fillGold)" />
+  <rect x="79" y="86" width="12" height="42" rx="2.5" fill="url(#fillGold)" />
+  <rect x="100" y="70" width="12" height="58" rx="2.5" fill="url(#fillGold)" />
+
+  <path d="M47 95C63.3 90.2 79.2 83.6 94.5 74.2C103.8 68.5 112 62.2 120 54" stroke="url(#strokeGold)" stroke-width="6.5" stroke-linecap="round" />
+  <path d="M119.5 44L131 53.8L118 65" stroke="url(#strokeGold)" stroke-width="6.2" stroke-linejoin="round" />
+</svg>

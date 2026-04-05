@@ -1,0 +1,38 @@
+name: Verify
+
+on:
+  push:
+    branches:
+      - main
+      - 'codex/**'
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+        run: npm run build

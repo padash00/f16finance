@@ -1,0 +1,5 @@
+export const SITE_NAME = 'Orda Control'
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ordaops.kz'
+export const SITE_DESCRIPTION =
+  'Orda Control — система для управления сменами, точками, зарплатой, доходами, расходами, Telegram-отчётами и управленческим учётом клуба и команды.'
+export const APEX_MAINTENANCE_MODE = process.env.APEX_MAINTENANCE_MODE === 'true'

@@ -1,0 +1,22 @@
+{
+  "name": "Orda Control",
+  "short_name": "Orda Control",
+  "description": "Orda Control — система для управления сменами, точками, зарплатой, доходами, расходами, Telegram-отчетами и управленческим учетом клуба и команды.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050816",
+  "theme_color": "#f59e0b",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/icon",
+      "sizes": "64x64",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-icon",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

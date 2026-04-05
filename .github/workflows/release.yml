@@ -1,0 +1,36 @@
+name: Release Electron App
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    defaults:
+      run:
+        working-directory: desktop/electron_point
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/electron_point/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build & publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+        run: npm run release
