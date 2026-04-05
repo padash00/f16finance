@@ -176,16 +176,14 @@ export default function ShiftPage({
   const kaspiDailySplitEnabled = flags.kaspi_daily_split === true
   const isNightKaspiSplit = kaspiDailySplitEnabled && form.shift === 'night'
 
-  const isArena = bootstrap.device.feature_flags?.arena_enabled === true
   /** F16 Ramen: классическая смена с ручным налом/Kaspi; витрина только для учёта товара, не в ФАКТ смены. */
   const isRamenCompany = (session.company.code || '').trim().toLowerCase() === 'ramen'
   const mergeInventorySalesIntoShift = hasInventorySale && !isRamenCompany
   /**
-   * Автосводка смены из сессий арены — только при явном флаге (иначе классический ручной отчёт, как до станций).
-   * Рамен: всегда ручной калькулятор.
+   * Сводка смены из сессий зон/арены отключена: всегда классический ручной отчёт (как на остальных точках).
+   * Флаг arena_shift_auto_totals в API оставлен на будущее.
    */
-  const useArenaShiftDashboard =
-    isArena && !isRamenCompany && bootstrap.device.feature_flags?.arena_shift_auto_totals === true
+  const useArenaShiftDashboard = false
   const wiponLabel = useArenaShiftDashboard ? 'Senet (система)' : 'Wipon (система)'
   const kaspiLabel = useArenaShiftDashboard ? 'Kaspi POS' : 'Kaspi'
 
