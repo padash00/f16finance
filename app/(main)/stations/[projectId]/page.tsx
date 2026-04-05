@@ -232,7 +232,6 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
   const [localDecos, setLocalDecos] = useState<Decoration[]>(decorations)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
 
   // Refs to always hold latest state for async save (avoids stale closure in setTimeout)
@@ -269,28 +268,29 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
 
   function markDirty() {
     setDirty(true)
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => void autoSave(), 1000)
   }
 
-  async function autoSave() {
-    // Read from refs to get latest state, not stale closure values
+  async function saveMapLayout() {
     const stationsSnap = latestStationsRef.current
     const zonesSnap = latestZonesRef.current
     const decosSnap = latestDecosRef.current
     setSaving(true)
     try {
-      await fetch('/api/admin/arena', {
+      const res = await fetch('/api/admin/arena', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'updateMapLayout',
           stations: stationsSnap.map(s => ({ id: s.id, grid_x: s.grid_x, grid_y: s.grid_y })),
           zones: zonesSnap.map(z => ({ id: z.id, grid_x: z.grid_x, grid_y: z.grid_y, grid_w: z.grid_w, grid_h: z.grid_h, color: z.color })),
+          decorations: decosSnap.map(d => ({ id: d.id, grid_x: d.grid_x, grid_y: d.grid_y })),
         }),
       })
+      const data = await res.json().catch(() => ({}))
+      if (!data.ok) throw new Error(data.error || 'Ошибка')
       setDirty(false)
       onSaved(zonesSnap, stationsSnap, decosSnap)
+      showFlash('ok', 'Карта сохранена')
     } catch {
       showFlash('err', 'Не удалось сохранить карту')
     } finally {
@@ -340,12 +340,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
       nx = Math.min(nx, GRID_W - 1)
       ny = Math.min(ny, GRID_H - 1)
       setLocalDecos(prev => prev.map(d => d.id === id ? { ...d, grid_x: nx, grid_y: ny } : d))
-      // Save decoration position directly
-      void fetch('/api/admin/arena', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'updateDecoration', decorationId: id, grid_x: nx, grid_y: ny }),
-      })
+      markDirty()
     }
     dragRef.current = null
   }
@@ -405,15 +400,10 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
     }
   }
 
-  async function handleZoneColor(zoneId: string, color: string) {
+  function handleZoneColor(zoneId: string, color: string) {
     setLocalZones(prev => prev.map(z => z.id === zoneId ? { ...z, color } : z))
     setColorPicker(null)
-    await fetch('/api/admin/arena', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'updateMapLayout', zones: [{ id: zoneId, color }], stations: [] }),
-    })
-    onSaved(localZones.map(z => z.id === zoneId ? { ...z, color } : z), localStations, localDecos)
+    markDirty()
   }
 
   async function handleZoneResize(zoneId: string, dw: number, dh: number) {
@@ -433,10 +423,29 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
     <div className="flex gap-4">
       {/* Left: grid */}
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span>Перетащите зоны и станции на сетку. Клик по пустой ячейке — декор. Список зон и «вне карты» — справа.</span>
-          {dirty && <span className="text-amber-400 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Сохранение…</span>}
-          {!dirty && !saving && <span className="text-emerald-400 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Сохранено</span>}
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <span className="text-muted-foreground">
+            Расставьте зоны, станции и декор, затем нажмите «Сохранить карту». Новый декор и удаление — сразу на сервере.
+          </span>
+          {dirty && (
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-400">
+              Есть несохранённые изменения
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => void saveMapLayout()}
+            disabled={saving || !dirty}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:pointer-events-none disabled:opacity-40"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            Сохранить карту
+          </button>
+          {!dirty && !saving && (
+            <span className="flex items-center gap-1 text-emerald-400">
+              <CheckCircle2 className="h-3 w-3" /> Сохранено
+            </span>
+          )}
         </div>
 
         {localZones.length > 0 && (

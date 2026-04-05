@@ -288,7 +288,7 @@ export async function POST(request: Request) {
 
     // ─── MAP LAYOUT ──────────────────────────────────────────────────
     if (body.action === 'updateMapLayout') {
-      const { stations: stationUpdates, zones: zoneUpdates } = body
+      const { stations: stationUpdates, zones: zoneUpdates, decorations: decorationUpdates } = body
       if (Array.isArray(stationUpdates)) {
         for (const u of stationUpdates) {
           if (!u.id) continue
@@ -307,6 +307,13 @@ export async function POST(request: Request) {
           if (u.grid_h !== undefined) upd.grid_h = u.grid_h
           if (u.color !== undefined) upd.color = u.color
           if (Object.keys(upd).length > 0) await supabase.from('arena_zones').update(upd).eq('id', u.id)
+        }
+      }
+      if (Array.isArray(decorationUpdates)) {
+        for (const u of decorationUpdates) {
+          if (!u.id) continue
+          await ensureArenaEntityAccess(supabase, 'arena_map_decorations', u.id, companyScope.allowedCompanyIds)
+          await supabase.from('arena_map_decorations').update({ grid_x: u.grid_x, grid_y: u.grid_y }).eq('id', u.id)
         }
       }
       return json({ ok: true })
