@@ -7,6 +7,25 @@ const { autoUpdater } = require('electron-updater')
 const isDev = !app.isPackaged
 const releasePageUrl = 'https://github.com/padash00/f16finance/releases'
 
+/** Явный feed: старые сборки могли попасть без корректного app-update.yml в resources. */
+const GITHUB_UPDATES = {
+  provider: 'github',
+  owner: 'padash00',
+  repo: 'f16finance',
+  releaseType: 'release',
+}
+
+function appendUpdaterLog(line) {
+  try {
+    fs.appendFileSync(
+      path.join(app.getPath('userData'), 'orda-updater.log'),
+      `${new Date().toISOString()} ${line}\n`,
+    )
+  } catch {
+    /* ignore */
+  }
+}
+
 const updaterState = {
   status: isDev ? 'development' : 'idle',
   currentVersion: app.getVersion(),
@@ -61,13 +80,39 @@ async function checkForAppUpdates(options = {}) {
   if (!ensureUpdaterReady()) return { ...updaterState }
   if (updateCheckPromise) return updateCheckPromise
 
-  updateCheckPromise = autoUpdater.checkForUpdates()
-    .then(() => ({ ...updaterState }))
+  updateCheckPromise = autoUpdater
+    .checkForUpdates()
+    .then((result) => {
+      if (result == null) return { ...updaterState }
+      // События иногда приходят с задержкой; результат checkForUpdates — надёжный источник для UI.
+      if (result.isUpdateAvailable && result.updateInfo) {
+        updateUpdaterState({
+          status: 'available',
+          latestVersion: result.updateInfo.version || null,
+          releaseNotes: normalizeReleaseNotes(result.updateInfo.releaseNotes),
+          releaseDate: result.updateInfo.releaseDate || null,
+          progress: null,
+          error: null,
+        })
+      } else if (result && !result.isUpdateAvailable) {
+        updateUpdaterState({
+          status: 'idle',
+          latestVersion: null,
+          releaseNotes: null,
+          releaseDate: null,
+          progress: null,
+          error: null,
+        })
+      }
+      return { ...updaterState }
+    })
     .catch((error) => {
+      const msg = error?.message || 'Не удалось проверить обновления.'
+      appendUpdaterLog(`check failed: ${msg}`)
       if (!silent) {
         updateUpdaterState({
           status: 'error',
-          error: error?.message || 'Не удалось проверить обновления.',
+          error: msg,
         })
       }
       return { ...updaterState }
@@ -133,8 +178,14 @@ function installAppUpdate() {
 function initAutoUpdater() {
   if (!ensureUpdaterReady()) return
 
+  autoUpdater.setFeedURL(GITHUB_UPDATES)
+  autoUpdater.allowPrerelease = false
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
+
+  appendUpdaterLog(
+    `init updater current=${app.getVersion()} feed=github/${GITHUB_UPDATES.owner}/${GITHUB_UPDATES.repo}`,
+  )
 
   autoUpdater.on('checking-for-update', () => {
     updateUpdaterState({
@@ -155,7 +206,10 @@ function initAutoUpdater() {
     })
   })
 
-  autoUpdater.on('update-not-available', () => {
+  autoUpdater.on('update-not-available', (info) => {
+    appendUpdaterLog(
+      `no update remote=${info?.version || 'n/a'} current=${app.getVersion()}`,
+    )
     updateUpdaterState({
       status: 'idle',
       latestVersion: null,
@@ -196,9 +250,11 @@ function initAutoUpdater() {
   })
 
   autoUpdater.on('error', (error) => {
+    const msg = error?.message || 'Ошибка обновления.'
+    appendUpdaterLog(`error: ${msg}`)
     updateUpdaterState({
       status: 'error',
-      error: error?.message || 'Ошибка обновления.',
+      error: msg,
     })
   })
 
