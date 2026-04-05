@@ -431,11 +431,10 @@ export default function App() {
 
     setView({ screen: 'booting' })
     try {
-      // Fetch bootstrap and restore session in parallel
-      const [bootstrap, cachedSession] = await Promise.all([
-        api.bootstrap(cfg),
-        loadOperatorSession(),
-      ])
+      // Сначала сессия: bootstrap без x-point-company-id даёт режим первой компании проекта,
+      // из‑за этого UI «чужой точки» при мульти-точке, пока API отвечает по выбранной компании.
+      const cachedSession = await loadOperatorSession()
+      const bootstrap = await api.bootstrap(cfg, cachedSession?.company?.id)
       saveBootstrapCache(bootstrap).catch(() => null) // fire and forget
       setIsOffline(false)
 
