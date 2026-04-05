@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { IBM_Plex_Mono, Space_Grotesk } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 
@@ -7,6 +7,13 @@ import { GlobalAssistant } from '@/components/ai/global-assistant'
 import { Toaster } from '@/components/ui/toaster'
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/core/site'
 import './globals.css'
+
+export const viewport: Viewport = {
+  themeColor: '#f59e0b',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+}
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -69,7 +76,11 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [`${SITE_URL}/og-image`],
   },
-  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: SITE_NAME,
+    statusBarStyle: 'black-translucent',
+  },
   icons: {
     icon: [{ url: '/icon' }, { url: '/icon.svg', type: 'image/svg+xml' }],
     apple: '/apple-icon',
