@@ -158,6 +158,7 @@ const navSections: NavSection[] = [
     items: [
       { href: '/salary', label: 'Зарплата', icon: Wallet, note: 'Расчеты и выплаты' },
       { href: '/salary/rules', label: 'Правила зарплаты', icon: ListChecks, note: 'Ставки и бонусы' },
+      { href: '/point-debts', label: 'Долги с точки', icon: Receipt, note: 'Позиции по неделям и списание' },
       { href: '/operators', label: 'Операторы', icon: Users2, note: 'Профили и состояние', badge: '8', badgeColor: 'blue' },
       { href: '/structure', label: 'Структура', icon: Network, note: 'Иерархия команды и точек' },
       { href: '/staff', label: 'Сотрудники', icon: Users, note: 'Админкоманда' },
