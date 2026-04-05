@@ -1,13 +1,21 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
-  BarChart3, Settings, Loader2, CheckCircle2, ChevronDown,
-  AlertTriangle, RefreshCw, TrendingUp, Calendar, Map,
+  BarChart3, Settings, Loader2, CheckCircle2, ChevronDown, ChevronRight,
+  AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download,
 } from 'lucide-react'
 import Link from 'next/link'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -31,6 +39,11 @@ type Session = {
   station: { name: string; zone_id: string | null } | null
   tariff: { name: string; duration_minutes: number; price: number } | null
 }
+
+type CrudDialogState =
+  | null
+  | { kind: 'station'; zoneId: string; zoneLabel: string }
+  | { kind: 'tariff'; zoneId: string; zoneLabel: string }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -96,6 +109,28 @@ function sortStationsByOrder(a: Station, b: Station) {
 
 function sortTariffsByPrice(a: Tariff, b: Tariff) {
   return a.price - b.price
+}
+
+function isISODate(s: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s)
+}
+
+function validateTariffInput(t: {
+  name: string
+  duration_minutes: string | number
+  price: string | number
+  tariff_type: string
+  window_end_time: string
+}): string | null {
+  if (!String(t.name).trim()) return 'Введите название тарифа'
+  const price = Number(t.price)
+  const dur = Number(t.duration_minutes)
+  if (!Number.isFinite(price) || price < 0) return 'Укажите корректную цену (≥ 0)'
+  if (!Number.isFinite(dur) || dur < 1) return 'Длительность не менее 1 минуты'
+  if (t.tariff_type === 'time_window' && !String(t.window_end_time || '').trim()) {
+    return 'Для пакета по времени укажите время окончания'
+  }
+  return null
 }
 
 // ─── Inline edit input ───────────────────────────────────────────────────────
@@ -365,11 +400,27 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
     <div className="flex gap-4">
       {/* Left: grid */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span>Перетащите элементы на сетку. Правая кнопка на ячейке — добавить декор.</span>
-          {dirty && <span className="text-amber-400 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Сохранение...</span>}
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <span>Перетащите зоны и станции на сетку. Клик по пустой ячейке — декор. Список зон и «вне карты» — справа.</span>
+          {dirty && <span className="text-amber-400 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Сохранение…</span>}
           {!dirty && !saving && <span className="text-emerald-400 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Сохранено</span>}
         </div>
+
+        {localZones.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">Цвета зон</span>
+            {localZones.map(z => (
+              <span
+                key={z.id}
+                className="inline-flex max-w-[140px] items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-foreground"
+                title={z.name}
+              >
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: z.color ?? '#3b82f6' }} />
+                <span className="truncate">{z.name}</span>
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Grid */}
         <div
@@ -727,6 +778,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
 export default function StationsPage() {
   const params = useParams()
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const projectId = params.projectId as string
   const companyId = searchParams.get('company') || null
@@ -740,7 +792,11 @@ export default function StationsPage() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics'>('manage')
+  const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics'>(() => {
+    if (typeof window === 'undefined') return 'manage'
+    const t = new URLSearchParams(window.location.search).get('tab')
+    return t === 'map' || t === 'analytics' ? t : 'manage'
+  })
 
   const cellSize = 70
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -749,25 +805,35 @@ export default function StationsPage() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [analyticsFrom, setAnalyticsFrom] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const v = new URLSearchParams(window.location.search).get('afrom')
+      if (v && isISODate(v)) return v
+    }
     const d = new Date(); d.setDate(d.getDate() - 30)
     return d.toISOString().slice(0, 10)
   })
-  const [analyticsTo, setAnalyticsTo] = useState(() => new Date().toISOString().slice(0, 10))
+  const [analyticsTo, setAnalyticsTo] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const v = new URLSearchParams(window.location.search).get('ato')
+      if (v && isISODate(v)) return v
+    }
+    return new Date().toISOString().slice(0, 10)
+  })
 
   // Add zone form
   const [addingZone, setAddingZone] = useState(false)
   const [newZoneName, setNewZoneName] = useState('')
   const [editingZoneId, setEditingZoneId] = useState<string | null>(null)
 
-  // Add station
-  const [addingStationZone, setAddingStationZone] = useState<string | null>(null)
+  const [crudDialog, setCrudDialog] = useState<CrudDialogState>(null)
   const [newStationName, setNewStationName] = useState('')
   const [editingStationId, setEditingStationId] = useState<string | null>(null)
 
-  // Add tariff
-  const [addingTariffZone, setAddingTariffZone] = useState<string | null>(null)
   const [newTariff, setNewTariff] = useState({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' })
   const [editingTariff, setEditingTariff] = useState<Tariff | null>(null)
+
+  const [manageQuery, setManageQuery] = useState('')
+  const [collapsedZones, setCollapsedZones] = useState<Record<string, boolean>>({})
 
   const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
@@ -816,6 +882,39 @@ export default function StationsPage() {
 
   useEffect(() => { void load() }, [load])
 
+  useEffect(() => {
+    const t = searchParams.get('tab')
+    if (t === 'map' || t === 'analytics' || t === 'manage') setActiveTab(t)
+    const af = searchParams.get('afrom')
+    const at = searchParams.get('ato')
+    if (af && isISODate(af)) setAnalyticsFrom(af)
+    if (at && isISODate(at)) setAnalyticsTo(at)
+  }, [projectId, searchParams])
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const curTab = searchParams.get('tab') || 'manage'
+      const curAf = searchParams.get('afrom') || ''
+      const curAt = searchParams.get('ato') || ''
+      if (
+        curTab === activeTab &&
+        curAf === analyticsFrom &&
+        curAt === analyticsTo &&
+        (searchParams.get('company') || '') === (companyId || '')
+      ) {
+        return
+      }
+      const p = new URLSearchParams(searchParams.toString())
+      p.set('tab', activeTab)
+      p.set('afrom', analyticsFrom)
+      p.set('ato', analyticsTo)
+      if (companyId) p.set('company', companyId)
+      else p.delete('company')
+      router.replace(`${pathname}?${p.toString()}`, { scroll: false })
+    }, 200)
+    return () => clearTimeout(id)
+  }, [activeTab, analyticsFrom, analyticsTo, companyId, pathname, router, searchParams])
+
   // Load all projects with companies for the selector (once)
   useEffect(() => {
     fetch('/api/admin/arena')
@@ -859,6 +958,55 @@ export default function StationsPage() {
     if (activeTab === 'analytics') void loadAnalytics()
   }, [activeTab, loadAnalytics])
 
+  const filteredZones = useMemo(() => {
+    const q = manageQuery.trim().toLowerCase()
+    if (!q) return zones
+    return zones.filter(z => {
+      if (z.name.toLowerCase().includes(q)) return true
+      const sts = stations.filter(s => s.zone_id === z.id)
+      const trs = tariffs.filter(t => t.zone_id === z.id)
+      return (
+        sts.some(s => s.name.toLowerCase().includes(q)) ||
+        trs.some(t => t.name.toLowerCase().includes(q))
+      )
+    })
+  }, [zones, stations, tariffs, manageQuery])
+
+  const exportAnalyticsCsv = useCallback(() => {
+    if (sessions.length === 0) {
+      showFlash('err', 'Нет данных для экспорта за период')
+      return
+    }
+    const headers = ['Начало', 'Окончание', 'Статус', 'Станция', 'Тариф', 'Сумма', 'Наличные', 'Kaspi', 'Способ оплаты']
+    const rows: string[][] = [headers]
+    for (const s of sessions) {
+      rows.push([
+        s.started_at,
+        s.ends_at,
+        s.status,
+        s.station?.name ?? '',
+        s.tariff?.name ?? '',
+        String(s.amount),
+        String(s.cash_amount ?? ''),
+        String(s.kaspi_amount ?? ''),
+        s.payment_method,
+      ])
+    }
+    const escape = (c: string) => `"${String(c).replace(/"/g, '""')}"`
+    const bom = '\uFEFF'
+    const csv = bom + rows.map(r => r.map(escape).join(';')).join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `arena_sessions_${analyticsFrom}_${analyticsTo}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    showFlash('ok', 'Файл CSV сохранён')
+  }, [sessions, analyticsFrom, analyticsTo, showFlash])
+
   async function apiPost(body: object): Promise<{ ok: true; data?: unknown }> {
     const res = await fetch('/api/admin/arena', {
       method: 'POST',
@@ -897,7 +1045,11 @@ export default function StationsPage() {
   }
 
   async function handleDeleteZone(zoneId: string) {
-    if (!confirm('Удалить зону? Все станции и тарифы зоны будут удалены.')) return
+    const z = zones.find(x => x.id === zoneId)
+    const nSt = stations.filter(s => s.zone_id === zoneId).length
+    const nTr = tariffs.filter(t => t.zone_id === zoneId).length
+    const label = z?.name ?? 'зону'
+    if (!confirm(`Удалить зону «${label}»?\nВместе с ней будут удалены ${nSt} станций и ${nTr} тарифов.`)) return
     setSaving(true)
     try {
       await apiPost({ action: 'deleteZone', zoneId })
@@ -916,7 +1068,8 @@ export default function StationsPage() {
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных станции')
       const s = arenaRowToStation(out.data as Record<string, unknown>)
       setStations(prev => [...prev, s].sort(sortStationsByOrder))
-      setNewStationName(''); setAddingStationZone(null)
+      setNewStationName('')
+      setCrudDialog(null)
       showFlash('ok', 'Станция добавлена')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
@@ -934,7 +1087,9 @@ export default function StationsPage() {
   }
 
   async function handleDeleteStation(stationId: string) {
-    if (!confirm('Удалить станцию?')) return
+    const st = stations.find(s => s.id === stationId)
+    const label = st?.name ?? 'станцию'
+    if (!confirm(`Удалить станцию «${label}»?`)) return
     setSaving(true)
     try {
       await apiPost({ action: 'deleteStation', stationId })
@@ -945,7 +1100,11 @@ export default function StationsPage() {
 
   // ─── Tariff CRUD ─────────────────────────────────────────────────────────
   async function handleCreateTariff(zoneId: string) {
-    if (!newTariff.name.trim() || !newTariff.price) return
+    const err = validateTariffInput(newTariff)
+    if (err) {
+      showFlash('err', err)
+      return
+    }
     setSaving(true)
     try {
       const out = await apiPost({
@@ -962,13 +1121,25 @@ export default function StationsPage() {
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных тарифа')
       const t = arenaRowToTariff(out.data as Record<string, unknown>)
       setTariffs(prev => [...prev, t].sort(sortTariffsByPrice))
-      setNewTariff({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' }); setAddingTariffZone(null)
+      setNewTariff({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' })
+      setCrudDialog(null)
       showFlash('ok', 'Тариф добавлен')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
   async function handleUpdateTariff() {
     if (!editingTariff) return
+    const err = validateTariffInput({
+      name: editingTariff.name,
+      duration_minutes: editingTariff.duration_minutes,
+      price: editingTariff.price,
+      tariff_type: editingTariff.tariff_type,
+      window_end_time: editingTariff.window_end_time || '',
+    })
+    if (err) {
+      showFlash('err', err)
+      return
+    }
     const tariffId = editingTariff.id
     setSaving(true)
     try {
@@ -990,7 +1161,9 @@ export default function StationsPage() {
   }
 
   async function handleDeleteTariff(tariffId: string) {
-    if (!confirm('Удалить тариф?')) return
+    const tr = tariffs.find(t => t.id === tariffId)
+    const label = tr?.name ?? 'тариф'
+    if (!confirm(`Удалить тариф «${label}»?`)) return
     setSaving(true)
     try {
       await apiPost({ action: 'deleteTariff', tariffId })
@@ -1141,8 +1314,12 @@ export default function StationsPage() {
                     value={currentValue}
                     onChange={e => {
                       const [pId, cId] = e.target.value.split('|')
-                      if (cId) router.push(`/stations/${pId}?company=${cId}`)
-                      else router.push(`/stations/${pId}`)
+                      const p = new URLSearchParams()
+                      p.set('tab', activeTab)
+                      p.set('afrom', analyticsFrom)
+                      p.set('ato', analyticsTo)
+                      if (cId) p.set('company', cId)
+                      router.push(`/stations/${pId}?${p.toString()}`)
                     }}
                     className="appearance-none rounded-xl border border-white/10 bg-card px-4 py-2 pr-8 text-lg font-bold text-foreground focus:outline-none focus:border-primary cursor-pointer"
                   >
@@ -1198,17 +1375,55 @@ export default function StationsPage() {
       <div className="space-y-4">
         {activeTab === 'manage' && (
           <div className="space-y-4">
-            {/* Add zone button */}
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold">Зоны и станции</h2>
-              {!addingZone && (
-                <button onClick={() => setAddingZone(true)} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/20">
-                  <Plus className="h-4 w-4" /> Добавить зону
-                </button>
-              )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-base font-semibold">Зоны и станции</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Поиск, сворачивание зон, станции и тарифы — в окнах.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {zones.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setCollapsedZones({})}
+                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                    >
+                      Развернуть все
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCollapsedZones(Object.fromEntries(zones.map(z => [z.id, true])))}
+                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                    >
+                      Свернуть все
+                    </button>
+                  </>
+                )}
+                {!addingZone && (
+                  <button
+                    type="button"
+                    onClick={() => setAddingZone(true)}
+                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/20"
+                  >
+                    <Plus className="h-4 w-4" /> Добавить зону
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* New zone form */}
+            {zones.length > 0 && (
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={manageQuery}
+                  onChange={e => setManageQuery(e.target.value)}
+                  placeholder="Поиск по названию зоны, станции или тарифа…"
+                  className="w-full rounded-xl border border-white/10 bg-card py-2.5 pl-10 pr-3 text-sm outline-none focus:border-primary/50"
+                  aria-label="Поиск по зонам и станциям"
+                />
+              </div>
+            )}
+
             {addingZone && (
               <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3">
                 <input
@@ -1219,172 +1434,163 @@ export default function StationsPage() {
                   placeholder="Название зоны (напр. PlayStation, ПК, VIP)"
                   className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-1.5 text-sm"
                 />
-                <button onClick={handleCreateZone} disabled={saving} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">
+                <button type="button" onClick={handleCreateZone} disabled={saving} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Создать
                 </button>
-                <button onClick={() => { setAddingZone(false); setNewZoneName('') }} className="p-1.5 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+                <button type="button" onClick={() => { setAddingZone(false); setNewZoneName('') }} className="p-1.5 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
               </div>
             )}
 
             {zones.length === 0 && !addingZone && (
               <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-muted-foreground">
                 <Monitor className="mx-auto h-8 w-8 mb-2 opacity-40" />
-                <p className="text-sm">Зон пока нет. Создайте первую зону чтобы добавить станции и тарифы.</p>
+                <p className="text-sm">Зон пока нет. Создайте первую зону, чтобы добавить станции и тарифы.</p>
               </div>
             )}
 
-            {/* Zone cards */}
-            {zones.map(zone => {
+            {zones.length > 0 && filteredZones.length === 0 && (
+              <p className="rounded-xl border border-dashed border-white/10 py-6 text-center text-sm text-muted-foreground">
+                Ничего не найдено — измените запрос или сбросьте поиск.
+              </p>
+            )}
+
+            {filteredZones.map(zone => {
               const zoneStations = stations.filter(s => s.zone_id === zone.id)
               const zoneTariffs = tariffs.filter(t => t.zone_id === zone.id)
+              const collapsed = Boolean(collapsedZones[zone.id])
+              const zColor = zone.color ?? '#3b82f6'
               return (
                 <div key={zone.id} className="rounded-xl border border-white/10 bg-card overflow-hidden">
-                  {/* Zone header */}
-                  <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-3">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 border-b border-white/10 bg-white/5 px-2 py-2 sm:px-3">
+                    <button
+                      type="button"
+                      onClick={() => setCollapsedZones(p => ({ ...p, [zone.id]: !p[zone.id] }))}
+                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                      title={collapsed ? 'Развернуть зону' : 'Свернуть зону'}
+                      aria-expanded={!collapsed}
+                    >
+                      {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </button>
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: zColor }} aria-hidden />
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
                       {editingZoneId === zone.id ? (
                         <InlineEdit value={zone.name} onSave={v => handleUpdateZone(zone.id, v)} onCancel={() => setEditingZoneId(null)} />
                       ) : (
                         <>
-                          <span className="font-semibold text-sm">{zone.name}</span>
-                          <span className="rounded-full bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{zoneStations.length} ст.</span>
-                          {!zone.is_active && <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-400">неактивна</span>}
+                          <span className="truncate font-semibold text-sm">{zone.name}</span>
+                          <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{zoneStations.length} ст.</span>
+                          <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{zoneTariffs.length} тар.</span>
+                          {!zone.is_active && <span className="shrink-0 rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-400">неактивна</span>}
                         </>
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setEditingZoneId(editingZoneId === zone.id ? null : zone.id)} className="p-1.5 text-muted-foreground hover:text-foreground rounded"><Pencil className="h-3.5 w-3.5" /></button>
-                      <button onClick={() => handleDeleteZone(zone.id)} className="p-1.5 text-muted-foreground hover:text-destructive rounded"><Trash2 className="h-3.5 w-3.5" /></button>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <button type="button" onClick={() => setEditingZoneId(editingZoneId === zone.id ? null : zone.id)} className="rounded p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                      <button type="button" onClick={() => handleDeleteZone(zone.id)} className="rounded p-1.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
                   </div>
 
-                  <div className="grid md:grid-cols-2 divide-x divide-white/10">
-                    {/* Stations */}
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5"><Monitor className="h-3.5 w-3.5" /> Станции</span>
-                        <button onClick={() => { setAddingStationZone(zone.id); setNewStationName('') }} className="flex items-center gap-1 rounded bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground">
-                          <Plus className="h-3 w-3" /> Добавить
-                        </button>
+                  {!collapsed && (
+                    <div className="grid md:grid-cols-2 divide-y divide-white/10 md:divide-x md:divide-y-0">
+                      <div className="p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground"><Monitor className="h-3.5 w-3.5" /> Станции</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewStationName('')
+                              setCrudDialog({ kind: 'station', zoneId: zone.id, zoneLabel: zone.name })
+                            }}
+                            className="flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                          >
+                            <Plus className="h-3 w-3" /> Добавить
+                          </button>
+                        </div>
+                        <div className="space-y-1">
+                          {zoneStations.length === 0 && <p className="py-2 text-xs text-muted-foreground">Нет станций</p>}
+                          {zoneStations.map(st => (
+                            <div key={st.id} className="group flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5">
+                              {editingStationId === st.id ? (
+                                <InlineEdit value={st.name} onSave={v => handleUpdateStation(st.id, v)} onCancel={() => setEditingStationId(null)} />
+                              ) : (
+                                <>
+                                  <span className="text-sm">{st.name}</span>
+                                  <div className="hidden items-center gap-1 group-hover:flex">
+                                    <button type="button" onClick={() => setEditingStationId(st.id)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
+                                    <button type="button" onClick={() => handleDeleteStation(st.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
 
-                      {addingStationZone === zone.id && (
-                        <div className="mb-2 flex items-center gap-1">
-                          <input
-                            autoFocus
-                            value={newStationName}
-                            onChange={e => setNewStationName(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter') handleCreateStation(zone.id); if (e.key === 'Escape') setAddingStationZone(null) }}
-                            placeholder="Название (напр. PS-1)"
-                            className="flex-1 rounded border border-white/20 bg-background px-2 py-1 text-xs"
-                          />
-                          <button onClick={() => handleCreateStation(zone.id)} className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground">OK</button>
-                          <button onClick={() => setAddingStationZone(null)} className="p-1 text-muted-foreground"><X className="h-3 w-3" /></button>
+                      <div className="p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground"><Clock className="h-3.5 w-3.5" /> Тарифы</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewTariff({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' })
+                              setCrudDialog({ kind: 'tariff', zoneId: zone.id, zoneLabel: zone.name })
+                            }}
+                            className="flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                          >
+                            <Plus className="h-3 w-3" /> Добавить
+                          </button>
                         </div>
-                      )}
-
-                      <div className="space-y-1">
-                        {zoneStations.length === 0 && <p className="text-xs text-muted-foreground py-2">Нет станций</p>}
-                        {zoneStations.map(st => (
-                          <div key={st.id} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5 group">
-                            {editingStationId === st.id ? (
-                              <InlineEdit value={st.name} onSave={v => handleUpdateStation(st.id, v)} onCancel={() => setEditingStationId(null)} />
-                            ) : (
-                              <>
-                                <span className="text-sm">{st.name}</span>
-                                <div className="hidden group-hover:flex items-center gap-1">
-                                  <button onClick={() => setEditingStationId(st.id)} className="p-1 text-muted-foreground hover:text-foreground"><Pencil className="h-3 w-3" /></button>
-                                  <button onClick={() => handleDeleteStation(st.id)} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                        <div className="space-y-1">
+                          {zoneTariffs.length === 0 && <p className="py-2 text-xs text-muted-foreground">Нет тарифов</p>}
+                          {zoneTariffs.map(t => (
+                            <div key={t.id} className="group">
+                              {editingTariff?.id === t.id ? (
+                                <div className="space-y-1.5 rounded-lg border border-primary/30 bg-primary/5 p-2">
+                                  <input value={editingTariff.name} onChange={e => setEditingTariff(p => p ? ({ ...p, name: e.target.value }) : p)} className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs" />
+                                  <div className="grid grid-cols-2 gap-1">
+                                    <input value={editingTariff.duration_minutes} onChange={e => setEditingTariff(p => p ? ({ ...p, duration_minutes: Number(e.target.value) }) : p)} type="number" min={1} className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
+                                    <input value={editingTariff.price} onChange={e => setEditingTariff(p => p ? ({ ...p, price: Number(e.target.value) }) : p)} type="number" min={0} step="1" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-1">
+                                    <select value={editingTariff.tariff_type || 'fixed'} onChange={e => setEditingTariff(p => p ? ({ ...p, tariff_type: e.target.value as 'fixed' | 'time_window' }) : p)} className="rounded border border-white/20 bg-background px-2 py-1 text-xs">
+                                      <option value="fixed">Фиксированный</option>
+                                      <option value="time_window">Пакет по времени</option>
+                                    </select>
+                                    {editingTariff.tariff_type === 'time_window' && (
+                                      <input value={editingTariff.window_end_time || ''} onChange={e => setEditingTariff(p => p ? ({ ...p, window_end_time: e.target.value }) : p)} type="time" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
+                                    )}
+                                  </div>
+                                  <div className="flex gap-1">
+                                    <button type="button" onClick={handleUpdateTariff} className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground">Сохранить</button>
+                                    <button type="button" onClick={() => setEditingTariff(null)} className="rounded bg-white/10 px-2 py-1 text-xs">Отмена</button>
+                                  </div>
                                 </div>
-                              </>
-                            )}
-                          </div>
-                        ))}
+                              ) : (
+                                <div className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5">
+                                  <div className="min-w-0">
+                                    <span className="text-sm">{t.name}</span>
+                                    <span className="ml-2 text-xs text-muted-foreground">
+                                      {t.tariff_type === 'time_window' && t.window_end_time
+                                        ? `до ${t.window_end_time}`
+                                        : formatMinutes(t.duration_minutes)}
+                                      {' · '}{formatPrice(t.price)}
+                                    </span>
+                                    {t.tariff_type === 'time_window' && (
+                                      <span className="ml-1.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-semibold text-amber-400">Пакет</span>
+                                    )}
+                                  </div>
+                                  <div className="hidden shrink-0 items-center gap-1 group-hover:flex">
+                                    <button type="button" onClick={() => setEditingTariff(t)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
+                                    <button type="button" onClick={() => handleDeleteTariff(t.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-
-                    {/* Tariffs */}
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Тарифы</span>
-                        <button onClick={() => { setAddingTariffZone(zone.id); setNewTariff({ name: '', duration_minutes: '60', price: '', tariff_type: 'fixed', window_end_time: '' }) }} className="flex items-center gap-1 rounded bg-white/5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground">
-                          <Plus className="h-3 w-3" /> Добавить
-                        </button>
-                      </div>
-
-                      {addingTariffZone === zone.id && (
-                        <div className="mb-2 space-y-1.5 rounded-lg border border-white/10 bg-white/5 p-2">
-                          <input value={newTariff.name} onChange={e => setNewTariff(p => ({ ...p, name: e.target.value }))} placeholder="Название (напр. 1 час)" className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs" />
-                          <div className="grid grid-cols-2 gap-1">
-                            <input value={newTariff.duration_minutes} onChange={e => setNewTariff(p => ({ ...p, duration_minutes: e.target.value }))} placeholder="Минуты" type="number" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
-                            <input value={newTariff.price} onChange={e => setNewTariff(p => ({ ...p, price: e.target.value }))} placeholder="Цена ₸" type="number" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
-                          </div>
-                          <div className="grid grid-cols-2 gap-1">
-                            <select value={newTariff.tariff_type} onChange={e => setNewTariff(p => ({ ...p, tariff_type: e.target.value }))} className="rounded border border-white/20 bg-background px-2 py-1 text-xs">
-                              <option value="fixed">Фиксированный</option>
-                              <option value="time_window">Пакет по времени</option>
-                            </select>
-                            {newTariff.tariff_type === 'time_window' && (
-                              <input value={newTariff.window_end_time} onChange={e => setNewTariff(p => ({ ...p, window_end_time: e.target.value }))} placeholder="До (напр. 16:00)" type="time" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
-                            )}
-                          </div>
-                          <div className="flex gap-1">
-                            <button onClick={() => handleCreateTariff(zone.id)} className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground">Добавить</button>
-                            <button onClick={() => setAddingTariffZone(null)} className="rounded bg-white/10 px-2 py-1 text-xs text-muted-foreground">Отмена</button>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-1">
-                        {zoneTariffs.length === 0 && <p className="text-xs text-muted-foreground py-2">Нет тарифов</p>}
-                        {zoneTariffs.map(t => (
-                          <div key={t.id} className="group">
-                            {editingTariff?.id === t.id ? (
-                              <div className="space-y-1.5 rounded-lg border border-primary/30 bg-primary/5 p-2">
-                                <input value={editingTariff.name} onChange={e => setEditingTariff(p => p ? ({ ...p, name: e.target.value }) : p)} className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs" />
-                                <div className="grid grid-cols-2 gap-1">
-                                  <input value={editingTariff.duration_minutes} onChange={e => setEditingTariff(p => p ? ({ ...p, duration_minutes: Number(e.target.value) }) : p)} type="number" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
-                                  <input value={editingTariff.price} onChange={e => setEditingTariff(p => p ? ({ ...p, price: Number(e.target.value) }) : p)} type="number" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
-                                </div>
-                                <div className="grid grid-cols-2 gap-1">
-                                  <select value={editingTariff.tariff_type || 'fixed'} onChange={e => setEditingTariff(p => p ? ({ ...p, tariff_type: e.target.value as 'fixed' | 'time_window' }) : p)} className="rounded border border-white/20 bg-background px-2 py-1 text-xs">
-                                    <option value="fixed">Фиксированный</option>
-                                    <option value="time_window">Пакет по времени</option>
-                                  </select>
-                                  {editingTariff.tariff_type === 'time_window' && (
-                                    <input value={editingTariff.window_end_time || ''} onChange={e => setEditingTariff(p => p ? ({ ...p, window_end_time: e.target.value }) : p)} type="time" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
-                                  )}
-                                </div>
-                                <div className="flex gap-1">
-                                  <button onClick={handleUpdateTariff} className="flex-1 rounded bg-primary py-1 text-xs text-primary-foreground">Сохранить</button>
-                                  <button onClick={() => setEditingTariff(null)} className="rounded bg-white/10 px-2 py-1 text-xs">Отмена</button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5">
-                                <div>
-                                  <span className="text-sm">{t.name}</span>
-                                  <span className="ml-2 text-xs text-muted-foreground">
-                                    {t.tariff_type === 'time_window' && t.window_end_time
-                                      ? `до ${t.window_end_time}`
-                                      : formatMinutes(t.duration_minutes)}
-                                    {' · '}{formatPrice(t.price)}
-                                  </span>
-                                  {t.tariff_type === 'time_window' && (
-                                    <span className="ml-1.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-semibold text-amber-400">Пакет</span>
-                                  )}
-                                </div>
-                                <div className="hidden group-hover:flex items-center gap-1">
-                                  <button onClick={() => setEditingTariff(t)} className="p-1 text-muted-foreground hover:text-foreground"><Pencil className="h-3 w-3" /></button>
-                                  <button onClick={() => handleDeleteTariff(t.id)} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
               )
             })}
@@ -1398,7 +1604,7 @@ export default function StationsPage() {
             style={{ height: 'calc(100vh - 240px)' }}
           >
             <p className="mb-2 shrink-0 text-xs text-muted-foreground">
-              Перетаскивайте зоны и станции мышью. Клик по пустой ячейке — добавить декор. Ячейка: {cellSize}px
+              Редактор карты: подсказки и легенда цветов — внутри блока слева. Ячейка сетки: {cellSize}px.
             </p>
             <div className="flex-1 min-h-0">
               <MapEditor
@@ -1421,19 +1627,39 @@ export default function StationsPage() {
 
         {activeTab === 'analytics' && (
           <div className="space-y-6">
-            {/* Date filter */}
             <div className="flex flex-wrap items-center gap-3">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <input type="date" value={analyticsFrom} onChange={e => setAnalyticsFrom(e.target.value)} className="rounded-lg border border-white/10 bg-card px-3 py-1.5 text-sm" />
+              <input type="date" value={analyticsFrom} onChange={e => setAnalyticsFrom(e.target.value)} className="rounded-lg border border-white/10 bg-card px-3 py-1.5 text-sm" aria-label="Дата с" />
               <span className="text-muted-foreground">—</span>
-              <input type="date" value={analyticsTo} onChange={e => setAnalyticsTo(e.target.value)} className="rounded-lg border border-white/10 bg-card px-3 py-1.5 text-sm" />
-              <button onClick={loadAnalytics} disabled={analyticsLoading} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground">
+              <input type="date" value={analyticsTo} onChange={e => setAnalyticsTo(e.target.value)} className="rounded-lg border border-white/10 bg-card px-3 py-1.5 text-sm" aria-label="Дата по" />
+              <button type="button" onClick={() => void loadAnalytics()} disabled={analyticsLoading} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">
                 {analyticsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Загрузить
               </button>
+              <button
+                type="button"
+                onClick={exportAnalyticsCsv}
+                disabled={analyticsLoading || sessions.length === 0}
+                className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-muted-foreground hover:bg-white/10 hover:text-foreground disabled:opacity-40"
+                title="Экспорт всех загруженных сессий за период (CSV, UTF-8)"
+              >
+                <Download className="h-4 w-4" /> CSV
+              </button>
             </div>
+            <p className="text-[11px] text-muted-foreground">Период сохраняется в адресе (<code className="rounded bg-white/5 px-1">tab</code>, <code className="rounded bg-white/5 px-1">afrom</code>, <code className="rounded bg-white/5 px-1">ato</code>) — можно поделиться ссылкой.</p>
 
             {analyticsLoading ? (
-              <div className="flex h-32 items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Загрузка...</div>
+              <div className="space-y-4 animate-pulse">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <div key={i} className="h-24 rounded-xl border border-white/5 bg-white/5" />
+                  ))}
+                </div>
+                <div className="h-32 rounded-xl border border-white/5 bg-white/5" />
+                <div className="h-40 rounded-xl border border-white/5 bg-white/5" />
+                <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Загружаем сессии…
+                </p>
+              </div>
             ) : completedSessions.length === 0 ? (
               <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-muted-foreground text-sm">
                 За выбранный период нет завершённых сессий
@@ -1600,6 +1826,100 @@ export default function StationsPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={crudDialog !== null} onOpenChange={open => { if (!open) setCrudDialog(null) }}>
+        <DialogContent className="border-white/10 bg-card sm:max-w-md">
+          {crudDialog?.kind === 'station' && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Новая станция</DialogTitle>
+                <DialogDescription>Зона «{crudDialog.zoneLabel}». Имя отображается в зале и в отчётах.</DialogDescription>
+              </DialogHeader>
+              <input
+                autoFocus
+                value={newStationName}
+                onChange={e => setNewStationName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') void handleCreateStation(crudDialog.zoneId)
+                }}
+                placeholder="Например, PS-1 или ПК-3"
+                className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+              />
+              <DialogFooter className="gap-2 sm:gap-0">
+                <button
+                  type="button"
+                  onClick={() => setCrudDialog(null)}
+                  className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-white/10"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  disabled={saving || !newStationName.trim()}
+                  onClick={() => void handleCreateStation(crudDialog.zoneId)}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
+                >
+                  {saving ? <Loader2 className="inline h-4 w-4 animate-spin" /> : null} Добавить
+                </button>
+              </DialogFooter>
+            </>
+          )}
+          {crudDialog?.kind === 'tariff' && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Новый тариф</DialogTitle>
+                <DialogDescription>Зона «{crudDialog.zoneLabel}». Проверьте длительность, цену и тип.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <input
+                  value={newTariff.name}
+                  onChange={e => setNewTariff(p => ({ ...p, name: e.target.value }))}
+                  placeholder="Название (напр. 1 час)"
+                  className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-xs text-muted-foreground">
+                    <span className="mb-1 block">Минуты</span>
+                    <input value={newTariff.duration_minutes} onChange={e => setNewTariff(p => ({ ...p, duration_minutes: e.target.value }))} type="number" min={1} className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
+                  </label>
+                  <label className="text-xs text-muted-foreground">
+                    <span className="mb-1 block">Цена, ₸</span>
+                    <input value={newTariff.price} onChange={e => setNewTariff(p => ({ ...p, price: e.target.value }))} type="number" min={0} step="1" className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-xs text-muted-foreground">
+                    <span className="mb-1 block">Тип</span>
+                    <select value={newTariff.tariff_type} onChange={e => setNewTariff(p => ({ ...p, tariff_type: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm">
+                      <option value="fixed">Фиксированный</option>
+                      <option value="time_window">Пакет по времени</option>
+                    </select>
+                  </label>
+                  {newTariff.tariff_type === 'time_window' && (
+                    <label className="text-xs text-muted-foreground">
+                      <span className="mb-1 block">До времени</span>
+                      <input value={newTariff.window_end_time} onChange={e => setNewTariff(p => ({ ...p, window_end_time: e.target.value }))} type="time" className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
+                    </label>
+                  )}
+                </div>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <button type="button" onClick={() => setCrudDialog(null)} className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-white/10">
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void handleCreateTariff(crudDialog.zoneId)}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
+                >
+                  {saving ? <Loader2 className="inline h-4 w-4 animate-spin" /> : null} Добавить тариф
+                </button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
