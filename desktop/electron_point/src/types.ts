@@ -14,6 +14,8 @@ export interface FeatureFlags {
   kaspi_daily_split: boolean
   start_cash_prompt: boolean
   arena_enabled: boolean
+  /** Подмена экрана смены сводкой из сессий арены (по умолчанию выключено — ручной отчёт). */
+  arena_shift_auto_totals: boolean
 }
 
 export interface BootstrapOperator {

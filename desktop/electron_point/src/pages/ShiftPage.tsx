@@ -180,8 +180,12 @@ export default function ShiftPage({
   /** F16 Ramen: классическая смена с ручным налом/Kaspi; витрина только для учёта товара, не в ФАКТ смены. */
   const isRamenCompany = (session.company.code || '').trim().toLowerCase() === 'ramen'
   const mergeInventorySalesIntoShift = hasInventorySale && !isRamenCompany
-  /** Не показывать «смену арены» вместо калькулятора, если случайно включили арену на раменной точке. */
-  const useArenaShiftDashboard = isArena && !isRamenCompany
+  /**
+   * Автосводка смены из сессий арены — только при явном флаге (иначе классический ручной отчёт, как до станций).
+   * Рамен: всегда ручной калькулятор.
+   */
+  const useArenaShiftDashboard =
+    isArena && !isRamenCompany && bootstrap.device.feature_flags?.arena_shift_auto_totals === true
   const wiponLabel = useArenaShiftDashboard ? 'Senet (система)' : 'Wipon (система)'
   const kaspiLabel = useArenaShiftDashboard ? 'Kaspi POS' : 'Kaspi'
 

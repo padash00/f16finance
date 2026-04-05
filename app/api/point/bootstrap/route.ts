@@ -15,6 +15,8 @@ function normalizeFlags(input: Record<string, unknown> | null | undefined) {
     kaspi_daily_split: input?.kaspi_daily_split === true,
     start_cash_prompt: input?.start_cash_prompt === true,
     arena_enabled: input?.arena_enabled === true,
+    /** Если true — вкладка «Смена» подставляет суммы из сессий арены; иначе классический ручной отчёт. */
+    arena_shift_auto_totals: input?.arena_shift_auto_totals === true,
   }
 }
 

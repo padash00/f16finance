@@ -20,8 +20,9 @@ export function isOvernightWindow(startM: number, endM: number): boolean {
 }
 
 /**
- * Можно ли начать сессию сейчас (для time_window с заданным началом).
- * Если window_start не задан — как раньше, ограничения по времени старта нет.
+ * Можно ли начать сессию сейчас (тариф «пакет по окну»).
+ * - Заданы начало и конец — интервал [start, end), ночное окно если start > end.
+ * - Задан только конец — интервал с полуночи до end (локальные часы `now`).
  */
 export function isNowInTariffWindow(
   now: Date,
@@ -32,12 +33,16 @@ export function isNowInTariffWindow(
   if (tariffType !== 'time_window' || !windowEnd) return { ok: true }
   const endM = parseTimeToMinutes(windowEnd)
   if (endM === null) return { ok: true }
-  if (!windowStart?.trim()) return { ok: true }
+  const nowM = minutesNow(now)
+
+  if (!windowStart?.trim()) {
+    if (nowM < endM) return { ok: true }
+    return { ok: false, code: 'outside-tariff-window' }
+  }
 
   const startM = parseTimeToMinutes(windowStart)
   if (startM === null) return { ok: true }
 
-  const nowM = minutesNow(now)
   if (!isOvernightWindow(startM, endM)) {
     if (nowM >= startM && nowM < endM) return { ok: true }
     return { ok: false, code: 'outside-tariff-window' }
@@ -101,4 +106,22 @@ export function formatTariffWindowLabel(start: string | null | undefined, end: s
   if (a == null || b == null) return `${start}–${end}`
   if (isOvernightWindow(a, b)) return `${start}–${end} (ночь)`
   return `${start}–${end} (день)`
+}
+
+/** Для выдачи в API терминалу: фиксированные тарифы всегда; по окну — только если сейчас в интервале. */
+export function isTariffOfferedNow(
+  now: Date,
+  tariff: {
+    tariff_type?: string | null
+    window_start_time?: string | null
+    window_end_time?: string | null
+  },
+): boolean {
+  if (tariff.tariff_type !== 'time_window') return true
+  return isNowInTariffWindow(
+    now,
+    String(tariff.tariff_type),
+    tariff.window_start_time,
+    tariff.window_end_time,
+  ).ok
 }

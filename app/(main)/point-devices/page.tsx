@@ -44,6 +44,7 @@ type CompanyAssignment = {
     debt_report: boolean | null       // null = inherit
     kaspi_daily_split: boolean | null // null = inherit
     arena_enabled: boolean | null     // null = inherit
+    arena_shift_auto_totals: boolean | null // null = inherit — сводка смены из сессий арены
   }
 }
 
@@ -119,7 +120,16 @@ function formatDateTime(value: string | null) {
 }
 
 function emptyAssignment(company_id: string): CompanyAssignment {
-  return { company_id, point_mode: '', feature_flags: { debt_report: null, kaspi_daily_split: null, arena_enabled: null } }
+  return {
+    company_id,
+    point_mode: '',
+    feature_flags: {
+      debt_report: null,
+      kaspi_daily_split: null,
+      arena_enabled: null,
+      arena_shift_auto_totals: null,
+    },
+  }
 }
 
 function CompanyAssignmentEditor({
@@ -151,7 +161,11 @@ function CompanyAssignmentEditor({
     onChange(assignments.map((a) => a.company_id === companyId ? { ...a, ...patch } : a))
   }
 
-  function updateFlag(companyId: string, key: 'debt_report' | 'kaspi_daily_split' | 'arena_enabled', value: boolean | null) {
+  function updateFlag(
+    companyId: string,
+    key: 'debt_report' | 'kaspi_daily_split' | 'arena_enabled' | 'arena_shift_auto_totals',
+    value: boolean | null,
+  ) {
     onChange(assignments.map((a) =>
       a.company_id === companyId
         ? { ...a, feature_flags: { ...a.feature_flags, [key]: value } }
@@ -168,7 +182,9 @@ function CompanyAssignmentEditor({
         const hasOverride = assignment && (
           (assignment.point_mode && assignment.point_mode !== '') ||
           assignment.feature_flags.debt_report !== null ||
-          assignment.feature_flags.kaspi_daily_split !== null
+          assignment.feature_flags.kaspi_daily_split !== null ||
+          assignment.feature_flags.arena_enabled !== null ||
+          assignment.feature_flags.arena_shift_auto_totals !== null
         )
 
         return (
@@ -241,6 +257,7 @@ function CompanyAssignmentEditor({
                       ['debt_report', 'Долги и сканер', projectFlags.debt_report],
                       ['kaspi_daily_split', 'Суточная сверка Kaspi', projectFlags.kaspi_daily_split],
                       ['arena_enabled', 'Арена / Станции', false],
+                      ['arena_shift_auto_totals', 'Смена: авто из сессий арены', false],
                     ] as [keyof typeof assignment.feature_flags, string, boolean][]).map(([key, label, projectDefault]) => {
                       const val = assignment.feature_flags[key]
                       return (
@@ -443,16 +460,18 @@ export default function PointDevicesPage() {
       const hasFlagDebt = a.feature_flags.debt_report !== null
       const hasFlagKaspi = a.feature_flags.kaspi_daily_split !== null
       const hasFlagArena = a.feature_flags.arena_enabled !== null
+      const hasFlagArenaShiftAuto = a.feature_flags.arena_shift_auto_totals !== null
       return {
         company_id: a.company_id,
         point_mode: hasMode ? a.point_mode : null,
-        feature_flags: (hasFlagDebt || hasFlagKaspi || hasFlagArena)
+        feature_flags: (hasFlagDebt || hasFlagKaspi || hasFlagArena || hasFlagArenaShiftAuto)
           ? {
               shift_report: true,
               income_report: true,
               debt_report: a.feature_flags.debt_report ?? false,
               kaspi_daily_split: a.feature_flags.kaspi_daily_split ?? false,
               arena_enabled: a.feature_flags.arena_enabled ?? false,
+              arena_shift_auto_totals: a.feature_flags.arena_shift_auto_totals ?? false,
             }
           : null,
       }
@@ -498,6 +517,7 @@ export default function PointDevicesPage() {
           debt_report: c.feature_flags?.debt_report ?? null,
           kaspi_daily_split: c.feature_flags?.kaspi_daily_split ?? null,
           arena_enabled: (c.feature_flags as any)?.arena_enabled ?? null,
+          arena_shift_auto_totals: (c.feature_flags as any)?.arena_shift_auto_totals ?? null,
         },
       })),
       shift_report_chat_id: project.shift_report_chat_id || '',
@@ -745,6 +765,8 @@ export default function PointDevicesPage() {
                                   {[
                                     c.feature_flags.debt_report === true && 'долги',
                                     c.feature_flags.kaspi_daily_split === true && 'kaspi-split',
+                                    (c.feature_flags as any)?.arena_enabled === true && 'арена',
+                                    (c.feature_flags as any)?.arena_shift_auto_totals === true && 'смена-арена-авто',
                                   ].filter(Boolean).join(', ') || null}
                                 </div>
                               )}

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { computeTimeWindowEndsAt, isNowInTariffWindow } from '@/lib/core/arena-tariff-window'
+import { computeTimeWindowEndsAt, isNowInTariffWindow, isTariffOfferedNow } from '@/lib/core/arena-tariff-window'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
@@ -78,17 +78,29 @@ export async function GET(request: Request) {
         .eq('status', 'active')
     }
     const activeSessions = (sessions || []).filter((s: any) => s.ends_at >= autoCutoff)
+    const activeTariffIds = new Set(
+      (activeSessions as { tariff_id?: string }[]).map((s) => s.tariff_id).filter(Boolean) as string[],
+    )
 
     const incomeRows = todayIncomes || []
     const todayCash = incomeRows.reduce((s: number, r: any) => s + Number(r.cash_amount || 0), 0)
     const todayKaspi = incomeRows.reduce((s: number, r: any) => s + Number(r.kaspi_amount || 0), 0)
+
+    const tariffsVisible = (tariffs || []).filter((t: any) =>
+      activeTariffIds.has(String(t.id)) ||
+      isTariffOfferedNow(nowTs, {
+        tariff_type: t.tariff_type,
+        window_start_time: t.window_start_time,
+        window_end_time: t.window_end_time,
+      }),
+    )
 
     return json({
       ok: true,
       data: {
         zones: zones || [],
         stations: stations || [],
-        tariffs: tariffs || [],
+        tariffs: tariffsVisible,
         sessions: activeSessions,
         decorations: decorations || [],
         today_income: { cash: todayCash, kaspi: todayKaspi, rows: incomeRows },

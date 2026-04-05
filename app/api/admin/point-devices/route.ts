@@ -11,6 +11,8 @@ type PointFeatureFlags = {
   debt_report: boolean
   kaspi_daily_split: boolean
   arena_enabled?: boolean
+  /** Экран смены подставляет суммы из сессий арены (Electron). */
+  arena_shift_auto_totals?: boolean
 }
 
 type CompanyAssignment = {
@@ -72,9 +74,12 @@ function normalizeFlags(input: Partial<PointFeatureFlags> | null | undefined): P
     debt_report: input?.debt_report === true,
     kaspi_daily_split: input?.kaspi_daily_split === true,
   }
-  // arena_enabled is a per-point flag, store only if explicitly provided
+  // arena_* are per-point flags, store only if explicitly provided
   if (input?.arena_enabled !== undefined) {
     flags.arena_enabled = input.arena_enabled === true
+  }
+  if (input?.arena_shift_auto_totals !== undefined) {
+    flags.arena_shift_auto_totals = input.arena_shift_auto_totals === true
   }
   return flags
 }
