@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { formatMoney } from '@/lib/core/format'
 import { InventoryLegacyRedirect } from './legacy-redirect'
@@ -204,7 +205,8 @@ type InventoryView =
 const inventoryViewMeta: Record<InventoryView, { title: string; description: string }> = {
   overview: {
     title: 'Магазин',
-    description: 'Центр управления магазином: склад, витрины точек, заявки и последние товарные операции.',
+    description:
+      'Центральный склад организации и витрины только на тех точках, где вы их включили. Заявки, приёмка и движения товара.',
   },
   catalog: {
     title: 'Каталог магазина',
@@ -1154,17 +1156,28 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
       {success ? <Card className="border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">{success}</Card> : null}
 
       {showOverview ? (
-        <InventoryOverviewCenter
-          itemsCount={data?.items.length || 0}
-          pendingRequests={pendingRequests}
-          recentReceipts={recentReceipts}
-          recentMovements={recentMovements}
-          groupedPointBalances={groupedPointBalances}
-          lowWarehouseBalances={lowWarehouseBalances}
-          pointStockQty={pointStockQty}
-          warehouseStockQty={warehouseStockQty}
-          stocktakesCount={data?.stocktakes.length || 0}
-        />
+        <>
+          {data?.companies?.length ? (
+            <ShowcaseTogglesCard
+              companies={data.companies}
+              locations={data?.locations || []}
+              loadData={loadData}
+              setSuccess={setSuccess}
+              setError={setError}
+            />
+          ) : null}
+          <InventoryOverviewCenter
+            itemsCount={data?.items.length || 0}
+            pendingRequests={pendingRequests}
+            recentReceipts={recentReceipts}
+            recentMovements={recentMovements}
+            groupedPointBalances={groupedPointBalances}
+            lowWarehouseBalances={lowWarehouseBalances}
+            pointStockQty={pointStockQty}
+            warehouseStockQty={warehouseStockQty}
+            stocktakesCount={data?.stocktakes.length || 0}
+          />
+        </>
       ) : null}
 
       <div className={inventoryView === 'overview' ? 'grid gap-6 xl:grid-cols-[1.1fr_0.9fr]' : 'grid gap-6 xl:grid-cols-1'}>
@@ -2177,6 +2190,83 @@ export function InventoryPageContent({ forcedView = 'overview' }: { forcedView?:
         </Card>
       </div>
     </div>
+  )
+}
+
+function ShowcaseTogglesCard({
+  companies,
+  locations,
+  loadData,
+  setSuccess,
+  setError,
+}: {
+  companies: Array<{ id: string; name: string; code: string | null }>
+  locations: InventoryLocation[]
+  loadData: () => Promise<void>
+  setSuccess: (msg: string | null) => void
+  setError: (msg: string | null) => void
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const pointByCompany = useMemo(() => {
+    const m = new Map<string, InventoryLocation>()
+    for (const loc of locations) {
+      if (loc.location_type === 'point_display' && loc.company_id) {
+        m.set(loc.company_id, loc)
+      }
+    }
+    return m
+  }, [locations])
+
+  async function applyShowcase(companyId: string, enabled: boolean) {
+    setBusyId(companyId)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/inventory/showcase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: companyId, enabled }),
+      })
+      const j = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(j?.error || 'Не удалось сохранить')
+      await loadData()
+      setSuccess(enabled ? 'Витрина для точки включена' : 'Витрина для точки отключена')
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка сохранения витрины')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <Card className="border-border/70 p-5">
+      <SectionTitle
+        icon={Store}
+        title="Витрина по точкам"
+        subtitle="Центральный склад один на организацию. Витрину включайте только там, где касса продаёт со склада точки; иначе POS и терминал не будут показывать эту локацию."
+      />
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {companies.map((c) => {
+          const loc = pointByCompany.get(c.id)
+          const on = Boolean(loc?.is_active)
+          return (
+            <div key={c.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/60 px-3 py-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{c.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {on ? 'Витрина активна' : loc ? 'Витрина выключена' : 'Витрина не создана — включите переключатель'}
+                </div>
+              </div>
+              <Switch
+                checked={on}
+                disabled={busyId === c.id}
+                onCheckedChange={(v) => void applyShowcase(c.id, v)}
+              />
+            </div>
+          )
+        })}
+      </div>
+    </Card>
   )
 }
 

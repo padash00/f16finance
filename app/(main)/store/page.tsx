@@ -155,7 +155,7 @@ export default function StoreOverviewPage() {
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Новые заявки" value={metrics.pendingRequests} hint="Ждут решения" />
-          <MetricCard label="Витрины" value={metrics.showcases} hint="Точек с выдачей товара" />
+          <MetricCard label="Витрины" value={metrics.showcases} hint="Точек с активной витриной" />
           <MetricCard label="Низкий остаток" value={metrics.lowStock} hint="Позиции под контролем" />
           <MetricCard label="Последние приёмки" value={metrics.receipts} hint="Документы прихода" />
         </div>

@@ -22,6 +22,8 @@ type ImportRow = {
   category: string | null
   item_type: 'product' | 'service' | 'consumable'
   article: string | null
+  /** Если задано — после импорта выставляется остаток на центральном складе */
+  stock_qty?: number
 }
 
 export async function GET(request: Request) {
@@ -111,8 +113,12 @@ export async function POST(request: Request) {
       const updated_items: Array<ImportRow & { existing_name: string; price_changed: boolean; name_changed: boolean }> = []
       let unchanged_count = 0
       const newCatSet = new Set<string>()
+      let stock_rows = 0
 
       for (const row of rows) {
+        if (typeof row.stock_qty === 'number' && Number.isFinite(row.stock_qty)) {
+          stock_rows++
+        }
         if (row.category && !existingCatNames.has(row.category.toLowerCase())) {
           newCatSet.add(row.category)
         }
@@ -146,6 +152,7 @@ export async function POST(request: Request) {
           updated_items,
           unchanged_count,
           categories_to_create: Array.from(newCatSet),
+          stock_rows,
         },
       })
     }
@@ -286,7 +293,127 @@ export async function POST(request: Request) {
         })
       }
 
-      return json({ ok: true, data: { created, updated } })
+      let stock_updated = 0
+      const orgId = access.activeOrganization?.id || null
+      const rowsWithStock = rows.filter(
+        (row) => typeof row.stock_qty === 'number' && Number.isFinite(row.stock_qty) && row.stock_qty >= 0,
+      )
+      if (rowsWithStock.length > 0 && orgId) {
+        const { data: whList, error: whErr } = await supabase
+          .from('inventory_locations')
+          .select('id')
+          .eq('location_type', 'warehouse')
+          .eq('is_active', true)
+          .eq('organization_id', orgId)
+          .order('name', { ascending: true })
+          .limit(1)
+
+        if (whErr) throw whErr
+        const warehouseId = whList?.[0]?.id as string | undefined
+        if (warehouseId) {
+          const bc = rowsWithStock.map((r) => r.barcode)
+          const { data: idRows, error: idErr } = await supabase
+            .from('inventory_items')
+            .select('id, barcode')
+            .eq('organization_id', orgId)
+            .in('barcode', bc)
+
+          if (idErr) throw idErr
+          const barcodeToId = new Map((idRows || []).map((r: { id: string; barcode: string }) => [r.barcode, r.id]))
+          const upserts: Array<{ location_id: string; item_id: string; quantity: number }> = []
+          for (const row of rowsWithStock) {
+            const itemId = barcodeToId.get(row.barcode)
+            if (!itemId) continue
+            upserts.push({
+              location_id: warehouseId,
+              item_id: itemId,
+              quantity: Math.round((row.stock_qty as number + Number.EPSILON) * 1000) / 1000,
+            })
+          }
+          if (upserts.length > 0) {
+            const { error: balErr } = await supabase.from('inventory_balances').upsert(upserts, {
+              onConflict: 'location_id,item_id',
+            })
+            if (balErr) throw balErr
+            stock_updated = upserts.length
+          }
+        }
+      }
+
+      return json({ ok: true, data: { created, updated, stock_updated } })
+    }
+
+    // -----------------------------------------------------------------------
+    // deactivateAllItems — скрыть все позиции каталога (is_active = false)
+    // -----------------------------------------------------------------------
+    if (body.action === 'deactivateAllItems') {
+      const confirm = String(body.confirm || '').trim()
+      if (confirm !== 'ОТКЛЮЧИТЬ ВСЕ') {
+        return json({ error: 'Введите фразу подтверждения: ОТКЛЮЧИТЬ ВСЕ' }, 400)
+      }
+      const orgId = access.activeOrganization?.id || null
+      if (!orgId) {
+        return json({ error: 'Выберите организацию' }, 400)
+      }
+
+      const { data: updatedRows, error: deactErr } = await supabase
+        .from('inventory_items')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('organization_id', orgId)
+        .select('id')
+
+      if (deactErr) throw deactErr
+
+      return json({ ok: true, data: { count: (updatedRows || []).length } })
+    }
+
+    // -----------------------------------------------------------------------
+    // deleteEmptyBalanceItems — удалить товары без остатков (как одиночное удаление)
+    // -----------------------------------------------------------------------
+    if (body.action === 'deleteEmptyBalanceItems') {
+      const confirm = String(body.confirm || '').trim()
+      if (confirm !== 'УДАЛИТЬ ПУСТЫЕ') {
+        return json({ error: 'Введите фразу подтверждения: УДАЛИТЬ ПУСТЫЕ' }, 400)
+      }
+      const orgId = access.activeOrganization?.id || null
+      if (!orgId) {
+        return json({ error: 'Выберите организацию' }, 400)
+      }
+
+      const { data: orgItems, error: listErr } = await supabase
+        .from('inventory_items')
+        .select('id')
+        .eq('organization_id', orgId)
+
+      if (listErr) throw listErr
+
+      let deleted = 0
+      const failed: string[] = []
+
+      for (const row of orgItems || []) {
+        const itemId = String(row.id)
+        const { data: balances, error: balanceError } = await supabase
+          .from('inventory_balances')
+          .select('quantity')
+          .eq('item_id', itemId)
+
+        if (balanceError) {
+          failed.push(itemId)
+          continue
+        }
+
+        const totalBalance = (balances || []).reduce((sum: number, b: { quantity: number }) => sum + (b.quantity || 0), 0)
+        if (totalBalance > 0) continue
+
+        const { error: deleteError } = await supabase.from('inventory_items').delete().eq('id', itemId)
+        if (deleteError) {
+          failed.push(itemId)
+          continue
+        }
+        deleted++
+      }
+
+      return json({ ok: true, data: { deleted, failed: failed.length } })
     }
 
     // -----------------------------------------------------------------------

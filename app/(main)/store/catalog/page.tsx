@@ -41,10 +41,10 @@ export default function StoreCatalogPage() {
               <Boxes className="h-3.5 w-3.5" />
               Каталог магазина
             </div>
-            <h1 className="mt-4 text-3xl font-semibold text-white">Товары, категории и импорт без лишней каши</h1>
+            <h1 className="mt-4 text-3xl font-semibold text-white">Каталог: центральный склад и витрины на точках</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-              Здесь удобно поддерживать каталог: добавлять новые SKU, обновлять цены, импортировать позиции из Wipon
-              и сразу видеть остатки по базе.
+              Номенклатура для организации, импорт из Excel (как в экспорте из Wipon и аналогов), массовые действия
+              и остатки по базе.
             </p>
           </div>
 

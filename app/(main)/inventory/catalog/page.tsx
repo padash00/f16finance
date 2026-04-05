@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { Package, Pencil, Plus, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -8,6 +8,14 @@ import { Package, Pencil, Plus, Search, Trash2, Upload, Download, Check, X, Chev
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -40,6 +48,8 @@ type ImportRow = {
   category: string | null
   item_type: 'product' | 'service'
   article: string | null
+  /** Колонка «Остаток» в Excel — выставляет остаток на центральном складе */
+  stock_qty?: number
 }
 
 type PreviewData = {
@@ -47,6 +57,7 @@ type PreviewData = {
   updated_items: Array<ImportRow & { existing_name: string; price_changed: boolean; name_changed: boolean }>
   unchanged_count: number
   categories_to_create: string[]
+  stock_rows?: number
 }
 
 type ItemFormData = {
@@ -83,6 +94,24 @@ function parseBarcodeValue(val: unknown): string {
   return String(val).trim()
 }
 
+function normHeaderCell(val: unknown): string {
+  return String(val ?? '')
+    .replace(/\u00a0/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+/** Поиск колонки по точному или альтернативному заголовку */
+function colIndex(headers: string[], ...aliases: string[]): number {
+  const norm = headers.map(normHeaderCell)
+  for (const a of aliases) {
+    const t = normHeaderCell(a)
+    const i = norm.indexOf(t)
+    if (i >= 0) return i
+  }
+  return -1
+}
+
 function parseWiponExcel(file: File): Promise<ImportRow[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -95,21 +124,24 @@ function parseWiponExcel(file: File): Promise<ImportRow[]> {
 
         if (!rows.length) return reject(new Error('Файл пустой'))
 
-        const headers = (rows[0] as unknown[]).map((h) => String(h || '').trim())
-        const idx = (name: string) => headers.findIndex((h) => h === name)
+        const headers = (rows[0] as unknown[]).map((h) => normHeaderCell(h))
 
-        // Wipon columns
-        const iName = idx('Название')
-        const iBarcode = idx('Штрихкод')
-        const iUnit = idx('Единица измерения')
-        const iSalePrice = idx('Цена продажи')
-        const iPurchasePrice = idx('Цена закупки')
-        const iCategory = idx('Категория')
-        const iType = idx('Тип')
-        const iArticle = idx('Артикул')
+        const iName = colIndex(headers, 'Название', 'Наименование')
+        const iBarcode = colIndex(headers, 'Штрихкод', 'Штрих-код', 'Barcode')
+        const iUnit = colIndex(headers, 'Единица измерения', 'Ед. изм.', 'Единица')
+        const iSalePrice = colIndex(headers, 'Цена продажи', 'Продажа')
+        const iPurchasePrice = colIndex(headers, 'Цена закупки', 'Закупка')
+        const iCategory = colIndex(headers, 'Категория')
+        const iStock = colIndex(headers, 'Остаток', 'Количество', 'Остаток на складе')
+        const iType = colIndex(headers, 'Тип')
+        const iArticle = colIndex(headers, 'Артикул')
 
         if (iName === -1 || iBarcode === -1) {
-          return reject(new Error('Не распознан формат файла. Ожидаются колонки: «Название» и «Штрихкод»'))
+          return reject(
+            new Error(
+              'Не распознан формат файла. Нужны колонки «Название» и «Штрихкод» (как в экспорте из Wipon / продаж).',
+            ),
+          )
         }
 
         const result: ImportRow[] = []
@@ -119,16 +151,21 @@ function parseWiponExcel(file: File): Promise<ImportRow[]> {
           const barcode = parseBarcodeValue(row[iBarcode])
           if (!name || !barcode) continue
 
-          result.push({
+          const out: ImportRow = {
             name,
             barcode,
-            unit: iUnit >= 0 ? String(row[iUnit] || 'шт').trim() : 'шт',
-            sale_price: parseRussianNumber(row[iSalePrice]),
-            purchase_price: parseRussianNumber(row[iPurchasePrice]),
+            unit: iUnit >= 0 ? String(row[iUnit] || 'шт').trim() || 'шт' : 'шт',
+            sale_price: iSalePrice >= 0 ? parseRussianNumber(row[iSalePrice]) : 0,
+            purchase_price: iPurchasePrice >= 0 ? parseRussianNumber(row[iPurchasePrice]) : 0,
             category: iCategory >= 0 && row[iCategory] ? String(row[iCategory]).trim() : null,
             item_type: iType >= 0 && String(row[iType] || '') === 'Услуга' ? 'service' : 'product',
             article: iArticle >= 0 && row[iArticle] ? String(row[iArticle]).trim() : null,
-          })
+          }
+          if (iStock >= 0 && row[iStock] !== '' && row[iStock] !== undefined && row[iStock] !== null) {
+            out.stock_qty = parseRussianNumber(row[iStock])
+          }
+
+          result.push(out)
         }
 
         resolve(result)
@@ -273,9 +310,13 @@ export function CatalogPageContent() {
   const [importRows, setImportRows] = useState<ImportRow[]>([])
   const [preview, setPreview] = useState<PreviewData | null>(null)
   const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'previewing' | 'importing' | 'done'>('idle')
-  const [importResult, setImportResult] = useState<{ created: number; updated: number } | null>(null)
+  const [importResult, setImportResult] = useState<{ created: number; updated: number; stock_updated?: number } | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [bulkDialog, setBulkDialog] = useState<null | 'deactivate' | 'deleteEmpty'>(null)
+  const [bulkPhrase, setBulkPhrase] = useState('')
+  const [bulkLoading, setBulkLoading] = useState(false)
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -484,6 +525,38 @@ export function CatalogPageContent() {
     }
   }
 
+  async function runBulkAction() {
+    if (!bulkDialog) return
+    setBulkLoading(true)
+    try {
+      const action = bulkDialog === 'deactivate' ? 'deactivateAllItems' : 'deleteEmptyBalanceItems'
+      const confirm = bulkDialog === 'deactivate' ? 'ОТКЛЮЧИТЬ ВСЕ' : 'УДАЛИТЬ ПУСТЫЕ'
+      if (bulkPhrase.trim() !== confirm) {
+        showToast('Неверная фраза подтверждения')
+        return
+      }
+      const res = await fetch('/api/admin/inventory/catalog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, confirm: bulkPhrase.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      if (bulkDialog === 'deactivate') {
+        showToast(`Скрыто позиций: ${json.data?.count ?? 0}`)
+      } else {
+        showToast(`Удалено: ${json.data?.deleted ?? 0}, не удалось: ${json.data?.failed ?? 0}`)
+      }
+      setBulkDialog(null)
+      setBulkPhrase('')
+      await loadItems()
+    } catch (e: any) {
+      showToast(e.message || 'Ошибка')
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
   function resetImport() {
     setImportFile(null)
     setImportRows([])
@@ -521,6 +594,12 @@ export function CatalogPageContent() {
             <Download className="w-3.5 h-3.5 mr-1.5" />
             Экспорт Excel
           </Button>
+          <Button variant="outline" size="sm" className="text-amber-700 border-amber-500/40" onClick={() => { setBulkDialog('deactivate'); setBulkPhrase('') }}>
+            Скрыть все в каталоге
+          </Button>
+          <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => { setBulkDialog('deleteEmpty'); setBulkPhrase('') }}>
+            Удалить без остатков
+          </Button>
           <Button size="sm" onClick={() => { setShowAdd(true); setEditingId(null) }}>
             <Plus className="w-3.5 h-3.5 mr-1.5" />
             Добавить товар
@@ -540,7 +619,7 @@ export function CatalogPageContent() {
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t === 'catalog' ? `Каталог${filtered.length !== items.length ? ` (${filtered.length})` : ` (${items.length})`}` : 'Импорт из Wipon'}
+            {t === 'catalog' ? `Каталог${filtered.length !== items.length ? ` (${filtered.length})` : ` (${items.length})`}` : 'Импорт Excel'}
           </button>
         ))}
       </div>
@@ -637,8 +716,8 @@ export function CatalogPageContent() {
                   </thead>
                   <tbody className="divide-y divide-border/40">
                     {paginated.map((item) => (
-                      <>
-                        <tr key={item.id} className={`hover:bg-muted/20 transition-colors ${!item.is_active ? 'opacity-50' : ''}`}>
+                      <Fragment key={item.id}>
+                        <tr className={`hover:bg-muted/20 transition-colors ${!item.is_active ? 'opacity-50' : ''}`}>
                           <td className="px-3 py-2.5 font-medium max-w-[220px]">
                             <span className="truncate block">{item.name}</span>
                             {item.item_type === 'consumable' && (
@@ -679,7 +758,7 @@ export function CatalogPageContent() {
                           </td>
                         </tr>
                         {editingId === item.id && (
-                          <tr key={item.id + '-edit'}>
+                          <tr>
                             <td colSpan={8} className="px-4 py-3 bg-muted/30 border-b border-primary/20">
                               <ItemForm
                                 form={editForm}
@@ -692,7 +771,7 @@ export function CatalogPageContent() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -724,9 +803,11 @@ export function CatalogPageContent() {
       {tab === 'import' && (
         <div className="space-y-4 max-w-2xl">
           <Card className="border-border/70 p-5">
-            <h2 className="font-semibold mb-1">Импорт из Wipon</h2>
+            <h2 className="font-semibold mb-1">Импорт из Excel</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Экспортируйте товары из Wipon в формате Excel и загрузите файл сюда. Система сама определит новые и изменившиеся позиции.
+              Поддерживается типичный экспорт из Wipon и похожие файлы. Ожидаемые колонки: «Название», «Штрихкод»,
+              «Единица измерения», «Цена продажи», «Цена закупки», «Категория»; при наличии «Остаток» — после импорта
+              остаток выставляется на центральном складе (нужна выбранная организация в шапке).
             </p>
 
             {/* File drop zone */}
@@ -743,7 +824,7 @@ export function CatalogPageContent() {
               >
                 <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm font-medium">{importFile ? importFile.name : 'Нажмите или перетащите файл'}</p>
-                <p className="text-xs text-muted-foreground mt-1">Поддерживаются .xlsx и .xls (формат экспорта Wipon)</p>
+                <p className="text-xs text-muted-foreground mt-1">Файлы .xlsx и .xls</p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -799,6 +880,12 @@ export function CatalogPageContent() {
                     ))}
                   </div>
                 )}
+
+                {(preview.stock_rows || 0) > 0 ? (
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    В файле указан остаток для {preview.stock_rows} строк — после применения импорта он будет записан на центральный склад.
+                  </p>
+                ) : null}
 
                 {preview.new_items.length > 0 && (
                   <div>
@@ -859,6 +946,9 @@ export function CatalogPageContent() {
                   <p className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1"><Check className="w-4 h-4" /> Импорт выполнен успешно</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     Добавлено: <strong>{importResult.created}</strong> · Обновлено: <strong>{importResult.updated}</strong>
+                    {typeof importResult.stock_updated === 'number' && importResult.stock_updated > 0
+                      ? <> · Остатки на складе: <strong>{importResult.stock_updated}</strong></>
+                      : null}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -872,16 +962,44 @@ export function CatalogPageContent() {
           </Card>
 
           <Card className="border-border/70 p-4 bg-muted/30">
-            <h3 className="text-sm font-medium mb-2">Как экспортировать из Wipon?</h3>
+            <h3 className="text-sm font-medium mb-2">Пример колонок (как в вашем экспорте)</h3>
+            <p className="text-xs text-muted-foreground mb-2">
+              Название · Единица измерения · Цена продажи · Штрихкод · Остаток · Цена закупки · Категория
+            </p>
             <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-              <li>Откройте Wipon → Склад → Товары</li>
-              <li>Нажмите «Экспорт» или «Скачать Excel»</li>
-              <li>Сохраните файл .xlsx</li>
-              <li>Загрузите его сюда</li>
+              <li>Экспортируйте товары в Excel из Wipon или другой программы</li>
+              <li>Сохраните .xlsx и загрузите сюда</li>
             </ol>
           </Card>
         </div>
       )}
+
+      <Dialog open={bulkDialog !== null} onOpenChange={(open) => { if (!open) { setBulkDialog(null); setBulkPhrase('') } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {bulkDialog === 'deactivate' ? 'Скрыть все позиции в каталоге' : 'Удалить товары без остатков'}
+            </DialogTitle>
+            <DialogDescription>
+              {bulkDialog === 'deactivate'
+                ? 'Все товары станут неактивными (не исчезнут из базы). Для POS и отчётов они не будут предлагаться.'
+                : 'Будут удалены только позиции с нулевым остатком на всех локациях. Если у товара есть приёмки, продажи или другая история, удаление может не пройти — такие строки будут пропущены.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label className="text-xs text-muted-foreground">
+              Введите фразу: <span className="font-mono text-foreground">{bulkDialog === 'deactivate' ? 'ОТКЛЮЧИТЬ ВСЕ' : 'УДАЛИТЬ ПУСТЫЕ'}</span>
+            </Label>
+            <Input value={bulkPhrase} onChange={(e) => setBulkPhrase(e.target.value)} placeholder="Точно как указано выше" autoComplete="off" />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setBulkDialog(null); setBulkPhrase('') }}>Отмена</Button>
+            <Button variant="destructive" disabled={bulkLoading} onClick={() => void runBulkAction()}>
+              {bulkLoading ? 'Выполняю...' : 'Подтвердить'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
