@@ -84,6 +84,10 @@ export async function resolvePointOperatorLoginForDevice(params: {
     : (operatorAuth as any).operator || null
   const profile = Array.isArray(operator?.operator_profiles) ? operator.operator_profiles[0] || null : null
 
+  if (!operator || operator.is_active === false) {
+    return { ok: false, error: 'operator-inactive', status: 403 }
+  }
+
   const projectCompanyIds = new Set(device.company_ids)
   const projectAssignments =
     projectCompanyIds.size > 0 ? assignments.filter((a: any) => projectCompanyIds.has(a.company_id)) : assignments

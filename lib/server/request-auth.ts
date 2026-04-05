@@ -217,6 +217,7 @@ export async function requireOperatorAuthRow(request: Request, authId: string) {
     .select('id')
     .eq('id', authId)
     .eq('user_id', user.id)
+    .eq('is_active', true)
     .maybeSingle()
 
   if (error || !data) {
@@ -263,23 +264,30 @@ export async function getRequestOperatorContext(request: Request): Promise<
     .from('operator_auth')
     .select('id, operator_id, username, role')
     .eq('user_id', user.id)
+    .eq('is_active', true)
     .maybeSingle()
 
   if (authError || !operatorAuth?.operator_id) {
     return {
-      response: NextResponse.json({ error: 'forbidden' }, { status: 403 }),
+      response: NextResponse.json({ error: 'operator-auth-disabled' }, { status: 403 }),
     }
   }
 
   const { data: operator, error: operatorError } = await supabase
     .from('operators')
-    .select('id, name, short_name, telegram_chat_id, operator_profiles(*)')
+    .select('id, name, short_name, telegram_chat_id, is_active, operator_profiles(*)')
     .eq('id', operatorAuth.operator_id)
     .maybeSingle()
 
   if (operatorError || !operator) {
     return {
       response: NextResponse.json({ error: 'operator-not-found' }, { status: 404 }),
+    }
+  }
+
+  if (operator.is_active === false) {
+    return {
+      response: NextResponse.json({ error: 'operator-inactive' }, { status: 403 }),
     }
   }
 

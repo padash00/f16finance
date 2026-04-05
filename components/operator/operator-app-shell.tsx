@@ -3,8 +3,10 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ComponentType, ReactNode } from 'react'
+import { useEffect } from 'react'
 import { Briefcase, CalendarDays, ChevronRight, CircleUserRound, Home, MonitorSmartphone, Wallet } from 'lucide-react'
 
+import { supabase } from '@/lib/supabaseClient'
 import { cn } from '@/lib/utils'
 
 type NavItem = {
@@ -118,6 +120,23 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const currentMeta = metaByPath.find((item) => item.match(pathname)) || metaByPath[0]
   const activeItem = navItems.find((item) => isActivePath(pathname, item.href)) || navItems[0]
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const res = await fetch('/api/operator/profile', { cache: 'no-store', credentials: 'same-origin' })
+      const json = (await res.json().catch(() => null)) as { error?: string } | null
+      if (cancelled || res.ok) return
+      const code = json?.error
+      if (code === 'operator-inactive' || code === 'operator-auth-disabled') {
+        await supabase.auth.signOut().catch(() => null)
+        window.location.href = '/login?reason=operator-disabled'
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,165,80,0.16),transparent_26%),linear-gradient(180deg,#07101c_0%,#0b1324_48%,#040814_100%)] text-white">

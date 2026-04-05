@@ -24,6 +24,7 @@ type OperatorAuthMode = 'password' | 'qr'
 const errorMessages: Record<string, string> = {
   'invalid-credentials': 'Неверный логин или пароль.',
   'operator-auth-not-found': 'Оператор не найден.',
+  'operator-inactive': 'Учётная запись оператора отключена. Обратитесь к руководителю.',
   'operator-not-assigned-to-device-point': 'Оператор не прикреплён к этой точке.',
   'operator-not-assigned-to-any-point': 'Оператор не прикреплён ни к одной точке.',
   'super-admin-only': 'Требуется вход супер-администратора.',

@@ -125,10 +125,15 @@ export async function proxy(request: NextRequest) {
     `,
     )
     .eq('user_id', user.id)
+    .eq('is_active', true)
     .maybeSingle()
 
+  const operatorJoin = operatorAuth?.operators as { id?: string; name?: string; is_active?: boolean } | { id?: string; name?: string; is_active?: boolean }[] | null | undefined
+  const operatorRow = Array.isArray(operatorJoin) ? operatorJoin[0] : operatorJoin
+  const operatorRecordActive = operatorRow?.is_active !== false
+
   const isStaff = isSuperAdmin || !!staffMember
-  const isOperator = !!operatorAuth
+  const isOperator = !!(operatorAuth && operatorRecordActive)
 
   let rolePermissionOverrides: Array<{ path: string; enabled: boolean }> = []
 

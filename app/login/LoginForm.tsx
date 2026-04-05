@@ -185,15 +185,27 @@ export default function LoginForm({
 
       const { data: authByUser, error: authByUserError } = await supabase
         .from('operator_auth')
-        .select('id, username')
+        .select('id, username, operator_id')
         .eq('user_id', operatorUserId)
         .eq('is_active', true)
         .maybeSingle()
 
       if (authByUserError) throw authByUserError
-      if (!authByUser?.id) {
+      if (!authByUser?.id || !authByUser.operator_id) {
         await supabase.auth.signOut().catch(() => null)
         throw new Error('Неверный логин или пароль')
+      }
+
+      const { data: operatorRow, error: operatorActiveError } = await supabase
+        .from('operators')
+        .select('is_active')
+        .eq('id', authByUser.operator_id)
+        .maybeSingle()
+
+      if (operatorActiveError) throw operatorActiveError
+      if (!operatorRow || operatorRow.is_active === false) {
+        await supabase.auth.signOut().catch(() => null)
+        throw new Error('Учётная запись оператора отключена. Обратитесь к руководителю.')
       }
 
       await fetch('/api/auth/login-attempt', {

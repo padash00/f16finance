@@ -35,12 +35,16 @@ async function requirePointOperator(request: Request) {
 
   const { data: operator, error: operatorError } = await supabase
     .from('operators')
-    .select('id, name, short_name, telegram_chat_id, operator_profiles(*)')
+    .select('id, name, short_name, telegram_chat_id, is_active, operator_profiles(*)')
     .eq('id', operatorId)
     .maybeSingle()
 
   if (operatorError || !operator) {
     return { response: NextResponse.json({ error: 'operator-not-found' }, { status: 404 }) }
+  }
+
+  if ((operator as { is_active?: boolean }).is_active === false) {
+    return { response: NextResponse.json({ error: 'operator-inactive' }, { status: 403 }) }
   }
 
   return {
