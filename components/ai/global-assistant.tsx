@@ -26,10 +26,16 @@ const HIDDEN_PATH_PREFIXES = [
   '/unauthorized',
 ]
 
+function isOperatorCabinetPath(pathname: string) {
+  return pathname === '/operator' || pathname.startsWith('/operator/')
+}
+
 export function GlobalAssistant() {
   const pathname = usePathname()
 
-  const shouldHide = HIDDEN_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix + '/'))
+  const shouldHide =
+    isOperatorCabinetPath(pathname || '') ||
+    HIDDEN_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix + '/'))
 
   const snapshot = useMemo<PageSnapshot>(
     () => ({

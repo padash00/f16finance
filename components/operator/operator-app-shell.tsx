@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ComponentType, ReactNode } from 'react'
-import { Briefcase, CalendarDays, ChevronRight, CircleUserRound, Home, Wallet } from 'lucide-react'
+import { Briefcase, CalendarDays, ChevronRight, CircleUserRound, Home, MonitorSmartphone, Wallet } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -51,6 +51,13 @@ const navItems: NavItem[] = [
     icon: CircleUserRound,
     description: 'Личные данные и настройки',
   },
+  {
+    href: '/operator/terminal-login',
+    label: 'Терминал',
+    shortLabel: 'Терминал',
+    icon: MonitorSmartphone,
+    description: 'Вход на Orda Point по QR с экрана кассы',
+  },
 ]
 
 const metaByPath: Array<{
@@ -82,6 +89,16 @@ const metaByPath: Array<{
     match: (pathname) => pathname.startsWith('/operator/profile'),
     title: 'Мой профиль',
     subtitle: 'Контакты, точки, Telegram и быстрый доступ к рабочим настройкам.',
+  },
+  {
+    match: (pathname) => pathname.startsWith('/operator/terminal-login'),
+    title: 'Вход на терминале',
+    subtitle: 'Подтвердите вход в Orda Point на кассе: отсканируйте QR или введите код из ссылки.',
+  },
+  {
+    match: (pathname) => pathname.startsWith('/operator/point-qr-confirm'),
+    title: 'Подтверждение входа',
+    subtitle: 'Вы подтверждаете вход в программу на рабочем компьютере.',
   },
   {
     match: (pathname) => pathname.startsWith('/operator/settings'),
@@ -147,7 +164,7 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-3 pt-2">
-        <div className="mx-auto flex max-w-xl items-center gap-1 rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-2 shadow-[0_22px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl">
+        <div className="mx-auto flex max-w-xl items-stretch gap-1 overflow-x-auto rounded-[1.75rem] border border-white/10 bg-slate-950/90 p-2 shadow-[0_22px_70px_rgba(0,0,0,0.42)] backdrop-blur-2xl [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {navItems.map((item) => {
             const active = isActivePath(pathname, item.href)
             const Icon = item.icon
@@ -156,7 +173,7 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'group flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[10px] font-medium leading-none transition sm:flex-row sm:gap-2 sm:px-3 sm:py-3 sm:text-xs',
+                  'group flex min-w-[3.65rem] shrink-0 flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 text-[10px] font-medium leading-none transition sm:min-w-[4.25rem] sm:flex-row sm:gap-2 sm:px-2.5 sm:py-3 sm:text-xs',
                   active
                     ? 'bg-[linear-gradient(135deg,rgba(255,179,107,0.96),rgba(255,122,89,0.94))] text-slate-950 shadow-[0_16px_34px_rgba(255,140,88,0.28)]'
                     : 'text-slate-400 hover:bg-white/[0.05] hover:text-white',
@@ -164,7 +181,7 @@ export function OperatorAppShell({ children }: { children: ReactNode }) {
                 aria-label={item.description}
               >
                 <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-slate-950' : 'text-slate-400 group-hover:text-white')} />
-                <span className="truncate">{item.shortLabel}</span>
+                <span className="max-w-[4.5rem] truncate text-center">{item.shortLabel}</span>
               </Link>
             )
           })}
