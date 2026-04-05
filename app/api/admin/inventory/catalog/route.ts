@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { resolveEffectiveOrganizationId } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { syncInventoryItemToPointProducts } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -86,9 +87,18 @@ export async function POST(request: Request) {
       const rows: ImportRow[] = body.rows || []
       if (!Array.isArray(rows)) return json({ error: 'rows-required' }, 400)
 
-      const orgId = access.activeOrganization?.id || null
+      const orgId = await resolveEffectiveOrganizationId({
+        supabase,
+        activeOrganizationId: access.activeOrganization?.id || null,
+      })
       if (!orgId) {
-        return json({ error: 'Выберите организацию в шапке — импорт привязан к организации' }, 400)
+        return json(
+          {
+            error:
+              'Укажите организацию в шапке или оставьте в системе одну организацию (режим без SaaS-переключателя).',
+          },
+          400,
+        )
       }
 
       // Fetch existing items by barcode (в рамках организации)
@@ -171,9 +181,18 @@ export async function POST(request: Request) {
       const rows: ImportRow[] = body.rows || []
       if (!Array.isArray(rows)) return json({ error: 'rows-required' }, 400)
 
-      const orgId = access.activeOrganization?.id || null
+      const orgId = await resolveEffectiveOrganizationId({
+        supabase,
+        activeOrganizationId: access.activeOrganization?.id || null,
+      })
       if (!orgId) {
-        return json({ error: 'Выберите организацию в шапке — импорт привязан к организации' }, 400)
+        return json(
+          {
+            error:
+              'Укажите организацию в шапке или оставьте в системе одну организацию (режим без SaaS-переключателя).',
+          },
+          400,
+        )
       }
 
       // Ensure all categories exist (с organization_id)
@@ -366,9 +385,12 @@ export async function POST(request: Request) {
       if (confirm !== 'ОТКЛЮЧИТЬ ВСЕ') {
         return json({ error: 'Введите фразу подтверждения: ОТКЛЮЧИТЬ ВСЕ' }, 400)
       }
-      const orgId = access.activeOrganization?.id || null
+      const orgId = await resolveEffectiveOrganizationId({
+        supabase,
+        activeOrganizationId: access.activeOrganization?.id || null,
+      })
       if (!orgId) {
-        return json({ error: 'Выберите организацию' }, 400)
+        return json({ error: 'Укажите организацию в шапке или одну организацию в БД' }, 400)
       }
 
       const { data: updatedRows, error: deactErr } = await supabase
@@ -390,9 +412,12 @@ export async function POST(request: Request) {
       if (confirm !== 'УДАЛИТЬ ПУСТЫЕ') {
         return json({ error: 'Введите фразу подтверждения: УДАЛИТЬ ПУСТЫЕ' }, 400)
       }
-      const orgId = access.activeOrganization?.id || null
+      const orgId = await resolveEffectiveOrganizationId({
+        supabase,
+        activeOrganizationId: access.activeOrganization?.id || null,
+      })
       if (!orgId) {
-        return json({ error: 'Выберите организацию' }, 400)
+        return json({ error: 'Укажите организацию в шапке или одну организацию в БД' }, 400)
       }
 
       const { data: orgItems, error: listErr } = await supabase

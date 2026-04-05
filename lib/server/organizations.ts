@@ -1,6 +1,6 @@
 import 'server-only'
 
-import type { User } from '@supabase/supabase-js'
+import type { SupabaseClient, User } from '@supabase/supabase-js'
 
 import type { SubscriptionFeature } from '@/lib/core/access'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -43,7 +43,7 @@ export type OrganizationUsage = Record<OrganizationLimitKey, number>
 
 // Temporary rollback: restore the old F16-style single-tenant behavior
 // while the SaaS layer is being redesigned safely.
-const LEGACY_SINGLE_TENANT_MODE = true
+export const LEGACY_SINGLE_TENANT_MODE = true
 
 const ZERO_ORGANIZATION_USAGE: OrganizationUsage = {
   companies: 0,
@@ -266,6 +266,29 @@ export function selectActiveOrganization(params: {
   }
 
   return organizations.find((item) => item.isDefault) || organizations[0] || null
+}
+
+/**
+ * Когда SaaS-выбор организации в UI отключён / cookie пустой, но в БД одна организация (классический single-tenant).
+ * Если организаций несколько и activeOrganizationId не задан — возвращает null (нужен явный выбор).
+ */
+export async function resolveEffectiveOrganizationId(params: {
+  supabase: SupabaseClient<any, 'public', any>
+  activeOrganizationId: string | null
+}): Promise<string | null> {
+  if (params.activeOrganizationId) return params.activeOrganizationId
+
+  if (!LEGACY_SINGLE_TENANT_MODE) return null
+
+  const { data: orgs, error } = await params.supabase
+    .from('organizations')
+    .select('id')
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  const list = orgs || []
+  if (list.length === 1) return String((list[0] as { id: string }).id)
+  return null
 }
 
 export async function resolveActiveOrganizationSubscription(params: {
