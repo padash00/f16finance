@@ -18,6 +18,22 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return out
 }
 
+/** Остаток из импорта всегда на центральный склад: main-warehouse → имя с «централ» → первый по алфавиту (ru). */
+function pickCentralWarehouseId(
+  rows: Array<{ id: string; name?: string | null; code?: string | null }> | null | undefined,
+): string | undefined {
+  const list = rows || []
+  if (!list.length) return undefined
+  const byCode = list.find((r) => String(r.code || '').toLowerCase() === 'main-warehouse')
+  if (byCode?.id) return String(byCode.id)
+  const byName = list.find((r) => /централ/i.test(String(r.name || '')))
+  if (byName?.id) return String(byName.id)
+  const sorted = [...list].sort((a, b) =>
+    String(a.name || '').localeCompare(String(b.name || ''), 'ru', { sensitivity: 'base' }),
+  )
+  return sorted[0]?.id ? String(sorted[0].id) : undefined
+}
+
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
@@ -364,49 +380,55 @@ export async function POST(request: Request) {
       if (rowsWithStock.length > 0 && orgId) {
         const { data: whList, error: whErr } = await supabase
           .from('inventory_locations')
-          .select('id')
+          .select('id, name, code')
           .eq('location_type', 'warehouse')
           .eq('is_active', true)
           .eq('organization_id', orgId)
-          .order('name', { ascending: true })
-          .limit(1)
 
         if (whErr) throw whErr
-        const warehouseId = whList?.[0]?.id as string | undefined
-        if (warehouseId) {
-          const bc = rowsWithStock.map((r) => r.barcode)
-          const barcodeToId = new Map<string, string>()
-          for (const bcChunk of chunkArray(bc, 200)) {
-            if (!bcChunk.length) continue
-            const { data: idRows, error: idErr } = await supabase
-              .from('inventory_items')
-              .select('id, barcode')
-              .eq('organization_id', orgId)
-              .in('barcode', bcChunk)
+        const warehouseId = pickCentralWarehouseId(whList)
+        if (!warehouseId) {
+          return json(
+            {
+              error:
+                'В организации нет активного центрального склада (warehouse) — добавьте склад или включите существующий, чтобы записать остатки из Excel.',
+            },
+            400,
+          )
+        }
 
-            if (idErr) throw idErr
-            for (const r of idRows || []) {
-              barcodeToId.set((r as { barcode: string }).barcode, (r as { id: string }).id)
-            }
+        const bc = rowsWithStock.map((r) => r.barcode)
+        const barcodeToId = new Map<string, string>()
+        for (const bcChunk of chunkArray(bc, 200)) {
+          if (!bcChunk.length) continue
+          const { data: idRows, error: idErr } = await supabase
+            .from('inventory_items')
+            .select('id, barcode')
+            .eq('organization_id', orgId)
+            .in('barcode', bcChunk)
+
+          if (idErr) throw idErr
+          for (const r of idRows || []) {
+            barcodeToId.set((r as { barcode: string }).barcode, (r as { id: string }).id)
           }
-          const upserts: Array<{ location_id: string; item_id: string; quantity: number }> = []
-          for (const row of rowsWithStock) {
-            const itemId = barcodeToId.get(row.barcode)
-            if (!itemId) continue
-            upserts.push({
-              location_id: warehouseId,
-              item_id: itemId,
-              quantity: Math.round((row.stock_qty as number + Number.EPSILON) * 1000) / 1000,
+        }
+        const upserts: Array<{ location_id: string; item_id: string; quantity: number }> = []
+        for (const row of rowsWithStock) {
+          const itemId = barcodeToId.get(row.barcode)
+          if (!itemId) continue
+          upserts.push({
+            location_id: warehouseId,
+            item_id: itemId,
+            quantity: Math.round((row.stock_qty as number + Number.EPSILON) * 1000) / 1000,
+          })
+        }
+        if (upserts.length > 0) {
+          for (const slice of chunkArray(upserts, 500)) {
+            const { error: balErr } = await supabase.from('inventory_balances').upsert(slice, {
+              onConflict: 'location_id,item_id',
             })
-          }
-          if (upserts.length > 0) {
-            for (const slice of chunkArray(upserts, 500)) {
-              const { error: balErr } = await supabase.from('inventory_balances').upsert(slice, {
-                onConflict: 'location_id,item_id',
-              })
-              if (balErr) throw balErr
-              stock_updated += slice.length
-            }
+            if (balErr) throw balErr
+            stock_updated += slice.length
           }
         }
       }

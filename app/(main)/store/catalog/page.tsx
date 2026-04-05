@@ -43,8 +43,8 @@ export default function StoreCatalogPage() {
             </div>
             <h1 className="mt-4 text-3xl font-semibold text-white">Каталог: центральный склад и витрины на точках</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-              Номенклатура для организации, импорт из Excel (как в экспорте из Wipon и аналогов), массовые действия
-              и остатки по базе.
+              Импорт из Excel: каталог и цены; колонка «Остаток» всегда идёт на центральный склад, витрины не трогаем.
+              Массовые действия и остатки по базе в каталоге.
             </p>
           </div>
 
