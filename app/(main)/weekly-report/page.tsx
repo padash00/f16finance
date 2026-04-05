@@ -13,6 +13,7 @@ import ExcelJS from 'exceljs'
 import { buildDashboardSheet, buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useCompanies } from '@/hooks/use-companies'
@@ -1675,78 +1676,73 @@ function WeeklyReportContent() {
             </div>
           )}
 
-          {/* Header */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
-            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-violet-500/25">
-                  <CalendarDays className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                    Недельный баланс
-                  </h1>
-                  <p className="text-gray-400 mt-1 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    {formatDateRange(startDate, endDate)}
-                    {comparisonMode && <span className="text-violet-400">(сравнение с прошлой неделей)</span>}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className={`rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 ${comparisonMode ? 'bg-violet-500/20 text-violet-400 border-violet-500/50' : ''}`}
+          <AdminPageHeader
+            title="Недельный баланс"
+            description="Доходы, расходы и сальдо за выбранную неделю"
+            accent="violet"
+            icon={<CalendarDays className="h-5 w-5" aria-hidden />}
+            actions={
+              <>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={`rounded-xl border-white/10 bg-white/5 hover:bg-white/10 ${comparisonMode ? 'border-violet-500/50 bg-violet-500/20 text-violet-300' : ''}`}
                   onClick={() => setComparisonMode(!comparisonMode)}
                   title="Сравнение с прошлой неделей"
+                  aria-label="Сравнение с прошлой неделей"
                 >
-                  <ArrowUpDown className="w-4 h-4" />
+                  <ArrowUpDown className="h-4 w-4" />
                 </Button>
 
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className={`rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={`rounded-xl border-white/10 bg-white/5 hover:bg-white/10 ${refreshing ? '[&_svg]:animate-spin' : ''}`}
                   onClick={handleRefresh}
                   title="Обновить"
+                  aria-label="Обновить"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className="h-4 w-4" />
                 </Button>
 
                 <div className="relative group">
-                  <Button 
-                    variant="outline" 
-                    className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
+                  <Button variant="outline" className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10">
+                    <Download className="mr-2 h-4 w-4" />
                     Экспорт
-                    <ChevronDown className="w-4 h-4 ml-2" />
+                    <ChevronDown className="ml-2 h-4 w-4" />
                   </Button>
-                  <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                    <button onClick={handleDownloadExcel} className="w-full px-4 py-2 text-left text-sm hover:bg-white/5 flex items-center gap-2">
-                      <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                  <div className="invisible absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-white/10 bg-gray-900 py-2 opacity-0 shadow-xl transition-all group-hover:visible group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={handleDownloadExcel}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-white/5"
+                    >
+                      <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
                       Скачать Excel
                     </button>
                   </div>
                 </div>
 
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
                   onClick={handleShare}
                   title="Поделиться"
+                  aria-label="Поделиться"
                 >
-                  <Share2 className="w-4 h-4" />
+                  <Share2 className="h-4 w-4" />
                 </Button>
+              </>
+            }
+            toolbar={
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
+                <span>{formatDateRange(startDate, endDate)}</span>
+                {comparisonMode ? <span className="text-violet-300">· сравнение с прошлой неделей</span> : null}
               </div>
-            </div>
-          </div>
+            }
+          />
 
           {/* Week Navigation */}
           <Card className="p-4 border-white/5 bg-gray-900/40 backdrop-blur-xl">

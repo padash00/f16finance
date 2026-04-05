@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Users, Plus, Search, Star, Edit2, Trash2, RefreshCw, Download, Clock } from 'lucide-react'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
 
+import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -281,27 +282,28 @@ export default function CustomersPage() {
 
   return (
     <div className="app-page">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6 text-emerald-400" />
-            Клиенты
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">База клиентов и программа лояльности</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={exportExcel} disabled={customers.length === 0}>
-            <Download className="mr-2 h-4 w-4" />
-            Экспорт Excel
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-          <Button size="sm" onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowAdd(true) }}>
-            <Plus className="mr-2 h-4 w-4" />
-            Добавить клиента
-          </Button>
-        </div>
+      <div className="mb-6">
+        <AdminPageHeader
+          title="Клиенты"
+          description="База клиентов и программа лояльности"
+          accent="emerald"
+          icon={<Users className="h-5 w-5" aria-hidden />}
+          actions={
+            <>
+              <Button variant="outline" size="sm" onClick={() => void exportExcel()} disabled={customers.length === 0}>
+                <Download className="mr-2 h-4 w-4" />
+                Экспорт Excel
+              </Button>
+              <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => void load()} disabled={loading} aria-label="Обновить">
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button size="sm" onClick={() => { setForm(EMPTY_FORM); setFormError(null); setShowAdd(true) }}>
+                <Plus className="mr-2 h-4 w-4" />
+                Добавить клиента
+              </Button>
+            </>
+          }
+        />
       </div>
 
       {/* Stats */}
@@ -358,7 +360,7 @@ export default function CustomersPage() {
       )}
 
       {/* Table */}
-      <Card>
+      <Card className="overflow-hidden p-0">
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-muted-foreground">
@@ -370,9 +372,9 @@ export default function CustomersPage() {
               Клиентов не найдено
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <AdminTableViewport maxHeight="min(70vh, 40rem)" className="rounded-none border-0 bg-transparent">
               <table className="w-full text-sm">
-                <thead>
+                <thead className={adminTableStickyTheadClass}>
                   <tr className="border-b border-white/10">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Клиент</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Телефон</th>
@@ -455,7 +457,7 @@ export default function CustomersPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </AdminTableViewport>
           )}
         </CardContent>
       </Card>

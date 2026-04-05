@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
@@ -893,70 +894,69 @@ export default function ShiftsPage() {
   return (
     <>
         <div className="app-page max-w-7xl">
-          <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-purple-500/15 p-2 text-purple-300">
-                <Users className="h-5 w-5" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-white">График смен</h1>
-                <p className="text-xs text-muted-foreground">Расписание операторов, конфликты, быстрые действия</p>
-              </div>
-            </div>
+          <div className="mb-6">
+            <AdminPageHeader
+              title="График смен"
+              description="Расписание операторов, конфликты, быстрые действия"
+              accent="violet"
+              icon={<Users className="h-5 w-5" aria-hidden />}
+              actions={
+                <>
+                  <Card className="!flex-row !items-center !gap-0 shrink-0 self-start border-border bg-card !px-1 !py-1 neon-glow">
+                    <Button variant="ghost" size="icon" onClick={goToPrevWeek} aria-label="Предыдущая неделя">
+                      <ChevronLeft className="h-5 w-5" />
+                    </Button>
 
-            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-              <Card className="!flex-row !items-center !gap-0 self-start shrink-0 border-border bg-card !px-1 !py-1 neon-glow">
-                <Button variant="ghost" size="icon" onClick={goToPrevWeek}>
-                  <ChevronLeft className="h-5 w-5" />
-                </Button>
+                    <div className="min-w-[160px] px-4 text-center">
+                      <div className="flex items-center justify-center gap-2 text-sm font-bold">
+                        <CalendarDays className="h-4 w-4 text-accent" aria-hidden />
+                        {weekRange}
+                      </div>
+                    </div>
 
-                <div className="min-w-[160px] px-4 text-center">
-                  <div className="flex items-center justify-center gap-2 text-sm font-bold">
-                    <CalendarDays className="h-4 w-4 text-accent" />
-                    {weekRange}
-                  </div>
-                </div>
+                    <Button variant="ghost" size="icon" onClick={goToNextWeek} aria-label="Следующая неделя">
+                      <ChevronRight className="h-5 w-5" />
+                    </Button>
 
-                <Button variant="ghost" size="icon" onClick={goToNextWeek}>
-                  <ChevronRight className="h-5 w-5" />
-                </Button>
+                    <div className="mx-1 h-6 w-px bg-border" />
 
-                <div className="mx-1 h-6 w-px bg-border" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setLoading(true)
+                        void fetchScheduleData()
+                      }}
+                      title="Обновить данные"
+                      aria-label="Обновить данные"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                    </Button>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setLoading(true)
-                    fetchScheduleData()
-                  }}
-                  title="Обновить данные"
-                >
-                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                </Button>
+                    <Button variant="secondary" size="sm" className="ml-1 text-xs" onClick={goToToday}>
+                      Сегодня
+                    </Button>
+                  </Card>
 
-                <Button variant="secondary" size="sm" className="ml-1 text-xs" onClick={goToToday}>
-                  Сегодня
-                </Button>
-              </Card>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={handleCopyPreviousWeek}
+                    disabled={copyingWeek || loading}
+                  >
+                    {copyingWeek ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                    Заполнить по прошлой неделе
+                  </Button>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={handleCopyPreviousWeek}
-                disabled={copyingWeek || loading}
-              >
-                {copyingWeek ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                Заполнить по прошлой неделе
-              </Button>
-
-              <Link href="/shifts/report">
-                <Button variant="outline" size="sm" className="gap-2">
-                  <BarChart2 className="h-4 w-4" /> Отчёт по смене
-                </Button>
-              </Link>
-            </div>
+                  <Link href="/shifts/report">
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <BarChart2 className="h-4 w-4" /> Отчёт по смене
+                    </Button>
+                  </Link>
+                </>
+              }
+            />
           </div>
 
           <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -1528,11 +1528,14 @@ function ScheduleGrid({
             <span className="font-bold text-foreground">{company.name}</span>
           </div>
 
-          <div className="overflow-x-auto">
+          <AdminTableViewport
+            maxHeight="min(56vh, 32rem)"
+            className="rounded-none border-0 border-t border-border bg-transparent"
+          >
             <table className="w-full border-collapse text-sm">
-              <thead>
+              <thead className={`${adminTableStickyTheadClass} !normal-case [&_th]:align-middle`}>
                 <tr>
-                  <th className="w-24 border-b border-border bg-muted/10 p-3 text-left font-medium text-muted-foreground">
+                  <th className="w-24 border-b border-border bg-muted/10 p-3 text-left text-sm font-medium normal-case text-muted-foreground">
                     Смена
                   </th>
                   {weekDays.map((day) => {
@@ -1605,7 +1608,7 @@ function ScheduleGrid({
                 )}
               </tbody>
             </table>
-          </div>
+          </AdminTableViewport>
         </Card>
       ))}
     </div>

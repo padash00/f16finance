@@ -2,6 +2,7 @@
 
 import { useEffect, useState, FormEvent, useMemo, useCallback } from 'react'
 import Link from 'next/link'
+import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
@@ -422,39 +423,23 @@ export default function OperatorsPage() {
   return (
     <>
         <div className="app-page max-w-7xl space-y-6">
-          {/* Header */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
-            <div className="relative z-10 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-violet-500/25">
-                  <Users2 className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                    Операторы
-                  </h1>
-                  <p className="text-gray-400 mt-1">
-                    Управление операторами и их профилями
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={load}
-                  variant="outline"
-                  size="icon"
-                  className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10"
-                  title="Обновить"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
+          <AdminPageHeader
+            title="Операторы"
+            description="Управление операторами и их профилями"
+            accent="violet"
+            icon={<Users2 className="h-5 w-5" aria-hidden />}
+            actions={
+              <Button
+                onClick={() => void load()}
+                variant="outline"
+                size="icon"
+                className="rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
+                aria-label="Обновить"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            }
+          />
 
           {/* Уведомления */}
           {error && (
@@ -643,11 +628,14 @@ export default function OperatorsPage() {
           </div>
 
           {/* Таблица операторов */}
-          <Card className="overflow-hidden bg-gray-900/40 backdrop-blur-xl border-white/5">
-            <div className="overflow-x-auto">
+          <Card className="overflow-hidden bg-gray-900/40 backdrop-blur-xl border-white/5 p-0">
+            <AdminTableViewport
+              maxHeight="min(70vh, 40rem)"
+              className="rounded-none border-0 border-b border-white/10 bg-transparent"
+            >
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-white/5 bg-white/5">
+                <thead className={adminTableStickyTheadClass}>
+                  <tr className="border-b border-white/5">
                     <th className="py-3 px-4 w-8">
                       {canManageOperators ? (
                         <input
@@ -864,7 +852,7 @@ export default function OperatorsPage() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </AdminTableViewport>
 
             {/* Footer с итогами */}
             <div className="border-t border-white/5 bg-white/5 px-4 py-3">

@@ -7,6 +7,7 @@ import {
   Tag, Wallet, CreditCard, Settings, ChevronDown, ChevronUp,
   AlertTriangle, CheckCircle, LogIn, Trash2, Pencil, Plus, FileText,
 } from 'lucide-react'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -499,25 +500,24 @@ export default function LogsPage() {
 
   return (
     <div className="app-page space-y-6">
-      {/* Header */}
-      <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.16),transparent_34%),linear-gradient(135deg,rgba(9,15,31,0.98),rgba(6,10,22,0.96))] p-6 text-white sm:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="mb-4 inline-flex rounded-2xl bg-sky-500/12 p-4">
-              <ShieldCheck className="h-7 w-7 text-sky-300" />
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-white">Журнал действий</h1>
-            <p className="mt-2 text-sm text-slate-400">Кто, что и когда сделал в системе — на понятном языке</p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Button variant="outline" onClick={exportLogs}><Download className="mr-2 h-4 w-4" />Экспорт CSV</Button>
-            <Button onClick={() => loadLogs(true)} disabled={refreshing}>
+      <AdminPageHeader
+        title="Журнал действий"
+        description="Кто, что и когда сделал в системе — на понятном языке"
+        accent="blue"
+        icon={<ShieldCheck className="h-5 w-5" aria-hidden />}
+        actions={
+          <>
+            <Button variant="outline" onClick={exportLogs} className="border-white/10 bg-white/5 hover:bg-white/10">
+              <Download className="mr-2 h-4 w-4" />
+              Экспорт CSV
+            </Button>
+            <Button onClick={() => void loadLogs(true)} disabled={refreshing}>
               {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               Обновить
             </Button>
-          </div>
-        </div>
-      </Card>
+          </>
+        }
+      />
 
       {/* Stats */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-5">

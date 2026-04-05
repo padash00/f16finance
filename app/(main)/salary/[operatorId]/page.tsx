@@ -2,11 +2,9 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { useParams, useSearchParams } from 'next/navigation'
 import {
   AlertTriangle,
-  ArrowLeft,
   Building2,
   CheckCircle2,
   CreditCard,
@@ -24,6 +22,7 @@ import {
   Wallet,
 } from 'lucide-react'
 
+import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -221,45 +220,49 @@ export default function OperatorSalaryDetailPage() {
     <>
         <div className="mx-auto max-w-[1400px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6 xl:px-8">
 
-          {/* Header */}
-          <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_35%),linear-gradient(180deg,_rgba(15,23,42,0.96),_rgba(2,6,23,0.96))] p-5 md:p-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex items-center gap-4">
-                <Link href="/salary" className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-300 hover:bg-white/10">
-                  <ArrowLeft className="h-5 w-5" />
-                </Link>
-                {data?.operator.photo_url ? (
-                  <div className="h-12 w-12 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500">
-                    <Image src={data.operator.photo_url} alt={title} width={48} height={48} className="h-full w-full object-cover" />
-                  </div>
-                ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
-                    <UserCircle2 className="h-7 w-7" />
-                  </div>
-                )}
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-semibold text-white">{title}</h1>
-                    {data && !data.operator.is_active && <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-400">неактивен</span>}
-                  </div>
-                  {data?.operator.position && <p className="mt-0.5 text-sm text-slate-400">{data.operator.position}</p>}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>Прошлая неделя</Button>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(currentWeek)}>Текущая</Button>
-                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, 7))}>Следующая</Button>
+          <AdminPageHeader
+            backHref="/salary"
+            title={title}
+            description={data?.operator.position || undefined}
+            accent="emerald"
+            icon={
+              data?.operator.photo_url ? (
+                <span className="relative -m-1 block h-9 w-9 overflow-hidden rounded-lg">
+                  <Image src={data.operator.photo_url} alt={title} width={36} height={36} className="h-full w-full object-cover" />
+                </span>
+              ) : (
+                <UserCircle2 className="h-6 w-6" aria-hidden />
+              )
+            }
+            actions={
+              <>
+                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, -7))}>
+                  Прошлая неделя
+                </Button>
+                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(currentWeek)}>
+                  Текущая
+                </Button>
+                <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => setWeekStart(addDaysISO(weekStart, 7))}>
+                  Следующая
+                </Button>
                 <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void load()}>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Обновить
                 </Button>
+              </>
+            }
+            toolbar={
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
+                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                  Неделя: <span className="font-semibold text-white">{formatRuDate(weekStart)} — {formatRuDate(weekEnd)}</span>
+                </div>
+                {st ? <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${st.className}`}>{st.label}</span> : null}
+                {data && !data.operator.is_active ? (
+                  <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[10px] font-medium text-red-400">неактивен</span>
+                ) : null}
               </div>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-300">
-              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Неделя: <span className="font-semibold text-white">{formatRuDate(weekStart)} — {formatRuDate(weekEnd)}</span></div>
-              {st && <span className={`rounded-full border px-3 py-1.5 text-xs font-medium ${st.className}`}>{st.label}</span>}
-            </div>
-          </Card>
+            }
+          />
 
           {error ? <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</Card> : null}
 
@@ -315,9 +318,9 @@ export default function OperatorSalaryDetailPage() {
                   <div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">
                     <Building2 className="h-4 w-4 text-emerald-300" />Разбивка по точкам
                   </div>
-                  <div className="overflow-x-auto">
+                  <AdminTableViewport maxHeight="min(45vh, 22rem)" className="rounded-xl border border-white/10 bg-transparent">
                     <table className="min-w-full text-xs">
-                      <thead className="text-slate-500">
+                      <thead className={adminTableStickyTheadClass}>
                         <tr>
                           <th className="pb-3 text-left font-medium">Точка</th>
                           <th className="pb-3 text-right font-medium">Начислено</th>
@@ -345,7 +348,7 @@ export default function OperatorSalaryDetailPage() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </AdminTableViewport>
                 </Card>
               )}
 
@@ -442,13 +445,13 @@ export default function OperatorSalaryDetailPage() {
               </Card>
 
               {/* Shifts table */}
-              <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
+              <Card className="overflow-hidden border-white/10 bg-white/[0.04] p-0">
                 <div className="border-b border-white/10 px-5 py-4 text-sm font-medium text-white">
                   Смены за неделю <span className="ml-2 rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-400">{shifts.length}</span>
                 </div>
-                <div className="overflow-x-auto">
+                <AdminTableViewport maxHeight="min(60vh, 36rem)" className="rounded-none border-0 bg-transparent">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-slate-950/50 text-xs uppercase tracking-wide text-slate-500">
+                    <thead className={adminTableStickyTheadClass}>
                       <tr>
                         <th className="px-4 py-3 text-left">Дата</th>
                         <th className="px-4 py-3 text-center">Смена</th>
@@ -479,7 +482,7 @@ export default function OperatorSalaryDetailPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </AdminTableViewport>
               </Card>
             </>
           ) : null}

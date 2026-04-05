@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { AdminPageHeader } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabaseClient'
 import {
@@ -433,41 +434,39 @@ export default function AccessPage() {
   return (
     <div className="app-page max-w-5xl space-y-5">
 
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900/60 via-gray-900 to-blue-900/20 p-6 border border-slate-500/20">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-slate-600 rounded-full blur-3xl opacity-10 pointer-events-none" />
-        <div className="flex items-center gap-3 relative z-10">
-          <div className="p-3 bg-slate-500/20 rounded-xl">
-            <Shield className="w-8 h-8 text-slate-300" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-              Права доступа
-            </h1>
-            <p className="text-sm text-gray-400">Должности, права на страницы и аккаунты сотрудников</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-gray-900/80 border border-gray-800 rounded-xl w-fit">
-        {([
-          { key: 'positions', icon: Briefcase, label: 'Должности' },
-          { key: 'permissions', icon: Lock, label: 'Права доступа' },
-          { key: 'accounts', icon: Users, label: 'Аккаунты и пароли' },
-        ] as const).map(({ key, icon: Icon, label }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              tab === key ? 'bg-slate-700 text-white' : 'text-gray-500 hover:text-gray-300'
-            }`}
+      <AdminPageHeader
+        title="Права доступа"
+        description="Должности, права на страницы и аккаунты сотрудников"
+        accent="blue"
+        icon={<Shield className="h-5 w-5" aria-hidden />}
+        toolbar={
+          <div
+            className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-black/20 p-1"
+            role="tablist"
+            aria-label="Раздел прав доступа"
           >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
-      </div>
+            {([
+              { key: 'positions' as const, icon: Briefcase, label: 'Должности' },
+              { key: 'permissions' as const, icon: Lock, label: 'Права доступа' },
+              { key: 'accounts' as const, icon: Users, label: 'Аккаунты и пароли' },
+            ]).map(({ key, icon: Icon, label }) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  tab === key ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                <Icon className="h-4 w-4" aria-hidden />
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       {/* ============ TAB: POSITIONS ============ */}
       {tab === 'positions' && (

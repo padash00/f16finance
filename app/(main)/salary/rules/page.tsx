@@ -1,12 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback, useRef, Suspense } from 'react'
-import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
-  ArrowLeft,
   Plus,
   Save,
   AlertTriangle,
@@ -653,66 +652,54 @@ function SalaryRulesContent() {
   return (
     <>
         <div className="app-page max-w-7xl space-y-6">
-          {/* Header */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 border border-white/10 p-6 lg:p-8">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-fuchsia-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
-            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <Link href="/salary">
-                  <div className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-colors">
-                    <ArrowLeft className="w-5 h-5 text-gray-400" />
-                  </div>
-                </Link>
-                <div className="p-3 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-violet-500/25">
-                  <Settings className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                    Правила расчёта зарплаты
-                  </h1>
-                  <p className="text-gray-400 mt-1 flex items-center gap-2">
-                    <Building2 className="w-4 h-4" />
-                    Настройка окладов и бонусов для операторов
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
+          <AdminPageHeader
+            backHref="/salary"
+            title="Правила расчёта зарплаты"
+            description="Настройка окладов и бонусов для операторов"
+            accent="violet"
+            icon={<Settings className="h-5 w-5" aria-hidden />}
+            actions={
+              <>
                 <Button
                   variant="outline"
                   size="icon"
-                  className={`rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`}
-                  onClick={() => loadAll(true)}
+                  className={`rounded-xl border-white/10 bg-white/5 hover:bg-white/10 ${refreshing ? '[&_svg]:animate-spin' : ''}`}
+                  onClick={() => void loadAll(true)}
                   title="Обновить"
+                  aria-label="Обновить"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className="h-4 w-4" />
                 </Button>
 
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={handleSaveAll}
+                  onClick={() => void handleSaveAll()}
                   disabled={savingAll || dirtyIds.size === 0}
-                  className="rounded-xl border-white/10 bg-gray-900/50 backdrop-blur-xl hover:bg-white/10 gap-2"
+                  className="gap-2 rounded-xl border-white/10 bg-white/5 hover:bg-white/10"
                 >
-                  <Save className="w-4 h-4" />
+                  <Save className="h-4 w-4" />
                   {savingAll ? 'Сохранение...' : `Сохранить (${dirtyIds.size})`}
                 </Button>
 
                 <Button
                   size="sm"
-                  className="rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 gap-2"
-                  onClick={handleAddRule}
+                  className="gap-2 rounded-xl bg-violet-600 text-white hover:bg-violet-500"
+                  onClick={() => void handleAddRule()}
                   disabled={adding}
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="h-4 w-4" />
                   {adding ? 'Создание...' : 'Добавить правило'}
                 </Button>
-              </div>
-            </div>
-          </div>
+              </>
+            }
+            toolbar={
+              <p className="flex items-center gap-2 text-xs text-slate-500">
+                <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                Правила привязаны к точкам и типам смен
+              </p>
+            }
+          />
 
           {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -907,10 +894,10 @@ function SalaryRulesContent() {
           </Card>
 
           {/* Rules Table */}
-          <Card className="bg-gray-900/40 backdrop-blur-xl border-white/5 overflow-hidden">
-            <div className="overflow-x-auto">
+          <Card className="overflow-hidden border-white/5 bg-gray-900/40 p-0 backdrop-blur-xl">
+            <AdminTableViewport maxHeight="min(70vh, 40rem)" className="rounded-none border-0 bg-transparent">
               <table className="w-full text-sm">
-                <thead>
+                <thead className={adminTableStickyTheadClass}>
                   <tr className="border-b border-white/5">
                     <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Компания</th>
                     <th className="py-3 px-4 text-left text-xs font-medium text-gray-400">Смена</th>
@@ -1135,7 +1122,7 @@ function SalaryRulesContent() {
                     })}
                 </tbody>
               </table>
-            </div>
+            </AdminTableViewport>
           </Card>
 
           <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">

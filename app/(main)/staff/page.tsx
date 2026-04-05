@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
+import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -513,27 +514,45 @@ export default function StaffPageSmart() {
     <>
         <div className="mx-auto max-w-[1400px] space-y-4 px-4 pb-6 pt-4 md:px-6 md:py-6">
 
-          {/* Header */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600/20 via-teal-600/20 to-cyan-600/20 border border-white/10 p-5 lg:p-6">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-
-            <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl shadow-lg shadow-emerald-500/25">
-                  <Users2 className="w-6 h-6 text-white" />
+          <AdminPageHeader
+            title="Команда"
+            description="Управление сотрудниками и правами доступа"
+            accent="emerald"
+            icon={<Users2 className="h-5 w-5" aria-hidden />}
+            actions={
+              <>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={`h-9 w-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 ${refreshing ? '[&_svg]:animate-spin' : ''}`}
+                  onClick={() => void loadData(true)}
+                  aria-label="Обновить"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10" onClick={() => void handleExport()} aria-label="Экспорт Excel">
+                  <Download className="h-4 w-4" />
+                </Button>
+                <Button onClick={() => setIsAddStaffOpen(true)} className="h-9 gap-1.5 rounded-xl bg-emerald-600 text-sm text-white hover:bg-emerald-500">
+                  <Plus className="h-4 w-4" />
+                  Добавить
+                </Button>
+              </>
+            }
+            toolbar={
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                  ФОТ: <span className="font-semibold text-white">{money(stats.totalBudget)}</span>
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold text-white">Команда</h1>
-                  <p className="text-gray-400 text-sm">Управление сотрудниками и правами доступа</p>
+                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                  Сотрудников: <span className="font-semibold text-white">{stats.activeStaff}</span>
+                </div>
+                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                  Средний оклад: <span className="font-semibold text-white">{moneyCompact(stats.avgSalary)}</span>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" size="icon" className={`h-9 w-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 ${refreshing ? 'animate-spin' : ''}`} onClick={() => loadData(true)}><RefreshCw className="w-4 h-4" /></Button>
-                <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl border-white/10 bg-white/5 hover:bg-white/10" onClick={handleExport}><Download className="w-4 h-4" /></Button>
-                <Button onClick={() => setIsAddStaffOpen(true)} className="h-9 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white gap-1.5 text-sm"><Plus className="w-4 h-4" />Добавить</Button>
-              </div>
-            </div>
-          </div>
+            }
+          />
 
           {pageNotice && (
             <Card className={cn('p-3 border text-sm', pageNotice.tone === 'success' ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-red-500/30 bg-red-500/10')}>
@@ -543,15 +562,6 @@ export default function StaffPageSmart() {
               </div>
             </Card>
           )}
-
-          {/* Stats row */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">ФОТ: <span className="font-semibold text-white">{money(stats.totalBudget)}</span></div>
-              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Сотрудников: <span className="font-semibold text-white">{stats.activeStaff}</span></div>
-              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Средний оклад: <span className="font-semibold text-white">{moneyCompact(stats.avgSalary)}</span></div>
-            </div>
-          </div>
 
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
@@ -573,11 +583,11 @@ export default function StaffPageSmart() {
           </div>
 
           {/* Main Table */}
-          <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
-            <div className="overflow-x-auto">
+          <Card className="overflow-hidden border-white/10 bg-white/[0.04] p-0">
+            <AdminTableViewport maxHeight="min(70vh, 40rem)" className="rounded-none border-0 bg-transparent">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-white/5 bg-gray-900/50">
+                <thead className={adminTableStickyTheadClass}>
+                  <tr className="border-b border-white/5">
                     <th className="py-4 px-4 text-left text-xs font-medium text-gray-400">Сотрудник</th>
                     <th className="py-4 px-4 text-right text-xs font-medium text-gray-400">Оклад</th>
                     <th className="py-4 px-4 text-center text-xs font-medium text-gray-400">Действия</th>
@@ -623,7 +633,7 @@ export default function StaffPageSmart() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </AdminTableViewport>
           </Card>
 
           <div className="text-xs text-slate-500">Показано {filteredStaff.length} из {staff.length} сотрудников</div>
