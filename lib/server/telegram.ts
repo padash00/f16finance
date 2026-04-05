@@ -29,6 +29,10 @@ export async function sendTelegram(
   })
 }
 
+function escapeHtmlTelegram(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 export async function notifyShiftReport(params: {
   companyName: string
   pointName?: string | null
@@ -48,33 +52,63 @@ export async function notifyShiftReport(params: {
 }): Promise<void> {
   if (!isTelegramConfigured()) return
 
-  const fmt = (n: number) => n.toLocaleString('ru-RU')
-  const shiftLabel = params.shift === 'day' ? '☀️ Дневная' : '🌙 Ночная'
-  const diff = params.diff ?? 0
+  const fmt = (n: number) =>
+    n.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  const shiftLabel = params.shift === 'day' ? '☀️ День' : '🌙 Ночь'
+  const diff = Number(params.diff ?? 0)
   const diffSign = diff >= 0 ? '+' : ''
-  const diffIcon = diff < 0 ? '🔴' : '🟢'
+  const ok = diff >= 0
 
-  const lines = [
-    `${diffIcon} <b>Смена закрыта</b>`,
-    '',
-    `📍 <b>${params.companyName}</b>`,
-    params.pointName ? `🖥 <b>Устройство:</b> ${params.pointName}` : null,
-    `👤 ${params.operatorName || '—'} · ${params.date} · ${shiftLabel}`,
-    '',
-    params.cashAmount ? `💵 Наличные: ${fmt(params.cashAmount)} ₸` : null,
-    params.coins ? `🪙 Мелочь: ${fmt(params.coins)} ₸` : null,
-    params.kaspiAmount ? `💳 Kaspi: ${fmt(params.kaspiAmount)} ₸` : null,
-    params.onlineAmount ? `🌐 Kaspi Online: ${fmt(params.onlineAmount)} ₸` : null,
-    params.debts ? `📋 Тех: ${fmt(params.debts)} ₸` : null,
-    params.startCash ? `➡️ Старт: ${fmt(params.startCash)} ₸` : null,
-    params.wipon ? `➡️ Вычет: ${fmt(params.wipon)} ₸` : null,
-    '',
-    `<b>ИТОГ: ${diffSign}${fmt(diff)} ₸</b>`,
-  ].filter(Boolean).join('\n')
+  const company = escapeHtmlTelegram(params.companyName || 'Точка')
+  const device = params.pointName ? escapeHtmlTelegram(params.pointName) : null
+  const who = escapeHtmlTelegram(params.operatorName || '—')
+  const dateStr = escapeHtmlTelegram(params.date)
 
-  await sendTelegram(lines, params.reportChatId || undefined)
+  const cash = Number(params.cashAmount || 0)
+  const coins = Number(params.coins || 0)
+  const kaspi = Number(params.kaspiAmount || 0)
+  const online = Number(params.onlineAmount || 0)
+  const tech = Number(params.debts || 0)
+  const start = Number(params.startCash || 0)
+  const wipon = Number(params.wipon || 0)
+
+  type Row = { k: string; v: number; always?: boolean }
+  const rows: Row[] = [
+    { k: 'Наличные', v: cash },
+    { k: 'Мелочь', v: coins },
+    { k: 'Kaspi POS', v: kaspi },
+    { k: 'Kaspi Online', v: online },
+    { k: 'Тех / прочее', v: tech },
+    { k: 'Старт кассы', v: start },
+    { k: 'Вычет (сист.)', v: wipon },
+    { k: 'ИТОГ', v: diff, always: true },
+  ]
+
+  const visible = rows.filter((r) => r.always || r.v !== 0)
+  const labelW = Math.min(22, Math.max(12, ...visible.map((r) => r.k.length)))
+  const preBody = visible
+    .map((r) => {
+      const isTotal = r.k === 'ИТОГ'
+      const sep = isTotal ? '─'.repeat(labelW + 2 + 14) : null
+      const amountStr = isTotal ? `${diffSign}${fmt(r.v)}` : fmt(r.v)
+      const line = `${r.k.padEnd(labelW, ' ')}  ${amountStr} ₸`
+      return sep ? `${sep}\n${line}` : line
+    })
+    .join('\n')
+
+  const title = ok ? '✅ Смена закрыта' : '⚠️ Закрытие смены'
+  const html = [
+    `<b>${title}</b>`,
+    '',
+    `🏷 <b>${company}</b>${device ? ` · <code>${device}</code>` : ''}`,
+    `👤 <i>${who} · ${dateStr} · ${shiftLabel}</i>`,
+    '',
+    `<pre>${preBody}</pre>`,
+  ].join('\n')
+
+  await sendTelegram(html, params.reportChatId || undefined)
   if (params.operatorChatId) {
-    await sendTelegram(lines, params.operatorChatId).catch(() => null)
+    await sendTelegram(html, params.operatorChatId).catch(() => null)
   }
 }
 
