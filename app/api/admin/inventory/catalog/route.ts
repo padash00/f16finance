@@ -86,11 +86,17 @@ export async function POST(request: Request) {
       const rows: ImportRow[] = body.rows || []
       if (!Array.isArray(rows)) return json({ error: 'rows-required' }, 400)
 
-      // Fetch existing items by barcode
+      const orgId = access.activeOrganization?.id || null
+      if (!orgId) {
+        return json({ error: 'Выберите организацию в шапке — импорт привязан к организации' }, 400)
+      }
+
+      // Fetch existing items by barcode (в рамках организации)
       const barcodes = rows.map((r) => r.barcode).filter(Boolean)
       const { data: existingItems, error: existingError } = await supabase
         .from('inventory_items')
         .select('id, name, barcode, sale_price, default_purchase_price')
+        .eq('organization_id', orgId)
         .in('barcode', barcodes)
 
       if (existingError) throw existingError
@@ -100,10 +106,11 @@ export async function POST(request: Request) {
         existingMap[item.barcode] = item
       }
 
-      // Fetch existing categories
+      // Fetch existing categories этой организации
       const { data: existingCategories, error: catError } = await supabase
         .from('inventory_categories')
         .select('id, name')
+        .eq('organization_id', orgId)
 
       if (catError) throw catError
 
@@ -164,10 +171,16 @@ export async function POST(request: Request) {
       const rows: ImportRow[] = body.rows || []
       if (!Array.isArray(rows)) return json({ error: 'rows-required' }, 400)
 
-      // Ensure all categories exist
+      const orgId = access.activeOrganization?.id || null
+      if (!orgId) {
+        return json({ error: 'Выберите организацию в шапке — импорт привязан к организации' }, 400)
+      }
+
+      // Ensure all categories exist (с organization_id)
       const { data: existingCategories, error: catFetchError } = await supabase
         .from('inventory_categories')
         .select('id, name')
+        .eq('organization_id', orgId)
 
       if (catFetchError) throw catFetchError
 
@@ -185,7 +198,7 @@ export async function POST(request: Request) {
       }
 
       if (missingCats.size > 0) {
-        const newCats = Array.from(missingCats).map((name) => ({ name }))
+        const newCats = Array.from(missingCats).map((name) => ({ name, organization_id: orgId }))
         const { data: insertedCats, error: insertCatError } = await supabase
           .from('inventory_categories')
           .insert(newCats)
@@ -198,11 +211,12 @@ export async function POST(request: Request) {
         }
       }
 
-      // Fetch existing items by barcode to determine create vs update
+      // Fetch existing items by barcode to determine create vs update (в организации)
       const barcodes = rows.map((r) => r.barcode).filter(Boolean)
       const { data: existingItems, error: existingError } = await supabase
         .from('inventory_items')
         .select('id, barcode')
+        .eq('organization_id', orgId)
         .in('barcode', barcodes)
 
       if (existingError) throw existingError
@@ -217,6 +231,7 @@ export async function POST(request: Request) {
 
       // Process in batches
       const toInsert: Array<{
+        organization_id: string
         name: string
         barcode: string
         unit: string
@@ -257,6 +272,7 @@ export async function POST(request: Request) {
           })
         } else {
           toInsert.push({
+            organization_id: orgId,
             name: row.name,
             barcode: row.barcode,
             unit: row.unit,
@@ -294,7 +310,6 @@ export async function POST(request: Request) {
       }
 
       let stock_updated = 0
-      const orgId = access.activeOrganization?.id || null
       const rowsWithStock = rows.filter(
         (row) => typeof row.stock_qty === 'number' && Number.isFinite(row.stock_qty) && row.stock_qty >= 0,
       )
