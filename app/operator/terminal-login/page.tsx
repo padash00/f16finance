@@ -34,8 +34,7 @@ function decodeQrWithJsQR(imageData: ImageData): string | null {
   return result?.data ?? null
 }
 
-/** Рисуем кадр видео на canvas и читаем QR через jsQR (Safari, Firefox, большинство мобильных). */
-function videoFrameToImageData(video: HTMLVideoElement, canvas: HTMLCanvasElement, maxSide = 720): ImageData | null {
+function videoFrameToImageData(video: HTMLVideoElement, canvas: HTMLCanvasElement, maxSide = 960): ImageData | null {
   const vw = video.videoWidth
   const vh = video.videoHeight
   if (!vw || !vh) return null
@@ -60,19 +59,24 @@ export default function OperatorTerminalLoginPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [scanning, setScanning] = useState(false)
+  /** Поток камеры: отдельно от scanning, чтобы <video> успел смонтироваться и ref был не null. */
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const rafRef = useRef<number | null>(null)
-  const frameCountRef = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const barcodeDetectorRef = useRef<{ detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>> } | null>(
+    null,
+  )
 
   const stopScan = useCallback(() => {
     if (rafRef.current != null) {
       cancelAnimationFrame(rafRef.current)
       rafRef.current = null
     }
-    frameCountRef.current = 0
+    barcodeDetectorRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
+    setCameraStream(null)
     if (videoRef.current) {
       videoRef.current.srcObject = null
     }
@@ -87,16 +91,6 @@ export default function OperatorTerminalLoginPage() {
     router.push(`/operator/point-qr-confirm?n=${encodeURIComponent(trimmed)}`)
   }
 
-  const handleDecodedRaw = (raw: string) => {
-    const n = nonceFromQrText(raw)
-    stopScan()
-    if (n) {
-      router.push(`/operator/point-qr-confirm?n=${encodeURIComponent(n)}`)
-      return
-    }
-    setScanError('В QR нет ссылки входа Orda Point. Введите код вручную ниже.')
-  }
-
   const startScan = async () => {
     setScanError(null)
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -109,67 +103,130 @@ export default function OperatorTerminalLoginPage() {
         video: { facingMode: { ideal: 'environment' } },
         audio: false,
       })
-      streamRef.current = stream
-      const v = videoRef.current
-      if (!v) {
-        stream.getTracks().forEach((t) => t.stop())
-        return
-      }
-      v.srcObject = stream
-      await v.play()
-      setScanning(true)
-
       const BD = (typeof window !== 'undefined'
         ? (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector
         : undefined) as BarcodeDetectorCtor | undefined
-      const barcodeDetector = BD ? new BD({ formats: ['qr_code'] }) : null
-
-      const tick = async () => {
-        const el = videoRef.current
-        const canvas = canvasRef.current
-        if (!el || !canvas || el.readyState < 2) {
-          rafRef.current = requestAnimationFrame(() => void tick())
-          return
-        }
-
-        frameCountRef.current += 1
-        const useHeavyJsQr = frameCountRef.current % 3 === 0
-
-        try {
-          if (barcodeDetector) {
-            const barcodes = await barcodeDetector.detect(el)
-            const raw = barcodes[0]?.rawValue
-            if (raw) {
-              handleDecodedRaw(raw)
-              return
-            }
-          }
-        } catch {
-          /* кадр BarcodeDetector пропускаем */
-        }
-
-        if (useHeavyJsQr) {
-          try {
-            const imageData = videoFrameToImageData(el, canvas)
-            if (imageData) {
-              const raw = decodeQrWithJsQR(imageData)
-              if (raw) {
-                handleDecodedRaw(raw)
-                return
-              }
-            }
-          } catch {
-            /* кадр jsQR пропускаем */
-          }
-        }
-
-        rafRef.current = requestAnimationFrame(() => void tick())
-      }
-      void tick()
+      barcodeDetectorRef.current = BD ? new BD({ formats: ['qr_code'] }) : null
+      streamRef.current = stream
+      setCameraStream(stream)
+      setScanning(true)
     } catch {
       setScanError('Камера недоступна. Разрешите доступ в настройках браузера или загрузите фото с QR ниже.')
     }
   }
+
+  /** После scanning=true в DOM появляется <video> — ждём ref, вешаем stream и цикл распознавания. */
+  useEffect(() => {
+    if (!scanning || !cameraStream) return
+
+    let cancelled = false
+
+    const finishRaw = (raw: string) => {
+      if (cancelled) return
+      const n = nonceFromQrText(raw)
+      stopScan()
+      if (n) {
+        router.push(`/operator/point-qr-confirm?n=${encodeURIComponent(n)}`)
+        return
+      }
+      setScanError('В QR нет ссылки входа Orda Point. Введите код вручную ниже.')
+    }
+
+    const waitForVideoSize = (video: HTMLVideoElement) =>
+      new Promise<void>((resolve) => {
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          resolve()
+          return
+        }
+        const done = () => {
+          video.removeEventListener('loadedmetadata', done)
+          video.removeEventListener('playing', done)
+          resolve()
+        }
+        video.addEventListener('loadedmetadata', done, { once: true })
+        video.addEventListener('playing', done, { once: true })
+        window.setTimeout(resolve, 2500)
+      })
+
+    const run = async () => {
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+
+      const video = videoRef.current
+      const canvas = canvasRef.current
+      if (cancelled || !video || !canvas) {
+        if (!cancelled) {
+          setScanError('Не удалось открыть превью. Нажмите «Стоп» и «Сканировать» ещё раз.')
+          stopScan()
+        }
+        return
+      }
+
+      video.srcObject = cameraStream
+
+      try {
+        await video.play()
+      } catch {
+        if (!cancelled) setScanError('Не удалось запустить превью камеры.')
+        stopScan()
+        return
+      }
+
+      await waitForVideoSize(video)
+      if (cancelled) return
+
+      const detector = barcodeDetectorRef.current
+
+      const tick = async () => {
+        if (cancelled) return
+        const el = videoRef.current
+        const cv = canvasRef.current
+        if (!el || !cv || el.readyState < 2) {
+          rafRef.current = requestAnimationFrame(() => void tick())
+          return
+        }
+
+        try {
+          if (detector) {
+            const barcodes = await detector.detect(el)
+            const raw = barcodes[0]?.rawValue
+            if (raw) {
+              finishRaw(raw)
+              return
+            }
+          }
+        } catch {
+          /* пропуск кадра */
+        }
+
+        try {
+          const imageData = videoFrameToImageData(el, cv)
+          if (imageData) {
+            const raw = decodeQrWithJsQR(imageData)
+            if (raw) {
+              finishRaw(raw)
+              return
+            }
+          }
+        } catch {
+          /* пропуск кадра */
+        }
+
+        rafRef.current = requestAnimationFrame(() => void tick())
+      }
+
+      void tick()
+    }
+
+    void run()
+
+    return () => {
+      cancelled = true
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+    }
+  }, [scanning, cameraStream, router, stopScan])
 
   const onPickImage = () => fileInputRef.current?.click()
 
@@ -249,10 +306,9 @@ export default function OperatorTerminalLoginPage() {
             <ol className="mt-3 list-decimal space-y-2 pl-4 text-sm leading-relaxed text-slate-300">
               <li>На кассе в Orda Point откройте вход «QR-код».</li>
               <li>
-                На телефоне нажмите <strong className="text-white">«Сканировать QR»</strong> и наведите камеру на экран — код
-                считается прямо в браузере.
+                На телефоне нажмите <strong className="text-white">«Сканировать QR»</strong>, разрешите камеру — появится превью, наведите на QR на экране ПК.
               </li>
-              <li>Можно сделать фото QR и загрузить файл — или вставить код из ссылки вручную.</li>
+              <li>Можно загрузить фото с QR или вставить код из ссылки вручную.</li>
             </ol>
           </div>
         </div>
@@ -261,14 +317,14 @@ export default function OperatorTerminalLoginPage() {
       <OperatorPanel className="border-white/10 bg-white/[0.045]">
         <OperatorSectionHeading
           title="Сканировать камерой"
-          description="Работает на HTTPS в большинстве браузеров (включая многие версии Safari). Разрешите доступ к камере."
+          description="После разрешения камеры должно появиться изображение. Если чёрный экран подождите 1–2 с или нажмите «Стоп» и снова «Сканировать»."
         />
         {scanning ? (
           <div className="mt-4 space-y-3">
             <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/40">
-              <video ref={videoRef} className="aspect-video w-full object-cover" playsInline muted />
+              <video ref={videoRef} className="aspect-video w-full object-cover" playsInline muted autoPlay />
             </div>
-            <p className="text-center text-xs text-slate-400">Держите QR в рамке, подождите 1–3 секунды.</p>
+            <p className="text-center text-xs text-slate-400">Держите QR в центре кадра 2–5 секунд при хорошем свете.</p>
             <Button type="button" variant="outline" className="w-full border-white/20 text-white" onClick={stopScan}>
               Остановить камеру
             </Button>
