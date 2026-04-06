@@ -42,7 +42,8 @@ type TimeRange = 'week' | 'month' | 'year' | 'all'
 
 // ================== CONFIG ==================
 const COLORS = ['#3b82f6', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6', '#6366f1']
-const MAX_ROWS = 5000
+/** Совпадает с верхней границей GET /api/admin/expenses (page_size) */
+const EXPENSE_PAGE_SIZE = 2000
 
 // ================== HELPERS ==================
 const toISO = (d: Date) => {
@@ -95,18 +96,32 @@ export default function ExpensesDashboard() {
     setLoading(true)
     const { from, to } = getDateRange(range)
 
-    const params = new URLSearchParams()
-    params.set('to', to)
-    params.set('page_size', String(MAX_ROWS))
-    params.set('sort', 'date_asc')
-    if (range !== 'all') params.set('from', from)
-    if (companyId !== 'all') params.set('company_id', companyId)
+    const base = new URLSearchParams()
+    base.set('to', to)
+    base.set('page_size', String(EXPENSE_PAGE_SIZE))
+    base.set('sort', 'date_asc')
+    if (range !== 'all') base.set('from', from)
+    if (companyId !== 'all') base.set('company_id', companyId)
 
-    const res = await fetch(`/api/admin/expenses?${params.toString()}`)
-    const payload = await res.json().catch(() => null)
-    if (res.ok && payload?.data) {
-      setRows(payload.data as ExpenseRow[])
-    } else {
+    const merged: ExpenseRow[] = []
+    let page = 0
+    try {
+      while (true) {
+        const params = new URLSearchParams(base)
+        params.set('page', String(page))
+        const res = await fetch(`/api/admin/expenses?${params.toString()}`)
+        const payload = await res.json().catch(() => null)
+        if (!res.ok || !payload?.data) {
+          setRows(merged.length ? merged : [])
+          break
+        }
+        const chunk = payload.data as ExpenseRow[]
+        merged.push(...chunk)
+        if (chunk.length < EXPENSE_PAGE_SIZE) break
+        page++
+      }
+      setRows(merged)
+    } catch {
       setRows([])
     }
     setLoading(false)

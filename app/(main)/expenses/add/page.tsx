@@ -233,7 +233,7 @@ export default function AddExpensePage() {
       const monthEnd = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
 
       const response = await fetch(
-        `/api/admin/expenses?from=${monthStart}&to=${monthEnd}&category=${encodeURIComponent(categoryName)}`,
+        `/api/admin/expenses?from=${monthStart}&to=${monthEnd}&category=${encodeURIComponent(categoryName)}&page_size=2000&page=0`,
         { cache: 'no-store' },
       )
       const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] }

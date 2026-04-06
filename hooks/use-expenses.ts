@@ -26,13 +26,14 @@ export type UseExpensesOptions = {
   search?: string
   /** Sort order (default: date_desc) */
   sort?: 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'
-  /** Rows per page (default: 200, max: 500) */
+  /** Rows per page (default: 200; API caps at 2000) */
   pageSize?: number
   /** Set to false to skip the initial fetch */
   enabled?: boolean
 }
 
-const MAX_ROWS_HARD_LIMIT = 2000
+/** Верхняя граница строк, подгружаемых серией page/page_size (API макс. 2000 за запрос) */
+const MAX_ROWS_HARD_LIMIT = 20_000
 
 /**
  * Fetches expense rows from GET /api/admin/expenses with full pagination support.

@@ -363,6 +363,7 @@ export default function ExpensesPage() {
     payFilter: payFilter !== 'all' ? payFilter : undefined,
     search: searchDebounced.length >= SEARCH_MIN_LEN ? searchDebounced : undefined,
     sort: sortMode,
+    pageSize: 2000,
   })
 
   const companyMap = useMemo(() => {
