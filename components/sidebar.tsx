@@ -447,12 +447,21 @@ function SidebarSection({
           </div>
         </button>
 
-        <div className={cn('mt-3 space-y-1 overflow-hidden transition-all duration-300', open ? 'max-h-[48rem] opacity-100' : 'max-h-0 opacity-0')}>
-          {section.items.map((item) => {
-            const active =
-              item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/')
-            return <SidebarItem key={item.href} item={item} active={active} onClick={onNavigate} />
-          })}
+        <div
+          className={cn(
+            'grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none',
+            open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+          )}
+        >
+          <div className="min-h-0">
+            <div className="space-y-1 pt-3">
+              {section.items.map((item) => {
+                const active =
+                  item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/')
+                return <SidebarItem key={item.href} item={item} active={active} onClick={onNavigate} />
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -952,8 +961,12 @@ export function Sidebar() {
 
       {isOpen ? (
         <div className="fixed inset-0 z-50 md:hidden">
-          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-[84%] max-w-[20rem] border-r border-white/5 shadow-2xl">
+          <div
+            className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm orda-drawer-backdrop"
+            onClick={() => setIsOpen(false)}
+            aria-hidden
+          />
+          <div className="absolute inset-y-0 left-0 w-[84%] max-w-[20rem] border-r border-white/5 shadow-2xl orda-drawer-panel">
             {navContent}
           </div>
         </div>

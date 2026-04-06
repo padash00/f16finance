@@ -124,6 +124,50 @@
   }
 }
 
+/* ─── Анимации: только если пользователь не просил reduce-motion ─────────── */
+@keyframes orda-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes orda-drawer-in {
+  from {
+    transform: translateX(-104%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes orda-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .orda-main-enter {
+    animation: orda-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .orda-drawer-panel {
+    animation: orda-drawer-in 0.32s cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+
+  .orda-drawer-backdrop {
+    animation: orda-backdrop-in 0.22s ease-out both;
+  }
+}
+
 /* Единая типографика шапок страниц (подключайте class на корневом блоке заголовка) */
 @layer components {
   .page-header {
@@ -146,6 +190,20 @@
   /* Карточки секций без полного Card — лёгкая подложка */
   .surface-panel {
     @apply rounded-2xl border border-white/[0.09] bg-card/60 px-4 py-4 shadow-[0_12px_40px_rgba(0,0,0,0.14)] backdrop-blur-md sm:rounded-[1.25rem] sm:px-5 sm:py-5;
+  }
+}
+
+/* Плавные интерактивные карточки (не ломает layout в grid) */
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot='card'] {
+    transition:
+      box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.35s ease;
+  }
+
+  [data-slot='card']:hover {
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.26);
+    border-color: rgba(255, 255, 255, 0.14);
   }
 }
 
