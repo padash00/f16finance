@@ -1320,9 +1320,15 @@ export default function ArenaPage({
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-card px-5 pb-3 no-drag">
         <div className="flex items-center gap-2 min-w-0">
           <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="truncate text-sm font-semibold">{bootstrap.device.name}</span>
-          <span className="text-muted-foreground/50">·</span>
-          <span className="truncate text-sm text-muted-foreground">{session.operator.name}</span>
+          <div className="flex min-w-0 flex-col leading-tight">
+            <span className="truncate text-sm font-semibold">{session.company.name}</span>
+            <span className="truncate text-[11px] text-muted-foreground">
+              {(bootstrap.device.name || '').trim() && (bootstrap.device.name || '').trim() !== (session.company.name || '').trim()
+                ? `${bootstrap.device.name} · `
+                : ''}
+              {session.operator.short_name || session.operator.name || session.operator.username}
+            </span>
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2 no-drag">

@@ -91,6 +91,15 @@ function nextDayISO(dateISO: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** Имя проекта (узла) в шапке: не путать с юр. точкой `session.company`, если названия разные. */
+function workspaceSubtitle(bootstrap: BootstrapData, session: OperatorSession): string {
+  const dn = (bootstrap.device.name || '').trim()
+  const cn = (session.company.name || '').trim()
+  if (dn && cn && dn !== cn) return `Проект: ${dn}`
+  if (dn) return dn
+  return bootstrap.device.point_mode
+}
+
 export default function ShiftPage({
   config,
   bootstrap,
@@ -522,7 +531,7 @@ export default function ShiftPage({
               <span className="rounded-full border border-border/80 bg-background/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                 Рабочий терминал
               </span>
-              <span className="text-[11px] text-muted-foreground">{bootstrap.device.name || bootstrap.device.point_mode}</span>
+              <span className="text-[11px] text-muted-foreground">{workspaceSubtitle(bootstrap, session)}</span>
             </div>
             <p className="text-sm font-semibold leading-none">{session.company.name}</p>
             <p className="text-xs text-muted-foreground">{operatorName}</p>
@@ -679,7 +688,7 @@ export default function ShiftPage({
                             Точка
                           </div>
                           <div className="mt-1 text-sm font-medium">{session.company.name}</div>
-                          <div className="text-xs text-muted-foreground">{bootstrap.device.name || bootstrap.device.point_mode}</div>
+                          <div className="text-xs text-muted-foreground">{workspaceSubtitle(bootstrap, session)}</div>
                         </div>
                         <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                           <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -1044,7 +1053,7 @@ export default function ShiftPage({
                           Точка
                         </div>
                         <div className="mt-1 text-sm font-medium">{session.company.name}</div>
-                        <div className="text-xs text-muted-foreground">{bootstrap.device.name || bootstrap.device.point_mode}</div>
+                        <div className="text-xs text-muted-foreground">{workspaceSubtitle(bootstrap, session)}</div>
                       </div>
                       <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                         <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">

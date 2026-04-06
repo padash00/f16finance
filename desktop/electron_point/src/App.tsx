@@ -516,12 +516,31 @@ export default function App() {
   }
 
   // ─── Вход оператора ────────────────────────────────────────────────────────
+  async function prefetchBootstrapForDefaultCompany(session: OperatorSession): Promise<BootstrapData> {
+    if (!config || !session.company.id) return session.bootstrap
+    try {
+      const b = await api.bootstrap(config, session.company.id)
+      await saveBootstrapCache(b)
+      return b
+    } catch {
+      return session.bootstrap
+    }
+  }
+
   function handleOperatorLogin(session: OperatorSession, allCompanies: CompanyOption[]) {
     if (allCompanies.length > 1) {
-      setView({ screen: 'point-select', bootstrap: session.bootstrap, session, allCompanies })
-    } else {
-      proceedToApp(session)
+      void (async () => {
+        const bootstrap = await prefetchBootstrapForDefaultCompany(session)
+        setView({
+          screen: 'point-select',
+          bootstrap,
+          session: { ...session, bootstrap },
+          allCompanies,
+        })
+      })()
+      return
     }
+    void proceedToApp(session)
   }
 
   // ─── Выбор точки (при нескольких компаниях) ────────────────────────────────

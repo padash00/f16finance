@@ -96,10 +96,25 @@ export async function resolvePointOperatorLoginForDevice(params: {
     return { ok: false, error: 'operator-not-assigned-to-any-point', status: 403 }
   }
 
-  const primaryAssignment =
-    projectAssignments.find((a: any) => a.is_primary) || projectAssignments[0]
+  /** Основная точка среди всех назначений оператора (не только в этом проекте). */
+  const globalPrimaryCompanyId = (assignments.find((a: any) => a.is_primary === true) as { company_id?: string } | undefined)
+    ?.company_id
 
-  const allCompanies = projectAssignments.map((a: any) => {
+  const sortedProjectAssignments = [...projectAssignments].sort((a: any, b: any) => {
+    const aGlob = globalPrimaryCompanyId && a.company_id === globalPrimaryCompanyId ? 0 : 1
+    const bGlob = globalPrimaryCompanyId && b.company_id === globalPrimaryCompanyId ? 0 : 1
+    if (aGlob !== bGlob) return aGlob - bGlob
+    const pa = a.is_primary ? 0 : 1
+    const pb = b.is_primary ? 0 : 1
+    if (pa !== pb) return pa - pb
+    const na = companyMap[a.company_id]?.name || ''
+    const nb = companyMap[b.company_id]?.name || ''
+    return na.localeCompare(nb, 'ru')
+  })
+
+  const primaryAssignment = sortedProjectAssignments[0]
+
+  const allCompanies = sortedProjectAssignments.map((a: any) => {
     const co = companyMap[a.company_id]
     return {
       id: a.company_id,
