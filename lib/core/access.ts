@@ -15,6 +15,7 @@
   '/auth/complete',
 ] as const
 
+/** См. docs/roles.md — матрица staff/оператор/платформа и план роли «клиент». */
 export type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
 export type SubscriptionFeature =
   | 'ai_reports'
