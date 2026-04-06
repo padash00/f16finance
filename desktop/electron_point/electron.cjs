@@ -265,9 +265,25 @@ function initAutoUpdater() {
     })
   })
 
+  const FIRST_CHECK_MS = 5000
+  const RETRY_AFTER_FAIL_MS = 90_000
+  const PERIODIC_CHECK_MS = 4 * 60 * 60 * 1000
+
   setTimeout(() => {
-    void checkForAppUpdates({ silent: false })
-  }, 3000)
+    void checkForAppUpdates({ silent: false }).then(() => {
+      if (updaterState.status === 'error') {
+        appendUpdaterLog(`check failed (will retry in ${RETRY_AFTER_FAIL_MS / 1000}s)`)
+        setTimeout(() => {
+          void checkForAppUpdates({ silent: true })
+        }, RETRY_AFTER_FAIL_MS)
+      }
+    })
+  }, FIRST_CHECK_MS)
+
+  setInterval(() => {
+    if (updaterState.status === 'downloading' || updaterState.status === 'downloaded') return
+    void checkForAppUpdates({ silent: true })
+  }, PERIODIC_CHECK_MS)
 }
 
 // ─── Window ──────────────────────────────────────────────────────────────────
