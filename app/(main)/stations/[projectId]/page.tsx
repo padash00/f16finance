@@ -1592,6 +1592,9 @@ export default function StationsPage() {
                               </button>
                             </div>
                           </div>
+                          <p className="text-[10px] text-muted-foreground/90 leading-snug">
+                            Если оставить пустым — для продления по сумме подставится минимальная цена среди фикс. тарифов зоны ровно на 60 мин (например «Час»).
+                          </p>
                         </div>
                       ) : (
                         <>

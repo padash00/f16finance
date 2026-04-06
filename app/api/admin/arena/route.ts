@@ -3,6 +3,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { effectiveZoneExtensionHourly } from '@/lib/core/arena-zone-extension-hourly'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -140,7 +141,16 @@ export async function GET(request: Request) {
     if (tariffsError) throw tariffsError
     if (decorationsError) throw decorationsError
 
-    return json({ ok: true, data: { project, zones: zones || [], stations: stations || [], tariffs: tariffs || [], decorations: decorations || [] } })
+    const allTariffs = tariffs || []
+    const zonesOut = (zones || []).map((z: any) => {
+      const eff = effectiveZoneExtensionHourly(z, z.id, allTariffs)
+      return eff != null ? { ...z, extension_hourly_price: eff } : z
+    })
+
+    return json({
+      ok: true,
+      data: { project, zones: zonesOut, stations: stations || [], tariffs: allTariffs, decorations: decorations || [] },
+    })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/arena:get', message: error?.message || 'Arena GET error' })
     return json({ error: error?.message || 'Ошибка загрузки' }, 500)

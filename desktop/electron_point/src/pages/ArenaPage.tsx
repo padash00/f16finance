@@ -25,6 +25,7 @@ import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { toastError, toastInfo } from '@/lib/toast'
 import * as api from '@/lib/api'
 import { arenaExtensionMinutesFromPayment } from '../../../../lib/core/arena-extension-minutes'
+import { effectiveZoneExtensionHourly } from '../../../../lib/core/arena-zone-extension-hourly'
 import type { AppConfig, ArenaMapDecoration, ArenaSession, ArenaStation, ArenaTariff, ArenaZone, BootstrapData, OperatorSession } from '@/types'
 
 interface Props {
@@ -289,9 +290,8 @@ function ManageSessionModal({
   const rateTariff = tariffs.find(t => t.id === arenaSession.tariff_id)
   const zoneIdForHourly = station.zone_id ?? rateTariff?.zone_id ?? null
   const zoneRow = zoneIdForHourly ? zones.find(z => z.id === zoneIdForHourly) : undefined
-  const zoneHourly = zoneRow?.extension_hourly_price
-  const zoneHourlyEff =
-    zoneHourly != null && Number(zoneHourly) > 0 ? Number(zoneHourly) : null
+  /** Сервер подмешивает час из тарифа «60 мин»; локально — тот же расчёт по видимым тарифам (fallback). */
+  const zoneHourlyEff = effectiveZoneExtensionHourly(zoneRow, zoneIdForHourly, tariffs)
   const legacyTariffHourlyRaw = (rateTariff as { extension_hourly_price?: unknown } | undefined)?.extension_hourly_price
   const legacyTariffHourly =
     legacyTariffHourlyRaw != null && legacyTariffHourlyRaw !== ''
@@ -382,10 +382,10 @@ function ManageSessionModal({
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
                     {extensionHourlyEffective != null
-                      ? `Продление по сумме: ${formatMoney(extensionHourlyEffective)} за 60 мин${zoneHourlyEff != null ? ' (час зоны)' : ' (старая ставка в тарифе)'}. Меньше суммы пакета — по этому часу; от полной цены пакета — целые пакеты по ${formatMoney(Number(rateTariff.price))}, остаток снова по часу.`
+                      ? `Продление по сумме: ${formatMoney(extensionHourlyEffective)} за 60 мин (час зоны или тариф «1 ч»). Меньше суммы пакета — по этому часу; от полной цены пакета — целые пакеты по ${formatMoney(Number(rateTariff.price))}, остаток снова по часу.`
                       : zoneIdForHourly && !zoneRow
                         ? 'Час зоны задан на сайте, но зона не пришла в данные точки — обновите экран (↻) или проверьте привязку компании у зоны/станции.'
-                        : 'Не задан час зоны — время считается пропорционально пакету. Укажите «час продления по сумме» у зоны: Станции → карандаш у названия зоны.'}
+                        : 'Нет ни поля «час продления» у зоны, ни фикс. тарифа ровно на 60 мин в зоне — время пропорционально пакету. Задайте час у зоны (карандаш) или добавьте тариф «1 час».'}
                   </p>
                 </div>
 

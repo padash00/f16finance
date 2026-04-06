@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { arenaExtensionMinutesFromPayment } from '@/lib/core/arena-extension-minutes'
+import { effectiveZoneExtensionHourly } from '@/lib/core/arena-zone-extension-hourly'
 import { computeTimeWindowEndsAt, isNowInTariffWindow, isTariffOfferedNow } from '@/lib/core/arena-tariff-window'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -97,10 +98,16 @@ export async function GET(request: Request) {
       }),
     )
 
+    const allTariffs = tariffs || []
+    const zonesOut = (zones || []).map((z: any) => {
+      const eff = effectiveZoneExtensionHourly(z, z.id, allTariffs)
+      return eff != null ? { ...z, extension_hourly_price: eff } : z
+    })
+
     return json({
       ok: true,
       data: {
-        zones: zones || [],
+        zones: zonesOut,
         stations: stations || [],
         tariffs: tariffsVisible,
         sessions: activeSessions,
@@ -359,13 +366,16 @@ export async function POST(request: Request) {
           stZoneId = String(tariffZoneId)
         }
         if (stZoneId) {
-          const { data: zoneRow } = await supabase
-            .from('arena_zones')
-            .select('extension_hourly_price')
-            .eq('id', stZoneId)
-            .maybeSingle()
-          const zh = zoneRow != null ? Number((zoneRow as Record<string, unknown>).extension_hourly_price) : NaN
-          if (Number.isFinite(zh) && zh > 0) zoneHourly = zh
+          const [{ data: zoneRow }, { data: zoneTariffRows }] = await Promise.all([
+            supabase.from('arena_zones').select('extension_hourly_price').eq('id', stZoneId).maybeSingle(),
+            supabase
+              .from('arena_tariffs')
+              .select('zone_id,duration_minutes,price,tariff_type')
+              .eq('zone_id', stZoneId)
+              .eq('is_active', true),
+          ])
+          const eff = effectiveZoneExtensionHourly(zoneRow, stZoneId, zoneTariffRows || [])
+          if (eff != null) zoneHourly = eff
         }
 
         const tariffHourlyRaw = (rateTariff as Record<string, unknown>).extension_hourly_price
