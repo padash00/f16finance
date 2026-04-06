@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 // ─── Shared AudioContext singleton (created once, reused) ──────────────────────
 let _audioCtx: AudioContext | null = null
@@ -71,6 +71,16 @@ function formatRemaining(ms: number): string {
   const s = totalSec % 60
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/** Минуты продления по сумме: пропорция к пакету тарифа (как на Senet). */
+function previewExtensionMinutes(tariff: ArenaTariff | undefined, paidTotal: number): number {
+  if (!tariff) return 0
+  const price = Number(tariff.price)
+  const dur = Number(tariff.duration_minutes)
+  if (!(price > 0) || !(dur > 0) || paidTotal < 1) return 0
+  const m = Math.round(paidTotal / (price / dur))
+  return m >= 1 ? m : 0
 }
 
 // ─── Start Session Modal ───────────────────────────────────────────────────────
@@ -246,7 +256,7 @@ function ManageSessionModal({
   station,
   session: arenaSession,
   tariffs,
-  zoneId,
+  zoneId: _zoneId,
   onExtend,
   onEnd,
   onTech,
@@ -257,7 +267,7 @@ function ManageSessionModal({
   session: ArenaSession
   tariffs: ArenaTariff[]
   zoneId: string | null
-  onExtend: (tariffId: string, paymentMethod: 'cash' | 'kaspi' | 'mixed', cashAmount: number, kaspiAmount: number) => void
+  onExtend: (paymentMethod: 'cash' | 'kaspi' | 'mixed', cashAmount: number, kaspiAmount: number) => void
   onEnd: () => void
   onTech: () => void
   onClose: () => void
@@ -265,14 +275,19 @@ function ManageSessionModal({
 }) {
   const [mode, setMode] = useState<'view' | 'extend'>('view')
 
-  const sorted = tariffs
-    .filter(t => t.zone_id === zoneId)
-    .sort((a, b) => a.price - b.price)
+  const rateTariff = tariffs.find(t => t.id === arenaSession.tariff_id)
 
-  const [selected, setSelected] = useState<string>(sorted[0]?.id ?? '')
   const [extPayMethod, setExtPayMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
+  const [extAmount, setExtAmount] = useState('')
   const [extCashAmt, setExtCashAmt] = useState('')
   const [extKaspiAmt, setExtKaspiAmt] = useState('')
+
+  const paidTotal = useMemo(() => {
+    if (extPayMethod === 'mixed') return Math.round((Number(extCashAmt) || 0) + (Number(extKaspiAmt) || 0))
+    return Math.round(Number(extAmount) || 0)
+  }, [extPayMethod, extAmount, extCashAmt, extKaspiAmt])
+
+  const previewMin = previewExtensionMinutes(rateTariff, paidTotal)
 
   const remainingMs = getRemainingMs(arenaSession.ends_at)
   const isExpired = remainingMs <= 0
@@ -329,80 +344,101 @@ function ManageSessionModal({
           </>
         ) : (
           <>
-            <p className="mb-2 text-sm font-medium">Выберите тариф для продления</p>
-            <div className="mb-4 flex flex-col gap-2">
-              {sorted.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setSelected(t.id)}
-                  className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition ${
-                    selected === t.id
-                      ? 'border-primary bg-primary/10 text-foreground'
-                      : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/50 hover:text-foreground'
-                  }`}
-                >
-                  <span className="font-medium">{t.name}</span>
-                  <span className="flex items-center gap-3 text-xs">
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {formatArenaTariffSchedule(t)}
-                    </span>
-                    <span className="font-semibold text-foreground">{formatMoney(t.price)}</span>
-                  </span>
-                </button>
-              ))}
-              {sorted.length === 0 && (
-                <p className="py-4 text-center text-sm text-muted-foreground">
-                  Нет тарифов для этой зоны. Добавьте тарифы на сайте Orda.
-                </p>
-              )}
-            </div>
+            {!rateTariff ? (
+              <p className="mb-4 text-sm text-muted-foreground">
+                Продление по сумме недоступно: у сессии не сохранён тариф. Завершите сессию и запустите станцию заново с нужным тарифом.
+              </p>
+            ) : (
+              <>
+                <div className="mb-4 rounded-xl border border-white/10 bg-muted/30 p-3 text-sm">
+                  <p className="font-medium text-foreground">{rateTariff.name}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    База для времени: {formatMoney(Number(rateTariff.price))} за {rateTariff.duration_minutes} мин
+                    {rateTariff.tariff_type === 'time_window' ? ` · ${formatArenaTariffSchedule(rateTariff)}` : ''}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Внесите сумму как в Senet — время посчитается автоматически (пропорционально этому пакету).
+                  </p>
+                </div>
 
-            {/* Payment method for extension */}
-            <p className="mb-2 text-sm font-medium">Способ оплаты</p>
-            <div className="mb-4 flex gap-2">
-              {(['cash', 'kaspi', 'mixed'] as const).map(m => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setExtPayMethod(m)}
-                  className={`flex-1 rounded-lg py-2 text-sm font-medium border transition ${
-                    extPayMethod === m
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'border-white/10 text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Каспи' : 'Смешанный'}
-                </button>
-              ))}
-            </div>
-            {extPayMethod === 'mixed' && (
-              <div className="mb-4 grid grid-cols-2 gap-2">
-                <div>
-                  <p className="mb-1 text-xs text-muted-foreground">Наличка ₸</p>
-                  <input type="number" min="0" value={extCashAmt} onChange={e => setExtCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+                <p className="mb-2 text-sm font-medium">Способ оплаты</p>
+                <div className="mb-4 flex gap-2">
+                  {(['cash', 'kaspi', 'mixed'] as const).map(m => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setExtPayMethod(m)}
+                      className={`flex-1 rounded-lg py-2 text-sm font-medium border transition ${
+                        extPayMethod === m
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-white/10 text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {m === 'cash' ? 'Наличка' : m === 'kaspi' ? 'Каспи' : 'Смешанный'}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <p className="mb-1 text-xs text-muted-foreground">Каспи ₸</p>
-                  <input type="number" min="0" value={extKaspiAmt} onChange={e => setExtKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+
+                {extPayMethod === 'mixed' ? (
+                  <div className="mb-4 grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="mb-1 text-xs text-muted-foreground">Наличка ₸</p>
+                      <input type="number" min="0" value={extCashAmt} onChange={e => setExtCashAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs text-muted-foreground">Каспи ₸</p>
+                      <input type="number" min="0" value={extKaspiAmt} onChange={e => setExtKaspiAmt(e.target.value)} placeholder="0" className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-4">
+                    <p className="mb-1 text-xs text-muted-foreground">Сумма ₸</p>
+                    <input
+                      type="number"
+                      min="0"
+                      value={extAmount}
+                      onChange={e => setExtAmount(e.target.value)}
+                      placeholder="200"
+                      className="w-full rounded-lg border border-white/10 bg-background px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                )}
+
+                {previewMin > 0 ? (
+                  <p className="mb-4 text-center text-sm font-semibold text-emerald-400">
+                    ≈ {previewMin} мин
+                  </p>
+                ) : paidTotal > 0 ? (
+                  <p className="mb-4 text-center text-xs text-amber-400">Суммы не хватает даже на 1 минуту по тарифу</p>
+                ) : null}
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (extPayMethod === 'cash') onExtend('cash', paidTotal, 0)
+                      else if (extPayMethod === 'kaspi') onExtend('kaspi', 0, paidTotal)
+                      else onExtend('mixed', Math.round(Number(extCashAmt) || 0), Math.round(Number(extKaspiAmt) || 0))
+                    }}
+                    disabled={!rateTariff || loading || previewMin < 1}
+                    className="flex-1"
+                  >
+                    {loading ? 'Продлеваем...' : 'Подтвердить'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setMode('view')} disabled={loading}>
+                    Назад
+                  </Button>
                 </div>
-              </div>
+              </>
             )}
 
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                onClick={() => selected && onExtend(selected, extPayMethod, Number(extCashAmt), Number(extKaspiAmt))}
-                disabled={!selected || loading || sorted.length === 0}
-                className="flex-1"
-              >
-                {loading ? 'Продлеваем...' : 'Подтвердить'}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setMode('view')} disabled={loading}>
-                Назад
-              </Button>
-            </div>
+            {!rateTariff ? (
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" className="flex-1" onClick={() => setMode('view')} disabled={loading}>
+                  Назад
+                </Button>
+              </div>
+            ) : null}
           </>
         )}
       </div>
@@ -1225,11 +1261,12 @@ export default function ArenaPage({
     }
   }
 
-  async function handleExtend(tariffId: string, payMethod: 'cash' | 'kaspi' | 'mixed', cashAmt: number, kaspiAmt: number) {
+  async function handleExtend(payMethod: 'cash' | 'kaspi' | 'mixed', cashAmt: number, kaspiAmt: number) {
     if (!manageTarget) return
     setActionLoading(true)
     try {
-      const updated = await api.extendArenaSession(config, session, manageTarget.session.id, tariffId, {
+      const updated = await api.extendArenaSession(config, session, manageTarget.session.id, {
+        amount_extension: true,
         payment_method: payMethod,
         cash_amount: cashAmt,
         kaspi_amount: kaspiAmt,

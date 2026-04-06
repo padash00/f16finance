@@ -787,14 +787,43 @@ export async function extendArenaSession(
   config: AppConfig,
   session: OperatorSession,
   sessionId: string,
-  tariffId: string,
-  payment: { payment_method: 'cash' | 'kaspi' | 'mixed'; cash_amount?: number; kaspi_amount?: number },
+  payload:
+    | {
+        amount_extension: true
+        payment_method: 'cash' | 'kaspi' | 'mixed'
+        cash_amount?: number
+        kaspi_amount?: number
+      }
+    | {
+        tariffId: string
+        payment_method: 'cash' | 'kaspi' | 'mixed'
+        cash_amount?: number
+        kaspi_amount?: number
+      },
 ): Promise<ArenaSession> {
+  const body =
+    'amount_extension' in payload && payload.amount_extension === true
+      ? {
+          action: 'extendSession' as const,
+          sessionId,
+          amount_extension: true,
+          payment_method: payload.payment_method,
+          cash_amount: payload.cash_amount,
+          kaspi_amount: payload.kaspi_amount,
+        }
+      : {
+          action: 'extendSession' as const,
+          sessionId,
+          tariffId: (payload as { tariffId: string }).tariffId,
+          payment_method: payload.payment_method,
+          cash_amount: payload.cash_amount,
+          kaspi_amount: payload.kaspi_amount,
+        }
   const data = await request<{ ok: boolean; data: ArenaSession }>(
     config,
     'POST',
     '/api/point/arena',
-    { action: 'extendSession', sessionId, tariffId, ...payment },
+    body,
     operatorHeaders(session),
   )
   return data.data

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { arenaExtensionMinutesFromPayment } from '@/lib/core/arena-extension-minutes'
 import { computeTimeWindowEndsAt, isNowInTariffWindow, isTariffOfferedNow } from '@/lib/core/arena-tariff-window'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
@@ -299,42 +300,93 @@ export async function POST(request: Request) {
       const {
         sessionId,
         tariffId,
+        amount_extension: amountExtension,
         payment_method = 'cash',
         cash_amount: extCashAmt,
         kaspi_amount: extKaspiAmt,
       } = body
-      if (!sessionId || !tariffId) return json({ error: 'sessionId and tariffId required' }, 400)
-
-      const { data: tariff, error: tariffError } = await supabase
-        .from('arena_tariffs')
-        .select('*')
-        .eq('id', tariffId)
-        .single()
-      if (tariffError || !tariff) return json({ error: 'tariff-not-found' }, 404)
+      if (!sessionId) return json({ error: 'sessionId required' }, 400)
 
       const { data: current, error: fetchError } = await supabase
         .from('arena_sessions')
-        .select('ends_at, amount, station_id, operator_id')
+        .select('ends_at, amount, station_id, operator_id, tariff_id')
         .eq('id', sessionId)
         .eq('point_project_id', projectId)
         .single()
       if (fetchError || !current) return json({ error: 'session-not-found' }, 404)
 
-      // Extend from current ends_at (or now if already elapsed)
       const currentEndsAt = new Date((current as any).ends_at)
       const baseTime = currentEndsAt > new Date() ? currentEndsAt : new Date()
-      const newEndsAt = new Date(baseTime.getTime() + Number(tariff.duration_minutes) * 60_000)
 
-      const extPrice = Number(tariff.price) || 0
+      let extraMinutes: number
       let extCash: number
       let extKaspi: number
-      if (payment_method === 'cash') {
-        extCash = extPrice; extKaspi = 0
-      } else if (payment_method === 'kaspi') {
-        extCash = 0; extKaspi = extPrice
+      let extPrice: number
+
+      if (amountExtension === true) {
+        const sid = (current as any).tariff_id as string | null
+        if (!sid) {
+          return json(
+            { error: 'У сессии нет тарифа — продление только по выбранному пакету с сайта невозможно. Завершите и откройте заново.', code: 'session-tariff-missing' },
+            400,
+          )
+        }
+        const { data: rateTariff, error: rateErr } = await supabase.from('arena_tariffs').select('*').eq('id', sid).single()
+        if (rateErr || !rateTariff) return json({ error: 'tariff-not-found' }, 404)
+
+        if (payment_method === 'cash') {
+          extCash = Math.round(Number(extCashAmt) || 0)
+          extKaspi = 0
+        } else if (payment_method === 'kaspi') {
+          extCash = 0
+          extKaspi = Math.round(Number(extKaspiAmt) || 0)
+        } else {
+          extCash = Math.round(Number(extCashAmt) || 0)
+          extKaspi = Math.round(Number(extKaspiAmt) || 0)
+        }
+        extPrice = extCash + extKaspi
+        const computed = arenaExtensionMinutesFromPayment(
+          Number(rateTariff.price),
+          Number(rateTariff.duration_minutes),
+          extPrice,
+        )
+        if (!computed.ok) {
+          const msg =
+            computed.code === 'extension-amount-too-small'
+              ? 'Сумма слишком мала для хотя бы 1 минуты по тарифу зоны'
+              : computed.code === 'invalid-tariff-rate'
+                ? 'Тариф сессии некорректен (цена/длительность)'
+                : 'Укажите сумму продления'
+          return json({ error: msg, code: computed.code }, 400)
+        }
+        extraMinutes = computed.minutes
       } else {
-        extCash = Number(extCashAmt) || 0; extKaspi = Number(extKaspiAmt) || 0
+        if (!tariffId) return json({ error: 'tariffId required (или amount_extension: true)' }, 400)
+
+        const { data: tariff, error: tariffError } = await supabase
+          .from('arena_tariffs')
+          .select('*')
+          .eq('id', tariffId)
+          .single()
+        if (tariffError || !tariff) return json({ error: 'tariff-not-found' }, 404)
+
+        extraMinutes = Number(tariff.duration_minutes) || 0
+        if (extraMinutes < 1) return json({ error: 'Некорректная длительность тарифа' }, 400)
+
+        extPrice = Number(tariff.price) || 0
+        if (payment_method === 'cash') {
+          extCash = extPrice
+          extKaspi = 0
+        } else if (payment_method === 'kaspi') {
+          extCash = 0
+          extKaspi = extPrice
+        } else {
+          extCash = Number(extCashAmt) || 0
+          extKaspi = Number(extKaspiAmt) || 0
+        }
       }
+
+      const newEndsAt = new Date(baseTime.getTime() + extraMinutes * 60_000)
 
       const { data: updatedSession, error: updateError } = await supabase
         .from('arena_sessions')
