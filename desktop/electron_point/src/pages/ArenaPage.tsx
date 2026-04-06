@@ -287,7 +287,8 @@ function ManageSessionModal({
   const [mode, setMode] = useState<'view' | 'extend'>('view')
 
   const rateTariff = tariffs.find(t => t.id === arenaSession.tariff_id)
-  const zoneRow = station.zone_id ? zones.find(z => z.id === station.zone_id) : undefined
+  const zoneIdForHourly = station.zone_id ?? rateTariff?.zone_id ?? null
+  const zoneRow = zoneIdForHourly ? zones.find(z => z.id === zoneIdForHourly) : undefined
   const zoneHourly = zoneRow?.extension_hourly_price
   const zoneHourlyEff =
     zoneHourly != null && Number(zoneHourly) > 0 ? Number(zoneHourly) : null
@@ -382,7 +383,9 @@ function ManageSessionModal({
                   <p className="mt-2 text-xs text-muted-foreground">
                     {extensionHourlyEffective != null
                       ? `Продление по сумме: ${formatMoney(extensionHourlyEffective)} за 60 мин${zoneHourlyEff != null ? ' (час зоны)' : ' (старая ставка в тарифе)'}. Меньше суммы пакета — по этому часу; от полной цены пакета — целые пакеты по ${formatMoney(Number(rateTariff.price))}, остаток снова по часу.`
-                      : 'Не задан час зоны — время считается пропорционально пакету. Укажите «час продления по сумме» у зоны: Станции → карандаш у названия зоны.'}
+                      : zoneIdForHourly && !zoneRow
+                        ? 'Час зоны задан на сайте, но зона не пришла в данные точки — обновите экран (↻) или проверьте привязку компании у зоны/станции.'
+                        : 'Не задан час зоны — время считается пропорционально пакету. Укажите «час продления по сумме» у зоны: Станции → карандаш у названия зоны.'}
                   </p>
                 </div>
 

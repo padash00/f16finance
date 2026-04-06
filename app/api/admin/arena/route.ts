@@ -120,7 +120,7 @@ export async function GET(request: Request) {
 
     function withCompany<T>(q: T): T {
       if (!companyId) return q
-      return (q as any).eq('company_id', companyId) as T
+      return (q as any).or(`company_id.eq.${companyId},company_id.is.null`) as T
     }
 
     const [

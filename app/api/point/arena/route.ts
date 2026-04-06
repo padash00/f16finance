@@ -37,9 +37,10 @@ export async function GET(request: Request) {
     const projectId = device.id
     const companyId = device.company_id || null
 
+    /** Строки с company_id = null (старые данные) должны быть видны той же точке, что и привязанная компания */
     function withCo<T>(q: T): T {
       if (!companyId) return q
-      return (q as any).eq('company_id', companyId) as T
+      return (q as any).or(`company_id.eq.${companyId},company_id.is.null`) as T
     }
 
     const todayDate = new Date().toISOString().slice(0, 10)
@@ -352,7 +353,11 @@ export async function POST(request: Request) {
           .select('zone_id')
           .eq('id', (current as any).station_id as string)
           .maybeSingle()
-        const stZoneId = stRow?.zone_id as string | null | undefined
+        let stZoneId = stRow?.zone_id as string | null | undefined
+        const tariffZoneId = (rateTariff as Record<string, unknown>).zone_id
+        if (!stZoneId && tariffZoneId != null && tariffZoneId !== '') {
+          stZoneId = String(tariffZoneId)
+        }
         if (stZoneId) {
           const { data: zoneRow } = await supabase
             .from('arena_zones')
