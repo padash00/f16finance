@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
@@ -9,6 +10,7 @@ import { resolveRequestAuthPersona, type RequestAuthPersonaKind } from '@/lib/se
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
 import { fetchLinkedCustomersForUser, type LinkedCustomerRow } from '@/lib/server/linked-customers'
 import { requiredEnv } from '@/lib/server/env'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import {
   ACTIVE_ORGANIZATION_COOKIE,
   resolveActiveOrganizationSubscription,
@@ -32,7 +34,28 @@ function parseCookies(header: string | null): Map<string, string> {
   return map
 }
 
+function getBearerToken(request: Request): string | null {
+  const raw = request.headers.get('authorization') || ''
+  const match = raw.match(/^Bearer\s+(.+)$/i)
+  return match?.[1]?.trim() || null
+}
+
 export function createRequestSupabaseClient(request: Request) {
+  const bearerToken = getBearerToken(request)
+  if (bearerToken) {
+    return createClient(requiredEnv('NEXT_PUBLIC_SUPABASE_URL'), requiredEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'), {
+      global: {
+        headers: {
+          Authorization: `Bearer ${bearerToken}`,
+        },
+      },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    })
+  }
+
   const cookieMap = parseCookies(request.headers.get('cookie'))
 
   return createServerClient(requiredEnv('NEXT_PUBLIC_SUPABASE_URL'), requiredEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'), {
@@ -59,6 +82,12 @@ export function createRequestSupabaseClient(request: Request) {
 }
 
 export async function getRequestUser(request: Request) {
+  const bearerToken = getBearerToken(request)
+  if (bearerToken && hasAdminSupabaseCredentials()) {
+    const { data } = await createAdminSupabaseClient().auth.getUser(bearerToken)
+    return data.user
+  }
+
   const supabase = createRequestSupabaseClient(request)
   const {
     data: { user },

@@ -90,14 +90,14 @@ export async function proxy(request: NextRequest) {
   const apexHost = new URL(SITE_URL).hostname.toLowerCase()
   const requestHost = normalizeHost(request.headers.get('host'))
 
+  if (url.pathname.startsWith('/api/')) {
+    return response
+  }
+
   if (requestHost && requestHost !== apexHost && requestHost !== `www.${apexHost}`) {
     url.protocol = new URL(SITE_URL).protocol
     url.host = apexHost
     return NextResponse.redirect(url)
-  }
-
-  if (url.pathname.startsWith('/api/')) {
-    return response
   }
 
   if (!user) {
