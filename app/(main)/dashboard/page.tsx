@@ -784,7 +784,10 @@ export default function SmartDashboardPage() {
         const [companiesBody, incomesBody, expensesBody] = await Promise.all([
           fetchJson<{ data: Company[] }>('/api/admin/companies'),
           fetchJson<{ data: IncomeRow[] }>(`/api/admin/incomes?from=${prevFrom}&to=${dateTo}`),
-          fetchJson<{ data: ExpenseRow[] }>(`/api/admin/expenses?from=${prevFrom}&to=${dateTo}`),
+          // API по умолчанию отдаёт 200 строк; окно prevFrom…dateTo — два периода, иначе расходы за выбранный период обрезаются
+          fetchJson<{ data: ExpenseRow[] }>(
+            `/api/admin/expenses?from=${prevFrom}&to=${dateTo}&page_size=2000&page=0`,
+          ),
         ])
 
         if (!mounted) return
@@ -825,7 +828,7 @@ export default function SmartDashboardPage() {
           `/api/admin/incomes?from=${today}&to=${today}`,
         ),
         fetchJson<{ data: Array<{ cash_amount: number | null; kaspi_amount: number | null }> }>(
-          `/api/admin/expenses?from=${today}&to=${today}`,
+          `/api/admin/expenses?from=${today}&to=${today}&page_size=2000&page=0`,
         ),
       ])
       if (!mounted) return
