@@ -3,6 +3,7 @@ import 'server-only'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { writeNotificationLog } from '@/lib/server/audit'
 import { requiredEnv } from '@/lib/server/env'
+import { escapeTelegramHtml, ordaTelegramFrame } from '@/lib/telegram/message-kit'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 
 type DbClient = ReturnType<typeof createAdminSupabaseClient> | any
@@ -124,7 +125,7 @@ async function sendTelegramMessage(chatId: string, text: string, replyMarkup?: R
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
-      text,
+      text: ordaTelegramFrame(text),
       parse_mode: 'HTML',
       disable_web_page_preview: true,
       reply_markup: replyMarkup,
@@ -235,7 +236,7 @@ function buildTeamRoster(shifts: ShiftRow[]) {
     .map(([date, row]) => {
       const dayLabel = row.day ? `день — ${row.day}` : 'день — свободно'
       const nightLabel = row.night ? `ночь — ${row.night}` : 'ночь — свободно'
-      return `• ${formatShiftDate(date)}: ${dayLabel}; ${nightLabel}`
+      return escapeTelegramHtml(`• ${formatShiftDate(date)}: ${dayLabel}; ${nightLabel}`)
     })
     .join('\n')
 }
@@ -248,23 +249,27 @@ function buildOperatorWeekMessage(params: {
   teamRoster: string
 }) {
   const personalShifts = params.assignments
-    .map((shift) => `• ${formatShiftDate(shift.date)} — ${formatShiftType(shift.shift_type)}`)
+    .map((shift) =>
+      escapeTelegramHtml(`• ${formatShiftDate(shift.date)} — ${formatShiftType(shift.shift_type)}`),
+    )
     .join('\n')
 
+  const company = escapeTelegramHtml(params.companyName)
+
   return [
-    `<b>Недельный график опубликован</b>`,
+    `<b>📅 Недельный график опубликован</b>`,
     '',
-    `<b>Точка:</b> ${params.companyName}`,
-    `<b>Период:</b> ${formatShiftDate(params.weekStart)} — ${formatShiftDate(params.weekEnd)}`,
+    `<b>Точка</b> · ${company}`,
+    `<b>Период</b> · ${formatShiftDate(params.weekStart)} — ${formatShiftDate(params.weekEnd)}`,
     '',
-    `<b>Ваши смены:</b>`,
-    personalShifts || 'На эту неделю у вас нет смен.',
+    `<b>Ваши смены</b>`,
+    personalShifts || '<i>На эту неделю у вас нет смен.</i>',
     '',
-    `<b>Команда на неделю:</b>`,
-    params.teamRoster || 'Нет данных по команде.',
+    `<b>Команда на неделю</b>`,
+    params.teamRoster || '<i>Нет данных по команде.</i>',
     '',
-    `Если вы согласны со всеми датами, нажмите <b>Подтверждаю неделю</b>.`,
-    `Если по одной из смен есть проблема, нажмите <b>Есть проблема</b>.`,
+    `Если всё верно — <b>Подтверждаю неделю</b>.`,
+    `Если есть вопрос по смене — <b>Есть проблема</b>.`,
   ].join('\n')
 }
 

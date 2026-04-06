@@ -4,6 +4,7 @@ import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { validateAdminToken } from '@/lib/server/admin-tokens'
+import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
 function json(data: unknown, status = 200) {
@@ -235,7 +236,13 @@ export async function POST(request: Request) {
       // Notify operator via Telegram that their debt was marked as paid
       if (operator.telegram_chat_id) {
         const item_name_for_tg = (item as any).item_name || 'Товар'
-        const text = `✅ <b>Долг погашен</b>\n${item_name_for_tg} — ${Number(item.total_amount).toLocaleString('ru-RU')} ₸`
+        const amt = Number(item.total_amount).toLocaleString('ru-RU')
+        const text = [
+          `<b>✅ Долг погашен</b>`,
+          ``,
+          `${escapeTelegramHtml(item_name_for_tg)}`,
+          `<b>${amt} ₸</b>`,
+        ].join('\n')
         await sendTelegramMessage(String(operator.telegram_chat_id), text).catch(() => null)
       }
 

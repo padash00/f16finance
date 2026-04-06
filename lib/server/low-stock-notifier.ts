@@ -1,4 +1,5 @@
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
+import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
 export async function checkAndNotifyLowStock(
@@ -77,7 +78,14 @@ export async function checkAndNotifyLowStock(
 
       // 3c. Build Telegram message
       const unit = item.unit || 'шт'
-      const text = `⚠️ Низкий остаток: ${item.name}\nОстаток: ${balance} ${unit}\nПорог: ${threshold} ${unit}\nТочка: ${locationName}`
+      const text = [
+        `<b>⚠️ Низкий остаток</b>`,
+        ``,
+        `<b>${escapeTelegramHtml(item.name)}</b>`,
+        `📊 Сейчас: <b>${balance}</b> ${escapeTelegramHtml(unit)}`,
+        `📏 Порог: <b>${threshold}</b> ${escapeTelegramHtml(unit)}`,
+        `📍 Точка: <b>${escapeTelegramHtml(locationName)}</b>`,
+      ].join('\n')
 
       // 3d. Fetch all staff with telegram_chat_id and role in ('owner', 'manager')
       const { data: staff } = await supabase

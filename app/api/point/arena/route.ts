@@ -4,6 +4,7 @@ import { effectiveZoneExtensionHourly } from '@/lib/core/arena-zone-extension-ho
 import { computeTimeWindowEndsAt, isNowInTariffWindow, isTariffOfferedNow } from '@/lib/core/arena-tariff-window'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 
 function json(data: unknown, status = 200) {
@@ -521,7 +522,13 @@ export async function POST(request: Request) {
             : (session.station as any)?.name
           const mins = Math.max(0, Math.ceil(remaining / 60_000))
           const timeStr = endsAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-          const text = `⏰ <b>Осталось ${mins} мин.</b>\nСтанция: <b>${stationName || '—'}</b>\nОкончание: ${timeStr}`
+          const station = escapeTelegramHtml(String(stationName || '—'))
+          const text = [
+            `<b>⏰ Аренда · ${mins} мин до конца</b>`,
+            ``,
+            `<b>Станция</b> · ${station}`,
+            `<b>Окончание</b> · <code>${escapeTelegramHtml(timeStr)}</code>`,
+          ].join('\n')
           await sendTelegramMessage(operator.telegram_chat_id, text).catch(() => null)
         }
       }

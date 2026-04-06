@@ -3,10 +3,11 @@ import { NextResponse } from 'next/server'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { resolveStaffByUser } from '@/lib/server/admin'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
-import { requiredEnv } from '@/lib/server/env'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
+import { sendTelegramMessage as sendOrdaTelegram } from '@/lib/telegram/send'
 
 import type { TaskStatus, TaskPriority, TaskResponse } from '@/lib/core/types'
 
@@ -152,26 +153,6 @@ function formatTaskDate(date: string | null) {
   })
 }
 
-async function sendTelegramMessage(chatId: string, text: string) {
-  const token = requiredEnv('TELEGRAM_BOT_TOKEN')
-  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-      reply_markup: undefined,
-    }),
-  })
-
-  const payload = await response.json().catch(() => null)
-  if (!response.ok || !payload?.ok) {
-    throw new Error(payload?.description || 'Telegram не принял сообщение')
-  }
-}
-
 async function getNextTaskNumber(supabase: ClientLike) {
   const { data, error } = await supabase
     .from('tasks')
@@ -269,43 +250,40 @@ function buildTaskTelegramMessage(params: {
   const { type, task, company } = params
   const header =
     type === 'assigned'
-      ? 'Новая задача в Orda Control'
-      : 'Обновление по задаче в Orda Control'
+      ? '📋 Новая задача'
+      : '📝 Обновление по задаче'
 
   const lines = [
-    `<b>${escapeHtml(header)}</b>`,
+    `<b>${header}</b>`,
     '',
-    `<b>Задача #${task.task_number}</b>`,
-    `<blockquote>${escapeHtml(task.title)}</blockquote>`,
-    `<b>Компания:</b> ${escapeHtml(company?.name || 'не указана')}`,
-    `<b>Приоритет:</b> ${escapeHtml(PRIORITY_LABELS[task.priority])}`,
-    `<b>Дедлайн:</b> ${escapeHtml(formatTaskDate(task.due_date))}`,
-    `<b>Статус:</b> ${escapeHtml(params.statusLabel || STATUS_LABELS[task.status])}`,
+    `<b>#${task.task_number}</b> · ${escapeHtml(task.title)}`,
+    '',
+    `<b>Точка</b> · ${escapeHtml(company?.name || 'не указана')}`,
+    `<b>Приоритет</b> · ${escapeHtml(PRIORITY_LABELS[task.priority])}`,
+    `<b>Дедлайн</b> · ${escapeHtml(formatTaskDate(task.due_date))}`,
+    `<b>Статус</b> · ${escapeHtml(params.statusLabel || STATUS_LABELS[task.status])}`,
   ]
 
   if (task.description?.trim()) {
-    lines.push('', `<b>Что нужно сделать:</b>`, escapeHtml(task.description.trim()))
+    lines.push('', `<b>Описание</b>`, escapeHtml(task.description.trim()))
   }
 
   if (params.note?.trim()) {
-    lines.push('', `<b>Комментарий:</b>`, escapeHtml(params.note.trim()))
+    lines.push('', `<b>Комментарий</b>`, escapeHtml(params.note.trim()))
   }
 
   if (type === 'assigned') {
     lines.push(
       '',
-      '<b>Можно ответить прямо в Telegram:</b>',
-      '• Нажмите кнопку под сообщением',
-      '• Или напишите, например: <code>#123 принял</code>',
+      `<b>Ответ в Telegram</b>`,
+      '▸ Кнопки под сообщением',
+      `▸ Или текстом: <code>#${task.task_number} принял</code>`,
       '',
-      '<b>Также можно ответить в кабинете:</b>',
-      '• Принял в работу',
-      '• Нужны уточнения',
-      '• Уже выполнено',
+      `<i>Или откройте задачи в кабинете.</i>`,
     )
   }
 
-  lines.push('', 'Откройте раздел задач в кабинете, чтобы продолжить работу.')
+  lines.push('', `<i>Раздел «Задачи» в Orda Control</i>`)
 
   return lines.join('\n')
 }
@@ -382,25 +360,16 @@ async function notifyTaskAssignee(
     note: params.note,
   })
 
-  const token = requiredEnv('TELEGRAM_BOT_TOKEN')
-  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: String(params.operator.telegram_chat_id),
-      text,
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-      reply_markup:
-        params.type === 'assigned' && params.task.status !== 'done' && params.task.status !== 'archived'
-          ? buildTaskResponseKeyboard(params.task.id)
-          : undefined,
-    }),
-  })
+  const replyMarkup =
+    params.type === 'assigned' && params.task.status !== 'done' && params.task.status !== 'archived'
+      ? buildTaskResponseKeyboard(params.task.id)
+      : undefined
 
-  const payload = await response.json().catch(() => null)
-  if (!response.ok || !payload?.ok) {
-    throw new Error(payload?.description || 'Telegram не принял сообщение')
+  const result = await sendOrdaTelegram(String(params.operator.telegram_chat_id), text, {
+    replyMarkup,
+  })
+  if (!result.ok) {
+    throw new Error(result.error || 'Telegram не принял сообщение')
   }
 
   await writeNotificationLog(supabase, {
@@ -902,7 +871,9 @@ export async function POST(req: Request) {
 
     try {
       if (body.message?.trim()) {
-        await sendTelegramMessage(String(context.operator.telegram_chat_id), body.message.trim())
+        const customCore = `<b>📨 Сообщение по задаче #${context.task.task_number}</b>\n\n${escapeTelegramHtml(body.message.trim())}`
+        const tgResult = await sendOrdaTelegram(String(context.operator.telegram_chat_id), customCore)
+        if (!tgResult.ok) throw new Error(tgResult.error || 'Telegram не принял сообщение')
         await writeNotificationLog(supabase, {
           channel: 'telegram',
           recipient: String(context.operator.telegram_chat_id),

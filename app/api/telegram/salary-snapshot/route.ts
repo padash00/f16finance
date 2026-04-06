@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 
 import { requireAdminRequest } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
-import { requiredEnv } from '@/lib/server/env'
 import { findOperatorByKey } from '@/lib/server/repositories/salary'
 import { buildSalaryTelegramMessage, getOperatorSalarySnapshot } from '@/lib/server/services/salary'
+import { sendTelegramMessage } from '@/lib/telegram/send'
 
 type ReqBody = {
   operatorId: string
@@ -72,22 +72,9 @@ export async function POST(req: Request) {
       lastItem: body.lastItem,
     })
 
-    const token = requiredEnv('TELEGRAM_BOT_TOKEN')
-    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: operator.telegram_chat_id,
-        text,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-      }),
-    })
-
-    if (!response.ok) {
-      const raw = await response.text().catch(() => '')
-      console.error('Telegram send error', raw)
-      return json({ error: 'Telegram не принял сообщение' }, 502)
+    const result = await sendTelegramMessage(operator.telegram_chat_id, text)
+    if (!result.ok) {
+      return json({ error: result.error || 'Telegram не принял сообщение' }, 502)
     }
 
     return json({ ok: true, operator: { id: operator.id, telegram_chat_id: operator.telegram_chat_id } })

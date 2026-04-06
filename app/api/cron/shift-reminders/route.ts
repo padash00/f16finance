@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { requiredEnv } from '@/lib/server/env'
+import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
+import { sendTelegramMessage } from '@/lib/telegram/send'
 
 export const runtime = 'nodejs'
 
@@ -14,15 +16,6 @@ function nowKZHour(): number {
 function todayKZISO(): string {
   const d = new Date(Date.now() + KZ_OFFSET)
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
-}
-
-async function sendTg(chatId: string, text: string) {
-  const token = requiredEnv('TELEGRAM_BOT_TOKEN')
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
-  })
 }
 
 // Shift start hours (KZ time)
@@ -69,15 +62,15 @@ export async function GET(req: Request) {
     const shiftLabel = SHIFT_TIMES[shift.shift_type]?.label || shift.shift_type
 
     const text = [
-      `👋 <b>${name}</b>, напоминание!`,
+      `👋 <b>${escapeTelegramHtml(name)}</b>`,
       ``,
-      `Через 1 час начинается твоя смена:`,
-      `${shiftLabel}${company ? ` — ${company}` : ''}`,
+      `<b>⏰ Через час смена</b>`,
+      `${shiftLabel}${company ? ` · ${escapeTelegramHtml(company)}` : ''}`,
       ``,
-      `Не забудь прийти вовремя. Удачи! 💪`,
+      `<i>Не опаздывайте — удачи! 💪</i>`,
     ].join('\n')
 
-    await sendTg(String(op.telegram_chat_id), text).catch(() => null)
+    await sendTelegramMessage(String(op.telegram_chat_id), text).catch(() => null)
     sent++
   }
 

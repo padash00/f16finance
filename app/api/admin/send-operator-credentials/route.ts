@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { ensureOrganizationOperatorAccess } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 
@@ -22,14 +23,21 @@ export async function POST(request: Request) {
       operatorId: String(operatorId),
     })
 
+    const who = escapeTelegramHtml(String(name || username))
+    const u = escapeTelegramHtml(String(username))
+    const p = escapeTelegramHtml(String(password))
     const text = [
-      `🔐 <b>Данные для входа в Orda Point</b>`,
+      `<b>🔐 Вход в Orda Point</b>`,
       ``,
-      `👤 ${name || username}`,
-      `🔑 Логин: <code>${username}</code>`,
-      `🔐 Пароль: <code>${password}</code>`,
+      `👤 <b>${who}</b>`,
       ``,
-      `Введите эти данные в программе на кассе.`,
+      `🔑 Логин`,
+      `<code>${u}</code>`,
+      ``,
+      `🔐 Пароль`,
+      `<code>${p}</code>`,
+      ``,
+      `<i>Сохраните сообщение и введите данные в программе на кассе.</i>`,
     ].join('\n')
 
     const result = await sendTelegramMessage(chatId, text)

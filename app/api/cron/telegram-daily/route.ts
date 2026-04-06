@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requiredEnv } from '@/lib/server/env'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
+import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
+import { sendTelegramMessage } from '@/lib/telegram/send'
 
 export const runtime = 'nodejs'
 
@@ -20,17 +22,6 @@ function fmtMoney(v: number) {
   if (abs >= 1_000_000) return sign + (abs / 1_000_000).toFixed(1) + ' млн ₸'
   if (abs >= 1_000) return sign + Math.round(abs / 1_000) + ' тыс ₸'
   return Math.round(v).toLocaleString('ru-RU') + ' ₸'
-}
-
-async function sendTg(chatId: string, text: string) {
-  const token = requiredEnv('TELEGRAM_BOT_TOKEN')
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
-  })
-  const data = await res.json().catch(() => null)
-  if (!data?.ok) throw new Error(data?.description || 'Telegram send failed')
 }
 
 export async function GET(req: Request) {
@@ -126,8 +117,8 @@ export async function GET(req: Request) {
   const isSurge = avgDailyIncome > 0 && totalIncome > avgDailyIncome * 1.3
 
   const lines = [
-    `<b>☀️ Orda Control — Итоги дня</b>`,
-    `<i>${date}</i>`,
+    `<b>☀️ Итоги дня</b>`,
+    `<i>📅 ${date}</i>`,
     '',
     `💰 Выручка: <b>${fmtMoney(totalIncome)}</b>`,
     `📉 Расходы: <b>${fmtMoney(totalExpense)}</b>`,
@@ -142,20 +133,20 @@ export async function GET(req: Request) {
   // Per-company breakdown
   const sortedCompanies = Array.from(companyRevenue.values()).sort((a, b) => b.total - a.total)
   if (sortedCompanies.length > 1) {
-    lines.push('', '<b>По точкам:</b>')
+    lines.push('', '<b>По точкам</b>')
     for (const { name, total } of sortedCompanies) {
       const pct = totalIncome > 0 ? Math.round((total / totalIncome) * 100) : 0
-      lines.push(`  🏢 ${name}: <b>${fmtMoney(total)}</b> (${pct}%)`)
+      lines.push(`  🏢 ${escapeTelegramHtml(name)}: <b>${fmtMoney(total)}</b> (${pct}%)`)
     }
   }
 
   // Operator breakdown
   const sortedOps = Array.from(opRevenue.entries()).sort((a, b) => b[1] - a[1])
   if (sortedOps.length > 0) {
-    lines.push('', `<b>Операторы (${sortedOps.length}):</b>`)
+    lines.push('', `<b>Операторы (${sortedOps.length})</b>`)
     for (const [opId, rev] of sortedOps) {
       const name = operatorNames.get(opId) || 'Оператор'
-      lines.push(`  👤 ${name}: <b>${fmtMoney(rev)}</b>`)
+      lines.push(`  👤 ${escapeTelegramHtml(name)}: <b>${fmtMoney(rev)}</b>`)
     }
   }
 
@@ -169,14 +160,16 @@ export async function GET(req: Request) {
   }
 
   if (topCats.length > 0) {
-    lines.push('', '<b>Топ расходов:</b>')
-    for (const [cat, val] of topCats) lines.push(`  • ${cat}: ${fmtMoney(val)}`)
+    lines.push('', '<b>Топ расходов</b>')
+    for (const [cat, val] of topCats) lines.push(`  ▸ ${escapeTelegramHtml(cat)}: ${fmtMoney(val)}`)
   }
 
   const messageText = lines.join('\n')
   const recipients = [chatId, process.env.TELEGRAM_OWNER_CHAT_ID].filter(Boolean) as string[]
   const uniqueRecipients = [...new Set(recipients)]
-  await Promise.all(uniqueRecipients.map(id => sendTg(id, messageText).catch(() => null)))
+  await Promise.all(
+    uniqueRecipients.map((id) => sendTelegramMessage(id, messageText).then(() => null).catch(() => null)),
+  )
 
   return NextResponse.json({ ok: true, date, totalIncome, totalExpense, profit, recipients: uniqueRecipients.length })
 }

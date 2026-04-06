@@ -64,7 +64,8 @@ export function buildSalaryTelegramMessage(params: {
 }): string {
   const { operatorName, dateFrom, dateTo, weekStart, weekEnd, summary, lastItem } = params
 
-  let text = `👤 <b>${escapeHtml(operatorName)}</b>\n`
+  let text = `<b>💰 Зарплата · сводка</b>\n\n`
+  text += `👤 <b>${escapeHtml(operatorName)}</b>\n`
   text += `📆 Период: <code>${escapeHtml(`${dateFrom} — ${dateTo}`)}</code>\n`
   text += `🗓 Неделя (пн-вс): <code>${escapeHtml(`${weekStart} — ${weekEnd}`)}</code>\n\n`
 

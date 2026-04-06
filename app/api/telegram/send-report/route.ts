@@ -103,8 +103,8 @@ export async function POST(request: Request) {
   const sign = profit >= 0 ? '+' : ''
 
   const lines = [
-    `<b>📊 Orda Control — ${reportTitle}</b>`,
-    `<i>${dateFrom === today ? today : `${dateFrom} — ${today}`}</i>`,
+    `<b>📊 ${reportTitle}</b>`,
+    `<i>📅 ${dateFrom === today ? today : `${dateFrom} — ${today}`}</i>`,
     '',
     `💰 Выручка: <b>${fmtMoney(totalIncome)}</b>`,
     `📉 Расходы: <b>${fmtMoney(totalExpense)}</b>`,
@@ -114,14 +114,11 @@ export async function POST(request: Request) {
 
   if (topCategories.length > 0) {
     lines.push('')
-    lines.push('<b>Топ статей расходов:</b>')
+    lines.push('<b>Топ статей расходов</b>')
     for (const [cat, val] of topCategories) {
-      lines.push(`  • ${cat}: ${fmtMoney(val)}`)
+      lines.push(`  ▸ ${cat}: ${fmtMoney(val)}`)
     }
   }
-
-  lines.push('')
-  lines.push(`<i>Отправлено из Orda Control</i>`)
 
   const result = await sendTelegramMessage(chatId, lines.join('\n'))
   if (!result.ok) {

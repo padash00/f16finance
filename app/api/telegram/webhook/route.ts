@@ -30,6 +30,7 @@ import {
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { SITE_CONTEXT } from '@/lib/ai/site-context'
 import { assembleSystemPrompt, wrapDataBlock } from '@/lib/ai/prompts'
+import { escapeTelegramHtml, ordaTelegramFrame } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
 import { extractTextFromPdf, parseExpenseFromText, parseExpenseFromImage } from '@/lib/server/expense-receipt-parser'
 import { getOperatorSalarySnapshot, buildSalaryTelegramMessage } from '@/lib/server/services/salary'
@@ -312,7 +313,7 @@ async function handleTopOperators(chatId: number) {
   } else {
     for (let i = 0; i < leaderboard.length; i++) {
       const op = leaderboard[i]
-      lines.push(`${medals[i]} <b>${op.name}</b>`)
+      lines.push(`${medals[i]} <b>${escapeTelegramHtml(op.name)}</b>`)
       lines.push(`   ${fmtMoney(op.revenue)} · ${op.shifts} смен`)
     }
   }
@@ -467,7 +468,7 @@ async function handleMyStats(chatId: number, operatorId: string, operatorName: s
 
   const lines = [
     `<b>📊 Ваша статистика</b>`,
-    `<i>${operatorName} · ${dateFrom} — ${today}</i>`,
+    `<i>${escapeTelegramHtml(operatorName)} · ${dateFrom} — ${today}</i>`,
     '',
     `💰 Выручка: <b>${fmtMoney(totalRevenue)}</b>`,
     `🔢 Смен: <b>${shifts}</b>`,
@@ -500,7 +501,7 @@ async function handleMyShifts(chatId: number, operatorId: string, operatorName: 
 
   const lines = [
     `<b>📅 Ваши ближайшие смены</b>`,
-    `<i>${operatorName}</i>`,
+    `<i>${escapeTelegramHtml(operatorName)}</i>`,
     '',
   ]
 
@@ -510,7 +511,9 @@ async function handleMyShifts(chatId: number, operatorId: string, operatorName: 
     for (const shift of shifts) {
       const company = (shift.company as any)?.name || ''
       const typeLabel = shiftTypeLabel[shift.shift_type] || shift.shift_type
-      lines.push(`• ${fmtDate(shift.shift_date)} — ${typeLabel}${company ? `, ${company}` : ''}`)
+      lines.push(
+        `• ${fmtDate(shift.shift_date)} — ${typeLabel}${company ? `, ${escapeTelegramHtml(company)}` : ''}`,
+      )
     }
   }
 
@@ -641,7 +644,12 @@ async function answerCallbackQuery(callbackQueryId: string, text: string, showAl
 }
 
 async function sendTelegramText(chatId: string | number, text: string) {
-  await callTelegram('sendMessage', { chat_id: String(chatId), text, parse_mode: 'HTML', disable_web_page_preview: true })
+  await callTelegram('sendMessage', {
+    chat_id: String(chatId),
+    text: ordaTelegramFrame(text),
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+  })
 }
 
 async function clearCallbackButtons(chatId: string | number, messageId: number) {
@@ -806,7 +814,7 @@ async function handleInvoicePhoto(chatId: number, messageId: number, telegramUse
 
   await callTelegram('sendMessage', {
     chat_id: String(chatId),
-    text: confirmText,
+    text: ordaTelegramFrame(confirmText),
     parse_mode: 'HTML',
     reply_markup: keyboard,
   })

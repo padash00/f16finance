@@ -4,6 +4,7 @@ import { createAdminSupabaseClient } from '@/lib/server/supabase'
 import { requiredEnv } from '@/lib/server/env'
 import { buildSalaryTelegramMessage, getOperatorSalarySnapshot } from '@/lib/server/services/salary'
 import { listWeeklyTelegramOperators } from '@/lib/server/repositories/salary'
+import { ordaTelegramFrame } from '@/lib/telegram/message-kit'
 
 export const runtime = 'nodejs'
 
@@ -38,7 +39,7 @@ async function sendTelegramMessage(chatId: string, text: string) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       chat_id: chatId,
-      text,
+      text: ordaTelegramFrame(text),
       parse_mode: 'HTML',
       disable_web_page_preview: 'true',
     }),

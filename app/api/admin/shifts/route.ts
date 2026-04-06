@@ -7,6 +7,7 @@ import { listOrganizationOperatorIds, resolveCompanyScope } from '@/lib/server/o
 import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapabilityRequest } from '@/lib/server/request-auth'
 import { loadShiftWeekWorkflow, publishShiftWeekForCompany, resolveShiftChangeRequest } from '@/lib/server/shift-workflow'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { escapeTelegramHtml, ordaTelegramFrame } from '@/lib/telegram/message-kit'
 
 type ShiftWritePayload = {
   shiftId?: string | null
@@ -172,7 +173,7 @@ async function sendTelegramMessage(chatId: string, text: string) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       chat_id: chatId,
-      text,
+      text: ordaTelegramFrame(text),
       parse_mode: 'HTML',
       disable_web_page_preview: 'true',
     }),
@@ -200,13 +201,13 @@ async function notifySingleShiftAssignment(
     return { sent: false, reason: 'token-missing' as const }
   }
 
-  const companyName = await getCompanyNameById(supabase, payload.companyId)
+  const companyName = escapeTelegramHtml(await getCompanyNameById(supabase, payload.companyId))
   const text =
-    `<b>Вам назначена новая смена</b>\n\n` +
-    `<b>Точка:</b> ${companyName}\n` +
-    `<b>Дата:</b> ${formatShiftDate(payload.date)}\n` +
-    `<b>Смена:</b> ${formatShiftType(payload.shiftType)}\n\n` +
-    `Проверьте график в кабинете и заранее подтвердите, что вы видели это назначение.`
+    `<b>📌 Новая смена</b>\n\n` +
+    `<b>Точка</b> · ${companyName}\n` +
+    `<b>Дата</b> · ${formatShiftDate(payload.date)}\n` +
+    `<b>Смена</b> · ${formatShiftType(payload.shiftType)}\n\n` +
+    `<i>Проверьте график в кабинете.</i>`
 
   await sendTelegramMessage(String(operator.telegram_chat_id), text)
   return { sent: true as const, operatorLabel: getOperatorDisplayName(operator, 'Оператор') }
@@ -234,17 +235,17 @@ async function notifyBulkShiftAssignment(
   }
 
   const sortedDates = [...payload.dates].sort()
-  const companyName = await getCompanyNameById(supabase, payload.companyId)
+  const companyName = escapeTelegramHtml(await getCompanyNameById(supabase, payload.companyId))
   const periodStart = formatShiftDate(sortedDates[0])
   const periodEnd = formatShiftDate(sortedDates[sortedDates.length - 1])
-  const dateList = sortedDates.map((date) => `• ${formatShiftDate(date)}`).join('\n')
+  const dateList = sortedDates.map((date) => `▸ ${formatShiftDate(date)}`).join('\n')
   const text =
-    `<b>График смен обновлен</b>\n\n` +
-    `<b>Точка:</b> ${companyName}\n` +
-    `<b>Период:</b> ${periodStart} — ${periodEnd}\n` +
-    `<b>Тип смены:</b> ${formatShiftType(payload.shiftType)}\n\n` +
-    `<b>Ваши даты выхода:</b>\n${dateList}\n\n` +
-    `Если одна из дат вам не подходит, предупредите руководителя заранее.`
+    `<b>📅 График обновлён</b>\n\n` +
+    `<b>Точка</b> · ${companyName}\n` +
+    `<b>Период</b> · ${periodStart} — ${periodEnd}\n` +
+    `<b>Смена</b> · ${formatShiftType(payload.shiftType)}\n\n` +
+    `<b>Ваши даты</b>\n${dateList}\n\n` +
+    `<i>Если дата не подходит — сообщите руководителю.</i>`
 
   await sendTelegramMessage(String(operator.telegram_chat_id), text)
   return {
@@ -495,10 +496,12 @@ async function applyShiftIssueResolution(
   const shiftLabel = `${formatShiftDate(requestRow.shift_date)} (${requestRow.shift_type === 'day' ? 'день' : 'ночь'})`
 
   if (requester?.telegram_chat_id && process.env.TELEGRAM_BOT_TOKEN) {
+    const cn = escapeTelegramHtml(companyName)
+    const note = escapeTelegramHtml(effectiveNote)
     const requesterText =
       params.status === 'resolved'
-        ? `<b>Запрос по смене обработан</b>\n\n<b>Точка:</b> ${companyName}\n<b>Дата:</b> ${shiftLabel}\n<b>Решение:</b> ${effectiveNote}`
-        : `<b>Запрос по смене закрыт</b>\n\n<b>Точка:</b> ${companyName}\n<b>Дата:</b> ${shiftLabel}\n<b>Комментарий:</b> ${effectiveNote}`
+        ? `<b>✅ Запрос по смене обработан</b>\n\n<b>Точка</b> · ${cn}\n<b>Смена</b> · ${shiftLabel}\n\n<b>Решение</b>\n${note}`
+        : `<b>📋 Запрос по смене закрыт</b>\n\n<b>Точка</b> · ${cn}\n<b>Смена</b> · ${shiftLabel}\n\n<b>Комментарий</b>\n${note}`
 
     try {
       await sendTelegramMessage(String(requester.telegram_chat_id), requesterText)
@@ -544,7 +547,7 @@ async function applyShiftIssueResolution(
     try {
       await sendTelegramMessage(
         String(replacementOperator.telegram_chat_id),
-        `<b>Вам назначена смена после замены</b>\n\n<b>Точка:</b> ${companyName}\n<b>Дата:</b> ${shiftLabel}\nПроверьте обновлённый график.`,
+        `<b>🔄 Смена после замены</b>\n\n<b>Точка</b> · ${escapeTelegramHtml(companyName)}\n<b>Смена</b> · ${shiftLabel}\n\n<i>Проверьте график в кабинете.</i>`,
       )
       await writeNotificationLog(supabase, {
         channel: 'telegram',

@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { ordaTelegramFrame } from '@/lib/telegram/message-kit'
+
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID
 
@@ -21,7 +23,7 @@ export async function sendTelegram(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chat,
-      text,
+      text: ordaTelegramFrame(text),
       parse_mode: 'HTML',
     }),
   }).catch(() => {

@@ -22,6 +22,8 @@ import {
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
+import { sendTelegramMessage } from '@/lib/telegram/send'
 
 type CategoryBody = {
   action: 'createCategory'
@@ -184,38 +186,29 @@ async function notifyManagersAboutRequest(requestId: string, companyName: string
 
     if (!staff?.length) return
 
+    const cn = escapeTelegramHtml(companyName)
     const text = [
-      `📦 <b>Новая заявка на товар</b>`,
+      `<b>📦 Заявка на товар</b>`,
       ``,
-      `🏪 Точка: <b>${companyName}</b>`,
-      `📋 Позиций: <b>${itemCount}</b>`,
-      comment ? `💬 Комментарий: ${comment}` : null,
+      `<b>Точка</b> · ${cn}`,
+      `<b>Позиций</b> · <b>${itemCount}</b>`,
+      comment ? `💬 <b>Комментарий</b>\n${escapeTelegramHtml(comment)}` : null,
       ``,
-      `Нажмите кнопку для одобрения:`,
+      `<i>Выберите действие:</i>`,
     ].filter(Boolean).join('\n')
 
     const keyboard = {
       inline_keyboard: [[
         { text: '✅ Одобрить всё', callback_data: `ireq:${requestId}:approve` },
         { text: '❌ Отклонить', callback_data: `ireq:${requestId}:reject` },
-      ]]
+      ]],
     }
 
-    const token = process.env.TELEGRAM_BOT_TOKEN
-    if (!token) return
+    if (!process.env.TELEGRAM_BOT_TOKEN) return
 
     for (const s of staff) {
       if (!s.telegram_chat_id) continue
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: String(s.telegram_chat_id),
-          text,
-          parse_mode: 'HTML',
-          reply_markup: keyboard,
-        }),
-      }).catch(() => null)
+      await sendTelegramMessage(String(s.telegram_chat_id), text, { replyMarkup: keyboard }).catch(() => null)
     }
   } catch { /* silent */ }
 }
