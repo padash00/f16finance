@@ -29,8 +29,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # GitHub API иногда отвечает 504 при POST /releases — повторяем несколько раз
       - name: Build & publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-        run: npm run release
+        shell: pwsh
+        run: |
+          $attempts = 5
+          $delaySec = 60
+          for ($i = 1; $i -le $attempts; $i++) {
+            npm run release
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            Write-Host "::warning::Попытка $i/$attempts не удалась (код $LASTEXITCODE). Частая причина — 504 GitHub API."
+            if ($i -lt $attempts) {
+              Write-Host "Повтор через $delaySec с..."
+              Start-Sleep -Seconds $delaySec
+            }
+          }
+          exit 1
