@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import WorkModeSwitch from '@/components/WorkModeSwitch'
 import { toastError, toastInfo } from '@/lib/toast'
 import * as api from '@/lib/api'
+import { arenaExtensionMinutesFromPayment } from '../../../../lib/core/arena-extension-minutes'
 import type { AppConfig, ArenaMapDecoration, ArenaSession, ArenaStation, ArenaTariff, ArenaZone, BootstrapData, OperatorSession } from '@/types'
 
 interface Props {
@@ -73,14 +74,19 @@ function formatRemaining(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-/** Минуты продления по сумме: пропорция к пакету тарифа (как на Senet). */
+/** Минуты продления по сумме (та же логика, что на сервере). */
 function previewExtensionMinutes(tariff: ArenaTariff | undefined, paidTotal: number): number {
   if (!tariff) return 0
-  const price = Number(tariff.price)
-  const dur = Number(tariff.duration_minutes)
-  if (!(price > 0) || !(dur > 0) || paidTotal < 1) return 0
-  const m = Math.round(paidTotal / (price / dur))
-  return m >= 1 ? m : 0
+  const paid = Math.round(Number(paidTotal))
+  if (paid < 1) return 0
+  const hourly = tariff.extension_hourly_price
+  const r = arenaExtensionMinutesFromPayment(
+    Number(tariff.price),
+    Number(tariff.duration_minutes),
+    paid,
+    hourly != null && hourly > 0 ? hourly : null,
+  )
+  return r.ok ? r.minutes : 0
 }
 
 // ─── Start Session Modal ───────────────────────────────────────────────────────
@@ -353,11 +359,13 @@ function ManageSessionModal({
                 <div className="mb-4 rounded-xl border border-white/10 bg-muted/30 p-3 text-sm">
                   <p className="font-medium text-foreground">{rateTariff.name}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    База для времени: {formatMoney(Number(rateTariff.price))} за {rateTariff.duration_minutes} мин
+                    Пакет: {formatMoney(Number(rateTariff.price))} за {rateTariff.duration_minutes} мин
                     {rateTariff.tariff_type === 'time_window' ? ` · ${formatArenaTariffSchedule(rateTariff)}` : ''}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Внесите сумму как в Senet — время посчитается автоматически (пропорционально этому пакету).
+                    {rateTariff.extension_hourly_price != null && rateTariff.extension_hourly_price > 0
+                      ? `Сумма меньше пакета — по часу ${formatMoney(Number(rateTariff.extension_hourly_price))} / 60 мин. От полной цены пакета — целые пакеты по ${formatMoney(Number(rateTariff.price))}, остаток снова по часу.`
+                      : 'Время считается пропорционально цене и длительности пакета. Для скидочного пакета укажите «час для доплаты» в настройках тарифа на сайте.'}
                   </p>
                 </div>
 

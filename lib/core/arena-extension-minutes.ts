@@ -1,6 +1,8 @@
 /**
- * Продление по сумме: минуты из ставки пакета (цена / длительность).
- * Например тариф 600₸ / 60 мин → 200₸ ≈ 20 мин.
+ * Продление по сумме.
+ * Если задан extensionHourlyPrice (>0): сумма меньше цены пакета считается по часу;
+ * сумма ≥ цены пакета — целые пакеты по цене пакета + остаток по часу.
+ * Иначе (как раньше): пропорция к пакету (цена / длительность).
  */
 
 export type ExtensionMinutesResult =
@@ -11,18 +13,36 @@ export function arenaExtensionMinutesFromPayment(
   tariffPrice: number,
   durationMinutes: number,
   paidTotal: number,
+  extensionHourlyPrice?: number | null,
 ): ExtensionMinutesResult {
   const price = Number(tariffPrice)
   const dur = Number(durationMinutes)
   const paid = Math.round(Number(paidTotal))
+  const hourlyRaw = extensionHourlyPrice != null ? Number(extensionHourlyPrice) : NaN
+  const hasHourly = Number.isFinite(hourlyRaw) && hourlyRaw > 0
+
   if (!Number.isFinite(price) || !Number.isFinite(dur) || price <= 0 || dur <= 0) {
     return { ok: false, code: 'invalid-tariff-rate' }
   }
   if (!Number.isFinite(paid) || paid < 1) {
     return { ok: false, code: 'invalid-payment' }
   }
-  const perMinute = price / dur
-  const minutes = Math.round(paid / perMinute)
+
+  let minutes: number
+  if (hasHourly) {
+    const h = hourlyRaw
+    if (paid < price) {
+      minutes = Math.round((paid / h) * 60)
+    } else {
+      const full = Math.floor(paid / price)
+      const rem = paid - full * price
+      minutes = full * dur + (rem > 0 ? Math.round((rem / h) * 60) : 0)
+    }
+  } else {
+    const perMinute = price / dur
+    minutes = Math.round(paid / perMinute)
+  }
+
   if (minutes < 1) {
     return { ok: false, code: 'extension-amount-too-small' }
   }

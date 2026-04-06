@@ -34,6 +34,7 @@ type Tariff = {
   name: string
   duration_minutes: number
   price: number
+  extension_hourly_price: number | null
   is_active: boolean
   tariff_type: 'fixed' | 'time_window'
   window_start_time: string | null
@@ -97,12 +98,18 @@ function arenaRowToStation(row: Record<string, unknown>): Station {
 
 function arenaRowToTariff(row: Record<string, unknown>): Tariff {
   const tt = row.tariff_type === 'time_window' ? 'time_window' : 'fixed'
+  const extH = row.extension_hourly_price
   return {
     id: String(row.id),
     zone_id: String(row.zone_id ?? ''),
     name: String(row.name ?? ''),
     duration_minutes: Number(row.duration_minutes ?? 0),
     price: Number(row.price ?? 0),
+    extension_hourly_price: (() => {
+      if (extH == null || extH === '') return null
+      const n = Number(extH)
+      return Number.isFinite(n) && n > 0 ? n : null
+    })(),
     is_active: Boolean(row.is_active ?? true),
     tariff_type: tt,
     window_start_time: row.window_start_time != null ? String(row.window_start_time) : null,
@@ -131,6 +138,7 @@ function validateTariffInput(t: {
   name: string
   duration_minutes: string | number
   price: string | number
+  extension_hourly_price?: string | number | null
   tariff_type: string
   window_start_time: string
   window_end_time: string
@@ -140,6 +148,13 @@ function validateTariffInput(t: {
   const dur = Number(t.duration_minutes)
   if (!Number.isFinite(price) || price < 0) return 'Укажите корректную цену (≥ 0)'
   if (!Number.isFinite(dur) || dur < 1) return 'Длительность не менее 1 минуты'
+  const extRaw = t.extension_hourly_price
+  if (extRaw !== undefined && extRaw !== null && String(extRaw).trim() !== '') {
+    const ep = Number(extRaw)
+    if (!Number.isFinite(ep) || ep <= 0) {
+      return 'Ставка за час (доплата): положительное число или оставьте пустым'
+    }
+  }
   if (t.tariff_type === 'time_window') {
     if (!String(t.window_end_time || '').trim()) return 'Для пакета укажите время окончания окна'
     if (parseTimeToMinutes(String(t.window_end_time).trim()) === null) return 'Окончание окна: формат ЧЧ:ММ (например 16:00)'
@@ -154,6 +169,7 @@ const EMPTY_NEW_TARIFF: {
   name: string
   duration_minutes: string
   price: string
+  extension_hourly_price: string
   tariff_type: 'fixed' | 'time_window'
   window_start_time: string
   window_end_time: string
@@ -161,6 +177,7 @@ const EMPTY_NEW_TARIFF: {
   name: '',
   duration_minutes: '60',
   price: '',
+  extension_hourly_price: '',
   tariff_type: 'fixed',
   window_start_time: '',
   window_end_time: '',
@@ -904,7 +921,11 @@ export default function StationsPage() {
       setProjectName(data.data.project?.name || '')
       setZones(data.data.zones)
       setStations(data.data.stations)
-      setTariffs(data.data.tariffs)
+      setTariffs(
+        Array.isArray(data.data.tariffs)
+          ? (data.data.tariffs as Record<string, unknown>[]).map(arenaRowToTariff)
+          : [],
+      )
       setDecorations(data.data.decorations || [])
     } catch (e: any) {
       const msg = e?.message || 'Ошибка загрузки'
@@ -1160,6 +1181,10 @@ export default function StationsPage() {
         tariff_type: newTariff.tariff_type || 'fixed',
         window_start_time: newTariff.tariff_type === 'time_window' ? (newTariff.window_start_time || null) : null,
         window_end_time: newTariff.tariff_type === 'time_window' ? (newTariff.window_end_time || null) : null,
+        extension_hourly_price: (() => {
+          const s = String(newTariff.extension_hourly_price ?? '').trim()
+          return s === '' ? null : Number(s)
+        })(),
       })
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных тарифа')
       const t = arenaRowToTariff(out.data as Record<string, unknown>)
@@ -1176,6 +1201,7 @@ export default function StationsPage() {
       name: editingTariff.name,
       duration_minutes: editingTariff.duration_minutes,
       price: editingTariff.price,
+      extension_hourly_price: editingTariff.extension_hourly_price,
       tariff_type: editingTariff.tariff_type,
       window_start_time: editingTariff.window_start_time || '',
       window_end_time: editingTariff.window_end_time || '',
@@ -1196,6 +1222,10 @@ export default function StationsPage() {
         tariff_type: editingTariff.tariff_type || 'fixed',
         window_start_time: editingTariff.tariff_type === 'time_window' ? (editingTariff.window_start_time || null) : null,
         window_end_time: editingTariff.tariff_type === 'time_window' ? (editingTariff.window_end_time || null) : null,
+        extension_hourly_price:
+          editingTariff.extension_hourly_price != null && editingTariff.extension_hourly_price > 0
+            ? editingTariff.extension_hourly_price
+            : null,
       })
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных тарифа')
       const t = arenaRowToTariff(out.data as Record<string, unknown>)
@@ -1596,6 +1626,26 @@ export default function StationsPage() {
                                     <input value={editingTariff.duration_minutes} onChange={e => setEditingTariff(p => p ? ({ ...p, duration_minutes: Number(e.target.value) }) : p)} type="number" min={1} className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
                                     <input value={editingTariff.price} onChange={e => setEditingTariff(p => p ? ({ ...p, price: Number(e.target.value) }) : p)} type="number" min={0} step="1" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
                                   </div>
+                                  <label className="block text-[10px] text-muted-foreground">
+                                    <span className="mb-0.5 block">Час для доплаты, ₸ (пусто = как раньше по пакету)</span>
+                                    <input
+                                      value={editingTariff.extension_hourly_price ?? ''}
+                                      onChange={e => {
+                                        const v = e.target.value
+                                        setEditingTariff(p => {
+                                          if (!p) return p
+                                          if (v.trim() === '') return { ...p, extension_hourly_price: null }
+                                          const n = Number(v)
+                                          return { ...p, extension_hourly_price: Number.isFinite(n) ? n : p.extension_hourly_price }
+                                        })
+                                      }}
+                                      type="number"
+                                      min={0}
+                                      step="1"
+                                      placeholder="напр. 1200"
+                                      className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                    />
+                                  </label>
                                   <div className="grid grid-cols-2 gap-1">
                                     <select
                                       value={editingTariff.tariff_type || 'fixed'}
@@ -1649,6 +1699,9 @@ export default function StationsPage() {
                                         ? formatTariffWindowLabel(t.window_start_time, t.window_end_time)
                                         : formatMinutes(t.duration_minutes)}
                                       {' · '}{formatPrice(t.price)}
+                                      {t.extension_hourly_price != null && t.extension_hourly_price > 0
+                                        ? ` · час доплаты ${formatPrice(t.extension_hourly_price)}`
+                                        : ''}
                                     </span>
                                     {t.tariff_type === 'time_window' && (
                                       <span className="ml-1.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-semibold text-amber-400">Окно</span>
@@ -1964,6 +2017,18 @@ export default function StationsPage() {
                     <input value={newTariff.price} onChange={e => setNewTariff(p => ({ ...p, price: e.target.value }))} type="number" min={0} step="1" className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
                   </label>
                 </div>
+                <label className="block text-xs text-muted-foreground">
+                  <span className="mb-1 block">Час для доплаты, ₸ (если пакет со скидкой — например 1200 при пакете 2400/3ч)</span>
+                  <input
+                    value={newTariff.extension_hourly_price}
+                    onChange={e => setNewTariff(p => ({ ...p, extension_hourly_price: e.target.value }))}
+                    type="number"
+                    min={0}
+                    step="1"
+                    placeholder="пусто = время от цены пакета"
+                    className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                  />
+                </label>
 
                 <label className="block text-xs font-medium text-muted-foreground">Режим</label>
                 <select

@@ -345,10 +345,14 @@ export async function POST(request: Request) {
           extKaspi = Math.round(Number(extKaspiAmt) || 0)
         }
         extPrice = extCash + extKaspi
+        const extHourlyRaw = (rateTariff as Record<string, unknown>).extension_hourly_price
+        const extHourly =
+          extHourlyRaw != null && extHourlyRaw !== '' ? Number(extHourlyRaw) : null
         const computed = arenaExtensionMinutesFromPayment(
           Number(rateTariff.price),
           Number(rateTariff.duration_minutes),
           extPrice,
+          extHourly,
         )
         if (!computed.ok) {
           const msg =

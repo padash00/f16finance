@@ -445,6 +445,8 @@ export interface ArenaTariff {
   name: string
   duration_minutes: number
   price: number
+  /** ₸ за 60 мин при доплате меньше цены пакета; отсутствует/null — пропорция к пакету */
+  extension_hourly_price?: number | null
   is_active: boolean
   tariff_type: 'fixed' | 'time_window'
   /** Начало окна HH:MM; вместе с window_end_time задаёт день/ночь */
