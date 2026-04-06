@@ -124,3 +124,26 @@ export async function sendLeadRequestEmail(payload: LeadRequestPayload) {
     html,
   })
 }
+
+export async function sendSystemEmail(params: {
+  to: string
+  subject: string
+  text: string
+  html?: string
+  replyTo?: string | null
+}) {
+  const transporter = getTransporter()
+  const { from } = getMailerConfig()
+  if (!from) {
+    throw new Error('SMTP sender is not configured')
+  }
+
+  await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: params.subject,
+    text: params.text,
+    html: params.html || undefined,
+    replyTo: params.replyTo || undefined,
+  })
+}

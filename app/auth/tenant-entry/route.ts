@@ -34,7 +34,7 @@ export async function GET(req: Request) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  const access = await getRequestAccessContext(req)
+  const access = await getRequestAccessContext(req, { allowCustomer: true })
   if ('response' in access) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
@@ -45,6 +45,7 @@ export async function GET(req: Request) {
         isSuperAdmin: false,
         isStaff: !!access.staffMember,
         isOperator: !!access.operatorAuth,
+        isCustomer: access.isCustomer,
         staffRole: access.staffRole,
       })
 

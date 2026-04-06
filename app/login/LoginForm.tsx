@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -121,7 +120,6 @@ export default function LoginForm({
   isTenantSubdomain: boolean
   platformUrl: string
 }) {
-  const router = useRouter()
   const [mode, setMode] = useState<LoginMode>('email')
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
@@ -139,6 +137,14 @@ export default function LoginForm({
     // Full navigation avoids a race where Supabase SSR cookies are not yet
     // visible to middleware during an immediate RSC transition after sign-in.
     window.location.assign(path)
+  }
+
+  const resolvePostLoginPath = async (fallback: string) => {
+    const response = await fetch('/api/auth/session-role', { method: 'GET' }).catch(() => null)
+    if (!response?.ok) return fallback
+    const payload = await response.json().catch(() => null)
+    const nextPath = typeof payload?.defaultPath === 'string' ? payload.defaultPath : null
+    return nextPath && nextPath.startsWith('/') ? nextPath : fallback
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -164,7 +170,8 @@ export default function LoginForm({
           body: JSON.stringify({ method: 'email', target: 'staff' }),
         }).catch(() => null)
 
-        navigateAfterLogin('/welcome')
+        const nextPath = await resolvePostLoginPath('/welcome')
+        navigateAfterLogin(nextPath)
         return
       }
 
@@ -227,7 +234,8 @@ export default function LoginForm({
         body: JSON.stringify({ authId: authByUser.id }),
       })
 
-      navigateAfterLogin('/operator-dashboard')
+      const nextPath = await resolvePostLoginPath('/operator-dashboard')
+      navigateAfterLogin(nextPath)
     } catch (err: any) {
       console.error('Login error:', err)
       await fetch('/api/auth/login-attempt', {

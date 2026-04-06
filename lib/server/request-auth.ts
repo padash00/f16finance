@@ -5,7 +5,9 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 import { normalizeStaffRole, staffRoleHasCapability, type StaffCapability, type StaffRole } from '@/lib/core/access'
+import { resolveRequestAuthPersona, type RequestAuthPersonaKind } from '@/lib/server/auth-persona'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
+import { fetchLinkedCustomersForUser, type LinkedCustomerRow } from '@/lib/server/linked-customers'
 import { requiredEnv } from '@/lib/server/env'
 import {
   ACTIVE_ORGANIZATION_COOKIE,
@@ -64,7 +66,15 @@ export async function getRequestUser(request: Request) {
   return user
 }
 
-export async function getRequestAccessContext(request: Request): Promise<
+export type GetRequestAccessContextOptions = {
+  /** Разрешить контекст для гостя (`customers.auth_user_id`). По умолчанию false — только staff/оператор/super-admin. */
+  allowCustomer?: boolean
+}
+
+export async function getRequestAccessContext(
+  request: Request,
+  options?: GetRequestAccessContextOptions,
+): Promise<
   | {
       response: NextResponse
     }
@@ -80,6 +90,9 @@ export async function getRequestAccessContext(request: Request): Promise<
         username?: string | null
         role?: string | null
       } | null
+      isCustomer: boolean
+      linkedCustomers: LinkedCustomerRow[]
+      persona: RequestAuthPersonaKind
       requestedOrganizationId: string | null
       organizationHubRequired: boolean
       organizationSelectionRequired: boolean
@@ -105,13 +118,20 @@ export async function getRequestAccessContext(request: Request): Promise<
     .from('operator_auth')
     .select('id, operator_id, username, role')
     .eq('user_id', user.id)
+    .eq('is_active', true)
     .maybeSingle()
   const staffMember = isSuperAdmin ? null : await resolveStaffByUser(supabase, user)
+  const linkedCustomers =
+    !isSuperAdmin && !staffMember && !operatorAuth ? await fetchLinkedCustomersForUser(supabase, user.id) : []
+
+  const customerCompanyIds = linkedCustomers.map((c) => c.company_id).filter((id): id is string => Boolean(id))
+
   const organizationAccess = await resolveUserOrganizations({
     user,
     isSuperAdmin,
     staffMember,
     operatorId: String((operatorAuth as any)?.operator_id || '') || null,
+    customerCompanyIds: customerCompanyIds.length ? customerCompanyIds : null,
   })
   const hostOrganization = await resolveOrganizationByHost(request.headers.get('host'))
   const requestedOrganizationId = hostOrganization?.id || cookieMap.get(ACTIVE_ORGANIZATION_COOKIE) || null
@@ -143,6 +163,9 @@ export async function getRequestAccessContext(request: Request): Promise<
       staffMember: null,
       staffRole: 'owner',
       operatorAuth: null,
+      isCustomer: false,
+      linkedCustomers: [],
+      persona: 'super_admin',
       requestedOrganizationId,
       organizationHubRequired,
       organizationSelectionRequired,
@@ -152,33 +175,51 @@ export async function getRequestAccessContext(request: Request): Promise<
     }
   }
 
-  if (!staffMember && !operatorAuth) {
+  const isCustomer = !staffMember && !operatorAuth && linkedCustomers.length > 0
+
+  if (!staffMember && !operatorAuth && !isCustomer) {
     return {
       response: NextResponse.json({ error: 'forbidden' }, { status: 403 }),
     }
   }
 
+  if (isCustomer && !options?.allowCustomer) {
+    return {
+      response: NextResponse.json({ error: 'forbidden' }, { status: 403 }),
+    }
+  }
+
+  const persona = resolveRequestAuthPersona({
+    isSuperAdmin: false,
+    staffMember,
+    operatorAuth,
+    linkedCustomers,
+  })!
+
   return {
     supabase,
     user,
     isSuperAdmin: false,
-      staffMember,
-      staffRole: normalizeStaffRole(staffMember?.role),
-      operatorAuth: operatorAuth
-        ? {
-            id: String((operatorAuth as any).id),
+    staffMember,
+    staffRole: normalizeStaffRole(staffMember?.role),
+    operatorAuth: operatorAuth
+      ? {
+          id: String((operatorAuth as any).id),
           operator_id: String((operatorAuth as any).operator_id),
           username: (operatorAuth as any).username || null,
-            role: (operatorAuth as any).role || null,
-          }
-        : null,
-      requestedOrganizationId,
-      organizationHubRequired,
-      organizationSelectionRequired,
-      organizations: organizationAccess.organizations,
-      activeOrganization,
-      activeSubscription,
-    }
+          role: (operatorAuth as any).role || null,
+        }
+      : null,
+    isCustomer,
+    linkedCustomers,
+    persona,
+    requestedOrganizationId,
+    organizationHubRequired,
+    organizationSelectionRequired,
+    organizations: organizationAccess.organizations,
+    activeOrganization,
+    activeSubscription,
+  }
 }
 
 export async function requireAdminRequest(request: Request) {
@@ -356,5 +397,45 @@ export async function getRequestOperatorLeadContext(request: Request): Promise<
   return {
     ...context,
     leadAssignments,
+  }
+}
+
+export async function getRequestCustomerContext(request: Request): Promise<
+  | {
+      response: NextResponse
+    }
+  | (Awaited<ReturnType<typeof getRequestAccessContext>> extends infer T
+      ? T extends { response: NextResponse }
+        ? never
+        : T & {
+            linkedCustomerIds: string[]
+            linkedCompanyIds: string[]
+          }
+      : never)
+> {
+  const context = await getRequestAccessContext(request, { allowCustomer: true })
+  if ('response' in context) return context
+
+  if (!context.isCustomer) {
+    return {
+      response: NextResponse.json({ error: 'forbidden' }, { status: 403 }),
+    }
+  }
+
+  const linkedCustomerIds = context.linkedCustomers.map((item) => item.id).filter(Boolean)
+  if (!linkedCustomerIds.length) {
+    return {
+      response: NextResponse.json({ error: 'customer-not-linked' }, { status: 403 }),
+    }
+  }
+
+  const linkedCompanyIds = context.linkedCustomers
+    .map((item) => item.company_id)
+    .filter((item): item is string => Boolean(item))
+
+  return {
+    ...context,
+    linkedCustomerIds,
+    linkedCompanyIds,
   }
 }

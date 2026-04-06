@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { canAccessPath, getDefaultAppPath, normalizeStaffRole, isPublicPath } from '@/lib/core/access'
 import { SITE_URL } from '@/lib/core/site'
 import { isAdminEmail, resolveStaffByUser } from '@/lib/server/admin'
+import { fetchLinkedCustomersForUser } from '@/lib/server/linked-customers'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 const AUTH_SELF_SERVICE_PATHS = [
@@ -134,6 +135,11 @@ export async function proxy(request: NextRequest) {
 
   const isStaff = isSuperAdmin || !!staffMember
   const isOperator = !!(operatorAuth && operatorRecordActive)
+  const linkedCustomers =
+    !isSuperAdmin && !staffMember && !isOperator
+      ? await fetchLinkedCustomersForUser(supabase, user.id)
+      : []
+  const isCustomer = !isSuperAdmin && !staffMember && !isOperator && linkedCustomers.length > 0
 
   let rolePermissionOverrides: Array<{ path: string; enabled: boolean }> = []
 
@@ -165,6 +171,7 @@ export async function proxy(request: NextRequest) {
     isSuperAdmin,
     isStaff,
     isOperator,
+    isCustomer,
     staffRole,
     rolePermissionOverrides,
   })
@@ -196,6 +203,7 @@ export async function proxy(request: NextRequest) {
     pathname: requestedPath,
     isStaff,
     isOperator,
+    isCustomer,
     staffRole,
     isSuperAdmin,
     rolePermissionOverrides,

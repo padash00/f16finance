@@ -15,7 +15,7 @@
   '/auth/complete',
 ] as const
 
-/** См. docs/roles.md — матрица staff/оператор/платформа и план роли «клиент». */
+/** См. docs/roles.md — матрица staff/оператор/платформа и гостевой контур (`CLIENT_PATHS`, `customers.auth_user_id`). */
 export type StaffRole = 'manager' | 'marketer' | 'owner' | 'other'
 export type SubscriptionFeature =
   | 'ai_reports'
@@ -294,6 +294,9 @@ export const SUPER_ADMIN_MATRIX_ENTRY = {
   ],
 } satisfies RoleMatrixEntry
 
+/** Гостевой контур (клиент клуба); см. docs/roles.md. */
+export const CLIENT_PATHS = ['/client', '/client/*'] as const
+
 export const OPERATOR_PATHS = [
   '/operator',
   '/operator/*',
@@ -536,26 +539,43 @@ export function canAccessPath(params: {
   pathname: string
   isStaff: boolean
   isOperator: boolean
+  isCustomer?: boolean
   staffRole?: StaffRole | null
   isSuperAdmin?: boolean
   subscriptionFeatures?: Partial<Record<SubscriptionFeature, boolean>> | null
   rolePermissionOverrides?: readonly RolePermissionOverride[] | null
 }): boolean {
-  const { pathname, isStaff, isOperator, staffRole, isSuperAdmin, subscriptionFeatures, rolePermissionOverrides } = params
+  const {
+    pathname,
+    isStaff,
+    isOperator,
+    isCustomer,
+    staffRole,
+    isSuperAdmin,
+    subscriptionFeatures,
+    rolePermissionOverrides,
+  } = params
 
   if (isSuperAdmin) {
     // Super admin has access to everything except public/auth-only paths
     return true
   }
 
-  const staffAllowed = isStaff && canStaffRoleAccessPath(normalizeStaffRole(staffRole), pathname, rolePermissionOverrides)
-  const operatorAllowed = isOperator && OPERATOR_PATHS.some((rule) => matchesPath(pathname, rule))
-
   if (isStaff) {
+    const staffAllowed = canStaffRoleAccessPath(normalizeStaffRole(staffRole), pathname, rolePermissionOverrides)
     return staffAllowed && canUsePathForSubscription(pathname, subscriptionFeatures)
   }
 
-  return operatorAllowed && canUsePathForSubscription(pathname, subscriptionFeatures)
+  if (isOperator) {
+    const operatorAllowed = OPERATOR_PATHS.some((rule) => matchesPath(pathname, rule))
+    return operatorAllowed && canUsePathForSubscription(pathname, subscriptionFeatures)
+  }
+
+  if (isCustomer) {
+    return CLIENT_PATHS.some((rule) => matchesPath(pathname, rule)) && canUsePathForSubscription(pathname, subscriptionFeatures)
+  }
+
+  return false
 }
 
 export function getBuiltinRoleDefaultPaths(role: StaffRole): string[] {
@@ -579,14 +599,16 @@ export function getDefaultAppPath(params: {
   isSuperAdmin?: boolean
   isStaff?: boolean
   isOperator?: boolean
+  isCustomer?: boolean
   staffRole?: StaffRole | null
   rolePermissionOverrides?: readonly RolePermissionOverride[] | null
 }) {
-  const { isSuperAdmin, isStaff, isOperator, staffRole, rolePermissionOverrides } = params
+  const { isSuperAdmin, isStaff, isOperator, isCustomer, staffRole, rolePermissionOverrides } = params
 
   if (isSuperAdmin) return '/dashboard'
   if (isStaff) return getDefaultPathForStaffRole(normalizeStaffRole(staffRole), rolePermissionOverrides)
   if (isOperator) return '/operator'
+  if (isCustomer) return '/client'
   return '/unauthorized'
 }
 

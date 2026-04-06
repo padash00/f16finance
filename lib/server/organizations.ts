@@ -14,12 +14,19 @@ export type OrganizationSummary = {
   status: string
 }
 
-export type OrganizationAccessRole = 'super_admin' | 'owner' | 'manager' | 'marketer' | 'operator' | 'other'
+export type OrganizationAccessRole =
+  | 'super_admin'
+  | 'owner'
+  | 'manager'
+  | 'marketer'
+  | 'operator'
+  | 'customer'
+  | 'other'
 
 export type OrganizationAccess = OrganizationSummary & {
   accessRole: OrganizationAccessRole
   isDefault: boolean
-  source: 'super_admin' | 'staff' | 'operator'
+  source: 'super_admin' | 'staff' | 'operator' | 'customer'
 }
 
 export type OrganizationSubscription = {
@@ -125,8 +132,10 @@ export async function resolveUserOrganizations(params: {
   isSuperAdmin: boolean
   staffMember?: { id?: string | null; email?: string | null; role?: string | null } | null
   operatorId?: string | null
+  /** Companies from linked `customers.auth_user_id` (guest contour). */
+  customerCompanyIds?: string[] | null
 }) {
-  const { user, isSuperAdmin, staffMember, operatorId } = params
+  const { user, isSuperAdmin, staffMember, operatorId, customerCompanyIds } = params
   const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
 
   if (!supabase) {
@@ -240,6 +249,33 @@ export async function resolveUserOrganizations(params: {
         accessRole: 'operator',
         isDefault: organizations.length === 0,
         source: 'operator',
+      })
+    }
+  }
+
+  const uniqueCustomerCompanyIds = [...new Set((customerCompanyIds || []).filter(Boolean))]
+  if (uniqueCustomerCompanyIds.length) {
+    const { data } = await supabase
+      .from('companies')
+      .select('id, organization_id, organization:organization_id(id, name, slug, status)')
+      .in('id', uniqueCustomerCompanyIds)
+
+    for (const row of data || []) {
+      const organization = Array.isArray((row as any).organization)
+        ? (row as any).organization[0]
+        : (row as any).organization
+
+      if (!organization?.id) continue
+      if (organization.status === 'suspended') continue
+
+      organizations.push({
+        id: String(organization.id),
+        name: String(organization.name || ''),
+        slug: String(organization.slug || ''),
+        status: String(organization.status || 'active'),
+        accessRole: 'customer',
+        isDefault: organizations.length === 0,
+        source: 'customer',
       })
     }
   }

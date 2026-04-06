@@ -11,11 +11,23 @@ export type Company = {
   code: string | null
 }
 
+export type SessionOrganizationAccessRole =
+  | 'super_admin'
+  | 'owner'
+  | 'manager'
+  | 'marketer'
+  | 'operator'
+  | 'customer'
+  | 'other'
+
 /** Session role info returned from /api/auth/session-role */
 export type SessionRoleInfo = {
   isSuperAdmin?: boolean
   isTenantContext?: boolean
   isPlatformContext?: boolean
+  isCustomer?: boolean
+  persona?: 'super_admin' | 'staff' | 'operator' | 'customer'
+  linkedCustomerIds?: string[]
   staffRole?: 'manager' | 'marketer' | 'owner' | 'other'
   organizationHubRequired?: boolean
   organizationSelectionRequired?: boolean
@@ -24,7 +36,7 @@ export type SessionRoleInfo = {
     name: string
     slug: string
     status: string
-    accessRole: 'super_admin' | 'owner' | 'manager' | 'marketer' | 'operator' | 'other'
+    accessRole: SessionOrganizationAccessRole
     isDefault?: boolean
   }>
   activeOrganization?: {
@@ -32,7 +44,7 @@ export type SessionRoleInfo = {
     name: string
     slug: string
     status: string
-    accessRole: 'super_admin' | 'owner' | 'manager' | 'marketer' | 'operator' | 'other'
+    accessRole: SessionOrganizationAccessRole
   } | null
   activeSubscription?: {
     id: string

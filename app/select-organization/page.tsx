@@ -404,6 +404,7 @@ function formatAccessRole(value: string | null | undefined) {
     manager: 'Менеджер',
     marketer: 'Маркетолог',
     operator: 'Оператор',
+    customer: 'Гость',
     other: 'Участник',
   }
 

@@ -18,10 +18,11 @@ function getRoleLabel(params: {
   isSuperAdmin: boolean
   staffRole: ReturnType<typeof normalizeStaffRole>
   isOperator: boolean
+  isCustomer: boolean
   leadAssignmentsCount: number
   leadRoleLabel: string | null
 }) {
-  const { isSuperAdmin, staffRole, isOperator, leadAssignmentsCount, leadRoleLabel } = params
+  const { isSuperAdmin, staffRole, isOperator, isCustomer, leadAssignmentsCount, leadRoleLabel } = params
 
   if (isSuperAdmin) return 'Супер-администратор'
   if (staffRole === 'manager') return 'Руководитель'
@@ -29,12 +30,13 @@ function getRoleLabel(params: {
   if (staffRole === 'owner') return 'Владелец'
   if (leadAssignmentsCount > 0 && leadRoleLabel) return leadRoleLabel
   if (isOperator) return 'Оператор'
+  if (isCustomer) return 'Гость клуба'
   return 'Пользователь'
 }
 
 export async function GET(req: Request) {
   try {
-    const access = await getRequestAccessContext(req)
+    const access = await getRequestAccessContext(req, { allowCustomer: true })
     if ('response' in access) return access.response
 
     const supabase = createRequestSupabaseClient(req)
@@ -48,6 +50,7 @@ export async function GET(req: Request) {
     const staffRole = normalizeStaffRole(staffMember?.role)
     const operatorAuth = access.operatorAuth
     const isOperator = !!operatorAuth
+    const isCustomer = access.isCustomer
 
     const leadAssignments = operatorAuth
       ? await listActiveOperatorLeadAssignments(
@@ -65,6 +68,7 @@ export async function GET(req: Request) {
 
     const displayName =
       (isSuperAdmin ? null : staffMember?.full_name || staffMember?.short_name) ||
+      (isCustomer ? access.linkedCustomers[0]?.name || null : null) ||
       user.user_metadata?.name ||
       user.email ||
       null
@@ -94,6 +98,9 @@ export async function GET(req: Request) {
       isSuperAdmin,
       isStaff: isSuperAdmin || !!staffMember,
       isOperator,
+      isCustomer,
+      persona: access.persona,
+      linkedCustomerIds: access.linkedCustomers.map((c) => c.id),
       isLeadOperator: leadAssignments.length > 0,
       leadAssignments: leadAssignments.map((assignment) => ({
         id: assignment.id,
@@ -108,6 +115,7 @@ export async function GET(req: Request) {
         isSuperAdmin,
         staffRole,
         isOperator,
+        isCustomer,
         leadAssignmentsCount: leadAssignments.length,
         leadRoleLabel,
       }),
@@ -123,6 +131,7 @@ export async function GET(req: Request) {
         isSuperAdmin,
         isStaff: isSuperAdmin || !!staffMember,
         isOperator,
+        isCustomer,
         staffRole,
         rolePermissionOverrides,
       }),
