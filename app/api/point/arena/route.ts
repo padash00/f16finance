@@ -345,9 +345,34 @@ export async function POST(request: Request) {
           extKaspi = Math.round(Number(extKaspiAmt) || 0)
         }
         extPrice = extCash + extKaspi
-        const extHourlyRaw = (rateTariff as Record<string, unknown>).extension_hourly_price
+
+        let zoneHourly: number | null = null
+        const { data: stRow } = await supabase
+          .from('arena_stations')
+          .select('zone_id')
+          .eq('id', (current as any).station_id as string)
+          .maybeSingle()
+        const stZoneId = stRow?.zone_id as string | null | undefined
+        if (stZoneId) {
+          const { data: zoneRow } = await supabase
+            .from('arena_zones')
+            .select('extension_hourly_price')
+            .eq('id', stZoneId)
+            .maybeSingle()
+          const zh = zoneRow != null ? Number((zoneRow as Record<string, unknown>).extension_hourly_price) : NaN
+          if (Number.isFinite(zh) && zh > 0) zoneHourly = zh
+        }
+
+        const tariffHourlyRaw = (rateTariff as Record<string, unknown>).extension_hourly_price
+        const tariffHourly =
+          tariffHourlyRaw != null && tariffHourlyRaw !== '' ? Number(tariffHourlyRaw) : null
         const extHourly =
-          extHourlyRaw != null && extHourlyRaw !== '' ? Number(extHourlyRaw) : null
+          zoneHourly != null
+            ? zoneHourly
+            : tariffHourly != null && Number.isFinite(tariffHourly) && tariffHourly > 0
+              ? tariffHourly
+              : null
+
         const computed = arenaExtensionMinutesFromPayment(
           Number(rateTariff.price),
           Number(rateTariff.duration_minutes),

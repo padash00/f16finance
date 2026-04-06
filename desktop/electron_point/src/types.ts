@@ -406,6 +406,8 @@ export interface ArenaZone {
   point_project_id: string
   name: string
   is_active: boolean
+  /** ₸ за 60 мин — база для продления по сумме на всех станциях зоны */
+  extension_hourly_price?: number | null
   grid_x: number | null
   grid_y: number | null
   grid_w: number | null
@@ -445,8 +447,6 @@ export interface ArenaTariff {
   name: string
   duration_minutes: number
   price: number
-  /** ₸ за 60 мин при доплате меньше цены пакета; отсутствует/null — пропорция к пакету */
-  extension_hourly_price?: number | null
   is_active: boolean
   tariff_type: 'fixed' | 'time_window'
   /** Начало окна HH:MM; вместе с window_end_time задаёт день/ночь */

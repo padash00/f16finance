@@ -75,16 +75,19 @@ function formatRemaining(ms: number): string {
 }
 
 /** Минуты продления по сумме (та же логика, что на сервере). */
-function previewExtensionMinutes(tariff: ArenaTariff | undefined, paidTotal: number): number {
+function previewExtensionMinutes(
+  tariff: ArenaTariff | undefined,
+  paidTotal: number,
+  extensionHourlyPrice: number | null,
+): number {
   if (!tariff) return 0
   const paid = Math.round(Number(paidTotal))
   if (paid < 1) return 0
-  const hourly = tariff.extension_hourly_price
   const r = arenaExtensionMinutesFromPayment(
     Number(tariff.price),
     Number(tariff.duration_minutes),
     paid,
-    hourly != null && hourly > 0 ? hourly : null,
+    extensionHourlyPrice != null && extensionHourlyPrice > 0 ? extensionHourlyPrice : null,
   )
   return r.ok ? r.minutes : 0
 }
@@ -262,6 +265,7 @@ function ManageSessionModal({
   station,
   session: arenaSession,
   tariffs,
+  zones,
   zoneId: _zoneId,
   onExtend,
   onEnd,
@@ -272,6 +276,7 @@ function ManageSessionModal({
   station: ArenaStation
   session: ArenaSession
   tariffs: ArenaTariff[]
+  zones: ArenaZone[]
   zoneId: string | null
   onExtend: (paymentMethod: 'cash' | 'kaspi' | 'mixed', cashAmount: number, kaspiAmount: number) => void
   onEnd: () => void
@@ -282,6 +287,18 @@ function ManageSessionModal({
   const [mode, setMode] = useState<'view' | 'extend'>('view')
 
   const rateTariff = tariffs.find(t => t.id === arenaSession.tariff_id)
+  const zoneRow = station.zone_id ? zones.find(z => z.id === station.zone_id) : undefined
+  const zoneHourly = zoneRow?.extension_hourly_price
+  const zoneHourlyEff =
+    zoneHourly != null && Number(zoneHourly) > 0 ? Number(zoneHourly) : null
+  const legacyTariffHourlyRaw = (rateTariff as { extension_hourly_price?: unknown } | undefined)?.extension_hourly_price
+  const legacyTariffHourly =
+    legacyTariffHourlyRaw != null && legacyTariffHourlyRaw !== ''
+      ? Number(legacyTariffHourlyRaw)
+      : NaN
+  const extensionHourlyEffective =
+    zoneHourlyEff ??
+    (Number.isFinite(legacyTariffHourly) && legacyTariffHourly > 0 ? legacyTariffHourly : null)
 
   const [extPayMethod, setExtPayMethod] = useState<'cash' | 'kaspi' | 'mixed'>('cash')
   const [extAmount, setExtAmount] = useState('')
@@ -293,7 +310,7 @@ function ManageSessionModal({
     return Math.round(Number(extAmount) || 0)
   }, [extPayMethod, extAmount, extCashAmt, extKaspiAmt])
 
-  const previewMin = previewExtensionMinutes(rateTariff, paidTotal)
+  const previewMin = previewExtensionMinutes(rateTariff, paidTotal, extensionHourlyEffective)
 
   const remainingMs = getRemainingMs(arenaSession.ends_at)
   const isExpired = remainingMs <= 0
@@ -363,9 +380,9 @@ function ManageSessionModal({
                     {rateTariff.tariff_type === 'time_window' ? ` · ${formatArenaTariffSchedule(rateTariff)}` : ''}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    {rateTariff.extension_hourly_price != null && rateTariff.extension_hourly_price > 0
-                      ? `Сумма меньше пакета — по часу ${formatMoney(Number(rateTariff.extension_hourly_price))} / 60 мин. От полной цены пакета — целые пакеты по ${formatMoney(Number(rateTariff.price))}, остаток снова по часу.`
-                      : 'Время считается пропорционально цене и длительности пакета. Для скидочного пакета укажите «час для доплаты» в настройках тарифа на сайте.'}
+                    {extensionHourlyEffective != null
+                      ? `Продление по сумме: ${formatMoney(extensionHourlyEffective)} за 60 мин${zoneHourlyEff != null ? ' (час зоны)' : ' (старая ставка в тарифе)'}. Меньше суммы пакета — по этому часу; от полной цены пакета — целые пакеты по ${formatMoney(Number(rateTariff.price))}, остаток снова по часу.`
+                      : 'Не задан час зоны — время считается пропорционально пакету. Укажите «час продления по сумме» у зоны: Станции → карандаш у названия зоны.'}
                   </p>
                 </div>
 
@@ -1581,6 +1598,7 @@ export default function ArenaPage({
           station={manageTarget.station}
           session={manageTarget.session}
           tariffs={tariffs}
+          zones={zones}
           zoneId={manageTarget.station.zone_id}
           onExtend={handleExtend}
           onEnd={handleEnd}

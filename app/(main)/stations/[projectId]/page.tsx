@@ -21,7 +21,11 @@ import { formatTariffWindowLabel, parseTimeToMinutes } from '@/lib/core/arena-ta
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type Zone = {
-  id: string; name: string; is_active: boolean
+  id: string
+  name: string
+  is_active: boolean
+  /** ₸/час для продления по сумме на станциях зоны */
+  extension_hourly_price: number | null
   grid_x: number | null; grid_y: number | null; grid_w: number | null; grid_h: number | null; color: string | null
 }
 type Station = {
@@ -34,7 +38,6 @@ type Tariff = {
   name: string
   duration_minutes: number
   price: number
-  extension_hourly_price: number | null
   is_active: boolean
   tariff_type: 'fixed' | 'time_window'
   window_start_time: string | null
@@ -72,10 +75,16 @@ function formatMinutes(m: number) {
 
 /** Строки из POST /api/admin/arena (.select().single()) → типы экрана */
 function arenaRowToZone(row: Record<string, unknown>): Zone {
+  const extH = row.extension_hourly_price
   return {
     id: String(row.id),
     name: String(row.name ?? ''),
     is_active: Boolean(row.is_active),
+    extension_hourly_price: (() => {
+      if (extH == null || extH === '') return null
+      const n = Number(extH)
+      return Number.isFinite(n) && n > 0 ? n : null
+    })(),
     grid_x: row.grid_x != null ? Number(row.grid_x) : null,
     grid_y: row.grid_y != null ? Number(row.grid_y) : null,
     grid_w: row.grid_w != null ? Number(row.grid_w) : null,
@@ -98,18 +107,12 @@ function arenaRowToStation(row: Record<string, unknown>): Station {
 
 function arenaRowToTariff(row: Record<string, unknown>): Tariff {
   const tt = row.tariff_type === 'time_window' ? 'time_window' : 'fixed'
-  const extH = row.extension_hourly_price
   return {
     id: String(row.id),
     zone_id: String(row.zone_id ?? ''),
     name: String(row.name ?? ''),
     duration_minutes: Number(row.duration_minutes ?? 0),
     price: Number(row.price ?? 0),
-    extension_hourly_price: (() => {
-      if (extH == null || extH === '') return null
-      const n = Number(extH)
-      return Number.isFinite(n) && n > 0 ? n : null
-    })(),
     is_active: Boolean(row.is_active ?? true),
     tariff_type: tt,
     window_start_time: row.window_start_time != null ? String(row.window_start_time) : null,
@@ -138,7 +141,6 @@ function validateTariffInput(t: {
   name: string
   duration_minutes: string | number
   price: string | number
-  extension_hourly_price?: string | number | null
   tariff_type: string
   window_start_time: string
   window_end_time: string
@@ -148,13 +150,6 @@ function validateTariffInput(t: {
   const dur = Number(t.duration_minutes)
   if (!Number.isFinite(price) || price < 0) return 'Укажите корректную цену (≥ 0)'
   if (!Number.isFinite(dur) || dur < 1) return 'Длительность не менее 1 минуты'
-  const extRaw = t.extension_hourly_price
-  if (extRaw !== undefined && extRaw !== null && String(extRaw).trim() !== '') {
-    const ep = Number(extRaw)
-    if (!Number.isFinite(ep) || ep <= 0) {
-      return 'Ставка за час (доплата): положительное число или оставьте пустым'
-    }
-  }
   if (t.tariff_type === 'time_window') {
     if (!String(t.window_end_time || '').trim()) return 'Для пакета укажите время окончания окна'
     if (parseTimeToMinutes(String(t.window_end_time).trim()) === null) return 'Окончание окна: формат ЧЧ:ММ (например 16:00)'
@@ -169,7 +164,6 @@ const EMPTY_NEW_TARIFF: {
   name: string
   duration_minutes: string
   price: string
-  extension_hourly_price: string
   tariff_type: 'fixed' | 'time_window'
   window_start_time: string
   window_end_time: string
@@ -177,7 +171,6 @@ const EMPTY_NEW_TARIFF: {
   name: '',
   duration_minutes: '60',
   price: '',
-  extension_hourly_price: '',
   tariff_type: 'fixed',
   window_start_time: '',
   window_end_time: '',
@@ -883,6 +876,8 @@ export default function StationsPage() {
   const [addingZone, setAddingZone] = useState(false)
   const [newZoneName, setNewZoneName] = useState('')
   const [editingZoneId, setEditingZoneId] = useState<string | null>(null)
+  const [zoneEditName, setZoneEditName] = useState('')
+  const [zoneEditHourly, setZoneEditHourly] = useState('')
 
   const [crudDialog, setCrudDialog] = useState<CrudDialogState>(null)
   const [newStationName, setNewStationName] = useState('')
@@ -919,7 +914,11 @@ export default function StationsPage() {
       const data = await res.json()
       if (!data.ok) throw new Error(data.error)
       setProjectName(data.data.project?.name || '')
-      setZones(data.data.zones)
+      setZones(
+        Array.isArray(data.data.zones)
+          ? (data.data.zones as Record<string, unknown>[]).map(arenaRowToZone)
+          : [],
+      )
       setStations(data.data.stations)
       setTariffs(
         Array.isArray(data.data.tariffs)
@@ -1095,10 +1094,25 @@ export default function StationsPage() {
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
-  async function handleUpdateZone(zoneId: string, name: string) {
+  async function handleSaveZoneEdit(zoneId: string) {
+    const name = zoneEditName.trim()
+    if (!name) {
+      showFlash('err', 'Введите название зоны')
+      return
+    }
+    const h = zoneEditHourly.trim()
+    let extension_hourly_price: number | null = null
+    if (h !== '') {
+      const n = Number(h)
+      if (!Number.isFinite(n) || n <= 0) {
+        showFlash('err', 'Час продления: положительное число или оставьте пустым')
+        return
+      }
+      extension_hourly_price = n
+    }
     setSaving(true)
     try {
-      const out = await apiPost({ action: 'updateZone', zoneId, name })
+      const out = await apiPost({ action: 'updateZone', zoneId, name, extension_hourly_price })
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных зоны')
       const z = arenaRowToZone(out.data as Record<string, unknown>)
       setZones(prev => prev.map(x => x.id === zoneId ? z : x))
@@ -1181,10 +1195,6 @@ export default function StationsPage() {
         tariff_type: newTariff.tariff_type || 'fixed',
         window_start_time: newTariff.tariff_type === 'time_window' ? (newTariff.window_start_time || null) : null,
         window_end_time: newTariff.tariff_type === 'time_window' ? (newTariff.window_end_time || null) : null,
-        extension_hourly_price: (() => {
-          const s = String(newTariff.extension_hourly_price ?? '').trim()
-          return s === '' ? null : Number(s)
-        })(),
       })
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных тарифа')
       const t = arenaRowToTariff(out.data as Record<string, unknown>)
@@ -1201,7 +1211,6 @@ export default function StationsPage() {
       name: editingTariff.name,
       duration_minutes: editingTariff.duration_minutes,
       price: editingTariff.price,
-      extension_hourly_price: editingTariff.extension_hourly_price,
       tariff_type: editingTariff.tariff_type,
       window_start_time: editingTariff.window_start_time || '',
       window_end_time: editingTariff.window_end_time || '',
@@ -1222,10 +1231,6 @@ export default function StationsPage() {
         tariff_type: editingTariff.tariff_type || 'fixed',
         window_start_time: editingTariff.tariff_type === 'time_window' ? (editingTariff.window_start_time || null) : null,
         window_end_time: editingTariff.tariff_type === 'time_window' ? (editingTariff.window_end_time || null) : null,
-        extension_hourly_price:
-          editingTariff.extension_hourly_price != null && editingTariff.extension_hourly_price > 0
-            ? editingTariff.extension_hourly_price
-            : null,
       })
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных тарифа')
       const t = arenaRowToTariff(out.data as Record<string, unknown>)
@@ -1547,20 +1552,81 @@ export default function StationsPage() {
                       {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </button>
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: zColor }} aria-hidden />
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
                       {editingZoneId === zone.id ? (
-                        <InlineEdit value={zone.name} onSave={v => handleUpdateZone(zone.id, v)} onCancel={() => setEditingZoneId(null)} />
+                        <div className="flex min-w-0 w-full flex-col gap-2">
+                          <input
+                            value={zoneEditName}
+                            onChange={e => setZoneEditName(e.target.value)}
+                            className="w-full rounded border border-white/20 bg-background px-2 py-1 text-sm"
+                            placeholder="Название зоны"
+                          />
+                          <div className="flex flex-wrap items-end gap-2">
+                            <label className="min-w-[140px] flex-1 text-[10px] text-muted-foreground">
+                              <span className="mb-0.5 block">Час продления по сумме, ₸</span>
+                              <input
+                                value={zoneEditHourly}
+                                onChange={e => setZoneEditHourly(e.target.value)}
+                                type="number"
+                                min={0}
+                                step="1"
+                                placeholder="напр. 1200"
+                                className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                              />
+                            </label>
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => void handleSaveZoneEdit(zone.id)}
+                                disabled={saving}
+                                className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground"
+                              >
+                                Сохранить
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingZoneId(null)}
+                                className="rounded bg-white/10 px-2 py-1 text-xs"
+                              >
+                                Отмена
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       ) : (
                         <>
                           <span className="truncate font-semibold text-sm">{zone.name}</span>
                           <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{zoneStations.length} ст.</span>
                           <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{zoneTariffs.length} тар.</span>
+                          {zone.extension_hourly_price != null && zone.extension_hourly_price > 0 && (
+                            <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                              час {formatPrice(zone.extension_hourly_price)}
+                            </span>
+                          )}
                           {!zone.is_active && <span className="shrink-0 rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-400">неактивна</span>}
                         </>
                       )}
                     </div>
-                    <div className="flex shrink-0 items-center gap-0.5">
-                      <button type="button" onClick={() => setEditingZoneId(editingZoneId === zone.id ? null : zone.id)} className="rounded p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                    <div className="flex shrink-0 items-center gap-0.5 self-start sm:self-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editingZoneId === zone.id) {
+                            setEditingZoneId(null)
+                          } else {
+                            setEditingZoneId(zone.id)
+                            setZoneEditName(zone.name)
+                            setZoneEditHourly(
+                              zone.extension_hourly_price != null && zone.extension_hourly_price > 0
+                                ? String(zone.extension_hourly_price)
+                                : '',
+                            )
+                          }
+                        }}
+                        className="rounded p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
                       <button type="button" onClick={() => handleDeleteZone(zone.id)} className="rounded p-1.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
                   </div>
@@ -1626,26 +1692,6 @@ export default function StationsPage() {
                                     <input value={editingTariff.duration_minutes} onChange={e => setEditingTariff(p => p ? ({ ...p, duration_minutes: Number(e.target.value) }) : p)} type="number" min={1} className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
                                     <input value={editingTariff.price} onChange={e => setEditingTariff(p => p ? ({ ...p, price: Number(e.target.value) }) : p)} type="number" min={0} step="1" className="rounded border border-white/20 bg-background px-2 py-1 text-xs" />
                                   </div>
-                                  <label className="block text-[10px] text-muted-foreground">
-                                    <span className="mb-0.5 block">Час для доплаты, ₸ (пусто = как раньше по пакету)</span>
-                                    <input
-                                      value={editingTariff.extension_hourly_price ?? ''}
-                                      onChange={e => {
-                                        const v = e.target.value
-                                        setEditingTariff(p => {
-                                          if (!p) return p
-                                          if (v.trim() === '') return { ...p, extension_hourly_price: null }
-                                          const n = Number(v)
-                                          return { ...p, extension_hourly_price: Number.isFinite(n) ? n : p.extension_hourly_price }
-                                        })
-                                      }}
-                                      type="number"
-                                      min={0}
-                                      step="1"
-                                      placeholder="напр. 1200"
-                                      className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs"
-                                    />
-                                  </label>
                                   <div className="grid grid-cols-2 gap-1">
                                     <select
                                       value={editingTariff.tariff_type || 'fixed'}
@@ -1699,9 +1745,6 @@ export default function StationsPage() {
                                         ? formatTariffWindowLabel(t.window_start_time, t.window_end_time)
                                         : formatMinutes(t.duration_minutes)}
                                       {' · '}{formatPrice(t.price)}
-                                      {t.extension_hourly_price != null && t.extension_hourly_price > 0
-                                        ? ` · час доплаты ${formatPrice(t.extension_hourly_price)}`
-                                        : ''}
                                     </span>
                                     {t.tariff_type === 'time_window' && (
                                       <span className="ml-1.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-semibold text-amber-400">Окно</span>
@@ -1997,7 +2040,7 @@ export default function StationsPage() {
               <DialogHeader>
                 <DialogTitle>Новый тариф</DialogTitle>
                 <DialogDescription>
-                  Зона «{crudDialog.zoneLabel}». <strong>Фикс</strong> — сеанс на N минут в любое время. <strong>Пакет по окну</strong> — старт только внутри интервала, окончание в конце окна (день 10–16 или ночь 22–10).
+                  Зона «{crudDialog.zoneLabel}». <strong>Фикс</strong> — сеанс на N минут в любое время. <strong>Пакет по окну</strong> — старт только внутри интервала, окончание в конце окна. Час для продления по сумме задаётся у <strong>зоны</strong> (карандаш у названия зоны), не у тарифа.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
@@ -2017,18 +2060,6 @@ export default function StationsPage() {
                     <input value={newTariff.price} onChange={e => setNewTariff(p => ({ ...p, price: e.target.value }))} type="number" min={0} step="1" className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
                   </label>
                 </div>
-                <label className="block text-xs text-muted-foreground">
-                  <span className="mb-1 block">Час для доплаты, ₸ (если пакет со скидкой — например 1200 при пакете 2400/3ч)</span>
-                  <input
-                    value={newTariff.extension_hourly_price}
-                    onChange={e => setNewTariff(p => ({ ...p, extension_hourly_price: e.target.value }))}
-                    type="number"
-                    min={0}
-                    step="1"
-                    placeholder="пусто = время от цены пакета"
-                    className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
-                  />
-                </label>
 
                 <label className="block text-xs font-medium text-muted-foreground">Режим</label>
                 <select
