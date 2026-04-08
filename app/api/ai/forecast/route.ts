@@ -54,27 +54,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'OPENAI_API_KEY не настроен на сервере.' }, { status: 500 })
     }
 
+    const body = (await request.json().catch(() => ({}))) as { company_id?: string | null }
+    const selectedCompanyId = typeof body.company_id === 'string' && body.company_id.trim().length > 0 ? body.company_id.trim() : null
+
     const dateTo = todayISO()
     const dateFrom = addDaysISO(dateTo, -89) // 90 days of history
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
-    const [incomesRes, expensesRes] = await Promise.all([
-      supabase
-        .from('incomes')
-        .select('date, cash_amount, kaspi_amount, online_amount, card_amount')
-        .gte('date', dateFrom)
-        .lte('date', dateTo)
-        .order('date', { ascending: true })
-        .range(0, 4999),
-      supabase
-        .from('expenses')
-        .select('date, cash_amount, kaspi_amount')
-        .gte('date', dateFrom)
-        .lte('date', dateTo)
-        .order('date', { ascending: true })
-        .range(0, 4999),
-    ])
+    let incomesQuery = supabase
+      .from('incomes')
+      .select('date, company_id, cash_amount, kaspi_amount, online_amount, card_amount')
+      .gte('date', dateFrom)
+      .lte('date', dateTo)
+      .order('date', { ascending: true })
+      .range(0, 4999)
+    let expensesQuery = supabase
+      .from('expenses')
+      .select('date, company_id, cash_amount, kaspi_amount')
+      .gte('date', dateFrom)
+      .lte('date', dateTo)
+      .order('date', { ascending: true })
+      .range(0, 4999)
+
+    if (selectedCompanyId) {
+      incomesQuery = incomesQuery.eq('company_id', selectedCompanyId)
+      expensesQuery = expensesQuery.eq('company_id', selectedCompanyId)
+    }
+
+    const [incomesRes, expensesRes] = await Promise.all([incomesQuery, expensesQuery])
 
     if (incomesRes.error) throw incomesRes.error
     if (expensesRes.error) throw expensesRes.error

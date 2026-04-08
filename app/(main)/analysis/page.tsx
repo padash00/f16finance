@@ -64,6 +64,11 @@ const PLANS_TABLE = "plans_daily"
 
 // ================== ТИПЫ ==================
 type PaymentMethod = 'cash' | 'kaspi' | 'card' | 'online'
+type CompanyOption = {
+  id: string
+  name: string
+  code?: string | null
+}
 
 type DataPoint = {
   date: string
@@ -812,6 +817,8 @@ function AnomalyDot(props: any) {
 export default function AIAnalysisPage() {
   const [history, setHistory] = useState<DataPoint[]>([])
   const [expenseCategories, setExpenseCategories] = useState<Record<string, number>>({})
+  const [companies, setCompanies] = useState<CompanyOption[]>([])
+  const [companyId, setCompanyId] = useState<string>('all')
   const [loading, setLoading] = useState(true)
   const [errorText, setErrorText] = useState<string | null>(null)
 
@@ -860,6 +867,26 @@ export default function AIAnalysisPage() {
     return { start, end }
   }
 
+  useEffect(() => {
+    let mounted = true
+    const loadCompanies = async () => {
+      try {
+        const response = await fetch('/api/admin/companies', { cache: 'no-store' })
+        const body = await response.json().catch(() => null)
+        if (!mounted) return
+        if (response.ok && Array.isArray(body?.data)) {
+          setCompanies(body.data as CompanyOption[])
+        }
+      } catch {
+        if (mounted) setCompanies([])
+      }
+    }
+    loadCompanies()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   const loadData = async () => {
     setLoading(true)
     setErrorText(null)
@@ -869,8 +896,10 @@ export default function AIAnalysisPage() {
       const { start, end } = computeRange()
       const fromDateStr = toISODateLocal(start)
       const toDateStr = toISODateLocal(end)
+      const selectedCompanyId = companyId !== 'all' ? companyId : null
 
       const incomeParams = new URLSearchParams({ from: fromDateStr, to: toDateStr })
+      if (selectedCompanyId) incomeParams.set('company_id', selectedCompanyId)
       const incomeApiRes = await fetch(`/api/admin/incomes?${incomeParams}`)
       if (!incomeApiRes.ok) throw new Error('Ошибка загрузки доходов')
       const incomeJson = await incomeApiRes.json()
@@ -882,6 +911,7 @@ export default function AIAnalysisPage() {
         let page = 0
         while (true) {
           const expParams = new URLSearchParams({ from: fromDateStr, to: toDateStr, page_size: String(PAGE_SIZE), page: String(page) })
+          if (selectedCompanyId) expParams.set('company_id', selectedCompanyId)
           const res = await fetch(`/api/admin/expenses?${expParams}`)
           if (!res.ok) throw new Error('Ошибка загрузки расходов')
           const j = await res.json()
@@ -1033,7 +1063,7 @@ export default function AIAnalysisPage() {
       aliveRef.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangePreset, customStart, customEnd, plansEnabled])
+  }, [rangePreset, customStart, customEnd, plansEnabled, companyId])
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -1439,6 +1469,23 @@ export default function AIAnalysisPage() {
                     onChange={(e) => setCustomEnd(e.target.value)}
                     className="w-[160px] bg-gray-900 border-gray-700 text-gray-300"
                   />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="text-xs text-gray-500">Компания</div>
+                  <Select value={companyId} onValueChange={setCompanyId}>
+                    <SelectTrigger className="w-[220px] bg-gray-900 border-gray-700 text-gray-300">
+                      <SelectValue placeholder="Выберите компанию" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-900 border-gray-700">
+                      <SelectItem value="all">Все компании</SelectItem>
+                      {companies.map((company) => (
+                        <SelectItem key={company.id} value={company.id}>
+                          {company.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="flex items-center gap-2">

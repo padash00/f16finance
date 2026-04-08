@@ -33,6 +33,7 @@ const shiftMonth = (m: string, offset: number) => {
 }
 
 type Goal = { id: string; period: string; target_income: number; target_expense: number; note: string | null }
+type Company = { id: string; name: string; code?: string | null }
 
 const SQL_SCRIPT = `create table if not exists goals (
   id uuid primary key default gen_random_uuid(),
@@ -44,7 +45,7 @@ const SQL_SCRIPT = `create table if not exists goals (
   updated_at timestamptz default now()
 );`
 
-function VarianceTable({ goals }: { goals: Goal[] }) {
+function VarianceTable({ goals, companyId }: { goals: Goal[]; companyId: string }) {
   const [actuals, setActuals] = useState<Record<string, {income: number, expense: number}>>({})
 
   useEffect(() => {
@@ -67,9 +68,10 @@ function VarianceTable({ goals }: { goals: Goal[] }) {
         }
         return rows
       }
+      const companyParam = companyId !== 'all' ? `&company_id=${encodeURIComponent(companyId)}` : ''
       const [incRows, expRows] = await Promise.all([
-        fetchAll(`/api/admin/incomes?from=${start}&to=${end}`),
-        fetchAll(`/api/admin/expenses?from=${start}&to=${end}`),
+        fetchAll(`/api/admin/incomes?from=${start}&to=${end}${companyParam}`),
+        fetchAll(`/api/admin/expenses?from=${start}&to=${end}${companyParam}`),
       ])
       const income = incRows.reduce((s:number,r:any) => s+(r.cash_amount||0)+(r.kaspi_amount||0)+(r.online_amount||0)+(r.card_amount||0), 0)
       const expense = expRows.reduce((s:number,r:any) => s+(r.cash_amount||0)+(r.kaspi_amount||0), 0)
@@ -77,7 +79,7 @@ function VarianceTable({ goals }: { goals: Goal[] }) {
     })).then(results => {
       setActuals(Object.fromEntries(results))
     })
-  }, [goals])
+  }, [goals, companyId])
 
   const fmt = (v: number) => {
     const abs = Math.abs(v)
@@ -157,6 +159,8 @@ function ProgressBar({ value, target, color }: { value: number; target: number; 
 export default function GoalsPage() {
   const [month, setMonth] = useState(currentMonthISO)
   const [goals, setGoals] = useState<Goal[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [companyId, setCompanyId] = useState<string>('all')
   const [tableExists, setTableExists] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -167,8 +171,16 @@ export default function GoalsPage() {
   const dateFrom = useMemo(() => monthStart(month), [month])
   const dateTo = useMemo(() => monthEnd(month), [month])
 
-  const { rows: incomeRows, loading: incomeLoading } = useIncome({ from: dateFrom, to: dateTo })
-  const { rows: expenseRows, loading: expenseLoading } = useExpenses({ from: dateFrom, to: dateTo })
+  const { rows: incomeRows, loading: incomeLoading } = useIncome({
+    from: dateFrom,
+    to: dateTo,
+    companyId: companyId !== 'all' ? companyId : undefined,
+  })
+  const { rows: expenseRows, loading: expenseLoading } = useExpenses({
+    from: dateFrom,
+    to: dateTo,
+    companyId: companyId !== 'all' ? companyId : undefined,
+  })
 
   const actuals = useMemo(() => {
     const income = incomeRows.reduce((s, r) => s + (r.cash_amount || 0) + (r.kaspi_amount || 0) + (r.online_amount || 0) + (r.card_amount || 0), 0)
@@ -188,6 +200,15 @@ export default function GoalsPage() {
       })
       .catch(() => setTableExists(false))
       .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/admin/companies', { cache: 'no-store' })
+      .then((r) => r.json().catch(() => null).then((json) => ({ ok: r.ok, json })))
+      .then(({ ok, json }) => {
+        if (ok && Array.isArray(json?.data)) setCompanies(json.data as Company[])
+      })
+      .catch(() => setCompanies([]))
   }, [])
 
   useEffect(() => {
@@ -277,6 +298,18 @@ export default function GoalsPage() {
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
+                <select
+                  value={companyId}
+                  onChange={(e) => setCompanyId(e.target.value)}
+                  className="ml-2 px-2.5 py-2 bg-gray-800/50 border border-gray-700 rounded-xl text-sm text-gray-200 min-w-[190px]"
+                >
+                  <option value="all">Все компании</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
@@ -427,7 +460,10 @@ export default function GoalsPage() {
               {goals.filter(g => g.target_income > 0 || g.target_expense > 0).length > 0 && (
                 <Card className="p-5 bg-gray-900/80 border-gray-800">
                   <h2 className="text-sm font-semibold text-white mb-4">План vs Факт — история</h2>
-                  <VarianceTable goals={goals.filter(g => g.target_income > 0 || g.target_expense > 0)} />
+                  <VarianceTable
+                    goals={goals.filter(g => g.target_income > 0 || g.target_expense > 0)}
+                    companyId={companyId}
+                  />
                 </Card>
               )}
             </>

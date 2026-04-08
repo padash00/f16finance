@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { AssistantPanel } from '@/components/ai/assistant-panel'
 import { Card } from '@/components/ui/card'
@@ -75,6 +75,11 @@ type ForecastResult = {
     }
   }
 }
+type CompanyOption = {
+  id: string
+  name: string
+  code?: string | null
+}
 
 // ================== TOOLTIP ==================
 function ForecastTooltip({ active, payload, label }: any) {
@@ -95,9 +100,29 @@ function ForecastTooltip({ active, payload, label }: any) {
 // ================== PAGE ==================
 export default function ForecastPage() {
   const [result, setResult] = useState<ForecastResult | null>(null)
+  const [companies, setCompanies] = useState<CompanyOption[]>([])
+  const [companyId, setCompanyId] = useState<string>('all')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [scenario, setScenario] = useState<'pessimistic' | 'realistic' | 'optimistic'>('realistic')
+
+  useEffect(() => {
+    let mounted = true
+    const loadCompanies = async () => {
+      try {
+        const res = await fetch('/api/admin/companies', { cache: 'no-store' })
+        const data = await res.json().catch(() => null)
+        if (!mounted) return
+        if (res.ok && Array.isArray(data?.data)) setCompanies(data.data as CompanyOption[])
+      } catch {
+        if (mounted) setCompanies([])
+      }
+    }
+    loadCompanies()
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const activeProjected = useMemo(
     () => result ? (result.scenarios?.[scenario] ?? result.projected) : null,
@@ -108,7 +133,12 @@ export default function ForecastPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/ai/forecast', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      const payload = companyId !== 'all' ? { company_id: companyId } : {}
+      const res = await fetch('/api/ai/forecast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error || 'Ошибка генерации прогноза')
       setResult(data)
@@ -210,23 +240,37 @@ export default function ForecastPage() {
                 </div>
               </div>
 
-              <button
-                onClick={handleGenerate}
-                disabled={loading}
-                className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Анализирую...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    {result ? 'Обновить прогноз' : 'Сгенерировать прогноз'}
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                <select
+                  value={companyId}
+                  onChange={(e) => setCompanyId(e.target.value)}
+                  className="px-3 py-2 bg-gray-800/80 border border-gray-700 rounded-xl text-sm text-gray-200 min-w-[210px]"
+                >
+                  <option value="all">Все компании</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleGenerate}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Анализирую...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      {result ? 'Обновить прогноз' : 'Сгенерировать прогноз'}
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
