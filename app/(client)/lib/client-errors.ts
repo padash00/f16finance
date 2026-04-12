@@ -16,6 +16,13 @@ export function formatClientApiError(code: string | undefined, fallback: string)
       return 'Введите текст обращения.'
     case 'message-too-long':
       return 'Сообщение слишком длинное (максимум 2000 символов).'
+    case 'station-not-found':
+    case 'station-invalid':
+      return 'Выберите станцию из списка ещё раз.'
+    case 'station-not-for-company':
+    case 'station-not-in-company-project':
+    case 'station-no-project':
+      return 'Эта станция не относится к выбранному клубу.'
     default:
       return fallback
   }

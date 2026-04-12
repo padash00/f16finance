@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 
+import { assertArenaStationForCompanyBooking } from '@/lib/server/client-arena-station'
 import { resolveLinkedCustomerForWrite } from '@/lib/server/linked-customers'
 import { getRequestCustomerContext } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
 
     let query = context.supabase
       .from('client_bookings')
-      .select('id, company_id, customer_id, starts_at, ends_at, status, notes, source, created_at, updated_at')
+      .select('id, company_id, customer_id, starts_at, ends_at, status, notes, source, arena_station_id, created_at, updated_at')
       .in('customer_id', context.linkedCustomerIds)
       .order('starts_at', { ascending: false })
       .limit(limit)
@@ -36,7 +38,21 @@ export async function GET(request: Request) {
     const { data, error } = await query
     if (error) throw error
 
-    return json({ ok: true, bookings: data || [] })
+    const rows = data || []
+    const stationIds = [...new Set(rows.map((r: any) => r.arena_station_id).filter(Boolean))] as string[]
+    let stationNames: Record<string, string> = {}
+    if (stationIds.length && hasAdminSupabaseCredentials()) {
+      const admin = createAdminSupabaseClient()
+      const { data: stRows } = await admin.from('arena_stations').select('id, name').in('id', stationIds)
+      stationNames = Object.fromEntries((stRows || []).map((s: any) => [String(s.id), String(s.name || 'Станция')]))
+    }
+
+    const bookings = rows.map((r: any) => ({
+      ...r,
+      station_name: r.arena_station_id ? stationNames[String(r.arena_station_id)] || null : null,
+    }))
+
+    return json({ ok: true, bookings })
   } catch (error: any) {
     return json({ error: error?.message || 'client-bookings-fetch-failed' }, 500)
   }
@@ -54,6 +70,8 @@ export async function POST(request: Request) {
           notes?: string
           /** К какой точке (компании) привязать бронь, если у аккаунта несколько `customers` по сети */
           companyId?: string | null
+          /** Опционально: станция арены (ПК) из схемы клуба */
+          arenaStationId?: string | null
         }
       | null
 
@@ -72,6 +90,19 @@ export async function POST(request: Request) {
       return json({ error: resolved.error }, 400)
     }
 
+    const stationRaw = String(body?.arenaStationId || '').trim()
+    let arenaStationId: string | null = null
+    if (stationRaw) {
+      if (!hasAdminSupabaseCredentials()) {
+        return json({ error: 'client-api-requires-admin-credentials' }, 503)
+      }
+      const check = await assertArenaStationForCompanyBooking(createAdminSupabaseClient(), stationRaw, resolved.companyId)
+      if (!check.ok) {
+        return json({ error: check.error }, 400)
+      }
+      arenaStationId = stationRaw
+    }
+
     const { data, error } = await context.supabase
       .from('client_bookings')
       .insert({
@@ -83,8 +114,9 @@ export async function POST(request: Request) {
         notes: String(body?.notes || '').trim() || null,
         source: 'client_app',
         created_by: context.user?.id || null,
+        arena_station_id: arenaStationId,
       })
-      .select('id, company_id, customer_id, starts_at, ends_at, status, notes, source, created_at, updated_at')
+      .select('id, company_id, customer_id, starts_at, ends_at, status, notes, source, arena_station_id, created_at, updated_at')
       .single()
 
     if (error) throw error

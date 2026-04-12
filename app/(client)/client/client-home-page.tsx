@@ -94,6 +94,9 @@ export function ClientHomePage() {
   const supportHref = effectiveCompanyId
     ? `/client/support?companyId=${encodeURIComponent(effectiveCompanyId)}`
     : '/client/support'
+  const storeHref = effectiveCompanyId
+    ? `/client/store?companyId=${encodeURIComponent(effectiveCompanyId)}`
+    : '/client/store'
 
   useEffect(() => {
     fetch('/api/client/me')
@@ -282,7 +285,16 @@ export function ClientHomePage() {
         </section>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Link
+          href={storeHref}
+          className={`rounded-xl border p-3 transition hover:bg-accent/30 ${
+            !effectiveCompanyId && linkedCompanyIds.length > 1 ? 'pointer-events-none opacity-50' : 'border-border/70 bg-background/70'
+          }`}
+        >
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Магазин</p>
+          <p className="mt-1 text-sm text-foreground">Витрина цен и наличия на точке.</p>
+        </Link>
         <Link
           href={bookingsHref}
           className={`rounded-xl border p-3 transition hover:bg-accent/30 ${

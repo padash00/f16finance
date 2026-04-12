@@ -12,7 +12,17 @@ type BookingRow = {
   ends_at: string | null
   status: string
   notes: string | null
+  arena_station_id?: string | null
+  station_name?: string | null
 }
+
+type VenueProject = {
+  id: string
+  name: string
+  stations: { id: string; name?: string | null; is_active?: boolean | null }[]
+}
+
+type VenuePayload = { ok?: boolean; projects?: VenueProject[]; error?: string }
 
 export function BookingsPageClient() {
   const searchParams = useSearchParams()
@@ -21,6 +31,8 @@ export function BookingsPageClient() {
   const [rows, setRows] = useState<BookingRow[]>([])
   const [startsAt, setStartsAt] = useState('')
   const [notes, setNotes] = useState('')
+  const [stationOptions, setStationOptions] = useState<{ id: string; label: string }[]>([])
+  const [arenaStationId, setArenaStationId] = useState('')
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -53,6 +65,36 @@ export function BookingsPageClient() {
     load()
   }, [bookingsQuery])
 
+  useEffect(() => {
+    if (!companyId) {
+      setStationOptions([])
+      setArenaStationId('')
+      return
+    }
+    fetch(`/api/client/venue-preview?companyId=${encodeURIComponent(companyId)}`)
+      .then(async (r) => {
+        const payload = (await r.json().catch(() => null)) as VenuePayload | null
+        if (!r.ok || !payload?.projects) {
+          setStationOptions([])
+          return
+        }
+        const list: { id: string; label: string }[] = []
+        for (const p of payload.projects) {
+          for (const s of p.stations || []) {
+            if (!s?.id) continue
+            const name = (s.name || 'Станция').trim()
+            list.push({
+              id: String(s.id),
+              label: `${name} · ${p.name}${s.is_active === false ? ' (выкл.)' : ''}`,
+            })
+          }
+        }
+        list.sort((a, b) => a.label.localeCompare(b.label, 'ru'))
+        setStationOptions(list)
+      })
+      .catch(() => setStationOptions([]))
+  }, [companyId])
+
   const submitBooking = async (event: FormEvent) => {
     event.preventDefault()
     if (!startsAt) return
@@ -66,6 +108,7 @@ export function BookingsPageClient() {
           startsAt: new Date(startsAt).toISOString(),
           notes,
           companyId: companyId || undefined,
+          arenaStationId: arenaStationId || undefined,
         }),
       })
       const payload = await response.json().catch(() => null)
@@ -75,6 +118,7 @@ export function BookingsPageClient() {
       }
       setStartsAt('')
       setNotes('')
+      setArenaStationId('')
       load()
     } finally {
       setSaving(false)
@@ -85,9 +129,13 @@ export function BookingsPageClient() {
     <div className="space-y-3">
       <h2 className="text-xl font-semibold tracking-tight">Мои брони</h2>
       <p className="text-sm text-muted-foreground">
-        Запрос уходит в выбранную точку клуба. Схему зала и список станций можно посмотреть на{' '}
+        Запрос уходит в выбранную точку клуба. Схему зала и список станций — на{' '}
         <Link href={companyId ? `/client?companyId=${encodeURIComponent(companyId)}` : '/client'} className="text-sky-400 underline-offset-2 hover:underline">
           главной
+        </Link>
+        , витрина — в{' '}
+        <Link href={companyId ? `/client/store?companyId=${encodeURIComponent(companyId)}` : '/client/store'} className="text-sky-400 underline-offset-2 hover:underline">
+          магазине
         </Link>
         .
       </p>
@@ -100,6 +148,25 @@ export function BookingsPageClient() {
       {saveError ? <p className="text-sm text-amber-200/90">{saveError}</p> : null}
       <form onSubmit={submitBooking} className="space-y-2 rounded-xl border border-border/70 bg-background/60 p-3">
         <p className="text-sm font-medium">Новая бронь</p>
+        {companyId && stationOptions.length > 0 ? (
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Станция (по желанию)</span>
+            <select
+              value={arenaStationId}
+              onChange={(e) => setArenaStationId(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
+            >
+              <option value="">Не указывать — любой свободный ПК</option>
+              {stationOptions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : companyId && stationOptions.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Станции для этой точки пока не заведены в арене — бронь без выбора ПК.</p>
+        ) : null}
         <input
           type="datetime-local"
           value={startsAt}
@@ -128,6 +195,7 @@ export function BookingsPageClient() {
             <p className="text-muted-foreground">
               Статус: {item.status}
               {item.ends_at ? ` · Окончание: ${new Date(item.ends_at).toLocaleString('ru-RU')}` : ''}
+              {item.station_name ? ` · Станция: ${item.station_name}` : item.arena_station_id ? ` · Станция: ${item.arena_station_id.slice(0, 8)}…` : ''}
             </p>
             {item.notes ? <p className="mt-1 text-muted-foreground">{item.notes}</p> : null}
           </div>

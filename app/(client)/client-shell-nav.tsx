@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 
 const clientLinks = [
   { href: '/client', label: 'Главная' },
+  { href: '/client/store', label: 'Магазин' },
   { href: '/client/bookings', label: 'Брони' },
   { href: '/client/points', label: 'Баллы' },
   { href: '/client/support', label: 'Поддержка' },
