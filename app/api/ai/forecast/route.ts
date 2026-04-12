@@ -44,6 +44,23 @@ function linearRegression(values: number[]) {
   return { slope, intercept }
 }
 
+async function fetchAllRows(
+  queryFactory: (from: number, to: number) => any,
+  pageSize = 2000,
+) {
+  const rows: any[] = []
+  let offset = 0
+  while (true) {
+    const { data, error } = await queryFactory(offset, offset + pageSize - 1)
+    if (error) throw error
+    const chunk = data ?? []
+    rows.push(...chunk)
+    if (chunk.length < pageSize) break
+    offset += pageSize
+  }
+  return rows
+}
+
 export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -62,30 +79,30 @@ export async function POST(request: Request) {
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
 
-    let incomesQuery = supabase
-      .from('incomes')
-      .select('date, company_id, cash_amount, kaspi_amount, online_amount, card_amount')
-      .gte('date', dateFrom)
-      .lte('date', dateTo)
-      .order('date', { ascending: true })
-      .range(0, 4999)
-    let expensesQuery = supabase
-      .from('expenses')
-      .select('date, company_id, cash_amount, kaspi_amount')
-      .gte('date', dateFrom)
-      .lte('date', dateTo)
-      .order('date', { ascending: true })
-      .range(0, 4999)
+    const incomesPromise = fetchAllRows((from, to) => {
+      let query = supabase
+        .from('incomes')
+        .select('date, company_id, cash_amount, kaspi_amount, online_amount, card_amount')
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('date', { ascending: true })
+        .range(from, to)
+      if (selectedCompanyId) query = query.eq('company_id', selectedCompanyId)
+      return query
+    })
+    const expensesPromise = fetchAllRows((from, to) => {
+      let query = supabase
+        .from('expenses')
+        .select('date, company_id, cash_amount, kaspi_amount')
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('date', { ascending: true })
+        .range(from, to)
+      if (selectedCompanyId) query = query.eq('company_id', selectedCompanyId)
+      return query
+    })
 
-    if (selectedCompanyId) {
-      incomesQuery = incomesQuery.eq('company_id', selectedCompanyId)
-      expensesQuery = expensesQuery.eq('company_id', selectedCompanyId)
-    }
-
-    const [incomesRes, expensesRes] = await Promise.all([incomesQuery, expensesQuery])
-
-    if (incomesRes.error) throw incomesRes.error
-    if (expensesRes.error) throw expensesRes.error
+    const [incomeRows, expenseRows] = await Promise.all([incomesPromise, expensesPromise])
 
     // Aggregate by week (7-day buckets from dateFrom)
     const weeklyIncome: number[] = []
@@ -110,13 +127,13 @@ export async function POST(request: Request) {
       weekLabels.push(`${weekStart} — ${weekEnd}`)
     }
 
-    for (const row of incomesRes.data ?? []) {
+    for (const row of incomeRows) {
       const wi = getWeekIndex(row.date)
       if (wi >= 0 && wi < numWeeks) {
         weeklyIncome[wi] += safeNumber(row.cash_amount) + safeNumber(row.kaspi_amount) + safeNumber(row.online_amount) + safeNumber(row.card_amount)
       }
     }
-    for (const row of expensesRes.data ?? []) {
+    for (const row of expenseRows) {
       const wi = getWeekIndex(row.date)
       if (wi >= 0 && wi < numWeeks) {
         weeklyExpense[wi] += safeNumber(row.cash_amount) + safeNumber(row.kaspi_amount)

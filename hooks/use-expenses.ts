@@ -26,6 +26,8 @@ export type UseExpensesOptions = {
   search?: string
   /** Sort order (default: date_desc) */
   sort?: 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'
+  /** Fetch all pages (for analytics totals) */
+  fetchAll?: boolean
   /** Rows per page (default: 200; API caps at 2000) */
   pageSize?: number
   /** Set to false to skip the initial fetch */
@@ -49,6 +51,7 @@ export function useExpenses(options: UseExpensesOptions = {}) {
     payFilter,
     search,
     sort = 'date_desc',
+    fetchAll = false,
     pageSize = 200,
     enabled = true,
   } = options
@@ -82,27 +85,51 @@ export function useExpenses(options: UseExpensesOptions = {}) {
         if (payFilter) params.set('pay_filter', payFilter)
         if (search && search.length >= 2) params.set('search', search)
         params.set('sort', sort)
-        params.set('page', String(targetPage))
-        params.set('page_size', String(pageSize))
-
-        const res = await fetch(`/api/admin/expenses?${params}`)
-        if (myReqId !== reqIdRef.current) return
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body.error || `HTTP ${res.status}`)
-        }
-        const body = await res.json()
-        const pageRows: ExpenseRow[] = body.data ?? []
-
-        if (myReqId !== reqIdRef.current) return
-        setHasMore(pageRows.length === pageSize && (targetPage + 1) * pageSize < MAX_ROWS_HARD_LIMIT)
-
-        if (mode === 'replace') {
-          setRows(pageRows)
-          setPage(targetPage)
+        if (fetchAll && mode === 'replace') {
+          const allRows: ExpenseRow[] = []
+          let currentPage = 0
+          while (currentPage * pageSize < MAX_ROWS_HARD_LIMIT) {
+            params.set('page', String(currentPage))
+            params.set('page_size', String(pageSize))
+            const res = await fetch(`/api/admin/expenses?${params}`)
+            if (myReqId !== reqIdRef.current) return
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}))
+              throw new Error(body.error || `HTTP ${res.status}`)
+            }
+            const body = await res.json()
+            const chunk = (body.data ?? []) as ExpenseRow[]
+            allRows.push(...chunk)
+            if (chunk.length < pageSize) break
+            currentPage += 1
+          }
+          if (myReqId !== reqIdRef.current) return
+          setRows(allRows)
+          setPage(0)
+          setHasMore(false)
         } else {
-          setRows((prev) => [...prev, ...pageRows])
-          setPage(targetPage)
+          params.set('page', String(targetPage))
+          params.set('page_size', String(pageSize))
+
+          const res = await fetch(`/api/admin/expenses?${params}`)
+          if (myReqId !== reqIdRef.current) return
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new Error(body.error || `HTTP ${res.status}`)
+          }
+          const body = await res.json()
+          const pageRows: ExpenseRow[] = body.data ?? []
+
+          if (myReqId !== reqIdRef.current) return
+          setHasMore(pageRows.length === pageSize && (targetPage + 1) * pageSize < MAX_ROWS_HARD_LIMIT)
+
+          if (mode === 'replace') {
+            setRows(pageRows)
+            setPage(targetPage)
+          } else {
+            setRows((prev) => [...prev, ...pageRows])
+            setPage(targetPage)
+          }
         }
       } catch (e: unknown) {
         if (myReqId !== reqIdRef.current) return
@@ -114,7 +141,7 @@ export function useExpenses(options: UseExpensesOptions = {}) {
         setLoadingMore(false)
       }
     },
-    [from, to, companyId, category, payFilter, search, sort, pageSize],
+    [from, to, companyId, category, payFilter, search, sort, fetchAll, pageSize],
   )
 
   useEffect(() => {

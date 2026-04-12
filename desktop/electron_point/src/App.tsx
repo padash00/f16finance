@@ -469,6 +469,7 @@ export default function App() {
           start_cash_prompt: false,
           arena_enabled: false,
           arena_shift_auto_totals: false,
+          arena_defer_income_to_shift: false,
         },
       },
       company: { id: '', name: '', code: null },

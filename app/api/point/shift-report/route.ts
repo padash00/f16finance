@@ -45,6 +45,12 @@ function isKaspiDailySplitEnabled(input: Record<string, unknown> | null | undefi
   return input?.kaspi_daily_split === true
 }
 
+function nextCalendarDateIso(isoDate: string): string {
+  const d = new Date(`${isoDate}T12:00:00.000Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
 function resolveIncomeZone(params: {
   requestedZone?: string | null
   companyCode?: string | null
@@ -141,6 +147,26 @@ export async function POST(request: Request) {
       .select('*')
       .single()
     if (insertError) throw insertError
+
+    if (device.feature_flags?.arena_defer_income_to_shift === true) {
+      const dayAfter = nextCalendarDateIso(payload.date)
+      const { error: arenaLinkError } = await supabase
+        .from('arena_sessions')
+        .update({ income_id: created.id })
+        .eq('point_project_id', device.id)
+        .is('income_id', null)
+        .eq('operator_id', payload.operator_id)
+        .gte('started_at', `${payload.date}T00:00:00.000Z`)
+        .lt('started_at', `${dayAfter}T00:00:00.000Z`)
+
+      if (arenaLinkError) {
+        await writeSystemErrorLogSafe({
+          scope: 'server',
+          area: 'point-shift-report:arena-session-link',
+          message: arenaLinkError.message || 'Failed to link arena sessions to shift income',
+        })
+      }
+    }
 
     const operator = Array.isArray((assignment as any).operator)
       ? (assignment as any).operator[0] || null

@@ -17,6 +17,8 @@ function normalizeFlags(input: Record<string, unknown> | null | undefined) {
     arena_enabled: input?.arena_enabled === true,
     /** Если true — вкладка «Смена» подставляет суммы из сессий арены; иначе классический ручной отчёт. */
     arena_shift_auto_totals: input?.arena_shift_auto_totals === true,
+    /** Доходы арены не пишутся в `incomes` при каждом тарифе — только сменный отчёт. */
+    arena_defer_income_to_shift: input?.arena_defer_income_to_shift === true,
   }
 }
 

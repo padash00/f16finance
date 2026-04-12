@@ -29,6 +29,10 @@ export type UseIncomeOptions = {
   operatorNull?: boolean
   /** Filter by payment type > 0 */
   payFilter?: 'cash' | 'kaspi' | 'online' | 'card'
+  /** Fetch all pages (for analytics totals) */
+  fetchAll?: boolean
+  /** Rows per page when fetchAll=true (max 2000) */
+  pageSize?: number
   /** Set to false to skip the initial fetch */
   enabled?: boolean
 }
@@ -38,7 +42,7 @@ export type UseIncomeOptions = {
  * Handles race conditions via AbortController.
  */
 export function useIncome(options: UseIncomeOptions = {}) {
-  const { from, to, companyId, shift, operatorId, operatorNull, payFilter, enabled = true } = options
+  const { from, to, companyId, shift, operatorId, operatorNull, payFilter, fetchAll = false, pageSize = 1000, enabled = true } = options
 
   const [rows, setRows] = useState<IncomeRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -62,21 +66,42 @@ export function useIncome(options: UseIncomeOptions = {}) {
       if (operatorNull) params.set('operator_null', 'true')
       else if (operatorId) params.set('operator_id', operatorId)
       if (payFilter) params.set('pay_filter', payFilter)
-
-      const res = await fetch(`/api/admin/incomes?${params}`, { signal: controller.signal })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error || `HTTP ${res.status}`)
+      if (!fetchAll) {
+        const res = await fetch(`/api/admin/incomes?${params}`, { signal: controller.signal })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error || `HTTP ${res.status}`)
+        }
+        const body = await res.json()
+        setRows(body.data ?? [])
+        return
       }
-      const body = await res.json()
-      setRows(body.data ?? [])
+
+      const normalizedPageSize = Math.min(2000, Math.max(1, pageSize))
+      let page = 0
+      const allRows: IncomeRow[] = []
+      while (true) {
+        params.set('page', String(page))
+        params.set('page_size', String(normalizedPageSize))
+        const res = await fetch(`/api/admin/incomes?${params}`, { signal: controller.signal })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error || `HTTP ${res.status}`)
+        }
+        const body = await res.json()
+        const chunk = (body.data ?? []) as IncomeRow[]
+        allRows.push(...chunk)
+        if (chunk.length < normalizedPageSize) break
+        page += 1
+      }
+      setRows(allRows)
     } catch (e: unknown) {
       if ((e as Error)?.name === 'AbortError') return
       setError(e instanceof Error ? e.message : 'Ошибка загрузки доходов')
     } finally {
       if (!controller.signal.aborted) setLoading(false)
     }
-  }, [from, to, companyId, shift, operatorId, operatorNull, payFilter])
+  }, [from, to, companyId, shift, operatorId, operatorNull, payFilter, fetchAll, pageSize])
 
   useEffect(() => {
     if (enabled) load()

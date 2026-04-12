@@ -175,11 +175,15 @@ export default function GoalsPage() {
     from: dateFrom,
     to: dateTo,
     companyId: companyId !== 'all' ? companyId : undefined,
+    fetchAll: true,
+    pageSize: 1000,
   })
   const { rows: expenseRows, loading: expenseLoading } = useExpenses({
     from: dateFrom,
     to: dateTo,
     companyId: companyId !== 'all' ? companyId : undefined,
+    fetchAll: true,
+    pageSize: 1000,
   })
 
   const actuals = useMemo(() => {

@@ -13,6 +13,8 @@ type PointFeatureFlags = {
   arena_enabled?: boolean
   /** Экран смены подставляет суммы из сессий арены (Electron). */
   arena_shift_auto_totals?: boolean
+  /** Не создавать incomes при старте сессии арены — учёт в сменном отчёте. */
+  arena_defer_income_to_shift?: boolean
 }
 
 type CompanyAssignment = {
@@ -80,6 +82,9 @@ function normalizeFlags(input: Partial<PointFeatureFlags> | null | undefined): P
   }
   if (input?.arena_shift_auto_totals !== undefined) {
     flags.arena_shift_auto_totals = input.arena_shift_auto_totals === true
+  }
+  if (input?.arena_defer_income_to_shift !== undefined) {
+    flags.arena_defer_income_to_shift = input.arena_defer_income_to_shift === true
   }
   return flags
 }

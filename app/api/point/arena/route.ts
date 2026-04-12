@@ -16,6 +16,16 @@ function getCurrentShift(): 'day' | 'night' {
   return hour >= 6 && hour < 22 ? 'day' : 'night'
 }
 
+function deferArenaSessionIncomes(flags: Record<string, unknown> | null | undefined) {
+  return flags?.arena_defer_income_to_shift === true
+}
+
+function nextCalendarDateIso(isoDate: string): string {
+  const d = new Date(`${isoDate}T12:00:00.000Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
 // In-memory map: sessionId → notifiedAt timestamp (for 5-min Telegram dedup)
 const notified5minMap = new Map<string, number>()
 
@@ -46,6 +56,8 @@ export async function GET(request: Request) {
     }
 
     const todayDate = new Date().toISOString().slice(0, 10)
+    const todayEndExclusive = `${nextCalendarDateIso(todayDate)}T00:00:00.000Z`
+    const deferIncomes = deferArenaSessionIncomes(device.feature_flags as Record<string, unknown>)
 
     const [
       { data: zones, error: zonesError },
@@ -53,7 +65,7 @@ export async function GET(request: Request) {
       { data: tariffs, error: tariffsError },
       { data: sessions, error: sessionsError },
       { data: decorations },
-      { data: todayIncomes },
+      { data: arenaDayRows },
       { data: todayTechLogs },
     ] = await Promise.all([
       withCo(supabase.from('arena_zones').select('*').eq('point_project_id', projectId).eq('is_active', true)).order('name'),
@@ -61,7 +73,23 @@ export async function GET(request: Request) {
       withCo(supabase.from('arena_tariffs').select('*').eq('point_project_id', projectId).eq('is_active', true)).order('price'),
       withCo(supabase.from('arena_sessions').select('*').eq('point_project_id', projectId).eq('status', 'active')),
       withCo(supabase.from('arena_map_decorations').select('*').eq('point_project_id', projectId)).order('created_at'),
-      withCo(supabase.from('incomes').select('cash_amount,kaspi_amount,comment,created_at').eq('source', 'arena-session').eq('date', todayDate)),
+      deferIncomes
+        ? withCo(
+            supabase
+              .from('arena_sessions')
+              .select('id, cash_amount, kaspi_amount, started_at, station:station_id(name), tariff:tariff_id(name)')
+              .eq('point_project_id', projectId)
+              .is('income_id', null)
+              .gte('started_at', `${todayDate}T00:00:00.000Z`)
+              .lt('started_at', todayEndExclusive),
+          )
+        : withCo(
+            supabase
+              .from('incomes')
+              .select('cash_amount,kaspi_amount,comment,created_at')
+              .eq('source', 'arena-session')
+              .eq('date', todayDate),
+          ),
       withCo(supabase.from('arena_tech_logs').select('id,station_name,reason,amount,created_at').eq('point_project_id', projectId)).gte('created_at', todayDate + 'T00:00:00.000Z').order('created_at'),
     ])
 
@@ -86,7 +114,20 @@ export async function GET(request: Request) {
       (activeSessions as { tariff_id?: string }[]).map((s) => s.tariff_id).filter(Boolean) as string[],
     )
 
-    const incomeRows = todayIncomes || []
+    const incomeRows = deferIncomes
+      ? (arenaDayRows || []).map((s: any) => {
+          const st = Array.isArray(s.station) ? s.station[0] : s.station
+          const tf = Array.isArray(s.tariff) ? s.tariff[0] : s.tariff
+          const stationName = st?.name || '—'
+          const tariffName = tf?.name || 'тариф'
+          return {
+            cash_amount: Number(s.cash_amount || 0),
+            kaspi_amount: Number(s.kaspi_amount || 0),
+            comment: `Арена: ${stationName} — ${tariffName}`,
+            created_at: s.started_at,
+          }
+        })
+      : arenaDayRows || []
     const todayCash = incomeRows.reduce((s: number, r: any) => s + Number(r.cash_amount || 0), 0)
     const todayKaspi = incomeRows.reduce((s: number, r: any) => s + Number(r.kaspi_amount || 0), 0)
 
@@ -136,6 +177,7 @@ export async function POST(request: Request) {
     const { supabase, device } = point
     const projectId = device.id
     const companyId = device.company_id || null
+    const deferIncomes = deferArenaSessionIncomes(device.feature_flags as Record<string, unknown>)
 
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'action required' }, 400)
@@ -248,39 +290,39 @@ export async function POST(request: Request) {
 
       if (insertError) throw insertError
 
-      // Create income record
-      const { data: incomeRow, error: incomeError } = await supabase
-        .from('incomes')
-        .insert({
-          date: new Date().toISOString().slice(0, 10),
-          company_id: companyId || null,
-          operator_id: operatorId || null,
-          shift: getCurrentShift(),
-          zone: 'pc',
-          cash_amount: finalCash,
-          kaspi_amount: finalKaspi,
-          online_amount: 0,
-          card_amount: 0,
-          comment: `Арена: ${stationName} — ${tariff.name}`,
-          source: 'arena-session',
-        })
-        .select('id')
-        .single()
+      if (!deferIncomes) {
+        const { data: incomeRow, error: incomeError } = await supabase
+          .from('incomes')
+          .insert({
+            date: new Date().toISOString().slice(0, 10),
+            company_id: companyId || null,
+            operator_id: operatorId || null,
+            shift: getCurrentShift(),
+            zone: 'pc',
+            cash_amount: finalCash,
+            kaspi_amount: finalKaspi,
+            online_amount: 0,
+            card_amount: 0,
+            comment: `Арена: ${stationName} — ${tariff.name}`,
+            source: 'arena-session',
+          })
+          .select('id')
+          .single()
 
-      if (incomeError) {
-        await writeSystemErrorLogSafe({
-          scope: 'server',
-          area: 'api/point/arena:startSession:incomeInsert',
-          message: incomeError.message || 'Income insert failed',
-        })
-      }
+        if (incomeError) {
+          await writeSystemErrorLogSafe({
+            scope: 'server',
+            area: 'api/point/arena:startSession:incomeInsert',
+            message: incomeError.message || 'Income insert failed',
+          })
+        }
 
-      // Update session with income_id if successfully created
-      if (incomeRow?.id) {
-        await supabase
-          .from('arena_sessions')
-          .update({ income_id: incomeRow.id })
-          .eq('id', (arenaSession as any).id)
+        if (incomeRow?.id) {
+          await supabase
+            .from('arena_sessions')
+            .update({ income_id: incomeRow.id })
+            .eq('id', (arenaSession as any).id)
+        }
       }
 
       return json({ ok: true, data: arenaSession })
@@ -318,7 +360,7 @@ export async function POST(request: Request) {
 
       const { data: current, error: fetchError } = await supabase
         .from('arena_sessions')
-        .select('ends_at, amount, station_id, operator_id, tariff_id')
+        .select('ends_at, amount, cash_amount, kaspi_amount, station_id, operator_id, tariff_id')
         .eq('id', sessionId)
         .eq('point_project_id', projectId)
         .single()
@@ -433,11 +475,16 @@ export async function POST(request: Request) {
 
       const newEndsAt = new Date(baseTime.getTime() + extraMinutes * 60_000)
 
+      const prevCash = Number((current as any).cash_amount) || 0
+      const prevKaspi = Number((current as any).kaspi_amount) || 0
+
       const { data: updatedSession, error: updateError } = await supabase
         .from('arena_sessions')
         .update({
           ends_at: newEndsAt.toISOString(),
           amount: (Number((current as any).amount) || 0) + extPrice,
+          cash_amount: prevCash + extCash,
+          kaspi_amount: prevKaspi + extKaspi,
         })
         .eq('id', sessionId)
         .select()
@@ -445,34 +492,34 @@ export async function POST(request: Request) {
 
       if (updateError) throw updateError
 
-      // Fetch station name for income comment
-      const { data: extStationRow } = await supabase
-        .from('arena_stations')
-        .select('name')
-        .eq('id', (current as any).station_id)
-        .maybeSingle()
-      const extStationName = (extStationRow as any)?.name || (current as any).station_id
+      if (!deferIncomes) {
+        const { data: extStationRow } = await supabase
+          .from('arena_stations')
+          .select('name')
+          .eq('id', (current as any).station_id)
+          .maybeSingle()
+        const extStationName = (extStationRow as any)?.name || (current as any).station_id
 
-      // Create income record for extension
-      const { error: extIncomeError } = await supabase.from('incomes').insert({
-        date: new Date().toISOString().slice(0, 10),
-        company_id: companyId,
-        operator_id: (current as any).operator_id || null,
-        shift: getCurrentShift(),
-        zone: 'pc',
-        cash_amount: extCash,
-        kaspi_amount: extKaspi,
-        online_amount: 0,
-        card_amount: 0,
-        comment: `Арена продление: ${extStationName}`,
-        source: 'arena-session',
-      })
-      if (extIncomeError) {
-        await writeSystemErrorLogSafe({
-          scope: 'server',
-          area: 'api/point/arena:extendSession:incomeInsert',
-          message: extIncomeError.message || 'Income insert failed',
+        const { error: extIncomeError } = await supabase.from('incomes').insert({
+          date: new Date().toISOString().slice(0, 10),
+          company_id: companyId,
+          operator_id: (current as any).operator_id || null,
+          shift: getCurrentShift(),
+          zone: 'pc',
+          cash_amount: extCash,
+          kaspi_amount: extKaspi,
+          online_amount: 0,
+          card_amount: 0,
+          comment: `Арена продление: ${extStationName}`,
+          source: 'arena-session',
         })
+        if (extIncomeError) {
+          await writeSystemErrorLogSafe({
+            scope: 'server',
+            area: 'api/point/arena:extendSession:incomeInsert',
+            message: extIncomeError.message || 'Income insert failed',
+          })
+        }
       }
 
       // Reset notification flag so the new end time gets a fresh notification

@@ -17,16 +17,21 @@ type Body = {
     kaspi_daily_split?: boolean
     debt_report?: boolean
     start_cash_prompt?: boolean
+    /** Не писать в incomes при каждом тарифе арены — только сменный отчёт + привязка сессий. */
+    arena_defer_income_to_shift?: boolean
   } | null
 }
 
 function normalizeFlags(input: Record<string, unknown> | null | undefined) {
+  const prev = input && typeof input === 'object' && !Array.isArray(input) ? { ...input } : {}
   return {
-    shift_report: input?.shift_report !== false,
-    income_report: input?.income_report !== false,
-    debt_report: input?.debt_report === true,
-    kaspi_daily_split: input?.kaspi_daily_split === true,
-    start_cash_prompt: input?.start_cash_prompt === true,
+    ...prev,
+    shift_report: prev.shift_report !== false,
+    income_report: prev.income_report !== false,
+    debt_report: prev.debt_report === true,
+    kaspi_daily_split: prev.kaspi_daily_split === true,
+    start_cash_prompt: prev.start_cash_prompt === true,
+    arena_defer_income_to_shift: prev.arena_defer_income_to_shift === true,
   }
 }
 
@@ -103,6 +108,9 @@ export async function POST(request: Request) {
       }
       if (body.feature_flags && typeof body.feature_flags.start_cash_prompt === 'boolean') {
         nextFlags.start_cash_prompt = body.feature_flags.start_cash_prompt === true
+      }
+      if (body.feature_flags && typeof body.feature_flags.arena_defer_income_to_shift === 'boolean') {
+        nextFlags.arena_defer_income_to_shift = body.feature_flags.arena_defer_income_to_shift === true
       }
 
       const { data, error } = await supabase

@@ -16,6 +16,11 @@ export interface FeatureFlags {
   arena_enabled: boolean
   /** Подмена экрана смены сводкой из сессий арены (по умолчанию выключено — ручной отчёт). */
   arena_shift_auto_totals: boolean
+  /**
+   * Не создавать строки incomes при старте/продлении сессии арены — учёт только в сменном отчёте
+   * (страница «Доходы» без отдельной строки на каждый тариф до закрытия смены).
+   */
+  arena_defer_income_to_shift: boolean
 }
 
 export interface BootstrapOperator {

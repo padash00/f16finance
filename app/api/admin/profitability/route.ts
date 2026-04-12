@@ -115,16 +115,49 @@ function canManageProfitability(access: {
   return access.isSuperAdmin || access.staffRole === 'owner'
 }
 
+/** Просмотр ОПиУ доступен владельцу и менеджеру (как маршруты в lib/core/access); правки только у owner/super_admin. */
+function canViewProfitability(access: {
+  isSuperAdmin: boolean
+  staffRole: 'manager' | 'marketer' | 'owner' | 'other'
+}) {
+  return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+}
+
+function collectKaspiDailySplitCompanyIds(deviceRows: any[] | null | undefined, projectRows: any[] | null | undefined) {
+  const splitCompanyIds = new Set<string>()
+  for (const row of deviceRows || []) {
+    if (row?.company_id && row?.feature_flags?.kaspi_daily_split === true) {
+      splitCompanyIds.add(String(row.company_id))
+    }
+  }
+  for (const proj of projectRows || []) {
+    const links = Array.isArray((proj as any)?.point_project_companies)
+      ? (proj as any).point_project_companies
+      : []
+    for (const link of links) {
+      const flags = link?.feature_flags
+      const on =
+        flags &&
+        typeof flags === 'object' &&
+        !Array.isArray(flags) &&
+        (flags as Record<string, unknown>).kaspi_daily_split === true
+      if (on && link?.company_id) splitCompanyIds.add(String(link.company_id))
+    }
+  }
+  return splitCompanyIds
+}
+
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    if (!canManageProfitability(access)) return json({ error: 'forbidden' }, 403)
+    if (!canViewProfitability(access)) return json({ error: 'forbidden' }, 403)
 
     const url = new URL(req.url)
     const from = normalizeMonth(url.searchParams.get('from'))
     const to = normalizeMonth(url.searchParams.get('to'))
-    const includeKaspiDaily = url.searchParams.get('includeKaspiDaily') === '1'
+    const includeKaspiDaily =
+      url.searchParams.get('includeKaspiDaily') === '1' || url.searchParams.get('include_kaspi_daily') === '1'
 
     const supabase = createAdminSupabaseClient()
     let query = supabase.from('monthly_profitability_inputs').select('*').order('month', { ascending: true })
@@ -143,23 +176,25 @@ export async function GET(req: Request) {
     const dateTo = monthEnd(to)
     const previousDate = prevDayISO(dateFrom)
 
-    const [{ data: deviceRows, error: devicesError }, { data: incomeRows, error: incomesError }] = await Promise.all([
-      supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true),
-      supabase
-        .from('incomes')
-        .select('company_id,date,shift,kaspi_amount,kaspi_before_midnight')
-        .gte('date', previousDate)
-        .lte('date', dateTo),
-    ])
+    const [{ data: deviceRows, error: devicesError }, { data: projectRows, error: projectsError }, { data: incomeRows, error: incomesError }] =
+      await Promise.all([
+        supabase.from('point_devices').select('company_id, feature_flags').eq('is_active', true),
+        supabase
+          .from('point_projects')
+          .select('point_project_companies(company_id, feature_flags)')
+          .eq('is_active', true),
+        supabase
+          .from('incomes')
+          .select('company_id,date,shift,kaspi_amount,kaspi_before_midnight')
+          .gte('date', previousDate)
+          .lte('date', dateTo),
+      ])
 
     if (devicesError) throw devicesError
+    if (projectsError) throw projectsError
     if (incomesError) throw incomesError
 
-    const splitCompanyIds = new Set<string>(
-      ((deviceRows || []) as any[])
-        .filter((row) => row?.company_id && row?.feature_flags?.kaspi_daily_split === true)
-        .map((row) => String(row.company_id)),
-    )
+    const splitCompanyIds = collectKaspiDailySplitCompanyIds(deviceRows as any[], projectRows as any[])
 
     const splitRows = ((incomeRows || []) as any[])
       .filter((row) => splitCompanyIds.has(String(row.company_id || '')))

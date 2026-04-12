@@ -9,7 +9,16 @@ const registerSchema = z.object({
   companyCode: z.string().trim().min(2).max(80),
   pointProjectId: z.string().trim().uuid(),
   phone: z.string().trim().min(5).max(40),
-  name: z.string().trim().min(2).max(140).optional().or(z.literal('')),
+  /** Короткое/пустое имя игнорируем — подставится из профиля или email (как на основном сайте). */
+  name: z
+    .unknown()
+    .optional()
+    .transform((v) => {
+      if (v === undefined || v === null) return undefined
+      const s = String(v).trim()
+      if (s.length < 2) return undefined
+      return s.slice(0, 140)
+    }),
 })
 
 function normalizePhone(value: string) {

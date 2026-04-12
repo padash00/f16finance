@@ -1825,11 +1825,14 @@ function CreateTaskModal({
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (isOpen) {
-      setForm(createEmptyTaskForm())
-      setSubmitError(null)
+    if (!isOpen) return
+    const base = createEmptyTaskForm()
+    if (companies.length === 1) {
+      base.company_id = companies[0].id
     }
-  }, [isOpen])
+    setForm(base)
+    setSubmitError(null)
+  }, [isOpen, companies])
 
   const buildTaskData = (taskNumber: number) => {
     const payload: {
@@ -1859,6 +1862,10 @@ function CreateTaskModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (companies.length > 0 && !form.company_id?.trim()) {
+      setSubmitError('Выберите точку (компанию) для задачи')
+      return
+    }
     setLoading(true)
     setSubmitError(null)
     const response = await fetch('/api/admin/tasks', {

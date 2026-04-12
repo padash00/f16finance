@@ -93,11 +93,15 @@ export default function CashFlowPage() {
     from: dateFrom || undefined,
     to: dateTo || undefined,
     companyId: companyId || undefined,
+    fetchAll: true,
+    pageSize: 1000,
   })
   const { rows: expenseRows, loading: expenseLoading } = useExpenses({
     from: dateFrom || undefined,
     to: dateTo || undefined,
     companyId: companyId || undefined,
+    fetchAll: true,
+    pageSize: 1000,
   })
 
   const loading = incomeLoading || expenseLoading

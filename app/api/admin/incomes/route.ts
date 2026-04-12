@@ -107,6 +107,8 @@ export async function GET(req: Request) {
     const operatorId = url.searchParams.get('operator_id')
     const operatorNull = url.searchParams.get('operator_null') === 'true'
     const payFilter = url.searchParams.get('pay_filter') as 'cash' | 'kaspi' | 'online' | 'card' | null
+    const page = Math.max(0, parseInt(url.searchParams.get('page') || '0', 10))
+    const pageSize = Math.min(2000, Math.max(1, parseInt(url.searchParams.get('page_size') || '200', 10)))
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()
@@ -121,7 +123,7 @@ export async function GET(req: Request) {
       .from('incomes')
       .select('id, date, company_id, operator_id, shift, zone, cash_amount, kaspi_amount, kaspi_before_midnight, online_amount, card_amount, comment')
       .order('date', { ascending: false })
-      .limit(2000)
+      .range(page * pageSize, page * pageSize + pageSize - 1)
 
     if (from) query = query.gte('date', from)
     if (to) query = query.lte('date', to)
