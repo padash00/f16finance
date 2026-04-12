@@ -1,6 +1,10 @@
 'use client'
 
-import { type FormEvent, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
+
+import { formatClientApiError } from '@/app/(client)/lib/client-errors'
 
 type BookingRow = {
   id: string
@@ -11,33 +15,64 @@ type BookingRow = {
 }
 
 export default function ClientBookingsPage() {
+  const searchParams = useSearchParams()
+  const companyId = searchParams.get('companyId')?.trim() || ''
+
   const [rows, setRows] = useState<BookingRow[]>([])
   const [startsAt, setStartsAt] = useState('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  const bookingsQuery = useMemo(() => {
+    const base = 'limit=20'
+    if (!companyId) return base
+    return `${base}&companyId=${encodeURIComponent(companyId)}`
+  }, [companyId])
 
   const load = () => {
-    fetch('/api/client/bookings?limit=20')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((payload) => setRows(Array.isArray(payload?.bookings) ? payload.bookings : []))
-      .catch(() => null)
+    setLoadError(null)
+    fetch(`/api/client/bookings?${bookingsQuery}`)
+      .then(async (r) => {
+        const payload = await r.json().catch(() => null)
+        if (!r.ok) {
+          setRows([])
+          setLoadError(formatClientApiError(payload?.error, 'Не удалось загрузить брони.'))
+          return
+        }
+        setRows(Array.isArray(payload?.bookings) ? payload.bookings : [])
+      })
+      .catch(() => {
+        setRows([])
+        setLoadError('Не удалось загрузить брони.')
+      })
   }
 
   useEffect(() => {
     load()
-  }, [])
+  }, [bookingsQuery])
 
   const submitBooking = async (event: FormEvent) => {
     event.preventDefault()
     if (!startsAt) return
     setSaving(true)
+    setSaveError(null)
     try {
       const response = await fetch('/api/client/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startsAt: new Date(startsAt).toISOString(), notes }),
+        body: JSON.stringify({
+          startsAt: new Date(startsAt).toISOString(),
+          notes,
+          companyId: companyId || undefined,
+        }),
       })
-      if (!response.ok) return
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        setSaveError(formatClientApiError(payload?.error, payload?.error || 'Не удалось отправить запрос на бронь.'))
+        return
+      }
       setStartsAt('')
       setNotes('')
       load()
@@ -50,8 +85,19 @@ export default function ClientBookingsPage() {
     <div className="space-y-3">
       <h2 className="text-xl font-semibold tracking-tight">Мои брони</h2>
       <p className="text-sm text-muted-foreground">
-        Здесь отображаются брони из выделенной таблицы `client_bookings`.
+        Запрос уходит в выбранную точку клуба. Схему зала и список станций можно посмотреть на{' '}
+        <Link href={companyId ? `/client?companyId=${encodeURIComponent(companyId)}` : '/client'} className="text-sky-400 underline-offset-2 hover:underline">
+          главной
+        </Link>
+        .
       </p>
+      {!companyId ? (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+          Если у вас несколько точек в одном аккаунте, откройте главную и выберите клуб — иначе бронь не отправится.
+        </p>
+      ) : null}
+      {loadError ? <p className="text-sm text-amber-200/90">{loadError}</p> : null}
+      {saveError ? <p className="text-sm text-amber-200/90">{saveError}</p> : null}
       <form onSubmit={submitBooking} className="space-y-2 rounded-xl border border-border/70 bg-background/60 p-3">
         <p className="text-sm font-medium">Новая бронь</p>
         <input

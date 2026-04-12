@@ -26,3 +26,38 @@ export async function fetchLinkedCustomersForUser(
 
   return ((data || []) as LinkedCustomerRow[]).filter((row) => row.id)
 }
+
+/**
+ * Один auth-пользователь может иметь несколько строк `customers` (разные `company_id`) — тогда клиент «видит» всю сеть.
+ * Для POST-операций нужно выбрать строку: явный `companyId` из тела запроса или единственная привязка.
+ */
+export function resolveLinkedCustomerForWrite(
+  linkedCustomers: LinkedCustomerRow[],
+  requestedCompanyId?: string | null,
+): { ok: true; customerId: string; companyId: string } | { ok: false; error: string } {
+  const rows = linkedCustomers
+    .map((c) => ({
+      id: String(c.id || '').trim(),
+      companyId: c.company_id ? String(c.company_id).trim() : '',
+    }))
+    .filter((r) => r.id && r.companyId)
+
+  if (rows.length === 0) {
+    return { ok: false, error: 'customer-company-not-found' }
+  }
+
+  const req = requestedCompanyId?.trim()
+  if (req) {
+    const hit = rows.find((r) => r.companyId === req)
+    if (!hit) {
+      return { ok: false, error: 'company-not-in-profile' }
+    }
+    return { ok: true, customerId: hit.id, companyId: hit.companyId }
+  }
+
+  if (rows.length === 1) {
+    return { ok: true, customerId: rows[0].id, companyId: rows[0].companyId }
+  }
+
+  return { ok: false, error: 'company-id-required' }
+}

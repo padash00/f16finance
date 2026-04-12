@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { resolveLinkedCustomerForWrite } from '@/lib/server/linked-customers'
 import { getRequestCustomerContext } from '@/lib/server/request-auth'
 
 function json(data: unknown, status = 200) {
@@ -14,6 +15,10 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const limitRaw = Number(url.searchParams.get('limit') || 20)
     const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.floor(limitRaw))) : 20
+    const filterCompanyId = url.searchParams.get('companyId')?.trim() || null
+    if (filterCompanyId && !context.linkedCompanyIds.includes(filterCompanyId)) {
+      return json({ error: 'company-not-in-profile' }, 400)
+    }
 
     let query = context.supabase
       .from('client_bookings')
@@ -22,7 +27,9 @@ export async function GET(request: Request) {
       .order('starts_at', { ascending: false })
       .limit(limit)
 
-    if (context.linkedCompanyIds.length) {
+    if (filterCompanyId) {
+      query = query.eq('company_id', filterCompanyId)
+    } else if (context.linkedCompanyIds.length) {
       query = query.in('company_id', context.linkedCompanyIds)
     }
 
@@ -45,6 +52,8 @@ export async function POST(request: Request) {
           startsAt?: string
           endsAt?: string | null
           notes?: string
+          /** К какой точке (компании) привязать бронь, если у аккаунта несколько `customers` по сети */
+          companyId?: string | null
         }
       | null
 
@@ -58,23 +67,16 @@ export async function POST(request: Request) {
     const endsAt = endsAtRaw ? new Date(endsAtRaw) : null
     if (endsAt && Number.isNaN(endsAt.getTime())) return json({ error: 'endsAt-invalid' }, 400)
 
-    const targetCustomerId = context.linkedCustomerIds[0] || null
-    if (!targetCustomerId) return json({ error: 'customer-not-linked' }, 403)
-
-    const { data: customerRow, error: customerError } = await context.supabase
-      .from('customers')
-      .select('id, company_id')
-      .eq('id', targetCustomerId)
-      .maybeSingle()
-
-    if (customerError) throw customerError
-    if (!customerRow?.company_id) return json({ error: 'customer-company-not-found' }, 400)
+    const resolved = resolveLinkedCustomerForWrite(context.linkedCustomers, body?.companyId ?? null)
+    if (!resolved.ok) {
+      return json({ error: resolved.error }, 400)
+    }
 
     const { data, error } = await context.supabase
       .from('client_bookings')
       .insert({
-        customer_id: targetCustomerId,
-        company_id: customerRow.company_id,
+        customer_id: resolved.customerId,
+        company_id: resolved.companyId,
         starts_at: startsAt.toISOString(),
         ends_at: endsAt ? endsAt.toISOString() : null,
         status: 'requested',
