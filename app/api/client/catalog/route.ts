@@ -49,7 +49,9 @@ export async function GET(request: Request) {
       organization_id: c.organization_id ? String(c.organization_id) : null,
     }))
 
-    const orgIds = uniqueStrings(companies.map((c) => c.organization_id).filter(Boolean))
+    const orgIds = uniqueStrings(
+      companies.map((c) => c.organization_id).filter((id): id is string => Boolean(id)),
+    )
     if (!orgIds.length) {
       return json({ ok: true, label: 'Orda Market', companies, items: [] })
     }
