@@ -38,7 +38,9 @@ export async function POST(request: Request) {
     if (!message) return json({ error: 'message-required' }, 400)
     if (message.length > 2000) return json({ error: 'message-too-long' }, 400)
 
-    const resolved = resolveLinkedCustomerForWrite(context.linkedCustomers, body?.companyId ?? null)
+    const resolved = resolveLinkedCustomerForWrite(context.linkedCustomers, body?.companyId ?? null, {
+      defaultWhenMultiple: true,
+    })
     if (!resolved.ok) {
       return json({ error: resolved.error }, 400)
     }

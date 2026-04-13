@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 import { FormEvent, useEffect, useState } from 'react'
 
 import { formatClientApiError } from '@/app/(client)/lib/client-errors'
@@ -15,9 +14,6 @@ type SupportItem = {
 }
 
 export function SupportPageClient() {
-  const searchParams = useSearchParams()
-  const companyId = searchParams.get('companyId')?.trim() || ''
-
   const [message, setMessage] = useState('')
   const [items, setItems] = useState<SupportItem[]>([])
   const [sending, setSending] = useState(false)
@@ -55,7 +51,7 @@ export function SupportPageClient() {
       const response = await fetch('/api/client/support', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, companyId: companyId || undefined }),
+        body: JSON.stringify({ message }),
       })
       const payload = await response.json().catch(() => null)
       if (!response.ok) {
@@ -78,17 +74,12 @@ export function SupportPageClient() {
     <div className="space-y-3">
       <h2 className="text-xl font-semibold tracking-tight">Поддержка</h2>
       <p className="text-sm text-muted-foreground">
-        Сообщение уходит в выбранную точку. Точку можно сменить на{' '}
-        <Link href={companyId ? `/client?companyId=${encodeURIComponent(companyId)}` : '/client'} className="text-sky-400 underline-offset-2 hover:underline">
-          главной
+        Сообщение уходит в клуб по профилю. Если у вас несколько точек в одном аккаунте, сервер выберет одну по умолчанию — при необходимости уточните клуб в тексте обращения.{' '}
+        <Link href="/client" className="text-sky-400 underline-offset-2 hover:underline">
+          На главную
         </Link>
         .
       </p>
-      {!companyId ? (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-          Если у вас несколько клубов в одном аккаунте, сначала выберите точку на главной — иначе отправка может не пройти.
-        </p>
-      ) : null}
       {loadError ? <p className="text-sm text-amber-200/90">{loadError}</p> : null}
       {sendError ? <p className="text-sm text-amber-200/90">{sendError}</p> : null}
 

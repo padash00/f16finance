@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { assertArenaStationForCompanyBooking } from '@/lib/server/client-arena-station'
+import { resolveBookingCustomerFromStation } from '@/lib/server/client-booking-resolve'
 import { resolveLinkedCustomerForWrite } from '@/lib/server/linked-customers'
 import { getRequestCustomerContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -85,23 +86,34 @@ export async function POST(request: Request) {
     const endsAt = endsAtRaw ? new Date(endsAtRaw) : null
     if (endsAt && Number.isNaN(endsAt.getTime())) return json({ error: 'endsAt-invalid' }, 400)
 
-    const resolved = resolveLinkedCustomerForWrite(context.linkedCustomers, body?.companyId ?? null)
-    if (!resolved.ok) {
-      return json({ error: resolved.error }, 400)
-    }
-
     const stationRaw = String(body?.arenaStationId || '').trim()
-    let arenaStationId: string | null = null
+    const admin = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : null
+
+    let resolved: { customerId: string; companyId: string }
     if (stationRaw) {
-      if (!hasAdminSupabaseCredentials()) {
+      if (!admin) {
         return json({ error: 'client-api-requires-admin-credentials' }, 503)
       }
-      const check = await assertArenaStationForCompanyBooking(createAdminSupabaseClient(), stationRaw, resolved.companyId)
+      const fromStation = await resolveBookingCustomerFromStation(admin, context.linkedCustomers, stationRaw, body?.companyId ?? null)
+      if (!fromStation.ok) {
+        return json({ error: fromStation.error }, 400)
+      }
+      const check = await assertArenaStationForCompanyBooking(admin, stationRaw, fromStation.companyId)
       if (!check.ok) {
         return json({ error: check.error }, 400)
       }
-      arenaStationId = stationRaw
+      resolved = { customerId: fromStation.customerId, companyId: fromStation.companyId }
+    } else {
+      const w = resolveLinkedCustomerForWrite(context.linkedCustomers, body?.companyId ?? null, {
+        defaultWhenMultiple: true,
+      })
+      if (!w.ok) {
+        return json({ error: w.error }, 400)
+      }
+      resolved = w
     }
+
+    let arenaStationId: string | null = stationRaw || null
 
     const { data, error } = await context.supabase
       .from('client_bookings')

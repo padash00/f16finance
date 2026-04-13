@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isIP } from 'node:net'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -7,6 +8,24 @@ import { effectiveZoneExtensionHourly } from '@/lib/core/arena-zone-extension-ho
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
+}
+
+function normalizeDeviceIp(value: unknown): string | null {
+  if (value == null) return null
+  const ip = String(value).trim()
+  if (!ip) return null
+  if (!isIP(ip)) throw new Error('invalid-device-ip')
+  return ip
+}
+
+function normalizeDeviceMac(value: unknown): string | null {
+  if (value == null) return null
+  const raw = String(value).trim()
+  if (!raw) return null
+  const canonical = raw.replace(/-/g, ':').toUpperCase()
+  const ok = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(canonical)
+  if (!ok) throw new Error('invalid-device-mac')
+  return canonical
 }
 
 function filterProjectsByCompanyScope(projects: any[], allowedCompanyIds: string[] | null) {
@@ -36,7 +55,7 @@ async function ensureProjectAccess(supabase: any, projectId: string, allowedComp
 
 async function ensureArenaEntityAccess(
   supabase: any,
-  table: 'arena_zones' | 'arena_stations' | 'arena_tariffs' | 'arena_map_decorations',
+  table: 'arena_zones' | 'arena_stations' | 'arena_tariffs' | 'arena_map_decorations' | 'arena_games_catalog' | 'arena_station_games',
   id: string,
   allowedCompanyIds: string[] | null,
 ) {
@@ -129,17 +148,23 @@ export async function GET(request: Request) {
       { data: stations, error: stationsError },
       { data: tariffs, error: tariffsError },
       { data: decorations, error: decorationsError },
+      { data: gamesCatalog, error: gamesCatalogError },
+      { data: stationGames, error: stationGamesError },
     ] = await Promise.all([
       withCompany(supabase.from('arena_zones').select('*').eq('point_project_id', projectId)).order('name'),
       withCompany(supabase.from('arena_stations').select('*').eq('point_project_id', projectId)).order('order_index').order('name'),
       withCompany(supabase.from('arena_tariffs').select('*').eq('point_project_id', projectId)).order('price'),
       withCompany(supabase.from('arena_map_decorations').select('*').eq('point_project_id', projectId)).order('created_at'),
+      withCompany(supabase.from('arena_games_catalog').select('*').eq('point_project_id', projectId)).order('sort_order').order('title'),
+      withCompany(supabase.from('arena_station_games').select('*').eq('point_project_id', projectId)).order('sort_order').order('created_at'),
     ])
 
     if (zonesError) throw zonesError
     if (stationsError) throw stationsError
     if (tariffsError) throw tariffsError
     if (decorationsError) throw decorationsError
+    if (gamesCatalogError) throw gamesCatalogError
+    if (stationGamesError) throw stationGamesError
 
     const allTariffs = tariffs || []
     const zonesOut = (zones || []).map((z: any) => {
@@ -149,7 +174,15 @@ export async function GET(request: Request) {
 
     return json({
       ok: true,
-      data: { project, zones: zonesOut, stations: stations || [], tariffs: allTariffs, decorations: decorations || [] },
+      data: {
+        project,
+        zones: zonesOut,
+        stations: stations || [],
+        tariffs: allTariffs,
+        decorations: decorations || [],
+        gamesCatalog: gamesCatalog || [],
+        stationGames: stationGames || [],
+      },
     })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/arena:get', message: error?.message || 'Arena GET error' })
@@ -221,22 +254,26 @@ export async function POST(request: Request) {
 
     // ─── STATIONS ────────────────────────────────────────────────────
     if (body.action === 'createStation') {
-      const { projectId, zoneId, name, order_index } = body
+      const { projectId, zoneId, name, order_index, device_ip, device_mac } = body
       if (!projectId || !name?.trim()) return json({ error: 'projectId and name required' }, 400)
       await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
+      const normalizedIp = normalizeDeviceIp(device_ip)
+      const normalizedMac = normalizeDeviceMac(device_mac)
       const { data, error } = await supabase.from('arena_stations').insert({
         point_project_id: projectId,
         company_id: bodyCompanyId,
         zone_id: zoneId || null,
         name: name.trim(),
         order_index: order_index ?? 0,
+        device_ip: normalizedIp,
+        device_mac: normalizedMac,
       }).select().single()
       if (error) throw error
       return json({ ok: true, data })
     }
 
     if (body.action === 'updateStation') {
-      const { stationId, name, zone_id, order_index, is_active } = body
+      const { stationId, name, zone_id, order_index, is_active, device_ip, device_mac } = body
       if (!stationId) return json({ error: 'stationId required' }, 400)
       await ensureArenaEntityAccess(supabase, 'arena_stations', stationId, companyScope.allowedCompanyIds)
       const update: any = {}
@@ -244,6 +281,8 @@ export async function POST(request: Request) {
       if (zone_id !== undefined) update.zone_id = zone_id
       if (order_index !== undefined) update.order_index = order_index
       if (is_active !== undefined) update.is_active = is_active
+      if (device_ip !== undefined) update.device_ip = normalizeDeviceIp(device_ip)
+      if (device_mac !== undefined) update.device_mac = normalizeDeviceMac(device_mac)
       const { data, error } = await supabase.from('arena_stations').update(update).eq('id', stationId).select().single()
       if (error) throw error
       return json({ ok: true, data })
@@ -382,6 +421,81 @@ export async function POST(request: Request) {
       return json({ ok: true })
     }
 
+    // ─── GAMES CATALOG ────────────────────────────────────────────────
+    if (body.action === 'createGameCatalog') {
+      const { projectId, title, logo_url, sort_order, is_active } = body
+      if (!projectId || !title?.trim()) return json({ error: 'projectId and title required' }, 400)
+      await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
+      const { data, error } = await supabase.from('arena_games_catalog').insert({
+        point_project_id: projectId,
+        company_id: bodyCompanyId,
+        title: String(title).trim(),
+        logo_url: String(logo_url || '').trim() || null,
+        sort_order: Number(sort_order || 0),
+        is_active: is_active !== false,
+      }).select().single()
+      if (error) throw error
+      return json({ ok: true, data })
+    }
+
+    if (body.action === 'updateGameCatalog') {
+      const { gameCatalogId, title, logo_url, sort_order, is_active } = body
+      if (!gameCatalogId) return json({ error: 'gameCatalogId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_games_catalog', gameCatalogId, companyScope.allowedCompanyIds)
+      const update: any = {}
+      if (title !== undefined) update.title = String(title || '').trim()
+      if (logo_url !== undefined) update.logo_url = String(logo_url || '').trim() || null
+      if (sort_order !== undefined) update.sort_order = Number(sort_order || 0)
+      if (is_active !== undefined) update.is_active = Boolean(is_active)
+      const { data, error } = await supabase.from('arena_games_catalog').update(update).eq('id', gameCatalogId).select().single()
+      if (error) throw error
+      return json({ ok: true, data })
+    }
+
+    if (body.action === 'deleteGameCatalog') {
+      const { gameCatalogId } = body
+      if (!gameCatalogId) return json({ error: 'gameCatalogId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_games_catalog', gameCatalogId, companyScope.allowedCompanyIds)
+      const { error } = await supabase.from('arena_games_catalog').delete().eq('id', gameCatalogId)
+      if (error) throw error
+      return json({ ok: true })
+    }
+
+    // ─── STATION GAME BINDINGS ───────────────────────────────────────
+    if (body.action === 'upsertStationGame') {
+      const { stationId, gameId, exe_path, launch_args, sort_order, is_active } = body
+      if (!stationId || !gameId || !exe_path?.trim()) return json({ error: 'stationId, gameId and exe_path required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_stations', stationId, companyScope.allowedCompanyIds)
+      await ensureArenaEntityAccess(supabase, 'arena_games_catalog', gameId, companyScope.allowedCompanyIds)
+      const { data: stationRow, error: stationError } = await supabase
+        .from('arena_stations')
+        .select('point_project_id, company_id')
+        .eq('id', stationId)
+        .single()
+      if (stationError) throw stationError
+      const { data, error } = await supabase.from('arena_station_games').upsert({
+        point_project_id: stationRow.point_project_id,
+        company_id: stationRow.company_id || bodyCompanyId,
+        station_id: stationId,
+        game_id: gameId,
+        exe_path: String(exe_path).trim(),
+        launch_args: String(launch_args || '').trim() || null,
+        sort_order: Number(sort_order || 0),
+        is_active: is_active !== false,
+      }, { onConflict: 'station_id,game_id' }).select().single()
+      if (error) throw error
+      return json({ ok: true, data })
+    }
+
+    if (body.action === 'deleteStationGame') {
+      const { stationGameId } = body
+      if (!stationGameId) return json({ error: 'stationGameId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_station_games', stationGameId, companyScope.allowedCompanyIds)
+      const { error } = await supabase.from('arena_station_games').delete().eq('id', stationGameId)
+      if (error) throw error
+      return json({ ok: true })
+    }
+
     // ─── ANALYTICS ───────────────────────────────────────────────────
     if (body.action === 'getAnalytics') {
       const { projectId, from, to, companyId: analyticsCompanyId } = body
@@ -416,6 +530,18 @@ export async function POST(request: Request) {
     return json({ error: 'unknown action' }, 400)
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/arena:post', message: error?.message || 'Arena POST error' })
+    if (error?.message === 'invalid-device-ip') {
+      return json({ error: 'invalid-device-ip' }, 400)
+    }
+    if (error?.message === 'invalid-device-mac') {
+      return json({ error: 'invalid-device-mac' }, 400)
+    }
+    if (error?.code === '23505') {
+      const details = String(error?.details || '')
+      if (details.includes('device_mac')) return json({ error: 'device-mac-already-bound' }, 409)
+      if (details.includes('device_ip')) return json({ error: 'device-ip-already-bound' }, 409)
+      return json({ error: 'station-device-binding-conflict' }, 409)
+    }
     return json({ error: error?.message || 'Ошибка операции' }, 500)
   }
 }

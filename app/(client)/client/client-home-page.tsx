@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
 const GRID = 20
@@ -56,7 +55,6 @@ type VenuePayload = {
   companies?: VenueCompany[]
   projects?: VenueProject[]
   multiCompany?: boolean
-  chooseCompany?: boolean
   error?: string
 }
 
@@ -64,10 +62,13 @@ function inGrid(v: number | null | undefined) {
   return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < GRID
 }
 
-export function ClientHomePage() {
-  const searchParams = useSearchParams()
-  const companyIdFromUrl = searchParams.get('companyId')?.trim() || ''
+function companyLabel(venue: VenuePayload | null, companyId: string | null | undefined) {
+  if (!companyId || !venue?.companies) return ''
+  const id = String(companyId)
+  return venue.companies.find((c) => c.id === id)?.name || ''
+}
 
+export function ClientHomePage() {
   const [me, setMe] = useState<ClientMeResponse | null>(null)
   const [venue, setVenue] = useState<VenuePayload | null>(null)
   const [venueError, setVenueError] = useState<string | null>(null)
@@ -78,26 +79,6 @@ export function ClientHomePage() {
     return [...new Set(ids)]
   }, [me])
 
-  const effectiveCompanyId =
-    companyIdFromUrl && linkedCompanyIds.includes(companyIdFromUrl)
-      ? companyIdFromUrl
-      : linkedCompanyIds.length === 1
-        ? linkedCompanyIds[0]
-        : ''
-
-  const bookingsHref = effectiveCompanyId
-    ? `/client/bookings?companyId=${encodeURIComponent(effectiveCompanyId)}`
-    : '/client/bookings'
-  const pointsHref = effectiveCompanyId
-    ? `/client/points?companyId=${encodeURIComponent(effectiveCompanyId)}`
-    : '/client/points'
-  const supportHref = effectiveCompanyId
-    ? `/client/support?companyId=${encodeURIComponent(effectiveCompanyId)}`
-    : '/client/support'
-  const storeHref = effectiveCompanyId
-    ? `/client/store?companyId=${encodeURIComponent(effectiveCompanyId)}`
-    : '/client/store'
-
   useEffect(() => {
     fetch('/api/client/me')
       .then((r) => (r.ok ? r.json() : null))
@@ -106,8 +87,7 @@ export function ClientHomePage() {
   }, [])
 
   useEffect(() => {
-    const q = effectiveCompanyId ? `?companyId=${encodeURIComponent(effectiveCompanyId)}` : ''
-    fetch(`/api/client/venue-preview${q}`)
+    fetch('/api/client/venue-preview')
       .then(async (r) => {
         const payload = (await r.json().catch(() => null)) as VenuePayload | null
         if (!r.ok) {
@@ -122,24 +102,30 @@ export function ClientHomePage() {
         setVenue(null)
         setVenueError('Не удалось загрузить схему зала.')
       })
-  }, [effectiveCompanyId])
+  }, [])
 
   const active = me?.activeCustomer
   const noCompanyOnProfile = Boolean(me && linkedCompanyIds.length === 0)
 
   const displayProjects = venue?.projects || []
+
   return (
     <div className="space-y-6">
       <section className="space-y-2">
         <h2 className="text-xl font-semibold tracking-tight">Добро пожаловать</h2>
         <p className="text-sm text-muted-foreground">
-          Выберите точку клуба, посмотрите схему зала и перейдите к брони, баллам или поддержке — всё в контексте выбранной
-          станции.
+          Каталог и схемы по всем вашим клубам в одном месте. В брони выберите станцию — клуб определится автоматически.
         </p>
         {active ? (
           <p className="text-sm text-foreground/90">
             Профиль: <span className="font-medium">{active.name}</span> · Баллы: {active.loyalty_points} · Визиты:{' '}
             {active.visits_count}
+          </p>
+        ) : null}
+        {!noCompanyOnProfile && linkedCompanyIds.length > 1 ? (
+          <p className="text-xs text-muted-foreground">
+            Доступно клубов в сети: {linkedCompanyIds.length}. Витрина и карты объединены; при брони без станции запрос
+            уйдёт в одну из точек по умолчанию.
           </p>
         ) : null}
       </section>
@@ -151,53 +137,17 @@ export function ClientHomePage() {
         </div>
       ) : null}
 
-      {!noCompanyOnProfile && linkedCompanyIds.length > 1 && !companyIdFromUrl ? (
-        <div className="rounded-xl border border-border/70 bg-background/60 p-4">
-          <p className="text-sm font-medium text-foreground">Выберите точку</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            У вас несколько клубов в одном аккаунте. Выберите точку — ссылка обновится в адресе и сохранится в навигации.
-          </p>
-          <div className="mt-3 flex flex-col gap-2">
-            {linkedCompanyIds.map((id) => {
-              const name = venue?.companies?.find((x) => x.id === id)?.name || 'Точка клуба'
-              return (
-                <Link
-                  key={id}
-                  href={`/client?companyId=${encodeURIComponent(id)}`}
-                  className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition hover:bg-accent/40"
-                >
-                  {name}
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-      ) : null}
-
-      {!noCompanyOnProfile && linkedCompanyIds.length > 1 && companyIdFromUrl ? (
-        <p className="text-xs text-muted-foreground">
-          Точка:{' '}
-          <span className="font-medium text-foreground">
-            {venue?.companies?.find((c) => c.id === effectiveCompanyId)?.name || 'выбрана'}
-          </span>
-          .{' '}
-          <Link href="/client" className="text-sky-400 underline-offset-2 hover:underline">
-            Сменить точку
-          </Link>
-        </p>
-      ) : null}
-
       {venueError ? <p className="text-sm text-amber-200/90">{venueError}</p> : null}
 
-      {!noCompanyOnProfile && effectiveCompanyId && !venueError && displayProjects.length === 0 ? (
+      {!noCompanyOnProfile && !venueError && displayProjects.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Для этой точки пока нет карты арены в системе. Ниже всё равно можно перейти к брони — администратор увидит запрос.
+          Карты арены пока не заведены. Всё равно можно открыть магазин и бронь — администратор увидит запрос.
         </p>
       ) : null}
 
       {!noCompanyOnProfile && displayProjects.length > 0 ? (
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Схема зала</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Схемы залов</h3>
           {displayProjects.map((project) => {
             const zones = project.zones || []
             const stations = project.stations || []
@@ -254,30 +204,39 @@ export function ClientHomePage() {
                           </div>
                         )
                       })}
-                    {mapped.map((s) => (
-                      <div
-                        key={s.id}
-                        title={s.name || 'Станция'}
-                        className={`m-0.5 flex items-center justify-center rounded border text-[9px] font-medium leading-tight ${
-                          s.is_active === false ? 'border-white/10 bg-white/5 text-muted-foreground' : 'border-sky-400/50 bg-sky-500/20 text-sky-100'
-                        }`}
-                        style={{
-                          gridColumn: `${(s.grid_x as number) + 1}`,
-                          gridRow: `${(s.grid_y as number) + 1}`,
-                        }}
-                      >
-                        <span className="block max-w-full truncate px-0.5 text-center">{s.name || 'ПК'}</span>
-                      </div>
-                    ))}
+                    {mapped.map((s) => {
+                      const club = companyLabel(venue, s.company_id)
+                      return (
+                        <div
+                          key={s.id}
+                          title={[s.name || 'Станция', club].filter(Boolean).join(' · ')}
+                          className={`m-0.5 flex items-center justify-center rounded border text-[9px] font-medium leading-tight ${
+                            s.is_active === false ? 'border-white/10 bg-white/5 text-muted-foreground' : 'border-sky-400/50 bg-sky-500/20 text-sky-100'
+                          }`}
+                          style={{
+                            gridColumn: `${(s.grid_x as number) + 1}`,
+                            gridRow: `${(s.grid_y as number) + 1}`,
+                          }}
+                        >
+                          <span className="block max-w-full truncate px-0.5 text-center">{s.name || 'ПК'}</span>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
                 <ul className="max-h-40 space-y-1 overflow-y-auto text-xs text-muted-foreground">
-                  {stations.map((s) => (
-                    <li key={s.id} className="flex justify-between gap-2 border-b border-border/30 py-1 last:border-0">
-                      <span className="text-foreground/90">{s.name || 'Станция'}</span>
-                      <span>{s.is_active === false ? 'выкл.' : 'активна'}</span>
-                    </li>
-                  ))}
+                  {stations.map((s) => {
+                    const club = companyLabel(venue, s.company_id)
+                    return (
+                      <li key={s.id} className="flex justify-between gap-2 border-b border-border/30 py-1 last:border-0">
+                        <span className="text-foreground/90">
+                          {s.name || 'Станция'}
+                          {club ? <span className="text-muted-foreground"> · {club}</span> : null}
+                        </span>
+                        <span>{s.is_active === false ? 'выкл.' : 'активна'}</span>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )
@@ -286,36 +245,21 @@ export function ClientHomePage() {
       ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Link
-          href={storeHref}
-          className={`rounded-xl border p-3 transition hover:bg-accent/30 ${
-            !effectiveCompanyId && linkedCompanyIds.length > 1 ? 'pointer-events-none opacity-50' : 'border-border/70 bg-background/70'
-          }`}
-        >
+        <Link href="/client/store" className="rounded-xl border border-border/70 bg-background/70 p-3 transition hover:bg-accent/30">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Магазин</p>
-          <p className="mt-1 text-sm text-foreground">Витрина цен и наличия на точке.</p>
+          <p className="mt-1 text-sm text-foreground">Каталог по категориям, цены и наличие на витринах.</p>
         </Link>
-        <Link
-          href={bookingsHref}
-          className={`rounded-xl border p-3 transition hover:bg-accent/30 ${
-            !effectiveCompanyId && linkedCompanyIds.length > 1 ? 'pointer-events-none opacity-50' : 'border-border/70 bg-background/70'
-          }`}
-        >
+        <Link href="/client/bookings" className="rounded-xl border border-border/70 bg-background/70 p-3 transition hover:bg-accent/30">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Брони</p>
-          <p className="mt-1 text-sm text-foreground">Запросить визит в выбранную точку.</p>
+          <p className="mt-1 text-sm text-foreground">Выберите дату и станцию — клуб подставится сам.</p>
         </Link>
-        <Link href={pointsHref} className="rounded-xl border border-border/70 bg-background/70 p-3 transition hover:bg-accent/30">
+        <Link href="/client/points" className="rounded-xl border border-border/70 bg-background/70 p-3 transition hover:bg-accent/30">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Баллы</p>
           <p className="mt-1 text-sm text-foreground">Баланс и история по вашему профилю.</p>
         </Link>
-        <Link
-          href={supportHref}
-          className={`rounded-xl border p-3 transition hover:bg-accent/30 ${
-            !effectiveCompanyId && linkedCompanyIds.length > 1 ? 'pointer-events-none opacity-50' : 'border-border/70 bg-background/70'
-          }`}
-        >
+        <Link href="/client/support" className="rounded-xl border border-border/70 bg-background/70 p-3 transition hover:bg-accent/30">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Поддержка</p>
-          <p className="mt-1 text-sm text-foreground">Сообщение администратору клуба.</p>
+          <p className="mt-1 text-sm text-foreground">Сообщение администратору.</p>
         </Link>
       </section>
     </div>

@@ -1,0 +1,14 @@
+{
+  "name": "orda-kiosk-client",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "dependencies": {
+    "electron": "^41.2.0",
+    "ws": "^8.18.2"
+  }
+}

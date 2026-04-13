@@ -30,7 +30,25 @@ type Zone = {
 }
 type Station = {
   id: string; zone_id: string | null; name: string; order_index: number; is_active: boolean
+  device_ip: string | null; device_mac: string | null
   grid_x: number | null; grid_y: number | null
+}
+type GameCatalog = {
+  id: string
+  point_project_id: string
+  title: string
+  logo_url: string | null
+  sort_order: number
+  is_active: boolean
+}
+type StationGame = {
+  id: string
+  station_id: string
+  game_id: string
+  exe_path: string
+  launch_args: string | null
+  sort_order: number
+  is_active: boolean
 }
 type Tariff = {
   id: string
@@ -59,6 +77,7 @@ type CrudDialogState =
   | null
   | { kind: 'station'; zoneId: string; zoneLabel: string }
   | { kind: 'tariff'; zoneId: string; zoneLabel: string }
+  | { kind: 'stationGames'; stationId: string; stationLabel: string }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -71,6 +90,23 @@ function formatMinutes(m: number) {
   const h = Math.floor(m / 60)
   const rem = m % 60
   return rem > 0 ? `${h} ч ${rem} мин` : `${h} ч`
+}
+
+function formatArenaApiError(errorCode: string): string {
+  switch (errorCode) {
+    case 'invalid-device-ip':
+      return 'Некорректный IP-адрес станции.'
+    case 'invalid-device-mac':
+      return 'Некорректный MAC-адрес станции. Формат: AA:BB:CC:DD:EE:FF.'
+    case 'device-ip-already-bound':
+      return 'Этот IP уже привязан к другой станции в текущем проекте.'
+    case 'device-mac-already-bound':
+      return 'Этот MAC уже привязан к другой станции в текущем проекте.'
+    case 'station-device-binding-conflict':
+      return 'Конфликт привязки устройства станции. Проверьте IP/MAC.'
+    default:
+      return errorCode || 'Ошибка'
+  }
 }
 
 /** Строки из POST /api/admin/arena (.select().single()) → типы экрана */
@@ -100,6 +136,8 @@ function arenaRowToStation(row: Record<string, unknown>): Station {
     name: String(row.name ?? ''),
     order_index: Number(row.order_index ?? 0),
     is_active: Boolean(row.is_active),
+    device_ip: row.device_ip != null && String(row.device_ip).trim() ? String(row.device_ip).trim() : null,
+    device_mac: row.device_mac != null && String(row.device_mac).trim() ? String(row.device_mac).trim() : null,
     grid_x: row.grid_x != null ? Number(row.grid_x) : null,
     grid_y: row.grid_y != null ? Number(row.grid_y) : null,
   }
@@ -117,6 +155,29 @@ function arenaRowToTariff(row: Record<string, unknown>): Tariff {
     tariff_type: tt,
     window_start_time: row.window_start_time != null ? String(row.window_start_time) : null,
     window_end_time: row.window_end_time != null ? String(row.window_end_time) : null,
+  }
+}
+
+function arenaRowToGameCatalog(row: Record<string, unknown>): GameCatalog {
+  return {
+    id: String(row.id),
+    point_project_id: String(row.point_project_id ?? ''),
+    title: String(row.title ?? ''),
+    logo_url: row.logo_url != null ? String(row.logo_url) : null,
+    sort_order: Number(row.sort_order ?? 0),
+    is_active: Boolean(row.is_active ?? true),
+  }
+}
+
+function arenaRowToStationGame(row: Record<string, unknown>): StationGame {
+  return {
+    id: String(row.id),
+    station_id: String(row.station_id ?? ''),
+    game_id: String(row.game_id ?? ''),
+    exe_path: String(row.exe_path ?? ''),
+    launch_args: row.launch_args != null ? String(row.launch_args) : null,
+    sort_order: Number(row.sort_order ?? 0),
+    is_active: Boolean(row.is_active ?? true),
   }
 }
 
@@ -174,26 +235,6 @@ const EMPTY_NEW_TARIFF: {
   tariff_type: 'fixed',
   window_start_time: '',
   window_end_time: '',
-}
-
-// ─── Inline edit input ───────────────────────────────────────────────────────
-
-function InlineEdit({ value, onSave, onCancel, placeholder }: { value: string; onSave: (v: string) => void; onCancel: () => void; placeholder?: string }) {
-  const [v, setV] = useState(value)
-  return (
-    <div className="flex items-center gap-1">
-      <input
-        autoFocus
-        value={v}
-        onChange={e => setV(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') onSave(v); if (e.key === 'Escape') onCancel() }}
-        className="rounded border border-white/20 bg-background px-2 py-1 text-sm w-40"
-        placeholder={placeholder}
-      />
-      <button onClick={() => onSave(v)} className="p-1 text-emerald-400 hover:text-emerald-300"><Save className="h-3.5 w-3.5" /></button>
-      <button onClick={onCancel} className="p-1 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
-    </div>
-  )
 }
 
 // ─── Map Editor ──────────────────────────────────────────────────────────────
@@ -841,6 +882,8 @@ export default function StationsPage() {
   const [stations, setStations] = useState<Station[]>([])
   const [tariffs, setTariffs] = useState<Tariff[]>([])
   const [decorations, setDecorations] = useState<Decoration[]>([])
+  const [gamesCatalog, setGamesCatalog] = useState<GameCatalog[]>([])
+  const [stationGames, setStationGames] = useState<StationGame[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -882,9 +925,17 @@ export default function StationsPage() {
   const [crudDialog, setCrudDialog] = useState<CrudDialogState>(null)
   const [newStationName, setNewStationName] = useState('')
   const [editingStationId, setEditingStationId] = useState<string | null>(null)
+  const [stationEditName, setStationEditName] = useState('')
+  const [stationEditIp, setStationEditIp] = useState('')
+  const [stationEditMac, setStationEditMac] = useState('')
 
   const [newTariff, setNewTariff] = useState(() => ({ ...EMPTY_NEW_TARIFF }))
   const [editingTariff, setEditingTariff] = useState<Tariff | null>(null)
+  const [newGameTitle, setNewGameTitle] = useState('')
+  const [newGameLogo, setNewGameLogo] = useState('')
+  const [bindGameId, setBindGameId] = useState('')
+  const [bindExePath, setBindExePath] = useState('')
+  const [bindArgs, setBindArgs] = useState('')
 
   const [manageQuery, setManageQuery] = useState('')
   const [collapsedZones, setCollapsedZones] = useState<Record<string, boolean>>({})
@@ -926,6 +977,16 @@ export default function StationsPage() {
           : [],
       )
       setDecorations(data.data.decorations || [])
+      setGamesCatalog(
+        Array.isArray(data.data.gamesCatalog)
+          ? (data.data.gamesCatalog as Record<string, unknown>[]).map(arenaRowToGameCatalog)
+          : [],
+      )
+      setStationGames(
+        Array.isArray(data.data.stationGames)
+          ? (data.data.stationGames as Record<string, unknown>[]).map(arenaRowToStationGame)
+          : [],
+      )
     } catch (e: any) {
       const msg = e?.message || 'Ошибка загрузки'
       if (silent) {
@@ -1076,7 +1137,7 @@ export default function StationsPage() {
       body: JSON.stringify(body),
     })
     const data = await res.json()
-    if (!data.ok) throw new Error(data.error || 'Ошибка')
+    if (!data.ok) throw new Error(formatArenaApiError(String(data.error || 'Ошибка')))
     return data
   }
 
@@ -1151,14 +1212,30 @@ export default function StationsPage() {
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
-  async function handleUpdateStation(stationId: string, name: string) {
+  function startEditStation(st: Station) {
+    setEditingStationId(st.id)
+    setStationEditName(st.name || '')
+    setStationEditIp(st.device_ip || '')
+    setStationEditMac(st.device_mac || '')
+  }
+
+  async function handleUpdateStation(stationId: string, payload: { name: string; device_ip: string; device_mac: string }) {
     setSaving(true)
     try {
-      const out = await apiPost({ action: 'updateStation', stationId, name })
+      const out = await apiPost({
+        action: 'updateStation',
+        stationId,
+        name: payload.name,
+        device_ip: payload.device_ip.trim() || null,
+        device_mac: payload.device_mac.trim() || null,
+      })
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных станции')
       const s = arenaRowToStation(out.data as Record<string, unknown>)
       setStations(prev => prev.map(x => x.id === stationId ? s : x))
       setEditingStationId(null)
+      setStationEditName('')
+      setStationEditIp('')
+      setStationEditMac('')
       showFlash('ok', 'Станция обновлена')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
@@ -1172,6 +1249,64 @@ export default function StationsPage() {
       await apiPost({ action: 'deleteStation', stationId })
       setStations(prev => prev.filter(s => s.id !== stationId))
       showFlash('ok', 'Станция удалена')
+    } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
+  }
+
+  async function handleCreateGameCatalog() {
+    if (!newGameTitle.trim()) {
+      showFlash('err', 'Введите название игры')
+      return
+    }
+    setSaving(true)
+    try {
+      const out = await apiPost({
+        action: 'createGameCatalog',
+        projectId,
+        companyId,
+        title: newGameTitle,
+        logo_url: newGameLogo,
+      })
+      if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных игры')
+      const row = arenaRowToGameCatalog(out.data as Record<string, unknown>)
+      setGamesCatalog(prev => [...prev, row].sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title, 'ru')))
+      setNewGameTitle('')
+      setNewGameLogo('')
+      showFlash('ok', 'Игра добавлена в каталог')
+    } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
+  }
+
+  async function handleBindGameToStation(stationId: string) {
+    if (!bindGameId || !bindExePath.trim()) {
+      showFlash('err', 'Выберите игру и укажите путь EXE')
+      return
+    }
+    setSaving(true)
+    try {
+      const out = await apiPost({
+        action: 'upsertStationGame',
+        stationId,
+        gameId: bindGameId,
+        exe_path: bindExePath,
+        launch_args: bindArgs,
+      })
+      if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных привязки')
+      const row = arenaRowToStationGame(out.data as Record<string, unknown>)
+      setStationGames(prev => {
+        const next = prev.filter((x) => !(x.station_id === row.station_id && x.game_id === row.game_id))
+        return [...next, row].sort((a, b) => a.sort_order - b.sort_order)
+      })
+      setBindExePath('')
+      setBindArgs('')
+      showFlash('ok', 'Привязка игры сохранена')
+    } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
+  }
+
+  async function handleDeleteStationGame(stationGameId: string) {
+    setSaving(true)
+    try {
+      await apiPost({ action: 'deleteStationGame', stationGameId })
+      setStationGames(prev => prev.filter((x) => x.id !== stationGameId))
+      showFlash('ok', 'Привязка удалена')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
@@ -1653,17 +1788,81 @@ export default function StationsPage() {
                         <div className="space-y-1">
                           {zoneStations.length === 0 && <p className="py-2 text-xs text-muted-foreground">Нет станций</p>}
                           {zoneStations.map(st => (
-                            <div key={st.id} className="group flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5">
+                            <div key={st.id} className="group rounded-lg px-2 py-1.5 hover:bg-white/5">
                               {editingStationId === st.id ? (
-                                <InlineEdit value={st.name} onSave={v => handleUpdateStation(st.id, v)} onCancel={() => setEditingStationId(null)} />
+                                <div className="space-y-1.5 rounded-lg border border-primary/30 bg-primary/5 p-2">
+                                  <input
+                                    value={stationEditName}
+                                    onChange={e => setStationEditName(e.target.value)}
+                                    className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                    placeholder="Название станции"
+                                  />
+                                  <div className="grid grid-cols-2 gap-1">
+                                    <input
+                                      value={stationEditIp}
+                                      onChange={e => setStationEditIp(e.target.value)}
+                                      className="rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                      placeholder="IP (например 192.168.0.111)"
+                                    />
+                                    <input
+                                      value={stationEditMac}
+                                      onChange={e => setStationEditMac(e.target.value)}
+                                      className="rounded border border-white/20 bg-background px-2 py-1 text-xs uppercase"
+                                      placeholder="MAC (например AA:BB:CC:DD:EE:FF)"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleUpdateStation(st.id, { name: stationEditName, device_ip: stationEditIp, device_mac: stationEditMac })}
+                                      disabled={saving || !stationEditName.trim()}
+                                      className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
+                                    >
+                                      Сохранить
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingStationId(null)}
+                                      className="rounded bg-white/10 px-2 py-1 text-xs"
+                                    >
+                                      Отмена
+                                    </button>
+                                  </div>
+                                </div>
                               ) : (
-                                <>
-                                  <span className="text-sm">{st.name}</span>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <span className="text-sm">{st.name}</span>
+                                    <div className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
+                                      <span className="rounded bg-white/5 px-1.5 py-0.5">
+                                        IP: {st.device_ip || 'не задан'}
+                                      </span>
+                                      <span className="rounded bg-white/5 px-1.5 py-0.5">
+                                        MAC: {st.device_mac || 'не задан'}
+                                      </span>
+                                      <span className="rounded bg-white/5 px-1.5 py-0.5">
+                                        Игр: {stationGames.filter((g) => g.station_id === st.id).length}
+                                      </span>
+                                    </div>
+                                  </div>
                                   <div className="hidden items-center gap-1 group-hover:flex">
-                                    <button type="button" onClick={() => setEditingStationId(st.id)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setBindGameId(gamesCatalog[0]?.id || '')
+                                        setBindExePath('')
+                                        setBindArgs('')
+                                        setCrudDialog({ kind: 'stationGames', stationId: st.id, stationLabel: st.name })
+                                      }}
+                                      className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                                      title="Игры станции"
+                                    >
+                                      <Monitor className="h-3 w-3" />
+                                    </button>
+                                    <button type="button" onClick={() => startEditStation(st)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
                                     <button type="button" onClick={() => handleDeleteStation(st.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
                                   </div>
-                                </>
+                                </div>
                               )}
                             </div>
                           ))}
@@ -2157,6 +2356,117 @@ export default function StationsPage() {
                   className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
                 >
                   {saving ? <Loader2 className="inline h-4 w-4 animate-spin" /> : null} Добавить тариф
+                </button>
+              </DialogFooter>
+            </>
+          )}
+          {crudDialog?.kind === 'stationGames' && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Игры станции</DialogTitle>
+                <DialogDescription>
+                  Станция «{crudDialog.stationLabel}». Каталог и пути запуска хранятся на сервере.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="rounded-lg border border-white/10 p-3 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Каталог игр проекта</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <input
+                      value={newGameTitle}
+                      onChange={(e) => setNewGameTitle(e.target.value)}
+                      placeholder="Название игры"
+                      className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs"
+                    />
+                    <input
+                      value={newGameLogo}
+                      onChange={(e) => setNewGameLogo(e.target.value)}
+                      placeholder="URL логотипа"
+                      className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs sm:col-span-2"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateGameCatalog()}
+                    disabled={saving || !newGameTitle.trim()}
+                    className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
+                  >
+                    Добавить игру в каталог
+                  </button>
+                  <div className="max-h-28 overflow-auto space-y-1">
+                    {gamesCatalog.map((g) => (
+                      <div key={g.id} className="flex items-center justify-between rounded bg-white/5 px-2 py-1 text-xs">
+                        <span className="truncate">{g.title}</span>
+                        <span className="text-muted-foreground">{g.is_active ? 'активна' : 'выкл.'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-white/10 p-3 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Привязка игры к станции</p>
+                  <select
+                    value={bindGameId}
+                    onChange={(e) => setBindGameId(e.target.value)}
+                    className="w-full rounded border border-white/10 bg-background px-2 py-1.5 text-xs"
+                  >
+                    <option value="">Выберите игру</option>
+                    {gamesCatalog.filter((g) => g.is_active).map((g) => (
+                      <option key={g.id} value={g.id}>{g.title}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={bindExePath}
+                    onChange={(e) => setBindExePath(e.target.value)}
+                    placeholder="Путь EXE (например D:\\Games\\CS2\\cs2.exe)"
+                    className="w-full rounded border border-white/10 bg-background px-2 py-1.5 text-xs"
+                  />
+                  <input
+                    value={bindArgs}
+                    onChange={(e) => setBindArgs(e.target.value)}
+                    placeholder="Аргументы запуска (необязательно)"
+                    className="w-full rounded border border-white/10 bg-background px-2 py-1.5 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleBindGameToStation(crudDialog.stationId)}
+                    disabled={saving || !bindGameId || !bindExePath.trim()}
+                    className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
+                  >
+                    Сохранить привязку
+                  </button>
+                </div>
+
+                <div className="space-y-1 max-h-40 overflow-auto">
+                  {stationGames.filter((x) => x.station_id === crudDialog.stationId).map((x) => {
+                    const game = gamesCatalog.find((g) => g.id === x.game_id)
+                    return (
+                      <div key={x.id} className="rounded border border-white/10 bg-white/5 p-2 text-xs">
+                        <p className="font-medium">{game?.title || x.game_id}</p>
+                        <p className="text-muted-foreground truncate">{x.exe_path}</p>
+                        {x.launch_args ? <p className="text-muted-foreground truncate">args: {x.launch_args}</p> : null}
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteStationGame(x.id)}
+                          className="mt-1 rounded bg-destructive/20 px-2 py-1 text-[11px] text-destructive"
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    )
+                  })}
+                  {stationGames.filter((x) => x.station_id === crudDialog.stationId).length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Пока нет привязанных игр.</p>
+                  ) : null}
+                </div>
+              </div>
+              <DialogFooter>
+                <button
+                  type="button"
+                  onClick={() => setCrudDialog(null)}
+                  className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:bg-white/10"
+                >
+                  Закрыть
                 </button>
               </DialogFooter>
             </>

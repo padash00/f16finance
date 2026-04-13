@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 type PointsResponse = {
@@ -13,9 +12,6 @@ type PointsResponse = {
 }
 
 export function PointsPageClient() {
-  const searchParams = useSearchParams()
-  const companyId = searchParams.get('companyId')?.trim() || ''
-
   const [summary, setSummary] = useState<PointsResponse['summary'] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -41,8 +37,8 @@ export function PointsPageClient() {
     <div className="space-y-3">
       <h2 className="text-xl font-semibold tracking-tight">Баллы лояльности</h2>
       <p className="text-sm text-muted-foreground">
-        Здесь суммируются баллы по всем привязанным к аккаунту точкам. Схему зала смотрите на{' '}
-        <Link href={companyId ? `/client?companyId=${encodeURIComponent(companyId)}` : '/client'} className="text-sky-400 underline-offset-2 hover:underline">
+        Здесь суммируются баллы по всем привязанным к аккаунту точкам. Схемы залов — на{' '}
+        <Link href="/client" className="text-sky-400 underline-offset-2 hover:underline">
           главной
         </Link>
         .

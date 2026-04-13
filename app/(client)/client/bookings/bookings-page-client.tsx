@@ -1,8 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 
 import { formatClientApiError } from '@/app/(client)/lib/client-errors'
 
@@ -16,36 +15,41 @@ type BookingRow = {
   station_name?: string | null
 }
 
+type VenueCompany = { id: string; name: string }
+
 type VenueProject = {
   id: string
   name: string
-  stations: { id: string; name?: string | null; is_active?: boolean | null }[]
+  stations: {
+    id: string
+    name?: string | null
+    is_active?: boolean | null
+    company_id?: string | null
+  }[]
 }
 
-type VenuePayload = { ok?: boolean; projects?: VenueProject[]; error?: string }
+type VenuePayload = { ok?: boolean; companies?: VenueCompany[]; projects?: VenueProject[]; error?: string }
+
+function companyLabel(venue: VenuePayload | null, companyId: string | null | undefined) {
+  if (!companyId || !venue?.companies) return ''
+  const id = String(companyId)
+  return venue.companies.find((c) => c.id === id)?.name || ''
+}
 
 export function BookingsPageClient() {
-  const searchParams = useSearchParams()
-  const companyId = searchParams.get('companyId')?.trim() || ''
-
   const [rows, setRows] = useState<BookingRow[]>([])
   const [startsAt, setStartsAt] = useState('')
   const [notes, setNotes] = useState('')
+  const [venue, setVenue] = useState<VenuePayload | null>(null)
   const [stationOptions, setStationOptions] = useState<{ id: string; label: string }[]>([])
   const [arenaStationId, setArenaStationId] = useState('')
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  const bookingsQuery = useMemo(() => {
-    const base = 'limit=20'
-    if (!companyId) return base
-    return `${base}&companyId=${encodeURIComponent(companyId)}`
-  }, [companyId])
-
   const load = () => {
     setLoadError(null)
-    fetch(`/api/client/bookings?${bookingsQuery}`)
+    fetch('/api/client/bookings?limit=20')
       .then(async (r) => {
         const payload = await r.json().catch(() => null)
         if (!r.ok) {
@@ -63,37 +67,40 @@ export function BookingsPageClient() {
 
   useEffect(() => {
     load()
-  }, [bookingsQuery])
+  }, [])
 
   useEffect(() => {
-    if (!companyId) {
-      setStationOptions([])
-      setArenaStationId('')
-      return
-    }
-    fetch(`/api/client/venue-preview?companyId=${encodeURIComponent(companyId)}`)
+    fetch('/api/client/venue-preview')
       .then(async (r) => {
         const payload = (await r.json().catch(() => null)) as VenuePayload | null
         if (!r.ok || !payload?.projects) {
+          setVenue(null)
           setStationOptions([])
           return
         }
+        setVenue(payload)
         const list: { id: string; label: string }[] = []
         for (const p of payload.projects) {
           for (const s of p.stations || []) {
             if (!s?.id) continue
             const name = (s.name || 'Станция').trim()
+            const club = companyLabel(payload, s.company_id)
             list.push({
               id: String(s.id),
-              label: `${name} · ${p.name}${s.is_active === false ? ' (выкл.)' : ''}`,
+              label: `${name} · ${p.name}${club ? ` · ${club}` : ''}${s.is_active === false ? ' (выкл.)' : ''}`,
             })
           }
         }
         list.sort((a, b) => a.label.localeCompare(b.label, 'ru'))
         setStationOptions(list)
       })
-      .catch(() => setStationOptions([]))
-  }, [companyId])
+      .catch(() => {
+        setVenue(null)
+        setStationOptions([])
+      })
+  }, [])
+
+  const multiClub = Boolean(venue?.companies && venue.companies.length > 1)
 
   const submitBooking = async (event: FormEvent) => {
     event.preventDefault()
@@ -107,7 +114,6 @@ export function BookingsPageClient() {
         body: JSON.stringify({
           startsAt: new Date(startsAt).toISOString(),
           notes,
-          companyId: companyId || undefined,
           arenaStationId: arenaStationId || undefined,
         }),
       })
@@ -129,26 +135,20 @@ export function BookingsPageClient() {
     <div className="space-y-3">
       <h2 className="text-xl font-semibold tracking-tight">Мои брони</h2>
       <p className="text-sm text-muted-foreground">
-        Запрос уходит в выбранную точку клуба. Схему зала и список станций — на{' '}
-        <Link href={companyId ? `/client?companyId=${encodeURIComponent(companyId)}` : '/client'} className="text-sky-400 underline-offset-2 hover:underline">
-          главной
-        </Link>
-        , витрина — в{' '}
-        <Link href={companyId ? `/client/store?companyId=${encodeURIComponent(companyId)}` : '/client/store'} className="text-sky-400 underline-offset-2 hover:underline">
-          магазине
-        </Link>
-        .
+        Схемы залов и витрина — на <Link href="/client" className="text-sky-400 underline-offset-2 hover:underline">главной</Link>
+        {' '}и в <Link href="/client/store" className="text-sky-400 underline-offset-2 hover:underline">магазине</Link>. Выберите станцию —
+        клуб определится по ней; без станции запрос уйдёт в одну из ваших точек по умолчанию.
       </p>
-      {!companyId ? (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-          Если у вас несколько точек в одном аккаунте, откройте главную и выберите клуб — иначе бронь не отправится.
+      {multiClub && !arenaStationId ? (
+        <p className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+          У вас несколько клубов в аккаунте: чтобы бронь точно попала в нужную точку, выберите станцию из списка.
         </p>
       ) : null}
       {loadError ? <p className="text-sm text-amber-200/90">{loadError}</p> : null}
       {saveError ? <p className="text-sm text-amber-200/90">{saveError}</p> : null}
       <form onSubmit={submitBooking} className="space-y-2 rounded-xl border border-border/70 bg-background/60 p-3">
         <p className="text-sm font-medium">Новая бронь</p>
-        {companyId && stationOptions.length > 0 ? (
+        {stationOptions.length > 0 ? (
           <label className="block space-y-1">
             <span className="text-xs text-muted-foreground">Станция (по желанию)</span>
             <select
@@ -156,7 +156,7 @@ export function BookingsPageClient() {
               onChange={(e) => setArenaStationId(e.target.value)}
               className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
             >
-              <option value="">Не указывать — любой свободный ПК</option>
+              <option value="">Не указывать — любой свободный ПК в точке по умолчанию</option>
               {stationOptions.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label}
@@ -164,9 +164,9 @@ export function BookingsPageClient() {
               ))}
             </select>
           </label>
-        ) : companyId && stationOptions.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Станции для этой точки пока не заведены в арене — бронь без выбора ПК.</p>
-        ) : null}
+        ) : (
+          <p className="text-xs text-muted-foreground">Станции пока не заведены в арене — бронь без выбора ПК.</p>
+        )}
         <input
           type="datetime-local"
           value={startsAt}

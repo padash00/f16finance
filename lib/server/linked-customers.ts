@@ -27,13 +27,22 @@ export async function fetchLinkedCustomersForUser(
   return ((data || []) as LinkedCustomerRow[]).filter((row) => row.id)
 }
 
+export type ResolveLinkedCustomerOptions = {
+  /**
+   * Если несколько точек в профиле и `companyId` не передан — взять одну строку детерминированно
+   * (сортировка по company_id), чтобы гостю не нужно было выбирать клуб вручную.
+   */
+  defaultWhenMultiple?: boolean
+}
+
 /**
  * Один auth-пользователь может иметь несколько строк `customers` (разные `company_id`) — тогда клиент «видит» всю сеть.
- * Для POST-операций нужно выбрать строку: явный `companyId` из тела запроса или единственная привязка.
+ * Для POST: явный `companyId`, одна привязка, при `defaultWhenMultiple` — автоматический выбор точки.
  */
 export function resolveLinkedCustomerForWrite(
   linkedCustomers: LinkedCustomerRow[],
   requestedCompanyId?: string | null,
+  options?: ResolveLinkedCustomerOptions,
 ): { ok: true; customerId: string; companyId: string } | { ok: false; error: string } {
   const rows = linkedCustomers
     .map((c) => ({
@@ -57,6 +66,11 @@ export function resolveLinkedCustomerForWrite(
 
   if (rows.length === 1) {
     return { ok: true, customerId: rows[0].id, companyId: rows[0].companyId }
+  }
+
+  if (options?.defaultWhenMultiple) {
+    const sorted = [...rows].sort((a, b) => a.companyId.localeCompare(b.companyId))
+    return { ok: true, customerId: sorted[0].id, companyId: sorted[0].companyId }
   }
 
   return { ok: false, error: 'company-id-required' }

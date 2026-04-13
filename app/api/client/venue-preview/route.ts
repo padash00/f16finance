@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     const linkedCompanyIds = uniqueStrings(context.linkedCompanyIds)
     const multiCompany = linkedCompanyIds.length > 1
 
+    /** Без выбора точки: отдаём схемы по всем клубам профиля сразу. */
     const scopedCompanyIds =
       requestedCompany && linkedCompanyIds.includes(requestedCompany) ? [requestedCompany] : linkedCompanyIds
 
@@ -40,18 +41,6 @@ export async function GET(request: Request) {
     }
 
     const admin = createAdminSupabaseClient()
-
-    if (multiCompany && !requestedCompany) {
-      const { data: companyRows, error: companiesError } = await admin.from('companies').select('id, name').in('id', linkedCompanyIds)
-      if (companiesError) throw companiesError
-      return json({
-        ok: true,
-        companies: (companyRows || []).map((c: any) => ({ id: c.id, name: c.name })),
-        projects: [],
-        multiCompany: true,
-        chooseCompany: true,
-      })
-    }
 
     const [{ data: companyRows, error: companiesError }, { data: linkRows, error: linksError }] = await Promise.all([
       admin.from('companies').select('id, name').in('id', scopedCompanyIds),

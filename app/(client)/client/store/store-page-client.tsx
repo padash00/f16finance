@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
 type CatalogItem = {
@@ -25,18 +24,11 @@ type CatalogResponse = {
 }
 
 export function StorePageClient() {
-  const searchParams = useSearchParams()
-  const companyId = searchParams.get('companyId')?.trim() || ''
-
   const [payload, setPayload] = useState<CatalogResponse | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
 
-  const catalogUrl = useMemo(() => {
-    const base = '/api/client/catalog'
-    if (!companyId) return base
-    return `${base}?companyId=${encodeURIComponent(companyId)}`
-  }, [companyId])
+  const catalogUrl = useMemo(() => '/api/client/catalog', [])
 
   useEffect(() => {
     setLoadError(null)
@@ -87,20 +79,10 @@ export function StorePageClient() {
             {payload?.label || 'Витрина'} — просмотр цен и наличия на витрине точки. Заказ оформляется в клубе.
           </p>
         </div>
-        <Link
-          href={companyId ? `/client?companyId=${encodeURIComponent(companyId)}` : '/client'}
-          className="text-sm text-sky-400 underline-offset-2 hover:underline"
-        >
+        <Link href="/client" className="text-sm text-sky-400 underline-offset-2 hover:underline">
           ← На главную
         </Link>
       </div>
-
-      {!companyId ? (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-          Чтобы увидеть ассортимент конкретного клуба, выберите точку на главной (параметр <span className="font-mono">companyId</span> в
-          ссылке).
-        </p>
-      ) : null}
 
       {loadError ? <p className="text-sm text-amber-200/90">{loadError}</p> : null}
 

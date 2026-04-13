@@ -174,7 +174,7 @@ export async function getRequestAccessContext(
 
   if (!hostOrganizationAccessible) {
     return {
-      response: NextResponse.json({ error: 'forbidden' }, { status: 403 }),
+      response: NextResponse.json({ error: 'forbidden', code: 'host-organization-not-accessible' }, { status: 403 }),
     }
   }
 
@@ -208,7 +208,14 @@ export async function getRequestAccessContext(
 
   if (!staffMember && !operatorAuth && !isCustomer) {
     return {
-      response: NextResponse.json({ error: 'forbidden' }, { status: 403 }),
+      response: NextResponse.json(
+        {
+          error: 'forbidden',
+          code: 'guest-not-linked',
+          hint: 'В таблице customers нет активной строки с этим auth_user_id (или запрос customers не прошёл RLS).',
+        },
+        { status: 403 },
+      ),
     }
   }
 
@@ -447,14 +454,24 @@ export async function getRequestCustomerContext(request: Request): Promise<
 
   if (!context.isCustomer) {
     return {
-      response: NextResponse.json({ error: 'forbidden' }, { status: 403 }),
+      response: NextResponse.json(
+        {
+          error: 'forbidden',
+          code: 'client-api-guest-only',
+          hint: 'Эти маршруты только для гостя. У аккаунта есть роль сотрудника или оператора — для /api/client/* нужен отдельный вход клиента.',
+        },
+        { status: 403 },
+      ),
     }
   }
 
   const linkedCustomerIds = context.linkedCustomers.map((item) => item.id).filter(Boolean)
   if (!linkedCustomerIds.length) {
     return {
-      response: NextResponse.json({ error: 'customer-not-linked' }, { status: 403 }),
+      response: NextResponse.json(
+        { error: 'customer-not-linked', code: 'customer-rows-missing-id', hint: 'Профиль гостя без id — проверьте данные customers.' },
+        { status: 403 },
+      ),
     }
   }
 
