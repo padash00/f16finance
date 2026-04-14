@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orda Kiosk — настройка</title>
+    <link rel="stylesheet" href="./setup.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>Настройка Orda Kiosk</h1>
+      <p class="muted">Заполните данные один раз. Конфиг сохранится локально.</p>
+
+      <label>
+        <span>Код станции (= имя станции в админке)</span>
+        <input id="stationCode" placeholder="VIP-111" />
+      </label>
+
+      <label>
+        <span>Heartbeat URL</span>
+        <input id="heartbeatUrl" placeholder="https://example.com/api/kiosk/heartbeat" />
+      </label>
+
+      <label>
+        <span>Heartbeat secret</span>
+        <input id="heartbeatSecret" type="password" placeholder="KIOSK_HEARTBEAT_SECRET" />
+      </label>
+
+      <label>
+        <span>WebSocket URL (опционально)</span>
+        <input id="wsUrl" placeholder="wss://example.com/ws/client" />
+      </label>
+
+      <label>
+        <span>Название клуба (опционально)</span>
+        <input id="clubName" placeholder="ORDA CLUB" />
+      </label>
+
+      <label>
+        <span>Путь к игре по умолчанию (опционально)</span>
+        <input id="defaultGame" placeholder="D:\Games\CS2\cs2.exe" />
+      </label>
+
+      <p id="msg" class="msg hidden"></p>
+
+      <div class="actions">
+        <button id="save">Сохранить и перезапустить</button>
+      </div>
+    </main>
+    <script src="./setup.js"></script>
+  </body>
+</html>

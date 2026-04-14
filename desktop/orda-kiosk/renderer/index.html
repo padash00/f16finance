@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orda Kiosk</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="root">
+      <header class="header">
+        <h1 id="clubName">ORDA CLUB</h1>
+        <p class="station">Станция: <span id="stationCode">VIP-111</span></p>
+        <p class="station muted">IP: <span id="deviceIp">-</span> | MAC: <span id="deviceMac">-</span></p>
+      </header>
+
+      <section id="screenIdle" class="screen">
+        <h2>Ожидание</h2>
+        <p>Обратитесь к оператору для старта сессии.</p>
+        <button id="btnCallOperatorIdle">Вызвать оператора</button>
+      </section>
+
+      <section id="screenActive" class="screen hidden">
+        <h2>Активная сессия</h2>
+        <p>Тариф: <span id="tariffName">-</span></p>
+        <p class="timer" id="timer">00:00:00</p>
+        <div class="actions">
+          <button id="btnExtend">Продлить</button>
+          <button id="btnShop">Магазин</button>
+          <button id="btnCallOperator">Вызвать оператора</button>
+        </div>
+        <div class="games">
+          <div class="games-head">
+            <h3>Игры</h3>
+            <span id="gamesCount">0</span>
+          </div>
+          <div id="gamesGrid" class="games-grid"></div>
+        </div>
+      </section>
+
+      <section id="screenEnded" class="screen hidden">
+        <h2>Время истекло</h2>
+        <p>Сессия завершена. Для продолжения обратитесь к оператору.</p>
+        <button id="btnExtendEnded">Продлить</button>
+      </section>
+
+      <section id="screenBlocked" class="screen hidden">
+        <h2>Станция не привязана</h2>
+        <p id="blockedReason">Устройство не совпадает с привязкой станции.</p>
+        <button id="btnCallOperatorBlocked">Вызвать оператора</button>
+      </section>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>
