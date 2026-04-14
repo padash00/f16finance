@@ -27,6 +27,7 @@ function runtimeConfig() {
   const heartbeatPath = fileCfg.heartbeatPath || '/api/kiosk/heartbeat'
   return {
     stationCode: process.env.STATION_CODE || fileCfg.stationCode || 'VIP-111',
+    stationId: fileCfg.stationId || '',
     clubName: process.env.CLUB_NAME || fileCfg.clubName || 'ORDA CLUB',
     defaultGamePath: process.env.DEFAULT_GAME_PATH || fileCfg.defaultGamePath || 'D:\\Games\\CS2\\cs2.exe',
     wsUrl: process.env.KIOSK_WS_URL || fileCfg.wsUrl || '',
@@ -123,25 +124,32 @@ async function postHeartbeat(status) {
   if (!cfg.clientSecret || !cfg.deviceToken) return
   const net = getDeviceNetworkIdentity()
   try {
+    const body = {
+      deviceToken: cfg.deviceToken,
+      device_ip: net.ip,
+      device_mac: net.mac,
+      status,
+    }
+    // Prefer stationId (from registration) over stationCode lookup to avoid ambiguity
+    if (cfg.stationId) {
+      body.stationId = cfg.stationId
+    } else {
+      body.stationCode = cfg.stationCode
+    }
     const res = await fetch(cfg.heartbeatUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-kiosk-secret': cfg.clientSecret },
-      body: JSON.stringify({
-        stationCode: cfg.stationCode,
-        deviceToken: cfg.deviceToken,
-        device_ip: net.ip,
-        device_mac: net.mac,
-        status,
-      }),
+      body: JSON.stringify(body),
     })
     const payload = await res.json().catch(() => null)
     if (!res.ok) {
       logLine(`heartbeat http ${res.status}: ${JSON.stringify(payload || {})}`)
     } else {
-      if (payload?.stationId && !realtimeReady) {
-        knownStationId = payload.stationId
+      const resolvedStationId = payload?.stationId || cfg.stationId
+      if (resolvedStationId && !realtimeReady) {
+        knownStationId = resolvedStationId
         realtimeReady = true
-        void initRealtime(cfg.serverBaseUrl, payload.stationId)
+        void initRealtime(cfg.serverBaseUrl, resolvedStationId)
       }
       // Sync session state from server (handles kiosk restart mid-session)
       if (payload?.activeSession && !session.active) {
@@ -152,7 +160,6 @@ async function postHeartbeat(status) {
           applyStartSession({ durationSec: remainingSec, tariffName: payload.activeSession.tariffName })
         }
       } else if (payload?.activeSession === null && session.active) {
-        // Server says no active session — end locally
         logLine('heartbeat: server has no active session, clearing local session')
         clearSessionAndLock()
       }
@@ -167,7 +174,8 @@ async function initRealtime(serverBaseUrl, stationId) {
     const res = await fetch(`${serverBaseUrl}/api/kiosk/rtconfig`)
     const data = await res.json().catch(() => null)
     if (!data?.ok || !data.supabaseUrl || !data.supabaseAnonKey) {
-      logLine('Realtime: rtconfig not available, skipping')
+      logLine('Realtime: rtconfig not available, will retry on next heartbeat')
+      realtimeReady = false  // allow retry on next heartbeat
       return
     }
     await setupRealtime({
@@ -178,7 +186,8 @@ async function initRealtime(serverBaseUrl, stationId) {
       logLine,
     })
   } catch (error) {
-    logLine(`initRealtime failed: ${error.message}`)
+    logLine(`initRealtime failed: ${error.message}, will retry on next heartbeat`)
+    realtimeReady = false  // allow retry on next heartbeat
   }
 }
 
@@ -434,6 +443,7 @@ function setupIpc() {
 
     saveConfig({
       stationCode,
+      stationId: String(registerPayload.stationId || ''),
       serverBaseUrl,
       heartbeatUrl: `${serverBaseUrl}${String(registerPayload.heartbeatPath || '/api/kiosk/heartbeat')}`,
       heartbeatPath: String(registerPayload.heartbeatPath || '/api/kiosk/heartbeat'),
@@ -568,6 +578,15 @@ app.whenReady().then(() => {
   setupWebSocket()
   setupTimers()
   pushState()
+
+  // If stationId is already saved from registration, init realtime immediately
+  // (don't wait for the first heartbeat which fires after 10 seconds)
+  if (cfg.stationId) {
+    knownStationId = cfg.stationId
+    realtimeReady = true
+    const serverBaseUrl = String(cfg.serverBaseUrl || '').replace(/\/+$/, '')
+    void initRealtime(serverBaseUrl, cfg.stationId)
+  }
 })
 
 process.on('uncaughtException', (error) => {
