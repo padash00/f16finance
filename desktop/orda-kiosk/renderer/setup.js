@@ -12,7 +12,9 @@ async function init() {
 
 $('save').addEventListener('click', async () => {
   const msg = $('msg')
+  const btn = $('save')
   msg.classList.add('hidden')
+  btn.disabled = true
   const res = await window.setupApi.save({
     stationCode: $('stationCode').value,
     heartbeatUrl: $('heartbeatUrl').value,
@@ -24,8 +26,12 @@ $('save').addEventListener('click', async () => {
   if (!res.ok) {
     msg.textContent = res.error || 'Ошибка сохранения'
     msg.classList.remove('hidden')
+    btn.disabled = false
     return
   }
+  msg.textContent = 'Сохранено. Приложение перезапускается…'
+  msg.style.color = '#a7f3d0'
+  msg.classList.remove('hidden')
 })
 
 void init()

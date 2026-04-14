@@ -10,6 +10,14 @@ const { getDeviceNetworkIdentity } = require('./device')
 
 const argvHasSetup = process.argv.includes('--setup')
 
+function relaunchWithoutSetupFlag() {
+  const args = process.argv
+    .slice(1)
+    .filter((a) => a !== '--setup' && a !== '--inspect' && !a.startsWith('--inspect='))
+  app.relaunch({ args })
+  app.exit(0)
+}
+
 function runtimeConfig() {
   const fileCfg = loadConfig() || {}
   return {
@@ -333,8 +341,7 @@ function setupIpc() {
       clubName: String(payload?.clubName || '').trim(),
       defaultGamePath: String(payload?.defaultGamePath || '').trim(),
     })
-    app.relaunch()
-    app.exit(0)
+    relaunchWithoutSetupFlag()
     return { ok: true }
   })
 
