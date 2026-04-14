@@ -62,9 +62,14 @@ export async function POST(request: Request) {
     if (findError) throw findError
     if (!station?.id) return json({ error: 'station-not-found' }, 404)
 
-    const expectedHash = String(station.provisioning_key_hash || '')
-    if (!expectedHash) return json({ error: 'station-provisioning-not-configured' }, 409)
-    if (sha256(provisioningKey) !== expectedHash) return json({ error: 'provisioning-key-invalid' }, 401)
+    // Check global key first (env var), then fall back to per-station key
+    const globalKey = String(process.env.KIOSK_PROVISIONING_KEY || '').trim()
+    const perStationHash = String(station.provisioning_key_hash || '')
+    const validByGlobal = Boolean(globalKey && provisioningKey === globalKey)
+    const validByStation = Boolean(perStationHash && sha256(provisioningKey) === perStationHash)
+    if (!validByGlobal && !validByStation) {
+      return json({ error: 'provisioning-key-invalid' }, 401)
+    }
 
     const clientSecret = randomBytes(24).toString('hex')
     const deviceIp = normalizeIp(body?.device_ip)

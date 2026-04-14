@@ -118,7 +118,38 @@ export async function POST(request: Request) {
 
     if (updError) throw updError
 
-    return json({ ok: true, stationId: row.id, last_heartbeat_at: nowIso, kiosk_status: kioskStatus })
+    // Auto-end expired sessions for this station
+    await admin
+      .from('arena_sessions')
+      .update({ status: 'completed', ended_at: nowIso })
+      .eq('station_id', row.id)
+      .eq('status', 'active')
+      .lt('ends_at', nowIso)
+
+    // Return active session so kiosk can sync state after restart
+    const { data: activeSession } = await admin
+      .from('arena_sessions')
+      .select('ends_at, tariff:tariff_id(name)')
+      .eq('station_id', row.id)
+      .eq('status', 'active')
+      .gt('ends_at', nowIso)
+      .maybeSingle()
+
+    const tariffName = activeSession
+      ? (Array.isArray((activeSession as any).tariff)
+          ? (activeSession as any).tariff[0]?.name
+          : (activeSession as any).tariff?.name) ?? 'Тариф'
+      : null
+
+    return json({
+      ok: true,
+      stationId: row.id,
+      last_heartbeat_at: nowIso,
+      kiosk_status: kioskStatus,
+      activeSession: activeSession
+        ? { endsAt: (activeSession as any).ends_at, tariffName }
+        : null,
+    })
   } catch (error: any) {
     return json({ error: error?.message || 'kiosk-heartbeat-failed' }, 500)
   }
