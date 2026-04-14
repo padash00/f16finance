@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { isIP } from 'node:net'
-import { createHash, randomBytes } from 'node:crypto'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -28,14 +27,6 @@ function normalizeDeviceMac(value: unknown): string | null {
   const ok = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(canonical)
   if (!ok) throw new Error('invalid-device-mac')
   return canonical
-}
-
-function sha256(value: string) {
-  return createHash('sha256').update(value).digest('hex')
-}
-
-function randomProvisioningKey() {
-  return randomBytes(12).toString('hex').toUpperCase()
 }
 
 function filterProjectsByCompanyScope(projects: any[], allowedCompanyIds: string[] | null) {
@@ -140,11 +131,11 @@ export async function GET(request: Request) {
       return json({ ok: true, data: { projects: arenaProjects } })
     }
 
-    // Get project name
+    // Get project name + branding
     await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
     const { data: project } = await supabase
       .from('point_projects')
-      .select('id, name')
+      .select('id, name, arena_logo_url, arena_cover_url, arena_accent, arena_description')
       .eq('id', projectId)
       .single()
 
@@ -345,23 +336,6 @@ export async function POST(request: Request) {
       const { data, error } = await supabase.from('arena_stations').update(update).eq('id', stationId).select().single()
       if (error) throw error
       return json({ ok: true, data })
-    }
-
-    if (body.action === 'rotateStationProvisioningKey') {
-      const { stationId } = body
-      if (!stationId) return json({ error: 'stationId required' }, 400)
-      await ensureArenaEntityAccess(supabase, 'arena_stations', stationId, companyScope.allowedCompanyIds)
-      const plainKey = randomProvisioningKey()
-      const { data, error } = await supabase
-        .from('arena_stations')
-        .update({
-          provisioning_key_hash: sha256(plainKey),
-        })
-        .eq('id', stationId)
-        .select('id, station_code, name')
-        .single()
-      if (error) throw error
-      return json({ ok: true, data, provisioningKey: plainKey })
     }
 
     if (body.action === 'deleteStation') {
@@ -762,6 +736,21 @@ export async function POST(request: Request) {
 
       void broadcastKioskCommand(stationId, { type: 'end_session' })
 
+      return json({ ok: true })
+    }
+
+    // ─── PROJECT BRANDING ────────────────────────────────────────────
+    if (body.action === 'updateProjectBranding') {
+      const { projectId, arena_logo_url, arena_cover_url, arena_accent, arena_description } = body
+      if (!projectId) return json({ error: 'projectId required' }, 400)
+      await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
+      const update: Record<string, string | null> = {}
+      if (arena_logo_url !== undefined) update.arena_logo_url = arena_logo_url ? String(arena_logo_url).trim() : null
+      if (arena_cover_url !== undefined) update.arena_cover_url = arena_cover_url ? String(arena_cover_url).trim() : null
+      if (arena_accent !== undefined) update.arena_accent = arena_accent ? String(arena_accent).trim() : null
+      if (arena_description !== undefined) update.arena_description = arena_description ? String(arena_description).trim() : null
+      const { error } = await supabase.from('point_projects').update(update).eq('id', projectId)
+      if (error) throw error
       return json({ ok: true })
     }
 

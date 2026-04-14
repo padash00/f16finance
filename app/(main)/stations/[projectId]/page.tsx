@@ -923,10 +923,10 @@ export default function StationsPage() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics' | 'catalog'>(() => {
+  const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics' | 'catalog' | 'settings'>(() => {
     if (typeof window === 'undefined') return 'manage'
     const t = new URLSearchParams(window.location.search).get('tab')
-    return t === 'map' || t === 'analytics' || t === 'catalog' ? t : 'manage'
+    return t === 'map' || t === 'analytics' || t === 'catalog' || t === 'settings' ? t : 'manage'
   })
 
   const cellSize = 70
@@ -999,6 +999,13 @@ export default function StationsPage() {
   const [quickTariffId, setQuickTariffId] = useState('')
   const [quickStartSaving, setQuickStartSaving] = useState(false)
 
+  // Project branding (settings tab)
+  const [brandingLogoUrl, setBrandingLogoUrl] = useState('')
+  const [brandingCoverUrl, setBrandingCoverUrl] = useState('')
+  const [brandingAccent, setBrandingAccent] = useState('')
+  const [brandingDescription, setBrandingDescription] = useState('')
+  const [brandingSaving, setBrandingSaving] = useState(false)
+
   // Bulk zone assignment state (catalog tab)
   const [bulkZoneId, setBulkZoneId] = useState('')
   const [bulkExePaths, setBulkExePaths] = useState<Record<string, string>>({}) // gameId → exePath
@@ -1032,6 +1039,10 @@ export default function StationsPage() {
       const data = await res.json()
       if (!data.ok) throw new Error(data.error)
       setProjectName(data.data.project?.name || '')
+      setBrandingLogoUrl(data.data.project?.arena_logo_url || '')
+      setBrandingCoverUrl(data.data.project?.arena_cover_url || '')
+      setBrandingAccent(data.data.project?.arena_accent || '')
+      setBrandingDescription(data.data.project?.arena_description || '')
       setZones(
         Array.isArray(data.data.zones)
           ? (data.data.zones as Record<string, unknown>[]).map(arenaRowToZone)
@@ -1074,7 +1085,7 @@ export default function StationsPage() {
 
   useEffect(() => {
     const t = searchParams.get('tab')
-    if (t === 'map' || t === 'analytics' || t === 'manage' || t === 'catalog') setActiveTab(t)
+    if (t === 'map' || t === 'analytics' || t === 'manage' || t === 'catalog' || t === 'settings') setActiveTab(t)
     const af = searchParams.get('afrom')
     const at = searchParams.get('ato')
     if (af && isISODate(af)) setAnalyticsFrom(af)
@@ -1355,17 +1366,19 @@ export default function StationsPage() {
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
-  async function handleRotateProvisioningKey(stationId: string) {
-    setSaving(true)
+  async function handleSaveBranding() {
+    setBrandingSaving(true)
     try {
-      const out = await apiPost({ action: 'rotateStationProvisioningKey', stationId })
-      const key = typeof (out as any)?.provisioningKey === 'string' ? (out as any).provisioningKey : ''
-      if (key) {
-        await navigator.clipboard?.writeText(key).catch(() => null)
-        alert(`Provisioning key для станции:\n${key}\n\nСкопируйте и используйте в установщике.`)
-      }
-      showFlash('ok', 'Provisioning key обновлён')
-    } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
+      await apiPost({
+        action: 'updateProjectBranding',
+        projectId,
+        arena_logo_url: brandingLogoUrl.trim() || null,
+        arena_cover_url: brandingCoverUrl.trim() || null,
+        arena_accent: brandingAccent.trim() || null,
+        arena_description: brandingDescription.trim() || null,
+      })
+      showFlash('ok', 'Настройки страницы сохранены')
+    } catch (e: any) { showFlash('err', e.message) } finally { setBrandingSaving(false) }
   }
 
   async function handleDeleteStation(stationId: string) {
@@ -1713,7 +1726,7 @@ export default function StationsPage() {
   )
 
   return (
-    <div className={activeTab === 'map' ? 'app-page app-page-wide space-y-4' : activeTab === 'catalog' ? 'app-page max-w-4xl space-y-4' : 'app-page max-w-5xl space-y-6'}>
+    <div className={activeTab === 'map' ? 'app-page app-page-wide space-y-4' : activeTab === 'catalog' ? 'app-page max-w-4xl space-y-4' : activeTab === 'settings' ? 'app-page max-w-2xl space-y-4' : 'app-page max-w-5xl space-y-6'}>
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <Link href="/point-devices" className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground hover:text-foreground transition">
@@ -1806,6 +1819,7 @@ export default function StationsPage() {
           { id: 'catalog', label: 'Каталог игр', icon: Gamepad2 },
           { id: 'map', label: 'Карта', icon: Map },
           { id: 'analytics', label: 'Аналитика', icon: BarChart3 },
+          { id: 'settings', label: 'Настройки', icon: Paintbrush },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -2159,14 +2173,6 @@ export default function StationsPage() {
                                       title="Игры станции"
                                     >
                                       <Monitor className="h-3 w-3" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => void handleRotateProvisioningKey(st.id)}
-                                      className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-                                      title="Сгенерировать provisioning key"
-                                    >
-                                      <RefreshCw className="h-3 w-3" />
                                     </button>
                                     <button
                                       type="button"
@@ -2787,6 +2793,91 @@ export default function StationsPage() {
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="space-y-6">
+            {/* Cover preview */}
+            {brandingCoverUrl && (
+              <div
+                className="relative h-32 w-full overflow-hidden rounded-2xl border border-white/10"
+                style={{ backgroundImage: `url(${brandingCoverUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+              >
+                {brandingLogoUrl && (
+                  <img src={brandingLogoUrl} alt="logo" className="absolute left-4 bottom-4 h-12 w-12 rounded-xl object-contain bg-black/50 p-1" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                <p className="absolute bottom-4 left-20 text-sm font-semibold text-white drop-shadow">{projectName}</p>
+                {brandingDescription && (
+                  <p className="absolute bottom-2 left-20 text-[10px] text-white/70">{brandingDescription}</p>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-xl border border-white/10 bg-card p-5 space-y-4">
+              <h2 className="text-sm font-semibold">Оформление страницы</h2>
+
+              <div className="grid gap-3">
+                <label className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Логотип (URL картинки)</span>
+                  <input
+                    value={brandingLogoUrl}
+                    onChange={e => setBrandingLogoUrl(e.target.value)}
+                    placeholder="https://example.com/logo.png"
+                    className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                  />
+                </label>
+
+                <label className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Обложка / баннер (URL картинки)</span>
+                  <input
+                    value={brandingCoverUrl}
+                    onChange={e => setBrandingCoverUrl(e.target.value)}
+                    placeholder="https://example.com/cover.jpg"
+                    className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                  />
+                </label>
+
+                <label className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Акцентный цвет (hex)</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={brandingAccent || '#3b82f6'}
+                      onChange={e => setBrandingAccent(e.target.value)}
+                      className="h-9 w-12 cursor-pointer rounded border border-white/10 bg-background p-0.5"
+                    />
+                    <input
+                      value={brandingAccent}
+                      onChange={e => setBrandingAccent(e.target.value)}
+                      placeholder="#3b82f6"
+                      className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                    />
+                  </div>
+                </label>
+
+                <label className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Описание / tagline</span>
+                  <input
+                    value={brandingDescription}
+                    onChange={e => setBrandingDescription(e.target.value)}
+                    placeholder="Лучший игровой клуб в городе"
+                    className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                  />
+                </label>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void handleSaveBranding()}
+                disabled={brandingSaving}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              >
+                {brandingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Сохранить
+              </button>
+            </div>
           </div>
         )}
       </div>
