@@ -8,7 +8,7 @@
     "setup": "electron . --setup"
   },
   "dependencies": {
-    "electron": "^37.2.0",
+    "electron": "41.2.0",
     "ws": "^8.18.2"
   }
 }
