@@ -172,12 +172,44 @@ export async function GET(request: Request) {
       return eff != null ? { ...z, extension_hourly_price: eff } : z
     })
 
+    const stationRows = stations || []
+    const stationIds = [...new Set(stationRows.map((s: any) => String(s.id || '')).filter(Boolean))]
+    let activeByStation: Record<string, { id: string; ends_at: string | null }> = {}
+    if (stationIds.length) {
+      let q = supabase
+        .from('arena_sessions')
+        .select('id, station_id, ends_at, status')
+        .eq('point_project_id', projectId)
+        .eq('status', 'active')
+        .in('station_id', stationIds)
+      if (companyId) q = q.eq('company_id', companyId)
+      const { data: activeRows, error: activeError } = await q
+      if (activeError) throw activeError
+      activeByStation = Object.fromEntries(
+        (activeRows || []).map((r: any) => [
+          String(r.station_id),
+          { id: String(r.id), ends_at: r.ends_at != null ? String(r.ends_at) : null },
+        ]),
+      )
+    }
+
+    const stationsOut = stationRows.map((s: any) => {
+      const sid = String(s.id || '')
+      const active = activeByStation[sid]
+      if (!active) return s
+      return {
+        ...s,
+        active_session_id: active.id,
+        active_session_ends_at: active.ends_at,
+      }
+    })
+
     return json({
       ok: true,
       data: {
         project,
         zones: zonesOut,
-        stations: stations || [],
+        stations: stationsOut,
         tariffs: allTariffs,
         decorations: decorations || [],
         gamesCatalog: gamesCatalog || [],

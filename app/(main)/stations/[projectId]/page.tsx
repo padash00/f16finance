@@ -31,6 +31,10 @@ type Zone = {
 type Station = {
   id: string; zone_id: string | null; name: string; order_index: number; is_active: boolean
   device_ip: string | null; device_mac: string | null
+  last_heartbeat_at: string | null
+  kiosk_status: string | null
+  active_session_id: string | null
+  active_session_ends_at: string | null
   grid_x: number | null; grid_y: number | null
 }
 type GameCatalog = {
@@ -138,6 +142,10 @@ function arenaRowToStation(row: Record<string, unknown>): Station {
     is_active: Boolean(row.is_active),
     device_ip: row.device_ip != null && String(row.device_ip).trim() ? String(row.device_ip).trim() : null,
     device_mac: row.device_mac != null && String(row.device_mac).trim() ? String(row.device_mac).trim() : null,
+    last_heartbeat_at: row.last_heartbeat_at != null ? String(row.last_heartbeat_at) : null,
+    kiosk_status: row.kiosk_status != null ? String(row.kiosk_status) : null,
+    active_session_id: row.active_session_id != null ? String(row.active_session_id) : null,
+    active_session_ends_at: row.active_session_ends_at != null ? String(row.active_session_ends_at) : null,
     grid_x: row.grid_x != null ? Number(row.grid_x) : null,
     grid_y: row.grid_y != null ? Number(row.grid_y) : null,
   }
@@ -263,6 +271,17 @@ const DECORATION_TYPES = [
 
 function decoEmoji(type: string) {
   return DECORATION_TYPES.find(d => d.type === type)?.emoji ?? '❓'
+}
+
+const KIOSK_ONLINE_WINDOW_MS = 45_000
+
+function kioskStationPresence(station: Station) {
+  const hb = station.last_heartbeat_at ? new Date(station.last_heartbeat_at).getTime() : NaN
+  const online = Number.isFinite(hb) && Date.now() - hb <= KIOSK_ONLINE_WINDOW_MS
+  const ks = String(station.kiosk_status || '').toLowerCase()
+  const inGame = online && ks === 'in_game'
+  const busy = Boolean(station.active_session_id) || inGame
+  return { online, busy, inGame, lastHeartbeatAt: station.last_heartbeat_at }
 }
 
 interface MapEditorProps {
@@ -661,13 +680,19 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
           {stationsOnMap.map(station => {
             const x = station.grid_x!
             const y = station.grid_y!
+            const presence = kioskStationPresence(station)
+            const dotColor = presence.busy ? '#ef4444' : presence.online ? '#22c55e' : '#9ca3af'
+            const borderColor = presence.busy ? 'rgba(239,68,68,0.85)' : presence.online ? 'rgba(34,197,94,0.75)' : 'rgba(156,163,175,0.55)'
+            const bgColor = presence.busy ? 'rgba(239,68,68,0.12)' : presence.online ? 'rgba(34,197,94,0.12)' : 'rgba(156,163,175,0.12)'
+            const hbLabel = presence.lastHeartbeatAt ? new Date(presence.lastHeartbeatAt).toLocaleString('ru-RU') : 'нет heartbeat'
+            const title = `${station.name}\n${presence.busy ? 'Занято (сессия/игра)' : presence.online ? 'Онлайн' : 'Офлайн'}\nheartbeat: ${hbLabel}`
             return (
               <div
                 key={station.id}
                 draggable
                 onDragStart={e => { e.stopPropagation(); handleDragStart(e, 'station', station.id, x, y) }}
                 onDragOver={e => e.preventDefault()}
-                className="absolute flex flex-col items-center justify-center rounded border text-center select-none"
+                className="relative flex flex-col items-center justify-center rounded border text-center select-none"
                 style={{
                   left: x * CELL + 2,
                   top: y * CELL + 2,
@@ -675,12 +700,17 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
                   height: CELL - 4,
                   zIndex: 3,
                   cursor: 'grab',
-                  backgroundColor: 'rgba(99,102,241,0.2)',
-                  borderColor: 'rgba(99,102,241,0.6)',
+                  backgroundColor: bgColor,
+                  borderColor,
                   fontSize: 11,
                 }}
-                title={station.name}
+                title={title}
               >
+                <span
+                  className="absolute left-1 top-1 h-2 w-2 rounded-full"
+                  style={{ backgroundColor: dotColor, boxShadow: '0 0 0 1px rgba(0,0,0,0.35)' }}
+                  aria-hidden
+                />
                 <Monitor style={{ width: 18, height: 18, opacity: 0.8 }} />
                 <span className="truncate leading-tight mt-1 font-semibold" style={{ maxWidth: CELL - 8, fontSize: 11 }}>
                   {station.name}
@@ -1080,6 +1110,14 @@ export default function StationsPage() {
   useEffect(() => {
     if (activeTab === 'analytics') void loadAnalytics()
   }, [activeTab, loadAnalytics])
+
+  useEffect(() => {
+    if (activeTab !== 'map') return
+    const id = window.setInterval(() => {
+      void load({ silent: true })
+    }, 10000)
+    return () => window.clearInterval(id)
+  }, [activeTab, load])
 
   const filteredZones = useMemo(() => {
     const q = manageQuery.trim().toLowerCase()

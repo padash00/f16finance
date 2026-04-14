@@ -31,6 +31,8 @@ npm start
 - `STATION_CODE` - код станции (по умолчанию `VIP-111`)
 - `CLUB_NAME` - название клуба
 - `DEFAULT_GAME_PATH` - путь к игре (по умолчанию `D:\Games\CS2\cs2.exe`)
+- `KIOSK_HEARTBEAT_URL` - URL HTTP heartbeat (по умолчанию `http://127.0.0.1:3000/api/kiosk/heartbeat`)
+- `KIOSK_HEARTBEAT_SECRET` - секрет для heartbeat (обязателен для записи онлайн-статуса в БД)
 
 ## Формат команд WebSocket
 

@@ -11,10 +11,13 @@ const SERVER_WS_URL = process.env.KIOSK_WS_URL || 'ws://127.0.0.1:8787/ws/client
 const STATION_CODE = process.env.STATION_CODE || 'VIP-111'
 const CLUB_NAME = process.env.CLUB_NAME || 'ORDA CLUB'
 const DEFAULT_GAME_PATH = process.env.DEFAULT_GAME_PATH || 'D:\\Games\\CS2\\cs2.exe'
+const HEARTBEAT_URL = process.env.KIOSK_HEARTBEAT_URL || 'http://127.0.0.1:3000/api/kiosk/heartbeat'
+const HEARTBEAT_SECRET = process.env.KIOSK_HEARTBEAT_SECRET || ''
 
 let mainWindow = null
 let socket = null
 let heartbeatTimer = null
+let httpHeartbeatTimer = null
 let tickTimer = null
 
 const session = {
@@ -71,6 +74,57 @@ function pushState() {
   mainWindow.webContents.send('kiosk:state', buildState())
 }
 
+function sendStatus(status) {
+  if (!socket) return
+  const net = getDeviceNetworkIdentity()
+  socket.send({
+    type: 'status',
+    status,
+    stationCode: STATION_CODE,
+    device_ip: net.ip,
+    device_mac: net.mac,
+    interface: net.iface,
+    games_count: Array.isArray(session.games) ? session.games.length : 0,
+    timestamp: new Date().toISOString(),
+  })
+}
+
+async function postHeartbeat(status) {
+  if (!HEARTBEAT_SECRET) return
+  const net = getDeviceNetworkIdentity()
+  try {
+    const res = await fetch(HEARTBEAT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-kiosk-secret': HEARTBEAT_SECRET },
+      body: JSON.stringify({
+        stationCode: STATION_CODE,
+        device_ip: net.ip,
+        device_mac: net.mac,
+        status,
+      }),
+    })
+    const payload = await res.json().catch(() => null)
+    if (!res.ok) {
+      logLine(`heartbeat http ${res.status}: ${JSON.stringify(payload || {})}`)
+    }
+  } catch (error) {
+    logLine(`heartbeat failed: ${error.message}`)
+  }
+}
+
+function resolveGameById(gameId) {
+  const id = String(gameId || '').trim()
+  if (!id) return null
+  return session.games.find((g) => String(g.id) === id) || null
+}
+
+function launchConfiguredGame(gameId, fallbackPath) {
+  const game = resolveGameById(gameId)
+  const pathToRun = String(game?.exePath || fallbackPath || '').trim()
+  if (!pathToRun) throw new Error('game-path-required')
+  return launchGame(pathToRun)
+}
+
 function clearSessionAndLock() {
   stopGame()
   session.active = false
@@ -78,6 +132,7 @@ function clearSessionAndLock() {
   session.tariffName = ''
   pushState()
   sendStatus('idle')
+  void postHeartbeat('offline')
 }
 
 function onTick() {
@@ -106,6 +161,7 @@ function applyStartSession(command) {
   session.endsAtMs = Date.now() + durationSec * 1000
   pushState()
   sendStatus('idle')
+  void postHeartbeat('idle')
 }
 
 function applyExtendSession(command) {
@@ -113,34 +169,6 @@ function applyExtendSession(command) {
   if (!session.active || addSec <= 0) return
   session.endsAtMs += addSec * 1000
   pushState()
-}
-
-function resolveGameById(gameId) {
-  const id = String(gameId || '').trim()
-  if (!id) return null
-  return session.games.find((g) => String(g.id) === id) || null
-}
-
-function launchConfiguredGame(gameId, fallbackPath) {
-  const game = resolveGameById(gameId)
-  const pathToRun = String(game?.exePath || fallbackPath || '').trim()
-  if (!pathToRun) throw new Error('game-path-required')
-  return launchGame(pathToRun)
-}
-
-function sendStatus(status) {
-  if (!socket) return
-  const net = getDeviceNetworkIdentity()
-  socket.send({
-    type: 'status',
-    status,
-    stationCode: STATION_CODE,
-    device_ip: net.ip,
-    device_mac: net.mac,
-    interface: net.iface,
-    games_count: Array.isArray(session.games) ? session.games.length : 0,
-    timestamp: new Date().toISOString(),
-  })
 }
 
 function handleCommand(message) {
@@ -181,6 +209,7 @@ function handleCommand(message) {
       try {
         launchConfiguredGame(message.gameId, String(message.gamePath || DEFAULT_GAME_PATH))
         sendStatus('in_game')
+        void postHeartbeat('in_game')
         pushState()
       } catch (error) {
         logLine(`launch_game failed: ${error.message}`)
@@ -280,6 +309,7 @@ function setupWebSocket() {
     url: SERVER_WS_URL,
     onOpen: () => {
       sendStatus('online')
+      void postHeartbeat(session.active ? 'idle' : 'online')
       logLine('WebSocket connected')
     },
     onClose: () => {
@@ -297,11 +327,15 @@ function setupTimers() {
   heartbeatTimer = setInterval(() => {
     sendStatus(session.active ? 'idle' : 'online')
   }, 15000)
+  httpHeartbeatTimer = setInterval(() => {
+    void postHeartbeat(session.active ? 'idle' : 'online')
+  }, 10000)
 }
 
 function cleanup() {
   if (tickTimer) clearInterval(tickTimer)
   if (heartbeatTimer) clearInterval(heartbeatTimer)
+  if (httpHeartbeatTimer) clearInterval(httpHeartbeatTimer)
   globalShortcut.unregisterAll()
   if (socket) socket.close()
 }
