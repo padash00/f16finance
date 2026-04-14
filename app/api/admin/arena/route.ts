@@ -6,6 +6,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { effectiveZoneExtensionHourly } from '@/lib/core/arena-zone-extension-hourly'
+import { broadcastKioskCommand } from '@/lib/server/kiosk-broadcast'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -682,6 +683,86 @@ export async function POST(request: Request) {
         .limit(10)
       if (error) throw error
       return json({ ok: true, data: data || [] })
+    }
+
+    // ── Admin quick session start ──────────────────────────────────────────────
+    if (body.action === 'adminStartSession') {
+      const { stationId, tariffId, projectId: bProjectId, companyId: bCompanyId } = body as {
+        stationId: string; tariffId: string; projectId: string; companyId?: string
+      }
+      if (!stationId || !tariffId || !bProjectId) return json({ error: 'stationId, tariffId and projectId required' }, 400)
+
+      const { data: tariff } = await supabase
+        .from('arena_tariffs')
+        .select('id, name, duration_minutes, price')
+        .eq('id', tariffId)
+        .eq('is_active', true)
+        .single()
+      if (!tariff) return json({ error: 'tariff-not-found' }, 404)
+
+      const { data: existing } = await supabase
+        .from('arena_sessions')
+        .select('id')
+        .eq('station_id', stationId)
+        .eq('status', 'active')
+        .maybeSingle()
+      if (existing) return json({ error: 'station-already-occupied' }, 409)
+
+      const now = new Date()
+      const durationMin = Number(tariff.duration_minutes)
+      const endsAt = new Date(now.getTime() + durationMin * 60 * 1000)
+
+      const { data: sess, error: sessErr } = await supabase
+        .from('arena_sessions')
+        .insert({
+          station_id: stationId,
+          point_project_id: bProjectId,
+          company_id: bCompanyId || null,
+          tariff_id: tariffId,
+          started_at: now.toISOString(),
+          ends_at: endsAt.toISOString(),
+          amount: Number(tariff.price),
+          status: 'active',
+          payment_method: 'cash',
+          cash_amount: Number(tariff.price),
+          kaspi_amount: 0,
+          discount_percent: 0,
+        })
+        .select('id')
+        .single()
+      if (sessErr) throw sessErr
+
+      void broadcastKioskCommand(stationId, {
+        type: 'start_session',
+        durationSec: durationMin * 60,
+        tariffName: String(tariff.name || 'Тариф'),
+      })
+
+      return json({ ok: true, sessionId: sess.id, endsAt: endsAt.toISOString() })
+    }
+
+    // ── Admin quick session end ────────────────────────────────────────────────
+    if (body.action === 'adminEndSession') {
+      const { stationId } = body as { stationId: string }
+      if (!stationId) return json({ error: 'stationId required' }, 400)
+
+      const now = new Date().toISOString()
+      const { data: sess } = await supabase
+        .from('arena_sessions')
+        .select('id')
+        .eq('station_id', stationId)
+        .eq('status', 'active')
+        .maybeSingle()
+      if (!sess) return json({ error: 'no-active-session' }, 404)
+
+      await supabase
+        .from('arena_sessions')
+        .update({ status: 'completed', ended_at: now })
+        .eq('id', sess.id)
+
+      void broadcastKioskCommand(stationId, { type: 'end_session' })
+
+      return json({ ok: true })
     }
 
     return json({ error: 'unknown action' }, 400)

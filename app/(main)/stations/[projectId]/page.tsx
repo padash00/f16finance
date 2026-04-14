@@ -994,6 +994,11 @@ export default function StationsPage() {
   const [balanceTargetId, setBalanceTargetId] = useState<string | null>(null)
   const [showBalancePanel, setShowBalancePanel] = useState(false)
 
+  // Quick session start/stop
+  const [quickStartStationId, setQuickStartStationId] = useState<string | null>(null)
+  const [quickTariffId, setQuickTariffId] = useState('')
+  const [quickStartSaving, setQuickStartSaving] = useState(false)
+
   // Bulk zone assignment state (catalog tab)
   const [bulkZoneId, setBulkZoneId] = useState('')
   const [bulkExePaths, setBulkExePaths] = useState<Record<string, string>>({}) // gameId → exePath
@@ -1144,10 +1149,11 @@ export default function StationsPage() {
   }, [activeTab, loadAnalytics])
 
   useEffect(() => {
-    if (activeTab !== 'map') return
+    if (activeTab !== 'map' && activeTab !== 'manage') return
+    const interval = activeTab === 'map' ? 10000 : 30000
     const id = window.setInterval(() => {
       void load({ silent: true })
-    }, 10000)
+    }, interval)
     return () => window.clearInterval(id)
   }, [activeTab, load])
 
@@ -1458,6 +1464,28 @@ export default function StationsPage() {
       setBalanceResults(prev => prev.map(r => r.id === target.id ? { ...r, kiosk_balance: newBal } : r))
       setBalanceAmount('')
       showFlash('ok', `Баланс пополнен. Новый баланс: ${newBal} ₸`)
+    } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
+  }
+
+  async function handleAdminStartSession(stationId: string) {
+    if (!quickTariffId) { showFlash('err', 'Выберите тариф'); return }
+    setQuickStartSaving(true)
+    try {
+      await apiPost({ action: 'adminStartSession', stationId, tariffId: quickTariffId, projectId, companyId })
+      setQuickStartStationId(null)
+      setQuickTariffId('')
+      showFlash('ok', 'Сессия запущена — кiosk получит команду')
+      void load({ silent: true })
+    } catch (e: any) { showFlash('err', e.message) } finally { setQuickStartSaving(false) }
+  }
+
+  async function handleAdminEndSession(stationId: string) {
+    if (!confirm('Завершить сессию на этой станции?')) return
+    setSaving(true)
+    try {
+      await apiPost({ action: 'adminEndSession', stationId })
+      showFlash('ok', 'Сессия завершена')
+      void load({ silent: true })
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
@@ -2039,8 +2067,25 @@ export default function StationsPage() {
                                 </div>
                               ) : (
                                 <div className="flex items-center justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <span className="text-sm">{st.name}</span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      {(() => {
+                                        const p = kioskStationPresence(st)
+                                        return (
+                                          <span
+                                            className="inline-block h-2 w-2 shrink-0 rounded-full"
+                                            style={{ background: p.busy ? '#ef4444' : p.online ? '#22c55e' : '#6b7280' }}
+                                            title={p.busy ? 'Занято' : p.online ? 'Онлайн' : 'Офлайн'}
+                                          />
+                                        )
+                                      })()}
+                                      <span className="text-sm">{st.name}</span>
+                                      {st.active_session_id && st.active_session_ends_at && (
+                                        <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-400 shrink-0">
+                                          до {new Date(st.active_session_ends_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      )}
+                                    </div>
                                     <div className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
                                       <span className="rounded bg-white/5 px-1.5 py-0.5">
                                         Код: {st.station_code || st.name}
@@ -2049,12 +2094,57 @@ export default function StationsPage() {
                                         IP: {st.device_ip || 'не задан'}
                                       </span>
                                       <span className="rounded bg-white/5 px-1.5 py-0.5">
-                                        MAC: {st.device_mac || 'не задан'}
-                                      </span>
-                                      <span className="rounded bg-white/5 px-1.5 py-0.5">
                                         Игр: {stationGames.filter((g) => g.station_id === st.id).length}
                                       </span>
                                     </div>
+                                    {/* Quick session start inline panel */}
+                                    {quickStartStationId === st.id && (
+                                      <div className="mt-2 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2">
+                                        <select
+                                          value={quickTariffId}
+                                          onChange={e => setQuickTariffId(e.target.value)}
+                                          className="flex-1 rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                          autoFocus
+                                        >
+                                          <option value="">— Тариф —</option>
+                                          {tariffs.filter(t => t.zone_id === st.zone_id && t.is_active).map(t => (
+                                            <option key={t.id} value={t.id}>{t.name} — {formatPrice(t.price)} / {formatMinutes(t.duration_minutes)}</option>
+                                          ))}
+                                        </select>
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleAdminStartSession(st.id)}
+                                          disabled={quickStartSaving || !quickTariffId}
+                                          className="flex items-center gap-1 rounded bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-40"
+                                        >
+                                          {quickStartSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Старт
+                                        </button>
+                                        <button type="button" onClick={() => { setQuickStartStationId(null); setQuickTariffId('') }} className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-1">
+                                    {/* Start / Stop session buttons — always visible */}
+                                    {!st.active_session_id ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => { setQuickStartStationId(st.id); setQuickTariffId('') }}
+                                        className="rounded px-2 py-1 text-[10px] font-medium bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 transition-colors"
+                                        title="Запустить сессию"
+                                      >
+                                        ▶ Старт
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleAdminEndSession(st.id)}
+                                        disabled={saving}
+                                        className="rounded px-2 py-1 text-[10px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors disabled:opacity-40"
+                                        title="Завершить сессию"
+                                      >
+                                        ■ Стоп
+                                      </button>
+                                    )}
                                   </div>
                                   <div className="hidden items-center gap-1 group-hover:flex">
                                     <button

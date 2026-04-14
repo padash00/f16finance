@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { broadcastKioskCommand } from '@/lib/server/kiosk-broadcast'
 import { resolveStation, resolveClient } from '../../_lib/auth'
 
 export async function POST(req: NextRequest) {
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
   // Получаем тариф
   const { data: tariff, error: tariffErr } = await admin
     .from('arena_tariffs')
-    .select('id, name, duration_min, price')
+    .select('id, name, duration_minutes, price')
     .eq('id', tariffId)
     .eq('point_project_id', station.point_project_id)
     .eq('is_active', true)
@@ -66,7 +67,8 @@ export async function POST(req: NextRequest) {
 
   // Создаём arena_session
   const now = new Date()
-  const endsAt = new Date(now.getTime() + tariff.duration_min * 60 * 1000)
+  const durationMin = Number(tariff.duration_minutes)
+  const endsAt = new Date(now.getTime() + durationMin * 60 * 1000)
 
   const { data: session, error: sessionErr } = await admin
     .from('arena_sessions')
@@ -92,10 +94,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: sessionErr.message }, { status: 500 })
   }
 
+  // Broadcast to kiosk so ShellScreen activates immediately
+  void broadcastKioskCommand(station.id, {
+    type: 'start_session',
+    durationSec: durationMin * 60,
+    tariffName: String(tariff.name || 'Тариф'),
+  })
+
   return NextResponse.json({
     ok: true,
     sessionId: session.id,
-    durationMin: tariff.duration_min,
+    durationMin,
     endsAt: endsAt.toISOString(),
     newBalance: balance - price,
   })
