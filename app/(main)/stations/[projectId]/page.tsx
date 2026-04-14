@@ -978,9 +978,21 @@ export default function StationsPage() {
   const [newGameTitle, setNewGameTitle] = useState('')
   const [newGameLogo, setNewGameLogo] = useState('')
   const [newGameCategory, setNewGameCategory] = useState<'game' | 'browser' | 'app'>('game')
+  const [editingGame, setEditingGame] = useState<GameCatalog | null>(null)
+  const [editGameTitle, setEditGameTitle] = useState('')
+  const [editGameLogo, setEditGameLogo] = useState('')
+  const [editGameCategory, setEditGameCategory] = useState<'game' | 'browser' | 'app'>('game')
+  const [editGameActive, setEditGameActive] = useState(true)
   const [bindGameId, setBindGameId] = useState('')
   const [bindExePath, setBindExePath] = useState('')
   const [bindArgs, setBindArgs] = useState('')
+
+  const [balanceQuery, setBalanceQuery] = useState('')
+  const [balanceResults, setBalanceResults] = useState<{ id: string; name: string; phone: string; card_number: string | null; kiosk_balance: number }[]>([])
+  const [balanceSearching, setBalanceSearching] = useState(false)
+  const [balanceAmount, setBalanceAmount] = useState('')
+  const [balanceTargetId, setBalanceTargetId] = useState<string | null>(null)
+  const [showBalancePanel, setShowBalancePanel] = useState(false)
 
   const [manageQuery, setManageQuery] = useState('')
   const [collapsedZones, setCollapsedZones] = useState<Record<string, boolean>>({})
@@ -1379,6 +1391,68 @@ export default function StationsPage() {
       setNewGameLogo('')
       setNewGameCategory('game')
       showFlash('ok', 'Игра добавлена в каталог')
+    } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
+  }
+
+  function startEditGame(g: GameCatalog) {
+    setEditingGame(g)
+    setEditGameTitle(g.title)
+    setEditGameLogo(g.logo_url || '')
+    setEditGameCategory(g.category)
+    setEditGameActive(g.is_active)
+  }
+
+  async function handleUpdateGame() {
+    if (!editingGame || !editGameTitle.trim()) return
+    setSaving(true)
+    try {
+      const out = await apiPost({
+        action: 'updateGameCatalog',
+        gameCatalogId: editingGame.id,
+        title: editGameTitle,
+        logo_url: editGameLogo,
+        category: editGameCategory,
+        is_active: editGameActive,
+      })
+      if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных')
+      const row = arenaRowToGameCatalog(out.data as Record<string, unknown>)
+      setGamesCatalog(prev => prev.map(g => g.id === row.id ? row : g))
+      setEditingGame(null)
+      showFlash('ok', 'Игра обновлена')
+    } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
+  }
+
+  async function handleDeleteGame(gameId: string) {
+    const g = gamesCatalog.find(x => x.id === gameId)
+    if (!confirm(`Удалить «${g?.title || 'игру'}» из каталога?`)) return
+    setSaving(true)
+    try {
+      await apiPost({ action: 'deleteGameCatalog', gameCatalogId: gameId })
+      setGamesCatalog(prev => prev.filter(x => x.id !== gameId))
+      showFlash('ok', 'Игра удалена')
+    } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
+  }
+
+  async function handleSearchClient() {
+    if (!balanceQuery.trim()) return
+    setBalanceSearching(true)
+    try {
+      const out = await apiPost({ action: 'searchClient', query: balanceQuery, companyId })
+      setBalanceResults(Array.isArray(out.data) ? out.data : [])
+    } catch (e: any) { showFlash('err', e.message) } finally { setBalanceSearching(false) }
+  }
+
+  async function handleTopUp() {
+    const target = balanceResults.find(r => r.id === balanceTargetId)
+    const amt = Number(balanceAmount)
+    if (!target || !amt || amt <= 0) return
+    setSaving(true)
+    try {
+      const out = await apiPost({ action: 'topUpClientBalance', phone: target.phone || target.card_number, amount: amt, companyId })
+      const newBal = (out as any).newBalance
+      setBalanceResults(prev => prev.map(r => r.id === target.id ? { ...r, kiosk_balance: newBal } : r))
+      setBalanceAmount('')
+      showFlash('ok', `Баланс пополнен. Новый баланс: ${newBal} ₸`)
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
@@ -2160,6 +2234,73 @@ export default function StationsPage() {
           </div>
         )}
 
+        {activeTab === 'manage' && (
+          <div className="rounded-xl border border-white/10 bg-card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Banknote className="h-4 w-4 text-emerald-400" /> Пополнение баланса клиента
+              </h3>
+              <button type="button" onClick={() => setShowBalancePanel(p => !p)} className="text-xs text-muted-foreground hover:text-foreground">
+                {showBalancePanel ? 'Свернуть' : 'Открыть'}
+              </button>
+            </div>
+            {showBalancePanel && (
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    value={balanceQuery}
+                    onChange={(e) => setBalanceQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && void handleSearchClient()}
+                    placeholder="Телефон, карта или имя клиента"
+                    className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                  />
+                  <button type="button" onClick={() => void handleSearchClient()} disabled={balanceSearching || !balanceQuery.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-40 flex items-center gap-1.5">
+                    {balanceSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Найти
+                  </button>
+                </div>
+                {balanceResults.length > 0 && (
+                  <div className="space-y-1.5">
+                    {balanceResults.map((r) => (
+                      <div
+                        key={r.id}
+                        onClick={() => setBalanceTargetId(r.id)}
+                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${balanceTargetId === r.id ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-white/10 bg-white/5 hover:bg-white/8'}`}
+                      >
+                        <div>
+                          <p className="font-medium">{r.name || '—'}</p>
+                          <p className="text-xs text-muted-foreground">{r.phone}{r.card_number ? ` · ${r.card_number}` : ''}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-emerald-400">{r.kiosk_balance ?? 0} ₸</p>
+                          <p className="text-xs text-muted-foreground">баланс</p>
+                        </div>
+                      </div>
+                    ))}
+                    {balanceTargetId && (
+                      <div className="flex gap-2 mt-2">
+                        <input
+                          type="number"
+                          value={balanceAmount}
+                          onChange={(e) => setBalanceAmount(e.target.value)}
+                          placeholder="Сумма пополнения (₸)"
+                          min={1}
+                          className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm"
+                        />
+                        <button type="button" onClick={() => void handleTopUp()} disabled={saving || !balanceAmount || Number(balanceAmount) <= 0} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm text-white font-medium disabled:opacity-40">
+                          Пополнить
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {balanceResults.length === 0 && balanceQuery && !balanceSearching && (
+                  <p className="text-sm text-muted-foreground">Клиент не найден</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'map' && (
           <div
             ref={mapContainerRef}
@@ -2561,44 +2702,73 @@ export default function StationsPage() {
               <div className="space-y-3">
                 <div className="rounded-lg border border-white/10 p-3 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">Каталог игр проекта</p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <input
-                      value={newGameTitle}
-                      onChange={(e) => setNewGameTitle(e.target.value)}
-                      placeholder="Название игры"
-                      className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs"
-                    />
-                    <input
-                      value={newGameLogo}
-                      onChange={(e) => setNewGameLogo(e.target.value)}
-                      placeholder="URL логотипа"
-                      className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs sm:col-span-2"
-                    />
-                    <select
-                      value={newGameCategory}
-                      onChange={(e) => setNewGameCategory(e.target.value as 'game' | 'browser' | 'app')}
-                      className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs"
-                    >
-                      <option value="game">Игра</option>
-                      <option value="browser">Браузер</option>
-                      <option value="app">Программа</option>
-                    </select>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleCreateGameCatalog()}
-                    disabled={saving || !newGameTitle.trim()}
-                    className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
-                  >
-                    Добавить игру в каталог
-                  </button>
-                  <div className="max-h-28 overflow-auto space-y-1">
+
+                  {/* Форма добавления */}
+                  {!editingGame && (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        {newGameLogo && (
+                          <img src={newGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        )}
+                        <div className="flex-1 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                          <input value={newGameTitle} onChange={(e) => setNewGameTitle(e.target.value)} placeholder="Название" className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs" />
+                          <input value={newGameLogo} onChange={(e) => setNewGameLogo(e.target.value)} placeholder="URL обложки" className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs" />
+                          <select value={newGameCategory} onChange={(e) => setNewGameCategory(e.target.value as any)} className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs">
+                            <option value="game">Игра</option>
+                            <option value="browser">Браузер</option>
+                            <option value="app">Программа</option>
+                          </select>
+                          <button type="button" onClick={() => void handleCreateGameCatalog()} disabled={saving || !newGameTitle.trim()} className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50">
+                            + Добавить
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Форма редактирования */}
+                  {editingGame && (
+                    <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-2 space-y-1.5">
+                      <p className="text-xs text-blue-400 font-medium">Редактировать игру</p>
+                      <div className="flex gap-2">
+                        {editGameLogo && (
+                          <img src={editGameLogo} alt="" className="h-10 w-10 rounded object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        )}
+                        <div className="flex-1 grid grid-cols-2 gap-1.5">
+                          <input value={editGameTitle} onChange={(e) => setEditGameTitle(e.target.value)} placeholder="Название" className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs" />
+                          <input value={editGameLogo} onChange={(e) => setEditGameLogo(e.target.value)} placeholder="URL обложки" className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs" />
+                          <select value={editGameCategory} onChange={(e) => setEditGameCategory(e.target.value as any)} className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs">
+                            <option value="game">Игра</option>
+                            <option value="browser">Браузер</option>
+                            <option value="app">Программа</option>
+                          </select>
+                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                            <input type="checkbox" checked={editGameActive} onChange={(e) => setEditGameActive(e.target.checked)} className="h-3 w-3" />
+                            Активна
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <button type="button" onClick={() => void handleUpdateGame()} disabled={saving || !editGameTitle.trim()} className="rounded bg-blue-600 px-2 py-1 text-xs text-white disabled:opacity-50">Сохранить</button>
+                        <button type="button" onClick={() => setEditingGame(null)} className="rounded bg-white/10 px-2 py-1 text-xs">Отмена</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Список игр */}
+                  <div className="max-h-40 overflow-auto space-y-1">
                     {gamesCatalog.map((g) => (
-                      <div key={g.id} className="flex items-center justify-between rounded bg-white/5 px-2 py-1 text-xs">
-                        <span className="truncate">{g.title}</span>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-muted-foreground/60">{g.category === 'game' ? 'Игра' : g.category === 'browser' ? 'Браузер' : 'Прог.'}</span>
-                          <span className="text-muted-foreground">{g.is_active ? 'активна' : 'выкл.'}</span>
+                      <div key={g.id} className="flex items-center gap-2 rounded bg-white/5 px-2 py-1 text-xs group">
+                        {g.logo_url
+                          ? <img src={g.logo_url} alt="" className="h-6 w-6 rounded object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                          : <div className="h-6 w-6 rounded bg-white/10 shrink-0" />
+                        }
+                        <span className="flex-1 truncate">{g.title}</span>
+                        <span className="text-muted-foreground/50 shrink-0">{g.category === 'game' ? 'Игра' : g.category === 'browser' ? 'Браузер' : 'Прог.'}</span>
+                        {!g.is_active && <span className="text-red-400/70 shrink-0">выкл</span>}
+                        <div className="hidden group-hover:flex gap-1 shrink-0">
+                          <button type="button" onClick={() => startEditGame(g)} className="rounded p-0.5 hover:bg-white/15 text-muted-foreground hover:text-white"><Pencil className="h-3 w-3" /></button>
+                          <button type="button" onClick={() => void handleDeleteGame(g.id)} className="rounded p-0.5 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
                         </div>
                       </div>
                     ))}

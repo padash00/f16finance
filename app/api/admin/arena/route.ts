@@ -606,6 +606,46 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { sessions: sessions || [] } })
     }
 
+    // ─── CLIENT BALANCE TOP-UP ───────────────────────────────────────
+    if (body.action === 'topUpClientBalance') {
+      const { phone, amount } = body
+      if (!phone?.trim()) return json({ error: 'phone required' }, 400)
+      const amt = Number(amount || 0)
+      if (!Number.isFinite(amt) || amt <= 0) return json({ error: 'amount must be positive' }, 400)
+
+      const q = phone.trim()
+      const { data: customer, error: findErr } = await supabase
+        .from('customers')
+        .select('id, name, phone, card_number, kiosk_balance')
+        .or(`phone.eq.${q},card_number.eq.${q}`)
+        .maybeSingle()
+
+      if (findErr) throw findErr
+      if (!customer) return json({ error: 'client-not-found' }, 404)
+
+      const newBalance = Number(customer.kiosk_balance || 0) + amt
+      const { error: updErr } = await supabase
+        .from('customers')
+        .update({ kiosk_balance: newBalance })
+        .eq('id', customer.id)
+      if (updErr) throw updErr
+
+      return json({ ok: true, customerId: customer.id, name: customer.name, newBalance })
+    }
+
+    // ─── CLIENT SEARCH ───────────────────────────────────────────────
+    if (body.action === 'searchClient') {
+      const { query: q } = body
+      if (!q?.trim()) return json({ error: 'query required' }, 400)
+      const { data, error } = await supabase
+        .from('customers')
+        .select('id, name, phone, card_number, kiosk_balance')
+        .or(`phone.ilike.%${q.trim()}%,card_number.ilike.%${q.trim()}%,name.ilike.%${q.trim()}%`)
+        .limit(10)
+      if (error) throw error
+      return json({ ok: true, data: data || [] })
+    }
+
     return json({ error: 'unknown action' }, 400)
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/arena:post', message: error?.message || 'Arena POST error' })
