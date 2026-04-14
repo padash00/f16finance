@@ -606,6 +606,44 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { sessions: sessions || [] } })
     }
 
+    // ─── BULK UPSERT ZONE GAMES ──────────────────────────────────────
+    if (body.action === 'bulkUpsertZoneGames') {
+      const { zoneId, games } = body
+      if (!zoneId || !Array.isArray(games)) return json({ error: 'zoneId and games[] required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_zones', zoneId, companyScope.allowedCompanyIds)
+
+      // Получаем все станции зоны
+      const { data: stationsInZone, error: stErr } = await supabase
+        .from('arena_stations')
+        .select('id, point_project_id, company_id')
+        .eq('zone_id', zoneId)
+        .eq('is_active', true)
+      if (stErr) throw stErr
+
+      if (!stationsInZone?.length) return json({ ok: true, count: 0 })
+
+      // Для каждой станции upsert каждой игры
+      const rows = stationsInZone.flatMap((st: any) =>
+        games.map((g: any) => ({
+          point_project_id: st.point_project_id,
+          company_id: st.company_id || bodyCompanyId,
+          station_id: st.id,
+          game_id: String(g.gameId),
+          exe_path: String(g.exePath || '').trim(),
+          launch_args: String(g.launchArgs || '').trim() || null,
+          sort_order: Number(g.sortOrder || 0),
+          is_active: true,
+        })),
+      )
+
+      const { error: upsertErr } = await supabase
+        .from('arena_station_games')
+        .upsert(rows, { onConflict: 'station_id,game_id' })
+      if (upsertErr) throw upsertErr
+
+      return json({ ok: true, count: rows.length })
+    }
+
     // ─── CLIENT BALANCE TOP-UP ───────────────────────────────────────
     if (body.action === 'topUpClientBalance') {
       const { phone, amount } = body

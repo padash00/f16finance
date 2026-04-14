@@ -5,7 +5,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
   BarChart3, Settings, Loader2, CheckCircle2, ChevronDown, ChevronRight,
-  AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download, Paintbrush,
+  AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download, Paintbrush, Gamepad2, Layers,
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -923,10 +923,10 @@ export default function StationsPage() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics'>(() => {
+  const [activeTab, setActiveTab] = useState<'manage' | 'map' | 'analytics' | 'catalog'>(() => {
     if (typeof window === 'undefined') return 'manage'
     const t = new URLSearchParams(window.location.search).get('tab')
-    return t === 'map' || t === 'analytics' ? t : 'manage'
+    return t === 'map' || t === 'analytics' || t === 'catalog' ? t : 'manage'
   })
 
   const cellSize = 70
@@ -993,6 +993,11 @@ export default function StationsPage() {
   const [balanceAmount, setBalanceAmount] = useState('')
   const [balanceTargetId, setBalanceTargetId] = useState<string | null>(null)
   const [showBalancePanel, setShowBalancePanel] = useState(false)
+
+  // Bulk zone assignment state (catalog tab)
+  const [bulkZoneId, setBulkZoneId] = useState('')
+  const [bulkExePaths, setBulkExePaths] = useState<Record<string, string>>({}) // gameId → exePath
+  const [bulkSaving, setBulkSaving] = useState(false)
 
   const [manageQuery, setManageQuery] = useState('')
   const [collapsedZones, setCollapsedZones] = useState<Record<string, boolean>>({})
@@ -1064,7 +1069,7 @@ export default function StationsPage() {
 
   useEffect(() => {
     const t = searchParams.get('tab')
-    if (t === 'map' || t === 'analytics' || t === 'manage') setActiveTab(t)
+    if (t === 'map' || t === 'analytics' || t === 'manage' || t === 'catalog') setActiveTab(t)
     const af = searchParams.get('afrom')
     const at = searchParams.get('ato')
     if (af && isISODate(af)) setAnalyticsFrom(af)
@@ -1456,6 +1461,21 @@ export default function StationsPage() {
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
+  async function handleBulkZoneAssign() {
+    if (!bulkZoneId) { showFlash('err', 'Выберите зону'); return }
+    const games = gamesCatalog.filter(g => g.is_active && bulkExePaths[g.id]?.trim())
+    if (games.length === 0) { showFlash('err', 'Укажите путь EXE хотя бы для одной игры'); return }
+    setBulkSaving(true)
+    try {
+      await apiPost({
+        action: 'bulkUpsertZoneGames',
+        zoneId: bulkZoneId,
+        games: games.map(g => ({ gameId: g.id, exePath: bulkExePaths[g.id].trim(), launchArgs: '' })),
+      })
+      showFlash('ok', `Игры назначены всем станциям зоны`)
+    } catch (e: any) { showFlash('err', e.message) } finally { setBulkSaving(false) }
+  }
+
   async function handleBindGameToStation(stationId: string) {
     if (!bindGameId || !bindExePath.trim()) {
       showFlash('err', 'Выберите игру и укажите путь EXE')
@@ -1665,7 +1685,7 @@ export default function StationsPage() {
   )
 
   return (
-    <div className={activeTab === 'map' ? 'app-page app-page-wide space-y-4' : 'app-page max-w-5xl space-y-6'}>
+    <div className={activeTab === 'map' ? 'app-page app-page-wide space-y-4' : activeTab === 'catalog' ? 'app-page max-w-4xl space-y-4' : 'app-page max-w-5xl space-y-6'}>
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <Link href="/point-devices" className="flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 text-muted-foreground hover:text-foreground transition">
@@ -1755,6 +1775,7 @@ export default function StationsPage() {
       <div className="flex gap-0 border-b border-white/10">
         {[
           { id: 'manage', label: 'Управление', icon: Settings },
+          { id: 'catalog', label: 'Каталог игр', icon: Gamepad2 },
           { id: 'map', label: 'Карта', icon: Map },
           { id: 'analytics', label: 'Аналитика', icon: BarChart3 },
         ].map(({ id, label, icon: Icon }) => (
@@ -2298,6 +2319,155 @@ export default function StationsPage() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'catalog' && (
+          <div className="space-y-6">
+            {/* ─── Global Catalog ─── */}
+            <div className="rounded-xl border border-white/10 bg-card p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold flex items-center gap-2"><Gamepad2 className="h-4 w-4 text-primary" /> Каталог игр</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Добавляйте, редактируйте и удаляйте игры. Назначайте их по зонам сразу всем станциям.</p>
+                </div>
+              </div>
+
+              {/* Add new game form */}
+              {!editingGame && (
+                <div className="rounded-lg border border-white/10 bg-white/3 p-4 space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Новая игра</p>
+                  <div className="flex gap-3 items-start">
+                    {newGameLogo && (
+                      <img src={newGameLogo} alt="" className="h-14 w-14 rounded-lg object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                    )}
+                    <div className="flex-1 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      <input value={newGameTitle} onChange={(e) => setNewGameTitle(e.target.value)} placeholder="Название игры" className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
+                      <input value={newGameLogo} onChange={(e) => setNewGameLogo(e.target.value)} placeholder="URL обложки (необязательно)" className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
+                      <div className="flex gap-2">
+                        <select value={newGameCategory} onChange={(e) => setNewGameCategory(e.target.value as any)} className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm">
+                          <option value="game">Игра</option>
+                          <option value="browser">Браузер</option>
+                          <option value="app">Программа</option>
+                        </select>
+                        <button type="button" onClick={() => void handleCreateGameCatalog()} disabled={saving || !newGameTitle.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50 whitespace-nowrap">
+                          + Добавить
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit game form */}
+              {editingGame && (
+                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4 space-y-3">
+                  <p className="text-xs text-blue-400 font-semibold uppercase tracking-wide">Редактировать игру</p>
+                  <div className="flex gap-3 items-start">
+                    {editGameLogo && (
+                      <img src={editGameLogo} alt="" className="h-14 w-14 rounded-lg object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                    )}
+                    <div className="flex-1 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <input value={editGameTitle} onChange={(e) => setEditGameTitle(e.target.value)} placeholder="Название" className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
+                      <input value={editGameLogo} onChange={(e) => setEditGameLogo(e.target.value)} placeholder="URL обложки" className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm" />
+                      <select value={editGameCategory} onChange={(e) => setEditGameCategory(e.target.value as any)} className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm">
+                        <option value="game">Игра</option>
+                        <option value="browser">Браузер</option>
+                        <option value="app">Программа</option>
+                      </select>
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer px-2">
+                        <input type="checkbox" checked={editGameActive} onChange={(e) => setEditGameActive(e.target.checked)} className="h-4 w-4 rounded" />
+                        Активна
+                      </label>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => void handleUpdateGame()} disabled={saving || !editGameTitle.trim()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 flex items-center gap-1.5">
+                      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Сохранить
+                    </button>
+                    <button type="button" onClick={() => setEditingGame(null)} className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Отмена</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Games table */}
+              <div className="space-y-1">
+                {gamesCatalog.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-white/10 py-10 text-center text-muted-foreground">
+                    <Gamepad2 className="mx-auto h-8 w-8 mb-2 opacity-30" />
+                    <p className="text-sm">Каталог пуст. Добавьте первую игру выше.</p>
+                  </div>
+                )}
+                {gamesCatalog.map((g) => (
+                  <div key={g.id} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 group transition-colors ${g.is_active ? 'border-white/8 bg-white/3 hover:bg-white/5' : 'border-white/5 bg-white/2 opacity-50'}`}>
+                    {g.logo_url
+                      ? <img src={g.logo_url} alt="" className="h-9 w-9 rounded-md object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      : <div className="h-9 w-9 rounded-md bg-white/10 shrink-0 flex items-center justify-center"><Gamepad2 className="h-4 w-4 text-white/20" /></div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{g.title}</p>
+                      <p className="text-xs text-muted-foreground">{g.category === 'game' ? 'Игра' : g.category === 'browser' ? 'Браузер' : 'Программа'}{!g.is_active ? ' · выключена' : ''}</p>
+                    </div>
+                    <div className="hidden group-hover:flex items-center gap-1 shrink-0">
+                      <button type="button" onClick={() => startEditGame(g)} className="rounded-lg p-1.5 hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
+                      <button type="button" onClick={() => void handleDeleteGame(g.id)} className="rounded-lg p-1.5 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ─── Zone Bulk Assignment ─── */}
+            <div className="rounded-xl border border-white/10 bg-card p-5 space-y-4">
+              <div>
+                <h2 className="text-base font-semibold flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Назначение по зонам</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Выберите зону и укажите путь к EXE для каждой игры — все станции зоны получат эти настройки.</p>
+              </div>
+
+              <select
+                value={bulkZoneId}
+                onChange={(e) => setBulkZoneId(e.target.value)}
+                className="rounded-lg border border-white/10 bg-background px-3 py-2 text-sm w-full sm:w-64"
+              >
+                <option value="">— Выберите зону —</option>
+                {zones.filter(z => z.is_active).map(z => (
+                  <option key={z.id} value={z.id}>{z.name} ({stations.filter(s => s.zone_id === z.id && s.is_active).length} ст.)</option>
+                ))}
+              </select>
+
+              {bulkZoneId && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Укажите путь к EXE для игр, которые хотите назначить (оставьте пустым — пропустить):</p>
+                  {gamesCatalog.filter(g => g.is_active).map(g => (
+                    <div key={g.id} className="flex items-center gap-3">
+                      {g.logo_url
+                        ? <img src={g.logo_url} alt="" className="h-7 w-7 rounded object-cover bg-white/10 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                        : <div className="h-7 w-7 rounded bg-white/10 shrink-0" />
+                      }
+                      <span className="w-32 text-sm shrink-0 truncate">{g.title}</span>
+                      <input
+                        value={bulkExePaths[g.id] || ''}
+                        onChange={(e) => setBulkExePaths(prev => ({ ...prev, [g.id]: e.target.value }))}
+                        placeholder={`D:\\Games\\${g.title}\\game.exe`}
+                        className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-1.5 text-xs font-mono"
+                      />
+                    </div>
+                  ))}
+                  {gamesCatalog.filter(g => g.is_active).length === 0 && (
+                    <p className="text-sm text-muted-foreground">Нет активных игр в каталоге.</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleBulkZoneAssign()}
+                    disabled={bulkSaving || !bulkZoneId}
+                    className="mt-2 flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-40"
+                  >
+                    {bulkSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Применить ко всем станциям зоны
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
