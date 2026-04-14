@@ -1,0 +1,64 @@
+{
+  "name": "orda-kiosk",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "build": "vite build",
+    "dist": "vite build && electron-builder --win",
+    "start": "electron .",
+    "setup": "electron . --setup"
+  },
+  "build": {
+    "appId": "kz.ordaops.kiosk",
+    "productName": "Orda Kiosk",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "main/**/*",
+      "preload.js",
+      "scripts/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": false,
+      "installationDirectory": "C:\\Program Files\\Orda Kiosk",
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": false,
+      "runAfterFinish": false,
+      "include": "scripts/installer.nsh"
+    }
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.103.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.454.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.4",
+    "ws": "^8.18.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.9",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "concurrently": "^9.1.0",
+    "electron": "41.2.0",
+    "electron-builder": "^25.1.8",
+    "tailwindcss": "^4.1.9",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "wait-on": "^8.0.1"
+  }
+}
