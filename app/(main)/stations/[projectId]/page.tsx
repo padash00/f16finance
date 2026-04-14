@@ -30,6 +30,7 @@ type Zone = {
 }
 type Station = {
   id: string; zone_id: string | null; name: string; order_index: number; is_active: boolean
+  station_code: string | null
   device_ip: string | null; device_mac: string | null
   last_heartbeat_at: string | null
   kiosk_status: string | null
@@ -138,6 +139,7 @@ function arenaRowToStation(row: Record<string, unknown>): Station {
     id: String(row.id),
     zone_id: row.zone_id != null ? String(row.zone_id) : null,
     name: String(row.name ?? ''),
+    station_code: row.station_code != null && String(row.station_code).trim() ? String(row.station_code).trim() : null,
     order_index: Number(row.order_index ?? 0),
     is_active: Boolean(row.is_active),
     device_ip: row.device_ip != null && String(row.device_ip).trim() ? String(row.device_ip).trim() : null,
@@ -956,6 +958,7 @@ export default function StationsPage() {
   const [newStationName, setNewStationName] = useState('')
   const [editingStationId, setEditingStationId] = useState<string | null>(null)
   const [stationEditName, setStationEditName] = useState('')
+  const [stationEditCode, setStationEditCode] = useState('')
   const [stationEditIp, setStationEditIp] = useState('')
   const [stationEditMac, setStationEditMac] = useState('')
 
@@ -1253,17 +1256,19 @@ export default function StationsPage() {
   function startEditStation(st: Station) {
     setEditingStationId(st.id)
     setStationEditName(st.name || '')
+    setStationEditCode(st.station_code || st.name || '')
     setStationEditIp(st.device_ip || '')
     setStationEditMac(st.device_mac || '')
   }
 
-  async function handleUpdateStation(stationId: string, payload: { name: string; device_ip: string; device_mac: string }) {
+  async function handleUpdateStation(stationId: string, payload: { name: string; station_code: string; device_ip: string; device_mac: string }) {
     setSaving(true)
     try {
       const out = await apiPost({
         action: 'updateStation',
         stationId,
         name: payload.name,
+        station_code: payload.station_code.trim() || null,
         device_ip: payload.device_ip.trim() || null,
         device_mac: payload.device_mac.trim() || null,
       })
@@ -1272,9 +1277,23 @@ export default function StationsPage() {
       setStations(prev => prev.map(x => x.id === stationId ? s : x))
       setEditingStationId(null)
       setStationEditName('')
+      setStationEditCode('')
       setStationEditIp('')
       setStationEditMac('')
       showFlash('ok', 'Станция обновлена')
+    } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
+  }
+
+  async function handleRotateProvisioningKey(stationId: string) {
+    setSaving(true)
+    try {
+      const out = await apiPost({ action: 'rotateStationProvisioningKey', stationId })
+      const key = typeof (out as any)?.provisioningKey === 'string' ? (out as any).provisioningKey : ''
+      if (key) {
+        await navigator.clipboard?.writeText(key).catch(() => null)
+        alert(`Provisioning key для станции:\n${key}\n\nСкопируйте и используйте в установщике.`)
+      }
+      showFlash('ok', 'Provisioning key обновлён')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
@@ -1835,6 +1854,12 @@ export default function StationsPage() {
                                     className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs"
                                     placeholder="Название станции"
                                   />
+                                  <input
+                                    value={stationEditCode}
+                                    onChange={e => setStationEditCode(e.target.value)}
+                                    className="w-full rounded border border-white/20 bg-background px-2 py-1 text-xs"
+                                    placeholder="Код станции для установщика (например VIP-111)"
+                                  />
                                   <div className="grid grid-cols-2 gap-1">
                                     <input
                                       value={stationEditIp}
@@ -1852,7 +1877,7 @@ export default function StationsPage() {
                                   <div className="flex items-center gap-1">
                                     <button
                                       type="button"
-                                      onClick={() => void handleUpdateStation(st.id, { name: stationEditName, device_ip: stationEditIp, device_mac: stationEditMac })}
+                                      onClick={() => void handleUpdateStation(st.id, { name: stationEditName, station_code: stationEditCode, device_ip: stationEditIp, device_mac: stationEditMac })}
                                       disabled={saving || !stationEditName.trim()}
                                       className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
                                     >
@@ -1872,6 +1897,9 @@ export default function StationsPage() {
                                   <div className="min-w-0">
                                     <span className="text-sm">{st.name}</span>
                                     <div className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
+                                      <span className="rounded bg-white/5 px-1.5 py-0.5">
+                                        Код: {st.station_code || st.name}
+                                      </span>
                                       <span className="rounded bg-white/5 px-1.5 py-0.5">
                                         IP: {st.device_ip || 'не задан'}
                                       </span>
@@ -1896,6 +1924,14 @@ export default function StationsPage() {
                                       title="Игры станции"
                                     >
                                       <Monitor className="h-3 w-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleRotateProvisioningKey(st.id)}
+                                      className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                                      title="Сгенерировать provisioning key"
+                                    >
+                                      <RefreshCw className="h-3 w-3" />
                                     </button>
                                     <button type="button" onClick={() => startEditStation(st)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
                                     <button type="button" onClick={() => handleDeleteStation(st.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>

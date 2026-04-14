@@ -2,7 +2,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { app, BrowserWindow, ipcMain, globalShortcut, Menu } = require('electron')
 
-const { loadConfig, saveConfig } = require('./config-store')
+const { loadConfig, saveConfig, ensureDeviceToken } = require('./config-store')
 const { createSocketClient } = require('./websocket')
 const { launchGame, stopGame, getGameState } = require('./launcher')
 const { shutdownPc, rebootPc } = require('./system')
@@ -20,13 +20,18 @@ function relaunchWithoutSetupFlag() {
 
 function runtimeConfig() {
   const fileCfg = loadConfig() || {}
+  const serverBaseUrl = process.env.KIOSK_SERVER_BASE_URL || fileCfg.serverBaseUrl || 'http://127.0.0.1:3000'
+  const heartbeatPath = fileCfg.heartbeatPath || '/api/kiosk/heartbeat'
   return {
     stationCode: process.env.STATION_CODE || fileCfg.stationCode || 'VIP-111',
     clubName: process.env.CLUB_NAME || fileCfg.clubName || 'ORDA CLUB',
     defaultGamePath: process.env.DEFAULT_GAME_PATH || fileCfg.defaultGamePath || 'D:\\Games\\CS2\\cs2.exe',
-    wsUrl: process.env.KIOSK_WS_URL || fileCfg.wsUrl || 'ws://127.0.0.1:8787/ws/client',
-    heartbeatUrl: process.env.KIOSK_HEARTBEAT_URL || fileCfg.heartbeatUrl || 'http://127.0.0.1:3000/api/kiosk/heartbeat',
-    heartbeatSecret: process.env.KIOSK_HEARTBEAT_SECRET || fileCfg.heartbeatSecret || '',
+    wsUrl: process.env.KIOSK_WS_URL || fileCfg.wsUrl || '',
+    serverBaseUrl: serverBaseUrl.replace(/\/+$/, ''),
+    heartbeatUrl: process.env.KIOSK_HEARTBEAT_URL || fileCfg.heartbeatUrl || `${serverBaseUrl.replace(/\/+$/, '')}${heartbeatPath}`,
+    clientSecret: process.env.KIOSK_CLIENT_SECRET || fileCfg.clientSecret || '',
+    deviceToken: fileCfg.deviceToken || '',
+    heartbeatPath,
   }
 }
 
@@ -110,14 +115,15 @@ function sendStatus(status) {
 
 async function postHeartbeat(status) {
   const cfg = runtimeConfig()
-  if (!cfg.heartbeatSecret) return
+  if (!cfg.clientSecret || !cfg.deviceToken) return
   const net = getDeviceNetworkIdentity()
   try {
     const res = await fetch(cfg.heartbeatUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-kiosk-secret': cfg.heartbeatSecret },
+      headers: { 'Content-Type': 'application/json', 'x-kiosk-secret': cfg.clientSecret },
       body: JSON.stringify({
         stationCode: cfg.stationCode,
+        deviceToken: cfg.deviceToken,
         device_ip: net.ip,
         device_mac: net.mac,
         status,
@@ -315,10 +321,15 @@ function setupShortcuts() {
 function setupIpc() {
   ipcMain.handle('setup:load', async () => {
     const cfg = loadConfig() || {}
+    const baseFromCfg = String(cfg.serverBaseUrl || '').trim()
+    const hbFromCfg = String(cfg.heartbeatUrl || '').trim()
+    const guessedBase = hbFromCfg.endsWith('/api/kiosk/heartbeat')
+      ? hbFromCfg.slice(0, hbFromCfg.length - '/api/kiosk/heartbeat'.length)
+      : baseFromCfg
     return {
       stationCode: cfg.stationCode || '',
-      heartbeatUrl: cfg.heartbeatUrl || '',
-      heartbeatSecret: cfg.heartbeatSecret || '',
+      serverBaseUrl: guessedBase || '',
+      provisioningKey: '',
       wsUrl: cfg.wsUrl || '',
       clubName: cfg.clubName || '',
       defaultGamePath: cfg.defaultGamePath || '',
@@ -327,16 +338,38 @@ function setupIpc() {
 
   ipcMain.handle('setup:save', async (_event, payload) => {
     const stationCode = String(payload?.stationCode || '').trim()
-    const heartbeatUrl = String(payload?.heartbeatUrl || '').trim()
-    const heartbeatSecret = String(payload?.heartbeatSecret || '').trim()
+    const serverBaseUrl = String(payload?.serverBaseUrl || '').trim().replace(/\/+$/, '')
+    const provisioningKey = String(payload?.provisioningKey || '').trim()
     if (!stationCode) return { ok: false, error: 'stationCode-required' }
-    if (!heartbeatUrl) return { ok: false, error: 'heartbeatUrl-required' }
-    if (!heartbeatSecret) return { ok: false, error: 'heartbeatSecret-required' }
+    if (!serverBaseUrl) return { ok: false, error: 'serverBaseUrl-required' }
+    if (!provisioningKey) return { ok: false, error: 'provisioningKey-required' }
+
+    const deviceToken = ensureDeviceToken()
+    const net = getDeviceNetworkIdentity()
+    const registerUrl = `${serverBaseUrl}/api/kiosk/register`
+    const registerRes = await fetch(registerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stationCode,
+        provisioningKey,
+        deviceToken,
+        device_ip: net.ip,
+        device_mac: net.mac,
+      }),
+    })
+    const registerPayload = await registerRes.json().catch(() => null)
+    if (!registerRes.ok || !registerPayload?.ok) {
+      return { ok: false, error: String(registerPayload?.error || `register-failed-${registerRes.status}`) }
+    }
 
     saveConfig({
       stationCode,
-      heartbeatUrl,
-      heartbeatSecret,
+      serverBaseUrl,
+      heartbeatUrl: `${serverBaseUrl}${String(registerPayload.heartbeatPath || '/api/kiosk/heartbeat')}`,
+      heartbeatPath: String(registerPayload.heartbeatPath || '/api/kiosk/heartbeat'),
+      clientSecret: String(registerPayload.clientSecret || ''),
+      deviceToken,
       wsUrl: String(payload?.wsUrl || '').trim(),
       clubName: String(payload?.clubName || '').trim(),
       defaultGamePath: String(payload?.defaultGamePath || '').trim(),
@@ -422,7 +455,7 @@ app.whenReady().then(() => {
   setupIpc()
 
   const cfg = loadConfig()
-  const missingCfg = !cfg || !cfg.stationCode || !cfg.heartbeatUrl || !cfg.heartbeatSecret
+  const missingCfg = !cfg || !cfg.stationCode || !cfg.heartbeatUrl || !cfg.clientSecret || !cfg.deviceToken
 
   if (argvHasSetup || missingCfg) {
     createSetupWindow()

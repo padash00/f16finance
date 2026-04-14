@@ -1,5 +1,6 @@
 const fs = require('node:fs')
 const path = require('node:path')
+const crypto = require('node:crypto')
 const { app } = require('electron')
 
 function configPath() {
@@ -21,4 +22,12 @@ function saveConfig(cfg) {
   fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2), 'utf8')
 }
 
-module.exports = { loadConfig, saveConfig, configPath }
+function ensureDeviceToken() {
+  const cfg = loadConfig() || {}
+  if (cfg.deviceToken && String(cfg.deviceToken).trim()) return String(cfg.deviceToken)
+  const token = crypto.randomUUID()
+  saveConfig({ ...cfg, deviceToken: token })
+  return token
+}
+
+module.exports = { loadConfig, saveConfig, configPath, ensureDeviceToken }

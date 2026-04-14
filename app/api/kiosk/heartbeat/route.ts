@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createHash } from 'node:crypto'
 import { isIP } from 'node:net'
 
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -30,15 +31,14 @@ function normalizeStatus(value: unknown): string {
   return allowed.has(s) ? s : 'online'
 }
 
+function sha256(value: string) {
+  return createHash('sha256').update(value).digest('hex')
+}
+
 export async function POST(request: Request) {
   try {
     if (!hasAdminSupabaseCredentials()) {
       return json({ error: 'kiosk-api-requires-admin-credentials' }, 503)
-    }
-
-    const secretEnv = String(process.env.KIOSK_HEARTBEAT_SECRET || '').trim()
-    if (!secretEnv) {
-      return json({ error: 'kiosk-heartbeat-secret-not-configured' }, 503)
     }
 
     const headerSecret = request.headers.get('x-kiosk-secret')?.trim() || ''
@@ -47,6 +47,7 @@ export async function POST(request: Request) {
           secret?: string
           stationId?: string
           stationCode?: string
+          deviceToken?: string
           device_ip?: string | null
           device_mac?: string | null
           status?: string
@@ -54,12 +55,10 @@ export async function POST(request: Request) {
       | null
 
     const secret = String(body?.secret || headerSecret || '').trim()
-    if (!secret || secret !== secretEnv) {
-      return json({ error: 'unauthorized' }, 401)
-    }
 
     const stationId = String(body?.stationId || '').trim()
     const stationCode = String(body?.stationCode || '').trim()
+    const deviceToken = String(body?.deviceToken || '').trim()
     if (!stationId && !stationCode) {
       return json({ error: 'stationId-or-stationCode-required' }, 400)
     }
@@ -70,17 +69,35 @@ export async function POST(request: Request) {
 
     const admin = createAdminSupabaseClient()
 
-    let q = admin.from('arena_stations').select('id, name, device_ip, device_mac').limit(1)
+    let q = admin
+      .from('arena_stations')
+      .select('id, name, station_code, device_ip, device_mac, device_token_hash, client_secret_hash')
+      .limit(1)
     if (stationId) {
       q = q.eq('id', stationId)
     } else {
-      q = q.eq('name', stationCode)
+      q = q.or(`station_code.eq.${stationCode},name.eq.${stationCode}`)
     }
 
     const { data: row, error: findError } = await q.maybeSingle()
     if (findError) throw findError
     if (!row?.id) {
       return json({ error: 'station-not-found' }, 404)
+    }
+
+    const globalSecret = String(process.env.KIOSK_HEARTBEAT_SECRET || '').trim()
+    const perDeviceHash = String(row.client_secret_hash || '')
+    const expectedDeviceTokenHash = String(row.device_token_hash || '')
+    const providedSecretHash = secret ? sha256(secret) : ''
+    const providedDeviceTokenHash = deviceToken ? sha256(deviceToken) : ''
+
+    const authByPerDeviceSecret = Boolean(perDeviceHash && providedSecretHash && perDeviceHash === providedSecretHash)
+    const authByGlobalSecret = Boolean(globalSecret && secret && globalSecret === secret)
+    if (!authByPerDeviceSecret && !authByGlobalSecret) {
+      return json({ error: 'unauthorized' }, 401)
+    }
+    if (expectedDeviceTokenHash && providedDeviceTokenHash && expectedDeviceTokenHash !== providedDeviceTokenHash) {
+      return json({ error: 'device-token-mismatch', stationId: row.id }, 409)
     }
 
     const boundIp = row.device_ip != null ? String(row.device_ip).trim() : ''

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { isIP } from 'node:net'
+import { createHash, randomBytes } from 'node:crypto'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -26,6 +27,14 @@ function normalizeDeviceMac(value: unknown): string | null {
   const ok = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(canonical)
   if (!ok) throw new Error('invalid-device-mac')
   return canonical
+}
+
+function sha256(value: string) {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function randomProvisioningKey() {
+  return randomBytes(12).toString('hex').toUpperCase()
 }
 
 function filterProjectsByCompanyScope(projects: any[], allowedCompanyIds: string[] | null) {
@@ -305,7 +314,7 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'updateStation') {
-      const { stationId, name, zone_id, order_index, is_active, device_ip, device_mac } = body
+      const { stationId, name, zone_id, order_index, is_active, device_ip, device_mac, station_code } = body
       if (!stationId) return json({ error: 'stationId required' }, 400)
       await ensureArenaEntityAccess(supabase, 'arena_stations', stationId, companyScope.allowedCompanyIds)
       const update: any = {}
@@ -315,9 +324,27 @@ export async function POST(request: Request) {
       if (is_active !== undefined) update.is_active = is_active
       if (device_ip !== undefined) update.device_ip = normalizeDeviceIp(device_ip)
       if (device_mac !== undefined) update.device_mac = normalizeDeviceMac(device_mac)
+      if (station_code !== undefined) update.station_code = String(station_code || '').trim() || null
       const { data, error } = await supabase.from('arena_stations').update(update).eq('id', stationId).select().single()
       if (error) throw error
       return json({ ok: true, data })
+    }
+
+    if (body.action === 'rotateStationProvisioningKey') {
+      const { stationId } = body
+      if (!stationId) return json({ error: 'stationId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_stations', stationId, companyScope.allowedCompanyIds)
+      const plainKey = randomProvisioningKey()
+      const { data, error } = await supabase
+        .from('arena_stations')
+        .update({
+          provisioning_key_hash: sha256(plainKey),
+        })
+        .eq('id', stationId)
+        .select('id, station_code, name')
+        .single()
+      if (error) throw error
+      return json({ ok: true, data, provisioningKey: plainKey })
     }
 
     if (body.action === 'deleteStation') {

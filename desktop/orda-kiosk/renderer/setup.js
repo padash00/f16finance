@@ -3,8 +3,8 @@ const $ = (id) => document.getElementById(id)
 async function init() {
   const cfg = await window.setupApi.load()
   $('stationCode').value = cfg.stationCode || ''
-  $('heartbeatUrl').value = cfg.heartbeatUrl || ''
-  $('heartbeatSecret').value = cfg.heartbeatSecret || ''
+  $('serverBaseUrl').value = cfg.serverBaseUrl || ''
+  $('provisioningKey').value = cfg.provisioningKey || ''
   $('wsUrl').value = cfg.wsUrl || ''
   $('clubName').value = cfg.clubName || ''
   $('defaultGame').value = cfg.defaultGamePath || ''
@@ -17,8 +17,8 @@ $('save').addEventListener('click', async () => {
   btn.disabled = true
   const res = await window.setupApi.save({
     stationCode: $('stationCode').value,
-    heartbeatUrl: $('heartbeatUrl').value,
-    heartbeatSecret: $('heartbeatSecret').value,
+    serverBaseUrl: $('serverBaseUrl').value,
+    provisioningKey: $('provisioningKey').value,
     wsUrl: $('wsUrl').value,
     clubName: $('clubName').value,
     defaultGamePath: $('defaultGame').value,
