@@ -999,12 +999,15 @@ export default function StationsPage() {
   const [quickTariffId, setQuickTariffId] = useState('')
   const [quickStartSaving, setQuickStartSaving] = useState(false)
 
-  // Project branding (settings tab)
+  // Project branding + provisioning (settings tab)
   const [brandingLogoUrl, setBrandingLogoUrl] = useState('')
   const [brandingCoverUrl, setBrandingCoverUrl] = useState('')
   const [brandingAccent, setBrandingAccent] = useState('')
   const [brandingDescription, setBrandingDescription] = useState('')
   const [brandingSaving, setBrandingSaving] = useState(false)
+  const [provisioningKey, setProvisioningKey] = useState('')
+  const [provisioningKeyVisible, setProvisioningKeyVisible] = useState(false)
+  const [provisioningKeyRotating, setProvisioningKeyRotating] = useState(false)
 
   // Bulk zone assignment state (catalog tab)
   const [bulkZoneId, setBulkZoneId] = useState('')
@@ -1043,6 +1046,7 @@ export default function StationsPage() {
       setBrandingCoverUrl(data.data.project?.arena_cover_url || '')
       setBrandingAccent(data.data.project?.arena_accent || '')
       setBrandingDescription(data.data.project?.arena_description || '')
+      setProvisioningKey(data.data.project?.arena_provisioning_key || '')
       setZones(
         Array.isArray(data.data.zones)
           ? (data.data.zones as Record<string, unknown>[]).map(arenaRowToZone)
@@ -1364,6 +1368,21 @@ export default function StationsPage() {
       setKioskThemeStationId(null)
       showFlash('ok', 'Тема киоска сохранена')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
+  }
+
+  async function handleRotateProjectProvisioningKey() {
+    if (!confirm('Сгенерировать новый ключ активации? Старый ключ перестанет работать — все новые установки киоска нужно будет производить с новым ключом.')) return
+    setProvisioningKeyRotating(true)
+    try {
+      const out = await apiPost({ action: 'rotateProjectProvisioningKey', projectId })
+      const key = String((out as any)?.provisioningKey || '')
+      if (key) {
+        setProvisioningKey(key)
+        setProvisioningKeyVisible(true)
+        await navigator.clipboard?.writeText(key).catch(() => null)
+        showFlash('ok', 'Новый ключ активации сгенерирован и скопирован')
+      }
+    } catch (e: any) { showFlash('err', e.message) } finally { setProvisioningKeyRotating(false) }
   }
 
   async function handleSaveBranding() {
@@ -2876,6 +2895,51 @@ export default function StationsPage() {
               >
                 {brandingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Сохранить
+              </button>
+            </div>
+
+            {/* Provisioning key block */}
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5 space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold text-amber-400">Ключ активации киоска</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Вводится один раз при первой настройке kiosk-приложения на каждом ПК. Один ключ для всех станций проекта.</p>
+              </div>
+
+              {provisioningKey ? (
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm font-mono tracking-wider">
+                    {provisioningKeyVisible ? provisioningKey : '••••••••••••••••••••••••'}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => setProvisioningKeyVisible(v => !v)}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                  >
+                    {provisioningKeyVisible ? 'Скрыть' : 'Показать'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(provisioningKey).catch(() => null)
+                      showFlash('ok', 'Ключ скопирован')
+                    }}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                  >
+                    Копировать
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-amber-400/70">Ключ не задан. Сгенерируйте ключ, чтобы можно было зарегистрировать kiosk-клиент.</p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void handleRotateProjectProvisioningKey()}
+                disabled={provisioningKeyRotating}
+                className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-400 hover:bg-amber-500/20 disabled:opacity-50"
+              >
+                {provisioningKeyRotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                {provisioningKey ? 'Сгенерировать новый ключ' : 'Сгенерировать ключ'}
               </button>
             </div>
           </div>

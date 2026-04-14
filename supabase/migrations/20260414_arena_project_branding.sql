@@ -11,3 +11,9 @@ comment on column public.point_projects.arena_logo_url    is 'URL логотип
 comment on column public.point_projects.arena_cover_url   is 'URL обложки/баннера страницы проекта (арена)';
 comment on column public.point_projects.arena_accent      is 'Акцентный цвет страницы проекта (арена), hex';
 comment on column public.point_projects.arena_description is 'Краткое описание / tagline проекта (арена)';
+
+-- Provisioning key for kiosk registration (plaintext, shown to admin in UI)
+alter table public.point_projects
+  add column if not exists arena_provisioning_key text null;
+
+comment on column public.point_projects.arena_provisioning_key is 'Ключ активации киоска (plaintext). Вводится в kiosk-приложении при первичной настройке.';

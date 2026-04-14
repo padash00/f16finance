@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { isIP } from 'node:net'
+import { randomBytes } from 'node:crypto'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
@@ -135,7 +136,7 @@ export async function GET(request: Request) {
     await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
     const { data: project } = await supabase
       .from('point_projects')
-      .select('id, name, arena_logo_url, arena_cover_url, arena_accent, arena_description')
+      .select('id, name, arena_logo_url, arena_cover_url, arena_accent, arena_description, arena_provisioning_key')
       .eq('id', projectId)
       .single()
 
@@ -737,6 +738,20 @@ export async function POST(request: Request) {
       void broadcastKioskCommand(stationId, { type: 'end_session' })
 
       return json({ ok: true })
+    }
+
+    // ─── PROJECT PROVISIONING KEY ────────────────────────────────────
+    if (body.action === 'rotateProjectProvisioningKey') {
+      const { projectId } = body
+      if (!projectId) return json({ error: 'projectId required' }, 400)
+      await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
+      const newKey = randomBytes(12).toString('hex').toUpperCase()
+      const { error } = await supabase
+        .from('point_projects')
+        .update({ arena_provisioning_key: newKey })
+        .eq('id', projectId)
+      if (error) throw error
+      return json({ ok: true, provisioningKey: newKey })
     }
 
     // ─── PROJECT BRANDING ────────────────────────────────────────────
