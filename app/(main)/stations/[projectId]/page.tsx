@@ -5,7 +5,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
   BarChart3, Settings, Loader2, CheckCircle2, ChevronDown, ChevronRight,
-  AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download,
+  AlertTriangle, RefreshCw, TrendingUp, Calendar, Map, Search, Download, Paintbrush,
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -45,6 +45,7 @@ type GameCatalog = {
   logo_url: string | null
   sort_order: number
   is_active: boolean
+  category: 'game' | 'browser' | 'app'
 }
 type StationGame = {
   id: string
@@ -169,6 +170,8 @@ function arenaRowToTariff(row: Record<string, unknown>): Tariff {
 }
 
 function arenaRowToGameCatalog(row: Record<string, unknown>): GameCatalog {
+  const validCats = ['game', 'browser', 'app'] as const
+  const cat = String(row.category ?? 'game')
   return {
     id: String(row.id),
     point_project_id: String(row.point_project_id ?? ''),
@@ -176,6 +179,7 @@ function arenaRowToGameCatalog(row: Record<string, unknown>): GameCatalog {
     logo_url: row.logo_url != null ? String(row.logo_url) : null,
     sort_order: Number(row.sort_order ?? 0),
     is_active: Boolean(row.is_active ?? true),
+    category: validCats.includes(cat as any) ? (cat as 'game' | 'browser' | 'app') : 'game',
   }
 }
 
@@ -962,10 +966,18 @@ export default function StationsPage() {
   const [stationEditIp, setStationEditIp] = useState('')
   const [stationEditMac, setStationEditMac] = useState('')
 
+  const [kioskThemeStationId, setKioskThemeStationId] = useState<string | null>(null)
+  const [kioskBgType, setKioskBgType] = useState<'color' | 'gradient' | 'image' | 'video'>('color')
+  const [kioskBgValue, setKioskBgValue] = useState('')
+  const [kioskAccent, setKioskAccent] = useState('')
+  const [kioskLogoUrl, setKioskLogoUrl] = useState('')
+  const [kioskAnnouncement, setKioskAnnouncement] = useState('')
+
   const [newTariff, setNewTariff] = useState(() => ({ ...EMPTY_NEW_TARIFF }))
   const [editingTariff, setEditingTariff] = useState<Tariff | null>(null)
   const [newGameTitle, setNewGameTitle] = useState('')
   const [newGameLogo, setNewGameLogo] = useState('')
+  const [newGameCategory, setNewGameCategory] = useState<'game' | 'browser' | 'app'>('game')
   const [bindGameId, setBindGameId] = useState('')
   const [bindExePath, setBindExePath] = useState('')
   const [bindArgs, setBindArgs] = useState('')
@@ -1284,6 +1296,42 @@ export default function StationsPage() {
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
 
+  function openKioskTheme(st: Station & Record<string, any>) {
+    setKioskThemeStationId(st.id)
+    setKioskBgType((st.kiosk_bg_type as any) || 'color')
+    setKioskBgValue(st.kiosk_bg_value || '')
+    setKioskAccent(st.kiosk_accent || '')
+    setKioskLogoUrl(st.kiosk_logo_url || '')
+    setKioskAnnouncement(st.kiosk_announcement || '')
+  }
+
+  async function handleSaveKioskTheme(stationId: string) {
+    setSaving(true)
+    try {
+      const out = await apiPost({
+        action: 'updateStationKioskTheme',
+        stationId,
+        kiosk_bg_type: kioskBgType,
+        kiosk_bg_value: kioskBgValue,
+        kiosk_accent: kioskAccent,
+        kiosk_logo_url: kioskLogoUrl,
+        kiosk_announcement: kioskAnnouncement,
+      })
+      if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных')
+      const raw = out.data as Record<string, unknown>
+      setStations(prev => prev.map(x => x.id === stationId ? {
+        ...x,
+        ...(raw.kiosk_bg_type !== undefined ? { kiosk_bg_type: raw.kiosk_bg_type } as any : {}),
+        ...(raw.kiosk_bg_value !== undefined ? { kiosk_bg_value: raw.kiosk_bg_value } as any : {}),
+        ...(raw.kiosk_accent !== undefined ? { kiosk_accent: raw.kiosk_accent } as any : {}),
+        ...(raw.kiosk_logo_url !== undefined ? { kiosk_logo_url: raw.kiosk_logo_url } as any : {}),
+        ...(raw.kiosk_announcement !== undefined ? { kiosk_announcement: raw.kiosk_announcement } as any : {}),
+      } : x))
+      setKioskThemeStationId(null)
+      showFlash('ok', 'Тема киоска сохранена')
+    } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
+  }
+
   async function handleRotateProvisioningKey(stationId: string) {
     setSaving(true)
     try {
@@ -1322,12 +1370,14 @@ export default function StationsPage() {
         companyId,
         title: newGameTitle,
         logo_url: newGameLogo,
+        category: newGameCategory,
       })
       if (!out.data || typeof out.data !== 'object') throw new Error('Нет данных игры')
       const row = arenaRowToGameCatalog(out.data as Record<string, unknown>)
       setGamesCatalog(prev => [...prev, row].sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title, 'ru')))
       setNewGameTitle('')
       setNewGameLogo('')
+      setNewGameCategory('game')
       showFlash('ok', 'Игра добавлена в каталог')
     } catch (e: any) { showFlash('err', e.message) } finally { setSaving(false) }
   }
@@ -1933,8 +1983,74 @@ export default function StationsPage() {
                                     >
                                       <RefreshCw className="h-3 w-3" />
                                     </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openKioskTheme(st as any)}
+                                      className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                                      title="Тема киоска"
+                                    >
+                                      <Paintbrush className="h-3 w-3" />
+                                    </button>
                                     <button type="button" onClick={() => startEditStation(st)} className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"><Pencil className="h-3 w-3" /></button>
                                     <button type="button" onClick={() => handleDeleteStation(st.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                                  </div>
+                                </div>
+                              )}
+                              {kioskThemeStationId === st.id && (
+                                <div className="mt-2 space-y-2 rounded-lg border border-violet-500/30 bg-violet-500/5 p-3">
+                                  <p className="text-xs font-medium text-violet-400">Тема киоска</p>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <select
+                                      value={kioskBgType}
+                                      onChange={(e) => setKioskBgType(e.target.value as any)}
+                                      className="rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                    >
+                                      <option value="color">Цвет фона</option>
+                                      <option value="gradient">Градиент</option>
+                                      <option value="image">Картинка (URL)</option>
+                                      <option value="video">Видео (URL)</option>
+                                    </select>
+                                    <input
+                                      value={kioskBgValue}
+                                      onChange={(e) => setKioskBgValue(e.target.value)}
+                                      placeholder={kioskBgType === 'color' ? '#07080a' : kioskBgType === 'gradient' ? 'linear-gradient(...)' : 'https://...'}
+                                      className="rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                    />
+                                    <input
+                                      value={kioskAccent}
+                                      onChange={(e) => setKioskAccent(e.target.value)}
+                                      placeholder="Акцент (#3b82f6)"
+                                      className="rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                    />
+                                    <input
+                                      value={kioskLogoUrl}
+                                      onChange={(e) => setKioskLogoUrl(e.target.value)}
+                                      placeholder="URL логотипа клуба"
+                                      className="rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                    />
+                                  </div>
+                                  <input
+                                    value={kioskAnnouncement}
+                                    onChange={(e) => setKioskAnnouncement(e.target.value)}
+                                    placeholder="Объявление (бегущая строка)"
+                                    className="w-full rounded border border-white/10 bg-background px-2 py-1 text-xs"
+                                  />
+                                  <div className="flex gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleSaveKioskTheme(st.id)}
+                                      disabled={saving}
+                                      className="rounded bg-violet-600 px-2 py-1 text-xs text-white disabled:opacity-50"
+                                    >
+                                      Сохранить
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setKioskThemeStationId(null)}
+                                      className="rounded bg-white/10 px-2 py-1 text-xs"
+                                    >
+                                      Отмена
+                                    </button>
                                   </div>
                                 </div>
                               )}
@@ -2458,6 +2574,15 @@ export default function StationsPage() {
                       placeholder="URL логотипа"
                       className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs sm:col-span-2"
                     />
+                    <select
+                      value={newGameCategory}
+                      onChange={(e) => setNewGameCategory(e.target.value as 'game' | 'browser' | 'app')}
+                      className="rounded border border-white/10 bg-background px-2 py-1.5 text-xs"
+                    >
+                      <option value="game">Игра</option>
+                      <option value="browser">Браузер</option>
+                      <option value="app">Программа</option>
+                    </select>
                   </div>
                   <button
                     type="button"
@@ -2471,7 +2596,10 @@ export default function StationsPage() {
                     {gamesCatalog.map((g) => (
                       <div key={g.id} className="flex items-center justify-between rounded bg-white/5 px-2 py-1 text-xs">
                         <span className="truncate">{g.title}</span>
-                        <span className="text-muted-foreground">{g.is_active ? 'активна' : 'выкл.'}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-muted-foreground/60">{g.category === 'game' ? 'Игра' : g.category === 'browser' ? 'Браузер' : 'Прог.'}</span>
+                          <span className="text-muted-foreground">{g.is_active ? 'активна' : 'выкл.'}</span>
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -6,6 +6,7 @@ import { requirePointDevice } from '@/lib/server/point-devices'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { escapeTelegramHtml } from '@/lib/telegram/message-kit'
 import { sendTelegramMessage } from '@/lib/telegram/send'
+import { broadcastKioskCommand } from '@/lib/server/kiosk-broadcast'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -325,6 +326,12 @@ export async function POST(request: Request) {
         }
       }
 
+      void broadcastKioskCommand(stationId, {
+        type: 'start_session',
+        durationSec: Math.round((endsAt.getTime() - startedAt.getTime()) / 1000),
+        tariffName: tariff.name,
+      })
+
       return json({ ok: true, data: arenaSession })
     }
 
@@ -343,6 +350,8 @@ export async function POST(request: Request) {
 
       if (updateError) throw updateError
       notified5minMap.delete(sessionId)
+      const endedStationId = (session as any)?.station_id as string | undefined
+      if (endedStationId) void broadcastKioskCommand(endedStationId, { type: 'end_session' })
       return json({ ok: true, data: session })
     }
 
@@ -524,6 +533,13 @@ export async function POST(request: Request) {
 
       // Reset notification flag so the new end time gets a fresh notification
       notified5minMap.delete(sessionId)
+      const extStationId = (current as any).station_id as string | undefined
+      if (extStationId) {
+        void broadcastKioskCommand(extStationId, {
+          type: 'extend_session',
+          addSec: extraMinutes * 60,
+        })
+      }
       return json({ ok: true, data: updatedSession })
     }
 

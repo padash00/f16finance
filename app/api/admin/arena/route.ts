@@ -330,6 +330,22 @@ export async function POST(request: Request) {
       return json({ ok: true, data })
     }
 
+    if (body.action === 'updateStationKioskTheme') {
+      const { stationId, kiosk_bg_type, kiosk_bg_value, kiosk_accent, kiosk_logo_url, kiosk_announcement } = body
+      if (!stationId) return json({ error: 'stationId required' }, 400)
+      await ensureArenaEntityAccess(supabase, 'arena_stations', stationId, companyScope.allowedCompanyIds)
+      const validBgTypes = ['color', 'gradient', 'image', 'video']
+      const update: any = {}
+      if (kiosk_bg_type !== undefined && validBgTypes.includes(kiosk_bg_type)) update.kiosk_bg_type = kiosk_bg_type
+      if (kiosk_bg_value !== undefined) update.kiosk_bg_value = String(kiosk_bg_value || '').trim()
+      if (kiosk_accent !== undefined) update.kiosk_accent = String(kiosk_accent || '').trim()
+      if (kiosk_logo_url !== undefined) update.kiosk_logo_url = String(kiosk_logo_url || '').trim() || null
+      if (kiosk_announcement !== undefined) update.kiosk_announcement = String(kiosk_announcement || '').trim() || null
+      const { data, error } = await supabase.from('arena_stations').update(update).eq('id', stationId).select().single()
+      if (error) throw error
+      return json({ ok: true, data })
+    }
+
     if (body.action === 'rotateStationProvisioningKey') {
       const { stationId } = body
       if (!stationId) return json({ error: 'stationId required' }, 400)
@@ -482,9 +498,10 @@ export async function POST(request: Request) {
 
     // ─── GAMES CATALOG ────────────────────────────────────────────────
     if (body.action === 'createGameCatalog') {
-      const { projectId, title, logo_url, sort_order, is_active } = body
+      const { projectId, title, logo_url, sort_order, is_active, category } = body
       if (!projectId || !title?.trim()) return json({ error: 'projectId and title required' }, 400)
       await ensureProjectAccess(supabase, projectId, companyScope.allowedCompanyIds)
+      const validCategories = ['game', 'browser', 'app']
       const { data, error } = await supabase.from('arena_games_catalog').insert({
         point_project_id: projectId,
         company_id: bodyCompanyId,
@@ -492,20 +509,23 @@ export async function POST(request: Request) {
         logo_url: String(logo_url || '').trim() || null,
         sort_order: Number(sort_order || 0),
         is_active: is_active !== false,
+        category: validCategories.includes(category) ? category : 'game',
       }).select().single()
       if (error) throw error
       return json({ ok: true, data })
     }
 
     if (body.action === 'updateGameCatalog') {
-      const { gameCatalogId, title, logo_url, sort_order, is_active } = body
+      const { gameCatalogId, title, logo_url, sort_order, is_active, category } = body
       if (!gameCatalogId) return json({ error: 'gameCatalogId required' }, 400)
       await ensureArenaEntityAccess(supabase, 'arena_games_catalog', gameCatalogId, companyScope.allowedCompanyIds)
+      const validCategories = ['game', 'browser', 'app']
       const update: any = {}
       if (title !== undefined) update.title = String(title || '').trim()
       if (logo_url !== undefined) update.logo_url = String(logo_url || '').trim() || null
       if (sort_order !== undefined) update.sort_order = Number(sort_order || 0)
       if (is_active !== undefined) update.is_active = Boolean(is_active)
+      if (category !== undefined && validCategories.includes(category)) update.category = category
       const { data, error } = await supabase.from('arena_games_catalog').update(update).eq('id', gameCatalogId).select().single()
       if (error) throw error
       return json({ ok: true, data })
