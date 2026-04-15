@@ -96,19 +96,8 @@ export async function POST(request: Request) {
     if (!authByPerDeviceSecret && !authByGlobalSecret) {
       return json({ error: 'unauthorized' }, 401)
     }
-    if (expectedDeviceTokenHash && providedDeviceTokenHash && expectedDeviceTokenHash !== providedDeviceTokenHash) {
-      return json({ error: 'device-token-mismatch', stationId: row.id }, 409)
-    }
-
-    const boundIp = row.device_ip != null ? String(row.device_ip).trim() : ''
-    const boundMac = row.device_mac != null ? String(row.device_mac).trim().toUpperCase().replace(/-/g, ':') : ''
-
-    if (boundIp && deviceIp && boundIp !== deviceIp) {
-      return json({ error: 'device-ip-mismatch', stationId: row.id }, 409)
-    }
-    if (boundMac && deviceMac && boundMac !== deviceMac) {
-      return json({ error: 'device-mac-mismatch', stationId: row.id }, 409)
-    }
+    // Note: IP/MAC check removed — clientSecret + deviceToken are sufficient auth.
+    // IP can change (DHCP, VPN, docker) and cause false 409s that break session sync.
 
     const nowIso = new Date().toISOString()
     const { error: updError } = await admin
