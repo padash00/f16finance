@@ -99,6 +99,7 @@ export async function POST(request: Request) {
     // Note: IP/MAC check removed — clientSecret + deviceToken are sufficient auth.
     // IP can change (DHCP, VPN, docker) and cause false 409s that break session sync.
 
+    console.log(`[heartbeat] OK station=${row.id} code=${row.station_code} status=${kioskStatus} ip=${deviceIp}`)
     const nowIso = new Date().toISOString()
     const { error: updError } = await admin
       .from('arena_stations')
