@@ -1,6 +1,6 @@
 const fs = require('node:fs')
 const path = require('node:path')
-const { app, BrowserWindow, ipcMain, globalShortcut, Menu } = require('electron')
+const { app, BrowserWindow, ipcMain, globalShortcut, Menu, powerSaveBlocker, session } = require('electron')
 
 const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev')
 
@@ -45,9 +45,12 @@ let socket = null
 let heartbeatTimer = null
 let httpHeartbeatTimer = null
 let tickTimer = null
+let focusTimer = null
 let knownStationId = null
 let realtimeReady = false
 let lastHeartbeatStatus = 'pending'  // 'ok' | 'error:{code}' | 'pending'
+let consecutiveHeartbeatFailures = 0
+let powerSaveId = null
 
 const session = {
   active: false,
@@ -89,6 +92,7 @@ function buildState() {
     stationId: cfg.stationId || knownStationId || '',
     realtimeConnected: realtimeReady,
     heartbeatStatus: lastHeartbeatStatus,
+    offlineMode: consecutiveHeartbeatFailures >= 5,
     screen: session.bindingBlocked ? 'blocked' : getScreenMode(),
     active: session.active,
     tariffName: session.tariffName,
@@ -163,11 +167,13 @@ async function postHeartbeat(status) {
     clearTimeout(fetchTimeout)
     const payload = await res.json().catch(() => null)
     if (!res.ok) {
+      consecutiveHeartbeatFailures++
       lastHeartbeatStatus = `error:${res.status}:${payload?.error || ''}`
       logLine(`heartbeat http ${res.status}: ${JSON.stringify(payload || {})}`)
       pushState()
     } else {
       lastHeartbeatStatus = 'ok'
+      consecutiveHeartbeatFailures = 0
       logLine(`heartbeat ok: activeSession=${JSON.stringify(payload?.activeSession ?? null)}`)
       pushState()
       const resolvedStationId = payload?.stationId || cfg.stationId
@@ -198,6 +204,7 @@ async function postHeartbeat(status) {
       void initRealtime(cfg.serverBaseUrl, resolvedStationId)
     }
   } catch (error) {
+    consecutiveHeartbeatFailures++
     const isTimeout = error?.name === 'AbortError'
     lastHeartbeatStatus = isTimeout ? 'error:timeout' : `error:network`
     logLine(`heartbeat failed (${isTimeout ? 'timeout' : 'network'}): ${error.message}`)
@@ -407,27 +414,68 @@ function createKioskWindow() {
   Menu.setApplicationMenu(null)
 
   if (!isDev) {
-    mainWindow.on('close', (event) => {
-      event.preventDefault()
-    })
-  }
+    // ── Prevent closing ──────────────────────────────────────────────
+    mainWindow.on('close', (event) => { event.preventDefault() })
 
-  if (!isDev) {
+    // ── Prevent minimizing ───────────────────────────────────────────
+    mainWindow.on('minimize', () => {
+      mainWindow.restore()
+      mainWindow.setKiosk(true)
+      mainWindow.setAlwaysOnTop(true, 'screen-saver')
+      mainWindow.focus()
+    })
+
+    // ── Block dangerous keyboard combos ──────────────────────────────
     mainWindow.webContents.on('before-input-event', (event, input) => {
-      const altF4 = input.alt && input.key === 'F4'
-      const altTab = input.alt && input.key === 'Tab'
-      const ctrlW = input.control && input.key.toLowerCase() === 'w'
-      const ctrlShiftEsc = input.control && input.shift && input.key === 'Escape'
-      const ctrlShiftDel = input.control && input.shift && input.key === 'Delete'
-      const winKey = input.meta // Windows/Super key
-      if (altF4 || altTab || ctrlW || ctrlShiftEsc || ctrlShiftDel || winKey) {
+      const key = input.key
+      const ctrl = input.control
+      const alt = input.alt
+      const shift = input.shift
+      const meta = input.meta
+      if (
+        (alt && key === 'F4') ||           // Close window
+        (alt && key === 'Tab') ||          // Switch app
+        (ctrl && key.toLowerCase() === 'w') ||  // Close tab
+        (ctrl && shift && key === 'Escape') ||  // Task manager
+        (ctrl && shift && key === 'Delete') ||  // Task manager alt
+        (ctrl && shift && key.toLowerCase() === 'i') || // DevTools
+        (ctrl && shift && key.toLowerCase() === 'j') || // DevTools console
+        (ctrl && key.toLowerCase() === 'r') || // Refresh
+        (ctrl && key.toLowerCase() === 'p') || // Print
+        (ctrl && key.toLowerCase() === 'u') || // View source
+        (ctrl && key.toLowerCase() === 's') || // Save page
+        key === 'F5' ||                     // Refresh
+        key === 'F11' ||                    // Fullscreen toggle
+        key === 'F12' ||                    // DevTools
+        meta                                // Windows key
+      ) {
         event.preventDefault()
       }
     })
 
+    // ── Block DevTools if somehow opened ─────────────────────────────
     mainWindow.webContents.on('devtools-opened', () => {
       mainWindow.webContents.closeDevTools()
     })
+
+    // ── Block navigation to external URLs ────────────────────────────
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+      if (!url.startsWith('file://')) {
+        event.preventDefault()
+        logLine(`Security: blocked navigation to ${url}`)
+      }
+    })
+
+    // ── Block right-click context menu ───────────────────────────────
+    mainWindow.webContents.on('context-menu', (event) => {
+      event.preventDefault()
+    })
+
+    // ── Prevent sleep / screensaver ──────────────────────────────────
+    if (powerSaveId === null) {
+      powerSaveId = powerSaveBlocker.start('prevent-display-sleep')
+      logLine(`powerSaveBlocker started: id=${powerSaveId}`)
+    }
   }
 
   if (isDev) {
@@ -451,8 +499,17 @@ function setupShortcuts() {
     'Alt+F4',
     'CommandOrControl+W',
     'Alt+Tab',
-    'CommandOrControl+Shift+Escape',
-    'CommandOrControl+Shift+Delete',
+    'CommandOrControl+Shift+Escape',   // Task Manager
+    'CommandOrControl+Shift+Delete',   // Task Manager alt
+    'CommandOrControl+Shift+I',        // DevTools
+    'CommandOrControl+Shift+J',        // DevTools console
+    'F12',                             // DevTools
+    'F5',                              // Refresh
+    'CommandOrControl+R',              // Refresh
+    'CommandOrControl+P',              // Print
+    'CommandOrControl+U',              // View source
+    'CommandOrControl+S',              // Save page
+    'F11',                             // Fullscreen toggle
     // 'Super' removed — causes conversion failure on some Windows/Electron versions
   ]
   for (const sc of shortcuts) {
@@ -612,24 +669,73 @@ function setupTimers() {
   httpHeartbeatTimer = setInterval(() => {
     void postHeartbeat(session.active ? 'idle' : 'online')
   }, 10000)
+  // Re-assert kiosk on top every 30s (guards against Windows Focus Assist / notifications stealing focus)
+  if (!isDev) {
+    focusTimer = setInterval(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isFocused()) {
+        mainWindow.setAlwaysOnTop(true, 'screen-saver')
+        mainWindow.focus()
+      }
+    }, 30000)
+  }
 }
 
 function cleanup() {
   if (tickTimer) clearInterval(tickTimer)
   if (heartbeatTimer) clearInterval(heartbeatTimer)
   if (httpHeartbeatTimer) clearInterval(httpHeartbeatTimer)
+  if (focusTimer) clearInterval(focusTimer)
+  if (powerSaveId !== null) {
+    try { powerSaveBlocker.stop(powerSaveId) } catch (_) {}
+    powerSaveId = null
+  }
   globalShortcut.unregisterAll()
   if (socket) socket.close()
   void closeRealtime()
 }
 
+// ── Single instance: only one kiosk at a time ────────────────────────────────
+if (!isDev) {
+  const gotLock = app.requestSingleInstanceLock()
+  if (!gotLock) {
+    app.exit(0)
+  }
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setAlwaysOnTop(true, 'screen-saver')
+      mainWindow.focus()
+    }
+  })
+}
+
+// ── Block new windows / popups ───────────────────────────────────────────────
 app.on('web-contents-created', (_event, contents) => {
   contents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  // Block navigation in any webContents (covers <webview> if ever added)
+  contents.on('will-navigate', (event, url) => {
+    const okPrefixes = isDev ? ['http://localhost:5173'] : ['file://']
+    if (!okPrefixes.some(p => url.startsWith(p))) {
+      event.preventDefault()
+    }
+  })
+})
+
+// ── Reject invalid TLS certificates (prevent MITM) ──────────────────────────
+app.on('certificate-error', (event, _webContents, url, _error, _cert, callback) => {
+  logLine(`Security: certificate error for ${url} — rejected`)
+  event.preventDefault()
+  callback(false)
 })
 
 app.commandLine.appendSwitch('disable-http-cache')
 
 app.whenReady().then(() => {
+  // ── Deny all browser permission requests (notifications, geolocation, etc) ─
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    logLine(`Security: permission request '${permission}' denied`)
+    callback(false)
+  })
+
   setupIpc()
 
   const cfg = loadConfig()

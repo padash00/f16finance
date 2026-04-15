@@ -48,6 +48,19 @@ export default function App() {
     })
   }, [])
 
+  // Безопасность: блокируем правый клик и drag-drop в renderer
+  useEffect(() => {
+    const prevent = (e: Event) => e.preventDefault()
+    document.addEventListener('contextmenu', prevent)
+    document.addEventListener('dragover', prevent)
+    document.addEventListener('drop', prevent)
+    return () => {
+      document.removeEventListener('contextmenu', prevent)
+      document.removeEventListener('dragover', prevent)
+      document.removeEventListener('drop', prevent)
+    }
+  }, [])
+
   // Переключаем экраны на основе kiosk state
   useEffect(() => {
     if (!kioskState || uiScreen === 'setup' || uiScreen === 'profile') return
@@ -144,6 +157,12 @@ export default function App() {
           <div className="bg-green-500 text-white text-2xl font-bold px-10 py-6 rounded-2xl shadow-2xl">
             ✓ Связь работает! Realtime подключён.
           </div>
+        </div>
+      )}
+      {kioskState?.offlineMode && (
+        <div className="fixed top-0 inset-x-0 z-[9998] flex items-center justify-center gap-3 bg-red-900/95 border-b border-red-500/40 px-6 py-3 pointer-events-none">
+          <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse shrink-0" />
+          <p className="text-red-200 text-sm font-medium">Нет подключения к серверу — обратитесь к оператору</p>
         </div>
       )}
       {kioskState && (
