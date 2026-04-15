@@ -440,12 +440,21 @@ function createKioskWindow() {
 }
 
 function setupShortcuts() {
-  globalShortcut.register('Alt+F4', () => {})
-  globalShortcut.register('CommandOrControl+W', () => {})
-  globalShortcut.register('Alt+Tab', () => {})
-  globalShortcut.register('CommandOrControl+Shift+Escape', () => {}) // Task Manager
-  globalShortcut.register('CommandOrControl+Shift+Delete', () => {}) // Alt Task Manager shortcut
-  globalShortcut.register('Super', () => {}) // Win key (best-effort, kernel may override)
+  const shortcuts = [
+    'Alt+F4',
+    'CommandOrControl+W',
+    'Alt+Tab',
+    'CommandOrControl+Shift+Escape',
+    'CommandOrControl+Shift+Delete',
+    // 'Super' removed — causes conversion failure on some Windows/Electron versions
+  ]
+  for (const sc of shortcuts) {
+    try {
+      globalShortcut.register(sc, () => {})
+    } catch (e) {
+      logLine(`setupShortcuts: failed to register ${sc}: ${e.message}`)
+    }
+  }
 }
 
 function setupIpc() {
