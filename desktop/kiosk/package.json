@@ -5,7 +5,7 @@
   "main": "main/main.js",
   "type": "commonjs",
   "scripts": {
-    "dev": "concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev": "concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite\" \"wait-on http://localhost:5173 && electron . --dev\"",
     "build": "vite build",
     "dist": "vite build && electron-builder --win",
     "start": "electron .",

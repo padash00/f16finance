@@ -390,41 +390,45 @@ function createKioskWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
-    kiosk: true,
-    fullscreen: true,
-    alwaysOnTop: true,
-    frame: false,
+    kiosk: !isDev,
+    fullscreen: !isDev,
+    alwaysOnTop: !isDev,
+    frame: isDev,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      devTools: false,
+      devTools: isDev,
     },
   })
 
   Menu.setApplicationMenu(null)
 
-  mainWindow.on('close', (event) => {
-    event.preventDefault()
-  })
-
-  mainWindow.webContents.on('before-input-event', (event, input) => {
-    const altF4 = input.alt && input.key === 'F4'
-    const altTab = input.alt && input.key === 'Tab'
-    const ctrlW = input.control && input.key.toLowerCase() === 'w'
-    const ctrlShiftEsc = input.control && input.shift && input.key === 'Escape'
-    const ctrlShiftDel = input.control && input.shift && input.key === 'Delete'
-    const winKey = input.meta // Windows/Super key
-    if (altF4 || altTab || ctrlW || ctrlShiftEsc || ctrlShiftDel || winKey) {
+  if (!isDev) {
+    mainWindow.on('close', (event) => {
       event.preventDefault()
-    }
-  })
+    })
+  }
 
-  mainWindow.webContents.on('devtools-opened', () => {
-    mainWindow.webContents.closeDevTools()
-  })
+  if (!isDev) {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      const altF4 = input.alt && input.key === 'F4'
+      const altTab = input.alt && input.key === 'Tab'
+      const ctrlW = input.control && input.key.toLowerCase() === 'w'
+      const ctrlShiftEsc = input.control && input.shift && input.key === 'Escape'
+      const ctrlShiftDel = input.control && input.shift && input.key === 'Delete'
+      const winKey = input.meta // Windows/Super key
+      if (altF4 || altTab || ctrlW || ctrlShiftEsc || ctrlShiftDel || winKey) {
+        event.preventDefault()
+      }
+    })
+
+    mainWindow.webContents.on('devtools-opened', () => {
+      mainWindow.webContents.closeDevTools()
+    })
+  }
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
@@ -433,8 +437,10 @@ function createKioskWindow() {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
   }
   mainWindow.once('ready-to-show', () => {
-    mainWindow.setKiosk(true)
-    mainWindow.setAlwaysOnTop(true, 'screen-saver')
+    if (!isDev) {
+      mainWindow.setKiosk(true)
+      mainWindow.setAlwaysOnTop(true, 'screen-saver')
+    }
     mainWindow.focus()
     pushState()
   })
