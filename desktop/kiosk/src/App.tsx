@@ -21,6 +21,7 @@ export default function App() {
   const [theme, setTheme] = useState<StationTheme | null>(null)
   const [catalog, setCatalog] = useState<Game[]>([])
   const [uiScreen, setUiScreen] = useState<UiScreen>(isSetupMode ? 'setup' : 'welcome')
+  const [pingBanner, setPingBanner] = useState(false)
 
   // Конфиг + тема + каталог из API
   useEffect(() => {
@@ -36,6 +37,15 @@ export default function App() {
   useEffect(() => {
     if (isSetupMode) return
     return ipc.onState((state) => setKioskState(state))
+  }, [])
+
+  // Тест связи — показываем баннер при получении ping
+  useEffect(() => {
+    if (isSetupMode || !window.kioskApi.onPing) return
+    return window.kioskApi.onPing(() => {
+      setPingBanner(true)
+      setTimeout(() => setPingBanner(false), 4000)
+    })
   }, [])
 
   // Переключаем экраны на основе kiosk state
@@ -127,6 +137,13 @@ export default function App() {
   return (
     <>
       {renderScreen()}
+      {pingBanner && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center pointer-events-none">
+          <div className="bg-green-500 text-white text-2xl font-bold px-10 py-6 rounded-2xl shadow-2xl">
+            ✓ Связь работает! Realtime подключён.
+          </div>
+        </div>
+      )}
       {kioskState && (
         <div className="fixed bottom-2 left-2 z-[9999] text-[10px] font-mono bg-black/70 text-white px-2 py-1 rounded space-y-0.5 pointer-events-none select-none">
           <div>

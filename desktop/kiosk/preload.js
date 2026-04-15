@@ -25,4 +25,11 @@ contextBridge.exposeInMainWorld('kioskApi', {
 
   // Локальный старт сессии после self-purchase (без WS команды)
   startSessionLocal: (payload) => ipcRenderer.invoke('kiosk:start-session-local', payload),
+
+  // Тест связи — принимает ping от сервера
+  onPing: (listener) => {
+    const wrapped = (_event, payload) => listener(payload)
+    ipcRenderer.on('kiosk:ping', wrapped)
+    return () => ipcRenderer.removeListener('kiosk:ping', wrapped)
+  },
 })

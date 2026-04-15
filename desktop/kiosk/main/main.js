@@ -335,6 +335,12 @@ function handleCommand(message) {
     case 'reboot_pc':
       rebootPc()
       break
+    case 'ping':
+      logLine('ping received from server')
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('kiosk:ping', { ts: message.ts })
+      }
+      break
     default:
       break
   }
