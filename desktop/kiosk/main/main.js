@@ -1,6 +1,6 @@
 const fs = require('node:fs')
 const path = require('node:path')
-const { app, BrowserWindow, ipcMain, globalShortcut, Menu, powerSaveBlocker, session } = require('electron')
+const { app, BrowserWindow, ipcMain, globalShortcut, Menu, powerSaveBlocker, session: electronSession } = require('electron')
 
 const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev')
 
@@ -731,7 +731,7 @@ app.commandLine.appendSwitch('disable-http-cache')
 
 app.whenReady().then(() => {
   // ── Deny all browser permission requests (notifications, geolocation, etc) ─
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+  electronSession.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     logLine(`Security: permission request '${permission}' denied`)
     callback(false)
   })
