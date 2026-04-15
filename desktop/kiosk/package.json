@@ -23,15 +23,18 @@
       "preload.js",
       "scripts/**/*"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "padash00",
+      "repo": "OrdaKiosk"
+    },
     "win": {
       "target": "nsis",
-      "icon": "public/icon.ico",
       "requestedExecutionLevel": "requireAdministrator"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": false,
-      "installationDirectory": "C:\\Program Files\\Orda Kiosk",
+      "oneClick": true,
+      "perMachine": true,
       "createDesktopShortcut": false,
       "createStartMenuShortcut": false,
       "runAfterFinish": false,
@@ -40,6 +43,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
+    "electron-updater": "^6.3.9",
     "clsx": "^2.1.1",
     "lucide-react": "^0.454.0",
     "qrcode.react": "^4.2.0",

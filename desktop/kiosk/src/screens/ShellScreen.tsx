@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Clock, User, PhoneCall, Plus, Gamepad2, Globe, AppWindow, Play } from 'lucide-react'
+import { Clock, User, PhoneCall, Plus, Gamepad2, Globe, AppWindow, Play, MonitorPlay } from 'lucide-react'
 import type { KioskState, ClientSession, Game } from '@/types'
 import { formatSec, cn } from '@/lib/utils'
+import { ipc } from '@/lib/ipc'
 
 type CatalogTab = 'game' | 'browser' | 'app'
 
@@ -90,6 +91,16 @@ export default function ShellScreen({ kioskState, client, onProfile, onExtend, o
 
         {/* Правая часть — действия */}
         <div className="flex items-center gap-2">
+          {kioskState.game?.running && (
+            <button
+              onClick={() => ipc.returnToGame()}
+              style={{ backgroundColor: accent }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-opacity text-sm font-medium animate-pulse"
+            >
+              <MonitorPlay size={15} />
+              Вернуться в игру
+            </button>
+          )}
           <button
             onClick={onExtend}
             style={{ backgroundColor: `${accent}26`, borderColor: `${accent}33`, color: accent }}

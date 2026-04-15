@@ -32,4 +32,16 @@ contextBridge.exposeInMainWorld('kioskApi', {
     ipcRenderer.on('kiosk:ping', wrapped)
     return () => ipcRenderer.removeListener('kiosk:ping', wrapped)
   },
+
+  // Вернуться в запущенную игру (убирает kiosk за игру)
+  returnToGame: () => ipcRenderer.invoke('kiosk:return-to-game'),
+
+  // Авто-обновление
+  checkUpdate: () => ipcRenderer.invoke('kiosk:check-update'),
+  installUpdate: () => ipcRenderer.invoke('kiosk:install-update'),
+  onUpdateAvailable: (listener) => {
+    const wrapped = (_event, payload) => listener(payload)
+    ipcRenderer.on('kiosk:update-available', wrapped)
+    return () => ipcRenderer.removeListener('kiosk:update-available', wrapped)
+  },
 })

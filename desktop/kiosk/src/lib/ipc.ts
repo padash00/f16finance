@@ -7,6 +7,7 @@ declare global {
       launchGame: (gameId: string) => Promise<{ ok: boolean; error?: string }>
       requestExtend: () => Promise<{ ok: boolean }>
       callOperator: () => Promise<{ ok: boolean }>
+      returnToGame: () => Promise<{ ok: boolean; reason?: string }>
       setup: {
         load: () => Promise<Record<string, string>>
         save: (payload: Record<string, string>) => Promise<{ ok: boolean; error?: string }>
@@ -17,6 +18,10 @@ declare global {
         tariffName: string
         games?: Game[]
       }) => Promise<{ ok: boolean; error?: string }>
+      onPing?: (listener: () => void) => () => void
+      onUpdateAvailable?: (listener: (info: { version: string }) => void) => () => void
+      checkUpdate?: () => Promise<{ ok: boolean; updateInfo?: unknown; reason?: string }>
+      installUpdate?: () => Promise<{ ok: boolean; reason?: string }>
     }
   }
 }
@@ -26,6 +31,7 @@ export const ipc = {
   launchGame: (gameId: string) => window.kioskApi.launchGame(gameId),
   requestExtend: () => window.kioskApi.requestExtend(),
   callOperator: () => window.kioskApi.callOperator(),
+  returnToGame: () => window.kioskApi.returnToGame(),
   getConfig: () => window.kioskApi.getConfig(),
   startSessionLocal: (payload: { durationSec: number; tariffName: string; games?: Game[] }) =>
     window.kioskApi.startSessionLocal(payload),

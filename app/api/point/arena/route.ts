@@ -56,6 +56,28 @@ export async function GET(request: Request) {
       return (q as any).or(`company_id.eq.${companyId},company_id.is.null`) as T
     }
 
+    // ─── История сессий ────────────────────────────────────────────────────────
+    const url = new URL(request.url)
+    if (url.searchParams.get('action') === 'getSessions') {
+      const fromRaw = url.searchParams.get('from') || new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString().slice(0, 10)
+      const toRaw = url.searchParams.get('to') || new Date().toISOString().slice(0, 10)
+      const fromIso = `${fromRaw}T00:00:00.000Z`
+      const toIso = `${nextCalendarDateIso(toRaw)}T00:00:00.000Z`
+
+      const { data: historySessions, error: histErr } = await withCo(
+        supabase
+          .from('arena_sessions')
+          .select('id, station_id, tariff_id, started_at, ends_at, ended_at, amount, cash_amount, kaspi_amount, payment_method, discount_percent, status, operator_id, arena_stations!station_id(name), arena_tariffs!tariff_id(name)')
+          .eq('point_project_id', projectId)
+          .gte('started_at', fromIso)
+          .lt('started_at', toIso)
+          .order('started_at', { ascending: false })
+          .limit(500)
+      )
+      if (histErr) throw histErr
+      return json({ ok: true, sessions: historySessions || [] })
+    }
+
     const todayDate = new Date().toISOString().slice(0, 10)
     const todayEndExclusive = `${nextCalendarDateIso(todayDate)}T00:00:00.000Z`
     const deferIncomes = deferArenaSessionIncomes(device.feature_flags as Record<string, unknown>)
@@ -353,6 +375,51 @@ export async function POST(request: Request) {
       const endedStationId = (session as any)?.station_id as string | undefined
       if (endedStationId) void broadcastKioskCommand(endedStationId, { type: 'end_session' })
       return json({ ok: true, data: session })
+    }
+
+    // ─── END SESSION WITH REFUND ──────────────────────────────────────────────
+    if (body.action === 'endSessionWithRefund') {
+      const { sessionId } = body
+      if (!sessionId) return json({ error: 'sessionId required' }, 400)
+
+      // Fetch session to calculate refund
+      const { data: sess, error: fetchErr } = await supabase
+        .from('arena_sessions')
+        .select('started_at, ends_at, amount, cash_amount, kaspi_amount, station_id, payment_method')
+        .eq('id', sessionId)
+        .eq('point_project_id', projectId)
+        .single()
+      if (fetchErr || !sess) return json({ error: 'session-not-found' }, 404)
+
+      const now = new Date()
+      const startMs = new Date((sess as any).started_at).getTime()
+      const endMs = new Date((sess as any).ends_at).getTime()
+      const totalMs = endMs - startMs
+      const usedMs = Math.max(0, now.getTime() - startMs)
+      const unusedRatio = totalMs > 0 ? Math.max(0, 1 - usedMs / totalMs) : 0
+      const refundAmount = Math.round(Number((sess as any).amount) * unusedRatio)
+      const refundCash = Math.round(Number((sess as any).cash_amount) * unusedRatio)
+      const refundKaspi = Math.round(Number((sess as any).kaspi_amount) * unusedRatio)
+
+      const nowIso = now.toISOString()
+      const { data: updSess, error: updateError } = await supabase
+        .from('arena_sessions')
+        .update({ status: 'completed', ended_at: nowIso })
+        .eq('id', sessionId)
+        .eq('point_project_id', projectId)
+        .select()
+        .single()
+      if (updateError) throw updateError
+
+      notified5minMap.delete(sessionId)
+      const refundStationId = (sess as any)?.station_id as string | undefined
+      if (refundStationId) void broadcastKioskCommand(refundStationId, { type: 'end_session' })
+
+      return json({
+        ok: true,
+        data: updSess,
+        refund: { amount: refundAmount, cash: refundCash, kaspi: refundKaspi },
+      })
     }
 
     // ─── EXTEND SESSION ───────────────────────────────────────────────────────

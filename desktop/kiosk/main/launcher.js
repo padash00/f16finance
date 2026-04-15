@@ -15,7 +15,7 @@ function launchGame(gamePath, options = {}) {
     detached: false,
     shell: false,
     stdio: 'ignore',
-    windowsHide: true,
+    windowsHide: false,
   })
 
   activeGame = child
@@ -33,12 +33,14 @@ function stopGame() {
     return { ok: true, stopped: false }
   }
 
-  spawn('taskkill', ['/PID', String(activeGame.pid), '/T', '/F'], {
-    detached: false,
-    shell: true,
-    windowsHide: true,
-    stdio: 'ignore',
-  })
+  try {
+    spawn('taskkill', ['/PID', String(activeGame.pid), '/T', '/F'], {
+      detached: false,
+      shell: true,
+      windowsHide: true,
+      stdio: 'ignore',
+    })
+  } catch (_) {}
   activeGame = null
   return { ok: true, stopped: true }
 }

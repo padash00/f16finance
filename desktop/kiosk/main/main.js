@@ -11,6 +11,15 @@ const { shutdownPc, rebootPc } = require('./system')
 const { getDeviceNetworkIdentity } = require('./device')
 const { setupRealtime, closeRealtime } = require('./realtime')
 
+// Auto-updater (only active in production builds)
+let autoUpdater = null
+try {
+  const { autoUpdater: au } = require('electron-updater')
+  autoUpdater = au
+} catch (_) {
+  // electron-updater not available in dev
+}
+
 const argvHasSetup = process.argv.includes('--setup')
 
 function relaunchWithoutSetupFlag() {
@@ -52,6 +61,12 @@ let realtimeReady = false        // true only when SUBSCRIBED
 let lastHeartbeatStatus = 'pending'  // 'ok' | 'error:{code}' | 'pending'
 let consecutiveHeartbeatFailures = 0
 let powerSaveId = null
+
+// ── Game state ───────────────────────────────────────────────────────────────
+let gameActive = false           // true while a game/browser process is running
+let browserGameWindow = null     // BrowserWindow for category='browser' games
+let warnedAt5min = false         // prevents repeated 5-min popup
+let warnedAt1min = false         // prevents repeated 1-min popup
 
 const session = {
   active: false,
@@ -183,13 +198,23 @@ async function postHeartbeat(status) {
         realtimeInitialized = true
         void initRealtime(cfg.serverBaseUrl, resolvedStationId)
       }
-      // Sync session state from server (handles kiosk restart mid-session)
+      // Sync session state from server
       if (payload?.activeSession && !session.active) {
+        // Restore session after kiosk restart
         const endsAtMs = new Date(payload.activeSession.endsAt).getTime()
         const remainingSec = Math.floor((endsAtMs - Date.now()) / 1000)
         if (remainingSec > 5) {
           logLine(`heartbeat: restoring session from server, ${remainingSec}s remaining`)
           applyStartSession({ durationSec: remainingSec, tariffName: payload.activeSession.tariffName })
+        }
+      } else if (payload?.activeSession && session.active) {
+        // Correct clock drift: sync endsAtMs from server's authoritative value
+        const serverEndsAtMs = new Date(payload.activeSession.endsAt).getTime()
+        const drift = serverEndsAtMs - session.endsAtMs
+        if (Math.abs(drift) > 5000) {
+          logLine(`heartbeat: correcting clock drift ${Math.round(drift / 1000)}s`)
+          session.endsAtMs = serverEndsAtMs
+          pushState()
         }
       } else if (payload?.activeSession === null && session.active) {
         logLine('heartbeat: server has no active session, clearing local session')
@@ -263,29 +288,148 @@ function resolveGameById(gameId) {
   return session.games.find((g) => String(g.id) === id) || null
 }
 
+// ── Restore kiosk after game closes ─────────────────────────────────────────
+function restoreKioskFromGame() {
+  gameActive = false
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (!isDev) {
+    mainWindow.restore()
+    mainWindow.setKiosk(true)
+    mainWindow.setAlwaysOnTop(true, 'screen-saver')
+    mainWindow.focus()
+    // Re-register Alt+Tab block now that game is gone
+    try { globalShortcut.register('Alt+Tab', () => {}) } catch (_) {}
+    // Restart focusTimer if not running
+    if (!focusTimer) {
+      focusTimer = setInterval(() => {
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isFocused()) {
+          mainWindow.setAlwaysOnTop(true, 'screen-saver')
+          mainWindow.focus()
+        }
+      }, 30000)
+    }
+  }
+  sendStatus(session.active ? 'idle' : 'online')
+  void postHeartbeat(session.active ? 'idle' : 'online')
+  pushState()
+}
+
+// ── Stop browser game window ─────────────────────────────────────────────────
+function stopBrowserGame() {
+  if (!browserGameWindow || browserGameWindow.isDestroyed()) return
+  try {
+    browserGameWindow.webContents.removeAllListeners()
+    browserGameWindow.removeAllListeners('close')
+    browserGameWindow.removeAllListeners('closed')
+    browserGameWindow.destroy()
+  } catch (_) {}
+  browserGameWindow = null
+}
+
+// ── Launch browser/URL game in a separate Electron window ───────────────────
+function launchBrowserGame(url, game) {
+  if (browserGameWindow && !browserGameWindow.isDestroyed()) {
+    browserGameWindow.focus()
+    return { ok: true, alreadyRunning: true, pid: null }
+  }
+
+  // Yield kiosk to game
+  gameActive = true
+  if (focusTimer) { clearInterval(focusTimer); focusTimer = null }
+  if (!isDev) {
+    try { globalShortcut.unregister('Alt+Tab') } catch (_) {}
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setAlwaysOnTop(false)
+      mainWindow.minimize()
+    }
+  }
+
+  browserGameWindow = new BrowserWindow({
+    width: 1280,
+    height: 720,
+    fullscreen: !isDev,
+    kiosk: !isDev,
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      devTools: isDev,
+    },
+  })
+
+  browserGameWindow.loadURL(url)
+
+  if (!isDev) {
+    // Block dangerous keys inside browser game
+    browserGameWindow.webContents.on('before-input-event', (event, input) => {
+      if (
+        (input.alt && input.key === 'F4') ||
+        input.meta ||
+        input.key === 'F12' ||
+        (input.control && input.shift && input.key.toLowerCase() === 'i')
+      ) {
+        event.preventDefault()
+      }
+    })
+    browserGameWindow.on('close', (e) => e.preventDefault())
+  }
+
+  browserGameWindow.on('closed', () => {
+    browserGameWindow = null
+    restoreKioskFromGame()
+  })
+
+  logLine(`launchBrowserGame: ${url}`)
+  return { ok: true, pid: null }
+}
+
+// ── Launch game (exe or browser) ─────────────────────────────────────────────
 function launchConfiguredGame(gameId, fallbackPath) {
   const cfg = runtimeConfig()
   const game = resolveGameById(gameId)
+  const category = String(game?.category || 'game')
   const pathToRun = String(game?.exePath || fallbackPath || cfg.defaultGamePath || '').trim()
   if (!pathToRun) throw new Error('game-path-required')
+
+  // Browser/URL game
+  if (category === 'browser') {
+    return launchBrowserGame(pathToRun, game)
+  }
+
+  // Exe game (game or app)
+  // Yield kiosk to game
+  gameActive = true
+  if (focusTimer) { clearInterval(focusTimer); focusTimer = null }
+  if (!isDev) {
+    try { globalShortcut.unregister('Alt+Tab') } catch (_) {}
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setAlwaysOnTop(false)
+      mainWindow.minimize()
+    }
+  }
+
   return launchGame(pathToRun, {
-    onExit: () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setAlwaysOnTop(true, 'screen-saver')
-        mainWindow.focus()
-        sendStatus(session.active ? 'idle' : 'online')
-        void postHeartbeat(session.active ? 'idle' : 'online')
-        pushState()
-      }
-    },
+    onExit: () => restoreKioskFromGame(),
   })
 }
 
 function clearSessionAndLock() {
   stopGame()
+  stopBrowserGame()
+  gameActive = false
   session.active = false
   session.endsAtMs = 0
   session.tariffName = ''
+  warnedAt5min = false
+  warnedAt1min = false
+  if (!isDev && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.restore()
+    mainWindow.setKiosk(true)
+    mainWindow.setAlwaysOnTop(true, 'screen-saver')
+    mainWindow.focus()
+    try { globalShortcut.register('Alt+Tab', () => {}) } catch (_) {}
+  }
   pushState()
   sendStatus('idle')
   void postHeartbeat('offline')
@@ -294,9 +438,37 @@ function clearSessionAndLock() {
 function onTick() {
   const remaining = getRemainingSec()
   if (session.active && remaining <= 0) {
+    if (gameActive) {
+      stopGame()
+      stopBrowserGame()
+    }
     clearSessionAndLock()
     return
   }
+
+  // Time warnings while game is running — bring kiosk to front
+  if (gameActive && session.active && !isDev && mainWindow && !mainWindow.isDestroyed()) {
+    if (!warnedAt5min && remaining <= 300 && remaining > 60) {
+      warnedAt5min = true
+      logLine('game: 5-min warning, surfacing kiosk')
+      mainWindow.setAlwaysOnTop(true, 'screen-saver')
+      mainWindow.focus()
+      // Return to game after 15s if player didn't do anything
+      setTimeout(() => {
+        if (gameActive && getRemainingSec() > 60 && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setAlwaysOnTop(false)
+          mainWindow.minimize()
+        }
+      }, 15000)
+    } else if (!warnedAt1min && remaining <= 60) {
+      warnedAt1min = true
+      logLine('game: 1-min warning, locking kiosk on top')
+      mainWindow.setAlwaysOnTop(true, 'screen-saver')
+      mainWindow.focus()
+      // Don't go back — player must extend or wait for session end
+    }
+  }
+
   pushState()
 }
 
@@ -311,6 +483,9 @@ function applyStartSession(command) {
     session.games = command.games
   }
   session.endsAtMs = Date.now() + durationSec * 1000
+  // Reset per-session warning flags
+  warnedAt5min = false
+  warnedAt1min = false
   pushState()
   sendStatus('idle')
   void postHeartbeat('idle')
@@ -510,7 +685,7 @@ function setupShortcuts() {
   const shortcuts = [
     'Alt+F4',
     'CommandOrControl+W',
-    'Alt+Tab',
+    'Alt+Tab',                          // blocked by default; unregistered while game runs
     'CommandOrControl+Shift+Escape',   // Task Manager
     'CommandOrControl+Shift+Delete',   // Task Manager alt
     'CommandOrControl+Shift+I',        // DevTools
@@ -639,6 +814,24 @@ function setupIpc() {
     }
   })
 
+  ipcMain.handle('kiosk:return-to-game', () => {
+    const state = getGameState()
+    if (!state.running) return { ok: false, reason: 'no-game' }
+    // Unregister Alt+Tab so game can receive it naturally
+    try { globalShortcut.unregister('Alt+Tab') } catch (_) {}
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setAlwaysOnTop(false)
+      mainWindow.minimize()
+    }
+    // If it's a browser game, refocus the window directly
+    if (browserGameWindow && !browserGameWindow.isDestroyed()) {
+      browserGameWindow.setAlwaysOnTop(true, 'screen-saver')
+      browserGameWindow.focus()
+      browserGameWindow.setAlwaysOnTop(false)
+    }
+    return { ok: true }
+  })
+
   ipcMain.handle('kiosk:start-session-local', (_event, payload) => {
     const durationSec = Number(payload?.durationSec || 0)
     if (durationSec <= 0) return { ok: false, error: 'invalid-duration' }
@@ -649,6 +842,22 @@ function setupIpc() {
     if (Array.isArray(payload?.games)) session.games = payload.games
     pushState()
     void postHeartbeat('idle')
+    return { ok: true }
+  })
+
+  ipcMain.handle('kiosk:check-update', async () => {
+    if (!autoUpdater) return { ok: false, reason: 'updater-not-available' }
+    try {
+      const result = await autoUpdater.checkForUpdates()
+      return { ok: true, updateInfo: result?.updateInfo || null }
+    } catch (err) {
+      return { ok: false, reason: err.message }
+    }
+  })
+
+  ipcMain.handle('kiosk:install-update', () => {
+    if (!autoUpdater) return { ok: false, reason: 'updater-not-available' }
+    autoUpdater.quitAndInstall(false, true)
     return { ok: true }
   })
 }
@@ -774,6 +983,36 @@ app.whenReady().then(() => {
     realtimeInitialized = true
     const serverBaseUrl = String(cfg.serverBaseUrl || '').replace(/\/+$/, '')
     void initRealtime(serverBaseUrl, cfg.stationId)
+  }
+
+  // Auto-updater: check for updates silently 10s after startup (production only)
+  if (!isDev && autoUpdater) {
+    autoUpdater.logger = {
+      info: (msg) => logLine(`updater: ${msg}`),
+      warn: (msg) => logLine(`updater warn: ${msg}`),
+      error: (msg) => logLine(`updater error: ${msg}`),
+    }
+    autoUpdater.autoDownload = true
+    autoUpdater.autoInstallOnAppQuit = true
+
+    autoUpdater.on('update-available', (info) => {
+      logLine(`updater: update available ${info.version}`)
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('kiosk:update-available', { version: info.version })
+      }
+    })
+
+    autoUpdater.on('update-downloaded', (info) => {
+      logLine(`updater: update downloaded ${info.version}, will install on next quit`)
+    })
+
+    autoUpdater.on('error', (err) => {
+      logLine(`updater: error ${err.message}`)
+    })
+
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch((err) => logLine(`updater: checkForUpdates error ${err.message}`))
+    }, 10000)
   }
 })
 

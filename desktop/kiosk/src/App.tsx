@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ipc } from '@/lib/ipc'
 import type { KioskState, ClientSession, KioskConfig, UiScreen, StationTheme, Game } from '@/types'
-import { fetchTheme, fetchCatalog } from '@/lib/api'
+import { fetchTheme, fetchCatalog, fetchProfile } from '@/lib/api'
 
 import SetupScreen from '@/screens/SetupScreen'
 import WelcomeScreen from '@/screens/WelcomeScreen'
@@ -22,6 +22,7 @@ export default function App() {
   const [catalog, setCatalog] = useState<Game[]>([])
   const [uiScreen, setUiScreen] = useState<UiScreen>(isSetupMode ? 'setup' : 'welcome')
   const [pingBanner, setPingBanner] = useState(false)
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null)
 
   // Конфиг + тема + каталог из API
   useEffect(() => {
@@ -39,6 +40,14 @@ export default function App() {
     return ipc.onState((state) => setKioskState(state))
   }, [])
 
+  // Авто-обновление: слушаем уведомление о новой версии
+  useEffect(() => {
+    if (isSetupMode || !window.kioskApi.onUpdateAvailable) return
+    return window.kioskApi.onUpdateAvailable((info: { version: string }) => {
+      setUpdateAvailable(info.version)
+    })
+  }, [])
+
   // Тест связи — показываем баннер при получении ping
   useEffect(() => {
     if (isSetupMode || !window.kioskApi.onPing) return
@@ -47,6 +56,18 @@ export default function App() {
       setTimeout(() => setPingBanner(false), 4000)
     })
   }, [])
+
+  // Обновляем баланс клиента каждые 30 сек пока он залогинен
+  useEffect(() => {
+    if (!client || !config) return
+    const interval = setInterval(async () => {
+      try {
+        const updated = await fetchProfile(config, client.token)
+        setClient((prev) => prev ? { ...prev, balance: updated.balance } : prev)
+      } catch { /* ignore — не критично */ }
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [client?.token, config])
 
   // Безопасность: блокируем правый клик и drag-drop в renderer
   useEffect(() => {
@@ -158,6 +179,12 @@ export default function App() {
           <div className="bg-green-500 text-white text-2xl font-bold px-10 py-6 rounded-2xl shadow-2xl">
             ✓ Связь работает! Realtime подключён.
           </div>
+        </div>
+      )}
+      {updateAvailable && (
+        <div className="fixed top-0 inset-x-0 z-[9999] flex items-center justify-center gap-3 bg-blue-900/95 border-b border-blue-500/40 px-6 py-3">
+          <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0" />
+          <p className="text-blue-200 text-sm font-medium">Доступно обновление v{updateAvailable} — установится при следующем перезапуске</p>
         </div>
       )}
       {kioskState?.offlineMode && (
