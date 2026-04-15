@@ -168,6 +168,7 @@ async function postHeartbeat(status) {
       pushState()
     } else {
       lastHeartbeatStatus = 'ok'
+      logLine(`heartbeat ok: activeSession=${JSON.stringify(payload?.activeSession ?? null)}`)
       pushState()
       const resolvedStationId = payload?.stationId || cfg.stationId
       if (resolvedStationId && !realtimeReady) {
