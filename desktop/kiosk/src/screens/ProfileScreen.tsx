@@ -10,11 +10,13 @@ interface Props {
   onBack: () => void
   onLogout: () => void
   onClientUpdated: (client: ClientSession) => void
+  accentColor?: string | null
 }
 
 type Tab = 'info' | 'password'
 
-export default function ProfileScreen({ client, config, onBack, onLogout }: Props) {
+export default function ProfileScreen({ client, config, onBack, onLogout, accentColor }: Props) {
+  const accent = accentColor || '#2563eb'
   const [tab, setTab] = useState<Tab>('info')
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
@@ -61,11 +63,11 @@ export default function ProfileScreen({ client, config, onBack, onLogout }: Prop
         <div className="w-64 shrink-0 flex flex-col gap-3">
           {/* Аватар и имя */}
           <div className="rounded-2xl bg-[#11141a] border border-white/5 p-5 flex flex-col items-center gap-3">
-            <div className="w-20 h-20 rounded-full bg-blue-600/20 border-2 border-blue-500/20 flex items-center justify-center overflow-hidden">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden" style={{ backgroundColor: `${accent}33`, border: `2px solid ${accent}33` }}>
               {client.avatarUrl ? (
                 <img src={client.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
               ) : (
-                <User size={32} className="text-blue-400" />
+                <User size={32} style={{ color: accent }} />
               )}
             </div>
             <div className="text-center">
@@ -87,11 +89,10 @@ export default function ProfileScreen({ client, config, onBack, onLogout }: Prop
               <button
                 key={item.id}
                 onClick={() => setTab(item.id)}
+                style={tab === item.id ? { backgroundColor: `${accent}26`, borderColor: `${accent}66`, color: accent } : undefined}
                 className={cn(
-                  'flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-left transition-colors',
-                  tab === item.id
-                    ? 'bg-blue-600/15 text-blue-300 border border-blue-500/20'
-                    : 'text-white/50 hover:bg-white/5 hover:text-white/70',
+                  'flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-left transition-colors border border-transparent',
+                  tab !== item.id && 'text-white/50 hover:bg-white/5 hover:text-white/70',
                 )}
               >
                 {item.icon}
@@ -151,7 +152,8 @@ export default function ProfileScreen({ client, config, onBack, onLogout }: Prop
                 <button
                   type="submit"
                   disabled={loading || !oldPw || !newPw || !confirmPw}
-                  className="flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors mt-2"
+                  style={{ backgroundColor: accent }}
+                  className="flex items-center justify-center gap-2 py-3 rounded-xl text-white font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:opacity-90 mt-2"
                 >
                   {loading && <Loader2 size={16} className="animate-spin" />}
                   Сохранить

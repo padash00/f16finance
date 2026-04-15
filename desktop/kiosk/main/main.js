@@ -47,7 +47,8 @@ let httpHeartbeatTimer = null
 let tickTimer = null
 let focusTimer = null
 let knownStationId = null
-let realtimeReady = false
+let realtimeInitialized = false  // have we kicked off initRealtime
+let realtimeReady = false        // true only when SUBSCRIBED
 let lastHeartbeatStatus = 'pending'  // 'ok' | 'error:{code}' | 'pending'
 let consecutiveHeartbeatFailures = 0
 let powerSaveId = null
@@ -177,9 +178,9 @@ async function postHeartbeat(status) {
       logLine(`heartbeat ok: activeSession=${JSON.stringify(payload?.activeSession ?? null)}`)
       pushState()
       const resolvedStationId = payload?.stationId || cfg.stationId
-      if (resolvedStationId && !realtimeReady) {
+      if (resolvedStationId && !realtimeInitialized) {
         knownStationId = resolvedStationId
-        realtimeReady = true
+        realtimeInitialized = true
         void initRealtime(cfg.serverBaseUrl, resolvedStationId)
       }
       // Sync session state from server (handles kiosk restart mid-session)
@@ -195,12 +196,11 @@ async function postHeartbeat(status) {
         clearSessionAndLock()
       }
     }
-    // Even on auth failure (409 device mismatch), stationId may be returned —
-    // use it to ensure realtime is connected to the correct channel
-    if (!res.ok && payload?.stationId && !realtimeReady) {
+    // Even on auth failure, stationId may be returned — use it for realtime channel
+    if (!res.ok && payload?.stationId && !realtimeInitialized) {
       const resolvedStationId = payload.stationId
       knownStationId = resolvedStationId
-      realtimeReady = true
+      realtimeInitialized = true
       void initRealtime(cfg.serverBaseUrl, resolvedStationId)
     }
   } catch (error) {
@@ -218,7 +218,8 @@ async function initRealtime(serverBaseUrl, stationId) {
     const data = await res.json().catch(() => null)
     if (!data?.ok || !data.supabaseUrl || !data.supabaseAnonKey) {
       logLine('Realtime: rtconfig not available, will retry on next heartbeat')
-      realtimeReady = false  // allow retry on next heartbeat
+      realtimeInitialized = false  // allow retry
+      pushState()
       return
     }
     const subscribed = await setupRealtime({
@@ -227,21 +228,32 @@ async function initRealtime(serverBaseUrl, stationId) {
       stationId,
       onCommand: handleCommand,
       onStatusChange: (status) => {
-        // If connection drops after SUBSCRIBED, mark for retry on next heartbeat
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        if (status === 'SUBSCRIBED') {
+          realtimeReady = true
+          pushState()
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           logLine(`Realtime dropped (${status}), will retry on next heartbeat`)
           realtimeReady = false
+          realtimeInitialized = false  // allow retry
+          pushState()
         }
       },
       logLine,
     })
-    if (!subscribed) {
+    if (subscribed) {
+      realtimeReady = true
+      pushState()
+    } else {
       logLine('Realtime: subscription failed, will retry on next heartbeat')
       realtimeReady = false
+      realtimeInitialized = false  // allow retry
+      pushState()
     }
   } catch (error) {
     logLine(`initRealtime failed: ${error.message}, will retry on next heartbeat`)
-    realtimeReady = false  // allow retry on next heartbeat
+    realtimeReady = false
+    realtimeInitialized = false  // allow retry
+    pushState()
   }
 }
 
@@ -748,26 +760,18 @@ app.whenReady().then(() => {
 
   app.setLoginItemSettings({ openAtLogin: true })
   const { configPath } = require('./config-store')
-  logLine(`startup: configPath=${configPath()} stationId=${cfg.stationId} hasSecret=${!!cfg.clientSecret} hasToken=${!!cfg.deviceToken}`)
-  logLine('startup: createKioskWindow')
+  logLine(`startup: stationId=${cfg.stationId} hasSecret=${!!cfg.clientSecret} hasToken=${!!cfg.deviceToken} config=${configPath()}`)
   createKioskWindow()
-  logLine('startup: setupShortcuts')
   setupShortcuts()
-  logLine('startup: setupWebSocket')
   setupWebSocket()
-  logLine('startup: setupTimers')
   setupTimers()
-  logLine('startup: pushState')
   pushState()
-  logLine('startup: postHeartbeat')
   void postHeartbeat('online')
-  logLine('startup: done')
 
-  // If stationId is already saved from registration, init realtime immediately
-  // (don't wait for the first heartbeat which fires after 10 seconds)
+  // If stationId is already saved, init realtime immediately (don't wait 10s for heartbeat)
   if (cfg.stationId) {
     knownStationId = cfg.stationId
-    realtimeReady = true
+    realtimeInitialized = true
     const serverBaseUrl = String(cfg.serverBaseUrl || '').replace(/\/+$/, '')
     void initRealtime(serverBaseUrl, cfg.stationId)
   }

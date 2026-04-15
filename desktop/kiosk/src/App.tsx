@@ -126,6 +126,7 @@ export default function App() {
           onBack={() => setUiScreen('shell')}
           onLogout={handleLogout}
           onClientUpdated={setClient}
+          accentColor={theme?.accentColor}
         />
       )
     }
