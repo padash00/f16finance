@@ -1,8 +1,12 @@
 let supabaseClient = null
 let currentChannel = null
 
-async function setupRealtime({ supabaseUrl, supabaseAnonKey, stationId, onCommand, logLine }) {
-  if (!supabaseUrl || !supabaseAnonKey || !stationId) return
+/**
+ * Returns true if subscription reached SUBSCRIBED, false otherwise.
+ * Caller should set realtimeReady = false and retry on next heartbeat if false.
+ */
+async function setupRealtime({ supabaseUrl, supabaseAnonKey, stationId, onCommand, onStatusChange, logLine }) {
+  if (!supabaseUrl || !supabaseAnonKey || !stationId) return false
 
   try {
     // Lazy-require to avoid issues if package not installed
@@ -16,19 +20,38 @@ async function setupRealtime({ supabaseUrl, supabaseAnonKey, stationId, onComman
       realtime: { params: { eventsPerSecond: 10 } },
     })
 
-    currentChannel = supabaseClient
-      .channel(`kiosk:${stationId}`)
-      .on('broadcast', { event: 'command' }, ({ payload }) => {
-        if (payload && onCommand) {
-          if (logLine) logLine(`Realtime command: ${payload.type}`)
-          onCommand(payload)
+    return await new Promise((resolve) => {
+      let settled = false
+      // Timeout — if no SUBSCRIBED within 10s, treat as failure
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true
+          if (logLine) logLine(`Realtime subscribe timeout for kiosk:${stationId}`)
+          resolve(false)
         }
-      })
-      .subscribe((status) => {
-        if (logLine) logLine(`Realtime status: ${status}`)
-      })
+      }, 10000)
+
+      currentChannel = supabaseClient
+        .channel(`kiosk:${stationId}`)
+        .on('broadcast', { event: 'command' }, ({ payload }) => {
+          if (payload && onCommand) {
+            if (logLine) logLine(`Realtime command: ${payload.type}`)
+            onCommand(payload)
+          }
+        })
+        .subscribe((status) => {
+          if (logLine) logLine(`Realtime status: ${status}`)
+          if (onStatusChange) onStatusChange(status)
+          if (status === 'SUBSCRIBED') {
+            if (!settled) { settled = true; clearTimeout(timeout); resolve(true) }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            if (!settled) { settled = true; clearTimeout(timeout); resolve(false) }
+          }
+        })
+    })
   } catch (error) {
     if (logLine) logLine(`Realtime setup failed: ${error.message}`)
+    return false
   }
 }
 

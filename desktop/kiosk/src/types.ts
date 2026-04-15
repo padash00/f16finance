@@ -2,6 +2,8 @@ export interface KioskState {
   screen: 'idle' | 'active' | 'ended' | 'blocked'
   clubName: string
   stationCode: string
+  stationId: string
+  realtimeConnected: boolean
   deviceIp: string
   deviceMac: string
   active: boolean

@@ -12,6 +12,7 @@ import EndedScreen from '@/screens/EndedScreen'
 import BlockedScreen from '@/screens/BlockedScreen'
 
 const isSetupMode = window.location.search.includes('screen=setup')
+const isDev = import.meta.env.DEV
 
 export default function App() {
   const [kioskState, setKioskState] = useState<KioskState | null>(null)
@@ -69,66 +70,70 @@ export default function App() {
   // Объединяем каталог из API с играми из WS (WS приоритетнее — оператор может передать свой список)
   const effectiveGames = kioskState?.games?.length ? kioskState.games : catalog
 
-  if (uiScreen === 'setup') return <SetupScreen />
-
-  if (uiScreen === 'blocked' && kioskState) {
-    return <BlockedScreen reason={kioskState.bindingReason} />
-  }
-
-  if (uiScreen === 'ended') {
-    return <EndedScreen onExtend={() => ipc.requestExtend()} onLogout={handleLogout} />
-  }
-
-  if (uiScreen === 'welcome') {
+  function renderScreen() {
+    if (uiScreen === 'setup') return <SetupScreen />
+    if (uiScreen === 'blocked' && kioskState) return <BlockedScreen reason={kioskState.bindingReason} />
+    if (uiScreen === 'ended') return <EndedScreen onExtend={() => ipc.requestExtend()} onLogout={handleLogout} />
+    if (uiScreen === 'welcome') {
+      return (
+        <WelcomeScreen
+          theme={theme}
+          config={config}
+          onLoginSuccess={handleLoginSuccess}
+          onGuestActivated={() => setUiScreen('shell')}
+        />
+      )
+    }
+    if (uiScreen === 'tariff' && config) {
+      return (
+        <TariffScreen
+          client={client!}
+          config={config}
+          onActivated={() => setUiScreen('shell')}
+          onBack={() => setUiScreen('welcome')}
+        />
+      )
+    }
+    if (uiScreen === 'profile' && config) {
+      return (
+        <ProfileScreen
+          client={client!}
+          config={config}
+          onBack={() => setUiScreen('shell')}
+          onLogout={handleLogout}
+          onClientUpdated={setClient}
+        />
+      )
+    }
+    if (uiScreen === 'shell' && kioskState) {
+      return (
+        <ShellScreen
+          kioskState={{ ...kioskState, games: effectiveGames }}
+          client={client}
+          onProfile={() => setUiScreen('profile')}
+          onExtend={() => ipc.requestExtend()}
+          onCallOperator={() => ipc.callOperator()}
+          onLaunchGame={(id) => ipc.launchGame(id)}
+        />
+      )
+    }
     return (
-      <WelcomeScreen
-        theme={theme}
-        config={config}
-        onLoginSuccess={handleLoginSuccess}
-        onGuestActivated={() => setUiScreen('shell')}
-      />
-    )
-  }
-
-  if (uiScreen === 'tariff' && config) {
-    return (
-      <TariffScreen
-        client={client!}
-        config={config}
-        onActivated={() => setUiScreen('shell')}
-        onBack={() => setUiScreen('welcome')}
-      />
-    )
-  }
-
-  if (uiScreen === 'profile' && config) {
-    return (
-      <ProfileScreen
-        client={client!}
-        config={config}
-        onBack={() => setUiScreen('shell')}
-        onLogout={handleLogout}
-        onClientUpdated={setClient}
-      />
-    )
-  }
-
-  if (uiScreen === 'shell' && kioskState) {
-    return (
-      <ShellScreen
-        kioskState={{ ...kioskState, games: effectiveGames }}
-        client={client}
-        onProfile={() => setUiScreen('profile')}
-        onExtend={() => ipc.requestExtend()}
-        onCallOperator={() => ipc.callOperator()}
-        onLaunchGame={(id) => ipc.launchGame(id)}
-      />
+      <div className="h-screen flex items-center justify-center bg-[#07080a]">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
     )
   }
 
   return (
-    <div className="h-screen flex items-center justify-center bg-[#07080a]">
-      <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-    </div>
+    <>
+      {renderScreen()}
+      {isDev && kioskState && (
+        <div className="fixed bottom-2 left-2 z-[9999] text-[10px] font-mono bg-black/80 text-white px-2 py-1 rounded space-y-0.5 pointer-events-none">
+          <div>station: {kioskState.stationCode} | id: {kioskState.stationId ? kioskState.stationId.slice(0, 8) : '—'}</div>
+          <div>realtime: <span className={kioskState.realtimeConnected ? 'text-green-400' : 'text-red-400'}>{kioskState.realtimeConnected ? '✓ connected' : '✗ disconnected'}</span></div>
+          <div>screen: {kioskState.screen}</div>
+        </div>
+      )}
+    </>
   )
 }

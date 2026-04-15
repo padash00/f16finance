@@ -85,6 +85,8 @@ function buildState() {
   return {
     clubName: cfg.clubName,
     stationCode: cfg.stationCode,
+    stationId: cfg.stationId || knownStationId || '',
+    realtimeConnected: realtimeReady,
     screen: session.bindingBlocked ? 'blocked' : getScreenMode(),
     active: session.active,
     tariffName: session.tariffName,
@@ -164,6 +166,14 @@ async function postHeartbeat(status) {
         clearSessionAndLock()
       }
     }
+    // Even on auth failure (409 device mismatch), stationId may be returned —
+    // use it to ensure realtime is connected to the correct channel
+    if (!res.ok && payload?.stationId && !realtimeReady) {
+      const resolvedStationId = payload.stationId
+      knownStationId = resolvedStationId
+      realtimeReady = true
+      void initRealtime(cfg.serverBaseUrl, resolvedStationId)
+    }
   } catch (error) {
     logLine(`heartbeat failed: ${error.message}`)
   }
@@ -178,13 +188,24 @@ async function initRealtime(serverBaseUrl, stationId) {
       realtimeReady = false  // allow retry on next heartbeat
       return
     }
-    await setupRealtime({
+    const subscribed = await setupRealtime({
       supabaseUrl: data.supabaseUrl,
       supabaseAnonKey: data.supabaseAnonKey,
       stationId,
       onCommand: handleCommand,
+      onStatusChange: (status) => {
+        // If connection drops after SUBSCRIBED, mark for retry on next heartbeat
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          logLine(`Realtime dropped (${status}), will retry on next heartbeat`)
+          realtimeReady = false
+        }
+      },
       logLine,
     })
+    if (!subscribed) {
+      logLine('Realtime: subscription failed, will retry on next heartbeat')
+      realtimeReady = false
+    }
   } catch (error) {
     logLine(`initRealtime failed: ${error.message}, will retry on next heartbeat`)
     realtimeReady = false  // allow retry on next heartbeat
