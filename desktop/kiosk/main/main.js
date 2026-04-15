@@ -125,7 +125,19 @@ function sendStatus(status) {
 
 async function postHeartbeat(status) {
   const cfg = runtimeConfig()
-  if (!cfg.clientSecret || !cfg.deviceToken) return
+  logLine(`postHeartbeat called: status=${status} hasSecret=${!!cfg.clientSecret} hasToken=${!!cfg.deviceToken} url=${cfg.heartbeatUrl}`)
+  if (!cfg.clientSecret) {
+    lastHeartbeatStatus = 'error:no-secret'
+    logLine('postHeartbeat skipped: clientSecret missing from config')
+    pushState()
+    return
+  }
+  if (!cfg.deviceToken) {
+    lastHeartbeatStatus = 'error:no-token'
+    logLine('postHeartbeat skipped: deviceToken missing from config')
+    pushState()
+    return
+  }
   const net = getDeviceNetworkIdentity()
   try {
     const body = {
@@ -140,11 +152,15 @@ async function postHeartbeat(status) {
     } else {
       body.stationCode = cfg.stationCode
     }
+    const controller = new AbortController()
+    const fetchTimeout = setTimeout(() => controller.abort(), 15000)
     const res = await fetch(cfg.heartbeatUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-kiosk-secret': cfg.clientSecret },
       body: JSON.stringify(body),
+      signal: controller.signal,
     })
+    clearTimeout(fetchTimeout)
     const payload = await res.json().catch(() => null)
     if (!res.ok) {
       lastHeartbeatStatus = `error:${res.status}:${payload?.error || ''}`
@@ -181,8 +197,9 @@ async function postHeartbeat(status) {
       void initRealtime(cfg.serverBaseUrl, resolvedStationId)
     }
   } catch (error) {
-    lastHeartbeatStatus = `error:network`
-    logLine(`heartbeat failed: ${error.message}`)
+    const isTimeout = error?.name === 'AbortError'
+    lastHeartbeatStatus = isTimeout ? 'error:timeout' : `error:network`
+    logLine(`heartbeat failed (${isTimeout ? 'timeout' : 'network'}): ${error.message}`)
     pushState()
   }
 }
@@ -608,6 +625,8 @@ app.whenReady().then(() => {
   }
 
   app.setLoginItemSettings({ openAtLogin: true })
+  const { configPath } = require('./config-store')
+  logLine(`startup: configPath=${configPath()} stationId=${cfg.stationId} hasSecret=${!!cfg.clientSecret} hasToken=${!!cfg.deviceToken}`)
   createKioskWindow()
   setupShortcuts()
   setupWebSocket()
