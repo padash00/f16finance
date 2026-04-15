@@ -5,9 +5,12 @@
 async function broadcast(channel: string, event: string, payload: Record<string, unknown>): Promise<void> {
   const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '')
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || ''
-  if (!supabaseUrl || !serviceKey) return
+  if (!supabaseUrl || !serviceKey) {
+    console.warn('[kiosk-broadcast] SKIP: missing supabaseUrl or serviceKey')
+    return
+  }
   try {
-    await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+    const res = await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -16,8 +19,14 @@ async function broadcast(channel: string, event: string, payload: Record<string,
       },
       body: JSON.stringify({ messages: [{ topic: channel, event, payload }] }),
     })
-  } catch (_) {
-    // best-effort
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      console.error(`[kiosk-broadcast] HTTP ${res.status} for channel=${channel}:`, text)
+    } else {
+      console.log(`[kiosk-broadcast] OK channel=${channel} event=${event} payload=`, JSON.stringify(payload))
+    }
+  } catch (err: any) {
+    console.error('[kiosk-broadcast] fetch error:', err?.message)
   }
 }
 
