@@ -4,6 +4,7 @@ export interface KioskState {
   stationCode: string
   stationId: string
   realtimeConnected: boolean
+  heartbeatStatus: string
   deviceIp: string
   deviceMac: string
   active: boolean

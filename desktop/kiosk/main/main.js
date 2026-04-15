@@ -47,6 +47,7 @@ let httpHeartbeatTimer = null
 let tickTimer = null
 let knownStationId = null
 let realtimeReady = false
+let lastHeartbeatStatus = 'pending'  // 'ok' | 'error:{code}' | 'pending'
 
 const session = {
   active: false,
@@ -87,6 +88,7 @@ function buildState() {
     stationCode: cfg.stationCode,
     stationId: cfg.stationId || knownStationId || '',
     realtimeConnected: realtimeReady,
+    heartbeatStatus: lastHeartbeatStatus,
     screen: session.bindingBlocked ? 'blocked' : getScreenMode(),
     active: session.active,
     tariffName: session.tariffName,
@@ -145,8 +147,11 @@ async function postHeartbeat(status) {
     })
     const payload = await res.json().catch(() => null)
     if (!res.ok) {
+      lastHeartbeatStatus = `error:${res.status}`
       logLine(`heartbeat http ${res.status}: ${JSON.stringify(payload || {})}`)
+      pushState()
     } else {
+      lastHeartbeatStatus = 'ok'
       const resolvedStationId = payload?.stationId || cfg.stationId
       if (resolvedStationId && !realtimeReady) {
         knownStationId = resolvedStationId
@@ -175,7 +180,9 @@ async function postHeartbeat(status) {
       void initRealtime(cfg.serverBaseUrl, resolvedStationId)
     }
   } catch (error) {
+    lastHeartbeatStatus = `error:network`
     logLine(`heartbeat failed: ${error.message}`)
+    pushState()
   }
 }
 

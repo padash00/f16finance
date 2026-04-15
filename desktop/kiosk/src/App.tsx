@@ -127,11 +127,15 @@ export default function App() {
   return (
     <>
       {renderScreen()}
-      {isDev && kioskState && (
-        <div className="fixed bottom-2 left-2 z-[9999] text-[10px] font-mono bg-black/80 text-white px-2 py-1 rounded space-y-0.5 pointer-events-none">
-          <div>station: {kioskState.stationCode} | id: {kioskState.stationId ? kioskState.stationId.slice(0, 8) : '—'}</div>
-          <div>realtime: <span className={kioskState.realtimeConnected ? 'text-green-400' : 'text-red-400'}>{kioskState.realtimeConnected ? '✓ connected' : '✗ disconnected'}</span></div>
-          <div>screen: {kioskState.screen}</div>
+      {kioskState && (
+        <div className="fixed bottom-2 left-2 z-[9999] text-[10px] font-mono bg-black/70 text-white px-2 py-1 rounded space-y-0.5 pointer-events-none select-none">
+          <div>
+            <span className="text-white/50">id:</span> {kioskState.stationId ? kioskState.stationId.slice(0, 8) : '—'}
+            {' · '}
+            <span className="text-white/50">hb:</span> <span className={kioskState.heartbeatStatus === 'ok' ? 'text-green-400' : kioskState.heartbeatStatus === 'pending' ? 'text-yellow-400' : 'text-red-400'}>{kioskState.heartbeatStatus}</span>
+            {' · '}
+            <span className="text-white/50">rt:</span> <span className={kioskState.realtimeConnected ? 'text-green-400' : 'text-red-400'}>{kioskState.realtimeConnected ? '✓' : '✗'}</span>
+          </div>
         </div>
       )}
     </>
