@@ -37,6 +37,11 @@ type Station = {
   active_session_id: string | null
   active_session_ends_at: string | null
   grid_x: number | null; grid_y: number | null
+  kiosk_bg_type: string | null
+  kiosk_bg_value: string | null
+  kiosk_accent: string | null
+  kiosk_logo_url: string | null
+  kiosk_announcement: string | null
 }
 type GameCatalog = {
   id: string
@@ -151,6 +156,11 @@ function arenaRowToStation(row: Record<string, unknown>): Station {
     active_session_ends_at: row.active_session_ends_at != null ? String(row.active_session_ends_at) : null,
     grid_x: row.grid_x != null ? Number(row.grid_x) : null,
     grid_y: row.grid_y != null ? Number(row.grid_y) : null,
+    kiosk_bg_type: row.kiosk_bg_type != null ? String(row.kiosk_bg_type) : null,
+    kiosk_bg_value: row.kiosk_bg_value != null ? String(row.kiosk_bg_value) : null,
+    kiosk_accent: row.kiosk_accent != null ? String(row.kiosk_accent) : null,
+    kiosk_logo_url: row.kiosk_logo_url != null ? String(row.kiosk_logo_url) : null,
+    kiosk_announcement: row.kiosk_announcement != null ? String(row.kiosk_announcement) : null,
   }
 }
 
@@ -2896,6 +2906,158 @@ export default function StationsPage() {
                 {brandingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Сохранить
               </button>
+            </div>
+
+            {/* ─── Kiosk Branding ─────────────────────────────────────────── */}
+            <div className="rounded-xl border border-white/10 bg-card p-5 space-y-4">
+              <h2 className="text-sm font-semibold">Оформление киоска</h2>
+              <p className="text-xs text-muted-foreground -mt-2">Выберите станцию чтобы настроить внешний вид экрана приветствия и сессии.</p>
+
+              {/* Station selector */}
+              <div className="space-y-1">
+                <span className="text-xs text-muted-foreground">Станция</span>
+                <select
+                  value={kioskThemeStationId || ''}
+                  onChange={e => {
+                    const st = stations.find(s => s.id === e.target.value)
+                    if (st) openKioskTheme(st as any)
+                    else setKioskThemeStationId(null)
+                  }}
+                  className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                >
+                  <option value="">— выберите станцию —</option>
+                  {stations.map(st => (
+                    <option key={st.id} value={st.id}>{st.name || st.station_code || st.id.slice(0, 8)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {kioskThemeStationId && (() => {
+                // Live mini preview
+                const bgStyle: React.CSSProperties =
+                  kioskBgType === 'color' ? { background: kioskBgValue || '#07080a' }
+                  : kioskBgType === 'gradient' ? { background: kioskBgValue || 'linear-gradient(135deg,#07080a,#0f1520)' }
+                  : kioskBgType === 'image' ? { backgroundImage: `url(${kioskBgValue})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                  : { background: '#07080a' }
+                const ac = kioskAccent || '#2563eb'
+                const selectedSt = stations.find(s => s.id === kioskThemeStationId)
+                return (
+                  <div className="space-y-4">
+                    {/* ── Preview ── */}
+                    <div className="relative h-44 rounded-xl overflow-hidden border border-white/10" style={bgStyle}>
+                      <div className="absolute inset-0 bg-black/20" />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                        {kioskLogoUrl && (
+                          <img src={kioskLogoUrl} alt="logo" className="h-10 object-contain drop-shadow-lg" />
+                        )}
+                        <p className="text-white font-bold text-base drop-shadow">{selectedSt?.name || 'Станция'}</p>
+                        {kioskAnnouncement && (
+                          <p className="text-white/60 text-xs max-w-[180px] text-center">{kioskAnnouncement}</p>
+                        )}
+                        <div className="flex gap-2 mt-1">
+                          <div className="px-4 py-1.5 rounded-lg text-white text-xs font-semibold" style={{ backgroundColor: ac }}>Войти</div>
+                          <div className="px-4 py-1.5 rounded-lg text-white/50 text-xs border border-white/20">Гость</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Background ── */}
+                    <div className="space-y-2">
+                      <span className="text-xs text-muted-foreground">Тип фона</span>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {(['color', 'gradient', 'image', 'video'] as const).map(t => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setKioskBgType(t)}
+                            className={`rounded-lg px-2 py-1.5 text-xs font-medium border transition-colors ${kioskBgType === t ? 'border-primary bg-primary/10 text-primary' : 'border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10'}`}
+                          >
+                            {t === 'color' ? 'Цвет' : t === 'gradient' ? 'Градиент' : t === 'image' ? 'Картинка' : 'Видео'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground">
+                        {kioskBgType === 'color' ? 'Цвет фона' : kioskBgType === 'gradient' ? 'CSS-градиент' : kioskBgType === 'image' ? 'URL картинки' : 'URL видео (.mp4)'}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {kioskBgType === 'color' && (
+                          <input
+                            type="color"
+                            value={kioskBgValue || '#07080a'}
+                            onChange={e => setKioskBgValue(e.target.value)}
+                            className="h-9 w-12 cursor-pointer rounded border border-white/10 bg-background p-0.5 shrink-0"
+                          />
+                        )}
+                        <input
+                          value={kioskBgValue}
+                          onChange={e => setKioskBgValue(e.target.value)}
+                          placeholder={
+                            kioskBgType === 'color' ? '#07080a'
+                            : kioskBgType === 'gradient' ? 'linear-gradient(135deg, #07080a 0%, #1a0a2e 100%)'
+                            : kioskBgType === 'image' ? 'https://example.com/bg.jpg'
+                            : 'https://example.com/bg.mp4'
+                          }
+                          className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                        />
+                      </div>
+                    </div>
+
+                    {/* ── Accent color ── */}
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground">Акцентный цвет (кнопки, выделения)</span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={kioskAccent || '#2563eb'}
+                          onChange={e => setKioskAccent(e.target.value)}
+                          className="h-9 w-12 cursor-pointer rounded border border-white/10 bg-background p-0.5 shrink-0"
+                        />
+                        <input
+                          value={kioskAccent}
+                          onChange={e => setKioskAccent(e.target.value)}
+                          placeholder="#2563eb"
+                          className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                        />
+                      </div>
+                    </div>
+
+                    {/* ── Logo ── */}
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground">Логотип (URL картинки)</span>
+                      <input
+                        value={kioskLogoUrl}
+                        onChange={e => setKioskLogoUrl(e.target.value)}
+                        placeholder="https://example.com/logo.png"
+                        className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                      />
+                    </div>
+
+                    {/* ── Announcement ── */}
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground">Объявление (бегущая строка на приветственном экране)</span>
+                      <input
+                        value={kioskAnnouncement}
+                        onChange={e => setKioskAnnouncement(e.target.value)}
+                        placeholder="Добро пожаловать! Акция: 2 часа по цене 1!"
+                        className="w-full rounded-lg border border-white/10 bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveKioskTheme(kioskThemeStationId)}
+                      disabled={saving}
+                      className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                    >
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                      Сохранить оформление
+                    </button>
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Provisioning key block */}

@@ -10,9 +10,11 @@ interface Props {
   config: KioskConfig
   onActivated: () => void
   onBack: () => void
+  accentColor?: string | null
 }
 
-export default function TariffScreen({ client, config, onActivated, onBack }: Props) {
+export default function TariffScreen({ client, config, onActivated, onBack, accentColor }: Props) {
+  const accent = accentColor || '#2563eb'
   const [tariffs, setTariffs] = useState<Tariff[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -85,15 +87,13 @@ export default function TariffScreen({ client, config, onActivated, onBack }: Pr
                     disabled={!affordable}
                     className={cn(
                       'relative text-left p-5 rounded-2xl border transition-all duration-150',
-                      isSelected
-                        ? 'bg-blue-600/15 border-blue-500/40'
-                        : affordable
-                          ? 'bg-white/4 border-white/8 hover:bg-white/6 hover:border-white/15'
-                          : 'bg-white/2 border-white/5 opacity-40 cursor-not-allowed',
+                      !isSelected && affordable && 'bg-white/4 border-white/8 hover:bg-white/6 hover:border-white/15',
+                      !isSelected && !affordable && 'bg-white/2 border-white/5 opacity-40 cursor-not-allowed',
                     )}
+                    style={isSelected ? { backgroundColor: `${accent}26`, borderColor: `${accent}66` } : undefined}
                   >
                     {isSelected && (
-                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: accent }}>
                         <div className="w-2 h-2 rounded-full bg-white" />
                       </div>
                     )}
@@ -161,12 +161,8 @@ export default function TariffScreen({ client, config, onActivated, onBack }: Pr
           <button
             onClick={handleBuy}
             disabled={!selected || !canAfford || buying}
-            className={cn(
-              'w-full py-4 rounded-2xl font-semibold text-white text-base transition-all duration-200',
-              'flex items-center justify-center gap-2',
-              'disabled:opacity-30 disabled:cursor-not-allowed',
-              'bg-blue-600 hover:bg-blue-500',
-            )}
+            style={{ backgroundColor: accent }}
+            className="w-full py-4 rounded-2xl font-semibold text-white text-base flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
           >
             {buying && <Loader2 size={18} className="animate-spin" />}
             {buying ? 'Активация...' : 'Купить и начать'}

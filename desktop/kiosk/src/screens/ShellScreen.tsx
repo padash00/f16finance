@@ -12,6 +12,7 @@ interface Props {
   onExtend: () => void
   onCallOperator: () => void
   onLaunchGame: (id: string) => void
+  accentColor?: string | null
 }
 
 const TAB_LABELS: Record<CatalogTab, string> = {
@@ -26,7 +27,8 @@ const TAB_ICONS: Record<CatalogTab, React.ReactNode> = {
   app: <AppWindow size={16} />,
 }
 
-export default function ShellScreen({ kioskState, client, onProfile, onExtend, onCallOperator, onLaunchGame }: Props) {
+export default function ShellScreen({ kioskState, client, onProfile, onExtend, onCallOperator, onLaunchGame, accentColor }: Props) {
+  const accent = accentColor || '#2563eb'
   const [tab, setTab] = useState<CatalogTab>('game')
   const [warningLevel, setWarningLevel] = useState<'none' | 'warn' | 'danger'>('none')
 
@@ -52,11 +54,11 @@ export default function ShellScreen({ kioskState, client, onProfile, onExtend, o
             client ? 'hover:bg-white/5 cursor-pointer' : 'cursor-default',
           )}
         >
-          <div className="w-9 h-9 rounded-full bg-blue-600/20 border border-blue-500/20 flex items-center justify-center overflow-hidden">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden" style={{ backgroundColor: `${accent}33`, border: `1px solid ${accent}33` }}>
             {client?.avatarUrl ? (
               <img src={client.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
             ) : (
-              <User size={18} className="text-blue-400" />
+              <User size={18} style={{ color: accent }} />
             )}
           </div>
           <div className="text-left">
@@ -90,7 +92,8 @@ export default function ShellScreen({ kioskState, client, onProfile, onExtend, o
         <div className="flex items-center gap-2">
           <button
             onClick={onExtend}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600/15 border border-blue-500/20 text-blue-300 hover:bg-blue-600/25 transition-colors text-sm"
+            style={{ backgroundColor: `${accent}26`, borderColor: `${accent}33`, color: accent }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border hover:opacity-90 transition-opacity text-sm"
           >
             <Plus size={15} />
             Продлить

@@ -83,7 +83,7 @@ export default function App() {
   function renderScreen() {
     if (uiScreen === 'setup') return <SetupScreen />
     if (uiScreen === 'blocked' && kioskState) return <BlockedScreen reason={kioskState.bindingReason} />
-    if (uiScreen === 'ended') return <EndedScreen onExtend={() => ipc.requestExtend()} onLogout={handleLogout} />
+    if (uiScreen === 'ended') return <EndedScreen onExtend={() => ipc.requestExtend()} onLogout={handleLogout} accentColor={theme?.accentColor} />
     if (uiScreen === 'welcome') {
       return (
         <WelcomeScreen
@@ -101,6 +101,7 @@ export default function App() {
           config={config}
           onActivated={() => setUiScreen('shell')}
           onBack={() => setUiScreen('welcome')}
+          accentColor={theme?.accentColor}
         />
       )
     }
@@ -124,6 +125,7 @@ export default function App() {
           onExtend={() => ipc.requestExtend()}
           onCallOperator={() => ipc.callOperator()}
           onLaunchGame={(id) => ipc.launchGame(id)}
+          accentColor={theme?.accentColor}
         />
       )
     }
