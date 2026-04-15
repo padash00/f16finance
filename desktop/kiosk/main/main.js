@@ -627,14 +627,19 @@ app.whenReady().then(() => {
   app.setLoginItemSettings({ openAtLogin: true })
   const { configPath } = require('./config-store')
   logLine(`startup: configPath=${configPath()} stationId=${cfg.stationId} hasSecret=${!!cfg.clientSecret} hasToken=${!!cfg.deviceToken}`)
+  logLine('startup: createKioskWindow')
   createKioskWindow()
+  logLine('startup: setupShortcuts')
   setupShortcuts()
+  logLine('startup: setupWebSocket')
   setupWebSocket()
+  logLine('startup: setupTimers')
   setupTimers()
+  logLine('startup: pushState')
   pushState()
-
-  // Fire first heartbeat immediately (don't wait 10s for the interval)
+  logLine('startup: postHeartbeat')
   void postHeartbeat('online')
+  logLine('startup: done')
 
   // If stationId is already saved from registration, init realtime immediately
   // (don't wait for the first heartbeat which fires after 10 seconds)
@@ -647,9 +652,14 @@ app.whenReady().then(() => {
 })
 
 process.on('uncaughtException', (error) => {
-  logLine(`uncaughtException: ${error.message}`)
+  logLine(`uncaughtException: ${error.message}\n${error.stack}`)
   app.relaunch()
   app.exit(1)
+})
+
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? `${reason.message}\n${reason.stack}` : String(reason)
+  logLine(`unhandledRejection: ${msg}`)
 })
 
 app.on('before-quit', cleanup)
