@@ -147,11 +147,12 @@ async function postHeartbeat(status) {
     })
     const payload = await res.json().catch(() => null)
     if (!res.ok) {
-      lastHeartbeatStatus = `error:${res.status}`
+      lastHeartbeatStatus = `error:${res.status}:${payload?.error || ''}`
       logLine(`heartbeat http ${res.status}: ${JSON.stringify(payload || {})}`)
       pushState()
     } else {
       lastHeartbeatStatus = 'ok'
+      pushState()
       const resolvedStationId = payload?.stationId || cfg.stationId
       if (resolvedStationId && !realtimeReady) {
         knownStationId = resolvedStationId
@@ -612,6 +613,9 @@ app.whenReady().then(() => {
   setupWebSocket()
   setupTimers()
   pushState()
+
+  // Fire first heartbeat immediately (don't wait 10s for the interval)
+  void postHeartbeat('online')
 
   // If stationId is already saved from registration, init realtime immediately
   // (don't wait for the first heartbeat which fires after 10 seconds)
