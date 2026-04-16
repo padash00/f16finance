@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   Warehouse,
   X,
 } from 'lucide-react'
@@ -113,6 +114,11 @@ export default function WarehousePage() {
 
   // Search / filter existing stock
   const [stockSearch, setStockSearch] = useState('')
+
+  // Selection + delete
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<'selected' | 'all' | null>(null)
 
   // ── Load data ────────────────────────────────────────────────────────────────
 
@@ -474,6 +480,38 @@ export default function WarehousePage() {
     }
   }
 
+  // ── Delete stock ─────────────────────────────────────────────────────────────
+
+  async function handleDelete(mode: 'selected' | 'all') {
+    if (!selectedCompanyId) return
+    setDeleting(true)
+    setDeleteConfirm(null)
+    try {
+      const body: Record<string, unknown> = {
+        action: 'deleteStock',
+        company_id: selectedCompanyId,
+      }
+      if (mode === 'all') {
+        body.delete_all = true
+      } else {
+        body.item_ids = Array.from(selectedIds)
+      }
+      const res = await fetch('/api/admin/store/warehouse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка удаления')
+      setSelectedIds(new Set())
+      await load(selectedCompanyId)
+    } catch (err: any) {
+      alert(err?.message || 'Ошибка удаления')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   // ── Filtered balances ─────────────────────────────────────────────────────────
 
   const filteredBalances = balances.filter((b) => {
@@ -552,12 +590,12 @@ export default function WarehousePage() {
         {/* LEFT: current stock table */}
         <Card className="border-white/10 bg-card/70">
           <CardHeader className="border-b border-white/10 pb-3">
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="flex items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-sm mr-auto">
                 <Package className="h-4 w-4 text-amber-300" />
                 Текущие остатки
               </CardTitle>
-              <div className="relative w-48">
+              <div className="relative w-40">
                 <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   value={stockSearch}
@@ -566,6 +604,30 @@ export default function WarehousePage() {
                   className="h-7 pl-7 text-xs"
                 />
               </div>
+              {selectedIds.size > 0 && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => setDeleteConfirm('selected')}
+                  disabled={deleting}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Удалить выбранные ({selectedIds.size})
+                </Button>
+              )}
+              {balances.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1 text-xs border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                  onClick={() => setDeleteConfirm('all')}
+                  disabled={deleting}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Очистить склад
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -584,9 +646,46 @@ export default function WarehousePage() {
               </div>
             ) : (
               <div className="divide-y divide-white/[0.06]">
+                {/* Select-all row */}
+                <div className="flex items-center gap-3 px-4 py-2 bg-white/[0.02]">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 accent-amber-400 cursor-pointer"
+                    checked={filteredBalances.length > 0 && filteredBalances.every((b) => selectedIds.has(b.item_id))}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds((prev) => new Set([...prev, ...filteredBalances.map((b) => b.item_id)]))
+                      } else {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev)
+                          filteredBalances.forEach((b) => next.delete(b.item_id))
+                          return next
+                        })
+                      }
+                    }}
+                  />
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {selectedIds.size > 0 ? `Выбрано: ${selectedIds.size}` : 'Выбрать все'}
+                  </span>
+                </div>
                 {filteredBalances.map((b) => (
-                  <div key={b.item_id} className="flex items-center justify-between px-4 py-2.5">
-                    <div className="min-w-0">
+                  <div
+                    key={b.item_id}
+                    className={`flex items-center gap-3 px-4 py-2.5 transition ${selectedIds.has(b.item_id) ? 'bg-rose-500/[0.06]' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 accent-amber-400 cursor-pointer shrink-0"
+                      checked={selectedIds.has(b.item_id)}
+                      onChange={(e) => {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev)
+                          e.target.checked ? next.add(b.item_id) : next.delete(b.item_id)
+                          return next
+                        })
+                      }}
+                    />
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{b.item?.name || 'Товар'}</p>
                       <p className="text-[11px] text-muted-foreground">
                         {b.item?.barcode || ''}
@@ -825,7 +924,42 @@ export default function WarehousePage() {
         </Card>
       </div>
 
-      {/* New item dialog overlay */}
+      {/* Confirm delete dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#111827] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/15">
+                <Trash2 className="h-5 w-5 text-rose-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">
+                  {deleteConfirm === 'all' ? 'Очистить весь склад?' : `Удалить ${selectedIds.size} позиц.?`}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {deleteConfirm === 'all'
+                    ? 'Все остатки на складе будут удалены. Это действие нельзя отменить.'
+                    : 'Выбранные позиции будут удалены со склада.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setDeleteConfirm(null)} disabled={deleting}>
+                Отмена
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleDelete(deleteConfirm)}
+                disabled={deleting}
+              >
+                {deleting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1.5 h-3.5 w-3.5" />}
+                {deleteConfirm === 'all' ? 'Да, очистить' : 'Удалить'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

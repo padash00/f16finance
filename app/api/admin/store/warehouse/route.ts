@@ -285,6 +285,47 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { receipt: result, resolved: resolvedItems.length, skipped: rawItems.length - resolvedItems.length } })
     }
 
+    // ── deleteStock (remove balance rows for given item_ids) ──────────────────
+    if (body.action === 'deleteStock') {
+      const companyId = String(body.company_id || '').trim()
+      if (!companyId) return json({ error: 'company-id-required' }, 400)
+
+      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
+        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      }
+
+      const itemIds: string[] = (body.item_ids || [])
+        .map((id: any) => String(id || '').trim())
+        .filter(Boolean)
+
+      const deleteAll = body.delete_all === true
+
+      if (!deleteAll && itemIds.length === 0) return json({ error: 'item-ids-required' }, 400)
+
+      const warehouse = await ensureCompanyWarehouse(supabase, companyId)
+      const actorUserId = access.staffMember?.id || null
+
+      let deleteQuery = supabase
+        .from('inventory_balances')
+        .delete()
+        .eq('location_id', warehouse.id)
+
+      if (!deleteAll) deleteQuery = deleteQuery.in('item_id', itemIds)
+
+      const { error: delErr } = await deleteQuery
+      if (delErr) throw delErr
+
+      await writeAuditLog(supabase, {
+        actorUserId,
+        entityType: 'inventory-warehouse-stock',
+        entityId: warehouse.id,
+        action: 'delete_stock',
+        payload: { company_id: companyId, delete_all: deleteAll, item_ids: deleteAll ? [] : itemIds },
+      })
+
+      return json({ ok: true })
+    }
+
     return json({ error: 'unknown-action' }, 400)
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/warehouse.POST', message: error?.message })
