@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
+import mammoth from 'mammoth'
 import {
   AlertCircle,
   Barcode,
@@ -269,10 +270,141 @@ export default function WarehousePage() {
 
   // ── Excel import ─────────────────────────────────────────────────────────────
 
-  function handleExcelFile(e: React.ChangeEvent<HTMLInputElement>) {
+  function parseRowsFromTable(rows: any[][]): StockLine[] {
+    const parsed: StockLine[] = []
+    // Detect header row: skip if first cell looks like header text (not a number or barcode)
+    const startIdx = (() => {
+      if (rows.length === 0) return 0
+      const firstCell = String(rows[0][0] || '').trim().toLowerCase()
+      // Header-like: contains letters but no long digit sequence (barcode)
+      if (!/\d{8,}/.test(firstCell) && /[а-яёa-z№#]/i.test(firstCell)) return 1
+      return 0
+    })()
+
+    for (let i = startIdx; i < rows.length; i++) {
+      const row = rows[i]
+      if (!row || row.every((c: any) => !String(c || '').trim())) continue
+
+      // Try to find barcode (long digit sequence) and name and qty in the row
+      let barcode = ''
+      let name = ''
+      let qty = 0
+      let cost = 0
+      let unit = 'шт'
+
+      // Detect column layout by scanning values
+      const cells = row.map((c: any) => String(c || '').trim())
+
+      // If first cell is a small number (row index like 1,2,3...), shift columns
+      const hasIndex = cells[0] !== '' && /^\d{1,3}$/.test(cells[0]) && Number(cells[0]) < 1000 && !cells[0].match(/^\d{8,}/)
+      const offset = hasIndex ? 1 : 0
+
+      // After optional index: name, barcode, qty OR barcode, name, qty
+      const c0 = cells[offset] || ''
+      const c1 = cells[offset + 1] || ''
+      const c2 = cells[offset + 2] || ''
+      const c3 = cells[offset + 3] || ''
+
+      const isBarcodelike = (s: string) => /^\d{8,}$/.test(s.replace(/\s/g, ''))
+
+      if (isBarcodelike(c1)) {
+        // Layout: [idx?] Name | Barcode | Qty | Cost?
+        name = c0
+        barcode = c1.replace(/\s/g, '')
+        qty = parseNum(c2)
+        cost = parseNum(c3)
+      } else if (isBarcodelike(c0)) {
+        // Layout: [idx?] Barcode | Name | Qty | Cost?
+        barcode = c0.replace(/\s/g, '')
+        name = c1
+        qty = parseNum(c2)
+        cost = parseNum(c3)
+      } else {
+        // No barcode found — use name + qty only
+        name = c0
+        qty = parseNum(c1 || c2)
+        cost = parseNum(c3)
+      }
+
+      // Try last cells for unit
+      const lastCell = cells[cells.length - 1]
+      if (lastCell && !/^\d/.test(lastCell) && lastCell.length < 10) unit = lastCell
+
+      if (!name && !barcode) continue
+      if (qty <= 0) continue
+
+      parsed.push({
+        key: nextKey(),
+        item_id: '',
+        name,
+        barcode,
+        unit,
+        quantity: String(qty),
+        unit_cost: String(cost),
+        isNew: false,
+      })
+    }
+    return parsed
+  }
+
+  async function handleExcelFile(e: React.ChangeEvent<HTMLInputElement>) {
     setExcelError(null)
     const file = e.target.files?.[0]
     if (!file) return
+    e.target.value = ''
+
+    const ext = file.name.split('.').pop()?.toLowerCase() || ''
+
+    // ── DOCX ─────────────────────────────────────────────────────────────────
+    if (ext === 'docx') {
+      try {
+        const arrayBuffer = await file.arrayBuffer()
+        // Use mammoth to convert docx to plain text, then parse table-like structure
+        const result = await mammoth.convertToHtml({ arrayBuffer })
+        const html = result.value
+
+        // Parse <table> → rows from HTML
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(html, 'text/html')
+        const tables = doc.querySelectorAll('table')
+
+        if (tables.length === 0) {
+          // No table — try to parse as list: each line = "name barcode qty"
+          const lines = doc.body.textContent?.split('\n').map(l => l.trim()).filter(Boolean) || []
+          const rows = lines.map(line => line.split(/\t|\s{2,}|;|,/).map(s => s.trim()))
+          const parsed = parseRowsFromTable(rows)
+          if (parsed.length === 0) {
+            setExcelError('Таблица не найдена в документе. Убедитесь что в Word есть таблица с товарами.')
+            return
+          }
+          setExcelRows(parsed)
+          return
+        }
+
+        // Use first table
+        const table = tables[0]
+        const rows: string[][] = []
+        table.querySelectorAll('tr').forEach((tr) => {
+          const cells: string[] = []
+          tr.querySelectorAll('td, th').forEach((td) => {
+            cells.push(td.textContent?.trim() || '')
+          })
+          rows.push(cells)
+        })
+
+        const parsed = parseRowsFromTable(rows)
+        if (parsed.length === 0) {
+          setExcelError('Не найдено строк с данными в таблице Word.')
+          return
+        }
+        setExcelRows(parsed)
+      } catch (err: any) {
+        setExcelError('Не удалось прочитать .docx: ' + (err?.message || 'ошибка'))
+      }
+      return
+    }
+
+    // ── XLSX / XLS / CSV ──────────────────────────────────────────────────────
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
@@ -280,42 +412,17 @@ export default function WarehousePage() {
         const wb = XLSX.read(data, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-
-        // Find header row (first row with barcode/qty keywords or just use row 0)
-        const parsed: StockLine[] = []
-        const start = rows.length > 1 && String(rows[0][0]).toLowerCase().includes('штрих') ? 1 : 0
-
-        for (let i = start; i < rows.length; i++) {
-          const row = rows[i]
-          const barcode = String(row[0] || '').trim()
-          const name = String(row[1] || '').trim()
-          const qty = parseNum(String(row[2] || '0'))
-          const cost = parseNum(String(row[3] || '0'))
-          if (!barcode && !name) continue
-          if (qty <= 0) continue
-          parsed.push({
-            key: nextKey(),
-            item_id: '', // will be resolved on save
-            name,
-            barcode,
-            unit: String(row[4] || 'шт').trim() || 'шт',
-            quantity: String(qty),
-            unit_cost: String(cost),
-            isNew: false,
-          })
-        }
-
+        const parsed = parseRowsFromTable(rows)
         if (parsed.length === 0) {
-          setExcelError('Не найдено строк с данными. Формат: Штрихкод | Название | Количество | Цена (опц) | Единица (опц)')
+          setExcelError('Не найдено строк с данными. Формат: Штрихкод | Название | Количество | Цена (опц)')
           return
         }
         setExcelRows(parsed)
       } catch {
-        setExcelError('Не удалось прочитать файл. Убедитесь что это .xlsx или .xls')
+        setExcelError('Не удалось прочитать файл. Поддерживаются .xlsx, .xls, .csv, .docx')
       }
     }
     reader.readAsArrayBuffer(file)
-    e.target.value = ''
   }
 
   async function resolveExcelItems(): Promise<StockLine[]> {
@@ -687,10 +794,10 @@ export default function WarehousePage() {
                 >
                   <FileSpreadsheet className="h-8 w-8 text-blue-400" />
                   <p className="text-xs font-medium text-foreground">Нажмите чтобы загрузить файл</p>
-                  <p className="text-[10px] text-muted-foreground">.xlsx / .xls / .csv</p>
-                  <p className="text-[10px] text-muted-foreground">Формат: Штрихкод | Название | Количество | Цена (опц)</p>
+                  <p className="text-[10px] text-muted-foreground">.xlsx / .xls / .csv / .docx</p>
+                  <p className="text-[10px] text-muted-foreground">Формат: [№] Название | Штрихкод | Количество | Цена (опц)</p>
                 </div>
-                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelFile} />
+                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.docx" className="hidden" onChange={handleExcelFile} />
                 {excelError && <p className="text-xs text-rose-400">{excelError}</p>}
               </div>
             )}
