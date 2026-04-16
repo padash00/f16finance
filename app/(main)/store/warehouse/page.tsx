@@ -1,0 +1,758 @@
+'use client'
+
+import { useCallback, useEffect, useRef, useState } from 'react'
+import * as XLSX from 'xlsx'
+import {
+  AlertCircle,
+  Barcode,
+  CheckCircle2,
+  ChevronDown,
+  FileSpreadsheet,
+  Loader2,
+  Package,
+  PackagePlus,
+  Plus,
+  RefreshCw,
+  Search,
+  Warehouse,
+  X,
+} from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Category = { id: string; name: string }
+type Company = { id: string; name: string; code: string | null }
+type WarehouseLocation = { id: string; name: string; code: string | null; is_active: boolean }
+type BalanceItem = {
+  item_id: string
+  quantity: number
+  updated_at: string
+  item: {
+    id: string
+    name: string
+    barcode: string
+    unit: string
+    sale_price: number
+    category_id: string | null
+    category: { id: string; name: string } | null
+  } | null
+}
+
+type StockLine = {
+  key: string
+  item_id: string
+  name: string
+  barcode: string
+  unit: string
+  quantity: string
+  unit_cost: string
+  isNew?: boolean // not in catalog yet — needs to be created
+}
+
+type AddMode = 'barcode' | 'catalog' | 'excel'
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+let keyCounter = 0
+function nextKey() {
+  keyCounter += 1
+  return String(keyCounter)
+}
+
+function parseNum(v: string) {
+  const n = Number(String(v).replace(',', '.').trim())
+  return Number.isFinite(n) ? Math.max(0, n) : 0
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function WarehousePage() {
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
+  const [warehouse, setWarehouse] = useState<WarehouseLocation | null>(null)
+  const [balances, setBalances] = useState<BalanceItem[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Add-stock panel
+  const [addMode, setAddMode] = useState<AddMode>('barcode')
+  const [lines, setLines] = useState<StockLine[]>([])
+  const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Barcode mode
+  const [barcodeInput, setBarcodeInput] = useState('')
+  const [barcodeLoading, setBarcodeLoading] = useState(false)
+  const [barcodeResult, setBarcodeResult] = useState<'found' | 'not-found' | null>(null)
+  const barcodeRef = useRef<HTMLInputElement>(null)
+
+  // New item dialog (when barcode not found)
+  const [newItemDialog, setNewItemDialog] = useState<{ barcode: string } | null>(null)
+  const [newItemName, setNewItemName] = useState('')
+  const [newItemUnit, setNewItemUnit] = useState('шт')
+  const [creatingItem, setCreatingItem] = useState(false)
+
+  // Catalog mode
+  const [catalogSearch, setCatalogSearch] = useState('')
+  const [catalogItems, setCatalogItems] = useState<any[]>([])
+  const [catalogLoading, setCatalogLoading] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+
+  // Excel mode
+  const [excelRows, setExcelRows] = useState<StockLine[]>([])
+  const [excelError, setExcelError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  // Search / filter existing stock
+  const [stockSearch, setStockSearch] = useState('')
+
+  // ── Load data ────────────────────────────────────────────────────────────────
+
+  const load = useCallback(async (companyId?: string | null) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const id = companyId ?? selectedCompanyId
+      const url = id ? `/api/admin/store/warehouse?company_id=${id}` : '/api/admin/store/warehouse'
+      const res = await fetch(url, { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка загрузки')
+      const d = json.data
+      setCompanies(d.companies || [])
+      setSelectedCompanyId(d.selectedCompanyId)
+      setWarehouse(d.warehouse)
+      setBalances(d.balances || [])
+      setCategories(d.categories || [])
+    } catch (e: any) {
+      setError(e?.message || 'Ошибка')
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedCompanyId])
+
+  useEffect(() => { void load() }, [])
+
+  // ── Catalog search ───────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (addMode !== 'catalog') return
+    const t = setTimeout(async () => {
+      if (!catalogSearch.trim() && !selectedCategory) { setCatalogItems([]); return }
+      setCatalogLoading(true)
+      try {
+        const params = new URLSearchParams()
+        if (catalogSearch.trim()) params.set('q', catalogSearch.trim())
+        if (selectedCategory) params.set('category_id', selectedCategory)
+        const res = await fetch(`/api/admin/inventory/catalog?${params}`, { cache: 'no-store' })
+        const json = await res.json().catch(() => null)
+        setCatalogItems(json?.data?.items || [])
+      } catch { setCatalogItems([]) }
+      finally { setCatalogLoading(false) }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [catalogSearch, selectedCategory, addMode])
+
+  // ── Barcode lookup ───────────────────────────────────────────────────────────
+
+  async function handleBarcodeLookup(e: React.FormEvent) {
+    e.preventDefault()
+    const bc = barcodeInput.trim()
+    if (!bc) return
+    setBarcodeLoading(true)
+    setBarcodeResult(null)
+    try {
+      const res = await fetch('/api/admin/store/warehouse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lookupBarcode', barcode: bc }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Ошибка поиска')
+      if (json?.data?.item) {
+        const item = json.data.item
+        setBarcodeResult('found')
+        addLine({
+          key: nextKey(),
+          item_id: item.id,
+          name: item.name,
+          barcode: item.barcode,
+          unit: item.unit,
+          quantity: '',
+          unit_cost: String(item.default_purchase_price || 0),
+        })
+        setBarcodeInput('')
+        setTimeout(() => { setBarcodeResult(null); barcodeRef.current?.focus() }, 1500)
+      } else {
+        setBarcodeResult('not-found')
+        setNewItemDialog({ barcode: bc })
+        setNewItemName('')
+        setNewItemUnit('шт')
+      }
+    } catch (err: any) {
+      setBarcodeResult('not-found')
+    } finally {
+      setBarcodeLoading(false)
+    }
+  }
+
+  // ── Create new item ──────────────────────────────────────────────────────────
+
+  async function handleCreateItem() {
+    if (!newItemDialog || !newItemName.trim()) return
+    setCreatingItem(true)
+    try {
+      const res = await fetch('/api/admin/store/warehouse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createItem',
+          barcode: newItemDialog.barcode,
+          name: newItemName.trim(),
+          unit: newItemUnit,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || 'Ошибка создания')
+      const item = json.data.item
+      addLine({
+        key: nextKey(),
+        item_id: item.id,
+        name: item.name,
+        barcode: item.barcode,
+        unit: item.unit,
+        quantity: '',
+        unit_cost: '0',
+      })
+      setNewItemDialog(null)
+      setBarcodeInput('')
+      setBarcodeResult(null)
+      setTimeout(() => barcodeRef.current?.focus(), 100)
+    } catch (err: any) {
+      alert(err?.message || 'Ошибка создания товара')
+    } finally {
+      setCreatingItem(false)
+    }
+  }
+
+  // ── Add line ─────────────────────────────────────────────────────────────────
+
+  function addLine(line: StockLine) {
+    setLines((prev) => {
+      const exists = prev.findIndex((l) => l.item_id === line.item_id)
+      if (exists >= 0) {
+        return prev.map((l, i) =>
+          i === exists ? { ...l, quantity: String(parseNum(l.quantity) + 1) } : l,
+        )
+      }
+      return [...prev, line]
+    })
+  }
+
+  function addCatalogItem(item: any) {
+    addLine({
+      key: nextKey(),
+      item_id: item.id,
+      name: item.name,
+      barcode: item.barcode,
+      unit: item.unit,
+      quantity: '1',
+      unit_cost: String(item.default_purchase_price || 0),
+    })
+  }
+
+  // ── Excel import ─────────────────────────────────────────────────────────────
+
+  function handleExcelFile(e: React.ChangeEvent<HTMLInputElement>) {
+    setExcelError(null)
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const data = new Uint8Array(ev.target?.result as ArrayBuffer)
+        const wb = XLSX.read(data, { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+
+        // Find header row (first row with barcode/qty keywords or just use row 0)
+        const parsed: StockLine[] = []
+        const start = rows.length > 1 && String(rows[0][0]).toLowerCase().includes('штрих') ? 1 : 0
+
+        for (let i = start; i < rows.length; i++) {
+          const row = rows[i]
+          const barcode = String(row[0] || '').trim()
+          const name = String(row[1] || '').trim()
+          const qty = parseNum(String(row[2] || '0'))
+          const cost = parseNum(String(row[3] || '0'))
+          if (!barcode && !name) continue
+          if (qty <= 0) continue
+          parsed.push({
+            key: nextKey(),
+            item_id: '', // will be resolved on save
+            name,
+            barcode,
+            unit: String(row[4] || 'шт').trim() || 'шт',
+            quantity: String(qty),
+            unit_cost: String(cost),
+            isNew: false,
+          })
+        }
+
+        if (parsed.length === 0) {
+          setExcelError('Не найдено строк с данными. Формат: Штрихкод | Название | Количество | Цена (опц) | Единица (опц)')
+          return
+        }
+        setExcelRows(parsed)
+      } catch {
+        setExcelError('Не удалось прочитать файл. Убедитесь что это .xlsx или .xls')
+      }
+    }
+    reader.readAsArrayBuffer(file)
+    e.target.value = ''
+  }
+
+  async function resolveExcelItems(): Promise<StockLine[]> {
+    // Look up each barcode, create new items if needed
+    const resolved: StockLine[] = []
+    for (const row of excelRows) {
+      if (row.barcode) {
+        const res = await fetch('/api/admin/store/warehouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'lookupBarcode', barcode: row.barcode }),
+        })
+        const json = await res.json().catch(() => null)
+        if (json?.data?.item) {
+          resolved.push({ ...row, item_id: json.data.item.id, name: json.data.item.name })
+          continue
+        }
+        if (row.name) {
+          // Create new item
+          const cres = await fetch('/api/admin/store/warehouse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'createItem', barcode: row.barcode, name: row.name, unit: row.unit }),
+          })
+          const cjson = await cres.json().catch(() => null)
+          if (cjson?.data?.item) {
+            resolved.push({ ...row, item_id: cjson.data.item.id })
+            continue
+          }
+        }
+      }
+      // Can't resolve — skip
+    }
+    return resolved
+  }
+
+  // ── Save stock ────────────────────────────────────────────────────────────────
+
+  async function handleSave() {
+    if (!selectedCompanyId) return
+    setSaving(true)
+    setSaveError(null)
+    setSaveSuccess(false)
+
+    try {
+      let itemsToSave: StockLine[] = addMode === 'excel' ? await resolveExcelItems() : lines
+
+      const validItems = itemsToSave
+        .filter((l) => l.item_id && parseNum(l.quantity) > 0)
+        .map((l) => ({
+          item_id: l.item_id,
+          quantity: parseNum(l.quantity),
+          unit_cost: parseNum(l.unit_cost),
+        }))
+
+      if (validItems.length === 0) {
+        setSaveError('Нет позиций с заполненным количеством')
+        setSaving(false)
+        return
+      }
+
+      const res = await fetch('/api/admin/store/warehouse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'addStock',
+          company_id: selectedCompanyId,
+          items: validItems,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка сохранения')
+
+      setSaveSuccess(true)
+      setLines([])
+      setExcelRows([])
+      await load(selectedCompanyId)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (err: any) {
+      setSaveError(err?.message || 'Ошибка')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── Filtered balances ─────────────────────────────────────────────────────────
+
+  const filteredBalances = balances.filter((b) => {
+    if (!stockSearch.trim()) return true
+    const q = stockSearch.toLowerCase()
+    return (
+      b.item?.name?.toLowerCase().includes(q) ||
+      b.item?.barcode?.toLowerCase().includes(q)
+    )
+  })
+
+  const pendingLines = addMode === 'excel' ? excelRows : lines
+  const canSave = pendingLines.some((l) => parseNum(l.quantity) > 0)
+
+  // ─── Render ───────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <section className="rounded-3xl border border-amber-500/20 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.15),transparent_36%),linear-gradient(180deg,rgba(17,24,39,0.96),rgba(15,23,42,0.96))] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs text-amber-300">
+              <Warehouse className="h-3.5 w-3.5" />
+              Склад точки
+            </div>
+            <h1 className="mt-3 text-2xl font-semibold text-white">
+              {warehouse ? warehouse.name : 'Склад'}
+            </h1>
+            <p className="mt-1 text-sm text-slate-400">Остатки товаров на складе. Добавьте товар через штрихкод, каталог или Excel.</p>
+          </div>
+
+          {/* Company selector */}
+          {companies.length > 1 && (
+            <div className="flex flex-col gap-1">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Точка</Label>
+              <div className="relative">
+                <select
+                  value={selectedCompanyId || ''}
+                  onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
+                  className="appearance-none rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              </div>
+            </div>
+          )}
+
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-8 gap-1.5 self-start">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Обновить
+          </Button>
+        </div>
+
+        {/* Stats */}
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Позиций</p>
+            <p className="mt-1.5 text-2xl font-semibold">{balances.length}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Ед. товара</p>
+            <p className="mt-1.5 text-2xl font-semibold">{balances.reduce((s, b) => s + Number(b.quantity || 0), 0)}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Нулевых</p>
+            <p className="mt-1.5 text-2xl font-semibold text-rose-400">{balances.filter((b) => Number(b.quantity) <= 0).length}</p>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
+        {/* LEFT: current stock table */}
+        <Card className="border-white/10 bg-card/70">
+          <CardHeader className="border-b border-white/10 pb-3">
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Package className="h-4 w-4 text-amber-300" />
+                Текущие остатки
+              </CardTitle>
+              <div className="relative w-48">
+                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  value={stockSearch}
+                  onChange={(e) => setStockSearch(e.target.value)}
+                  placeholder="Поиск..."
+                  className="h-7 pl-7 text-xs"
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="flex h-40 items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <div className="flex h-40 items-center justify-center gap-2 text-rose-400">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-sm">{error}</span>
+              </div>
+            ) : filteredBalances.length === 0 ? (
+              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+                {stockSearch ? 'Ничего не найдено' : 'Склад пустой — добавьте товар справа'}
+              </div>
+            ) : (
+              <div className="divide-y divide-white/[0.06]">
+                {filteredBalances.map((b) => (
+                  <div key={b.item_id} className="flex items-center justify-between px-4 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{b.item?.name || 'Товар'}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {b.item?.barcode || ''}
+                        {b.item?.category ? ` · ${b.item.category.name}` : ''}
+                      </p>
+                    </div>
+                    <div className="ml-3 shrink-0 text-right">
+                      <p className={`text-sm font-semibold ${Number(b.quantity) <= 0 ? 'text-rose-400' : Number(b.quantity) <= 3 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                        {b.quantity}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">{b.item?.unit || 'шт'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* RIGHT: add stock panel */}
+        <Card className="border-white/10 bg-card/70">
+          <CardHeader className="border-b border-white/10 pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <PackagePlus className="h-4 w-4 text-emerald-300" />
+              Добавить на склад
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 space-y-4">
+            {/* Mode tabs */}
+            <div className="flex rounded-xl border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+              {([['barcode', 'Штрихкод', Barcode], ['catalog', 'Каталог', Search], ['excel', 'Excel', FileSpreadsheet]] as const).map(([mode, label, Icon]) => (
+                <button
+                  key={mode}
+                  onClick={() => { setAddMode(mode); setLines([]); setExcelRows([]) }}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 transition ${addMode === mode ? 'bg-white/10 text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── BARCODE MODE ── */}
+            {addMode === 'barcode' && (
+              <div className="space-y-3">
+                <form onSubmit={handleBarcodeLookup} className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Barcode className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      ref={barcodeRef}
+                      value={barcodeInput}
+                      onChange={(e) => setBarcodeInput(e.target.value)}
+                      placeholder="Введите или отсканируйте штрихкод"
+                      className="h-8 pl-8 text-xs"
+                      autoFocus
+                    />
+                  </div>
+                  <Button type="submit" size="sm" disabled={barcodeLoading || !barcodeInput.trim()} className="h-8">
+                    {barcodeLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                  </Button>
+                </form>
+
+                {barcodeResult === 'found' && (
+                  <p className="flex items-center gap-1.5 text-xs text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Товар найден в каталоге
+                  </p>
+                )}
+                {barcodeResult === 'not-found' && !newItemDialog && (
+                  <p className="flex items-center gap-1.5 text-xs text-amber-400">
+                    <AlertCircle className="h-3.5 w-3.5" /> Товар не найден в каталоге
+                  </p>
+                )}
+
+                {/* New item dialog */}
+                {newItemDialog && (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
+                    <p className="text-xs font-medium text-amber-200">
+                      Штрихкод <span className="font-mono">{newItemDialog.barcode}</span> не найден — создать новый товар?
+                    </p>
+                    <div className="grid grid-cols-[1fr_80px] gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Название</Label>
+                        <Input
+                          value={newItemName}
+                          onChange={(e) => setNewItemName(e.target.value)}
+                          placeholder="Название товара"
+                          className="h-7 text-xs"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Ед.</Label>
+                        <Input
+                          value={newItemUnit}
+                          onChange={(e) => setNewItemUnit(e.target.value)}
+                          placeholder="шт"
+                          className="h-7 text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" className="h-7 text-xs" onClick={handleCreateItem} disabled={creatingItem || !newItemName.trim()}>
+                        {creatingItem ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                        Создать и добавить
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setNewItemDialog(null); setBarcodeInput(''); setBarcodeResult(null) }}>
+                        Отмена
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── CATALOG MODE ── */}
+            {addMode === 'catalog' && (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      value={catalogSearch}
+                      onChange={(e) => setCatalogSearch(e.target.value)}
+                      placeholder="Поиск по каталогу..."
+                      className="h-8 pl-8 text-xs"
+                    />
+                  </div>
+                  {categories.length > 0 && (
+                    <select
+                      value={selectedCategory || ''}
+                      onChange={(e) => setSelectedCategory(e.target.value || null)}
+                      className="h-8 rounded-lg border border-input bg-background px-2 text-xs outline-none"
+                    >
+                      <option value="">Все категории</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div className="max-h-52 overflow-y-auto space-y-1 rounded-xl border border-white/10 bg-black/20 p-1">
+                  {catalogLoading ? (
+                    <div className="flex h-20 items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+                  ) : catalogItems.length === 0 ? (
+                    <p className="py-4 text-center text-xs text-muted-foreground">Введите название или выберите категорию</p>
+                  ) : (
+                    catalogItems.map((item: any) => (
+                      <button
+                        key={item.id}
+                        onClick={() => addCatalogItem(item)}
+                        className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs hover:bg-white/[0.06] transition"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{item.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{item.barcode}</p>
+                        </div>
+                        <Plus className="ml-2 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── EXCEL MODE ── */}
+            {addMode === 'excel' && (
+              <div className="space-y-2">
+                <div
+                  onClick={() => fileRef.current?.click()}
+                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/20 bg-white/[0.02] py-6 text-center transition hover:border-blue-400/40 hover:bg-white/[0.04]"
+                >
+                  <FileSpreadsheet className="h-8 w-8 text-blue-400" />
+                  <p className="text-xs font-medium text-foreground">Нажмите чтобы загрузить файл</p>
+                  <p className="text-[10px] text-muted-foreground">.xlsx / .xls / .csv</p>
+                  <p className="text-[10px] text-muted-foreground">Формат: Штрихкод | Название | Количество | Цена (опц)</p>
+                </div>
+                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelFile} />
+                {excelError && <p className="text-xs text-rose-400">{excelError}</p>}
+              </div>
+            )}
+
+            {/* Lines to save */}
+            {pendingLines.length > 0 && (
+              <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-2 max-h-64 overflow-y-auto">
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground px-1">К добавлению ({pendingLines.length})</p>
+                {pendingLines.map((line) => (
+                  <div key={line.key} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium">{line.name || line.barcode}</p>
+                      {line.barcode && <p className="text-[10px] text-muted-foreground font-mono">{line.barcode}</p>}
+                    </div>
+                    <Input
+                      value={line.quantity}
+                      onChange={(e) => {
+                        const src = addMode === 'excel' ? setExcelRows : setLines
+                        src((prev: StockLine[]) => prev.map((l) => l.key === line.key ? { ...l, quantity: e.target.value } : l))
+                      }}
+                      placeholder="Кол-во"
+                      className="h-7 w-16 text-xs text-center"
+                    />
+                    <span className="text-[10px] text-muted-foreground w-6">{line.unit}</span>
+                    <button
+                      onClick={() => {
+                        const src = addMode === 'excel' ? setExcelRows : setLines
+                        src((prev: StockLine[]) => prev.filter((l) => l.key !== line.key))
+                      }}
+                      className="text-muted-foreground hover:text-rose-400 transition"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Save button */}
+            {pendingLines.length > 0 && (
+              <div className="space-y-2">
+                {saveError && <p className="text-xs text-rose-400">{saveError}</p>}
+                {saveSuccess && (
+                  <p className="flex items-center gap-1.5 text-xs text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Добавлено на склад!
+                  </p>
+                )}
+                <Button
+                  onClick={handleSave}
+                  disabled={saving || !canSave}
+                  className="w-full"
+                >
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackagePlus className="mr-2 h-4 w-4" />}
+                  Добавить на склад ({pendingLines.filter((l) => parseNum(l.quantity) > 0).length} поз.)
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* New item dialog overlay */}
+    </div>
+  )
+}

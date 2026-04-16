@@ -53,6 +53,7 @@ import {
   Store,
   Target,
   Tags,
+  Warehouse,
   TrendingDown,
   TrendingUp,
   Trophy,
@@ -134,6 +135,8 @@ const navSections: NavSection[] = [
     icon: Boxes,
     items: [
       { href: '/store', label: 'Обзор магазина', icon: Boxes, note: 'Общая сводка по складу и витринам' },
+      { href: '/store/warehouse', label: 'Склад', icon: Warehouse, note: 'Остатки на складе точки, добавление товара' },
+      { href: '/store/showcase', label: 'Витрина', icon: Store, note: 'Остатки на витрине, заявки на пополнение' },
       { href: '/store/catalog', label: 'Каталог', icon: Tags, note: 'Товары, категории и поставщики' },
       { href: '/store/receipts', label: 'Приемка', icon: PackagePlus, note: 'Документы прихода на склад' },
       { href: '/store/requests', label: 'Заявки', icon: ClipboardList, note: 'Заявки точек и одобрение' },

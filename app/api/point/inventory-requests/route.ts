@@ -33,14 +33,28 @@ function normalizeMoney(value: unknown) {
 
 async function resolvePointInventoryContext(supabase: any, companyId: string) {
   const [{ data: sourceLocation, error: sourceError }, { data: targetLocation, error: targetError }] = await Promise.all([
+    // Prefer company-specific warehouse; fall back to global warehouse (company_id is null)
     supabase
       .from('inventory_locations')
       .select('id, name, code, location_type')
       .eq('location_type', 'warehouse')
+      .eq('company_id', companyId)
       .eq('is_active', true)
-      .order('created_at', { ascending: true })
       .limit(1)
-      .maybeSingle(),
+      .maybeSingle()
+      .then(async (res: any) => {
+        if (res.data?.id) return res
+        // Fallback: global warehouse without company_id
+        return supabase
+          .from('inventory_locations')
+          .select('id, name, code, location_type')
+          .eq('location_type', 'warehouse')
+          .is('company_id', null)
+          .eq('is_active', true)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+      }),
     supabase
       .from('inventory_locations')
       .select('id, name, code, location_type')

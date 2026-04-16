@@ -1,0 +1,200 @@
+import { NextResponse } from 'next/server'
+
+import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { resolveCompanyScope } from '@/lib/server/organizations'
+import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { createInventoryRequest } from '@/lib/server/repositories/inventory'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status })
+}
+
+function canView(access: { isSuperAdmin: boolean; staffRole: string }) {
+  return access.isSuperAdmin || ['owner', 'manager', 'other'].includes(access.staffRole)
+}
+
+function canCreateRequest(access: { isSuperAdmin: boolean; staffRole: string }) {
+  return access.isSuperAdmin || ['owner', 'manager', 'other'].includes(access.staffRole)
+}
+
+function normalizeQty(v: unknown) {
+  const n = Number(v || 0)
+  return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
+}
+
+// ─── GET: showcase balances for a company ────────────────────────────────────
+
+export async function GET(request: Request) {
+  try {
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
+    if (!canView(access)) return json({ error: 'forbidden' }, 403)
+
+    const url = new URL(request.url)
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    let companyId = url.searchParams.get('company_id') || null
+    if (!companyId) companyId = companyScope.allowedCompanyIds?.[0] || null
+    if (!companyId) return json({ error: 'company-required' }, 400)
+
+    if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
+      if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+    }
+
+    const { data: companies } = await supabase
+      .from('companies')
+      .select('id, name, code')
+      .in('id', companyScope.allowedCompanyIds || [companyId])
+      .order('name')
+
+    // Showcase location for this company
+    const { data: showcase, error: showcaseErr } = await supabase
+      .from('inventory_locations')
+      .select('id, name, code, location_type, is_active')
+      .eq('company_id', companyId)
+      .eq('location_type', 'point_display')
+      .eq('is_active', true)
+      .maybeSingle()
+    if (showcaseErr) throw showcaseErr
+
+    // Warehouse for this company (source for requests)
+    const { data: warehouse } = await supabase
+      .from('inventory_locations')
+      .select('id, name')
+      .eq('company_id', companyId)
+      .eq('location_type', 'warehouse')
+      .eq('is_active', true)
+      .maybeSingle()
+
+    let balances: any[] = []
+    if (showcase?.id) {
+      const { data, error: balErr } = await supabase
+        .from('inventory_balances')
+        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, category_id, category:category_id(id, name))')
+        .eq('location_id', showcase.id)
+        .order('quantity', { ascending: false })
+      if (balErr) throw balErr
+      balances = data || []
+    }
+
+    // Warehouse items (for request creation dropdown)
+    let warehouseItems: any[] = []
+    if (warehouse?.id) {
+      const { data } = await supabase
+        .from('inventory_balances')
+        .select('item_id, quantity, item:item_id(id, name, barcode, unit)')
+        .eq('location_id', warehouse.id)
+        .gt('quantity', 0)
+        .order('quantity', { ascending: false })
+      warehouseItems = data || []
+    }
+
+    // Pending requests from this company
+    const { data: pendingRequests } = await supabase
+      .from('inventory_requests')
+      .select('id, status, created_at, comment, items:inventory_request_items(id, item_id, requested_qty, approved_qty, item:item_id(id, name))')
+      .eq('requesting_company_id', companyId)
+      .order('created_at', { ascending: false })
+      .limit(10)
+
+    return json({
+      ok: true,
+      data: {
+        showcase: showcase || null,
+        warehouse: warehouse || null,
+        companies: companies || [],
+        balances,
+        warehouseItems,
+        pendingRequests: pendingRequests || [],
+        selectedCompanyId: companyId,
+      },
+    })
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/showcase.GET', message: error?.message })
+    return json({ error: error?.message || 'Ошибка загрузки витрины' }, 500)
+  }
+}
+
+// ─── POST: create request from showcase to warehouse ─────────────────────────
+
+export async function POST(request: Request) {
+  try {
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
+    if (!canCreateRequest(access)) return json({ error: 'forbidden' }, 403)
+
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    const body = await request.json().catch(() => null)
+    if (!body?.action) return json({ error: 'action-required' }, 400)
+
+    if (body.action === 'createRequest') {
+      const companyId = String(body.company_id || '').trim()
+      if (!companyId) return json({ error: 'company-id-required' }, 400)
+
+      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
+        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      }
+
+      const items: Array<{ item_id: string; requested_qty: number; comment?: string | null }> =
+        (body.items || [])
+          .map((i: any) => ({
+            item_id: String(i.item_id || '').trim(),
+            requested_qty: Math.round((normalizeQty(i.requested_qty) + Number.EPSILON) * 1000) / 1000,
+            comment: i.comment ? String(i.comment).trim() : null,
+          }))
+          .filter((i: any) => i.item_id && i.requested_qty > 0)
+
+      if (items.length === 0) return json({ error: 'items-required' }, 400)
+
+      // Source = warehouse of this company
+      const { data: warehouse, error: whErr } = await supabase
+        .from('inventory_locations')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('location_type', 'warehouse')
+        .eq('is_active', true)
+        .maybeSingle()
+      if (whErr) throw whErr
+      if (!warehouse?.id) return json({ error: 'warehouse-not-found' }, 404)
+
+      // Target = showcase of this company
+      const { data: showcase, error: scErr } = await supabase
+        .from('inventory_locations')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('location_type', 'point_display')
+        .eq('is_active', true)
+        .maybeSingle()
+      if (scErr) throw scErr
+      if (!showcase?.id) return json({ error: 'showcase-not-found' }, 404)
+
+      const actorUserId = access.staffMember?.id || null
+
+      const result = await createInventoryRequest(supabase, {
+        source_location_id: warehouse.id,
+        target_location_id: showcase.id,
+        requesting_company_id: companyId,
+        comment: String(body.comment || '').trim() || null,
+        created_by: actorUserId,
+        items,
+      })
+
+      return json({ ok: true, data: result })
+    }
+
+    return json({ error: 'unknown-action' }, 400)
+  } catch (error: any) {
+    await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/store/showcase.POST', message: error?.message })
+    return json({ error: error?.message || 'Ошибка' }, 500)
+  }
+}
