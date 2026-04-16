@@ -38,19 +38,17 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
+    const companiesQuery = supabase.from('companies').select('id, name, code').order('name')
+    if (companyScope.allowedCompanyIds) companiesQuery.in('id', companyScope.allowedCompanyIds)
+    const { data: companies } = await companiesQuery
+
     let companyId = url.searchParams.get('company_id') || null
-    if (!companyId) companyId = companyScope.allowedCompanyIds?.[0] || null
+    if (!companyId) companyId = (companies || [])[0]?.id || null
     if (!companyId) return json({ error: 'company-required' }, 400)
 
     if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
       if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
     }
-
-    const { data: companies } = await supabase
-      .from('companies')
-      .select('id, name, code')
-      .in('id', companyScope.allowedCompanyIds || [companyId])
-      .order('name')
 
     // Showcase location for this company
     const { data: showcase, error: showcaseErr } = await supabase

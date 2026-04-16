@@ -76,28 +76,25 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
+    // Get all available companies (null = superadmin/legacy = no filter)
+    const companiesQuery = supabase.from('companies').select('id, name, code').order('name')
+    if (companyScope.allowedCompanyIds) companiesQuery.in('id', companyScope.allowedCompanyIds)
+    const { data: companies, error: companiesErr } = await companiesQuery
+    if (companiesErr) throw companiesErr
+
     // Determine which company to show
     let companyId = url.searchParams.get('company_id') || null
     if (!companyId) {
-      // Default to first allowed company
-      companyId = companyScope.allowedCompanyIds?.[0] || null
+      companyId = (companies || [])[0]?.id || null
     }
     if (!companyId) return json({ error: 'company-required' }, 400)
 
-    // Access check
+    // Access check (when scope is limited)
     if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
       if (!companyScope.allowedCompanyIds.includes(companyId)) {
         return json({ error: 'forbidden' }, 403)
       }
     }
-
-    // Get allowed companies list for selector
-    const { data: companies, error: companiesErr } = await supabase
-      .from('companies')
-      .select('id, name, code')
-      .in('id', companyScope.allowedCompanyIds || [companyId])
-      .order('name')
-    if (companiesErr) throw companiesErr
 
     // Ensure warehouse exists
     const warehouse = await ensureCompanyWarehouse(supabase, companyId)
