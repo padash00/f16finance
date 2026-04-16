@@ -1,13 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { createAdminSupabaseClient } from '@/lib/server/supabase'
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 export function sha256(value: string) {
   return createHash('sha256').update(value).digest('hex')
 }
 
 export function json(data: unknown, status = 200) {
-  const { NextResponse } = require('next/server')
   return NextResponse.json(data, { status })
 }
 

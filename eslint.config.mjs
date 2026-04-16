@@ -27,5 +27,8 @@ export default defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    'desktop/**',
+    '_ordaios_scan/**',
+    'orda_electron/**',
   ]),
 ])
