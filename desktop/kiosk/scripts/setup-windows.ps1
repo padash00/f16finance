@@ -19,7 +19,7 @@
 
 $KioskUsername = "OrdaKiosk"
 $KioskPassword = "OrdaKi0sk#2026"          # Измените на свой пароль
-$KioskAppPath  = "$env:ProgramFiles\Orda Kiosk\orda-kiosk.exe"   # Путь после установки
+$KioskAppPath  = "$env:ProgramFiles\Orda Kiosk\Orda Kiosk.exe"   # Путь после установки
 
 # Установить в $true для Windows Assigned Access (только это приложение, ничего больше)
 # Требует Windows 10/11 Pro или Enterprise
@@ -235,5 +235,4 @@ Write-Host ""
 Write-Host "  Перезагрузите ПК — войдёт автоматически под OrdaKiosk" -ForegroundColor Cyan
 Write-Host ""
 
-$restart = Read-Host "Перезагрузить сейчас? (y/n)"
-if ($restart -eq 'y') { Restart-Computer -Force }
+# Автоматический перезапуск не выполняется — пользователь перезагрузит вручную
