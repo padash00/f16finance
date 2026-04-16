@@ -8,11 +8,16 @@
 
 ---
 
-## Скачать приложение
+## Скачать
 
-👉 **[Скачать Orda Point для Windows](https://github.com/padash00/f16finance/releases/latest)**
+| Программа | Назначение | Ссылка |
+|---|---|---|
+| **Orda Point** | Операторский терминал (кассир, администратор) | [📥 Скачать v2.3.18](https://github.com/padash00/f16finance/releases/download/v2.3.18/Orda-Point-Setup-2.3.18.exe) |
+| **Orda Kiosk** | Клиентский киоск (устанавливается на игровой ПК) | [📥 Скачать v0.1.0](https://github.com/padash00/OrdaKiosk/releases/download/v0.1.0/Orda.Kiosk.Setup.0.1.0.exe) |
 
-Загрузи файл `Orda-Point-Setup-x.x.x.exe` и установи. Приложение автоматически обновляется при выходе новых версий.
+Оба приложения автоматически обновляются при выходе новых версий.
+
+---
 
 ---
 
