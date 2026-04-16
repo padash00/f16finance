@@ -64,6 +64,8 @@ let powerSaveId = null
 
 // ── Game state ───────────────────────────────────────────────────────────────
 let gameActive = false           // true while a game/browser process is running
+let gameLaunching = false        // true during the brief moment of launch (debounce)
+let gameError = null             // last launch error message, cleared on next launch
 let browserGameWindow = null     // BrowserWindow for category='browser' games
 let warnedAt5min = false         // prevents repeated 5-min popup
 let warnedAt1min = false         // prevents repeated 1-min popup
@@ -118,7 +120,7 @@ function buildState() {
     games: session.games,
     deviceIp: net.ip,
     deviceMac: net.mac,
-    game: getGameState(),
+    game: { ...getGameState(), launching: gameLaunching, error: gameError },
   }
 }
 
@@ -291,6 +293,7 @@ function resolveGameById(gameId) {
 // ── Restore kiosk after game closes ─────────────────────────────────────────
 function restoreKioskFromGame() {
   gameActive = false
+  gameLaunching = false
   if (!mainWindow || mainWindow.isDestroyed()) return
   if (!isDev) {
     mainWindow.restore()
@@ -397,8 +400,21 @@ function launchConfiguredGame(gameId, fallbackPath) {
     return launchBrowserGame(pathToRun, game)
   }
 
-  // Exe game (game or app)
-  // Yield kiosk to game
+  // App (Steam, Discord, etc.) — Alt+Tab stays free, kiosk stays onTop but hides behind app
+  if (category === 'app') {
+    gameActive = true
+    if (focusTimer) { clearInterval(focusTimer); focusTimer = null }
+    if (!isDev && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setAlwaysOnTop(false)
+      mainWindow.minimize()
+      // Do NOT unregister Alt+Tab — apps need it (e.g. Steam overlay)
+    }
+    return launchGame(pathToRun, {
+      onExit: () => restoreKioskFromGame(),
+    })
+  }
+
+  // Exe game — full lockdown: Alt+Tab blocked, kiosk minimized
   gameActive = true
   if (focusTimer) { clearInterval(focusTimer); focusTimer = null }
   if (!isDev) {
@@ -418,6 +434,8 @@ function clearSessionAndLock() {
   stopGame()
   stopBrowserGame()
   gameActive = false
+  gameLaunching = false
+  gameError = null
   session.active = false
   session.endsAtMs = 0
   session.tariffName = ''
@@ -532,14 +550,22 @@ function handleCommand(message) {
       clearSessionAndLock()
       break
     case 'launch_game':
-      if (!session.active) return
+      if (!session.active || gameActive || gameLaunching) return
+      gameError = null
+      gameLaunching = true
+      pushState()
       try {
         launchConfiguredGame(message.gameId, String(message.gamePath || ''))
+        gameLaunching = false
         sendStatus('in_game')
         void postHeartbeat('in_game')
         pushState()
       } catch (error) {
+        gameLaunching = false
+        gameError = error.message
         logLine(`launch_game failed: ${error.message}`)
+        pushState()
+        setTimeout(() => { gameError = null; pushState() }, 5000)
       }
       break
     case 'shutdown_pc':
@@ -779,15 +805,25 @@ function setupIpc() {
   ipcMain.handle('kiosk:launch-game', async (_event, gameId) => {
     if (session.bindingBlocked) return { ok: false, error: 'binding-blocked' }
     if (!session.active) return { ok: false, error: 'session-not-active' }
+    if (gameActive || gameLaunching) return { ok: false, error: 'already-running' }
+    gameError = null
+    gameLaunching = true
+    pushState()
     try {
       const cfg = runtimeConfig()
       const result = launchConfiguredGame(gameId, cfg.defaultGamePath)
+      gameLaunching = false
       sendStatus('in_game')
       void postHeartbeat('in_game')
       pushState()
       return result
     } catch (error) {
+      gameLaunching = false
+      gameError = error.message
       logLine(`manual launch failed: ${error.message}`)
+      pushState()
+      // Auto-clear error after 5s
+      setTimeout(() => { gameError = null; pushState() }, 5000)
       return { ok: false, error: error.message }
     }
   })

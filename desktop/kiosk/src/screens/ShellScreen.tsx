@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Clock, User, PhoneCall, Plus, Gamepad2, Globe, AppWindow, Play, MonitorPlay } from 'lucide-react'
+import { User, PhoneCall, Plus, Gamepad2, Globe, AppWindow, Play, MonitorPlay, Loader2, AlertCircle } from 'lucide-react'
 import type { KioskState, ClientSession, Game } from '@/types'
 import { formatSec, cn } from '@/lib/utils'
 import { ipc } from '@/lib/ipc'
@@ -33,7 +33,8 @@ export default function ShellScreen({ kioskState, client, onProfile, onExtend, o
   const [tab, setTab] = useState<CatalogTab>('game')
   const [warningLevel, setWarningLevel] = useState<'none' | 'warn' | 'danger'>('none')
 
-  const { remainingSec, tariffName, games } = kioskState
+  const { remainingSec, tariffName, games, game: gameState } = kioskState
+  const isGameBusy = gameState?.running || gameState?.launching
 
   useEffect(() => {
     if (remainingSec <= 60) setWarningLevel('danger')
@@ -151,14 +152,22 @@ export default function ShellScreen({ kioskState, client, onProfile, onExtend, o
         ) : (
           <div className="grid grid-cols-5 gap-4">
             {filteredGames.map((game) => (
-              <GameCard key={game.id} game={game} onLaunch={() => onLaunchGame(game.id)} />
+              <GameCard key={game.id} game={game} disabled={isGameBusy} launching={gameState?.launching} onLaunch={() => onLaunchGame(game.id)} />
             ))}
           </div>
         )}
       </div>
 
+      {/* Ошибка запуска игры */}
+      {gameState?.error && (
+        <div className="fixed bottom-0 left-0 right-0 flex items-center justify-center gap-2 py-2.5 bg-red-500/20 text-red-300 text-sm font-medium">
+          <AlertCircle size={15} />
+          Не удалось запустить игру: {gameState.error === 'game-path-required' ? 'путь не задан' : gameState.error}
+        </div>
+      )}
+
       {/* Предупреждение о времени */}
-      {warningLevel !== 'none' && (
+      {warningLevel !== 'none' && !gameState?.error && (
         <div className={cn(
           'fixed bottom-0 left-0 right-0 py-2 text-center text-sm font-medium',
           warningLevel === 'danger' ? 'bg-red-500/20 text-red-300' : 'bg-yellow-500/15 text-yellow-300',
@@ -172,12 +181,17 @@ export default function ShellScreen({ kioskState, client, onProfile, onExtend, o
   )
 }
 
-function GameCard({ game, onLaunch }: { game: Game; onLaunch: () => void }) {
+function GameCard({ game, disabled, launching, onLaunch }: { game: Game; disabled?: boolean; launching?: boolean; onLaunch: () => void }) {
   const [imgError, setImgError] = useState(false)
 
   return (
-    <div className="group relative rounded-2xl overflow-hidden bg-[#11141a] border border-white/5 hover:border-white/15 transition-all duration-200 cursor-pointer"
-      onClick={onLaunch}>
+    <div
+      className={cn(
+        'group relative rounded-2xl overflow-hidden bg-[#11141a] border border-white/5 transition-all duration-200',
+        disabled ? 'cursor-not-allowed opacity-50' : 'hover:border-white/15 cursor-pointer',
+      )}
+      onClick={disabled ? undefined : onLaunch}
+    >
       {/* Обложка */}
       <div className="aspect-[3/4] relative overflow-hidden bg-[#0c0f16]">
         {game.logoUrl && !imgError ? (
@@ -185,7 +199,7 @@ function GameCard({ game, onLaunch }: { game: Game; onLaunch: () => void }) {
             src={game.logoUrl}
             alt={game.title}
             onError={() => setImgError(true)}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className={cn('w-full h-full object-cover transition-transform duration-300', !disabled && 'group-hover:scale-105')}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -193,17 +207,26 @@ function GameCard({ game, onLaunch }: { game: Game; onLaunch: () => void }) {
           </div>
         )}
 
-        {/* Hover оверлей */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center">
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-blue-600 rounded-full p-3 shadow-lg">
-            <Play size={20} className="text-white fill-white" />
+        {/* Hover оверлей — только если не заблокировано */}
+        {!disabled && (
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center">
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-blue-600 rounded-full p-3 shadow-lg">
+              <Play size={20} className="text-white fill-white" />
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Оверлей «запускается» */}
+        {launching && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+            <Loader2 size={28} className="text-white animate-spin" />
+          </div>
+        )}
       </div>
 
       {/* Название */}
       <div className="px-3 py-2.5">
-        <p className="text-white text-sm font-medium truncate">{game.title}</p>
+        <p className="text-white/70 text-sm font-medium truncate">{game.title}</p>
       </div>
     </div>
   )

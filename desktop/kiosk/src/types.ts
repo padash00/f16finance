@@ -27,6 +27,8 @@ export interface Game {
 
 export interface GameProcessState {
   running: boolean
+  launching: boolean
+  error: string | null
   pid?: number
 }
 
