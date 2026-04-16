@@ -162,7 +162,10 @@ export default function ShellScreen({ kioskState, client, onProfile, onExtend, o
       {gameState?.error && (
         <div className="fixed bottom-0 left-0 right-0 flex items-center justify-center gap-2 py-2.5 bg-red-500/20 text-red-300 text-sm font-medium">
           <AlertCircle size={15} />
-          Не удалось запустить игру: {gameState.error === 'game-path-required' ? 'путь не задан' : gameState.error}
+          Не удалось запустить игру:{' '}
+          {gameState.error === 'game-path-required' ? 'путь не задан'
+            : gameState.error === 'game-not-found' ? 'файл игры не найден — обратитесь к оператору'
+            : gameState.error}
         </div>
       )}
 

@@ -19,6 +19,14 @@ function launchGame(gamePath, options = {}) {
   })
 
   activeGame = child
+
+  // Catch ENOENT / permission errors — don't let them bubble to uncaughtException
+  child.on('error', (err) => {
+    activeGame = null
+    if (typeof options?.onError === 'function') options.onError(err)
+    else if (typeof options?.onExit === 'function') options.onExit()
+  })
+
   child.on('exit', () => {
     activeGame = null
     if (typeof options?.onExit === 'function') options.onExit()

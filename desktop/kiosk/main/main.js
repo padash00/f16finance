@@ -411,6 +411,12 @@ function launchConfiguredGame(gameId, fallbackPath) {
     }
     return launchGame(pathToRun, {
       onExit: () => restoreKioskFromGame(),
+      onError: (err) => {
+        logLine(`app launch error: ${err.message}`)
+        gameError = err.code === 'ENOENT' ? 'game-not-found' : err.message
+        restoreKioskFromGame()
+        setTimeout(() => { gameError = null; pushState() }, 5000)
+      },
     })
   }
 
@@ -427,6 +433,12 @@ function launchConfiguredGame(gameId, fallbackPath) {
 
   return launchGame(pathToRun, {
     onExit: () => restoreKioskFromGame(),
+    onError: (err) => {
+      logLine(`game launch error: ${err.message}`)
+      gameError = err.code === 'ENOENT' ? 'game-not-found' : err.message
+      restoreKioskFromGame()
+      setTimeout(() => { gameError = null; pushState() }, 5000)
+    },
   })
 }
 
