@@ -14,6 +14,12 @@ import BlockedScreen from '@/screens/BlockedScreen'
 const isSetupMode = window.location.search.includes('screen=setup')
 const isDev = import.meta.env.DEV
 
+// Проверяем что preload загрузился
+if (!window.kioskApi && !isSetupMode) {
+  document.body.style.cssText = 'background:#07080a;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:monospace;font-size:14px;'
+  document.body.innerHTML = '<div style="text-align:center"><p style="color:#f87171">Ошибка: preload не загрузился</p><p style="color:#6b7280;margin-top:8px">Переустановите Orda Kiosk</p></div>'
+}
+
 export default function App() {
   const [kioskState, setKioskState] = useState<KioskState | null>(null)
   const [client, setClient] = useState<ClientSession | null>(null)

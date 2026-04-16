@@ -703,11 +703,24 @@ function createKioskWindow() {
     }
   }
 
+  // Log renderer errors to kiosk.log for debugging white screen issues
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    logLine(`renderer: did-fail-load code=${code} desc=${desc} url=${url}`)
+  })
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    logLine(`renderer: render-process-gone reason=${details.reason} exitCode=${details.exitCode}`)
+  })
+  mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    if (level >= 2) logLine(`renderer console[${level}]: ${message} (${sourceId}:${line})`)
+  })
+
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+    const indexPath = path.join(__dirname, '..', 'dist', 'index.html')
+    logLine(`renderer: loading ${indexPath}`)
+    mainWindow.loadFile(indexPath)
   }
   mainWindow.once('ready-to-show', () => {
     if (!isDev) {
