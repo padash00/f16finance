@@ -425,40 +425,6 @@ export default function WarehousePage() {
     reader.readAsArrayBuffer(file)
   }
 
-  async function resolveExcelItems(): Promise<StockLine[]> {
-    // Look up each barcode, create new items if needed
-    const resolved: StockLine[] = []
-    for (const row of excelRows) {
-      if (row.barcode) {
-        const res = await fetch('/api/admin/store/warehouse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'lookupBarcode', barcode: row.barcode }),
-        })
-        const json = await res.json().catch(() => null)
-        if (json?.data?.item) {
-          resolved.push({ ...row, item_id: json.data.item.id, name: json.data.item.name })
-          continue
-        }
-        if (row.name) {
-          // Create new item
-          const cres = await fetch('/api/admin/store/warehouse', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'createItem', barcode: row.barcode, name: row.name, unit: row.unit }),
-          })
-          const cjson = await cres.json().catch(() => null)
-          if (cjson?.data?.item) {
-            resolved.push({ ...row, item_id: cjson.data.item.id })
-            continue
-          }
-        }
-      }
-      // Can't resolve — skip
-    }
-    return resolved
-  }
-
   // ── Save stock ────────────────────────────────────────────────────────────────
 
   async function handleSave() {
@@ -468,17 +434,21 @@ export default function WarehousePage() {
     setSaveSuccess(false)
 
     try {
-      let itemsToSave: StockLine[] = addMode === 'excel' ? await resolveExcelItems() : lines
+      const source = addMode === 'excel' ? excelRows : lines
 
-      const validItems = itemsToSave
-        .filter((l) => l.item_id && parseNum(l.quantity) > 0)
+      // Send raw rows to server — it resolves barcodes and creates missing items in bulk (1 round-trip)
+      const items = source
+        .filter((l) => parseNum(l.quantity) > 0)
         .map((l) => ({
-          item_id: l.item_id,
+          item_id: l.item_id || undefined,
+          barcode: l.barcode || undefined,
+          name: l.name || undefined,
+          unit: l.unit || 'шт',
           quantity: parseNum(l.quantity),
           unit_cost: parseNum(l.unit_cost),
         }))
 
-      if (validItems.length === 0) {
+      if (items.length === 0) {
         setSaveError('Нет позиций с заполненным количеством')
         setSaving(false)
         return
@@ -487,11 +457,7 @@ export default function WarehousePage() {
       const res = await fetch('/api/admin/store/warehouse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'addStock',
-          company_id: selectedCompanyId,
-          items: validItems,
-        }),
+        body: JSON.stringify({ action: 'addStock', company_id: selectedCompanyId, items }),
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка сохранения')

@@ -193,6 +193,7 @@ export async function POST(request: Request) {
     }
 
     // ── addStock (receipt-style add to warehouse) ──────────────────────────────
+    // Accepts items with either { item_id } or { barcode, name, unit } — resolves barcodes server-side in bulk
     if (body.action === 'addStock') {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
@@ -201,15 +202,65 @@ export async function POST(request: Request) {
         if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
       }
 
-      const items: Array<{ item_id: string; quantity: number; unit_cost: number }> = (body.items || [])
+      type RawItem = { item_id?: string; barcode?: string; name?: string; unit?: string; quantity: number; unit_cost: number }
+      const rawItems: RawItem[] = (body.items || [])
         .map((i: any) => ({
-          item_id: String(i.item_id || '').trim(),
+          item_id: String(i.item_id || '').trim() || undefined,
+          barcode: String(i.barcode || '').trim() || undefined,
+          name: String(i.name || '').trim() || undefined,
+          unit: String(i.unit || 'шт').trim() || 'шт',
           quantity: normalizeQty(i.quantity),
           unit_cost: normalizeQty(i.unit_cost),
         }))
-        .filter((i: any) => i.item_id && i.quantity > 0)
+        .filter((i: RawItem) => i.quantity > 0 && (i.item_id || i.barcode || i.name))
 
-      if (items.length === 0) return json({ error: 'items-required' }, 400)
+      if (rawItems.length === 0) return json({ error: 'items-required' }, 400)
+
+      // ── Batch-resolve barcodes → item_ids ──────────────────────────────────
+      const needLookup = rawItems.filter((i) => !i.item_id && i.barcode)
+      const barcodes = [...new Set(needLookup.map((i) => i.barcode!))]
+
+      let catalogByBarcode: Record<string, string> = {}
+      if (barcodes.length > 0) {
+        const { data: found } = await supabase
+          .from('inventory_items')
+          .select('id, barcode')
+          .in('barcode', barcodes)
+          .eq('is_active', true)
+        ;(found || []).forEach((row: any) => { catalogByBarcode[row.barcode] = row.id })
+      }
+
+      // ── Create missing items (batch) ───────────────────────────────────────
+      const orgId = access.activeOrganization?.id || null
+      const toCreate = needLookup.filter((i) => i.barcode && !catalogByBarcode[i.barcode!] && i.name)
+
+      if (toCreate.length > 0) {
+        const inserts = toCreate.map((i) => ({
+          name: i.name!,
+          barcode: i.barcode!,
+          unit: i.unit || 'шт',
+          sale_price: 0,
+          default_purchase_price: i.unit_cost || 0,
+          organization_id: orgId,
+          is_active: true,
+        }))
+        // upsert to handle duplicate barcodes gracefully
+        const { data: created } = await supabase
+          .from('inventory_items')
+          .upsert(inserts, { onConflict: 'barcode', ignoreDuplicates: false })
+          .select('id, barcode')
+        ;(created || []).forEach((row: any) => { catalogByBarcode[row.barcode] = row.id })
+      }
+
+      // ── Build final items list ─────────────────────────────────────────────
+      const resolvedItems: Array<{ item_id: string; quantity: number; unit_cost: number }> = []
+      for (const raw of rawItems) {
+        const itemId = raw.item_id || (raw.barcode ? catalogByBarcode[raw.barcode] : undefined)
+        if (!itemId) continue // couldn't resolve — skip
+        resolvedItems.push({ item_id: itemId, quantity: raw.quantity, unit_cost: raw.unit_cost })
+      }
+
+      if (resolvedItems.length === 0) return json({ error: 'no-items-resolved' }, 400)
 
       const warehouse = await ensureCompanyWarehouse(supabase, companyId)
       const actorUserId = access.staffMember?.id || null
@@ -220,7 +271,7 @@ export async function POST(request: Request) {
         supplier_id: null,
         comment: String(body.comment || '').trim() || 'Добавлено через склад',
         created_by: actorUserId,
-        items,
+        items: resolvedItems,
       })
 
       await writeAuditLog(supabase, {
@@ -228,10 +279,10 @@ export async function POST(request: Request) {
         entityType: 'inventory-warehouse-stock',
         entityId: warehouse.id,
         action: 'add_stock',
-        payload: { company_id: companyId, items_count: items.length },
+        payload: { company_id: companyId, items_count: resolvedItems.length },
       })
 
-      return json({ ok: true, data: { receipt: result } })
+      return json({ ok: true, data: { receipt: result, resolved: resolvedItems.length, skipped: rawItems.length - resolvedItems.length } })
     }
 
     return json({ error: 'unknown-action' }, 400)
