@@ -17,7 +17,7 @@ drop policy if exists "Allow insert for all users"  on public.expenses;
 drop policy if exists "allow_insert_expenses"       on public.expenses;
 drop policy if exists "expenses_insert"             on public.expenses;
 
--- SELECT policy: только своя компания
+-- SELECT policy: только своя компания (expenses.company_id существует)
 drop policy if exists expenses_select_same_company on public.expenses;
 create policy expenses_select_same_company
   on public.expenses
@@ -39,6 +39,8 @@ drop policy if exists shifts_insert_all             on public.shifts;
 -- ─── STAFF ───────────────────────────────────────────────────────────────────
 -- "Allow all access for authenticated users" — ALL OPERATIONS с USING(true)
 -- staff_delete_auth, staff_update_auth, staff_write_auth — с USING(true)
+-- Таблица staff НЕ имеет company_id; доступ только через service role (API).
+-- security definer функции (can_manage_shifts и др.) обходят RLS.
 alter table if exists public.staff enable row level security;
 
 drop policy if exists "Allow all access for authenticated users" on public.staff;
@@ -49,34 +51,37 @@ drop policy if exists "staff_insert"        on public.staff;
 drop policy if exists "staff_update"        on public.staff;
 drop policy if exists "staff_delete"        on public.staff;
 
--- SELECT: сотрудники видят только свою компанию
--- (can_manage_shifts() и другие security definer функции обходят RLS)
-drop policy if exists staff_select_same_company on public.staff;
-create policy staff_select_same_company
+-- SELECT: все authenticated могут читать (нужно для can_manage_* функций
+-- которые НЕ security definer, и для web-клиента).
+-- Запись — только через service role (API).
+drop policy if exists staff_select_authenticated on public.staff;
+create policy staff_select_authenticated
   on public.staff
   for select
   to authenticated
-  using (
-    company_id is not null
-    and public.can_access_company(company_id)
-  );
+  using (true);
 
--- ─── STAFF_SALARY_ADJUSTMENTS ────────────────────────────────────────────────
-alter table if exists public.staff_salary_adjustments enable row level security;
+-- ─── STAFF_ADJUSTMENTS (фактическое имя таблицы) ─────────────────────────────
+alter table if exists public.staff_adjustments enable row level security;
 
-drop policy if exists "Allow all"           on public.staff_salary_adjustments;
-drop policy if exists "staff_salary_adjustments_delete" on public.staff_salary_adjustments;
-drop policy if exists "staff_salary_adjustments_update" on public.staff_salary_adjustments;
-drop policy if exists "staff_salary_adjustments_insert" on public.staff_salary_adjustments;
-drop policy if exists "Allow insert for all users" on public.staff_salary_adjustments;
+drop policy if exists "Allow all"                   on public.staff_adjustments;
+drop policy if exists "staff_adjustments_delete"    on public.staff_adjustments;
+drop policy if exists "staff_adjustments_update"    on public.staff_adjustments;
+drop policy if exists "staff_adjustments_insert"    on public.staff_adjustments;
+drop policy if exists "staff_salary_adjustments_delete" on public.staff_adjustments;
+drop policy if exists "staff_salary_adjustments_update" on public.staff_adjustments;
+drop policy if exists "staff_salary_adjustments_insert" on public.staff_adjustments;
+drop policy if exists "Allow insert for all users"  on public.staff_adjustments;
 
 -- ─── STAFF_SALARY_PAYMENTS ───────────────────────────────────────────────────
-alter table if exists public.staff_payments enable row level security;
+alter table if exists public.staff_salary_payments enable row level security;
 
-drop policy if exists "Allow all"               on public.staff_payments;
-drop policy if exists "staff_payments_delete"   on public.staff_payments;
-drop policy if exists "staff_payments_insert"   on public.staff_payments;
-drop policy if exists "Allow insert for all users" on public.staff_payments;
+drop policy if exists "Allow all"                       on public.staff_salary_payments;
+drop policy if exists "staff_salary_payments_delete"    on public.staff_salary_payments;
+drop policy if exists "staff_salary_payments_insert"    on public.staff_salary_payments;
+drop policy if exists "staff_payments_delete"           on public.staff_salary_payments;
+drop policy if exists "staff_payments_insert"           on public.staff_salary_payments;
+drop policy if exists "Allow insert for all users"      on public.staff_salary_payments;
 
 -- ─── OPERATOR_DOCUMENTS ──────────────────────────────────────────────────────
 alter table if exists public.operator_documents enable row level security;
@@ -101,8 +106,8 @@ create policy operator_documents_select
 -- ─── OPERATOR_NOTES ──────────────────────────────────────────────────────────
 alter table if exists public.operator_notes enable row level security;
 
-drop policy if exists "operator_notes_insert"  on public.operator_notes;
-drop policy if exists "Allow all"              on public.operator_notes;
+drop policy if exists "operator_notes_insert"      on public.operator_notes;
+drop policy if exists "Allow all"                  on public.operator_notes;
 drop policy if exists "Allow insert for all users" on public.operator_notes;
 
 -- SELECT: по operator_id
@@ -117,23 +122,23 @@ create policy operator_notes_select
   );
 
 -- ─── PLANS_DAILY ─────────────────────────────────────────────────────────────
+-- Таблица plans_daily НЕ имеет company_id; только date/planned_income/planned_expense.
+-- Security Advisor жалуется только на UPDATE/INSERT политики с true.
+-- SELECT с using(true) для authenticated — безопасно (не является нарушением).
 alter table if exists public.plans_daily enable row level security;
 
-drop policy if exists "plans_daily_update"  on public.plans_daily;
-drop policy if exists "plans_daily_insert"  on public.plans_daily;
-drop policy if exists "Allow all"           on public.plans_daily;
+drop policy if exists "plans_daily_update"         on public.plans_daily;
+drop policy if exists "plans_daily_insert"         on public.plans_daily;
+drop policy if exists "Allow all"                  on public.plans_daily;
 drop policy if exists "Allow insert for all users" on public.plans_daily;
 
--- SELECT: по company_id
+-- Разрешаем читать всем авторизованным (нужно для страницы анализа)
 drop policy if exists plans_daily_select on public.plans_daily;
 create policy plans_daily_select
   on public.plans_daily
   for select
   to authenticated
-  using (
-    company_id is not null
-    and public.can_access_company(company_id)
-  );
+  using (true);
 
 -- ─── STORAGE: expense-attachments bucket ─────────────────────────────────────
 -- Убираем публичный listing (public_bucket_allows_listing)
