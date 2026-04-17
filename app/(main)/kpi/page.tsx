@@ -75,7 +75,7 @@ function useKpiForecast(targetMonthStartISO: string) {
         const endISO = new Date(prev1Date.getFullYear(), prev1Date.getMonth() + 1, 0).toISOString().slice(0, 10)
 
         const [incomesResponse, companiesResponse] = await Promise.all([
-          fetch(`/api/admin/incomes?from=${startISO}&to=${endISO}`, { cache: 'no-store' }),
+          fetch(`/api/admin/incomes?from=${startISO}&to=${endISO}&page_size=5000`, { cache: 'no-store' }),
           fetch('/api/admin/companies', { cache: 'no-store' }),
         ])
 

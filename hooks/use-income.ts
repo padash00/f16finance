@@ -77,7 +77,7 @@ export function useIncome(options: UseIncomeOptions = {}) {
         return
       }
 
-      const normalizedPageSize = Math.min(2000, Math.max(1, pageSize))
+      const normalizedPageSize = Math.min(5000, Math.max(1, pageSize))
       let page = 0
       const allRows: IncomeRow[] = []
       while (true) {

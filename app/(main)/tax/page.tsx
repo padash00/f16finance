@@ -78,7 +78,7 @@ export default function TaxPage() {
         setLoading(true)
         const [companiesRes, incomesRes] = await Promise.all([
           fetch('/api/admin/companies'),
-          fetch(`/api/admin/incomes?from=${dateFrom}&to=${dateTo}`),
+          fetch(`/api/admin/incomes?from=${dateFrom}&to=${dateTo}&page_size=5000`),
         ])
 
         const companiesJson = await companiesRes.json().catch(() => null)

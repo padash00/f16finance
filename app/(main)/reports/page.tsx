@@ -1181,9 +1181,9 @@ function ReportsContent() {
     try {
       const { prevFrom, prevTo } = calculatePrevPeriod(dateFrom, dateTo)
 
-      const incomeParams = new URLSearchParams({ from: prevFrom, to: dateTo })
-      const expenseCurParams = new URLSearchParams({ from: dateFrom, to: dateTo, page_size: '2000', page: '0' })
-      const expensePrevParams = new URLSearchParams({ from: prevFrom, to: prevTo, page_size: '2000', page: '0' })
+      const incomeParams = new URLSearchParams({ from: prevFrom, to: dateTo, page_size: '5000' })
+      const expenseCurParams = new URLSearchParams({ from: dateFrom, to: dateTo, page_size: '5000', page: '0' })
+      const expensePrevParams = new URLSearchParams({ from: prevFrom, to: prevTo, page_size: '5000', page: '0' })
       if (companyFilter !== 'all') {
         incomeParams.set('company_id', companyFilter)
         expenseCurParams.set('company_id', companyFilter)

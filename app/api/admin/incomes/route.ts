@@ -108,7 +108,7 @@ export async function GET(req: Request) {
     const operatorNull = url.searchParams.get('operator_null') === 'true'
     const payFilter = url.searchParams.get('pay_filter') as 'cash' | 'kaspi' | 'online' | 'card' | null
     const page = Math.max(0, parseInt(url.searchParams.get('page') || '0', 10))
-    const pageSize = Math.min(2000, Math.max(1, parseInt(url.searchParams.get('page_size') || '200', 10)))
+    const pageSize = Math.min(5000, Math.max(1, parseInt(url.searchParams.get('page_size') || '2000', 10)))
 
     const supabase = hasAdminSupabaseCredentials()
       ? createAdminSupabaseClient()

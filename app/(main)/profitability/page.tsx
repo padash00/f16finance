@@ -95,7 +95,7 @@ export default function ProfitabilityPage() {
       setLoading(true); setError(null)
       try {
         const [incomeRes, expenseRes, categoriesRes, inputsRes] = await Promise.all([
-          fetch(`/api/admin/incomes?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}`),
+          fetch(`/api/admin/incomes?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}&page_size=5000`),
           fetch(`/api/admin/expenses?from=${monthStart(monthFrom)}&to=${monthEnd(monthTo)}&page_size=2000`),
           fetch('/api/admin/expense-categories'),
           fetch(`/api/admin/profitability?from=${monthFrom}&to=${monthTo}&includeKaspiDaily=1`),

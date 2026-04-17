@@ -898,16 +898,16 @@ export default function AIAnalysisPage() {
       const toDateStr = toISODateLocal(end)
       const selectedCompanyId = companyId !== 'all' ? companyId : null
 
-      const incomeParams = new URLSearchParams({ from: fromDateStr, to: toDateStr })
+      const incomeParams = new URLSearchParams({ from: fromDateStr, to: toDateStr, page_size: '5000' })
       if (selectedCompanyId) incomeParams.set('company_id', selectedCompanyId)
       const incomeApiRes = await fetch(`/api/admin/incomes?${incomeParams}`)
       if (!incomeApiRes.ok) throw new Error('Ошибка загрузки доходов')
       const incomeJson = await incomeApiRes.json()
 
-      // Fetch all expense pages (API caps at 500 per page)
+      // Fetch all expense pages
       let expenseRows: any[] = []
       {
-        const PAGE_SIZE = 500
+        const PAGE_SIZE = 5000
         let page = 0
         while (true) {
           const expParams = new URLSearchParams({ from: fromDateStr, to: toDateStr, page_size: String(PAGE_SIZE), page: String(page) })
