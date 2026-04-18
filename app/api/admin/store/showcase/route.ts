@@ -99,7 +99,7 @@ export async function GET(request: Request) {
       .select('id, status, created_at, comment, items:inventory_request_items(id, item_id, requested_qty, approved_qty, item:item_id(id, name))')
       .eq('requesting_company_id', companyId)
       .order('created_at', { ascending: false })
-      .limit(10)
+      .limit(20)
 
     return json({
       ok: true,

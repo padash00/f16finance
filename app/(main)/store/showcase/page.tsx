@@ -1,8 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import {
   AlertCircle,
+  ArrowRight,
   CheckCircle2,
   ChevronDown,
   ClipboardList,
@@ -332,16 +334,34 @@ export default function ShowcasePage() {
           </Card>
 
           {/* Request history */}
-          {pendingRequests.length > 0 && (
-            <Card className="border-white/10 bg-card/70">
-              <CardHeader className="border-b border-white/10 pb-3">
+          <Card className="border-white/10 bg-card/70">
+            <CardHeader className="border-b border-white/10 pb-3">
+              <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-sm">
                   <ClipboardList className="h-4 w-4 text-violet-300" />
                   История заявок
                 </CardTitle>
-              </CardHeader>
-              <CardContent className="divide-y divide-white/[0.06] p-0">
-                {pendingRequests.map((req) => (
+                <Link
+                  href="/store/requests"
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-violet-300 transition-colors"
+                >
+                  Все заявки
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent className="divide-y divide-white/[0.06] p-0">
+              {loading ? (
+                <div className="flex h-24 items-center justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : pendingRequests.length === 0 ? (
+                <div className="flex h-24 flex-col items-center justify-center gap-1 text-muted-foreground">
+                  <ClipboardList className="h-5 w-5 opacity-30" />
+                  <p className="text-xs">Заявок пока нет</p>
+                </div>
+              ) : (
+                pendingRequests.map((req) => (
                   <div key={req.id} className="px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-xs text-muted-foreground">{formatDate(req.created_at)}</span>
@@ -365,10 +385,10 @@ export default function ShowcasePage() {
                       )}
                     </div>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+                ))
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* RIGHT: request panel */}
