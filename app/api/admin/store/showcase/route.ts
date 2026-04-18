@@ -39,7 +39,7 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    const companiesQuery = supabase.from('companies').select('id, name, code').order('name')
+    const companiesQuery = supabase.from('companies').select('id, name, code').eq('show_in_structure', true).order('name')
     if (companyScope.allowedCompanyIds) companiesQuery.in('id', companyScope.allowedCompanyIds)
     const { data: companies } = await companiesQuery
 

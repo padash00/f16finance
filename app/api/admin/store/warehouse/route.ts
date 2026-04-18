@@ -76,8 +76,8 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    // Get all available companies (null = superadmin/legacy = no filter)
-    const companiesQuery = supabase.from('companies').select('id, name, code').order('name')
+    // Only show companies with store enabled (show_in_structure = true)
+    const companiesQuery = supabase.from('companies').select('id, name, code').eq('show_in_structure', true).order('name')
     if (companyScope.allowedCompanyIds) companiesQuery.in('id', companyScope.allowedCompanyIds)
     const { data: companies, error: companiesErr } = await companiesQuery
     if (companiesErr) throw companiesErr

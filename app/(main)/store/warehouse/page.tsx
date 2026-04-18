@@ -40,6 +40,7 @@ type BalanceItem = {
     barcode: string
     unit: string
     sale_price: number
+    default_purchase_price: number
     category_id: string | null
     category: { id: string; name: string } | null
   } | null
@@ -570,20 +571,34 @@ export default function WarehousePage() {
         </div>
 
         {/* Stats */}
-        <div className="mt-4 grid grid-cols-3 gap-3">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Позиций</p>
-            <p className="mt-1.5 text-2xl font-semibold">{balances.length}</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Ед. товара</p>
-            <p className="mt-1.5 text-2xl font-semibold">{balances.reduce((s, b) => s + Number(b.quantity || 0), 0)}</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Нулевых</p>
-            <p className="mt-1.5 text-2xl font-semibold text-rose-400">{balances.filter((b) => Number(b.quantity) <= 0).length}</p>
-          </div>
-        </div>
+        {(() => {
+          const totalQty = balances.reduce((s, b) => s + Number(b.quantity || 0), 0)
+          const totalPurchase = balances.reduce((s, b) => s + Number(b.quantity || 0) * Number(b.item?.default_purchase_price || 0), 0)
+          const totalSale = balances.reduce((s, b) => s + Number(b.quantity || 0) * Number(b.item?.sale_price || 0), 0)
+          const fmtMoney = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
+          return (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Позиций</p>
+                <p className="mt-1.5 text-2xl font-semibold">{balances.length}</p>
+                <p className="text-xs text-muted-foreground">{totalQty} ед. товара</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Нулевых</p>
+                <p className="mt-1.5 text-2xl font-semibold text-rose-400">{balances.filter((b) => Number(b.quantity) <= 0).length}</p>
+              </div>
+              <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
+                <p className="text-[11px] uppercase tracking-widest text-blue-300/70">По закупу</p>
+                <p className="mt-1.5 text-xl font-semibold text-blue-200">{fmtMoney(totalPurchase)} ₸</p>
+              </div>
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3">
+                <p className="text-[11px] uppercase tracking-widest text-emerald-300/70">По продаже</p>
+                <p className="mt-1.5 text-xl font-semibold text-emerald-200">{fmtMoney(totalSale)} ₸</p>
+                {totalPurchase > 0 && <p className="text-xs text-emerald-400/70">+{fmtMoney(totalSale - totalPurchase)} ₸ маржа</p>}
+              </div>
+            </div>
+          )
+        })()}
       </section>
 
       <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
