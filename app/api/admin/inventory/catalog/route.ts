@@ -477,6 +477,47 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------------------------------------
+    // deleteAllItems — удалить ВСЕ товары организации (сначала остатки, потом товары)
+    // -----------------------------------------------------------------------
+    if (body.action === 'deleteAllItems') {
+      const confirm = String(body.confirm || '').trim()
+      if (confirm !== 'УДАЛИТЬ ВСЁ') {
+        return json({ error: 'Введите фразу подтверждения: УДАЛИТЬ ВСЁ' }, 400)
+      }
+      const orgId = await resolveEffectiveOrganizationId({
+        supabase,
+        activeOrganizationId: access.activeOrganization?.id || null,
+      })
+      if (!orgId) return json({ error: 'Укажите организацию' }, 400)
+
+      // Fetch all item ids for this org
+      const { data: orgItems, error: listErr } = await supabase
+        .from('inventory_items')
+        .select('id')
+        .eq('organization_id', orgId)
+      if (listErr) throw listErr
+
+      const itemIds = (orgItems || []).map((r: { id: string }) => r.id)
+      if (itemIds.length === 0) return json({ ok: true, data: { deleted: 0 } })
+
+      // Delete balances first (in case FK doesn't CASCADE)
+      const { error: balErr } = await supabase
+        .from('inventory_balances')
+        .delete()
+        .in('item_id', itemIds)
+      if (balErr) throw balErr
+
+      // Delete all items
+      const { error: delErr } = await supabase
+        .from('inventory_items')
+        .delete()
+        .eq('organization_id', orgId)
+      if (delErr) throw delErr
+
+      return json({ ok: true, data: { deleted: itemIds.length } })
+    }
+
+    // -----------------------------------------------------------------------
     // deleteEmptyBalanceItems — удалить товары без остатков (как одиночное удаление)
     // -----------------------------------------------------------------------
     if (body.action === 'deleteEmptyBalanceItems') {

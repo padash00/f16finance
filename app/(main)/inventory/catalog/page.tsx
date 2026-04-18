@@ -316,7 +316,7 @@ export function CatalogPageContent() {
   const [importError, setImportError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [bulkDialog, setBulkDialog] = useState<null | 'deactivate' | 'deleteEmpty'>(null)
+  const [bulkDialog, setBulkDialog] = useState<null | 'deactivate' | 'deleteEmpty' | 'deleteAll'>(null)
   const [bulkPhrase, setBulkPhrase] = useState('')
   const [bulkLoading, setBulkLoading] = useState(false)
 
@@ -553,8 +553,8 @@ export function CatalogPageContent() {
     if (!bulkDialog) return
     setBulkLoading(true)
     try {
-      const action = bulkDialog === 'deactivate' ? 'deactivateAllItems' : 'deleteEmptyBalanceItems'
-      const confirm = bulkDialog === 'deactivate' ? 'ОТКЛЮЧИТЬ ВСЕ' : 'УДАЛИТЬ ПУСТЫЕ'
+      const action = bulkDialog === 'deactivate' ? 'deactivateAllItems' : bulkDialog === 'deleteAll' ? 'deleteAllItems' : 'deleteEmptyBalanceItems'
+      const confirm = bulkDialog === 'deactivate' ? 'ОТКЛЮЧИТЬ ВСЕ' : bulkDialog === 'deleteAll' ? 'УДАЛИТЬ ВСЁ' : 'УДАЛИТЬ ПУСТЫЕ'
       if (bulkPhrase.trim() !== confirm) {
         showToast('Неверная фраза подтверждения')
         return
@@ -568,6 +568,8 @@ export function CatalogPageContent() {
       if (!res.ok) throw new Error(json.error)
       if (bulkDialog === 'deactivate') {
         showToast(`Скрыто позиций: ${json.data?.count ?? 0}`)
+      } else if (bulkDialog === 'deleteAll') {
+        showToast(`Удалено всё: ${json.data?.deleted ?? 0} позиций`)
       } else {
         showToast(`Удалено: ${json.data?.deleted ?? 0}, не удалось: ${json.data?.failed ?? 0}`)
       }
@@ -623,6 +625,9 @@ export function CatalogPageContent() {
           </Button>
           <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => { setBulkDialog('deleteEmpty'); setBulkPhrase('') }}>
             Удалить без остатков
+          </Button>
+          <Button variant="outline" size="sm" className="text-destructive border-destructive/60 bg-destructive/5" onClick={() => { setBulkDialog('deleteAll'); setBulkPhrase('') }}>
+            Удалить весь каталог
           </Button>
           <Button size="sm" onClick={() => { setShowAdd(true); setEditingId(null) }}>
             <Plus className="w-3.5 h-3.5 mr-1.5" />
@@ -1060,17 +1065,23 @@ export function CatalogPageContent() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {bulkDialog === 'deactivate' ? 'Скрыть все позиции в каталоге' : 'Удалить товары без остатков'}
+              {bulkDialog === 'deactivate' ? 'Скрыть все позиции в каталоге'
+                : bulkDialog === 'deleteAll' ? 'Удалить весь каталог'
+                : 'Удалить товары без остатков'}
             </DialogTitle>
             <DialogDescription>
               {bulkDialog === 'deactivate'
                 ? 'Все товары станут неактивными (не исчезнут из базы). Для POS и отчётов они не будут предлагаться.'
+                : bulkDialog === 'deleteAll'
+                ? 'Будут удалены ВСЕ товары организации включая остатки на складе и витринах. Это действие необратимо.'
                 : 'Будут удалены только позиции с нулевым остатком на всех локациях. Если у товара есть приёмки, продажи или другая история, удаление может не пройти — такие строки будут пропущены.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
             <Label className="text-xs text-muted-foreground">
-              Введите фразу: <span className="font-mono text-foreground">{bulkDialog === 'deactivate' ? 'ОТКЛЮЧИТЬ ВСЕ' : 'УДАЛИТЬ ПУСТЫЕ'}</span>
+              Введите фразу: <span className="font-mono text-foreground">
+                {bulkDialog === 'deactivate' ? 'ОТКЛЮЧИТЬ ВСЕ' : bulkDialog === 'deleteAll' ? 'УДАЛИТЬ ВСЁ' : 'УДАЛИТЬ ПУСТЫЕ'}
+              </span>
             </Label>
             <Input value={bulkPhrase} onChange={(e) => setBulkPhrase(e.target.value)} placeholder="Точно как указано выше" autoComplete="off" />
           </div>
