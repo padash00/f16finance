@@ -35,6 +35,8 @@ type CatalogItem = {
   notes: string | null
   is_active: boolean
   item_type: string
+  warehouse_qty: number
+  showcase_qty: number
   total_balance: number
   low_stock_threshold: number | null
 }
@@ -710,7 +712,9 @@ export function CatalogPageContent() {
                       <th className="px-3 py-2.5 text-right font-medium text-muted-foreground text-xs">Продажа</th>
                       <th className="px-3 py-2.5 text-right font-medium text-muted-foreground text-xs">Закупка</th>
                       <th className="px-3 py-2.5 text-center font-medium text-muted-foreground text-xs">Ед.</th>
-                      <th className="px-3 py-2.5 text-right font-medium text-muted-foreground text-xs">Остаток</th>
+                      <th className="px-3 py-2.5 text-right font-medium text-muted-foreground text-xs">Склад</th>
+                      <th className="px-3 py-2.5 text-right font-medium text-muted-foreground text-xs">Витрина</th>
+                      <th className="px-3 py-2.5 text-right font-medium text-muted-foreground text-xs">Итого</th>
                       <th className="px-3 py-2.5 text-center font-medium text-muted-foreground text-xs w-20">Действия</th>
                     </tr>
                   </thead>
@@ -735,7 +739,13 @@ export function CatalogPageContent() {
                           <td className="px-3 py-2.5 text-right font-medium">{item.sale_price.toLocaleString('ru-RU')} ₸</td>
                           <td className="px-3 py-2.5 text-right text-muted-foreground">{item.default_purchase_price.toLocaleString('ru-RU')} ₸</td>
                           <td className="px-3 py-2.5 text-center text-muted-foreground text-xs">{item.unit}</td>
-                          <td className={`px-3 py-2.5 text-right font-medium ${item.total_balance > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                          <td className={`px-3 py-2.5 text-right ${item.warehouse_qty > 0 ? 'text-blue-400 font-medium' : 'text-muted-foreground'}`}>
+                            {item.warehouse_qty > 0 ? item.warehouse_qty.toLocaleString('ru-RU') : '—'}
+                          </td>
+                          <td className={`px-3 py-2.5 text-right ${item.showcase_qty > 0 ? 'text-amber-400 font-medium' : 'text-muted-foreground'}`}>
+                            {item.showcase_qty > 0 ? item.showcase_qty.toLocaleString('ru-RU') : '—'}
+                          </td>
+                          <td className={`px-3 py-2.5 text-right font-semibold ${item.total_balance > 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>
                             {item.total_balance > 0 ? item.total_balance.toLocaleString('ru-RU') : '—'}
                           </td>
                           <td className="px-3 py-2.5">
@@ -759,7 +769,7 @@ export function CatalogPageContent() {
                         </tr>
                         {editingId === item.id && (
                           <tr>
-                            <td colSpan={8} className="px-4 py-3 bg-muted/30 border-b border-primary/20">
+                            <td colSpan={10} className="px-4 py-3 bg-muted/30 border-b border-primary/20">
                               <ItemForm
                                 form={editForm}
                                 onChange={setEditForm}

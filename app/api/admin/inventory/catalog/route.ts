@@ -71,25 +71,38 @@ export async function GET(request: Request) {
 
     if (itemsError) throw itemsError
 
-    // Fetch all balances to compute totals
+    // Fetch balances with location type to split warehouse vs showcase
     const { data: balances, error: balancesError } = await supabase
       .from('inventory_balances')
-      .select('item_id, quantity')
+      .select('item_id, quantity, loc:inventory_locations(location_type)')
 
     if (balancesError) throw balancesError
 
-    // Sum balances per item
-    const balanceMap: Record<string, number> = {}
+    // Split balances by location_type: warehouse vs point_display (showcase)
+    const warehouseMap: Record<string, number> = {}
+    const showcaseMap: Record<string, number> = {}
     for (const b of balances || []) {
-      balanceMap[b.item_id] = (balanceMap[b.item_id] || 0) + (b.quantity || 0)
+      const locType = (Array.isArray(b.loc) ? b.loc[0] : b.loc)?.location_type
+      const qty = b.quantity || 0
+      if (locType === 'warehouse') {
+        warehouseMap[b.item_id] = (warehouseMap[b.item_id] || 0) + qty
+      } else {
+        showcaseMap[b.item_id] = (showcaseMap[b.item_id] || 0) + qty
+      }
     }
 
     // Normalize items (category may come back as array from supabase joins)
-    const normalized = (items || []).map((item: any) => ({
-      ...item,
-      category: Array.isArray(item.category) ? item.category[0] || null : item.category || null,
-      total_balance: balanceMap[item.id] || 0,
-    }))
+    const normalized = (items || []).map((item: any) => {
+      const wh = warehouseMap[item.id] || 0
+      const sh = showcaseMap[item.id] || 0
+      return {
+        ...item,
+        category: Array.isArray(item.category) ? item.category[0] || null : item.category || null,
+        warehouse_qty: wh,
+        showcase_qty: sh,
+        total_balance: wh + sh,
+      }
+    })
 
     return json({ ok: true, data: normalized })
   } catch (error: any) {
