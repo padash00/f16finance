@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/styled-export'
-import { Package, Pencil, Plus, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Package, Pencil, Plus, Search, Trash2, Upload, Download, Check, X, ChevronLeft, ChevronRight, ShoppingCart, TrendingUp, Warehouse, Store, Tag } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -635,6 +635,75 @@ export function CatalogPageContent() {
           </Button>
         </div>
       </div>
+
+      {/* ── Summary cards ──────────────────────────────────────────────────── */}
+      {!loading && items.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {/* Позиций */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <Tag className="w-3.5 h-3.5 text-slate-400" />
+              Позиций
+            </div>
+            <div className="text-xl font-bold text-foreground">{items.length.toLocaleString('ru-RU')}</div>
+            {filtered.length !== items.length && (
+              <div className="text-[11px] text-muted-foreground mt-0.5">в фильтре: {filtered.length}</div>
+            )}
+          </div>
+
+          {/* Склад — закуп */}
+          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-blue-300/70 mb-1">
+              <Warehouse className="w-3.5 h-3.5" />
+              Склад по закупу
+            </div>
+            <div className="text-xl font-bold text-blue-300">
+              {Math.round(totals.warehousePurchase).toLocaleString('ru-RU')} ₸
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">{totals.warehouseQty.toLocaleString('ru-RU')} ед.</div>
+          </div>
+
+          {/* Склад — продажа */}
+          <div className="rounded-2xl border border-blue-400/20 bg-blue-400/[0.04] px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-blue-200/70 mb-1">
+              <TrendingUp className="w-3.5 h-3.5" />
+              Склад по продаже
+            </div>
+            <div className="text-xl font-bold text-blue-200">
+              {Math.round(totals.warehouseSale).toLocaleString('ru-RU')} ₸
+            </div>
+            <div className="text-[11px] text-emerald-400/80 mt-0.5">
+              +{Math.round(totals.warehouseSale - totals.warehousePurchase).toLocaleString('ru-RU')} ₸ наценка
+            </div>
+          </div>
+
+          {/* Витрина — закуп */}
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-amber-300/70 mb-1">
+              <Store className="w-3.5 h-3.5" />
+              Витрина по закупу
+            </div>
+            <div className="text-xl font-bold text-amber-300">
+              {Math.round(totals.showcasePurchase).toLocaleString('ru-RU')} ₸
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">{totals.showcaseQty.toLocaleString('ru-RU')} ед.</div>
+          </div>
+
+          {/* Всего — продажа */}
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-emerald-300/70 mb-1">
+              <ShoppingCart className="w-3.5 h-3.5" />
+              Итого по продаже
+            </div>
+            <div className="text-xl font-bold text-emerald-300">
+              {Math.round(totals.totalSale).toLocaleString('ru-RU')} ₸
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              зак: {Math.round(totals.totalPurchase).toLocaleString('ru-RU')} ₸
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
