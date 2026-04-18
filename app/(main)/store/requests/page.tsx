@@ -247,6 +247,26 @@ export default function StoreRequestsPage() {
     }))
   }
 
+  const transitionStatus = async (requestId: string, status: 'issued' | 'received') => {
+    setSavingId(requestId)
+    setError(null)
+    try {
+      const response = await fetch('/api/admin/inventory/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'transitionStatus', requestId, status }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Ошибка')
+      setSuccess(status === 'issued' ? 'Заявка отмечена как выданная.' : 'Заявка отмечена как полученная.')
+      await load()
+    } catch (err: any) {
+      setError(err?.message || 'Ошибка')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
   const submitDecision = async (request: InventoryRequest, approved: boolean, fullApprove: boolean) => {
     setSavingId(request.id)
     setError(null)
@@ -502,8 +522,8 @@ export default function StoreRequestsPage() {
                 approvedRequests.slice(0, 6).map((request) => (
                   <div key={request.id} className="rounded-2xl border border-white/6 bg-slate-900/70 p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-white">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-white">
                           {request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'}
                         </div>
                         <div className="mt-1 text-xs text-slate-400">
@@ -511,6 +531,20 @@ export default function StoreRequestsPage() {
                         </div>
                       </div>
                       <RequestStatusBadge status={request.status} />
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      {['approved_full', 'approved_partial'].includes(request.status) && (
+                        <Button size="sm" variant="outline" className="h-7 gap-1 text-xs border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10" disabled={savingId === request.id} onClick={() => transitionStatus(request.id, 'issued')}>
+                          {savingId === request.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <PackageCheck className="h-3 w-3" />}
+                          Выдать
+                        </Button>
+                      )}
+                      {request.status === 'issued' && (
+                        <Button size="sm" variant="outline" className="h-7 gap-1 text-xs border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10" disabled={savingId === request.id} onClick={() => transitionStatus(request.id, 'received')}>
+                          {savingId === request.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                          Получено
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))

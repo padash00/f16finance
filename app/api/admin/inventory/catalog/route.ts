@@ -66,7 +66,7 @@ export async function GET(request: Request) {
     // Fetch all inventory items with their category
     const { data: items, error: itemsError } = await supabase
       .from('inventory_items')
-      .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, category:inventory_categories(id, name)')
+      .select('id, name, barcode, category_id, sale_price, default_purchase_price, unit, notes, is_active, item_type, low_stock_threshold, category:inventory_categories(id, name)')
       .order('name', { ascending: true })
 
     if (itemsError) throw itemsError

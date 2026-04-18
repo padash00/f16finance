@@ -39,6 +39,7 @@ type BalanceItem = {
     barcode: string
     unit: string
     sale_price: number
+    low_stock_threshold: number | null
     category: { id: string; name: string } | null
   } | null
 }
@@ -111,6 +112,14 @@ export default function ShowcasePage() {
   const [sending, setSending] = useState(false)
   const [sendSuccess, setSendSuccess] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+
+  // Return to warehouse panel
+  const [showReturnPanel, setShowReturnPanel] = useState(false)
+  const [returnLines, setReturnLines] = useState<RequestLine[]>([{ item_id: '', requested_qty: '' }])
+  const [returnComment, setReturnComment] = useState('')
+  const [returning, setReturning] = useState(false)
+  const [returnSuccess, setReturnSuccess] = useState(false)
+  const [returnError, setReturnError] = useState<string | null>(null)
 
   // ── Load ─────────────────────────────────────────────────────────────────────
 
@@ -199,6 +208,50 @@ export default function ShowcasePage() {
     }
   }
 
+  async function handleReturn(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedCompanyId) return
+    setReturning(true)
+    setReturnError(null)
+    setReturnSuccess(false)
+
+    const items = returnLines
+      .map((l) => ({ item_id: l.item_id, quantity: parseQty(l.requested_qty) }))
+      .filter((l) => l.item_id && l.quantity > 0)
+
+    if (items.length === 0) {
+      setReturnError('Добавьте хотя бы одну позицию')
+      setReturning(false)
+      return
+    }
+
+    try {
+      const res = await fetch('/api/admin/store/showcase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'returnToWarehouse',
+          company_id: selectedCompanyId,
+          comment: returnComment.trim() || null,
+          items,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка возврата')
+
+      setReturnSuccess(true)
+      setReturnLines([{ item_id: '', requested_qty: '' }])
+      setReturnComment('')
+      setShowReturnPanel(false)
+      await load(selectedCompanyId)
+      setTimeout(() => setReturnSuccess(false), 3000)
+    } catch (err: any) {
+      setReturnError(err?.message || 'Ошибка')
+    } finally {
+      setReturning(false)
+    }
+  }
+
   // ─── Render ───────────────────────────────────────────────────────────────────
 
   const newRequestsCount = pendingRequests.filter((r) => r.status === 'new').length
@@ -240,10 +293,16 @@ export default function ShowcasePage() {
                 <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
               </div>
             )}
-            <Button size="sm" className="gap-1.5" onClick={() => setShowRequestPanel(!showRequestPanel)}>
+            <Button size="sm" className="gap-1.5" onClick={() => { setShowRequestPanel(!showRequestPanel); setShowReturnPanel(false) }}>
               <ClipboardList className="h-3.5 w-3.5" />
               Запросить со склада
             </Button>
+            {balances.length > 0 && (
+              <Button size="sm" variant="outline" className="gap-1.5 border-amber-500/30 text-amber-300 hover:bg-amber-500/10" onClick={() => { setShowReturnPanel(!showReturnPanel); setShowRequestPanel(false) }}>
+                <Trash2 className="h-3.5 w-3.5" />
+                Вернуть на склад
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-8 gap-1.5">
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             </Button>
@@ -308,26 +367,35 @@ export default function ShowcasePage() {
                 </div>
               ) : (
                 <div className="divide-y divide-white/[0.06]">
-                  {balances.map((b) => (
-                    <div key={b.item_id} className="flex items-center justify-between px-4 py-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{b.item?.name || 'Товар'}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {b.item?.barcode || ''}
-                          {b.item?.category ? ` · ${b.item.category.name}` : ''}
-                        </p>
+                  {balances.map((b) => {
+                    const qty = Number(b.quantity)
+                    const threshold = b.item?.low_stock_threshold ?? null
+                    const isLow = threshold !== null ? qty <= threshold : qty <= 0
+                    const isZero = qty <= 0
+                    const qtyColor = isZero ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-emerald-400'
+                    const rowBg = isLow && !isZero ? 'bg-amber-500/[0.04]' : isZero ? 'bg-rose-500/[0.04]' : ''
+                    return (
+                      <div key={b.item_id} className={`flex items-center justify-between px-4 py-3 ${rowBg}`}>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{b.item?.name || 'Товар'}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {b.item?.barcode || ''}
+                            {b.item?.category ? ` · ${b.item.category.name}` : ''}
+                          </p>
+                          {isLow && !isZero && threshold !== null && (
+                            <p className="text-[10px] text-amber-400">⚠ мало (мин: {threshold})</p>
+                          )}
+                        </div>
+                        <div className="ml-3 shrink-0 text-right">
+                          <p className={`text-sm font-semibold ${qtyColor}`}>{b.quantity}</p>
+                          <p className="text-[10px] text-muted-foreground">{b.item?.unit || 'шт'}</p>
+                          {b.item?.sale_price ? (
+                            <p className="text-[10px] text-muted-foreground">{b.item.sale_price} ₸</p>
+                          ) : null}
+                        </div>
                       </div>
-                      <div className="ml-3 shrink-0 text-right">
-                        <p className={`text-sm font-semibold ${Number(b.quantity) <= 0 ? 'text-rose-400' : Number(b.quantity) <= 3 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                          {b.quantity}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">{b.item?.unit || 'шт'}</p>
-                        {b.item?.sale_price ? (
-                          <p className="text-[10px] text-muted-foreground">{b.item.sale_price} ₸</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
@@ -434,9 +502,8 @@ export default function ShowcasePage() {
                           </select>
                           {line.item_id && (
                             <p className="text-[10px] text-muted-foreground">
-                              На складе: <span className="font-medium text-foreground">
-                                {warehouseItems.find((i) => i.item_id === line.item_id)?.quantity ?? '?'}
-                              </span>
+                              Склад: <span className="font-medium text-foreground">{warehouseItems.find((i) => i.item_id === line.item_id)?.quantity ?? '?'}</span>
+                              {' · '}Витрина: <span className="font-medium text-blue-300">{balances.find((b) => b.item_id === line.item_id)?.quantity ?? 0}</span>
                             </p>
                           )}
                         </div>
@@ -501,6 +568,89 @@ export default function ShowcasePage() {
                   <Button type="submit" disabled={sending} className="w-full gap-2">
                     {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
                     Отправить заявку
+                  </Button>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Return to warehouse panel */}
+        {showReturnPanel && (
+          <Card className="border-amber-500/20 bg-card/70">
+            <CardHeader className="border-b border-white/10 pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Trash2 className="h-4 w-4 text-amber-300" />
+                  Возврат на склад
+                </CardTitle>
+                <button onClick={() => setShowReturnPanel(false)} className="text-muted-foreground hover:text-foreground">✕</button>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">Товары спишутся с витрины и добавятся на склад</p>
+            </CardHeader>
+            <CardContent className="p-4">
+              {balances.length === 0 ? (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
+                  Витрина пустая — нечего возвращать.
+                </div>
+              ) : (
+                <form onSubmit={handleReturn} className="space-y-3">
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {returnLines.map((line, idx) => (
+                      <div key={idx} className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 space-y-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Товар</Label>
+                          <select
+                            value={line.item_id}
+                            onChange={(e) => setReturnLines((prev) => prev.map((l, i) => i === idx ? { ...l, item_id: e.target.value } : l))}
+                            className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-amber-400/50"
+                          >
+                            <option value="">Выберите товар</option>
+                            {balances.filter((b) => Number(b.quantity) > 0).map((b) => (
+                              <option key={b.item_id} value={b.item_id}>
+                                {b.item?.name || b.item_id} · {b.quantity} {b.item?.unit || 'шт'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="space-y-1 flex-1">
+                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Количество</Label>
+                            <div className="flex items-center gap-1">
+                              <button type="button" onClick={() => setReturnLines((prev) => prev.map((l, i) => i === idx ? { ...l, requested_qty: String(Math.max(0, parseQty(l.requested_qty) - 1)) } : l))} className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 hover:bg-white/[0.06]">
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <Input value={line.requested_qty} onChange={(e) => setReturnLines((prev) => prev.map((l, i) => i === idx ? { ...l, requested_qty: e.target.value } : l))} placeholder="0" className="h-7 text-xs text-center flex-1" />
+                              <button type="button" onClick={() => setReturnLines((prev) => prev.map((l, i) => i === idx ? { ...l, requested_qty: String(parseQty(l.requested_qty) + 1) } : l))} className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 hover:bg-white/[0.06]">
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                          {returnLines.length > 1 && (
+                            <button type="button" onClick={() => setReturnLines((prev) => prev.filter((_, i) => i !== idx))} className="mt-5 text-muted-foreground hover:text-rose-400 transition">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Button type="button" variant="outline" size="sm" className="w-full text-xs gap-1" onClick={() => setReturnLines((prev) => [...prev, { item_id: '', requested_qty: '' }])}>
+                    <Plus className="h-3.5 w-3.5" />
+                    Добавить позицию
+                  </Button>
+
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Комментарий</Label>
+                    <textarea value={returnComment} onChange={(e) => setReturnComment(e.target.value)} placeholder="Причина возврата..." rows={2} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs outline-none focus:border-amber-400/50" />
+                  </div>
+
+                  {returnError && <p className="text-xs text-rose-400">{returnError}</p>}
+
+                  <Button type="submit" disabled={returning} className="w-full gap-2 bg-amber-500 hover:bg-amber-600 text-black">
+                    {returning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    Вернуть на склад
                   </Button>
                 </form>
               )}

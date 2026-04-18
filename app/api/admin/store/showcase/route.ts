@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     if (showcase?.id) {
       const { data, error: balErr } = await supabase
         .from('inventory_balances')
-        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, category_id, category:category_id(id, name))')
+        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, low_stock_threshold, category_id, category:category_id(id, name))')
         .eq('location_id', showcase.id)
         .order('quantity', { ascending: false })
       if (balErr) throw balErr
@@ -242,6 +242,88 @@ export async function POST(request: Request) {
       })()
 
       return json({ ok: true, data: result })
+    }
+
+    // ── returnToWarehouse (move items back from showcase to warehouse) ────────
+    if (body.action === 'returnToWarehouse') {
+      const companyId = String(body.company_id || '').trim()
+      if (!companyId) return json({ error: 'company-id-required' }, 400)
+
+      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
+        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      }
+
+      type ReturnItem = { item_id: string; quantity: number }
+      const items: ReturnItem[] = (body.items || [])
+        .map((i: any) => ({ item_id: String(i.item_id || '').trim(), quantity: normalizeQty(i.quantity) }))
+        .filter((i: ReturnItem) => i.item_id && i.quantity > 0)
+
+      if (items.length === 0) return json({ error: 'items-required' }, 400)
+
+      // Resolve locations
+      const { data: showcase, error: scErr } = await supabase
+        .from('inventory_locations')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('location_type', 'point_display')
+        .eq('is_active', true)
+        .maybeSingle()
+      if (scErr) throw scErr
+      if (!showcase?.id) return json({ error: 'showcase-not-found' }, 404)
+
+      const { data: warehouse, error: whErr } = await supabase
+        .from('inventory_locations')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('location_type', 'warehouse')
+        .maybeSingle()
+      if (whErr) throw whErr
+      if (!warehouse?.id) return json({ error: 'warehouse-not-found' }, 404)
+
+      const actorUserId = access.staffMember?.id || null
+
+      // Update balances atomically via upsert for each item
+      for (const item of items) {
+        // Deduct from showcase
+        const { data: scBal } = await supabase
+          .from('inventory_balances')
+          .select('quantity')
+          .eq('location_id', showcase.id)
+          .eq('item_id', item.item_id)
+          .maybeSingle()
+
+        const scQty = Math.max(0, Number(scBal?.quantity || 0) - item.quantity)
+        await supabase
+          .from('inventory_balances')
+          .upsert({ location_id: showcase.id, item_id: item.item_id, quantity: scQty, updated_at: new Date().toISOString() }, { onConflict: 'location_id,item_id' })
+
+        // Add to warehouse
+        const { data: whBal } = await supabase
+          .from('inventory_balances')
+          .select('quantity')
+          .eq('location_id', warehouse.id)
+          .eq('item_id', item.item_id)
+          .maybeSingle()
+
+        const whQty = Number(whBal?.quantity || 0) + item.quantity
+        await supabase
+          .from('inventory_balances')
+          .upsert({ location_id: warehouse.id, item_id: item.item_id, quantity: whQty, updated_at: new Date().toISOString() }, { onConflict: 'location_id,item_id' })
+
+        // Record movement
+        await supabase.from('inventory_movements').insert({
+          item_id: item.item_id,
+          from_location_id: showcase.id,
+          to_location_id: warehouse.id,
+          quantity: item.quantity,
+          movement_type: 'transfer',
+          reference_type: 'return_to_warehouse',
+          comment: String(body.comment || '').trim() || 'Возврат с витрины на склад',
+          actor_user_id: actorUserId,
+        })
+      }
+
+      return json({ ok: true, data: { returned: items.length } })
     }
 
     return json({ error: 'unknown-action' }, 400)

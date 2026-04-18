@@ -71,7 +71,35 @@ export async function POST(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     }
     const body = await request.json().catch(() => null)
-    if (!body?.action || body.action !== 'decideRequest') return json({ error: 'invalid-action' }, 400)
+    if (!body?.action) return json({ error: 'action-required' }, 400)
+
+    // ── transitionStatus ───────────────────────────────────────────���─────────
+    if (body.action === 'transitionStatus') {
+      const requestId = String(body.requestId || '').trim()
+      if (!requestId) return json({ error: 'request-id-required' }, 400)
+
+      const newStatus = String(body.status || '').trim()
+      const allowed = ['issued', 'received']
+      if (!allowed.includes(newStatus)) return json({ error: 'invalid-status' }, 400)
+
+      await ensureInventoryRequestAccess(supabase as any, requestId, inventoryScope)
+
+      // Validate transition: issued only from approved, received only from issued
+      const { data: req } = await supabase.from('inventory_requests').select('status').eq('id', requestId).maybeSingle()
+      if (!req) return json({ error: 'not-found' }, 404)
+      if (newStatus === 'issued' && !['approved_full', 'approved_partial'].includes(req.status)) return json({ error: 'invalid-transition' }, 400)
+      if (newStatus === 'received' && req.status !== 'issued') return json({ error: 'invalid-transition' }, 400)
+
+      const { error: updErr } = await supabase
+        .from('inventory_requests')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', requestId)
+      if (updErr) throw updErr
+
+      return json({ ok: true, data: { status: newStatus } })
+    }
+
+    if (body.action !== 'decideRequest') return json({ error: 'invalid-action' }, 400)
 
     const actorUserId = access.staffMember?.id || null
     const requestId = String(body.requestId || '').trim()
