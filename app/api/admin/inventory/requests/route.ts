@@ -5,6 +5,7 @@ import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { resolveCompanyScope } from '@/lib/server/organizations'
 import { decideInventoryRequest, ensureInventoryRequestAccess, fetchInventoryRequests } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { notifyInventoryRequestDecided } from '@/lib/server/telegram'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -101,6 +102,66 @@ export async function POST(request: Request) {
         decision,
       },
     })
+
+    // ── Telegram notification ──────────────────────────────────────────────
+    void (async () => {
+      try {
+        // Fetch request with items and company
+        const { data: reqData } = await supabase
+          .from('inventory_requests')
+          .select(`
+            requesting_company_id,
+            company:companies!requesting_company_id(name),
+            items:inventory_request_items(
+              requested_qty, approved_qty,
+              item:inventory_items(name, unit)
+            )
+          `)
+          .eq('id', requestId)
+          .maybeSingle()
+
+        if (!reqData) return
+
+        const companyId = reqData.requesting_company_id
+        const companyName = (Array.isArray(reqData.company) ? reqData.company[0] : reqData.company)?.name || companyId
+
+        // Staff telegram IDs
+        const { data: staffRows } = await supabase
+          .from('staff')
+          .select('telegram_chat_id')
+          .eq('company_id', companyId)
+          .in('role', ['owner', 'manager'])
+          .not('telegram_chat_id', 'is', null)
+
+        const chatIds = [
+          ...(staffRows || []).map((s: any) => String(s.telegram_chat_id)),
+          process.env.TELEGRAM_ADMIN_CHAT_ID,
+        ].filter(Boolean) as string[]
+
+        const deciderName = access.staffMember
+          ? (access.staffMember as any).full_name || (access.staffMember as any).name || null
+          : null
+
+        const items = (Array.isArray(reqData.items) ? reqData.items : []).map((ri: any) => {
+          const item = Array.isArray(ri.item) ? ri.item[0] : ri.item
+          return {
+            name: item?.name || '?',
+            unit: item?.unit || 'шт',
+            requested_qty: Number(ri.requested_qty || 0),
+            approved_qty: ri.approved_qty != null ? Number(ri.approved_qty) : null,
+          }
+        })
+
+        await notifyInventoryRequestDecided({
+          companyName,
+          approved: body.approved === true,
+          decisionComment: body.decision_comment || null,
+          deciderName,
+          items,
+          chatIds: [...new Set(chatIds)],
+        })
+      } catch { /* не ломать основной сценарий */ }
+    })()
 
     return json({ ok: true, data: decision })
   } catch (error: any) {

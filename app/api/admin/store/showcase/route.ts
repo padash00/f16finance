@@ -5,6 +5,7 @@ import { resolveCompanyScope } from '@/lib/server/organizations'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createInventoryRequest } from '@/lib/server/repositories/inventory'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+import { notifyInventoryRequestCreated } from '@/lib/server/telegram'
 
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
@@ -186,6 +187,59 @@ export async function POST(request: Request) {
         created_by: actorUserId,
         items,
       })
+
+      // ── Telegram notification ──────────────────────────────────────────────
+      void (async () => {
+        try {
+          // Company name
+          const { data: company } = await supabase
+            .from('companies')
+            .select('name')
+            .eq('id', companyId)
+            .maybeSingle()
+
+          // Item names
+          const itemIds = items.map((i) => i.item_id)
+          const { data: itemRows } = await supabase
+            .from('inventory_items')
+            .select('id, name, unit')
+            .in('id', itemIds)
+          const itemMap: Record<string, { name: string; unit: string }> = {}
+          for (const r of itemRows || []) itemMap[r.id] = { name: r.name, unit: r.unit }
+
+          // Staff owners/managers with telegram
+          const { data: staffRows } = await supabase
+            .from('staff')
+            .select('telegram_chat_id, full_name')
+            .eq('company_id', companyId)
+            .in('role', ['owner', 'manager'])
+            .not('telegram_chat_id', 'is', null)
+
+          // Creator name from staff member
+          const createdByName = access.staffMember
+            ? (access.staffMember as any).full_name || (access.staffMember as any).name || null
+            : null
+
+          const chatIds = [
+            ...(staffRows || []).map((s: any) => String(s.telegram_chat_id)),
+            process.env.TELEGRAM_ADMIN_CHAT_ID,
+          ].filter(Boolean) as string[]
+
+          const uniqueChatIds = [...new Set(chatIds)]
+
+          await notifyInventoryRequestCreated({
+            companyName: company?.name || companyId,
+            createdByName,
+            comment: String(body.comment || '').trim() || null,
+            items: items.map((i) => ({
+              name: itemMap[i.item_id]?.name || i.item_id,
+              requested_qty: i.requested_qty,
+              unit: itemMap[i.item_id]?.unit || 'шт',
+            })),
+            chatIds: uniqueChatIds,
+          })
+        } catch { /* не ломать основной сценарий */ }
+      })()
 
       return json({ ok: true, data: result })
     }

@@ -114,6 +114,76 @@ export async function notifyShiftReport(params: {
   }
 }
 
+// ─── Inventory requests ───────────────────────────────────────────────────────
+
+function esc(s: string | null | undefined): string {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** Отправить уведомление о новой заявке на перемещение товаров */
+export async function notifyInventoryRequestCreated(params: {
+  companyName: string
+  createdByName: string | null
+  comment: string | null
+  items: Array<{ name: string; requested_qty: number; unit: string }>
+  chatIds: string[]
+}): Promise<void> {
+  if (!isTelegramConfigured() || params.chatIds.length === 0) return
+
+  const itemLines = params.items
+    .map((i) => `• ${esc(i.name)} — <b>${i.requested_qty} ${esc(i.unit)}</b>`)
+    .join('\n')
+
+  const html = [
+    `📦 <b>Новая заявка со склада</b>`,
+    ``,
+    `🏪 <b>${esc(params.companyName)}</b>`,
+    params.createdByName ? `👤 От: <i>${esc(params.createdByName)}</i>` : null,
+    ``,
+    itemLines,
+    params.comment ? `\n💬 <i>${esc(params.comment)}</i>` : null,
+  ].filter(Boolean).join('\n')
+
+  await Promise.all(
+    params.chatIds.map((id) => sendTelegram(html, id).catch(() => null)),
+  )
+}
+
+/** Отправить уведомление об одобрении/отказе заявки */
+export async function notifyInventoryRequestDecided(params: {
+  companyName: string
+  approved: boolean
+  decisionComment: string | null
+  deciderName: string | null
+  items: Array<{ name: string; requested_qty: number; approved_qty: number | null; unit: string }>
+  chatIds: string[]
+}): Promise<void> {
+  if (!isTelegramConfigured() || params.chatIds.length === 0) return
+
+  const icon = params.approved ? '✅' : '❌'
+  const title = params.approved ? 'Заявка одобрена' : 'Заявка отклонена'
+
+  const itemLines = params.items.map((i) => {
+    const req = `${i.requested_qty} ${esc(i.unit)}`
+    const appr = i.approved_qty != null ? `одобрено: <b>${i.approved_qty} ${esc(i.unit)}</b>` : ''
+    return `• ${esc(i.name)} — запр. ${req}${appr ? `, ${appr}` : ''}`
+  }).join('\n')
+
+  const html = [
+    `${icon} <b>${title}</b>`,
+    ``,
+    `🏪 <b>${esc(params.companyName)}</b>`,
+    params.deciderName ? `👤 Решение: <i>${esc(params.deciderName)}</i>` : null,
+    ``,
+    itemLines,
+    params.decisionComment ? `\n💬 <i>${esc(params.decisionComment)}</i>` : null,
+  ].filter(Boolean).join('\n')
+
+  await Promise.all(
+    params.chatIds.map((id) => sendTelegram(html, id).catch(() => null)),
+  )
+}
+
 /** @deprecated use notifyShiftReport */
 export async function notifyShiftDeficit(params: {
   companyName: string
