@@ -362,6 +362,28 @@ export function CatalogPageContent() {
 
   useEffect(() => { setPage(1) }, [search, filterCategory, filterType])
 
+  // Totals across all filtered items (not just current page)
+  const totals = filtered.reduce(
+    (acc, item) => {
+      acc.warehouseQty += item.warehouse_qty
+      acc.showcaseQty  += item.showcase_qty
+      acc.totalQty     += item.total_balance
+      acc.warehousePurchase += item.warehouse_qty * item.default_purchase_price
+      acc.warehouseSale     += item.warehouse_qty * item.sale_price
+      acc.showcasePurchase  += item.showcase_qty  * item.default_purchase_price
+      acc.showcaseSale      += item.showcase_qty  * item.sale_price
+      acc.totalPurchase     += item.total_balance * item.default_purchase_price
+      acc.totalSale         += item.total_balance * item.sale_price
+      return acc
+    },
+    {
+      warehouseQty: 0, showcaseQty: 0, totalQty: 0,
+      warehousePurchase: 0, warehouseSale: 0,
+      showcasePurchase: 0, showcaseSale: 0,
+      totalPurchase: 0, totalSale: 0,
+    },
+  )
+
   // ── Edit handlers ────────────────────────────────────────────────────────────
 
   function startEdit(item: CatalogItem) {
@@ -739,14 +761,32 @@ export function CatalogPageContent() {
                           <td className="px-3 py-2.5 text-right font-medium">{item.sale_price.toLocaleString('ru-RU')} ₸</td>
                           <td className="px-3 py-2.5 text-right text-muted-foreground">{item.default_purchase_price.toLocaleString('ru-RU')} ₸</td>
                           <td className="px-3 py-2.5 text-center text-muted-foreground text-xs">{item.unit}</td>
-                          <td className={`px-3 py-2.5 text-right ${item.warehouse_qty > 0 ? 'text-blue-400 font-medium' : 'text-muted-foreground'}`}>
-                            {item.warehouse_qty > 0 ? item.warehouse_qty.toLocaleString('ru-RU') : '—'}
+                          <td className="px-3 py-2 text-right">
+                            {item.warehouse_qty > 0 ? (
+                              <div className="space-y-0.5">
+                                <div className="text-blue-400 font-medium">{item.warehouse_qty.toLocaleString('ru-RU')} {item.unit}</div>
+                                <div className="text-[10px] text-muted-foreground">зак: {(item.warehouse_qty * item.default_purchase_price).toLocaleString('ru-RU')} ₸</div>
+                                <div className="text-[10px] text-muted-foreground">пр: {(item.warehouse_qty * item.sale_price).toLocaleString('ru-RU')} ₸</div>
+                              </div>
+                            ) : <span className="text-muted-foreground">—</span>}
                           </td>
-                          <td className={`px-3 py-2.5 text-right ${item.showcase_qty > 0 ? 'text-amber-400 font-medium' : 'text-muted-foreground'}`}>
-                            {item.showcase_qty > 0 ? item.showcase_qty.toLocaleString('ru-RU') : '—'}
+                          <td className="px-3 py-2 text-right">
+                            {item.showcase_qty > 0 ? (
+                              <div className="space-y-0.5">
+                                <div className="text-amber-400 font-medium">{item.showcase_qty.toLocaleString('ru-RU')} {item.unit}</div>
+                                <div className="text-[10px] text-muted-foreground">зак: {(item.showcase_qty * item.default_purchase_price).toLocaleString('ru-RU')} ₸</div>
+                                <div className="text-[10px] text-muted-foreground">пр: {(item.showcase_qty * item.sale_price).toLocaleString('ru-RU')} ₸</div>
+                              </div>
+                            ) : <span className="text-muted-foreground">—</span>}
                           </td>
-                          <td className={`px-3 py-2.5 text-right font-semibold ${item.total_balance > 0 ? 'text-emerald-400' : 'text-muted-foreground'}`}>
-                            {item.total_balance > 0 ? item.total_balance.toLocaleString('ru-RU') : '—'}
+                          <td className="px-3 py-2 text-right">
+                            {item.total_balance > 0 ? (
+                              <div className="space-y-0.5">
+                                <div className="text-emerald-400 font-semibold">{item.total_balance.toLocaleString('ru-RU')} {item.unit}</div>
+                                <div className="text-[10px] text-muted-foreground">зак: {(item.total_balance * item.default_purchase_price).toLocaleString('ru-RU')} ₸</div>
+                                <div className="text-[10px] text-muted-foreground">пр: {(item.total_balance * item.sale_price).toLocaleString('ru-RU')} ₸</div>
+                              </div>
+                            ) : <span className="text-muted-foreground">—</span>}
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center justify-center gap-1">
@@ -784,6 +824,37 @@ export function CatalogPageContent() {
                       </Fragment>
                     ))}
                   </tbody>
+                  {filtered.length > 0 && (
+                    <tfoot>
+                      <tr className="border-t-2 border-border/50 bg-muted/30">
+                        <td colSpan={6} className="px-3 py-2.5 text-xs text-muted-foreground font-medium text-right">
+                          Итого ({filtered.length} поз.):
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="space-y-0.5">
+                            <div className="text-blue-400 font-semibold text-xs">{totals.warehouseQty.toLocaleString('ru-RU')}</div>
+                            <div className="text-[10px] text-muted-foreground">зак: {Math.round(totals.warehousePurchase).toLocaleString('ru-RU')} ₸</div>
+                            <div className="text-[10px] text-muted-foreground">пр: {Math.round(totals.warehouseSale).toLocaleString('ru-RU')} ₸</div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="space-y-0.5">
+                            <div className="text-amber-400 font-semibold text-xs">{totals.showcaseQty.toLocaleString('ru-RU')}</div>
+                            <div className="text-[10px] text-muted-foreground">зак: {Math.round(totals.showcasePurchase).toLocaleString('ru-RU')} ₸</div>
+                            <div className="text-[10px] text-muted-foreground">пр: {Math.round(totals.showcaseSale).toLocaleString('ru-RU')} ₸</div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="space-y-0.5">
+                            <div className="text-emerald-400 font-bold text-xs">{totals.totalQty.toLocaleString('ru-RU')}</div>
+                            <div className="text-[10px] text-muted-foreground">зак: {Math.round(totals.totalPurchase).toLocaleString('ru-RU')} ₸</div>
+                            <div className="text-[10px] text-muted-foreground">пр: {Math.round(totals.totalSale).toLocaleString('ru-RU')} ₸</div>
+                          </div>
+                        </td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
             )}
