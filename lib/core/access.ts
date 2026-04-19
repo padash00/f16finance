@@ -361,6 +361,8 @@ export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
       { path: '/inventory', label: 'Склад' },
       { path: '/store', label: 'Обзор магазина' },
       { path: '/store/catalog', label: 'Каталог' },
+      { path: '/store/warehouse', label: 'Склад' },
+      { path: '/store/showcase', label: 'Витрина' },
       { path: '/store/receipts', label: 'Приёмка' },
       { path: '/store/requests', label: 'Заявки' },
       { path: '/store/analytics', label: 'Аналитика точек' },
