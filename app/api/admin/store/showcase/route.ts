@@ -51,42 +51,43 @@ export async function GET(request: Request) {
       if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
     }
 
-    // Fetch catalog and warehouse locations (showcase = catalog - warehouse)
-    const [{ data: catalogLoc }, { data: warehouseLoc }] = await Promise.all([
-      supabase.from('inventory_locations').select('id, name').eq('company_id', companyId).eq('location_type', 'catalog').maybeSingle(),
+    // Fetch warehouse (total) and backroom (physical back storage) locations
+    // showcase = warehouse - backroom (virtual, computed)
+    const [{ data: warehouseLoc }, { data: backroomLoc }] = await Promise.all([
       supabase.from('inventory_locations').select('id, name').eq('company_id', companyId).eq('location_type', 'warehouse').maybeSingle(),
+      supabase.from('inventory_locations').select('id, name').eq('company_id', companyId).eq('location_type', 'backroom').maybeSingle(),
     ])
 
     let balances: any[] = []
-    if (catalogLoc?.id) {
-      // Fetch catalog and warehouse balances together
-      const locationIds = [catalogLoc.id, warehouseLoc?.id].filter(Boolean)
+    if (warehouseLoc?.id) {
+      const locationIds = [warehouseLoc.id, backroomLoc?.id].filter(Boolean)
       const { data: allBal, error: balErr } = await supabase
         .from('inventory_balances')
         .select('location_id, item_id, quantity, item:item_id(id, name, barcode, unit, sale_price, low_stock_threshold, category_id, category:category_id(id, name))')
         .in('location_id', locationIds)
       if (balErr) throw balErr
 
-      const catalogMap = new Map<string, any>()
       const warehouseMap = new Map<string, any>()
+      const backroomMap = new Map<string, any>()
       ;(allBal || []).forEach((b: any) => {
-        if (b.location_id === catalogLoc.id) catalogMap.set(b.item_id, b)
-        else if (warehouseLoc?.id && b.location_id === warehouseLoc.id) warehouseMap.set(b.item_id, b)
+        if (b.location_id === warehouseLoc.id) warehouseMap.set(b.item_id, b)
+        else if (backroomLoc?.id && b.location_id === backroomLoc.id) backroomMap.set(b.item_id, b)
       })
 
-      balances = Array.from(catalogMap.keys()).map((itemId) => {
-        const cat = catalogMap.get(itemId)
+      // All warehouse items appear on showcase (with reduced qty if some are in backroom)
+      balances = Array.from(warehouseMap.keys()).map((itemId) => {
         const wh = warehouseMap.get(itemId)
-        const catalogQty = Number(cat?.quantity || 0)
-        const warehouseQty = Number(wh?.quantity || 0)
-        const showcaseQty = Math.max(0, catalogQty - warehouseQty)
+        const br = backroomMap.get(itemId)
+        const totalQty = Number(wh?.quantity || 0)
+        const backroomQty = Number(br?.quantity || 0)
+        const showcaseQty = Math.max(0, totalQty - backroomQty)
         return {
           item_id: itemId,
-          item: cat.item,
-          quantity: showcaseQty,
-          catalog_quantity: catalogQty,
-          warehouse_quantity: warehouseQty,
-          updated_at: cat.updated_at,
+          item: wh.item,
+          quantity: showcaseQty,           // on display
+          catalog_quantity: totalQty,       // total
+          warehouse_quantity: backroomQty,  // in backroom
+          updated_at: wh.updated_at,
         }
       }).sort((a, b) => b.quantity - a.quantity)
     }
@@ -102,8 +103,8 @@ export async function GET(request: Request) {
     return json({
       ok: true,
       data: {
-        showcase: catalogLoc ? { id: catalogLoc.id, name: 'Витрина' } : null,
-        warehouse: warehouseLoc || null,
+        showcase: warehouseLoc ? { id: warehouseLoc.id, name: 'Витрина' } : null,
+        warehouse: backroomLoc || null,
         companies: companies || [],
         balances,
         warehouseItems: balances.filter((b) => b.warehouse_quantity > 0),
@@ -268,40 +269,39 @@ export async function POST(request: Request) {
 
       if (items.length === 0) return json({ error: 'items-required' }, 400)
 
-      // In new catalog model: showcase = catalog - warehouse (virtual)
-      // "Return to warehouse" = increase warehouse_balance only (showcase auto-decreases)
-      const { data: warehouse, error: whErr } = await supabase
+      // showcase = warehouse - backroom (virtual)
+      // "Return to backroom" = increase backroom_balance (showcase auto-decreases)
+      const { data: backroomLoc } = await supabase
         .from('inventory_locations')
         .select('id')
         .eq('company_id', companyId)
-        .eq('location_type', 'warehouse')
+        .eq('location_type', 'backroom')
         .maybeSingle()
-      if (whErr) throw whErr
-      if (!warehouse?.id) return json({ error: 'warehouse-not-found' }, 404)
+      if (!backroomLoc?.id) return json({ error: 'backroom-not-found' }, 404)
 
       const actorUserId = access.staffMember?.id || null
       const now = new Date().toISOString()
 
       for (const item of items) {
-        const { data: whBal } = await supabase
+        const { data: brBal } = await supabase
           .from('inventory_balances')
           .select('quantity')
-          .eq('location_id', warehouse.id)
+          .eq('location_id', backroomLoc.id)
           .eq('item_id', item.item_id)
           .maybeSingle()
 
-        const whQty = Number(whBal?.quantity || 0) + item.quantity
+        const brQty = Number(brBal?.quantity || 0) + item.quantity
         await supabase
           .from('inventory_balances')
-          .upsert({ location_id: warehouse.id, item_id: item.item_id, quantity: whQty, updated_at: now }, { onConflict: 'location_id,item_id' })
+          .upsert({ location_id: backroomLoc.id, item_id: item.item_id, quantity: brQty, updated_at: now }, { onConflict: 'location_id,item_id' })
 
         await supabase.from('inventory_movements').insert({
           item_id: item.item_id,
-          to_location_id: warehouse.id,
+          to_location_id: backroomLoc.id,
           quantity: item.quantity,
           movement_type: 'transfer',
-          reference_type: 'return_to_warehouse',
-          comment: String(body.comment || '').trim() || 'Возврат на склад (витрина → склад)',
+          reference_type: 'move_to_backroom',
+          comment: String(body.comment || '').trim() || 'Убрать с витрины в подсобку',
           created_by: actorUserId,
           created_at: now,
         })
