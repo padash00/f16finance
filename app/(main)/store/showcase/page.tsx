@@ -32,7 +32,9 @@ type WarehouseLocation = { id: string; name: string } | null
 
 type BalanceItem = {
   item_id: string
-  quantity: number
+  quantity: number           // showcase qty = catalog - warehouse
+  catalog_quantity: number
+  warehouse_quantity: number
   item: {
     id: string
     name: string
@@ -100,7 +102,7 @@ export default function ShowcasePage() {
   const [showcase, setShowcase] = useState<ShowcaseLocation>(null)
   const [warehouse, setWarehouse] = useState<WarehouseLocation>(null)
   const [balances, setBalances] = useState<BalanceItem[]>([])
-  const [warehouseItems, setWarehouseItems] = useState<WarehouseItem[]>([])
+  const [warehouseItems, setWarehouseItems] = useState<BalanceItem[]>([])
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -386,12 +388,25 @@ export default function ShowcasePage() {
                             <p className="text-[10px] text-amber-400">⚠ мало (мин: {threshold})</p>
                           )}
                         </div>
-                        <div className="ml-3 shrink-0 text-right">
-                          <p className={`text-sm font-semibold ${qtyColor}`}>{b.quantity}</p>
-                          <p className="text-[10px] text-muted-foreground">{b.item?.unit || 'шт'}</p>
-                          {b.item?.sale_price ? (
-                            <p className="text-[10px] text-muted-foreground">{b.item.sale_price} ₸</p>
-                          ) : null}
+                        <div className="ml-3 shrink-0 flex gap-3 text-right">
+                          <div>
+                            <p className="text-[10px] text-muted-foreground">каталог</p>
+                            <p className="text-sm font-semibold text-foreground">{b.catalog_quantity}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground">склад</p>
+                            <p className="text-sm font-semibold text-amber-300">{b.warehouse_quantity}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground">витрина</p>
+                            <p className={`text-sm font-semibold ${qtyColor}`}>{b.quantity}</p>
+                          </div>
+                          <div className="self-end pb-0.5">
+                            <p className="text-[10px] text-muted-foreground">{b.item?.unit || 'шт'}</p>
+                            {b.item?.sale_price ? (
+                              <p className="text-[10px] text-muted-foreground">{b.item.sale_price} ₸</p>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     )
@@ -496,16 +511,20 @@ export default function ShowcasePage() {
                             <option value="">Выберите товар</option>
                             {warehouseItems.map((wi) => (
                               <option key={wi.item_id} value={wi.item_id}>
-                                {wi.item?.name || wi.item_id} · {wi.quantity} {wi.item?.unit || 'шт'}
+                                {wi.item?.name || wi.item_id} · {wi.warehouse_quantity} {wi.item?.unit || 'шт'} на складе
                               </option>
                             ))}
                           </select>
-                          {line.item_id && (
-                            <p className="text-[10px] text-muted-foreground">
-                              Склад: <span className="font-medium text-foreground">{warehouseItems.find((i) => i.item_id === line.item_id)?.quantity ?? '?'}</span>
-                              {' · '}Витрина: <span className="font-medium text-blue-300">{balances.find((b) => b.item_id === line.item_id)?.quantity ?? 0}</span>
-                            </p>
-                          )}
+                          {line.item_id && (() => {
+                            const bal = balances.find((b) => b.item_id === line.item_id)
+                            return bal ? (
+                              <p className="text-[10px] text-muted-foreground">
+                                Каталог: <span className="font-medium text-foreground">{bal.catalog_quantity}</span>
+                                {' · '}Склад: <span className="font-medium text-amber-300">{bal.warehouse_quantity}</span>
+                                {' · '}Витрина: <span className="font-medium text-blue-300">{bal.quantity}</span>
+                              </p>
+                            ) : null
+                          })()}
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="space-y-1 flex-1">
@@ -606,9 +625,9 @@ export default function ShowcasePage() {
                             className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-amber-400/50"
                           >
                             <option value="">Выберите товар</option>
-                            {balances.filter((b) => Number(b.quantity) > 0).map((b) => (
+                            {balances.filter((b) => Number(b.catalog_quantity) > 0).map((b) => (
                               <option key={b.item_id} value={b.item_id}>
-                                {b.item?.name || b.item_id} · {b.quantity} {b.item?.unit || 'шт'}
+                                {b.item?.name || b.item_id} · {b.warehouse_quantity} {b.item?.unit || 'шт'} на складе
                               </option>
                             ))}
                           </select>

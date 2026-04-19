@@ -51,46 +51,44 @@ export async function GET(request: Request) {
       if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
     }
 
-    // Showcase location for this company
-    const { data: showcase, error: showcaseErr } = await supabase
-      .from('inventory_locations')
-      .select('id, name, code, location_type, is_active')
-      .eq('company_id', companyId)
-      .eq('location_type', 'point_display')
-      .eq('is_active', true)
-      .maybeSingle()
-    if (showcaseErr) throw showcaseErr
-
-    // Warehouse for this company (source for requests)
-    const { data: warehouse } = await supabase
-      .from('inventory_locations')
-      .select('id, name')
-      .eq('company_id', companyId)
-      .eq('location_type', 'warehouse')
-      .eq('is_active', true)
-      .maybeSingle()
+    // Fetch catalog and warehouse locations (showcase = catalog - warehouse)
+    const [{ data: catalogLoc }, { data: warehouseLoc }] = await Promise.all([
+      supabase.from('inventory_locations').select('id, name').eq('company_id', companyId).eq('location_type', 'catalog').maybeSingle(),
+      supabase.from('inventory_locations').select('id, name').eq('company_id', companyId).eq('location_type', 'warehouse').maybeSingle(),
+    ])
 
     let balances: any[] = []
-    if (showcase?.id) {
-      const { data, error: balErr } = await supabase
+    if (catalogLoc?.id) {
+      // Fetch catalog and warehouse balances together
+      const locationIds = [catalogLoc.id, warehouseLoc?.id].filter(Boolean)
+      const { data: allBal, error: balErr } = await supabase
         .from('inventory_balances')
-        .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, low_stock_threshold, category_id, category:category_id(id, name))')
-        .eq('location_id', showcase.id)
-        .order('quantity', { ascending: false })
+        .select('location_id, item_id, quantity, item:item_id(id, name, barcode, unit, sale_price, low_stock_threshold, category_id, category:category_id(id, name))')
+        .in('location_id', locationIds)
       if (balErr) throw balErr
-      balances = data || []
-    }
 
-    // Warehouse items (for request creation dropdown)
-    let warehouseItems: any[] = []
-    if (warehouse?.id) {
-      const { data } = await supabase
-        .from('inventory_balances')
-        .select('item_id, quantity, item:item_id(id, name, barcode, unit)')
-        .eq('location_id', warehouse.id)
-        .gt('quantity', 0)
-        .order('quantity', { ascending: false })
-      warehouseItems = data || []
+      const catalogMap = new Map<string, any>()
+      const warehouseMap = new Map<string, any>()
+      ;(allBal || []).forEach((b: any) => {
+        if (b.location_id === catalogLoc.id) catalogMap.set(b.item_id, b)
+        else if (warehouseLoc?.id && b.location_id === warehouseLoc.id) warehouseMap.set(b.item_id, b)
+      })
+
+      balances = Array.from(catalogMap.keys()).map((itemId) => {
+        const cat = catalogMap.get(itemId)
+        const wh = warehouseMap.get(itemId)
+        const catalogQty = Number(cat?.quantity || 0)
+        const warehouseQty = Number(wh?.quantity || 0)
+        const showcaseQty = Math.max(0, catalogQty - warehouseQty)
+        return {
+          item_id: itemId,
+          item: cat.item,
+          quantity: showcaseQty,
+          catalog_quantity: catalogQty,
+          warehouse_quantity: warehouseQty,
+          updated_at: cat.updated_at,
+        }
+      }).sort((a, b) => b.quantity - a.quantity)
     }
 
     // Pending requests from this company
@@ -104,11 +102,11 @@ export async function GET(request: Request) {
     return json({
       ok: true,
       data: {
-        showcase: showcase || null,
-        warehouse: warehouse || null,
+        showcase: catalogLoc ? { id: catalogLoc.id, name: 'Витрина' } : null,
+        warehouse: warehouseLoc || null,
         companies: companies || [],
         balances,
-        warehouseItems,
+        warehouseItems: balances.filter((b) => b.warehouse_quantity > 0),
         pendingRequests: pendingRequests || [],
         selectedCompanyId: companyId,
       },
@@ -155,7 +153,8 @@ export async function POST(request: Request) {
 
       if (items.length === 0) return json({ error: 'items-required' }, 400)
 
-      // Source = warehouse of this company
+      // Source = warehouse, Target = point_display
+      // When approved: warehouse decreases → showcase (= catalog - warehouse) auto-increases
       const { data: warehouse, error: whErr } = await supabase
         .from('inventory_locations')
         .select('id')
@@ -166,22 +165,31 @@ export async function POST(request: Request) {
       if (whErr) throw whErr
       if (!warehouse?.id) return json({ error: 'warehouse-not-found' }, 404)
 
-      // Target = showcase of this company
-      const { data: showcase, error: scErr } = await supabase
+      // Ensure point_display exists (for legacy compatibility)
+      let showcaseId: string | null = null
+      const { data: pdLoc } = await supabase
         .from('inventory_locations')
         .select('id')
         .eq('company_id', companyId)
         .eq('location_type', 'point_display')
-        .eq('is_active', true)
         .maybeSingle()
-      if (scErr) throw scErr
-      if (!showcase?.id) return json({ error: 'showcase-not-found' }, 404)
+      if (pdLoc?.id) {
+        showcaseId = pdLoc.id
+      } else {
+        // Create point_display if missing
+        const { data: company } = await supabase.from('companies').select('name, code, organization_id').eq('id', companyId).maybeSingle()
+        const { data: newPD } = await supabase
+          .from('inventory_locations')
+          .insert({ company_id: companyId, organization_id: company?.organization_id, name: `Витрина — ${company?.name || companyId}`, location_type: 'point_display', is_active: true })
+          .select('id').single()
+        showcaseId = newPD?.id ?? warehouse.id
+      }
 
       const actorUserId = access.staffMember?.id || null
 
       const result = await createInventoryRequest(supabase, {
         source_location_id: warehouse.id,
-        target_location_id: showcase.id,
+        target_location_id: showcaseId!,
         requesting_company_id: companyId,
         comment: String(body.comment || '').trim() || null,
         created_by: actorUserId,
@@ -260,17 +268,8 @@ export async function POST(request: Request) {
 
       if (items.length === 0) return json({ error: 'items-required' }, 400)
 
-      // Resolve locations
-      const { data: showcase, error: scErr } = await supabase
-        .from('inventory_locations')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('location_type', 'point_display')
-        .eq('is_active', true)
-        .maybeSingle()
-      if (scErr) throw scErr
-      if (!showcase?.id) return json({ error: 'showcase-not-found' }, 404)
-
+      // In new catalog model: showcase = catalog - warehouse (virtual)
+      // "Return to warehouse" = increase warehouse_balance only (showcase auto-decreases)
       const { data: warehouse, error: whErr } = await supabase
         .from('inventory_locations')
         .select('id')
@@ -281,23 +280,9 @@ export async function POST(request: Request) {
       if (!warehouse?.id) return json({ error: 'warehouse-not-found' }, 404)
 
       const actorUserId = access.staffMember?.id || null
+      const now = new Date().toISOString()
 
-      // Update balances atomically via upsert for each item
       for (const item of items) {
-        // Deduct from showcase
-        const { data: scBal } = await supabase
-          .from('inventory_balances')
-          .select('quantity')
-          .eq('location_id', showcase.id)
-          .eq('item_id', item.item_id)
-          .maybeSingle()
-
-        const scQty = Math.max(0, Number(scBal?.quantity || 0) - item.quantity)
-        await supabase
-          .from('inventory_balances')
-          .upsert({ location_id: showcase.id, item_id: item.item_id, quantity: scQty, updated_at: new Date().toISOString() }, { onConflict: 'location_id,item_id' })
-
-        // Add to warehouse
         const { data: whBal } = await supabase
           .from('inventory_balances')
           .select('quantity')
@@ -308,18 +293,17 @@ export async function POST(request: Request) {
         const whQty = Number(whBal?.quantity || 0) + item.quantity
         await supabase
           .from('inventory_balances')
-          .upsert({ location_id: warehouse.id, item_id: item.item_id, quantity: whQty, updated_at: new Date().toISOString() }, { onConflict: 'location_id,item_id' })
+          .upsert({ location_id: warehouse.id, item_id: item.item_id, quantity: whQty, updated_at: now }, { onConflict: 'location_id,item_id' })
 
-        // Record movement
         await supabase.from('inventory_movements').insert({
           item_id: item.item_id,
-          from_location_id: showcase.id,
           to_location_id: warehouse.id,
           quantity: item.quantity,
           movement_type: 'transfer',
           reference_type: 'return_to_warehouse',
-          comment: String(body.comment || '').trim() || 'Возврат с витрины на склад',
-          actor_user_id: actorUserId,
+          comment: String(body.comment || '').trim() || 'Возврат на склад (витрина → склад)',
+          created_by: actorUserId,
+          created_at: now,
         })
       }
 

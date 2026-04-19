@@ -23,19 +23,17 @@ function normalizeQty(v: unknown) {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
 }
 
-/** Ensure warehouse location exists for a company, create if missing */
-async function ensureCompanyWarehouse(supabase: any, companyId: string) {
+async function ensureCompanyLocation(supabase: any, companyId: string, locationType: 'warehouse' | 'catalog') {
   const { data: existing, error: fetchErr } = await supabase
     .from('inventory_locations')
     .select('id, name, code, location_type, is_active')
     .eq('company_id', companyId)
-    .eq('location_type', 'warehouse')
+    .eq('location_type', locationType)
     .maybeSingle()
 
   if (fetchErr) throw fetchErr
   if (existing?.id) return existing
 
-  // Create warehouse for this company
   const { data: company, error: compErr } = await supabase
     .from('companies')
     .select('id, name, code, organization_id')
@@ -44,14 +42,15 @@ async function ensureCompanyWarehouse(supabase: any, companyId: string) {
   if (compErr) throw compErr
   if (!company?.id) throw new Error('company-not-found')
 
+  const isWarehouse = locationType === 'warehouse'
   const { data: created, error: insErr } = await supabase
     .from('inventory_locations')
     .insert({
       company_id: companyId,
       organization_id: company.organization_id,
-      name: `Склад — ${company.name}`,
-      code: company.code ? `WH-${company.code}` : null,
-      location_type: 'warehouse',
+      name: isWarehouse ? `Склад — ${company.name}` : `Каталог — ${company.name}`,
+      code: company.code ? `${isWarehouse ? 'WH' : 'CAT'}-${company.code}` : null,
+      location_type: locationType,
       is_active: true,
     })
     .select('id, name, code, location_type, is_active')
@@ -59,6 +58,11 @@ async function ensureCompanyWarehouse(supabase: any, companyId: string) {
 
   if (insErr) throw insErr
   return created
+}
+
+/** @deprecated use ensureCompanyLocation(supabase, companyId, 'warehouse') */
+async function ensureCompanyWarehouse(supabase: any, companyId: string) {
+  return ensureCompanyLocation(supabase, companyId, 'warehouse')
 }
 
 // ─── GET: warehouse balances for a company ───────────────────────────────────
@@ -96,16 +100,45 @@ export async function GET(request: Request) {
       }
     }
 
-    // Ensure warehouse exists
-    const warehouse = await ensureCompanyWarehouse(supabase, companyId)
+    // Ensure both warehouse and catalog locations exist
+    const [warehouse, catalog] = await Promise.all([
+      ensureCompanyLocation(supabase, companyId, 'warehouse'),
+      ensureCompanyLocation(supabase, companyId, 'catalog'),
+    ])
 
-    // Balances
-    const { data: balances, error: balErr } = await supabase
+    // Fetch balances for both locations in one query
+    const { data: allBalances, error: balErr } = await supabase
       .from('inventory_balances')
       .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name))')
-      .eq('location_id', warehouse.id)
-      .order('quantity', { ascending: false })
+      .in('location_id', [warehouse.id, catalog.id])
     if (balErr) throw balErr
+
+    // Split into catalog and warehouse maps, then build unified list
+    const catalogMap = new Map<string, any>()
+    const warehouseMap = new Map<string, any>()
+    ;(allBalances || []).forEach((b: any) => {
+      if (b.location_id === catalog.id) catalogMap.set(b.item_id, b)
+      else if (b.location_id === warehouse.id) warehouseMap.set(b.item_id, b)
+    })
+
+    // Union of all items across both locations
+    const itemIds = new Set([...catalogMap.keys(), ...warehouseMap.keys()])
+    const balances = Array.from(itemIds).map((itemId) => {
+      const cat = catalogMap.get(itemId)
+      const wh = warehouseMap.get(itemId)
+      const item = cat?.item || wh?.item
+      const catalogQty = Number(cat?.quantity || 0)
+      const warehouseQty = Number(wh?.quantity || 0)
+      return {
+        item_id: itemId,
+        item,
+        catalog_quantity: catalogQty,
+        warehouse_quantity: warehouseQty,
+        showcase_quantity: Math.max(0, catalogQty - warehouseQty),
+        quantity: catalogQty, // keep for backwards compat
+        updated_at: cat?.updated_at || wh?.updated_at,
+      }
+    }).sort((a, b) => b.catalog_quantity - a.catalog_quantity)
 
     // Categories for filter
     const { data: categories } = await supabase
@@ -117,6 +150,7 @@ export async function GET(request: Request) {
       ok: true,
       data: {
         warehouse,
+        catalog,
         companies: companies || [],
         balances: balances || [],
         categories: categories || [],
@@ -262,23 +296,66 @@ export async function POST(request: Request) {
 
       if (resolvedItems.length === 0) return json({ error: 'no-items-resolved' }, 400)
 
-      const warehouse = await ensureCompanyWarehouse(supabase, companyId)
+      // addStock always writes to CATALOG (total stock), not warehouse
+      const catalog = await ensureCompanyLocation(supabase, companyId, 'catalog')
       const actorUserId = access.staffMember?.id || null
+      const mode = String(body.mode || 'add') === 'set' ? 'set' : 'add'
+      const now = new Date().toISOString()
 
+      if (mode === 'set') {
+        // ── SET mode: upsert catalog to exact quantities (Wipon sync) ─────────────
+        const upserts = resolvedItems.map((item) => ({
+          location_id: catalog.id,
+          item_id: item.item_id,
+          quantity: item.quantity,
+          updated_at: now,
+        }))
+
+        const { error: upsertErr } = await supabase
+          .from('inventory_balances')
+          .upsert(upserts, { onConflict: 'location_id,item_id' })
+        if (upsertErr) throw upsertErr
+
+        const movements = resolvedItems.map((item) => ({
+          item_id: item.item_id,
+          movement_type: 'set_stock',
+          quantity: item.quantity,
+          unit_cost: item.unit_cost,
+          to_location_id: catalog.id,
+          reference_type: 'catalog_set',
+          reference_id: null,
+          comment: String(body.comment || '').trim() || 'Синхронизация каталога',
+          created_by: actorUserId,
+          created_at: now,
+        }))
+        await supabase.from('inventory_movements').insert(movements)
+
+        await writeAuditLog(supabase, {
+          actorUserId,
+          entityType: 'inventory-catalog-stock',
+          entityId: catalog.id,
+          action: 'set_catalog',
+          payload: { company_id: companyId, items_count: resolvedItems.length },
+        })
+
+        return json({ ok: true, data: { mode: 'set', resolved: resolvedItems.length, skipped: rawItems.length - resolvedItems.length } })
+      }
+
+      // ── ADD mode: add to catalog total ────────────────────────────────────────
       const result = await postInventoryReceipt(supabase, {
-        location_id: warehouse.id,
-        received_at: new Date().toISOString(),
+        location_id: catalog.id,
+        received_at: now,
         supplier_id: null,
-        comment: String(body.comment || '').trim() || 'Добавлено через склад',
+        comment: String(body.comment || '').trim() || 'Добавлено через каталог',
         created_by: actorUserId,
         items: resolvedItems,
       })
 
       await writeAuditLog(supabase, {
         actorUserId,
-        entityType: 'inventory-warehouse-stock',
-        entityId: warehouse.id,
-        action: 'add_stock',
+        entityType: 'inventory-catalog-stock',
+        entityId: catalog.id,
+        action: 'add_catalog',
         payload: { company_id: companyId, items_count: resolvedItems.length },
       })
 
@@ -302,23 +379,24 @@ export async function POST(request: Request) {
 
       if (!deleteAll && itemIds.length === 0) return json({ error: 'item-ids-required' }, 400)
 
-      const warehouse = await ensureCompanyWarehouse(supabase, companyId)
+      // Delete from both catalog AND warehouse so everything is cleared
+      const [catalog, warehouse] = await Promise.all([
+        ensureCompanyLocation(supabase, companyId, 'catalog'),
+        ensureCompanyLocation(supabase, companyId, 'warehouse'),
+      ])
       const actorUserId = access.staffMember?.id || null
 
-      let deleteQuery = supabase
-        .from('inventory_balances')
-        .delete()
-        .eq('location_id', warehouse.id)
-
-      if (!deleteAll) deleteQuery = deleteQuery.in('item_id', itemIds)
-
-      const { error: delErr } = await deleteQuery
-      if (delErr) throw delErr
+      for (const locId of [catalog.id, warehouse.id]) {
+        let deleteQuery = supabase.from('inventory_balances').delete().eq('location_id', locId)
+        if (!deleteAll) deleteQuery = deleteQuery.in('item_id', itemIds)
+        const { error: delErr } = await deleteQuery
+        if (delErr) throw delErr
+      }
 
       await writeAuditLog(supabase, {
         actorUserId,
         entityType: 'inventory-warehouse-stock',
-        entityId: warehouse.id,
+        entityId: catalog.id,
         action: 'delete_stock',
         payload: { company_id: companyId, delete_all: deleteAll, item_ids: deleteAll ? [] : itemIds },
       })

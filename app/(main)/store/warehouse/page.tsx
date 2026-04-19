@@ -32,7 +32,10 @@ type Company = { id: string; name: string; code: string | null }
 type WarehouseLocation = { id: string; name: string; code: string | null; is_active: boolean }
 type BalanceItem = {
   item_id: string
-  quantity: number
+  quantity: number           // = catalog_quantity (backwards compat)
+  catalog_quantity: number   // total (imported from Wipon)
+  warehouse_quantity: number // physically in back storage
+  showcase_quantity: number  // = catalog - warehouse (virtual)
   updated_at: string
   item: {
     id: string
@@ -115,6 +118,9 @@ export default function WarehousePage() {
 
   // Search / filter existing stock
   const [stockSearch, setStockSearch] = useState('')
+
+  // Stock mode: add to existing or set (replace) quantity
+  const [stockMode, setStockMode] = useState<'add' | 'set'>('add')
 
   // Selection + delete
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -464,7 +470,7 @@ export default function WarehousePage() {
       const res = await fetch('/api/admin/store/warehouse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'addStock', company_id: selectedCompanyId, items }),
+        body: JSON.stringify({ action: 'addStock', company_id: selectedCompanyId, items, mode: stockMode }),
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка сохранения')
@@ -542,7 +548,7 @@ export default function WarehousePage() {
             <h1 className="mt-3 text-2xl font-semibold text-white">
               {warehouse ? warehouse.name : 'Склад'}
             </h1>
-            <p className="mt-1 text-sm text-slate-400">Остатки товаров на складе. Добавьте товар через штрихкод, каталог или Excel.</p>
+            <p className="mt-1 text-sm text-slate-400">Каталог товаров. Витрина = каталог − склад. Импортируйте из Wipon через Excel.</p>
           </div>
 
           {/* Company selector */}
@@ -572,20 +578,23 @@ export default function WarehousePage() {
 
         {/* Stats */}
         {(() => {
-          const totalQty = balances.reduce((s, b) => s + Number(b.quantity || 0), 0)
-          const totalPurchase = balances.reduce((s, b) => s + Number(b.quantity || 0) * Number(b.item?.default_purchase_price || 0), 0)
-          const totalSale = balances.reduce((s, b) => s + Number(b.quantity || 0) * Number(b.item?.sale_price || 0), 0)
+          const totalQty = balances.reduce((s, b) => s + Number(b.catalog_quantity || 0), 0)
+          const totalPurchase = balances.reduce((s, b) => s + Number(b.catalog_quantity || 0) * Number(b.item?.default_purchase_price || 0), 0)
+          const totalSale = balances.reduce((s, b) => s + Number(b.catalog_quantity || 0) * Number(b.item?.sale_price || 0), 0)
+          const totalWarehouse = balances.reduce((s, b) => s + Number(b.warehouse_quantity || 0), 0)
+          const totalShowcase = balances.reduce((s, b) => s + Number(b.showcase_quantity || 0), 0)
           const fmtMoney = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
           return (
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Позиций</p>
-                <p className="mt-1.5 text-2xl font-semibold">{balances.length}</p>
-                <p className="text-xs text-muted-foreground">{totalQty} ед. товара</p>
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Каталог</p>
+                <p className="mt-1.5 text-2xl font-semibold">{balances.length} поз.</p>
+                <p className="text-xs text-muted-foreground">{totalQty} ед. всего</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Нулевых</p>
-                <p className="mt-1.5 text-2xl font-semibold text-rose-400">{balances.filter((b) => Number(b.quantity) <= 0).length}</p>
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Склад / витрина</p>
+                <p className="mt-1.5 text-lg font-semibold text-amber-300">{totalWarehouse} <span className="text-sm text-muted-foreground">/ {totalShowcase}</span></p>
+                <p className="text-[10px] text-muted-foreground">ед. в складе / на витрине</p>
               </div>
               <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
                 <p className="text-[11px] uppercase tracking-widest text-blue-300/70">По закупу</p>
@@ -657,7 +666,7 @@ export default function WarehousePage() {
               </div>
             ) : filteredBalances.length === 0 ? (
               <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                {stockSearch ? 'Ничего не найдено' : 'Склад пустой — добавьте товар справа'}
+                {stockSearch ? 'Ничего не найдено' : 'Каталог пустой — загрузите товары справа'}
               </div>
             ) : (
               <div className="divide-y divide-white/[0.06]">
@@ -707,11 +716,24 @@ export default function WarehousePage() {
                         {b.item?.category ? ` · ${b.item.category.name}` : ''}
                       </p>
                     </div>
-                    <div className="ml-3 shrink-0 text-right">
-                      <p className={`text-sm font-semibold ${Number(b.quantity) <= 0 ? 'text-rose-400' : Number(b.quantity) <= 3 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                        {b.quantity}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">{b.item?.unit || 'шт'}</p>
+                    <div className="ml-3 shrink-0 flex gap-3 text-right">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">каталог</p>
+                        <p className={`text-sm font-semibold ${Number(b.catalog_quantity) <= 0 ? 'text-rose-400' : 'text-foreground'}`}>
+                          {b.catalog_quantity}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">склад</p>
+                        <p className="text-sm font-semibold text-amber-300">{b.warehouse_quantity}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">витрина</p>
+                        <p className={`text-sm font-semibold ${Number(b.showcase_quantity) <= 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {b.showcase_quantity}
+                        </p>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground self-end pb-0.5">{b.item?.unit || 'шт'}</p>
                     </div>
                   </div>
                 ))}
@@ -725,7 +747,7 @@ export default function WarehousePage() {
           <CardHeader className="border-b border-white/10 pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
               <PackagePlus className="h-4 w-4 text-emerald-300" />
-              Добавить на склад
+              Обновить каталог
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
@@ -919,19 +941,46 @@ export default function WarehousePage() {
             {/* Save button */}
             {pendingLines.length > 0 && (
               <div className="space-y-2">
+                {/* Mode toggle */}
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 space-y-1.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Режим сохранения</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setStockMode('add')}
+                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'add' ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300' : 'border border-white/10 text-muted-foreground hover:bg-white/[0.04]'}`}
+                    >
+                      + Добавить к остатку
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStockMode('set')}
+                      className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${stockMode === 'set' ? 'bg-blue-500/20 border border-blue-500/40 text-blue-300' : 'border border-white/10 text-muted-foreground hover:bg-white/[0.04]'}`}
+                    >
+                      = Установить остаток
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {stockMode === 'add'
+                      ? 'Количество прибавится к текущему остатку в каталоге'
+                      : 'Остаток в каталоге будет заменён на указанное количество (синхронизация с Wipon)'}
+                  </p>
+                </div>
+
                 {saveError && <p className="text-xs text-rose-400">{saveError}</p>}
                 {saveSuccess && (
                   <p className="flex items-center gap-1.5 text-xs text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Добавлено на склад!
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {stockMode === 'set' ? 'Каталог обновлён!' : 'Добавлено в каталог!'}
                   </p>
                 )}
                 <Button
                   onClick={handleSave}
                   disabled={saving || !canSave}
-                  className="w-full"
+                  className={`w-full ${stockMode === 'set' ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
                 >
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackagePlus className="mr-2 h-4 w-4" />}
-                  Добавить на склад ({pendingLines.filter((l) => parseNum(l.quantity) > 0).length} поз.)
+                  {stockMode === 'set' ? 'Синхронизировать каталог' : 'Добавить в каталог'} ({pendingLines.filter((l) => parseNum(l.quantity) > 0).length} поз.)
                 </Button>
               </div>
             )}
