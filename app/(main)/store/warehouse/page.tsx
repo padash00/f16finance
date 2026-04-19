@@ -122,6 +122,11 @@ export default function WarehousePage() {
   // Stock mode: add to existing or set (replace) quantity
   const [stockMode, setStockMode] = useState<'add' | 'set'>('add')
 
+  // Inline warehouse allocation editing
+  const [editingWarehouse, setEditingWarehouse] = useState<string | null>(null) // item_id being edited
+  const [editWarehouseVal, setEditWarehouseVal] = useState('')
+  const [savingWarehouse, setSavingWarehouse] = useState(false)
+
   // Selection + delete
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
@@ -519,6 +524,34 @@ export default function WarehousePage() {
     }
   }
 
+  // ── Set warehouse allocation (how many physically in back room) ───────────────
+
+  async function handleSetWarehouse(itemId: string, qty: number) {
+    if (!selectedCompanyId) return
+    setSavingWarehouse(true)
+    try {
+      const res = await fetch('/api/admin/store/warehouse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setWarehouse', company_id: selectedCompanyId, item_id: itemId, quantity: qty }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка')
+      setBalances((prev) =>
+        prev.map((b) =>
+          b.item_id === itemId
+            ? { ...b, warehouse_quantity: qty, showcase_quantity: Math.max(0, b.catalog_quantity - qty) }
+            : b
+        )
+      )
+    } catch (err: any) {
+      alert(err?.message || 'Ошибка сохранения')
+    } finally {
+      setSavingWarehouse(false)
+      setEditingWarehouse(null)
+    }
+  }
+
   // ── Filtered balances ─────────────────────────────────────────────────────────
 
   const filteredBalances = balances.filter((b) => {
@@ -723,9 +756,30 @@ export default function WarehousePage() {
                           {b.catalog_quantity}
                         </p>
                       </div>
-                      <div>
+                      <div className="min-w-[52px]">
                         <p className="text-[10px] text-muted-foreground">склад</p>
-                        <p className="text-sm font-semibold text-amber-300">{b.warehouse_quantity}</p>
+                        {editingWarehouse === b.item_id ? (
+                          <form
+                            onSubmit={(e) => { e.preventDefault(); handleSetWarehouse(b.item_id, parseNum(editWarehouseVal)) }}
+                            className="flex items-center gap-1"
+                          >
+                            <Input
+                              value={editWarehouseVal}
+                              onChange={(e) => setEditWarehouseVal(e.target.value)}
+                              className="h-6 w-14 text-xs text-center px-1"
+                              autoFocus
+                              onBlur={() => { if (!savingWarehouse) setEditingWarehouse(null) }}
+                            />
+                          </form>
+                        ) : (
+                          <button
+                            onClick={() => { setEditingWarehouse(b.item_id); setEditWarehouseVal(String(b.warehouse_quantity)) }}
+                            className="text-sm font-semibold text-amber-300 hover:underline"
+                            title="Нажмите чтобы изменить"
+                          >
+                            {b.warehouse_quantity}
+                          </button>
+                        )}
                       </div>
                       <div>
                         <p className="text-[10px] text-muted-foreground">витрина</p>

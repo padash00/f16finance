@@ -362,6 +362,35 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { receipt: result, resolved: resolvedItems.length, skipped: rawItems.length - resolvedItems.length } })
     }
 
+    // ── setWarehouse: set how many items are physically in the back room ─────────
+    if (body.action === 'setWarehouse') {
+      const companyId = String(body.company_id || '').trim()
+      if (!companyId) return json({ error: 'company-id-required' }, 400)
+
+      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
+        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      }
+
+      const itemId = String(body.item_id || '').trim()
+      if (!itemId) return json({ error: 'item-id-required' }, 400)
+      const qty = normalizeQty(body.quantity)
+
+      const warehouse = await ensureCompanyLocation(supabase, companyId, 'warehouse')
+      const actorUserId = access.staffMember?.id || null
+      const now = new Date().toISOString()
+
+      if (qty <= 0) {
+        await supabase.from('inventory_balances').delete().eq('location_id', warehouse.id).eq('item_id', itemId)
+      } else {
+        const { error: upErr } = await supabase
+          .from('inventory_balances')
+          .upsert({ location_id: warehouse.id, item_id: itemId, quantity: qty, updated_at: now }, { onConflict: 'location_id,item_id' })
+        if (upErr) throw upErr
+      }
+
+      return json({ ok: true, data: { item_id: itemId, warehouse_quantity: qty } })
+    }
+
     // ── deleteStock (remove balance rows for given item_ids) ──────────────────
     if (body.action === 'deleteStock') {
       const companyId = String(body.company_id || '').trim()
