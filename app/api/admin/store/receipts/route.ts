@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { resolveCompanyScope } from '@/lib/server/organizations'
-import { ensureInventoryLocationAccess, fetchStoreReceipts, postInventoryReceipt } from '@/lib/server/repositories/inventory'
+import { bulkSyncInventoryItemsToPointProducts, ensureInventoryLocationAccess, fetchStoreReceipts, postInventoryReceipt } from '@/lib/server/repositories/inventory'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -25,7 +25,6 @@ type Body = {
     received_at: string
     invoice_number?: string | null
     comment?: string | null
-    update_sale_price?: boolean
     items: Array<{
       item_id: string
       quantity: number
@@ -114,15 +113,20 @@ export async function POST(request: Request) {
         : [],
     })
 
-    // Optional: update sale/default purchase prices from receipt lines
-    if (body.payload.update_sale_price === true && Array.isArray(body.payload.items)) {
-      const updates = body.payload.items
+    // Always update sale/default purchase prices globally from receipt lines
+    if (Array.isArray(body.payload.items)) {
+      const updatesRaw = body.payload.items
         .map((item) => ({
           item_id: String(item.item_id || '').trim(),
           unit_cost: normalizeMoney(item.unit_cost),
           sale_price: normalizeMoney(item.sale_price),
         }))
         .filter((item) => item.item_id && item.sale_price >= 0)
+
+      const updatesMap = new Map<string, { item_id: string; unit_cost: number; sale_price: number }>()
+      for (const row of updatesRaw) updatesMap.set(row.item_id, row)
+      const updates = [...updatesMap.values()]
+      const syncItems: Array<{ name: string; barcode: string; sale_price: number; is_active?: boolean }> = []
 
       for (const row of updates) {
         let query: any = supabase
@@ -133,11 +137,28 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq('id', row.item_id)
+          .select('name, barcode, sale_price, is_active')
+          .single()
         if (!access.isSuperAdmin && access.activeOrganization?.id) {
           query = query.eq('organization_id', access.activeOrganization.id)
         }
-        const { error: upErr } = await query
+        const { data: itemRow, error: upErr } = await query
         if (upErr) throw upErr
+        if (itemRow?.name && itemRow?.barcode) {
+          syncItems.push({
+            name: String(itemRow.name),
+            barcode: String(itemRow.barcode),
+            sale_price: Number(itemRow.sale_price || 0),
+            is_active: itemRow.is_active !== false,
+          })
+        }
+      }
+
+      if (syncItems.length > 0) {
+        await bulkSyncInventoryItemsToPointProducts(supabase as any, syncItems, {
+          organizationId: access.activeOrganization?.id || null,
+          isSuperAdmin: access.isSuperAdmin,
+        })
       }
     }
 
@@ -148,7 +169,7 @@ export async function POST(request: Request) {
       action: 'create',
       payload: {
         ...result,
-        update_sale_price: body.payload.update_sale_price === true,
+        update_sale_price: true,
       },
     })
 

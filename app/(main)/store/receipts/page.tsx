@@ -167,7 +167,6 @@ export default function StoreReceiptsPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<ReceiptLine[]>([emptyLine()])
-  const [updateSalePrice, setUpdateSalePrice] = useState(true)
   const [quickQuery, setQuickQuery] = useState('')
   const [quickError, setQuickError] = useState<string | null>(null)
   const quickInputRef = useRef<HTMLInputElement>(null)
@@ -322,7 +321,6 @@ export default function StoreReceiptsPage() {
             received_at: receivedAt,
             invoice_number: invoiceNumber.trim() || null,
             comment: comment.trim() || null,
-            update_sale_price: updateSalePrice,
             items: payloadItems,
           },
         }),
@@ -335,7 +333,7 @@ export default function StoreReceiptsPage() {
       setInvoiceNumber('')
       setComment('')
       setLines([emptyLine()])
-      setSuccess('Приемка проведена, остатки склада обновлены')
+      setSuccess('Приемка проведена. Остатки и цены обновлены везде.')
       await load()
     } catch (err: any) {
       setError(err?.message || 'Не удалось провести приемку')
@@ -490,15 +488,9 @@ export default function StoreReceiptsPage() {
               <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Что важно по этой приемке" rows={3} />
             </div>
 
-            <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-slate-300">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-emerald-500"
-                checked={updateSalePrice}
-                onChange={(event) => setUpdateSalePrice(event.target.checked)}
-              />
-              Обновлять цену продажи и закупа в карточке товара по строкам приемки
-            </label>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-3 py-2 text-sm text-emerald-200">
+              Цены применяются автоматически: закуп обновляет себестоимость, продажа и наценка синхронизируются по всем точкам.
+            </div>
 
             <div className="space-y-3">
               {lines.map((line, index) => (
