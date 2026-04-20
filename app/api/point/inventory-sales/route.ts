@@ -64,11 +64,10 @@ function roundLineTotal(quantity: number, unitPrice: number) {
 function buildAuthoritativeSaleLines(params: {
   requestedItems: Array<{ item_id: string; quantity: number; comment?: string | null }>
   dbItems: Array<{ id: string; name: string; sale_price: number; is_active: boolean; item_type?: string | null }>
-  balances: Array<{ item_id: string; quantity: number }>
+  showcaseBalances: Map<string, number>
   paymentTotal: number
 }) {
   const itemMap = new Map(params.dbItems.map((row) => [row.id, row]))
-  const balanceMap = new Map(params.balances.map((row) => [row.item_id, Number(row.quantity || 0)]))
 
   const baseLines = params.requestedItems.map((item) => {
     const dbItem = itemMap.get(item.item_id)
@@ -79,9 +78,9 @@ function buildAuthoritativeSaleLines(params: {
       throw new Error(`Расходник нельзя продать через кассу: ${dbItem.name}`)
     }
 
-    const available = Number(balanceMap.get(item.item_id) || 0)
+    const available = Number(params.showcaseBalances.get(item.item_id) || 0)
     if (item.quantity > available + 0.0001) {
-      throw new Error(`Недостаточно остатка на витрине для товара «${dbItem.name}»`)
+      throw new Error(`Недостаточно остатка на витрине для товара «${dbItem.name}» (доступно: ${available})`)
     }
 
     const unitPrice = normalizeMoney(dbItem.sale_price)
@@ -183,6 +182,59 @@ async function resolvePointSaleLocation(supabase: any, companyId: string) {
   if (error) throw error
   if (!data?.id) throw new Error('inventory-sale-location-not-found')
   return data
+}
+
+async function resolveStockLocations(supabase: any, companyId: string) {
+  const { data, error } = await supabase
+    .from('inventory_locations')
+    .select('id, location_type')
+    .eq('company_id', companyId)
+    .in('location_type', ['catalog', 'warehouse'])
+    .eq('is_active', true)
+
+  if (error) throw error
+  const catalogId = (data || []).find((row: any) => row.location_type === 'catalog')?.id || null
+  const warehouseId = (data || []).find((row: any) => row.location_type === 'warehouse')?.id || null
+  if (!catalogId) throw new Error('inventory-sale-catalog-location-missing')
+  return { catalogId, warehouseId }
+}
+
+async function fetchShowcaseBalances(params: {
+  supabase: any
+  catalogId: string
+  warehouseId: string | null
+  itemIds?: string[] | null
+}) {
+  const catalogQuery = params.supabase
+    .from('inventory_balances')
+    .select('item_id, quantity')
+    .eq('location_id', params.catalogId)
+  if (params.itemIds?.length) catalogQuery.in('item_id', params.itemIds)
+
+  const queries: Array<Promise<any>> = [catalogQuery]
+  if (params.warehouseId) {
+    const warehouseQuery = params.supabase
+      .from('inventory_balances')
+      .select('item_id, quantity')
+      .eq('location_id', params.warehouseId)
+    if (params.itemIds?.length) warehouseQuery.in('item_id', params.itemIds)
+    queries.push(warehouseQuery)
+  }
+
+  const results = await Promise.all(queries)
+  const [catalogRes, warehouseRes] = results
+  if (catalogRes.error) throw catalogRes.error
+  if (warehouseRes?.error) throw warehouseRes.error
+
+  const catalogMap = new Map<string, number>((catalogRes.data || []).map((row: any) => [row.item_id, Number(row.quantity || 0)]))
+  const warehouseMap = new Map<string, number>((warehouseRes?.data || []).map((row: any) => [row.item_id, Number(row.quantity || 0)]))
+
+  const showcaseMap = new Map<string, number>()
+  for (const [itemId, catalogQty] of catalogMap) {
+    const warehouseQty = warehouseMap.get(itemId) || 0
+    showcaseMap.set(itemId, Math.max(0, catalogQty - warehouseQty))
+  }
+  return showcaseMap
 }
 
 async function resolveActor(params: {
@@ -424,7 +476,9 @@ export async function GET(request: Request) {
       })
     }
 
-    const [{ data: items, error: itemsError }, { data: balances, error: balancesError }, { data: sales, error: salesError }] =
+    const stock = await resolveStockLocations(supabase, device.company_id)
+
+    const [{ data: items, error: itemsError }, showcaseMap, { data: sales, error: salesError }] =
       await Promise.all([
         supabase
           .from('inventory_items')
@@ -432,10 +486,7 @@ export async function GET(request: Request) {
           .eq('is_active', true)
           .neq('item_type', 'consumable')
           .order('name', { ascending: true }),
-        supabase
-          .from('inventory_balances')
-          .select('item_id, quantity')
-          .eq('location_id', location.id),
+        fetchShowcaseBalances({ supabase, catalogId: stock.catalogId, warehouseId: stock.warehouseId }),
         supabase
           .from('point_sales')
           .select(
@@ -447,10 +498,7 @@ export async function GET(request: Request) {
       ])
 
     if (itemsError) throw itemsError
-    if (balancesError) throw balancesError
     if (salesError) throw salesError
-
-    const balanceMap = new Map<string, number>((balances || []).map((row: any) => [row.item_id, Number(row.quantity || 0)]))
 
     return json({
       ok: true,
@@ -463,7 +511,7 @@ export async function GET(request: Request) {
         location,
         items: (items || []).map((item: any) => ({
           ...item,
-          display_qty: balanceMap.get(item.id) || 0,
+          display_qty: showcaseMap.get(item.id) || 0,
         })),
         sales: sales || [],
       },
@@ -532,16 +580,18 @@ export async function POST(request: Request) {
     }
 
     const itemIds = [...new Set(requestedItems.map((item) => item.item_id))]
-    const [{ data: dbItems, error: itemError }, { data: balances, error: balanceError }, customerContext] = await Promise.all([
+    const stock = await resolveStockLocations(supabase, device.company_id)
+    const [{ data: dbItems, error: itemError }, showcaseBalances, customerContext] = await Promise.all([
       supabase
         .from('inventory_items')
         .select('id, name, sale_price, is_active, item_type')
         .in('id', itemIds),
-      supabase
-        .from('inventory_balances')
-        .select('item_id, quantity')
-        .eq('location_id', location.id)
-        .in('item_id', itemIds),
+      fetchShowcaseBalances({
+        supabase,
+        catalogId: stock.catalogId,
+        warehouseId: stock.warehouseId,
+        itemIds,
+      }),
       resolveCustomerSaleContext({
         supabase,
         companyId: device.company_id,
@@ -551,12 +601,11 @@ export async function POST(request: Request) {
     ])
 
     if (itemError) throw itemError
-    if (balanceError) throw balanceError
 
     const items = buildAuthoritativeSaleLines({
       requestedItems,
       dbItems: dbItems || [],
-      balances: balances || [],
+      showcaseBalances,
       paymentTotal,
     })
 
@@ -624,9 +673,9 @@ export async function POST(request: Request) {
       },
     })
 
-    // Trigger low stock check in background (don't await)
+    // Trigger low stock check in background (don't await) — читаем с catalog
     const soldItemIds = items.map((i) => i.item_id)
-    checkAndNotifyLowStock(soldItemIds, location.id).catch(() => null)
+    checkAndNotifyLowStock(soldItemIds, stock.catalogId).catch(() => null)
 
     return json({
       ok: true,

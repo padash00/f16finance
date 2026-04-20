@@ -15,7 +15,7 @@ type InventoryLocation = {
   id: string
   name: string
   code: string | null
-  location_type: 'warehouse' | 'point_display'
+  location_type: 'catalog' | 'warehouse' | 'point_display'
   company?: { id: string; name: string; code: string | null } | null
 }
 
@@ -228,7 +228,7 @@ export default function StoreWriteoffsPage() {
                   <SelectContent>
                     {activeLocations.map((location) => (
                       <SelectItem key={location.id} value={location.id}>
-                        {location.location_type === 'warehouse' ? 'Склад' : 'Витрина'} · {location.company?.name || location.name}
+                        {location.location_type === 'catalog' ? 'Каталог' : location.location_type === 'warehouse' ? 'Склад' : 'Витрина'} · {location.company?.name || location.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -55,12 +55,15 @@ async function resolvePointInventoryContext(supabase: any, companyId: string) {
           .limit(1)
           .maybeSingle()
       }),
+    // Target — в catalog-модели нужен только для audit (decide не трогает target).
+    // Prefer point_display (legacy), fall back to catalog.
     supabase
       .from('inventory_locations')
       .select('id, name, code, location_type')
       .eq('company_id', companyId)
-      .eq('location_type', 'point_display')
+      .in('location_type', ['point_display', 'catalog'])
       .eq('is_active', true)
+      .order('location_type', { ascending: false }) // point_display > catalog alphabetically
       .limit(1)
       .maybeSingle(),
   ])

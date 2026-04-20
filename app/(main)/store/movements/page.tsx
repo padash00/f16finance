@@ -14,7 +14,7 @@ type InventoryLocation = {
   id: string
   name: string
   code: string | null
-  location_type: 'warehouse' | 'point_display'
+  location_type: 'catalog' | 'warehouse' | 'point_display'
   company?: { id: string; name: string; code: string | null } | null
 }
 

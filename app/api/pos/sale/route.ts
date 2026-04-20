@@ -168,7 +168,7 @@ export async function POST(request: Request) {
     const supabase = createAdminSupabaseClient()
 
     const itemIds = [...new Set(requestedItems.map((item) => item.item_id))]
-    const [{ data: locationRow, error: locationError }, { data: itemRows, error: itemError }, { data: balanceRows, error: balanceError }] =
+    const [{ data: locationRow, error: locationError }, { data: itemRows, error: itemError }, { data: companyLocations, error: companyLocsError }] =
       await Promise.all([
         supabase
           .from('inventory_locations')
@@ -180,22 +180,45 @@ export async function POST(request: Request) {
           .select('id, name, sale_price, is_active')
           .in('id', itemIds),
         supabase
-          .from('inventory_balances')
-          .select('item_id, quantity')
-          .eq('location_id', locationId)
-          .in('item_id', itemIds),
+          .from('inventory_locations')
+          .select('id, location_type')
+          .eq('company_id', companyId)
+          .in('location_type', ['catalog', 'warehouse'])
+          .eq('is_active', true),
       ])
 
-      if (locationError) throw locationError
+    if (locationError) throw locationError
     if (itemError) throw itemError
-    if (balanceError) throw balanceError
+    if (companyLocsError) throw companyLocsError
 
-    if (!locationRow || locationRow.company_id !== companyId || locationRow.location_type !== 'point_display') {
+    // location_id может быть point_display (legacy, для истории point_sales.location_id)
+    // либо catalog — главное чтобы принадлежал этой компании.
+    if (!locationRow || locationRow.company_id !== companyId) {
       return json({ error: 'invalid-location' }, 400)
     }
 
+    const catalogLocId = (companyLocations || []).find((l: any) => l.location_type === 'catalog')?.id
+    const warehouseLocId = (companyLocations || []).find((l: any) => l.location_type === 'warehouse')?.id
+    if (!catalogLocId) return json({ error: 'catalog-location-missing' }, 400)
+
+    // Баланс витрины = catalog - warehouse (виртуально)
+    const balanceLocs = [catalogLocId, warehouseLocId].filter(Boolean) as string[]
+    const { data: balanceRows, error: balanceError } = await supabase
+      .from('inventory_balances')
+      .select('item_id, location_id, quantity')
+      .in('location_id', balanceLocs)
+      .in('item_id', itemIds)
+    if (balanceError) throw balanceError
+
+    const catalogMap = new Map<string, number>()
+    const warehouseMap = new Map<string, number>()
+    for (const row of balanceRows || []) {
+      const q = Number(row.quantity || 0)
+      if (row.location_id === catalogLocId) catalogMap.set(row.item_id, q)
+      else if (row.location_id === warehouseLocId) warehouseMap.set(row.item_id, q)
+    }
+
     const itemMap = new Map((itemRows || []).map((row: any) => [row.id, row]))
-    const balanceMap = new Map((balanceRows || []).map((row: any) => [row.item_id, Number(row.quantity || 0)]))
 
     const pricedItems: PricedItem[] = []
     for (const item of requestedItems) {
@@ -204,9 +227,11 @@ export async function POST(request: Request) {
         return json({ error: `item-not-found:${item.item_id}` }, 400)
       }
 
-      const available = balanceMap.get(item.item_id) || 0
-      if (item.quantity > available + 0.0001) {
-        return json({ error: `Недостаточно остатка на витрине для товара «${dbItem.name}»` }, 400)
+      const catalogQ = catalogMap.get(item.item_id) || 0
+      const warehouseQ = warehouseMap.get(item.item_id) || 0
+      const showcaseQ = Math.max(0, catalogQ - warehouseQ)
+      if (item.quantity > showcaseQ + 0.0001) {
+        return json({ error: `Недостаточно остатка на витрине для товара «${dbItem.name}» (доступно: ${showcaseQ})` }, 400)
       }
 
       const unitPrice = normalizeMoney(dbItem.sale_price)
@@ -392,7 +417,7 @@ export async function POST(request: Request) {
 
     if (!saleId) throw new Error('pos-sale-save-failed')
 
-    checkAndNotifyLowStock(itemIds, locationId).catch(() => null)
+    checkAndNotifyLowStock(itemIds, catalogLocId).catch(() => null)
 
     const { data: receiptSale, error: receiptError } = await supabase
       .from('point_sales')

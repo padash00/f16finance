@@ -15,7 +15,7 @@ type InventoryLocation = {
   id: string
   name: string
   code: string | null
-  location_type: 'warehouse' | 'point_display'
+  location_type: 'catalog' | 'warehouse' | 'point_display'
 }
 
 type InventorySupplier = {
@@ -267,15 +267,15 @@ export default function StoreReceiptsPage() {
         <Card className="border-white/10 p-5">
           <div className="mb-4">
             <h2 className="text-lg font-semibold text-foreground">Новый документ приемки</h2>
-            <p className="text-sm text-muted-foreground">Заполняется быстро: склад, поставщик, дата, а дальше только товарные строки.</p>
+            <p className="text-sm text-muted-foreground">Заполняется быстро: каталог, поставщик, дата, а дальше только товарные строки. Приход увеличивает общий остаток в каталоге.</p>
           </div>
 
           <form onSubmit={createReceipt} className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Склад</Label>
+                <Label>Каталог</Label>
                 <Select value={locationId} onValueChange={setLocationId}>
-                  <SelectTrigger><SelectValue placeholder="Выберите склад" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Выберите каталог" /></SelectTrigger>
                   <SelectContent>
                     {(data?.locations || []).map((location) => (
                       <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>

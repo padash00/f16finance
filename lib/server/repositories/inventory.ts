@@ -325,7 +325,7 @@ export async function fetchStoreReceipts(supabase: AnySupabase, scope?: Inventor
       supabase
       .from('inventory_locations')
       .select('id, company_id, organization_id, name, code, location_type, is_active, company:company_id(id, name, code)')
-      .eq('location_type', 'warehouse')
+      .eq('location_type', 'catalog')
       .eq('is_active', true)
       .order('name', { ascending: true }),
       scope,
@@ -396,6 +396,7 @@ export async function fetchStoreWriteoffs(supabase: AnySupabase, scope?: Invento
       supabase
       .from('inventory_locations')
       .select('id, company_id, organization_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+      .in('location_type', ['catalog', 'warehouse'])
       .eq('is_active', true)
       .order('location_type', { ascending: true })
       .order('name', { ascending: true }),
@@ -445,6 +446,7 @@ export async function fetchStoreRevisions(supabase: AnySupabase, scope?: Invento
       supabase
       .from('inventory_locations')
       .select('id, company_id, organization_id, name, code, location_type, is_active, company:company_id(id, name, code)')
+      .in('location_type', ['catalog', 'warehouse'])
       .eq('is_active', true)
       .order('location_type', { ascending: true })
       .order('name', { ascending: true }),
@@ -666,7 +668,7 @@ export async function syncInventoryItemToPointProducts(
   let locationsQuery = supabase
     .from('inventory_locations')
     .select('company_id')
-    .eq('location_type', 'point_display')
+    .eq('location_type', 'catalog')
     .eq('is_active', true)
     .not('company_id', 'is', null)
 
@@ -732,7 +734,7 @@ export async function bulkSyncInventoryItemsToPointProducts(
   let locationsQuery = supabase
     .from('inventory_locations')
     .select('company_id')
-    .eq('location_type', 'point_display')
+    .eq('location_type', 'catalog')
     .eq('is_active', true)
     .not('company_id', 'is', null)
 

@@ -6,12 +6,14 @@ import mammoth from 'mammoth'
 import {
   AlertCircle,
   Barcode,
+  Check,
   CheckCircle2,
   ChevronDown,
   FileSpreadsheet,
   Loader2,
   Package,
   PackagePlus,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -29,13 +31,13 @@ import { Label } from '@/components/ui/label'
 
 type Category = { id: string; name: string }
 type Company = { id: string; name: string; code: string | null }
-type WarehouseLocation = { id: string; name: string; code: string | null; is_active: boolean }
+type LocationRef = { id: string; name: string; code: string | null; is_active: boolean }
 type BalanceItem = {
   item_id: string
-  quantity: number           // = catalog_quantity (backwards compat)
-  catalog_quantity: number   // total (imported from Wipon)
-  warehouse_quantity: number // physically in back storage
-  showcase_quantity: number  // = catalog - warehouse (virtual)
+  quantity: number // back-compat: catalog total
+  catalog_quantity: number
+  warehouse_quantity: number
+  showcase_quantity: number
   updated_at: string
   item: {
     id: string
@@ -57,12 +59,10 @@ type StockLine = {
   unit: string
   quantity: string
   unit_cost: string
-  isNew?: boolean // not in catalog yet — needs to be created
+  isNew?: boolean
 }
 
 type AddMode = 'barcode' | 'catalog' | 'excel'
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 let keyCounter = 0
 function nextKey() {
@@ -75,64 +75,51 @@ function parseNum(v: string) {
   return Number.isFinite(n) ? Math.max(0, n) : 0
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function WarehousePage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
-  const [warehouse, setWarehouse] = useState<WarehouseLocation | null>(null)
+  const [catalogLoc, setCatalogLoc] = useState<LocationRef | null>(null)
+  const [warehouseLoc, setWarehouseLoc] = useState<LocationRef | null>(null)
   const [balances, setBalances] = useState<BalanceItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Add-stock panel
   const [addMode, setAddMode] = useState<AddMode>('barcode')
   const [lines, setLines] = useState<StockLine[]>([])
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Barcode mode
   const [barcodeInput, setBarcodeInput] = useState('')
   const [barcodeLoading, setBarcodeLoading] = useState(false)
   const [barcodeResult, setBarcodeResult] = useState<'found' | 'not-found' | null>(null)
   const barcodeRef = useRef<HTMLInputElement>(null)
 
-  // New item dialog (when barcode not found)
   const [newItemDialog, setNewItemDialog] = useState<{ barcode: string } | null>(null)
   const [newItemName, setNewItemName] = useState('')
   const [newItemUnit, setNewItemUnit] = useState('шт')
   const [creatingItem, setCreatingItem] = useState(false)
 
-  // Catalog mode
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogItems, setCatalogItems] = useState<any[]>([])
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
 
-  // Excel mode
   const [excelRows, setExcelRows] = useState<StockLine[]>([])
   const [excelError, setExcelError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Search / filter existing stock
   const [stockSearch, setStockSearch] = useState('')
-
-  // Stock mode: add to existing or set (replace) quantity
   const [stockMode, setStockMode] = useState<'add' | 'set'>('add')
 
-  // Inline warehouse allocation editing
-  const [editingWarehouse, setEditingWarehouse] = useState<string | null>(null) // item_id being edited
-  const [editWarehouseVal, setEditWarehouseVal] = useState('')
-  const [savingWarehouse, setSavingWarehouse] = useState(false)
-
-  // Selection + delete
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<'selected' | 'all' | null>(null)
 
-  // ── Load data ────────────────────────────────────────────────────────────────
+  const [editingWh, setEditingWh] = useState<string | null>(null)
+  const [editWhVal, setEditWhVal] = useState('')
+  const [savingWh, setSavingWh] = useState(false)
 
   const load = useCallback(async (companyId?: string | null) => {
     setLoading(true)
@@ -146,7 +133,8 @@ export default function WarehousePage() {
       const d = json.data
       setCompanies(d.companies || [])
       setSelectedCompanyId(d.selectedCompanyId)
-      setWarehouse(d.warehouse)
+      setCatalogLoc(d.catalog)
+      setWarehouseLoc(d.warehouse)
       setBalances(d.balances || [])
       setCategories(d.categories || [])
     } catch (e: any) {
@@ -157,8 +145,6 @@ export default function WarehousePage() {
   }, [selectedCompanyId])
 
   useEffect(() => { void load() }, [])
-
-  // ── Catalog search ───────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (addMode !== 'catalog') return
@@ -177,8 +163,6 @@ export default function WarehousePage() {
     }, 300)
     return () => clearTimeout(t)
   }, [catalogSearch, selectedCategory, addMode])
-
-  // ── Barcode lookup ───────────────────────────────────────────────────────────
 
   async function handleBarcodeLookup(e: React.FormEvent) {
     e.preventDefault()
@@ -214,14 +198,12 @@ export default function WarehousePage() {
         setNewItemName('')
         setNewItemUnit('шт')
       }
-    } catch (err: any) {
+    } catch {
       setBarcodeResult('not-found')
     } finally {
       setBarcodeLoading(false)
     }
   }
-
-  // ── Create new item ──────────────────────────────────────────────────────────
 
   async function handleCreateItem() {
     if (!newItemDialog || !newItemName.trim()) return
@@ -260,8 +242,6 @@ export default function WarehousePage() {
     }
   }
 
-  // ── Add line ─────────────────────────────────────────────────────────────────
-
   function addLine(line: StockLine) {
     setLines((prev) => {
       const exists = prev.findIndex((l) => l.item_id === line.item_id)
@@ -286,15 +266,11 @@ export default function WarehousePage() {
     })
   }
 
-  // ── Excel import ─────────────────────────────────────────────────────────────
-
   function parseRowsFromTable(rows: any[][]): StockLine[] {
     const parsed: StockLine[] = []
-    // Detect header row: skip if first cell looks like header text (not a number or barcode)
     const startIdx = (() => {
       if (rows.length === 0) return 0
       const firstCell = String(rows[0][0] || '').trim().toLowerCase()
-      // Header-like: contains letters but no long digit sequence (barcode)
       if (!/\d{8,}/.test(firstCell) && /[а-яёa-z№#]/i.test(firstCell)) return 1
       return 0
     })()
@@ -303,21 +279,16 @@ export default function WarehousePage() {
       const row = rows[i]
       if (!row || row.every((c: any) => !String(c || '').trim())) continue
 
-      // Try to find barcode (long digit sequence) and name and qty in the row
       let barcode = ''
       let name = ''
       let qty = 0
       let cost = 0
       let unit = 'шт'
 
-      // Detect column layout by scanning values
       const cells = row.map((c: any) => String(c || '').trim())
-
-      // If first cell is a small number (row index like 1,2,3...), shift columns
       const hasIndex = cells[0] !== '' && /^\d{1,3}$/.test(cells[0]) && Number(cells[0]) < 1000 && !cells[0].match(/^\d{8,}/)
       const offset = hasIndex ? 1 : 0
 
-      // After optional index: name, barcode, qty OR barcode, name, qty
       const c0 = cells[offset] || ''
       const c1 = cells[offset + 1] || ''
       const c2 = cells[offset + 2] || ''
@@ -326,25 +297,21 @@ export default function WarehousePage() {
       const isBarcodelike = (s: string) => /^\d{8,}$/.test(s.replace(/\s/g, ''))
 
       if (isBarcodelike(c1)) {
-        // Layout: [idx?] Name | Barcode | Qty | Cost?
         name = c0
         barcode = c1.replace(/\s/g, '')
         qty = parseNum(c2)
         cost = parseNum(c3)
       } else if (isBarcodelike(c0)) {
-        // Layout: [idx?] Barcode | Name | Qty | Cost?
         barcode = c0.replace(/\s/g, '')
         name = c1
         qty = parseNum(c2)
         cost = parseNum(c3)
       } else {
-        // No barcode found — use name + qty only
         name = c0
         qty = parseNum(c1 || c2)
         cost = parseNum(c3)
       }
 
-      // Try last cells for unit
       const lastCell = cells[cells.length - 1]
       if (lastCell && !/^\d/.test(lastCell) && lastCell.length < 10) unit = lastCell
 
@@ -373,33 +340,28 @@ export default function WarehousePage() {
 
     const ext = file.name.split('.').pop()?.toLowerCase() || ''
 
-    // ── DOCX ─────────────────────────────────────────────────────────────────
     if (ext === 'docx') {
       try {
         const arrayBuffer = await file.arrayBuffer()
-        // Use mammoth to convert docx to plain text, then parse table-like structure
         const result = await mammoth.convertToHtml({ arrayBuffer })
         const html = result.value
 
-        // Parse <table> → rows from HTML
         const parser = new DOMParser()
         const doc = parser.parseFromString(html, 'text/html')
         const tables = doc.querySelectorAll('table')
 
         if (tables.length === 0) {
-          // No table — try to parse as list: each line = "name barcode qty"
           const lines = doc.body.textContent?.split('\n').map(l => l.trim()).filter(Boolean) || []
           const rows = lines.map(line => line.split(/\t|\s{2,}|;|,/).map(s => s.trim()))
           const parsed = parseRowsFromTable(rows)
           if (parsed.length === 0) {
-            setExcelError('Таблица не найдена в документе. Убедитесь что в Word есть таблица с товарами.')
+            setExcelError('Таблица не найдена в документе.')
             return
           }
           setExcelRows(parsed)
           return
         }
 
-        // Use first table
         const table = tables[0]
         const rows: string[][] = []
         table.querySelectorAll('tr').forEach((tr) => {
@@ -412,7 +374,7 @@ export default function WarehousePage() {
 
         const parsed = parseRowsFromTable(rows)
         if (parsed.length === 0) {
-          setExcelError('Не найдено строк с данными в таблице Word.')
+          setExcelError('Не найдено строк с данными.')
           return
         }
         setExcelRows(parsed)
@@ -422,7 +384,6 @@ export default function WarehousePage() {
       return
     }
 
-    // ── XLSX / XLS / CSV ──────────────────────────────────────────────────────
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
@@ -432,18 +393,16 @@ export default function WarehousePage() {
         const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
         const parsed = parseRowsFromTable(rows)
         if (parsed.length === 0) {
-          setExcelError('Не найдено строк с данными. Формат: Штрихкод | Название | Количество | Цена (опц)')
+          setExcelError('Не найдено строк. Формат: Штрихкод | Название | Количество | Цена')
           return
         }
         setExcelRows(parsed)
       } catch {
-        setExcelError('Не удалось прочитать файл. Поддерживаются .xlsx, .xls, .csv, .docx')
+        setExcelError('Не удалось прочитать файл.')
       }
     }
     reader.readAsArrayBuffer(file)
   }
-
-  // ── Save stock ────────────────────────────────────────────────────────────────
 
   async function handleSave() {
     if (!selectedCompanyId) return
@@ -454,7 +413,6 @@ export default function WarehousePage() {
     try {
       const source = addMode === 'excel' ? excelRows : lines
 
-      // Send raw rows to server — it resolves barcodes and creates missing items in bulk (1 round-trip)
       const items = source
         .filter((l) => parseNum(l.quantity) > 0)
         .map((l) => ({
@@ -467,7 +425,7 @@ export default function WarehousePage() {
         }))
 
       if (items.length === 0) {
-        setSaveError('Нет позиций с заполненным количеством')
+        setSaveError('Нет позиций с количеством')
         setSaving(false)
         return
       }
@@ -491,8 +449,6 @@ export default function WarehousePage() {
       setSaving(false)
     }
   }
-
-  // ── Delete stock ─────────────────────────────────────────────────────────────
 
   async function handleDelete(mode: 'selected' | 'all') {
     if (!selectedCompanyId) return
@@ -524,35 +480,37 @@ export default function WarehousePage() {
     }
   }
 
-  // ── Set warehouse allocation (how many physically in back room) ───────────────
-
-  async function handleSetWarehouse(itemId: string, qty: number) {
+  async function handleSetWarehouse(itemId: string) {
     if (!selectedCompanyId) return
-    setSavingWarehouse(true)
+    const qty = parseNum(editWhVal)
+    setSavingWh(true)
     try {
       const res = await fetch('/api/admin/store/warehouse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'setWarehouse', company_id: selectedCompanyId, item_id: itemId, quantity: qty }),
+        body: JSON.stringify({
+          action: 'setWarehouse',
+          company_id: selectedCompanyId,
+          item_id: itemId,
+          quantity: qty,
+        }),
       })
       const json = await res.json().catch(() => null)
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка')
-      setBalances((prev) =>
-        prev.map((b) =>
-          b.item_id === itemId
-            ? { ...b, warehouse_quantity: qty, showcase_quantity: Math.max(0, b.catalog_quantity - qty) }
-            : b
-        )
-      )
-    } catch (err: any) {
-      alert(err?.message || 'Ошибка сохранения')
+      if (!res.ok || !json?.ok) {
+        if (json?.error === 'warehouse-exceeds-catalog') {
+          alert(`Склад не может быть больше каталога (${json.catalogQty})`)
+        } else {
+          alert(json?.error || 'Ошибка сохранения')
+        }
+        return
+      }
+      setEditingWh(null)
+      setEditWhVal('')
+      await load(selectedCompanyId)
     } finally {
-      setSavingWarehouse(false)
-      setEditingWarehouse(null)
+      setSavingWh(false)
     }
   }
-
-  // ── Filtered balances ─────────────────────────────────────────────────────────
 
   const filteredBalances = balances.filter((b) => {
     if (!stockSearch.trim()) return true
@@ -566,11 +524,15 @@ export default function WarehousePage() {
   const pendingLines = addMode === 'excel' ? excelRows : lines
   const canSave = pendingLines.some((l) => parseNum(l.quantity) > 0)
 
-  // ─── Render ───────────────────────────────────────────────────────────────────
+  const totalCatalogQty = balances.reduce((s, b) => s + Number(b.catalog_quantity || 0), 0)
+  const totalWarehouseQty = balances.reduce((s, b) => s + Number(b.warehouse_quantity || 0), 0)
+  const totalShowcaseQty = balances.reduce((s, b) => s + Number(b.showcase_quantity || 0), 0)
+  const totalPurchase = balances.reduce((s, b) => s + Number(b.catalog_quantity || 0) * Number(b.item?.default_purchase_price || 0), 0)
+  const totalSale = balances.reduce((s, b) => s + Number(b.catalog_quantity || 0) * Number(b.item?.sale_price || 0), 0)
+  const fmtMoney = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <section className="rounded-3xl border border-amber-500/20 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.15),transparent_36%),linear-gradient(180deg,rgba(17,24,39,0.96),rgba(15,23,42,0.96))] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -579,12 +541,13 @@ export default function WarehousePage() {
               Склад точки
             </div>
             <h1 className="mt-3 text-2xl font-semibold text-white">
-              {warehouse ? warehouse.name : 'Склад'}
+              {warehouseLoc ? warehouseLoc.name : 'Склад'}
             </h1>
-            <p className="mt-1 text-sm text-slate-400">Каталог товаров. Витрина = каталог − склад. Импортируйте из Wipon через Excel.</p>
+            <p className="mt-1 text-sm text-slate-400">
+              Каталог — всего товаров. Склад — часть в подсобке. Витрина = каталог − склад.
+            </p>
           </div>
 
-          {/* Company selector */}
           {companies.length > 1 && (
             <div className="flex flex-col gap-1">
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Точка</Label>
@@ -609,48 +572,38 @@ export default function WarehousePage() {
           </Button>
         </div>
 
-        {/* Stats */}
-        {(() => {
-          const totalQty = balances.reduce((s, b) => s + Number(b.catalog_quantity || 0), 0)
-          const totalPurchase = balances.reduce((s, b) => s + Number(b.catalog_quantity || 0) * Number(b.item?.default_purchase_price || 0), 0)
-          const totalSale = balances.reduce((s, b) => s + Number(b.catalog_quantity || 0) * Number(b.item?.sale_price || 0), 0)
-          const totalWarehouse = balances.reduce((s, b) => s + Number(b.warehouse_quantity || 0), 0)
-          const totalShowcase = balances.reduce((s, b) => s + Number(b.showcase_quantity || 0), 0)
-          const fmtMoney = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
-          return (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Каталог</p>
-                <p className="mt-1.5 text-2xl font-semibold">{balances.length} поз.</p>
-                <p className="text-xs text-muted-foreground">{totalQty} ед. всего</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Склад / витрина</p>
-                <p className="mt-1.5 text-lg font-semibold text-amber-300">{totalWarehouse} <span className="text-sm text-muted-foreground">/ {totalShowcase}</span></p>
-                <p className="text-[10px] text-muted-foreground">ед. в складе / на витрине</p>
-              </div>
-              <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
-                <p className="text-[11px] uppercase tracking-widest text-blue-300/70">По закупу</p>
-                <p className="mt-1.5 text-xl font-semibold text-blue-200">{fmtMoney(totalPurchase)} ₸</p>
-              </div>
-              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3">
-                <p className="text-[11px] uppercase tracking-widest text-emerald-300/70">По продаже</p>
-                <p className="mt-1.5 text-xl font-semibold text-emerald-200">{fmtMoney(totalSale)} ₸</p>
-                {totalPurchase > 0 && <p className="text-xs text-emerald-400/70">+{fmtMoney(totalSale - totalPurchase)} ₸ маржа</p>}
-              </div>
-            </div>
-          )
-        })()}
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Позиций</p>
+            <p className="mt-1.5 text-2xl font-semibold">{balances.length}</p>
+          </div>
+          <div className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] px-4 py-3">
+            <p className="text-[11px] uppercase tracking-widest text-sky-300/70">Каталог</p>
+            <p className="mt-1.5 text-2xl font-semibold text-sky-200">{totalCatalogQty}</p>
+          </div>
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
+            <p className="text-[11px] uppercase tracking-widest text-amber-300/70">Склад</p>
+            <p className="mt-1.5 text-2xl font-semibold text-amber-300">{totalWarehouseQty}</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3">
+            <p className="text-[11px] uppercase tracking-widest text-emerald-300/70">Витрина</p>
+            <p className="mt-1.5 text-2xl font-semibold text-emerald-300">{totalShowcaseQty}</p>
+          </div>
+          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
+            <p className="text-[11px] uppercase tracking-widest text-blue-300/70">Стоимость</p>
+            <p className="mt-1.5 text-sm font-semibold text-blue-200">{fmtMoney(totalPurchase)} / {fmtMoney(totalSale)} ₸</p>
+            <p className="text-[10px] text-blue-400/70">закуп / продажа</p>
+          </div>
+        </div>
       </section>
 
       <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
-        {/* LEFT: current stock table */}
         <Card className="border-white/10 bg-card/70">
           <CardHeader className="border-b border-white/10 pb-3">
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle className="flex items-center gap-2 text-sm mr-auto">
                 <Package className="h-4 w-4 text-amber-300" />
-                Текущие остатки
+                Остатки
               </CardTitle>
               <div className="relative w-40">
                 <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
@@ -670,7 +623,7 @@ export default function WarehousePage() {
                   disabled={deleting}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Удалить выбранные ({selectedIds.size})
+                  Удалить ({selectedIds.size})
                 </Button>
               )}
               {balances.length > 0 && (
@@ -682,7 +635,7 @@ export default function WarehousePage() {
                   disabled={deleting}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Очистить склад
+                  Очистить
                 </Button>
               )}
             </div>
@@ -702,9 +655,8 @@ export default function WarehousePage() {
                 {stockSearch ? 'Ничего не найдено' : 'Каталог пустой — загрузите товары справа'}
               </div>
             ) : (
-              <div className="divide-y divide-white/[0.06]">
-                {/* Select-all row */}
-                <div className="flex items-center gap-3 px-4 py-2 bg-white/[0.02]">
+              <div>
+                <div className="flex items-center gap-3 px-4 py-2 bg-white/[0.02] border-b border-white/[0.06]">
                   <input
                     type="checkbox"
                     className="h-3.5 w-3.5 accent-amber-400 cursor-pointer"
@@ -721,82 +673,89 @@ export default function WarehousePage() {
                       }
                     }}
                   />
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {selectedIds.size > 0 ? `Выбрано: ${selectedIds.size}` : 'Выбрать все'}
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground flex-1">
+                    {selectedIds.size > 0 ? `Выбрано: ${selectedIds.size}` : 'Товар'}
                   </span>
+                  <span className="text-[10px] uppercase tracking-wider text-sky-300/70 w-16 text-right">Каталог</span>
+                  <span className="text-[10px] uppercase tracking-wider text-amber-300/70 w-20 text-right">Склад</span>
+                  <span className="text-[10px] uppercase tracking-wider text-emerald-300/70 w-16 text-right">Витрина</span>
                 </div>
-                {filteredBalances.map((b) => (
-                  <div
-                    key={b.item_id}
-                    className={`flex items-center gap-3 px-4 py-2.5 transition ${selectedIds.has(b.item_id) ? 'bg-rose-500/[0.06]' : ''}`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="h-3.5 w-3.5 accent-amber-400 cursor-pointer shrink-0"
-                      checked={selectedIds.has(b.item_id)}
-                      onChange={(e) => {
-                        setSelectedIds((prev) => {
-                          const next = new Set(prev)
-                          e.target.checked ? next.add(b.item_id) : next.delete(b.item_id)
-                          return next
-                        })
-                      }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{b.item?.name || 'Товар'}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {b.item?.barcode || ''}
-                        {b.item?.category ? ` · ${b.item.category.name}` : ''}
-                      </p>
-                    </div>
-                    <div className="ml-3 shrink-0 flex gap-3 text-right">
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">каталог</p>
-                        <p className={`text-sm font-semibold ${Number(b.catalog_quantity) <= 0 ? 'text-rose-400' : 'text-foreground'}`}>
-                          {b.catalog_quantity}
+                <div className="divide-y divide-white/[0.06]">
+                  {filteredBalances.map((b) => (
+                    <div
+                      key={b.item_id}
+                      className={`flex items-center gap-3 px-4 py-2.5 transition ${selectedIds.has(b.item_id) ? 'bg-rose-500/[0.06]' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 accent-amber-400 cursor-pointer shrink-0"
+                        checked={selectedIds.has(b.item_id)}
+                        onChange={(e) => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev)
+                            e.target.checked ? next.add(b.item_id) : next.delete(b.item_id)
+                            return next
+                          })
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{b.item?.name || 'Товар'}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {b.item?.barcode || ''}
+                          {b.item?.category ? ` · ${b.item.category.name}` : ''}
                         </p>
                       </div>
-                      <div className="min-w-[52px]">
-                        <p className="text-[10px] text-muted-foreground">склад</p>
-                        {editingWarehouse === b.item_id ? (
-                          <form
-                            onSubmit={(e) => { e.preventDefault(); handleSetWarehouse(b.item_id, parseNum(editWarehouseVal)) }}
-                            className="flex items-center gap-1"
-                          >
+                      <div className="shrink-0 w-16 text-right">
+                        <p className="text-sm font-semibold text-sky-200">{b.catalog_quantity}</p>
+                      </div>
+                      <div className="shrink-0 w-20 text-right">
+                        {editingWh === b.item_id ? (
+                          <div className="flex items-center justify-end gap-1">
                             <Input
-                              value={editWarehouseVal}
-                              onChange={(e) => setEditWarehouseVal(e.target.value)}
-                              className="h-6 w-14 text-xs text-center px-1"
+                              value={editWhVal}
+                              onChange={(e) => setEditWhVal(e.target.value)}
+                              className="h-6 w-12 text-xs text-center px-1"
                               autoFocus
-                              onBlur={() => { if (!savingWarehouse) setEditingWarehouse(null) }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') void handleSetWarehouse(b.item_id)
+                                if (e.key === 'Escape') { setEditingWh(null); setEditWhVal('') }
+                              }}
                             />
-                          </form>
+                            <button
+                              onClick={() => void handleSetWarehouse(b.item_id)}
+                              disabled={savingWh}
+                              className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+                            >
+                              {savingWh ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                            </button>
+                            <button
+                              onClick={() => { setEditingWh(null); setEditWhVal('') }}
+                              className="text-muted-foreground hover:text-rose-400"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         ) : (
                           <button
-                            onClick={() => { setEditingWarehouse(b.item_id); setEditWarehouseVal(String(b.warehouse_quantity)) }}
-                            className="text-sm font-semibold text-amber-300 hover:underline"
-                            title="Нажмите чтобы изменить"
+                            onClick={() => { setEditingWh(b.item_id); setEditWhVal(String(b.warehouse_quantity)) }}
+                            className="flex items-center justify-end gap-1 text-sm font-semibold text-amber-300 hover:text-amber-200 w-full"
                           >
                             {b.warehouse_quantity}
+                            <Pencil className="h-3 w-3 opacity-50" />
                           </button>
                         )}
                       </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">витрина</p>
-                        <p className={`text-sm font-semibold ${Number(b.showcase_quantity) <= 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                          {b.showcase_quantity}
-                        </p>
+                      <div className="shrink-0 w-16 text-right">
+                        <p className="text-sm font-semibold text-emerald-300">{b.showcase_quantity}</p>
                       </div>
-                      <p className="text-[10px] text-muted-foreground self-end pb-0.5">{b.item?.unit || 'шт'}</p>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* RIGHT: add stock panel */}
         <Card className="border-white/10 bg-card/70">
           <CardHeader className="border-b border-white/10 pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
@@ -805,7 +764,6 @@ export default function WarehousePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
-            {/* Mode tabs */}
             <div className="flex rounded-xl border border-white/10 bg-white/[0.03] p-0.5 text-xs">
               {([['barcode', 'Штрихкод', Barcode], ['catalog', 'Каталог', Search], ['excel', 'Excel', FileSpreadsheet]] as const).map(([mode, label, Icon]) => (
                 <button
@@ -819,7 +777,6 @@ export default function WarehousePage() {
               ))}
             </div>
 
-            {/* ── BARCODE MODE ── */}
             {addMode === 'barcode' && (
               <div className="space-y-3">
                 <form onSubmit={handleBarcodeLookup} className="flex gap-2">
@@ -850,7 +807,6 @@ export default function WarehousePage() {
                   </p>
                 )}
 
-                {/* New item dialog */}
                 {newItemDialog && (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
                     <p className="text-xs font-medium text-amber-200">
@@ -880,7 +836,7 @@ export default function WarehousePage() {
                     <div className="flex gap-2">
                       <Button size="sm" className="h-7 text-xs" onClick={handleCreateItem} disabled={creatingItem || !newItemName.trim()}>
                         {creatingItem ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                        Создать и добавить
+                        Создать
                       </Button>
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setNewItemDialog(null); setBarcodeInput(''); setBarcodeResult(null) }}>
                         Отмена
@@ -891,7 +847,6 @@ export default function WarehousePage() {
               </div>
             )}
 
-            {/* ── CATALOG MODE ── */}
             {addMode === 'catalog' && (
               <div className="space-y-2">
                 <div className="flex gap-2">
@@ -941,7 +896,6 @@ export default function WarehousePage() {
               </div>
             )}
 
-            {/* ── EXCEL MODE ── */}
             {addMode === 'excel' && (
               <div className="space-y-2">
                 <div
@@ -951,14 +905,12 @@ export default function WarehousePage() {
                   <FileSpreadsheet className="h-8 w-8 text-blue-400" />
                   <p className="text-xs font-medium text-foreground">Нажмите чтобы загрузить файл</p>
                   <p className="text-[10px] text-muted-foreground">.xlsx / .xls / .csv / .docx</p>
-                  <p className="text-[10px] text-muted-foreground">Формат: [№] Название | Штрихкод | Количество | Цена (опц)</p>
                 </div>
                 <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.docx" className="hidden" onChange={handleExcelFile} />
                 {excelError && <p className="text-xs text-rose-400">{excelError}</p>}
               </div>
             )}
 
-            {/* Lines to save */}
             {pendingLines.length > 0 && (
               <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-2 max-h-64 overflow-y-auto">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground px-1">К добавлению ({pendingLines.length})</p>
@@ -992,10 +944,8 @@ export default function WarehousePage() {
               </div>
             )}
 
-            {/* Save button */}
             {pendingLines.length > 0 && (
               <div className="space-y-2">
-                {/* Mode toggle */}
                 <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 space-y-1.5">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Режим сохранения</p>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -1016,8 +966,8 @@ export default function WarehousePage() {
                   </div>
                   <p className="text-[10px] text-muted-foreground">
                     {stockMode === 'add'
-                      ? 'Количество прибавится к текущему остатку в каталоге'
-                      : 'Остаток в каталоге будет заменён на указанное количество (синхронизация с Wipon)'}
+                      ? 'Прибавится к каталогу (общий остаток магазина).'
+                      : 'Остаток в каталоге будет заменён (синхронизация с Wipon).'}
                   </p>
                 </div>
 
@@ -1034,7 +984,7 @@ export default function WarehousePage() {
                   className={`w-full ${stockMode === 'set' ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
                 >
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackagePlus className="mr-2 h-4 w-4" />}
-                  {stockMode === 'set' ? 'Синхронизировать каталог' : 'Добавить в каталог'} ({pendingLines.filter((l) => parseNum(l.quantity) > 0).length} поз.)
+                  {stockMode === 'set' ? 'Синхронизировать' : 'Добавить'} ({pendingLines.filter((l) => parseNum(l.quantity) > 0).length} поз.)
                 </Button>
               </div>
             )}
@@ -1042,7 +992,6 @@ export default function WarehousePage() {
         </Card>
       </div>
 
-      {/* Confirm delete dialog */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#111827] p-6 shadow-2xl space-y-4">
@@ -1052,12 +1001,10 @@ export default function WarehousePage() {
               </div>
               <div>
                 <p className="font-semibold text-foreground">
-                  {deleteConfirm === 'all' ? 'Очистить весь склад?' : `Удалить ${selectedIds.size} позиц.?`}
+                  {deleteConfirm === 'all' ? 'Очистить весь каталог?' : `Удалить ${selectedIds.size} поз.?`}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {deleteConfirm === 'all'
-                    ? 'Все остатки на складе будут удалены. Это действие нельзя отменить.'
-                    : 'Выбранные позиции будут удалены со склада.'}
+                  Будут удалены остатки из каталога и склада. Это действие нельзя отменить.
                 </p>
               </div>
             </div>
@@ -1072,7 +1019,7 @@ export default function WarehousePage() {
                 disabled={deleting}
               >
                 {deleting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1.5 h-3.5 w-3.5" />}
-                {deleteConfirm === 'all' ? 'Да, очистить' : 'Удалить'}
+                Удалить
               </Button>
             </div>
           </div>

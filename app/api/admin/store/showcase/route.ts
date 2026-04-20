@@ -24,7 +24,41 @@ function normalizeQty(v: unknown) {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
 }
 
-// ─── GET: showcase balances for a company ────────────────────────────────────
+async function ensureCompanyLocation(supabase: any, companyId: string, locationType: 'warehouse' | 'catalog' | 'point_display') {
+  const { data: existing } = await supabase
+    .from('inventory_locations')
+    .select('id, name, code, location_type, is_active')
+    .eq('company_id', companyId)
+    .eq('location_type', locationType)
+    .maybeSingle()
+  if (existing?.id) return existing
+
+  const { data: company } = await supabase
+    .from('companies')
+    .select('id, name, code, organization_id')
+    .eq('id', companyId)
+    .maybeSingle()
+  if (!company?.id) throw new Error('company-not-found')
+
+  const prefix = locationType === 'warehouse' ? 'WH' : locationType === 'catalog' ? 'CAT' : 'PD'
+  const namePrefix = locationType === 'warehouse' ? 'Склад' : locationType === 'catalog' ? 'Каталог' : 'Витрина'
+  const { data: created, error: insErr } = await supabase
+    .from('inventory_locations')
+    .insert({
+      company_id: companyId,
+      organization_id: company.organization_id,
+      name: `${namePrefix} — ${company.name}`,
+      code: company.code ? `${prefix}-${company.code}` : null,
+      location_type: locationType,
+      is_active: true,
+    })
+    .select('id, name, code, location_type, is_active')
+    .single()
+  if (insErr) throw insErr
+  return created
+}
+
+// ─── GET: showcase = catalog - warehouse (virtual) ────────────────────────────
 
 export async function GET(request: Request) {
   try {
@@ -51,48 +85,59 @@ export async function GET(request: Request) {
       if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
     }
 
-    // Fetch warehouse (total) and backroom (physical back storage) locations
-    // showcase = warehouse - backroom (virtual, computed)
-    const [{ data: warehouseLoc }, { data: backroomLoc }] = await Promise.all([
-      supabase.from('inventory_locations').select('id, name').eq('company_id', companyId).eq('location_type', 'warehouse').maybeSingle(),
-      supabase.from('inventory_locations').select('id, name').eq('company_id', companyId).eq('location_type', 'backroom').maybeSingle(),
+    const [catalogLoc, warehouseLoc] = await Promise.all([
+      ensureCompanyLocation(supabase, companyId, 'catalog'),
+      ensureCompanyLocation(supabase, companyId, 'warehouse'),
     ])
 
-    let balances: any[] = []
-    if (warehouseLoc?.id) {
-      const locationIds = [warehouseLoc.id, backroomLoc?.id].filter(Boolean)
-      const { data: allBal, error: balErr } = await supabase
-        .from('inventory_balances')
-        .select('location_id, item_id, quantity, item:item_id(id, name, barcode, unit, sale_price, low_stock_threshold, category_id, category:category_id(id, name))')
-        .in('location_id', locationIds)
-      if (balErr) throw balErr
+    const { data: balanceRows, error: balErr } = await supabase
+      .from('inventory_balances')
+      .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, low_stock_threshold, category_id, category:category_id(id, name))')
+      .in('location_id', [catalogLoc.id, warehouseLoc.id])
+    if (balErr) throw balErr
 
-      const warehouseMap = new Map<string, any>()
-      const backroomMap = new Map<string, any>()
-      ;(allBal || []).forEach((b: any) => {
-        if (b.location_id === warehouseLoc.id) warehouseMap.set(b.item_id, b)
-        else if (backroomLoc?.id && b.location_id === backroomLoc.id) backroomMap.set(b.item_id, b)
-      })
-
-      // All warehouse items appear on showcase (with reduced qty if some are in backroom)
-      balances = Array.from(warehouseMap.keys()).map((itemId) => {
-        const wh = warehouseMap.get(itemId)
-        const br = backroomMap.get(itemId)
-        const totalQty = Number(wh?.quantity || 0)
-        const backroomQty = Number(br?.quantity || 0)
-        const showcaseQty = Math.max(0, totalQty - backroomQty)
-        return {
+    // Compute showcase = catalog - warehouse per item
+    const byItem = new Map<string, any>()
+    for (const row of balanceRows || []) {
+      const itemId = row.item_id
+      if (!itemId) continue
+      let bucket = byItem.get(itemId)
+      if (!bucket) {
+        bucket = {
           item_id: itemId,
-          item: wh.item,
-          quantity: showcaseQty,           // on display
-          catalog_quantity: totalQty,       // total
-          warehouse_quantity: backroomQty,  // in backroom
-          updated_at: wh.updated_at,
+          item: row.item,
+          catalog_quantity: 0,
+          warehouse_quantity: 0,
+          updated_at: row.updated_at,
         }
-      }).sort((a, b) => b.quantity - a.quantity)
+        byItem.set(itemId, bucket)
+      }
+      if (row.location_id === catalogLoc.id) bucket.catalog_quantity = Number(row.quantity) || 0
+      else if (row.location_id === warehouseLoc.id) bucket.warehouse_quantity = Number(row.quantity) || 0
+      if (row.updated_at > bucket.updated_at) bucket.updated_at = row.updated_at
     }
 
-    // Pending requests from this company
+    const balances = Array.from(byItem.values())
+      .map((b) => {
+        const showcaseQty = Math.max(0, b.catalog_quantity - b.warehouse_quantity)
+        return {
+          ...b,
+          quantity: showcaseQty, // back-compat: "quantity" = showcase
+          showcase_quantity: showcaseQty,
+        }
+      })
+      .filter((b) => b.showcase_quantity > 0 || b.catalog_quantity > 0)
+      .sort((a, b) => b.showcase_quantity - a.showcase_quantity)
+
+    // Items available in warehouse for request dropdown
+    const warehouseItemsList = Array.from(byItem.values())
+      .filter((b) => b.warehouse_quantity > 0)
+      .map((b) => ({
+        item_id: b.item_id,
+        item: b.item,
+        quantity: b.warehouse_quantity,
+      }))
+
     const { data: pendingRequests } = await supabase
       .from('inventory_requests')
       .select('id, status, created_at, comment, items:inventory_request_items(id, item_id, requested_qty, approved_qty, item:item_id(id, name))')
@@ -103,11 +148,11 @@ export async function GET(request: Request) {
     return json({
       ok: true,
       data: {
-        showcase: warehouseLoc ? { id: warehouseLoc.id, name: 'Витрина' } : null,
-        warehouse: backroomLoc || null,
+        catalog: catalogLoc,
+        warehouse: warehouseLoc,
         companies: companies || [],
         balances,
-        warehouseItems: balances.filter((b) => b.warehouse_quantity > 0),
+        warehouseItems: warehouseItemsList,
         pendingRequests: pendingRequests || [],
         selectedCompanyId: companyId,
       },
@@ -118,7 +163,7 @@ export async function GET(request: Request) {
   }
 }
 
-// ─── POST: create request from showcase to warehouse ─────────────────────────
+// ─── POST: create request / return to warehouse ───────────────────────────────
 
 export async function POST(request: Request) {
   try {
@@ -147,67 +192,39 @@ export async function POST(request: Request) {
         (body.items || [])
           .map((i: any) => ({
             item_id: String(i.item_id || '').trim(),
-            requested_qty: Math.round((normalizeQty(i.requested_qty) + Number.EPSILON) * 1000) / 1000,
+            requested_qty: normalizeQty(i.requested_qty),
             comment: i.comment ? String(i.comment).trim() : null,
           }))
           .filter((i: any) => i.item_id && i.requested_qty > 0)
 
       if (items.length === 0) return json({ error: 'items-required' }, 400)
 
-      // Source = warehouse, Target = point_display
-      // When approved: warehouse decreases → showcase (= catalog - warehouse) auto-increases
-      const { data: warehouse, error: whErr } = await supabase
-        .from('inventory_locations')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('location_type', 'warehouse')
-        .eq('is_active', true)
-        .maybeSingle()
-      if (whErr) throw whErr
-      if (!warehouse?.id) return json({ error: 'warehouse-not-found' }, 404)
-
-      // Ensure point_display exists (for legacy compatibility)
-      let showcaseId: string | null = null
-      const { data: pdLoc } = await supabase
-        .from('inventory_locations')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('location_type', 'point_display')
-        .maybeSingle()
-      if (pdLoc?.id) {
-        showcaseId = pdLoc.id
-      } else {
-        // Create point_display if missing
-        const { data: company } = await supabase.from('companies').select('name, code, organization_id').eq('id', companyId).maybeSingle()
-        const { data: newPD } = await supabase
-          .from('inventory_locations')
-          .insert({ company_id: companyId, organization_id: company?.organization_id, name: `Витрина — ${company?.name || companyId}`, location_type: 'point_display', is_active: true })
-          .select('id').single()
-        showcaseId = newPD?.id ?? warehouse.id
-      }
+      // Source = warehouse (decreases on approval → virtual showcase auto-grows)
+      // Target = point_display (legacy, kept for inventory_decide_request compatibility)
+      const [warehouseLoc, showcaseLoc] = await Promise.all([
+        ensureCompanyLocation(supabase, companyId, 'warehouse'),
+        ensureCompanyLocation(supabase, companyId, 'point_display'),
+      ])
 
       const actorUserId = access.staffMember?.id || null
 
       const result = await createInventoryRequest(supabase, {
-        source_location_id: warehouse.id,
-        target_location_id: showcaseId!,
+        source_location_id: warehouseLoc.id,
+        target_location_id: showcaseLoc.id,
         requesting_company_id: companyId,
         comment: String(body.comment || '').trim() || null,
         created_by: actorUserId,
         items,
       })
 
-      // ── Telegram notification ──────────────────────────────────────────────
       void (async () => {
         try {
-          // Company name
           const { data: company } = await supabase
             .from('companies')
             .select('name')
             .eq('id', companyId)
             .maybeSingle()
 
-          // Item names
           const itemIds = items.map((i) => i.item_id)
           const { data: itemRows } = await supabase
             .from('inventory_items')
@@ -216,7 +233,6 @@ export async function POST(request: Request) {
           const itemMap: Record<string, { name: string; unit: string }> = {}
           for (const r of itemRows || []) itemMap[r.id] = { name: r.name, unit: r.unit }
 
-          // Staff owners/managers with telegram
           const { data: staffRows } = await supabase
             .from('staff')
             .select('telegram_chat_id, full_name')
@@ -224,7 +240,6 @@ export async function POST(request: Request) {
             .in('role', ['owner', 'manager'])
             .not('telegram_chat_id', 'is', null)
 
-          // Creator name from staff member
           const createdByName = access.staffMember
             ? (access.staffMember as any).full_name || (access.staffMember as any).name || null
             : null
@@ -253,7 +268,7 @@ export async function POST(request: Request) {
       return json({ ok: true, data: result })
     }
 
-    // ── returnToWarehouse (move items back from showcase to warehouse) ────────
+    // ── returnToWarehouse: just increment warehouse (showcase is virtual) ──────
     if (body.action === 'returnToWarehouse') {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
@@ -269,39 +284,48 @@ export async function POST(request: Request) {
 
       if (items.length === 0) return json({ error: 'items-required' }, 400)
 
-      // showcase = warehouse - backroom (virtual)
-      // "Return to backroom" = increase backroom_balance (showcase auto-decreases)
-      const { data: backroomLoc } = await supabase
-        .from('inventory_locations')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('location_type', 'backroom')
-        .maybeSingle()
-      if (!backroomLoc?.id) return json({ error: 'backroom-not-found' }, 404)
+      const [catalogLoc, warehouseLoc] = await Promise.all([
+        ensureCompanyLocation(supabase, companyId, 'catalog'),
+        ensureCompanyLocation(supabase, companyId, 'warehouse'),
+      ])
 
       const actorUserId = access.staffMember?.id || null
       const now = new Date().toISOString()
 
       for (const item of items) {
-        const { data: brBal } = await supabase
+        // Check showcase (catalog - warehouse) has enough
+        const { data: cBal } = await supabase
           .from('inventory_balances')
           .select('quantity')
-          .eq('location_id', backroomLoc.id)
+          .eq('location_id', catalogLoc.id)
           .eq('item_id', item.item_id)
           .maybeSingle()
+        const { data: wBal } = await supabase
+          .from('inventory_balances')
+          .select('quantity')
+          .eq('location_id', warehouseLoc.id)
+          .eq('item_id', item.item_id)
+          .maybeSingle()
+        const catalogQty = Number(cBal?.quantity || 0)
+        const warehouseQty = Number(wBal?.quantity || 0)
+        const showcaseQty = Math.max(0, catalogQty - warehouseQty)
+        if (item.quantity > showcaseQty) {
+          return json({ error: 'showcase-insufficient', item_id: item.item_id, showcase: showcaseQty, requested: item.quantity }, 400)
+        }
 
-        const brQty = Number(brBal?.quantity || 0) + item.quantity
+        const newWarehouse = warehouseQty + item.quantity
         await supabase
           .from('inventory_balances')
-          .upsert({ location_id: backroomLoc.id, item_id: item.item_id, quantity: brQty, updated_at: now }, { onConflict: 'location_id,item_id' })
+          .upsert({ location_id: warehouseLoc.id, item_id: item.item_id, quantity: newWarehouse, updated_at: now }, { onConflict: 'location_id,item_id' })
 
         await supabase.from('inventory_movements').insert({
           item_id: item.item_id,
-          to_location_id: backroomLoc.id,
+          from_location_id: null,
+          to_location_id: warehouseLoc.id,
           quantity: item.quantity,
           movement_type: 'transfer',
-          reference_type: 'move_to_backroom',
-          comment: String(body.comment || '').trim() || 'Убрать с витрины в подсобку',
+          reference_type: 'return_to_warehouse',
+          comment: String(body.comment || '').trim() || 'Возврат с витрины на склад',
           created_by: actorUserId,
           created_at: now,
         })

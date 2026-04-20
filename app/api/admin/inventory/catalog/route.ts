@@ -18,15 +18,15 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return out
 }
 
-/** Остаток из импорта всегда на центральный склад: main-warehouse → имя с «централ» → первый по алфавиту (ru). */
-function pickCentralWarehouseId(
+/** Остаток из импорта всегда на каталог организации: main-catalog → имя с «катал» → первый по алфавиту (ru). */
+function pickCentralCatalogId(
   rows: Array<{ id: string; name?: string | null; code?: string | null }> | null | undefined,
 ): string | undefined {
   const list = rows || []
   if (!list.length) return undefined
-  const byCode = list.find((r) => String(r.code || '').toLowerCase() === 'main-warehouse')
+  const byCode = list.find((r) => String(r.code || '').toLowerCase() === 'main-catalog')
   if (byCode?.id) return String(byCode.id)
-  const byName = list.find((r) => /централ/i.test(String(r.name || '')))
+  const byName = list.find((r) => /катал/i.test(String(r.name || '')))
   if (byName?.id) return String(byName.id)
   const sorted = [...list].sort((a, b) =>
     String(a.name || '').localeCompare(String(b.name || ''), 'ru', { sensitivity: 'base' }),
@@ -78,29 +78,30 @@ export async function GET(request: Request) {
 
     if (balancesError) throw balancesError
 
-    // Split balances by location_type: warehouse vs point_display (showcase)
+    // Новая модель: catalog = итого, warehouse = аллокация, showcase = catalog - warehouse (виртуально)
+    const catalogMap: Record<string, number> = {}
     const warehouseMap: Record<string, number> = {}
-    const showcaseMap: Record<string, number> = {}
     for (const b of balances || []) {
       const locType = (Array.isArray(b.loc) ? b.loc[0] : b.loc)?.location_type
       const qty = b.quantity || 0
-      if (locType === 'warehouse') {
+      if (locType === 'catalog') {
+        catalogMap[b.item_id] = (catalogMap[b.item_id] || 0) + qty
+      } else if (locType === 'warehouse') {
         warehouseMap[b.item_id] = (warehouseMap[b.item_id] || 0) + qty
-      } else {
-        showcaseMap[b.item_id] = (showcaseMap[b.item_id] || 0) + qty
       }
     }
 
     // Normalize items (category may come back as array from supabase joins)
     const normalized = (items || []).map((item: any) => {
+      const catalogQty = catalogMap[item.id] || 0
       const wh = warehouseMap[item.id] || 0
-      const sh = showcaseMap[item.id] || 0
+      const sh = Math.max(0, catalogQty - wh)
       return {
         ...item,
         category: Array.isArray(item.category) ? item.category[0] || null : item.category || null,
         warehouse_qty: wh,
         showcase_qty: sh,
-        total_balance: wh + sh,
+        total_balance: catalogQty,
       }
     })
 
@@ -391,20 +392,20 @@ export async function POST(request: Request) {
         (row) => typeof row.stock_qty === 'number' && Number.isFinite(row.stock_qty) && row.stock_qty >= 0,
       )
       if (rowsWithStock.length > 0 && orgId) {
-        const { data: whList, error: whErr } = await supabase
+        const { data: catList, error: catLocErr } = await supabase
           .from('inventory_locations')
           .select('id, name, code')
-          .eq('location_type', 'warehouse')
+          .eq('location_type', 'catalog')
           .eq('is_active', true)
           .eq('organization_id', orgId)
 
-        if (whErr) throw whErr
-        const warehouseId = pickCentralWarehouseId(whList)
-        if (!warehouseId) {
+        if (catLocErr) throw catLocErr
+        const catalogId = pickCentralCatalogId(catList)
+        if (!catalogId) {
           return json(
             {
               error:
-                'В организации нет активного центрального склада (warehouse) — добавьте склад или включите существующий, чтобы записать остатки из Excel.',
+                'В организации нет активного каталога (catalog location) — создайте каталог для компании, чтобы записать остатки из Excel.',
             },
             400,
           )
@@ -430,7 +431,7 @@ export async function POST(request: Request) {
           const itemId = barcodeToId.get(row.barcode)
           if (!itemId) continue
           upserts.push({
-            location_id: warehouseId,
+            location_id: catalogId,
             item_id: itemId,
             quantity: Math.round((row.stock_qty as number + Number.EPSILON) * 1000) / 1000,
           })

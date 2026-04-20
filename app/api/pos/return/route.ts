@@ -120,10 +120,22 @@ export async function POST(request: Request) {
       throw returnError
     }
 
-    // Return inventory back to location
+    // Return inventory back to catalog (не на point_display — мы теперь в catalog-модели)
+    const { data: catalogLoc, error: catalogError } = await supabase
+      .from('inventory_locations')
+      .select('id')
+      .eq('company_id', originalSale.company_id)
+      .eq('location_type', 'catalog')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+    if (catalogError) throw catalogError
+    if (!catalogLoc?.id) {
+      return json({ error: 'Не найдена catalog-локация компании' }, 500)
+    }
     for (const item of items) {
       await supabase.rpc('inventory_apply_balance_delta', {
-        p_location_id: originalSale.location_id,
+        p_location_id: catalogLoc.id,
         p_item_id: item.item_id,
         p_delta: item.quantity,
       })

@@ -102,7 +102,7 @@ export default function ShowcasePage() {
   const [showcase, setShowcase] = useState<ShowcaseLocation>(null)
   const [warehouse, setWarehouse] = useState<WarehouseLocation>(null)
   const [balances, setBalances] = useState<BalanceItem[]>([])
-  const [warehouseItems, setWarehouseItems] = useState<BalanceItem[]>([])
+  const [warehouseItems, setWarehouseItems] = useState<WarehouseItem[]>([])
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -511,7 +511,7 @@ export default function ShowcasePage() {
                             <option value="">Выберите товар</option>
                             {warehouseItems.map((wi) => (
                               <option key={wi.item_id} value={wi.item_id}>
-                                {wi.item?.name || wi.item_id} · {wi.warehouse_quantity} {wi.item?.unit || 'шт'} на складе
+                                {wi.item?.name || wi.item_id} · {wi.quantity} {wi.item?.unit || 'шт'} на складе
                               </option>
                             ))}
                           </select>
@@ -625,9 +625,9 @@ export default function ShowcasePage() {
                             className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-amber-400/50"
                           >
                             <option value="">Выберите товар</option>
-                            {balances.filter((b) => Number(b.catalog_quantity) > 0).map((b) => (
+                            {balances.filter((b) => Number(b.quantity) > 0).map((b) => (
                               <option key={b.item_id} value={b.item_id}>
-                                {b.item?.name || b.item_id} · {b.warehouse_quantity} {b.item?.unit || 'шт'} на складе
+                                {b.item?.name || b.item_id} · {b.quantity} {b.item?.unit || 'шт'} на витрине
                               </option>
                             ))}
                           </select>

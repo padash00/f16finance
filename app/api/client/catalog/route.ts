@@ -11,7 +11,7 @@ function uniqueStrings(values: string[]) {
   return [...new Set(values.map((v) => String(v || '').trim()).filter(Boolean))]
 }
 
-/** Read-only витрина: товары организаций, к чьим точкам привязан гость. Остатки — только с витрин точек (point_display). */
+/** Read-only витрина: товары организаций, к чьим точкам привязан гость. Остатки — витрина = catalog - warehouse по компании. */
 export async function GET(request: Request) {
   try {
     const context = await getRequestCustomerContext(request)
@@ -67,29 +67,61 @@ export async function GET(request: Request) {
 
     if (itemsError) throw itemsError
 
+    // Catalog-модель: витрина = catalog - warehouse per company. Суммируем по всем компаниям.
     const { data: locRows, error: locError } = await admin
       .from('inventory_locations')
-      .select('id')
+      .select('id, company_id, location_type')
       .in('company_id', companyIds)
-      .eq('location_type', 'point_display')
+      .in('location_type', ['catalog', 'warehouse'])
       .eq('is_active', true)
 
     if (locError) throw locError
 
-    const locationIds = (locRows || []).map((l: any) => String(l.id)).filter(Boolean)
+    const catalogLocIds: string[] = []
+    const warehouseLocIds: string[] = []
+    const locCompanyType = new Map<string, { companyId: string; type: string }>()
+    for (const row of locRows || []) {
+      const id = String((row as any).id)
+      const companyId = String((row as any).company_id || '')
+      const type = String((row as any).location_type || '')
+      if (!id || !companyId) continue
+      locCompanyType.set(id, { companyId, type })
+      if (type === 'catalog') catalogLocIds.push(id)
+      else if (type === 'warehouse') warehouseLocIds.push(id)
+    }
+
+    const allLocIds = [...catalogLocIds, ...warehouseLocIds]
     const qtyByItem: Record<string, number> = {}
 
-    if (locationIds.length) {
+    if (allLocIds.length) {
       const { data: balRows, error: balError } = await admin
         .from('inventory_balances')
-        .select('item_id, quantity')
-        .in('location_id', locationIds)
+        .select('item_id, location_id, quantity')
+        .in('location_id', allLocIds)
 
       if (balError) throw balError
+
+      // Собираем catalog/warehouse qty per (company, item)
+      const catalogByCompanyItem = new Map<string, number>()
+      const warehouseByCompanyItem = new Map<string, number>()
       for (const row of balRows || []) {
-        const id = String((row as any).item_id || '')
-        if (!id) continue
-        qtyByItem[id] = (qtyByItem[id] || 0) + Number((row as any).quantity || 0)
+        const itemId = String((row as any).item_id || '')
+        const locId = String((row as any).location_id || '')
+        const qty = Number((row as any).quantity || 0)
+        const meta = locCompanyType.get(locId)
+        if (!itemId || !meta) continue
+        const key = `${meta.companyId}:${itemId}`
+        if (meta.type === 'catalog') catalogByCompanyItem.set(key, (catalogByCompanyItem.get(key) || 0) + qty)
+        else if (meta.type === 'warehouse') warehouseByCompanyItem.set(key, (warehouseByCompanyItem.get(key) || 0) + qty)
+      }
+
+      // Для каждого catalog-ключа вычисляем showcase = max(0, catalog - warehouse) и агрегируем по item
+      for (const [key, catalogQty] of catalogByCompanyItem) {
+        const [, itemId] = key.split(':')
+        if (!itemId) continue
+        const warehouseQty = warehouseByCompanyItem.get(key) || 0
+        const showcaseQty = Math.max(0, catalogQty - warehouseQty)
+        qtyByItem[itemId] = (qtyByItem[itemId] || 0) + showcaseQty
       }
     }
 

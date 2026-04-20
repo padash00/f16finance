@@ -962,8 +962,8 @@ export function CatalogPageContent() {
             <p className="text-sm text-muted-foreground mb-4">
               Поддерживается типичный экспорт из Wipon и похожие файлы. Колонки: «Название», «Штрихкод»,
               «Единица измерения», «Цена продажи», «Цена закупки», «Категория». Колонка «Остаток» из файла
-              всегда записывается только на центральный склад организации (витрины точек не меняются);
-              на точку товар потом ведётся заявками. Нужна выбранная организация (или одна организация в системе).
+              записывается в каталог организации — это полный объём товаров в магазине. Склад (подсобка)
+              редактируется вручную, витрина = каталог − склад. Нужна выбранная организация (или одна организация в системе).
             </p>
 
             {/* File drop zone */}
@@ -1039,7 +1039,7 @@ export function CatalogPageContent() {
 
                 {(preview.stock_rows || 0) > 0 ? (
                   <p className="text-xs text-blue-600 dark:text-blue-400">
-                    Остаток для {preview.stock_rows} строк из файла будет записан только на центральный склад (не на витрины).
+                    Остаток для {preview.stock_rows} строк из файла будет записан в каталог (итого по магазину).
                   </p>
                 ) : null}
 
@@ -1103,7 +1103,7 @@ export function CatalogPageContent() {
                   <p className="text-sm text-muted-foreground mt-1">
                     Добавлено: <strong>{importResult.created}</strong> · Обновлено: <strong>{importResult.updated}</strong>
                     {typeof importResult.stock_updated === 'number' && importResult.stock_updated > 0
-                      ? <> · Остатки на складе: <strong>{importResult.stock_updated}</strong></>
+                      ? <> · Остатки в каталоге: <strong>{importResult.stock_updated}</strong></>
                       : null}
                   </p>
                 </div>

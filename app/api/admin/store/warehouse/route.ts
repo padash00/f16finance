@@ -23,7 +23,7 @@ function normalizeQty(v: unknown) {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
 }
 
-async function ensureCompanyLocation(supabase: any, companyId: string, locationType: 'warehouse' | 'catalog' | 'backroom') {
+async function ensureCompanyLocation(supabase: any, companyId: string, locationType: 'warehouse' | 'catalog') {
   const { data: existing, error: fetchErr } = await supabase
     .from('inventory_locations')
     .select('id, name, code, location_type, is_active')
@@ -42,8 +42,8 @@ async function ensureCompanyLocation(supabase: any, companyId: string, locationT
   if (compErr) throw compErr
   if (!company?.id) throw new Error('company-not-found')
 
-  const prefix = locationType === 'warehouse' ? 'WH' : locationType === 'backroom' ? 'BR' : 'CAT'
-  const namePrefix = locationType === 'warehouse' ? 'Склад' : locationType === 'backroom' ? 'Подсобка' : 'Каталог'
+  const prefix = locationType === 'warehouse' ? 'WH' : 'CAT'
+  const namePrefix = locationType === 'warehouse' ? 'Склад' : 'Каталог'
   const { data: created, error: insErr } = await supabase
     .from('inventory_locations')
     .insert({
@@ -61,12 +61,7 @@ async function ensureCompanyLocation(supabase: any, companyId: string, locationT
   return created
 }
 
-/** @deprecated use ensureCompanyLocation(supabase, companyId, 'warehouse') */
-async function ensureCompanyWarehouse(supabase: any, companyId: string) {
-  return ensureCompanyLocation(supabase, companyId, 'warehouse')
-}
-
-// ─── GET: warehouse balances for a company ───────────────────────────────────
+// ─── GET: catalog + warehouse balances for a company ────────────────────────
 
 export async function GET(request: Request) {
   try {
@@ -81,65 +76,63 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    // Only show companies with store enabled (show_in_structure = true)
     const companiesQuery = supabase.from('companies').select('id, name, code').eq('show_in_structure', true).order('name')
     if (companyScope.allowedCompanyIds) companiesQuery.in('id', companyScope.allowedCompanyIds)
     const { data: companies, error: companiesErr } = await companiesQuery
     if (companiesErr) throw companiesErr
 
-    // Determine which company to show
     let companyId = url.searchParams.get('company_id') || null
     if (!companyId) {
       companyId = (companies || [])[0]?.id || null
     }
     if (!companyId) return json({ error: 'company-required' }, 400)
 
-    // Access check (when scope is limited)
     if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
       if (!companyScope.allowedCompanyIds.includes(companyId)) {
         return json({ error: 'forbidden' }, 403)
       }
     }
 
-    // Ensure warehouse and backroom locations exist
-    const [warehouse, backroom] = await Promise.all([
+    const [catalog, warehouse] = await Promise.all([
+      ensureCompanyLocation(supabase, companyId, 'catalog'),
       ensureCompanyLocation(supabase, companyId, 'warehouse'),
-      ensureCompanyLocation(supabase, companyId, 'backroom'),
     ])
 
-    // Fetch balances for both locations in one query
-    const { data: allBalances, error: balErr } = await supabase
+    const { data: balanceRows, error: balErr } = await supabase
       .from('inventory_balances')
       .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name))')
-      .in('location_id', [warehouse.id, backroom.id])
+      .in('location_id', [catalog.id, warehouse.id])
     if (balErr) throw balErr
 
-    // Split into warehouse (total) and backroom (physical back storage) maps
-    const warehouseMap = new Map<string, any>()
-    const backroomMap = new Map<string, any>()
-    ;(allBalances || []).forEach((b: any) => {
-      if (b.location_id === warehouse.id) warehouseMap.set(b.item_id, b)
-      else if (b.location_id === backroom.id) backroomMap.set(b.item_id, b)
-    })
-
-    // All items = all warehouse items (warehouse is the source of truth / catalog total)
-    const balances = Array.from(warehouseMap.keys()).map((itemId) => {
-      const wh = warehouseMap.get(itemId)
-      const br = backroomMap.get(itemId)
-      const totalQty = Number(wh?.quantity || 0)
-      const backroomQty = Number(br?.quantity || 0)
-      return {
-        item_id: itemId,
-        item: wh.item,
-        catalog_quantity: totalQty,       // total = warehouse
-        warehouse_quantity: backroomQty,   // "на складе" = в подсобке
-        showcase_quantity: Math.max(0, totalQty - backroomQty), // на витрине
-        quantity: totalQty,
-        updated_at: wh.updated_at,
+    // Merge by item_id: {item, catalog_quantity, warehouse_quantity, showcase_quantity}
+    const byItem = new Map<string, any>()
+    for (const row of balanceRows || []) {
+      const itemId = row.item_id
+      if (!itemId) continue
+      let bucket = byItem.get(itemId)
+      if (!bucket) {
+        bucket = {
+          item_id: itemId,
+          item: row.item,
+          catalog_quantity: 0,
+          warehouse_quantity: 0,
+          updated_at: row.updated_at,
+        }
+        byItem.set(itemId, bucket)
       }
-    }).sort((a, b) => b.catalog_quantity - a.catalog_quantity)
+      if (row.location_id === catalog.id) bucket.catalog_quantity = Number(row.quantity) || 0
+      else if (row.location_id === warehouse.id) bucket.warehouse_quantity = Number(row.quantity) || 0
+      if (row.updated_at > bucket.updated_at) bucket.updated_at = row.updated_at
+    }
 
-    // Categories for filter
+    const balances = Array.from(byItem.values())
+      .map((b) => ({
+        ...b,
+        quantity: b.catalog_quantity, // back-compat: "quantity" = catalog total
+        showcase_quantity: Math.max(0, b.catalog_quantity - b.warehouse_quantity),
+      }))
+      .sort((a, b) => b.catalog_quantity - a.catalog_quantity)
+
     const { data: categories } = await supabase
       .from('inventory_categories')
       .select('id, name')
@@ -148,10 +141,10 @@ export async function GET(request: Request) {
     return json({
       ok: true,
       data: {
+        catalog,
         warehouse,
-        backroom,
         companies: companies || [],
-        balances: balances || [],
+        balances,
         categories: categories || [],
         selectedCompanyId: companyId,
       },
@@ -162,7 +155,7 @@ export async function GET(request: Request) {
   }
 }
 
-// ─── POST: add stock / lookup barcode / create item ──────────────────────────
+// ─── POST: add stock / lookup barcode / create item / set warehouse ─────────
 
 export async function POST(request: Request) {
   try {
@@ -179,7 +172,6 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null)
     if (!body?.action) return json({ error: 'action-required' }, 400)
 
-    // ── lookupBarcode ──────────────────────────────────────────────────────────
     if (body.action === 'lookupBarcode') {
       const barcode = String(body.barcode || '').trim()
       if (!barcode) return json({ error: 'barcode-required' }, 400)
@@ -194,7 +186,6 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { item: item || null } })
     }
 
-    // ── createItem (new item not in catalog) ───────────────────────────────────
     if (body.action === 'createItem') {
       const name = String(body.name || '').trim()
       const barcode = String(body.barcode || '').trim()
@@ -225,8 +216,7 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { item } })
     }
 
-    // ── addStock (receipt-style add to warehouse) ──────────────────────────────
-    // Accepts items with either { item_id } or { barcode, name, unit } — resolves barcodes server-side in bulk
+    // ── addStock: adds to CATALOG (total store stock) ──────────────────────────
     if (body.action === 'addStock') {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
@@ -249,7 +239,6 @@ export async function POST(request: Request) {
 
       if (rawItems.length === 0) return json({ error: 'items-required' }, 400)
 
-      // ── Batch-resolve barcodes → item_ids ──────────────────────────────────
       const needLookup = rawItems.filter((i) => !i.item_id && i.barcode)
       const barcodes = [...new Set(needLookup.map((i) => i.barcode!))]
 
@@ -263,7 +252,6 @@ export async function POST(request: Request) {
         ;(found || []).forEach((row: any) => { catalogByBarcode[row.barcode] = row.id })
       }
 
-      // ── Create missing items (batch) ───────────────────────────────────────
       const orgId = access.activeOrganization?.id || null
       const toCreate = needLookup.filter((i) => i.barcode && !catalogByBarcode[i.barcode!] && i.name)
 
@@ -277,7 +265,6 @@ export async function POST(request: Request) {
           organization_id: orgId,
           is_active: true,
         }))
-        // upsert to handle duplicate barcodes gracefully
         const { data: created } = await supabase
           .from('inventory_items')
           .upsert(inserts, { onConflict: 'barcode', ignoreDuplicates: false })
@@ -285,26 +272,24 @@ export async function POST(request: Request) {
         ;(created || []).forEach((row: any) => { catalogByBarcode[row.barcode] = row.id })
       }
 
-      // ── Build final items list ─────────────────────────────────────────────
       const resolvedItems: Array<{ item_id: string; quantity: number; unit_cost: number }> = []
       for (const raw of rawItems) {
         const itemId = raw.item_id || (raw.barcode ? catalogByBarcode[raw.barcode] : undefined)
-        if (!itemId) continue // couldn't resolve — skip
+        if (!itemId) continue
         resolvedItems.push({ item_id: itemId, quantity: raw.quantity, unit_cost: raw.unit_cost })
       }
 
       if (resolvedItems.length === 0) return json({ error: 'no-items-resolved' }, 400)
 
-      // addStock writes to WAREHOUSE (= total stock / catalog)
-      const warehouse = await ensureCompanyLocation(supabase, companyId, 'warehouse')
+      const catalog = await ensureCompanyLocation(supabase, companyId, 'catalog')
       const actorUserId = access.staffMember?.id || null
       const mode = String(body.mode || 'add') === 'set' ? 'set' : 'add'
       const now = new Date().toISOString()
 
       if (mode === 'set') {
-        // ── SET mode: upsert warehouse to exact quantities (Wipon sync) ──────────
+        // SET mode: upsert catalog to exact quantities (Wipon sync)
         const upserts = resolvedItems.map((item) => ({
-          location_id: warehouse.id,
+          location_id: catalog.id,
           item_id: item.item_id,
           quantity: item.quantity,
           updated_at: now,
@@ -320,8 +305,8 @@ export async function POST(request: Request) {
           movement_type: 'set_stock',
           quantity: item.quantity,
           unit_cost: item.unit_cost,
-          to_location_id: warehouse.id,
-          reference_type: 'warehouse_set',
+          to_location_id: catalog.id,
+          reference_type: 'catalog_set',
           reference_id: null,
           comment: String(body.comment || '').trim() || 'Синхронизация с Wipon',
           created_by: actorUserId,
@@ -331,8 +316,8 @@ export async function POST(request: Request) {
 
         await writeAuditLog(supabase, {
           actorUserId,
-          entityType: 'inventory-warehouse-stock',
-          entityId: warehouse.id,
+          entityType: 'inventory-catalog-stock',
+          entityId: catalog.id,
           action: 'set_stock',
           payload: { company_id: companyId, items_count: resolvedItems.length },
         })
@@ -340,20 +325,20 @@ export async function POST(request: Request) {
         return json({ ok: true, data: { mode: 'set', resolved: resolvedItems.length, skipped: rawItems.length - resolvedItems.length } })
       }
 
-      // ── ADD mode: receipt-style add to warehouse ──────────────────────────────
+      // ADD mode: receipt-style add to catalog
       const result = await postInventoryReceipt(supabase, {
-        location_id: warehouse.id,
+        location_id: catalog.id,
         received_at: now,
         supplier_id: null,
-        comment: String(body.comment || '').trim() || 'Добавлено через склад',
+        comment: String(body.comment || '').trim() || 'Добавлено через каталог',
         created_by: actorUserId,
         items: resolvedItems,
       })
 
       await writeAuditLog(supabase, {
         actorUserId,
-        entityType: 'inventory-warehouse-stock',
-        entityId: warehouse.id,
+        entityType: 'inventory-catalog-stock',
+        entityId: catalog.id,
         action: 'add_stock',
         payload: { company_id: companyId, items_count: resolvedItems.length },
       })
@@ -361,8 +346,8 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { receipt: result, resolved: resolvedItems.length, skipped: rawItems.length - resolvedItems.length } })
     }
 
-    // ── setBackroom: set how many items are physically in the back room ──────────
-    if (body.action === 'setBackroom' || body.action === 'setWarehouse') {
+    // ── setWarehouse: set physical warehouse allocation for items ──────────────
+    if (body.action === 'setWarehouse') {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
 
@@ -373,23 +358,55 @@ export async function POST(request: Request) {
       const itemId = String(body.item_id || '').trim()
       if (!itemId) return json({ error: 'item-id-required' }, 400)
       const qty = normalizeQty(body.quantity)
+      if (qty < 0) return json({ error: 'quantity-invalid' }, 400)
 
-      const backroom = await ensureCompanyLocation(supabase, companyId, 'backroom')
+      const [catalog, warehouse] = await Promise.all([
+        ensureCompanyLocation(supabase, companyId, 'catalog'),
+        ensureCompanyLocation(supabase, companyId, 'warehouse'),
+      ])
+
+      // Enforce: warehouse <= catalog
+      const { data: catalogBal } = await supabase
+        .from('inventory_balances')
+        .select('quantity')
+        .eq('location_id', catalog.id)
+        .eq('item_id', itemId)
+        .maybeSingle()
+      const catalogQty = Number(catalogBal?.quantity || 0)
+      if (qty > catalogQty) return json({ error: 'warehouse-exceeds-catalog', catalogQty }, 400)
+
+      const actorUserId = access.staffMember?.id || null
       const now = new Date().toISOString()
 
-      if (qty <= 0) {
-        await supabase.from('inventory_balances').delete().eq('location_id', backroom.id).eq('item_id', itemId)
-      } else {
-        const { error: upErr } = await supabase
-          .from('inventory_balances')
-          .upsert({ location_id: backroom.id, item_id: itemId, quantity: qty, updated_at: now }, { onConflict: 'location_id,item_id' })
-        if (upErr) throw upErr
-      }
+      const { error: upsertErr } = await supabase
+        .from('inventory_balances')
+        .upsert({ location_id: warehouse.id, item_id: itemId, quantity: qty, updated_at: now }, { onConflict: 'location_id,item_id' })
+      if (upsertErr) throw upsertErr
 
-      return json({ ok: true, data: { item_id: itemId, warehouse_quantity: qty } })
+      await supabase.from('inventory_movements').insert({
+        item_id: itemId,
+        movement_type: 'warehouse_set',
+        quantity: qty,
+        to_location_id: warehouse.id,
+        reference_type: 'warehouse_alloc',
+        reference_id: null,
+        comment: String(body.comment || '').trim() || 'Аллокация склад/витрина',
+        created_by: actorUserId,
+        created_at: now,
+      })
+
+      await writeAuditLog(supabase, {
+        actorUserId,
+        entityType: 'inventory-warehouse-alloc',
+        entityId: warehouse.id,
+        action: 'set_warehouse',
+        payload: { company_id: companyId, item_id: itemId, quantity: qty },
+      })
+
+      return json({ ok: true })
     }
 
-    // ── deleteStock (remove balance rows for given item_ids) ──────────────────
+    // ── deleteStock: remove item entirely from catalog + warehouse ────────────
     if (body.action === 'deleteStock') {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
@@ -406,24 +423,21 @@ export async function POST(request: Request) {
 
       if (!deleteAll && itemIds.length === 0) return json({ error: 'item-ids-required' }, 400)
 
-      // Delete from both warehouse (total) and backroom
-      const [warehouse, backroom] = await Promise.all([
+      const [catalog, warehouse] = await Promise.all([
+        ensureCompanyLocation(supabase, companyId, 'catalog'),
         ensureCompanyLocation(supabase, companyId, 'warehouse'),
-        ensureCompanyLocation(supabase, companyId, 'backroom'),
       ])
       const actorUserId = access.staffMember?.id || null
 
-      for (const locId of [warehouse.id, backroom.id]) {
-        let deleteQuery = supabase.from('inventory_balances').delete().eq('location_id', locId)
-        if (!deleteAll) deleteQuery = deleteQuery.in('item_id', itemIds)
-        const { error: delErr } = await deleteQuery
-        if (delErr) throw delErr
-      }
+      let deleteQuery = supabase.from('inventory_balances').delete().in('location_id', [catalog.id, warehouse.id])
+      if (!deleteAll) deleteQuery = deleteQuery.in('item_id', itemIds)
+      const { error: delErr } = await deleteQuery
+      if (delErr) throw delErr
 
       await writeAuditLog(supabase, {
         actorUserId,
-        entityType: 'inventory-warehouse-stock',
-        entityId: warehouse.id,
+        entityType: 'inventory-catalog-stock',
+        entityId: catalog.id,
         action: 'delete_stock',
         payload: { company_id: companyId, delete_all: deleteAll, item_ids: deleteAll ? [] : itemIds },
       })
