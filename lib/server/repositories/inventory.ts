@@ -315,7 +315,7 @@ export async function fetchStoreReceipts(supabase: AnySupabase, scope?: Inventor
     applyOrganizationFilter(
       supabase
       .from('inventory_items')
-      .select('id, name, barcode, unit, default_purchase_price, item_type, category:category_id(id, name)')
+      .select('id, name, barcode, unit, sale_price, default_purchase_price, item_type, category:category_id(id, name)')
       .eq('is_active', true)
       .order('name', { ascending: true }),
       scope,

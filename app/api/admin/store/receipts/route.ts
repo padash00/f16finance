@@ -25,10 +25,12 @@ type Body = {
     received_at: string
     invoice_number?: string | null
     comment?: string | null
+    update_sale_price?: boolean
     items: Array<{
       item_id: string
       quantity: number
       unit_cost: number
+      sale_price?: number
       comment?: string | null
     }>
   }
@@ -112,12 +114,42 @@ export async function POST(request: Request) {
         : [],
     })
 
+    // Optional: update sale/default purchase prices from receipt lines
+    if (body.payload.update_sale_price === true && Array.isArray(body.payload.items)) {
+      const updates = body.payload.items
+        .map((item) => ({
+          item_id: String(item.item_id || '').trim(),
+          unit_cost: normalizeMoney(item.unit_cost),
+          sale_price: normalizeMoney(item.sale_price),
+        }))
+        .filter((item) => item.item_id && item.sale_price >= 0)
+
+      for (const row of updates) {
+        let query: any = supabase
+          .from('inventory_items')
+          .update({
+            sale_price: row.sale_price,
+            default_purchase_price: row.unit_cost,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', row.item_id)
+        if (!access.isSuperAdmin && access.activeOrganization?.id) {
+          query = query.eq('organization_id', access.activeOrganization.id)
+        }
+        const { error: upErr } = await query
+        if (upErr) throw upErr
+      }
+    }
+
     await writeAuditLog(supabase as any, {
       actorUserId,
       entityType: 'inventory-receipt',
       entityId: String(result?.receipt_id || result?.id || ''),
       action: 'create',
-      payload: result,
+      payload: {
+        ...result,
+        update_sale_price: body.payload.update_sale_price === true,
+      },
     })
 
     return json({ ok: true, data: result })

@@ -36,6 +36,7 @@ type InventoryItem = {
   name: string
   barcode: string
   unit: string
+  sale_price: number
   default_purchase_price: number
   item_type: string
   category?: { id: string; name: string } | null
@@ -73,6 +74,8 @@ type ReceiptLine = {
   item_id: string
   quantity: string
   unit_cost: string
+  sale_price: string
+  markup_percent: string
   comment: string
 }
 
@@ -137,8 +140,19 @@ const emptyLine = (): ReceiptLine => ({
   item_id: '',
   quantity: '',
   unit_cost: '',
+  sale_price: '',
+  markup_percent: '',
   comment: '',
 })
+
+function calcMarkupPercent(unitCostRaw: string, salePriceRaw: string) {
+  const unitCost = parseMoney(unitCostRaw)
+  const salePrice = parseMoney(salePriceRaw)
+  if (unitCost <= 0) return ''
+  const pct = ((salePrice - unitCost) / unitCost) * 100
+  if (!Number.isFinite(pct)) return ''
+  return String(Math.round((pct + Number.EPSILON) * 100) / 100)
+}
 
 export default function StoreReceiptsPage() {
   const [data, setData] = useState<ReceiptsResponse['data'] | null>(null)
@@ -153,6 +167,7 @@ export default function StoreReceiptsPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<ReceiptLine[]>([emptyLine()])
+  const [updateSalePrice, setUpdateSalePrice] = useState(true)
   const [quickQuery, setQuickQuery] = useState('')
   const [quickError, setQuickError] = useState<string | null>(null)
   const quickInputRef = useRef<HTMLInputElement>(null)
@@ -215,6 +230,9 @@ export default function StoreReceiptsPage() {
             ...line,
             quantity: String(nextQty),
             unit_cost: line.unit_cost || String(item.default_purchase_price || ''),
+            sale_price: line.sale_price || String(item.sale_price || ''),
+            markup_percent:
+              line.markup_percent || calcMarkupPercent(line.unit_cost || String(item.default_purchase_price || ''), line.sale_price || String(item.sale_price || '')),
           }
         })
       }
@@ -223,9 +241,11 @@ export default function StoreReceiptsPage() {
         item_id: itemId,
         quantity: '1',
         unit_cost: String(item.default_purchase_price || ''),
+        sale_price: String(item.sale_price || ''),
+        markup_percent: calcMarkupPercent(String(item.default_purchase_price || ''), String(item.sale_price || '')),
         comment: '',
       }
-      const hasOnlyEmpty = current.length === 1 && !current[0].item_id && !current[0].quantity && !current[0].unit_cost && !current[0].comment
+      const hasOnlyEmpty = current.length === 1 && !current[0].item_id && !current[0].quantity && !current[0].unit_cost && !current[0].sale_price && !current[0].markup_percent && !current[0].comment
       if (hasOnlyEmpty) return [nextLine]
       return [...current, nextLine]
     })
@@ -275,9 +295,10 @@ export default function StoreReceiptsPage() {
         item_id: line.item_id,
         quantity: parseQty(line.quantity),
         unit_cost: parseMoney(line.unit_cost),
+        sale_price: parseMoney(line.sale_price),
         comment: line.comment.trim() || null,
       }))
-      .filter((line) => line.item_id && line.quantity > 0 && line.unit_cost >= 0)
+      .filter((line) => line.item_id && line.quantity > 0 && line.unit_cost >= 0 && line.sale_price >= 0)
 
     if (!locationId) {
       setError('Выберите склад для приемки')
@@ -301,6 +322,7 @@ export default function StoreReceiptsPage() {
             received_at: receivedAt,
             invoice_number: invoiceNumber.trim() || null,
             comment: comment.trim() || null,
+            update_sale_price: updateSalePrice,
             items: payloadItems,
           },
         }),
@@ -468,9 +490,19 @@ export default function StoreReceiptsPage() {
               <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Что важно по этой приемке" rows={3} />
             </div>
 
+            <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-emerald-500"
+                checked={updateSalePrice}
+                onChange={(event) => setUpdateSalePrice(event.target.checked)}
+              />
+              Обновлять цену продажи и закупа в карточке товара по строкам приемки
+            </label>
+
             <div className="space-y-3">
               {lines.map((line, index) => (
-                <div key={index} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[minmax(0,1.4fr)_120px_140px_minmax(0,1fr)_auto]">
+                <div key={index} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[minmax(0,1.4fr)_110px_130px_130px_110px_minmax(0,1fr)_auto]">
                   <div className="space-y-1.5">
                     <Label>Товар</Label>
                     <Select
@@ -484,6 +516,10 @@ export default function StoreReceiptsPage() {
                               ...item,
                               item_id: value.startsWith('__empty__') ? '' : value,
                               unit_cost: selectedItem ? String(selectedItem.default_purchase_price || '') : item.unit_cost,
+                              sale_price: selectedItem ? String(selectedItem.sale_price || '') : item.sale_price,
+                              markup_percent: selectedItem
+                                ? calcMarkupPercent(String(selectedItem.default_purchase_price || ''), String(selectedItem.sale_price || ''))
+                                : item.markup_percent,
                             }
                           }),
                         )
@@ -508,7 +544,67 @@ export default function StoreReceiptsPage() {
 
                   <div className="space-y-1.5">
                     <Label>Цена закупа</Label>
-                    <Input value={line.unit_cost} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, unit_cost: event.target.value } : item))} placeholder="0" />
+                    <Input
+                      value={line.unit_cost}
+                      onChange={(event) =>
+                        setLines((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  unit_cost: event.target.value,
+                                  markup_percent: calcMarkupPercent(event.target.value, item.sale_price),
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Цена продажи</Label>
+                    <Input
+                      value={line.sale_price}
+                      onChange={(event) =>
+                        setLines((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  sale_price: event.target.value,
+                                  markup_percent: calcMarkupPercent(item.unit_cost, event.target.value),
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Наценка %</Label>
+                    <Input
+                      value={line.markup_percent}
+                      onChange={(event) =>
+                        setLines((current) =>
+                          current.map((item, itemIndex) => {
+                            if (itemIndex !== index) return item
+                            const pct = parseMoney(event.target.value)
+                            const base = parseMoney(item.unit_cost)
+                            const sale = base > 0 ? String(Math.round((base * (1 + pct / 100) + Number.EPSILON) * 100) / 100) : item.sale_price
+                            return {
+                              ...item,
+                              markup_percent: event.target.value,
+                              sale_price: sale,
+                            }
+                          }),
+                        )
+                      }
+                      placeholder="0"
+                    />
                   </div>
 
                   <div className="space-y-1.5">
