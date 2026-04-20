@@ -251,6 +251,34 @@ function createRuleMap(rules: SalaryRule[]): Map<string, SalaryRule> {
   return map
 }
 
+function getRuleForShift(
+  ruleMap: Map<string, SalaryRule>,
+  companyCode: string,
+  shift: ShiftType,
+) {
+  return ruleMap.get(`${companyCode}_${shift}`)
+}
+
+function calculateRoleBonusForAssignment(
+  rule: SalaryRule | undefined,
+  assignmentRole: SalaryOperatorCompanyAssignment['role_in_company'] | undefined,
+) {
+  if (assignmentRole === 'senior_operator') return toAmount(rule?.senior_operator_bonus)
+  if (assignmentRole === 'senior_cashier') return toAmount(rule?.senior_cashier_bonus)
+  return 0
+}
+
+function calculateThresholdBonus(rule: SalaryRule | undefined, turnover: number) {
+  let bonus = 0
+
+  const threshold1 = toAmount(rule?.threshold1_turnover)
+  const threshold2 = toAmount(rule?.threshold2_turnover)
+  if (threshold1 > 0 && turnover >= threshold1) bonus += toAmount(rule?.threshold1_bonus)
+  if (threshold2 > 0 && turnover >= threshold2) bonus += toAmount(rule?.threshold2_bonus)
+
+  return bonus
+}
+
 function createOperatorCompanyRoleMap(params: {
   assignments: SalaryOperatorCompanyAssignment[]
   companies: SalaryCompany[]
@@ -339,23 +367,11 @@ export function calculateOperatorSalarySummary(params: {
   let roleBonuses = 0
 
   for (const shift of aggregated.values()) {
-    const rule = ruleMap.get(`${shift.companyCode}_${shift.shift}`)
+    const rule = getRuleForShift(ruleMap, shift.companyCode, shift.shift)
     const basePerShift = toAmount(rule?.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
     const assignmentRole = operatorCompanyRoleMap.get(`${shift.operatorId}_${shift.companyCode}`)
-    const roleBonus =
-      assignmentRole === 'senior_operator'
-        ? toAmount(rule?.senior_operator_bonus)
-        : assignmentRole === 'senior_cashier'
-          ? toAmount(rule?.senior_cashier_bonus)
-          : 0
-
-    let bonus = 0
-    if (toAmount(rule?.threshold1_turnover) > 0 && shift.turnover >= toAmount(rule?.threshold1_turnover)) {
-      bonus += toAmount(rule?.threshold1_bonus)
-    }
-    if (toAmount(rule?.threshold2_turnover) > 0 && shift.turnover >= toAmount(rule?.threshold2_turnover)) {
-      bonus += toAmount(rule?.threshold2_bonus)
-    }
+    const roleBonus = calculateRoleBonusForAssignment(rule, assignmentRole)
+    const bonus = calculateThresholdBonus(rule, shift.turnover)
 
     shifts += 1
     baseSalary += basePerShift
@@ -476,23 +492,11 @@ export function calculateOperatorShiftBreakdown(params: {
   }
 
   const breakdown = Array.from(aggregated.values()).map((shift) => {
-    const rule = ruleMap.get(`${shift.companyCode}_${shift.shift}`)
+    const rule = getRuleForShift(ruleMap, shift.companyCode, shift.shift)
     const baseSalary = toAmount(rule?.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
     const assignmentRole = operatorCompanyRoleMap.get(`${params.operatorId}_${shift.companyCode}`)
-    const roleBonus =
-      assignmentRole === 'senior_operator'
-        ? toAmount(rule?.senior_operator_bonus)
-        : assignmentRole === 'senior_cashier'
-          ? toAmount(rule?.senior_cashier_bonus)
-          : 0
-
-    let autoBonus = 0
-    if (toAmount(rule?.threshold1_turnover) > 0 && shift.totalIncome >= toAmount(rule?.threshold1_turnover)) {
-      autoBonus += toAmount(rule?.threshold1_bonus)
-    }
-    if (toAmount(rule?.threshold2_turnover) > 0 && shift.totalIncome >= toAmount(rule?.threshold2_turnover)) {
-      autoBonus += toAmount(rule?.threshold2_bonus)
-    }
+    const roleBonus = calculateRoleBonusForAssignment(rule, assignmentRole)
+    const autoBonus = calculateThresholdBonus(rule, shift.totalIncome)
 
     return {
       ...shift,
@@ -757,23 +761,11 @@ export function calculateSalaryBoard(params: {
   }
 
   for (const shift of aggregated.values()) {
-    const rule = ruleMap.get(`${shift.companyCode}_${shift.shift}`)
+    const rule = getRuleForShift(ruleMap, shift.companyCode, shift.shift)
     const basePerShift = toAmount(rule?.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
     const assignmentRole = operatorCompanyRoleMap.get(`${shift.operatorId}_${shift.companyCode}`)
-    const roleBonus =
-      assignmentRole === 'senior_operator'
-        ? toAmount(rule?.senior_operator_bonus)
-        : assignmentRole === 'senior_cashier'
-          ? toAmount(rule?.senior_cashier_bonus)
-          : 0
-
-    let bonus = 0
-    if (toAmount(rule?.threshold1_turnover) > 0 && shift.turnover >= toAmount(rule?.threshold1_turnover)) {
-      bonus += toAmount(rule?.threshold1_bonus)
-    }
-    if (toAmount(rule?.threshold2_turnover) > 0 && shift.turnover >= toAmount(rule?.threshold2_turnover)) {
-      bonus += toAmount(rule?.threshold2_bonus)
-    }
+    const roleBonus = calculateRoleBonusForAssignment(rule, assignmentRole)
+    const bonus = calculateThresholdBonus(rule, shift.turnover)
 
     const stat = ensureOperator(shift.operatorId)
     stat.basePerShift = basePerShift

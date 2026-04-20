@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { addDaysISO } from '@/lib/core/date'
 import { calculateOperatorWeekSummary } from '@/lib/domain/salary'
+import { evaluatePointRules, type PointRuleRow } from '@/lib/domain/point-rules'
 import {
   ensureOrganizationOperatorAccess,
   listOrganizationCompanyIds,
@@ -103,6 +104,112 @@ function roundMoney(value: number) {
   return Math.round((Number.isFinite(value) ? value : 0) * 100) / 100
 }
 
+type SalaryPointRule = Pick<
+  PointRuleRow,
+  'id' | 'company_id' | 'scope' | 'event' | 'name' | 'priority' | 'is_active' | 'stop_processing' | 'conditions' | 'actions'
+>
+
+async function listSalaryPointRules(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  companyIds: string[] | null,
+) {
+  let query = supabase
+    .from('point_rules')
+    .select('id,company_id,scope,event,name,priority,is_active,stop_processing,conditions,actions')
+    .eq('scope', 'salary')
+    .eq('event', 'salary.week.computed')
+    .eq('is_active', true)
+    .order('priority', { ascending: true })
+
+  if (companyIds) {
+    if (companyIds.length === 0) return []
+    query = query.or(`company_id.is.null,company_id.in.(${companyIds.map((id) => `"${id}"`).join(',')})`)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data || []) as SalaryPointRule[]
+}
+
+function applySalaryPointRules(params: {
+  summary: Awaited<ReturnType<typeof calculateOperatorWeekSummary>>
+  rules: SalaryPointRule[]
+}) {
+  const summary = {
+    ...params.summary,
+    companyAllocations: params.summary.companyAllocations.map((item) => ({ ...item })),
+  }
+
+  const rules = params.rules || []
+  if (rules.length === 0 || summary.companyAllocations.length === 0) {
+    return { summary, matchedRules: [] as Array<{ id: string; name: string }> }
+  }
+
+  const byCompany = new Map(summary.companyAllocations.map((item) => [item.companyId, item]))
+  const fallbackCompany = [...summary.companyAllocations].sort((a, b) => b.accruedAmount - a.accruedAmount)[0] || summary.companyAllocations[0]
+  const matchedRules = new Map<string, { id: string; name: string }>()
+
+  for (const rule of rules) {
+    const targetCompany = rule.company_id ? byCompany.get(rule.company_id) : fallbackCompany
+    if (!targetCompany) continue
+    const context = {
+      week: {
+        grossAmount: summary.grossAmount,
+        bonusAmount: summary.bonusAmount,
+        fineAmount: summary.fineAmount,
+        debtAmount: summary.debtAmount,
+        advanceAmount: summary.advanceAmount,
+        netAmount: summary.netAmount,
+        shiftsCount: summary.shiftsCount,
+      },
+      company: {
+        id: targetCompany.companyId,
+        code: targetCompany.companyCode,
+        name: targetCompany.companyName,
+        accruedAmount: targetCompany.accruedAmount,
+        bonusAmount: targetCompany.bonusAmount,
+        fineAmount: targetCompany.fineAmount,
+        debtAmount: targetCompany.debtAmount,
+        advanceAmount: targetCompany.advanceAmount,
+        netAmount: targetCompany.netAmount,
+      },
+    }
+
+    const evaluation = evaluatePointRules({ rules: [rule] as PointRuleRow[], context })
+    for (const matched of evaluation.matchedRules) matchedRules.set(matched.id, matched)
+
+    for (const effect of evaluation.effects) {
+      const amount = roundMoney(Number(effect.amount || 0))
+
+      if (effect.type === 'add_bonus' && amount > 0) {
+        summary.bonusAmount = roundMoney(summary.bonusAmount + amount)
+        summary.netAmount = roundMoney(summary.netAmount + amount)
+        targetCompany.bonusAmount = roundMoney(targetCompany.bonusAmount + amount)
+        targetCompany.netAmount = roundMoney(targetCompany.netAmount + amount)
+      } else if (effect.type === 'add_fine' && amount > 0) {
+        summary.fineAmount = roundMoney(summary.fineAmount + amount)
+        summary.netAmount = roundMoney(summary.netAmount - amount)
+        targetCompany.fineAmount = roundMoney(targetCompany.fineAmount + amount)
+        targetCompany.netAmount = roundMoney(targetCompany.netAmount - amount)
+      } else if (effect.type === 'set_min_net' && amount > 0 && summary.netAmount < amount) {
+        const delta = roundMoney(amount - summary.netAmount)
+        summary.bonusAmount = roundMoney(summary.bonusAmount + delta)
+        summary.netAmount = roundMoney(summary.netAmount + delta)
+        targetCompany.bonusAmount = roundMoney(targetCompany.bonusAmount + delta)
+        targetCompany.netAmount = roundMoney(targetCompany.netAmount + delta)
+      } else if (effect.type === 'cap_net' && amount >= 0 && summary.netAmount > amount) {
+        const delta = roundMoney(summary.netAmount - amount)
+        summary.fineAmount = roundMoney(summary.fineAmount + delta)
+        summary.netAmount = roundMoney(summary.netAmount - delta)
+        targetCompany.fineAmount = roundMoney(targetCompany.fineAmount + delta)
+        targetCompany.netAmount = roundMoney(targetCompany.netAmount - delta)
+      }
+    }
+  }
+
+  return { summary, matchedRules: Array.from(matchedRules.values()) }
+}
+
 function normalizeSplit(cashAmount?: number | null, kaspiAmount?: number | null): PaymentSplit {
   const cash = roundMoney(Number(cashAmount || 0))
   const kaspi = roundMoney(Number(kaspiAmount || 0))
@@ -196,6 +303,7 @@ async function ensureSalaryWeekSnapshot(params: {
   actorUserId: string | null
   companyIds?: string[] | null
   references?: Awaited<ReturnType<typeof listSalaryReferenceData>>
+  pointRules?: SalaryPointRule[]
 }) {
   const weekEnd = addDaysISO(params.weekStart, 6)
   const references = params.references || (await listSalaryReferenceData(params.supabase, { companyIds: params.companyIds || null }))
@@ -207,7 +315,7 @@ async function ensureSalaryWeekSnapshot(params: {
     companyIds: params.companyIds || null,
   })
 
-  const summary = calculateOperatorWeekSummary({
+  const rawSummary = calculateOperatorWeekSummary({
     operatorId: params.operatorId,
     companies: references.companies,
     rules: references.rules,
@@ -215,6 +323,10 @@ async function ensureSalaryWeekSnapshot(params: {
     incomes: operatorData.incomes,
     adjustments: operatorData.adjustments,
     debts: operatorData.debts,
+  })
+  const { summary } = applySalaryPointRules({
+    summary: rawSummary,
+    rules: params.pointRules || [],
   })
 
   const { data: existingWeek, error: existingWeekError } = await params.supabase
@@ -372,6 +484,7 @@ export async function GET(req: Request) {
       const weekEnd = addDaysISO(weekStart, 6)
       const supabase = createAdminSupabaseClient()
       const referencesPromise = listSalaryReferenceData(supabase, { companyIds: allowedCompanyIds || null })
+      const pointRulesPromise = listSalaryPointRules(supabase, allowedCompanyIds || null)
 
       if (!access.isSuperAdmin && (!allowedOperatorIds || allowedOperatorIds.length === 0)) {
         return json({
@@ -417,11 +530,13 @@ export async function GET(req: Request) {
 
       const [
         references,
+        pointRules,
         { data: activeOperators, error: activeOperatorsError },
         { data: existingWeeks, error: existingWeeksError },
         { data: documents, error: documentsError },
       ] = await Promise.all([
         referencesPromise,
+        pointRulesPromise,
         activeOperatorsQuery,
         existingWeeksQuery,
         documentsQuery,
@@ -504,6 +619,7 @@ export async function GET(req: Request) {
             actorUserId: null,
             companyIds: allowedCompanyIds || null,
             references,
+            pointRules,
           }),
         ),
       )
@@ -731,7 +847,8 @@ export async function GET(req: Request) {
       if (incomesError) throw incomesError
       if (!operatorRow) return json({ error: 'operator-not-found' }, 404)
 
-      const snapshot = await ensureSalaryWeekSnapshot({ supabase, operatorId, weekStart, actorUserId: null, companyIds: allowedCompanyIds || null, references })
+      const pointRules = await listSalaryPointRules(supabase, allowedCompanyIds || null)
+      const snapshot = await ensureSalaryWeekSnapshot({ supabase, operatorId, weekStart, actorUserId: null, companyIds: allowedCompanyIds || null, references, pointRules })
 
       const [
         { data: payments, error: paymentsError },
@@ -1041,6 +1158,7 @@ export async function POST(req: Request) {
         weekStart,
         actorUserId: user?.id || null,
         companyIds: allowedCompanyIds || null,
+        pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null),
       })
 
       const expenseComment =
@@ -1169,6 +1287,7 @@ export async function POST(req: Request) {
         weekStart,
         actorUserId: user?.id || null,
         companyIds: allowedCompanyIds || null,
+        pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null),
       })
 
       if (split.totalAmount - weekBeforePayment.remainingAmount > 0.009) {
@@ -1299,6 +1418,7 @@ export async function POST(req: Request) {
         weekStart,
         actorUserId: user?.id || null,
         companyIds: allowedCompanyIds || null,
+        pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null),
       })
 
       await writeAuditLog(supabase, {
@@ -1376,7 +1496,7 @@ export async function POST(req: Request) {
         .eq('id', body.paymentId)
       if (voidPayError) throw voidPayError
 
-      const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null, companyIds: allowedCompanyIds || null })
+      const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null, companyIds: allowedCompanyIds || null, pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null) })
 
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,
@@ -1426,7 +1546,7 @@ export async function POST(req: Request) {
         .eq('id', body.adjustmentId)
       if (voidAdjError) throw voidAdjError
 
-      const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null, companyIds: allowedCompanyIds || null })
+      const weekAfterVoid = await ensureSalaryWeekSnapshot({ supabase, operatorId: body.operatorId, weekStart: weekStart2, actorUserId: user?.id || null, companyIds: allowedCompanyIds || null, pointRules: await listSalaryPointRules(supabase, allowedCompanyIds || null) })
 
       await writeAuditLog(supabase, {
         actorUserId: user?.id || null,

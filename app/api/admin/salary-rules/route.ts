@@ -61,6 +61,89 @@ function normalizePayload(payload: RulePayload) {
   }
 }
 
+function validatePayload(payload: ReturnType<typeof normalizePayload>) {
+  if (!payload.company_code) {
+    return 'Укажите код компании'
+  }
+  if (payload.shift_type !== 'day' && payload.shift_type !== 'night') {
+    return 'Некорректный тип смены'
+  }
+  if (payload.base_per_shift == null || payload.base_per_shift < 0) {
+    return 'Оклад за смену должен быть 0 или больше'
+  }
+  if (payload.senior_operator_bonus != null && payload.senior_operator_bonus < 0) {
+    return 'Бонус старшего оператора не может быть отрицательным'
+  }
+  if (payload.senior_cashier_bonus != null && payload.senior_cashier_bonus < 0) {
+    return 'Бонус старшего кассира не может быть отрицательным'
+  }
+  if (payload.threshold1_turnover != null && payload.threshold1_turnover < 0) {
+    return 'Порог 1 не может быть отрицательным'
+  }
+  if (payload.threshold2_turnover != null && payload.threshold2_turnover < 0) {
+    return 'Порог 2 не может быть отрицательным'
+  }
+  if (payload.threshold1_bonus != null && payload.threshold1_bonus < 0) {
+    return 'Бонус 1 не может быть отрицательным'
+  }
+  if (payload.threshold2_bonus != null && payload.threshold2_bonus < 0) {
+    return 'Бонус 2 не может быть отрицательным'
+  }
+
+  if (payload.threshold1_bonus != null && payload.threshold1_turnover == null) {
+    return 'Для бонуса 1 нужно указать порог 1'
+  }
+  if (payload.threshold2_bonus != null && payload.threshold2_turnover == null) {
+    return 'Для бонуса 2 нужно указать порог 2'
+  }
+  if (
+    payload.threshold1_turnover != null &&
+    payload.threshold2_turnover != null &&
+    payload.threshold2_turnover <= payload.threshold1_turnover
+  ) {
+    return 'Порог 2 должен быть больше порога 1'
+  }
+
+  return null
+}
+
+async function findDuplicateRule(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  params: { companyCode: string; shiftType: ShiftType; excludeId?: number },
+) {
+  let query = supabase
+    .from('operator_salary_rules')
+    .select('id')
+    .eq('company_code', params.companyCode)
+    .eq('shift_type', params.shiftType)
+    .limit(1)
+
+  if (params.excludeId != null) {
+    query = query.neq('id', params.excludeId)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return Boolean(data?.length)
+}
+
+async function hasAnotherActiveRule(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  params: { companyCode: string; shiftType: ShiftType; excludeId: number },
+) {
+  const { data, error } = await supabase
+    .from('operator_salary_rules')
+    .select('id')
+    .eq('company_code', params.companyCode)
+    .eq('shift_type', params.shiftType)
+    .eq('is_active', true)
+    .neq('id', params.excludeId)
+    .limit(1)
+
+  if (error) throw error
+  return Boolean(data?.length)
+}
+
 async function mapActorEmails(supabase: ReturnType<typeof createAdminSupabaseClient>, actorIds: string[]) {
   const actorEmailMap = new Map<string, string>()
   if (!actorIds.length || !hasAdminSupabaseCredentials()) return actorEmailMap
@@ -177,8 +260,17 @@ export async function POST(req: Request) {
 
     if (body.action === 'createRule') {
       const payload = normalizePayload(body.payload)
+      const validationError = validatePayload(payload)
+      if (validationError) return json({ error: validationError }, 400)
       if (allowedCompanyCodes && !allowedCompanyCodes.includes(payload.company_code)) {
         return json({ error: 'forbidden-company' }, 403)
+      }
+      const duplicateExists = await findDuplicateRule(supabase, {
+        companyCode: payload.company_code,
+        shiftType: payload.shift_type,
+      })
+      if (duplicateExists) {
+        return json({ error: 'Дубликат правила: для этой компании и смены уже есть запись' }, 400)
       }
       const { data, error } = await supabase
         .from('operator_salary_rules')
@@ -207,6 +299,8 @@ export async function POST(req: Request) {
 
     if (body.action === 'updateRule') {
       const payload = normalizePayload(body.payload)
+      const validationError = validatePayload(payload)
+      if (validationError) return json({ error: validationError }, 400)
       if (allowedCompanyCodes && !allowedCompanyCodes.includes(payload.company_code)) {
         return json({ error: 'forbidden-company' }, 403)
       }
@@ -220,6 +314,27 @@ export async function POST(req: Request) {
       if (!previous) return json({ error: 'Правило не найдено' }, 404)
       if (allowedCompanyCodes && !allowedCompanyCodes.includes(String(previous.company_code || ''))) {
         return json({ error: 'forbidden-company' }, 403)
+      }
+      const duplicateExists = await findDuplicateRule(supabase, {
+        companyCode: payload.company_code,
+        shiftType: payload.shift_type,
+        excludeId: body.ruleId,
+      })
+      if (duplicateExists) {
+        return json({ error: 'Дубликат правила: для этой компании и смены уже есть запись' }, 400)
+      }
+      if (previous.is_active && !payload.is_active) {
+        const hasReplacement = await hasAnotherActiveRule(supabase, {
+          companyCode: String(previous.company_code || ''),
+          shiftType: previous.shift_type,
+          excludeId: previous.id,
+        })
+        if (!hasReplacement) {
+          return json(
+            { error: 'Нельзя отключить последнее активное правило для этой компании и смены' },
+            400,
+          )
+        }
       }
 
       const { data, error } = await supabase
@@ -276,6 +391,19 @@ export async function POST(req: Request) {
       if (!previous) return json({ error: 'Правило не найдено' }, 404)
       if (allowedCompanyCodes && !allowedCompanyCodes.includes(String(previous.company_code || ''))) {
         return json({ error: 'forbidden-company' }, 403)
+      }
+      if (previous.is_active) {
+        const hasReplacement = await hasAnotherActiveRule(supabase, {
+          companyCode: String(previous.company_code || ''),
+          shiftType: previous.shift_type,
+          excludeId: previous.id,
+        })
+        if (!hasReplacement) {
+          return json(
+            { error: 'Нельзя удалить последнее активное правило для этой компании и смены' },
+            400,
+          )
+        }
       }
 
       const { error } = await supabase.from('operator_salary_rules').delete().eq('id', body.ruleId)
