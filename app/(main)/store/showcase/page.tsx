@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ClipboardList,
   Loader2,
+  MoreHorizontal,
   Minus,
   Package,
   Plus,
@@ -21,6 +22,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -295,19 +304,35 @@ export default function ShowcasePage() {
                 <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
               </div>
             )}
-            <Button size="sm" className="gap-1.5" onClick={() => { setShowRequestPanel(!showRequestPanel); setShowReturnPanel(false) }}>
-              <ClipboardList className="h-3.5 w-3.5" />
-              Запросить со склада
-            </Button>
-            {balances.length > 0 && (
-              <Button size="sm" variant="outline" className="gap-1.5 border-amber-500/30 text-amber-300 hover:bg-amber-500/10" onClick={() => { setShowReturnPanel(!showReturnPanel); setShowRequestPanel(false) }}>
-                <Trash2 className="h-3.5 w-3.5" />
-                Вернуть на склад
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-8 gap-1.5">
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1.5">
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  Действия
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Управление витриной</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => { setShowRequestPanel(true); setShowReturnPanel(false) }}>
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  Запросить со склада
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={balances.length === 0}
+                  onClick={() => { setShowReturnPanel(true); setShowRequestPanel(false) }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Вернуть на склад
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled={loading} onClick={() => void load()}>
+                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  Обновить данные
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

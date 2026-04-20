@@ -12,6 +12,7 @@ import {
   ChevronDown,
   FileSpreadsheet,
   Loader2,
+  MoreHorizontal,
   Package,
   PackagePlus,
   Pencil,
@@ -25,6 +26,14 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -749,30 +758,35 @@ export default function WarehousePage() {
                   className="h-7 pl-7 text-xs"
                 />
               </div>
-              {selectedIds.size > 0 && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="h-7 gap-1 text-xs"
-                  onClick={() => setDeleteConfirm('selected')}
-                  disabled={deleting}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Удалить ({selectedIds.size})
-                </Button>
-              )}
-              {balances.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 gap-1 text-xs border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
-                  onClick={() => setDeleteConfirm('all')}
-                  disabled={deleting}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Очистить
-                </Button>
-              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                    Действия
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Операции со складом</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem disabled={selectedIds.size === 0 || deleting} onClick={() => setDeleteConfirm('selected')}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Удалить выбранные ({selectedIds.size})
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    disabled={balances.length === 0 || deleting}
+                    onClick={() => setDeleteConfirm('all')}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Очистить весь склад
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem disabled={loading} onClick={() => void load()}>
+                    <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                    Обновить данные
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -895,8 +909,11 @@ export default function WarehousePage() {
           <CardHeader className="border-b border-white/10 pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
               <PackagePlus className="h-4 w-4 text-emerald-300" />
-              Обновить каталог
+              Операции со складом
             </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Один сценарий за раз: выберите режим ниже и выполните действие.
+            </p>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
             <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1 text-xs">
