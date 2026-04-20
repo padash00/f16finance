@@ -253,9 +253,10 @@ function createRuleMap(rules: SalaryRule[]): Map<string, SalaryRule> {
 
 function getRuleForShift(
   ruleMap: Map<string, SalaryRule>,
-  companyCode: string,
+  companyCode: string | null | undefined,
   shift: ShiftType,
 ) {
+  if (!companyCode) return undefined
   return ruleMap.get(`${companyCode}_${shift}`)
 }
 
