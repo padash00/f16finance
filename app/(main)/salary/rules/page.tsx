@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback, useRef, Suspense } from 'rea
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { SalaryVariantsTab } from '@/components/admin/salary-variants-tab'
+import { SalaryPreviewTab } from '@/components/admin/salary-preview-tab'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -707,6 +708,7 @@ function SalaryRulesContent() {
             <TabsList className="bg-gray-900/40 border border-white/5 backdrop-blur-xl">
               <TabsTrigger value="base">Базовые правила</TabsTrigger>
               <TabsTrigger value="variants">Варианты по выручке</TabsTrigger>
+              <TabsTrigger value="preview">Предпросмотр</TabsTrigger>
             </TabsList>
 
             <TabsContent value="base" className="space-y-6">
@@ -1271,6 +1273,10 @@ function SalaryRulesContent() {
 
             <TabsContent value="variants">
               <SalaryVariantsTab companies={companyOptions} />
+            </TabsContent>
+
+            <TabsContent value="preview">
+              <SalaryPreviewTab />
             </TabsContent>
           </Tabs>
         </div>

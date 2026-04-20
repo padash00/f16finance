@@ -126,6 +126,7 @@ export type SalaryShiftBreakdown = {
   autoBonus: number
   roleBonus: number
   salary: number
+  matchedRules: Array<{ id: string; name: string }>
 }
 
 export type SalaryWeekCompanyAllocation = {
@@ -313,7 +314,7 @@ function computeShiftCompensation(params: {
   const autoBonus =
     calculateThresholdBonus(params.rule, params.turnover) + (override?.thresholdBonusDelta || 0)
 
-  return { basePerShift, roleBonus, autoBonus }
+  return { basePerShift, roleBonus, autoBonus, matchedRules: override?.matchedRules || [] }
 }
 
 function createOperatorCompanyRoleMap(params: {
@@ -488,7 +489,7 @@ export function calculateOperatorShiftBreakdown(params: {
   const allowedCodes = new Set((params.options?.companyCodes || DEFAULT_COMPANY_CODES).map((item) => item.toLowerCase()))
   const aggregated = new Map<
     string,
-    Omit<SalaryShiftBreakdown, 'baseSalary' | 'autoBonus' | 'roleBonus' | 'salary'>
+    Omit<SalaryShiftBreakdown, 'baseSalary' | 'autoBonus' | 'roleBonus' | 'salary' | 'matchedRules'>
   >()
 
   for (const row of params.incomes) {
@@ -538,7 +539,7 @@ export function calculateOperatorShiftBreakdown(params: {
   const breakdown = Array.from(aggregated.values()).map((shift) => {
     const rule = getRuleForShift(ruleMap, shift.companyCode, shift.shift)
     const assignmentRole = operatorCompanyRoleMap.get(`${params.operatorId}_${shift.companyCode}`)
-    const { basePerShift, roleBonus, autoBonus } = computeShiftCompensation({
+    const { basePerShift, roleBonus, autoBonus, matchedRules } = computeShiftCompensation({
       rule,
       shiftRules: params.shiftRules,
       companyId: shift.companyId,
@@ -553,6 +554,7 @@ export function calculateOperatorShiftBreakdown(params: {
       autoBonus,
       roleBonus,
       salary: basePerShift + autoBonus + roleBonus,
+      matchedRules,
     }
   })
 

@@ -163,11 +163,9 @@ export async function POST(request: Request) {
 
 ## Что не сделано / TODO
 
-- Одобрение заявок на витрину (UI для менеджера)
 - QR-логин в киоске (заглушка на WelcomeScreen)
 - Загрузка обложек файлом (сейчас только URL)
 - Автозапуск `setup-windows.ps1` при NSIS-инсталле киоска
-- История движений (`inventory_movements`) — UI
 
 ## Деплой
 
