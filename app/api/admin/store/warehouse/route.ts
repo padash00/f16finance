@@ -451,6 +451,199 @@ export async function POST(request: Request) {
       return json({ ok: true })
     }
 
+    // ── previewBackroomUpload: match Excel barcodes to catalog, show diff ─────
+    // Input: { action, company_id, items: [{barcode, quantity, name?}] }
+    // Output: { matched: [...], unmatched: [...] } — ничего не меняет в БД.
+    if (body.action === 'previewBackroomUpload') {
+      const companyId = String(body.company_id || '').trim()
+      if (!companyId) return json({ error: 'company-id-required' }, 400)
+
+      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
+        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      }
+
+      type InRow = { barcode: string; quantity: number; name?: string }
+      const rawItems: InRow[] = (body.items || [])
+        .map((i: any) => ({
+          barcode: String(i.barcode || '').trim(),
+          quantity: normalizeQty(i.quantity),
+          name: String(i.name || '').trim() || undefined,
+        }))
+        .filter((i: InRow) => i.barcode && i.quantity > 0)
+
+      if (rawItems.length === 0) return json({ error: 'items-required' }, 400)
+
+      // Get company org for filtering items
+      const { data: company } = await supabase
+        .from('companies')
+        .select('organization_id')
+        .eq('id', companyId)
+        .maybeSingle()
+      const orgId = company?.organization_id || access.activeOrganization?.id || null
+
+      const barcodes = [...new Set(rawItems.map((i) => i.barcode))]
+      let itemsQuery = supabase
+        .from('inventory_items')
+        .select('id, name, barcode, unit')
+        .eq('is_active', true)
+        .in('barcode', barcodes)
+      if (orgId) itemsQuery = itemsQuery.eq('organization_id', orgId)
+      const { data: foundItems, error: itemsErr } = await itemsQuery
+      if (itemsErr) throw itemsErr
+
+      const byBarcode = new Map<string, { id: string; name: string; barcode: string; unit: string }>()
+      for (const it of foundItems || []) {
+        byBarcode.set(String(it.barcode), {
+          id: String(it.id),
+          name: String(it.name),
+          barcode: String(it.barcode),
+          unit: String(it.unit || 'шт'),
+        })
+      }
+
+      const [catalog, warehouse] = await Promise.all([
+        ensureCompanyLocation(supabase, companyId, 'catalog'),
+        ensureCompanyLocation(supabase, companyId, 'warehouse'),
+      ])
+
+      const matchedItemIds = [...byBarcode.values()].map((v) => v.id)
+      const curCatalog = new Map<string, number>()
+      const curWarehouse = new Map<string, number>()
+      if (matchedItemIds.length) {
+        const { data: bal } = await supabase
+          .from('inventory_balances')
+          .select('location_id, item_id, quantity')
+          .in('location_id', [catalog.id, warehouse.id])
+          .in('item_id', matchedItemIds)
+        for (const row of bal || []) {
+          const q = Number((row as any).quantity || 0)
+          const iid = String((row as any).item_id)
+          if ((row as any).location_id === catalog.id) curCatalog.set(iid, q)
+          else if ((row as any).location_id === warehouse.id) curWarehouse.set(iid, q)
+        }
+      }
+
+      const matched: any[] = []
+      const unmatched: any[] = []
+      for (const r of rawItems) {
+        const item = byBarcode.get(r.barcode)
+        if (!item) {
+          unmatched.push({ barcode: r.barcode, name: r.name || '', quantity: r.quantity })
+          continue
+        }
+        const curC = curCatalog.get(item.id) || 0
+        const curW = curWarehouse.get(item.id) || 0
+        const newW = r.quantity
+        const newC = Math.max(curC, newW) // catalog не даёт упасть ниже warehouse
+        matched.push({
+          item_id: item.id,
+          barcode: item.barcode,
+          catalog_name: item.name,
+          excel_name: r.name || null,
+          unit: item.unit,
+          current_catalog: curC,
+          current_warehouse: curW,
+          current_showcase: Math.max(0, curC - curW),
+          new_warehouse: newW,
+          new_catalog: newC,
+          new_showcase: Math.max(0, newC - newW),
+          catalog_changed: newC !== curC,
+        })
+      }
+
+      return json({
+        ok: true,
+        data: {
+          matched,
+          unmatched,
+          totals: {
+            matched_count: matched.length,
+            unmatched_count: unmatched.length,
+          },
+        },
+      })
+    }
+
+    // ── applyBackroomUpload: set warehouse=qty, catalog=max(catalog,qty) ──────
+    if (body.action === 'applyBackroomUpload') {
+      const companyId = String(body.company_id || '').trim()
+      if (!companyId) return json({ error: 'company-id-required' }, 400)
+
+      if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
+        if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
+      }
+
+      type InRow = { item_id: string; new_warehouse: number; new_catalog: number }
+      const rows: InRow[] = (body.items || [])
+        .map((i: any) => ({
+          item_id: String(i.item_id || '').trim(),
+          new_warehouse: normalizeQty(i.new_warehouse),
+          new_catalog: normalizeQty(i.new_catalog),
+        }))
+        .filter((i: InRow) => i.item_id && i.new_warehouse >= 0 && i.new_catalog >= i.new_warehouse)
+
+      if (rows.length === 0) return json({ error: 'items-required' }, 400)
+
+      const [catalog, warehouse] = await Promise.all([
+        ensureCompanyLocation(supabase, companyId, 'catalog'),
+        ensureCompanyLocation(supabase, companyId, 'warehouse'),
+      ])
+      const actorUserId = access.staffMember?.id || null
+      const now = new Date().toISOString()
+
+      // Upsert catalog balances
+      const catalogUpserts = rows.map((r) => ({
+        location_id: catalog.id,
+        item_id: r.item_id,
+        quantity: r.new_catalog,
+        updated_at: now,
+      }))
+      const { error: catErr } = await supabase
+        .from('inventory_balances')
+        .upsert(catalogUpserts, { onConflict: 'location_id,item_id' })
+      if (catErr) throw catErr
+
+      // Upsert warehouse balances
+      const warehouseUpserts = rows.map((r) => ({
+        location_id: warehouse.id,
+        item_id: r.item_id,
+        quantity: r.new_warehouse,
+        updated_at: now,
+      }))
+      const { error: whErr } = await supabase
+        .from('inventory_balances')
+        .upsert(warehouseUpserts, { onConflict: 'location_id,item_id' })
+      if (whErr) throw whErr
+
+      // Audit movements (inventory_adjustment — соответствует check-ограничению)
+      const movements = rows
+        .filter((r) => r.new_warehouse > 0)
+        .map((r) => ({
+          item_id: r.item_id,
+          movement_type: 'inventory_adjustment',
+          quantity: r.new_warehouse,
+          to_location_id: warehouse.id,
+          reference_type: 'backroom_bulk',
+          reference_id: null,
+          comment: 'Загрузка подсобки из Excel',
+          created_by: actorUserId,
+          created_at: now,
+        }))
+      if (movements.length) {
+        await supabase.from('inventory_movements').insert(movements)
+      }
+
+      await writeAuditLog(supabase, {
+        actorUserId,
+        entityType: 'inventory-warehouse-alloc',
+        entityId: warehouse.id,
+        action: 'backroom_bulk_upload',
+        payload: { company_id: companyId, rows: rows.length },
+      })
+
+      return json({ ok: true, data: { updated: rows.length } })
+    }
+
     // ── deleteStock: remove item entirely from catalog + warehouse ────────────
     if (body.action === 'deleteStock') {
       const companyId = String(body.company_id || '').trim()

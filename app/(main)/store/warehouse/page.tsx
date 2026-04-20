@@ -6,6 +6,7 @@ import mammoth from 'mammoth'
 import {
   AlertCircle,
   Barcode,
+  Boxes,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -62,7 +63,28 @@ type StockLine = {
   isNew?: boolean
 }
 
-type AddMode = 'barcode' | 'catalog' | 'excel'
+type AddMode = 'barcode' | 'catalog' | 'excel' | 'backroom'
+
+type BackroomMatchRow = {
+  item_id: string
+  barcode: string
+  catalog_name: string
+  excel_name: string | null
+  unit: string
+  current_catalog: number
+  current_warehouse: number
+  current_showcase: number
+  new_warehouse: number
+  new_catalog: number
+  new_showcase: number
+  catalog_changed: boolean
+}
+
+type BackroomUnmatchedRow = {
+  barcode: string
+  name: string
+  quantity: number
+}
 
 let keyCounter = 0
 function nextKey() {
@@ -120,6 +142,15 @@ export default function WarehousePage() {
   const [editingWh, setEditingWh] = useState<string | null>(null)
   const [editWhVal, setEditWhVal] = useState('')
   const [savingWh, setSavingWh] = useState(false)
+
+  const [backroomFileName, setBackroomFileName] = useState<string | null>(null)
+  const [backroomParseError, setBackroomParseError] = useState<string | null>(null)
+  const [backroomLoading, setBackroomLoading] = useState(false)
+  const [backroomMatched, setBackroomMatched] = useState<BackroomMatchRow[]>([])
+  const [backroomUnmatched, setBackroomUnmatched] = useState<BackroomUnmatchedRow[]>([])
+  const [backroomApplying, setBackroomApplying] = useState(false)
+  const [backroomDone, setBackroomDone] = useState<string | null>(null)
+  const backroomFileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async (companyId?: string | null) => {
     setLoading(true)
@@ -402,6 +433,110 @@ export default function WarehousePage() {
       }
     }
     reader.readAsArrayBuffer(file)
+  }
+
+  function resetBackroom() {
+    setBackroomFileName(null)
+    setBackroomParseError(null)
+    setBackroomMatched([])
+    setBackroomUnmatched([])
+    setBackroomDone(null)
+    if (backroomFileRef.current) backroomFileRef.current.value = ''
+  }
+
+  async function handleBackroomFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !selectedCompanyId) return
+    e.target.value = ''
+    setBackroomParseError(null)
+    setBackroomMatched([])
+    setBackroomUnmatched([])
+    setBackroomDone(null)
+    setBackroomFileName(file.name)
+    setBackroomLoading(true)
+
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || ''
+      let rows: any[][] = []
+      if (ext === 'docx') {
+        const arrayBuffer = await file.arrayBuffer()
+        const result = await mammoth.convertToHtml({ arrayBuffer })
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(result.value, 'text/html')
+        const tables = doc.querySelectorAll('table')
+        if (tables.length === 0) {
+          const lines = doc.body.textContent?.split('\n').map((l) => l.trim()).filter(Boolean) || []
+          rows = lines.map((line) => line.split(/\t|\s{2,}|;|,/).map((s) => s.trim()))
+        } else {
+          tables[0].querySelectorAll('tr').forEach((tr) => {
+            const cells: string[] = []
+            tr.querySelectorAll('td, th').forEach((td) => cells.push(td.textContent?.trim() || ''))
+            rows.push(cells)
+          })
+        }
+      } else {
+        const buf = await file.arrayBuffer()
+        const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][]
+      }
+
+      const parsed = parseRowsFromTable(rows)
+      if (parsed.length === 0) {
+        setBackroomParseError('Не найдено строк. Формат: Штрихкод | Название | Количество (последние две могут быть любыми из числовых).')
+        setBackroomLoading(false)
+        return
+      }
+
+      const items = parsed
+        .filter((l) => l.barcode && parseNum(l.quantity) > 0)
+        .map((l) => ({ barcode: l.barcode, quantity: parseNum(l.quantity), name: l.name || undefined }))
+
+      if (items.length === 0) {
+        setBackroomParseError('В файле нет строк с штрихкодом и количеством.')
+        setBackroomLoading(false)
+        return
+      }
+
+      const res = await fetch('/api/admin/store/warehouse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'previewBackroomUpload', company_id: selectedCompanyId, items }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка предпросмотра')
+      setBackroomMatched(json.data?.matched || [])
+      setBackroomUnmatched(json.data?.unmatched || [])
+    } catch (err: any) {
+      setBackroomParseError(err?.message || 'Не удалось обработать файл.')
+    } finally {
+      setBackroomLoading(false)
+    }
+  }
+
+  async function handleBackroomApply() {
+    if (!selectedCompanyId || backroomMatched.length === 0) return
+    setBackroomApplying(true)
+    try {
+      const items = backroomMatched.map((m) => ({
+        item_id: m.item_id,
+        new_warehouse: m.new_warehouse,
+        new_catalog: m.new_catalog,
+      }))
+      const res = await fetch('/api/admin/store/warehouse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'applyBackroomUpload', company_id: selectedCompanyId, items }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка применения')
+      setBackroomDone(`Обновлено: ${json.data?.updated ?? items.length}`)
+      await load(selectedCompanyId)
+    } catch (err: any) {
+      setBackroomParseError(err?.message || 'Не удалось применить.')
+    } finally {
+      setBackroomApplying(false)
+    }
   }
 
   async function handleSave() {
@@ -764,12 +899,22 @@ export default function WarehousePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
-            <div className="flex rounded-xl border border-white/10 bg-white/[0.03] p-0.5 text-xs">
-              {([['barcode', 'Штрихкод', Barcode], ['catalog', 'Каталог', Search], ['excel', 'Excel', FileSpreadsheet]] as const).map(([mode, label, Icon]) => (
+            <div className="grid grid-cols-4 gap-0.5 rounded-xl border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+              {([
+                ['barcode', 'Штрихкод', Barcode],
+                ['catalog', 'Каталог', Search],
+                ['excel', 'Excel', FileSpreadsheet],
+                ['backroom', 'Подсобка', Boxes],
+              ] as const).map(([mode, label, Icon]) => (
                 <button
                   key={mode}
-                  onClick={() => { setAddMode(mode); setLines([]); setExcelRows([]) }}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 transition ${addMode === mode ? 'bg-white/10 text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                  onClick={() => {
+                    setAddMode(mode)
+                    setLines([])
+                    setExcelRows([])
+                    if (mode !== 'backroom') resetBackroom()
+                  }}
+                  className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 transition ${addMode === mode ? 'bg-white/10 text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   <Icon className="h-3.5 w-3.5" />
                   {label}
@@ -908,6 +1053,139 @@ export default function WarehousePage() {
                 </div>
                 <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.docx" className="hidden" onChange={handleExcelFile} />
                 {excelError && <p className="text-xs text-rose-400">{excelError}</p>}
+              </div>
+            )}
+
+            {addMode === 'backroom' && (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2.5 text-[11px] text-amber-200/90">
+                  Загрузка остатков <b>в подсобку</b>. Сопоставление по штрихкоду — новые товары <b>не создаются</b>.
+                  Каталог поднимется до warehouse, витрина = каталог − подсобка.
+                </div>
+
+                <div
+                  onClick={() => backroomFileRef.current?.click()}
+                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/20 bg-white/[0.02] py-5 text-center transition hover:border-amber-400/40 hover:bg-white/[0.04]"
+                >
+                  <Boxes className="h-7 w-7 text-amber-300" />
+                  <p className="text-xs font-medium text-foreground">
+                    {backroomFileName ? `Файл: ${backroomFileName}` : 'Загрузить Excel / DOCX с остатками подсобки'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Формат: Штрихкод | Название | Количество</p>
+                </div>
+                <input
+                  ref={backroomFileRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv,.docx"
+                  className="hidden"
+                  onChange={handleBackroomFile}
+                  disabled={!selectedCompanyId || backroomLoading}
+                />
+
+                {backroomLoading && (
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Сопоставляю штрихкоды…
+                  </p>
+                )}
+
+                {backroomParseError && <p className="text-xs text-rose-400">{backroomParseError}</p>}
+                {backroomDone && (
+                  <p className="flex items-center gap-1.5 text-xs text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> {backroomDone}
+                  </p>
+                )}
+
+                {(backroomMatched.length > 0 || backroomUnmatched.length > 0) && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[10px] uppercase tracking-wider">
+                      <span className="text-emerald-300/80">Найдено: {backroomMatched.length}</span>
+                      <span className="text-rose-300/80">Не найдено: {backroomUnmatched.length}</span>
+                      <button
+                        type="button"
+                        onClick={resetBackroom}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        Сбросить
+                      </button>
+                    </div>
+
+                    {backroomMatched.length > 0 && (
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] max-h-80 overflow-y-auto">
+                        <table className="w-full text-[11px]">
+                          <thead className="sticky top-0 bg-[#0f172a]/95 backdrop-blur">
+                            <tr className="text-left text-muted-foreground">
+                              <th className="px-2 py-1.5 font-normal">Товар</th>
+                              <th className="px-2 py-1.5 font-normal text-right">Каталог</th>
+                              <th className="px-2 py-1.5 font-normal text-right">Подсобка</th>
+                              <th className="px-2 py-1.5 font-normal text-right">Витрина</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/[0.05]">
+                            {backroomMatched.map((m) => {
+                              const nameMismatch = m.excel_name && m.excel_name.trim().toLowerCase() !== m.catalog_name.trim().toLowerCase()
+                              return (
+                                <tr key={m.item_id} className="hover:bg-white/[0.03]">
+                                  <td className="px-2 py-1.5 align-top">
+                                    <div className="truncate font-medium">{m.catalog_name}</div>
+                                    <div className="text-[10px] font-mono text-muted-foreground">{m.barcode}</div>
+                                    {nameMismatch && (
+                                      <div className="text-[10px] text-amber-300/80">
+                                        В файле: «{m.excel_name}»
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right align-top">
+                                    <div className="text-sky-200 font-semibold">{m.new_catalog}</div>
+                                    <div className="text-[10px] text-muted-foreground">
+                                      было {m.current_catalog}
+                                      {m.catalog_changed && <span className="text-amber-300/80"> ↑</span>}
+                                    </div>
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right align-top">
+                                    <div className="text-amber-300 font-semibold">{m.new_warehouse}</div>
+                                    <div className="text-[10px] text-muted-foreground">было {m.current_warehouse}</div>
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right align-top">
+                                    <div className="text-emerald-300 font-semibold">{m.new_showcase}</div>
+                                    <div className="text-[10px] text-muted-foreground">было {m.current_showcase}</div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {backroomUnmatched.length > 0 && (
+                      <details className="rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-2">
+                        <summary className="cursor-pointer text-xs font-medium text-rose-200">
+                          Не найдены по штрихкоду ({backroomUnmatched.length}) — будут пропущены
+                        </summary>
+                        <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-[11px]">
+                          {backroomUnmatched.map((u, i) => (
+                            <li key={`${u.barcode}-${i}`} className="flex justify-between gap-2 text-muted-foreground">
+                              <span className="font-mono">{u.barcode}</span>
+                              <span className="truncate flex-1">{u.name}</span>
+                              <span className="text-rose-300">{u.quantity}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+
+                    {backroomMatched.length > 0 && (
+                      <Button
+                        onClick={handleBackroomApply}
+                        disabled={backroomApplying}
+                        className="w-full bg-amber-600 hover:bg-amber-700"
+                      >
+                        {backroomApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Boxes className="mr-2 h-4 w-4" />}
+                        Применить ({backroomMatched.length} поз.)
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
