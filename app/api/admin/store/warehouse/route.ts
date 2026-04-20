@@ -76,7 +76,36 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    const companiesQuery = supabase.from('companies').select('id, name, code').eq('show_in_structure', true).order('name')
+    // Только точки с включённым магазином (активная локация point_display)
+    const { data: enabledLocs, error: enabledErr } = await supabase
+      .from('inventory_locations')
+      .select('company_id')
+      .eq('location_type', 'point_display')
+      .eq('is_active', true)
+      .not('company_id', 'is', null)
+    if (enabledErr) throw enabledErr
+    const storeEnabledCompanyIds = [...new Set((enabledLocs || []).map((r: any) => String(r.company_id)))]
+
+    if (storeEnabledCompanyIds.length === 0) {
+      return json({
+        ok: true,
+        data: {
+          catalog: null,
+          warehouse: null,
+          companies: [],
+          balances: [],
+          categories: [],
+          selectedCompanyId: null,
+        },
+      })
+    }
+
+    const companiesQuery = supabase
+      .from('companies')
+      .select('id, name, code')
+      .eq('show_in_structure', true)
+      .in('id', storeEnabledCompanyIds)
+      .order('name')
     if (companyScope.allowedCompanyIds) companiesQuery.in('id', companyScope.allowedCompanyIds)
     const { data: companies, error: companiesErr } = await companiesQuery
     if (companiesErr) throw companiesErr
@@ -85,7 +114,23 @@ export async function GET(request: Request) {
     if (!companyId) {
       companyId = (companies || [])[0]?.id || null
     }
-    if (!companyId) return json({ error: 'company-required' }, 400)
+    if (!companyId) {
+      return json({
+        ok: true,
+        data: {
+          catalog: null,
+          warehouse: null,
+          companies: companies || [],
+          balances: [],
+          categories: [],
+          selectedCompanyId: null,
+        },
+      })
+    }
+
+    if (!storeEnabledCompanyIds.includes(companyId)) {
+      return json({ error: 'store-not-enabled-for-company' }, 400)
+    }
 
     if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
       if (!companyScope.allowedCompanyIds.includes(companyId)) {

@@ -73,13 +73,60 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    const companiesQuery = supabase.from('companies').select('id, name, code').eq('show_in_structure', true).order('name')
+    // Только точки с включённым магазином (активная локация point_display)
+    const { data: enabledLocs, error: enabledErr } = await supabase
+      .from('inventory_locations')
+      .select('company_id')
+      .eq('location_type', 'point_display')
+      .eq('is_active', true)
+      .not('company_id', 'is', null)
+    if (enabledErr) throw enabledErr
+    const storeEnabledCompanyIds = [...new Set((enabledLocs || []).map((r: any) => String(r.company_id)))]
+
+    if (storeEnabledCompanyIds.length === 0) {
+      return json({
+        ok: true,
+        data: {
+          showcase: null,
+          warehouse: null,
+          companies: [],
+          balances: [],
+          warehouseItems: [],
+          pendingRequests: [],
+          selectedCompanyId: null,
+        },
+      })
+    }
+
+    const companiesQuery = supabase
+      .from('companies')
+      .select('id, name, code')
+      .eq('show_in_structure', true)
+      .in('id', storeEnabledCompanyIds)
+      .order('name')
     if (companyScope.allowedCompanyIds) companiesQuery.in('id', companyScope.allowedCompanyIds)
     const { data: companies } = await companiesQuery
 
     let companyId = url.searchParams.get('company_id') || null
     if (!companyId) companyId = (companies || [])[0]?.id || null
-    if (!companyId) return json({ error: 'company-required' }, 400)
+    if (!companyId) {
+      return json({
+        ok: true,
+        data: {
+          showcase: null,
+          warehouse: null,
+          companies: companies || [],
+          balances: [],
+          warehouseItems: [],
+          pendingRequests: [],
+          selectedCompanyId: null,
+        },
+      })
+    }
+
+    if (!storeEnabledCompanyIds.includes(companyId)) {
+      return json({ error: 'store-not-enabled-for-company' }, 400)
+    }
 
     if (!access.isSuperAdmin && companyScope.allowedCompanyIds?.length) {
       if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
