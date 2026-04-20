@@ -10,16 +10,19 @@ import {
   History,
   Package,
   PackagePlus,
+  Search,
   ScanSearch,
   Store,
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { InventoryPageContent } from '../inventory/page'
 
 type StoreOverviewResponse = {
   items: Array<{ id: string; low_stock_threshold: number | null }>
-  locations: Array<{ id: string; location_type: 'warehouse' | 'point_display'; name: string }>
+  locations: Array<{ id: string; location_type: 'warehouse' | 'point_display'; name: string; company?: { id: string; name: string } | null }>
   balances: Array<{
     location_id: string
     quantity: number
@@ -30,6 +33,25 @@ type StoreOverviewResponse = {
   receipts: Array<{ id: string }>
   movements: Array<{ id: string }>
 }
+
+type GlobalFilters = {
+  q: string
+  company_id: string
+  from: string
+  to: string
+  status: string
+  actor: string
+}
+
+type SearchResult = {
+  type: string
+  title: string
+  subtitle: string
+  href: string
+  score: number
+}
+
+const STORE_FILTERS_KEY = 'store-global-filters-v1'
 
 function MetricCard({
   label,
@@ -51,6 +73,56 @@ function MetricCard({
 
 export default function StoreOverviewPage() {
   const [overview, setOverview] = useState<StoreOverviewResponse | null>(null)
+  const [filters, setFilters] = useState<GlobalFilters>({
+    q: '',
+    company_id: '',
+    from: '',
+    to: '',
+    status: '',
+    actor: '',
+  })
+  const [searching, setSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORE_FILTERS_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<GlobalFilters>
+        setFilters((prev) => ({ ...prev, ...parsed }))
+      }
+    } catch { /* ignore parse errors */ }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORE_FILTERS_KEY, JSON.stringify(filters))
+    } catch { /* ignore storage errors */ }
+  }, [filters])
+
+  useEffect(() => {
+    if (!filters.q.trim()) {
+      setSearchResults([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const res = await fetch(`/api/admin/store/global-search?q=${encodeURIComponent(filters.q.trim())}`, { cache: 'no-store' })
+        const json = await res.json().catch(() => null)
+        if (!res.ok || !json?.ok) {
+          setSearchResults([])
+          return
+        }
+        setSearchResults(Array.isArray(json?.data?.results) ? json.data.results : [])
+      } catch {
+        setSearchResults([])
+      } finally {
+        setSearching(false)
+      }
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [filters.q])
 
   useEffect(() => {
     async function load() {
@@ -93,6 +165,29 @@ export default function StoreOverviewPage() {
       .slice(0, 6)
   }, [overview])
 
+  const companies = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const loc of overview?.locations || []) {
+      const id = String((loc as any).company?.id || '')
+      const name = String((loc as any).company?.name || '')
+      if (id && name) map.set(id, name)
+    }
+    return [...map.entries()].map(([id, name]) => ({ id, name }))
+  }, [overview])
+
+  const withGlobalFilters = (baseHref: string) => {
+    const params = new URLSearchParams()
+    if (filters.company_id) params.set('company_id', filters.company_id)
+    if (filters.from) params.set('from', filters.from)
+    if (filters.to) params.set('to', filters.to)
+    if (filters.status) params.set('status', filters.status)
+    if (filters.actor) params.set('actor', filters.actor)
+    if (filters.q) params.set('q', filters.q)
+    const qs = params.toString()
+    if (!qs) return baseHref
+    return baseHref.includes('?') ? `${baseHref}&${qs}` : `${baseHref}?${qs}`
+  }
+
   return (
     <div className="space-y-5">
       <section className="rounded-3xl border border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_38%),linear-gradient(180deg,rgba(17,24,39,0.96),rgba(15,23,42,0.96))] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
@@ -107,11 +202,84 @@ export default function StoreOverviewPage() {
               Здесь видно, что заканчивается, сколько заявок ждут решения и куда перейти дальше: в приёмку, каталог,
               ревизию или движение товара.
             </p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <Input
+                value={filters.q}
+                onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value }))}
+                placeholder="Поиск: товар, штрихкод, заявка, приемка..."
+                className="h-9 border-white/20 bg-white/[0.04] text-white placeholder:text-slate-400 sm:col-span-2"
+              />
+              <select
+                value={filters.company_id}
+                onChange={(e) => setFilters((prev) => ({ ...prev, company_id: e.target.value }))}
+                className="h-9 rounded-md border border-white/20 bg-white/[0.04] px-2 text-sm text-white outline-none"
+              >
+                <option value="">Все точки</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 border-white/20 bg-white/[0.04] text-slate-100 hover:bg-white/[0.1]"
+                onClick={() => setFilters({ q: '', company_id: '', from: '', to: '', status: '', actor: '' })}
+              >
+                <Search className="mr-2 h-4 w-4" />
+                Сбросить
+              </Button>
+              <Input
+                type="date"
+                value={filters.from}
+                onChange={(e) => setFilters((prev) => ({ ...prev, from: e.target.value }))}
+                className="h-9 border-white/20 bg-white/[0.04] text-white"
+              />
+              <Input
+                type="date"
+                value={filters.to}
+                onChange={(e) => setFilters((prev) => ({ ...prev, to: e.target.value }))}
+                className="h-9 border-white/20 bg-white/[0.04] text-white"
+              />
+              <select
+                value={filters.status}
+                onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+                className="h-9 rounded-md border border-white/20 bg-white/[0.04] px-2 text-sm text-white outline-none"
+              >
+                <option value="">Все статусы</option>
+                <option value="new">Новые</option>
+                <option value="approved_full">Одобрено полностью</option>
+                <option value="approved_partial">Одобрено частично</option>
+                <option value="issued">Выдано</option>
+                <option value="received">Получено</option>
+                <option value="rejected">Отклонено</option>
+              </select>
+              <Input
+                value={filters.actor}
+                onChange={(e) => setFilters((prev) => ({ ...prev, actor: e.target.value }))}
+                placeholder="Ответственный"
+                className="h-9 border-white/20 bg-white/[0.04] text-white placeholder:text-slate-400"
+              />
+            </div>
+            {(searching || searchResults.length > 0) && (
+              <div className="mt-3 rounded-2xl border border-white/10 bg-black/25 p-3">
+                <p className="text-xs text-slate-400">{searching ? 'Ищу по магазину...' : `Найдено: ${searchResults.length}`}</p>
+                <div className="mt-2 space-y-1">
+                  {searchResults.slice(0, 8).map((row, idx) => (
+                    <Link
+                      key={`${row.type}-${idx}-${row.href}`}
+                      href={withGlobalFilters(row.href)}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-200 hover:bg-white/[0.08]"
+                    >
+                      <span className="truncate">{row.title}</span>
+                      <span className="shrink-0 text-xs text-slate-400">{row.subtitle}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2 xl:w-[360px]">
             <Link
-              href="/store/requests"
+              href={withGlobalFilters('/store/requests')}
               className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-100 transition hover:border-emerald-400/30 hover:bg-white/[0.08]"
             >
               <div className="flex items-center gap-2 font-medium">
@@ -121,7 +289,7 @@ export default function StoreOverviewPage() {
               <div className="mt-1 text-xs text-slate-400">Согласование и выдача</div>
             </Link>
             <Link
-              href="/store/receipts"
+              href={withGlobalFilters('/store/receipts')}
               className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-100 transition hover:border-emerald-400/30 hover:bg-white/[0.08]"
             >
               <div className="flex items-center gap-2 font-medium">
@@ -131,7 +299,7 @@ export default function StoreOverviewPage() {
               <div className="mt-1 text-xs text-slate-400">Приход товара на склад</div>
             </Link>
             <Link
-              href="/store/movements"
+              href={withGlobalFilters('/store/movements')}
               className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-100 transition hover:border-emerald-400/30 hover:bg-white/[0.08]"
             >
               <div className="flex items-center gap-2 font-medium">
@@ -141,7 +309,7 @@ export default function StoreOverviewPage() {
               <div className="mt-1 text-xs text-slate-400">Журнал операций</div>
             </Link>
             <Link
-              href="/store/revisions"
+              href={withGlobalFilters('/store/revisions')}
               className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-100 transition hover:border-emerald-400/30 hover:bg-white/[0.08]"
             >
               <div className="flex items-center gap-2 font-medium">

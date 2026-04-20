@@ -184,7 +184,17 @@ export default function WarehousePage() {
     }
   }, [selectedCompanyId])
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const companyId = params.get('company_id')
+      const q = params.get('q')
+      if (q) setStockSearch(q)
+      void load(companyId)
+    } catch {
+      void load()
+    }
+  }, [])
 
   useEffect(() => {
     if (addMode !== 'catalog') return

@@ -233,6 +233,22 @@ export default function StoreRequestsPage() {
     load()
   }, [])
 
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const q = params.get('q')
+      const status = params.get('status')
+      const actor = params.get('actor')
+      const from = params.get('from')
+      const to = params.get('to')
+      if (q) setSearch(q)
+      if (status) setStatusFilter(status)
+      if (actor) setActorFilter(actor)
+      if (from) setFromDate(from)
+      if (to) setToDate(to)
+    } catch { /* ignore query parse errors */ }
+  }, [])
+
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase()
     return requests.filter((request) => {

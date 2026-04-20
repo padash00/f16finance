@@ -158,7 +158,15 @@ export default function ShowcasePage() {
     }
   }, [selectedCompanyId])
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const companyId = params.get('company_id')
+      void load(companyId)
+    } catch {
+      void load()
+    }
+  }, [])
 
   // ── Request form ─────────────────────────────────────────────────────────────
 

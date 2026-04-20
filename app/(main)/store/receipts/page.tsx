@@ -195,6 +195,11 @@ export default function StoreReceiptsPage() {
   }
 
   useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const q = params.get('q')
+      if (q) setQuickQuery(q)
+    } catch { /* ignore query parse errors */ }
     void load()
   }, [])
 
