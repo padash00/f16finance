@@ -170,6 +170,10 @@ export default function StoreReceiptsPage() {
   const [quickQuery, setQuickQuery] = useState('')
   const [quickError, setQuickError] = useState<string | null>(null)
   const quickInputRef = useRef<HTMLInputElement>(null)
+  const [templateName, setTemplateName] = useState('')
+  const [savedTemplates, setSavedTemplates] = useState<Array<{ name: string; lines: ReceiptLine[] }>>([])
+  const [bulkMarkupPercent, setBulkMarkupPercent] = useState('')
+  const [bulkSalePrice, setBulkSalePrice] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -201,6 +205,33 @@ export default function StoreReceiptsPage() {
       if (q) setQuickQuery(q)
     } catch { /* ignore query parse errors */ }
     void load()
+  }, [])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('store-receipts-templates-v1')
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) setSavedTemplates(parsed)
+    } catch { /* ignore parse errors */ }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('store-receipts-templates-v1', JSON.stringify(savedTemplates))
+    } catch { /* ignore write errors */ }
+  }, [savedTemplates])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        quickInputRef.current?.focus()
+        quickInputRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
   const receiptTotal = useMemo(() => {
@@ -347,6 +378,91 @@ export default function StoreReceiptsPage() {
     }
   }
 
+  const saveTemplate = () => {
+    const name = templateName.trim()
+    if (!name) {
+      setError('Введите название шаблона')
+      return
+    }
+    const nonEmptyLines = lines.filter((line) => line.item_id && parseQty(line.quantity) > 0)
+    if (nonEmptyLines.length === 0) {
+      setError('Нет заполненных строк для шаблона')
+      return
+    }
+    setSavedTemplates((prev) => {
+      const rest = prev.filter((tpl) => tpl.name !== name)
+      return [{ name, lines: nonEmptyLines }, ...rest].slice(0, 25)
+    })
+    setTemplateName('')
+    setSuccess(`Шаблон «${name}» сохранён`)
+  }
+
+  const applyTemplate = (name: string) => {
+    const tpl = savedTemplates.find((item) => item.name === name)
+    if (!tpl) return
+    setLines(tpl.lines.map((line) => ({ ...line })))
+    setSuccess(`Шаблон «${name}» применён`)
+  }
+
+  const deleteTemplate = (name: string) => {
+    setSavedTemplates((prev) => prev.filter((tpl) => tpl.name !== name))
+  }
+
+  const applyBulkMarkupPercent = () => {
+    const pct = parseMoney(bulkMarkupPercent)
+    setLines((prev) =>
+      prev.map((line) => {
+        if (!line.item_id) return line
+        const base = parseMoney(line.unit_cost)
+        const sale = base > 0 ? String(Math.round((base * (1 + pct / 100) + Number.EPSILON) * 100) / 100) : line.sale_price
+        return { ...line, markup_percent: String(pct), sale_price: sale }
+      }),
+    )
+  }
+
+  const applyBulkSalePrice = () => {
+    const sale = parseMoney(bulkSalePrice)
+    setLines((prev) =>
+      prev.map((line) => {
+        if (!line.item_id) return line
+        return {
+          ...line,
+          sale_price: String(sale),
+          markup_percent: calcMarkupPercent(line.unit_cost, String(sale)),
+        }
+      }),
+    )
+  }
+
+  const exportCsv = () => {
+    const rows = lines
+      .filter((line) => line.item_id)
+      .map((line) => {
+        const item = (data?.items || []).find((i) => i.id === line.item_id)
+        return {
+          name: item?.name || '',
+          barcode: item?.barcode || '',
+          quantity: line.quantity,
+          unit_cost: line.unit_cost,
+          sale_price: line.sale_price,
+          markup_percent: line.markup_percent,
+          comment: line.comment || '',
+        }
+      })
+    if (rows.length === 0) return
+    const headers = ['name', 'barcode', 'quantity', 'unit_cost', 'sale_price', 'markup_percent', 'comment']
+    const csv = [headers.join(',')]
+      .concat(rows.map((r) => headers.map((h) => `"${String((r as any)[h] ?? '').replace(/"/g, '""')}"`).join(',')))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `receipts-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-6">
       <Card className="border-white/10 bg-gradient-to-br from-white/[0.05] via-white/[0.03] to-transparent p-6">
@@ -429,6 +545,7 @@ export default function StoreReceiptsPage() {
                   Добавить товар
                 </Button>
               </div>
+              <p className="mt-2 text-[11px] text-emerald-200/80">Горячая клавиша: Ctrl/Cmd + K — фокус на сканер</p>
               {quickError ? <p className="mt-2 text-xs text-rose-300">{quickError}</p> : null}
               {quickMatches.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -446,6 +563,39 @@ export default function StoreReceiptsPage() {
                     >
                       {item.name} · {item.barcode}
                     </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+              <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Массовые операции по строкам</p>
+              <div className="grid gap-2 md:grid-cols-2">
+                <div className="flex gap-2">
+                  <Input value={bulkMarkupPercent} onChange={(e) => setBulkMarkupPercent(e.target.value)} placeholder="Наценка % для всех" />
+                  <Button type="button" variant="outline" onClick={applyBulkMarkupPercent}>Применить</Button>
+                </div>
+                <div className="flex gap-2">
+                  <Input value={bulkSalePrice} onChange={(e) => setBulkSalePrice(e.target.value)} placeholder="Цена продажи для всех" />
+                  <Button type="button" variant="outline" onClick={applyBulkSalePrice}>Применить</Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+              <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Шаблоны приемки</p>
+              <div className="flex flex-wrap gap-2">
+                <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="min-w-[220px] flex-1" />
+                <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить шаблон</Button>
+                <Button type="button" variant="outline" onClick={exportCsv}>Экспорт CSV</Button>
+              </div>
+              {savedTemplates.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {savedTemplates.map((tpl) => (
+                    <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs">
+                      <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-200 hover:text-white">{tpl.name}</button>
+                      <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-300 hover:text-rose-200">×</button>
+                    </div>
                   ))}
                 </div>
               )}

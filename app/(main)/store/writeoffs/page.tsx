@@ -119,6 +119,8 @@ export default function StoreWriteoffsPage() {
   const [quickQuery, setQuickQuery] = useState('')
   const [quickError, setQuickError] = useState<string | null>(null)
   const quickInputRef = useRef<HTMLInputElement>(null)
+  const [templateName, setTemplateName] = useState('')
+  const [savedTemplates, setSavedTemplates] = useState<Array<{ name: string; lines: WriteoffLine[]; reason: string }>>([])
 
   const load = async () => {
     setLoading(true)
@@ -144,6 +146,33 @@ export default function StoreWriteoffsPage() {
       if (q) setQuickQuery(q)
     } catch { /* ignore query parse errors */ }
     void load()
+  }, [])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('store-writeoffs-templates-v1')
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) setSavedTemplates(parsed)
+    } catch { /* ignore parse errors */ }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('store-writeoffs-templates-v1', JSON.stringify(savedTemplates))
+    } catch { /* ignore write errors */ }
+  }, [savedTemplates])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        quickInputRef.current?.focus()
+        quickInputRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
   const activeLocations = data?.locations || []
@@ -266,6 +295,58 @@ export default function StoreWriteoffsPage() {
     }
   }
 
+  const saveTemplate = () => {
+    const name = templateName.trim()
+    if (!name) return setError('Введите название шаблона')
+    const nonEmptyLines = lines.filter((line) => line.item_id && parseQty(line.quantity) > 0)
+    if (nonEmptyLines.length === 0) return setError('Нет строк для шаблона')
+    setSavedTemplates((prev) => {
+      const rest = prev.filter((tpl) => tpl.name !== name)
+      return [{ name, lines: nonEmptyLines, reason: reason.trim() }, ...rest].slice(0, 25)
+    })
+    setTemplateName('')
+    setSuccess(`Шаблон «${name}» сохранён`)
+  }
+
+  const applyTemplate = (name: string) => {
+    const tpl = savedTemplates.find((item) => item.name === name)
+    if (!tpl) return
+    setLines(tpl.lines.map((line) => ({ ...line })))
+    if (tpl.reason) setReason(tpl.reason)
+    setSuccess(`Шаблон «${name}» применён`)
+  }
+
+  const deleteTemplate = (name: string) => {
+    setSavedTemplates((prev) => prev.filter((tpl) => tpl.name !== name))
+  }
+
+  const exportCsv = () => {
+    const rows = lines
+      .filter((line) => line.item_id)
+      .map((line) => {
+        const balance = selectedBalances.find((b) => b.item_id === line.item_id)
+        return {
+          name: balance?.item?.name || '',
+          barcode: balance?.item?.barcode || '',
+          quantity: line.quantity,
+          comment: line.comment || '',
+          reason: reason || '',
+        }
+      })
+    if (rows.length === 0) return
+    const headers = ['name', 'barcode', 'quantity', 'comment', 'reason']
+    const csv = [headers.join(',')]
+      .concat(rows.map((r) => headers.map((h) => `"${String((r as any)[h] ?? '').replace(/"/g, '""')}"`).join(',')))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `writeoffs-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 pt-5 md:px-6">
       <Card className="border-white/10 bg-gradient-to-br from-white/[0.05] via-white/[0.03] to-transparent p-6">
@@ -343,6 +424,7 @@ export default function StoreWriteoffsPage() {
                   Добавить товар
                 </Button>
               </div>
+              <p className="mt-2 text-[11px] text-rose-200/80">Горячая клавиша: Ctrl/Cmd + K — фокус на сканер</p>
               {quickError ? <p className="mt-2 text-xs text-rose-300">{quickError}</p> : null}
               {quickCandidates.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -360,6 +442,25 @@ export default function StoreWriteoffsPage() {
                     >
                       {balance.item?.name || 'Товар'} · {balance.item?.barcode || '—'} · {formatQty(Number(balance.quantity || 0))}
                     </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+              <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Шаблоны и экспорт</p>
+              <div className="flex flex-wrap gap-2">
+                <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="min-w-[220px] flex-1" />
+                <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить шаблон</Button>
+                <Button type="button" variant="outline" onClick={exportCsv}>Экспорт CSV</Button>
+              </div>
+              {savedTemplates.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {savedTemplates.map((tpl) => (
+                    <div key={tpl.name} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs">
+                      <button type="button" onClick={() => applyTemplate(tpl.name)} className="text-slate-200 hover:text-white">{tpl.name}</button>
+                      <button type="button" onClick={() => deleteTemplate(tpl.name)} className="text-rose-300 hover:text-rose-200">×</button>
+                    </div>
                   ))}
                 </div>
               )}

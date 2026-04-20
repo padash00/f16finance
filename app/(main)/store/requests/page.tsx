@@ -394,6 +394,35 @@ export default function StoreRequestsPage() {
     }
   }
 
+  const exportRequestsCsv = () => {
+    const rows = filteredRequests.map((request) => ({
+      request_id: request.id,
+      status: request.status,
+      company: request.company?.name || '',
+      created_at: request.created_at || '',
+      approved_at: request.approved_at || '',
+      issued_at: request.issued_at || '',
+      received_at: request.received_at || '',
+      created_by: actorLabel(request.created_by_staff, request.created_by),
+      approved_by: actorLabel(request.approved_by_staff, request.approved_by),
+      issued_by: actorLabel(request.issued_by_staff, request.issued_by),
+      items_requested: asArray(request.items).reduce((sum, item) => sum + Number(item.requested_qty || 0), 0),
+      items_approved: asArray(request.items).reduce((sum, item) => sum + Number(item.approved_qty || 0), 0),
+    }))
+    if (rows.length === 0) return
+    const headers = Object.keys(rows[0])
+    const csv = [headers.join(',')]
+      .concat(rows.map((row) => headers.map((h) => `"${String((row as any)[h] ?? '').replace(/"/g, '""')}"`).join(',')))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `requests-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 pt-5 md:px-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -476,6 +505,9 @@ export default function StoreRequestsPage() {
             }}
           >
             Сбросить фильтры
+          </Button>
+          <Button type="button" variant="outline" onClick={exportRequestsCsv}>
+            Экспорт CSV
           </Button>
         </div>
       </Card>
