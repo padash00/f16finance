@@ -627,12 +627,13 @@ function createKioskWindow() {
     alwaysOnTop: !isDev,
     frame: isDev,
     autoHideMenuBar: true,
+    backgroundColor: '#07080a',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
-      devTools: isDev,
+      sandbox: false,
+      devTools: true,
     },
   })
 
@@ -703,15 +704,21 @@ function createKioskWindow() {
     }
   }
 
-  // Log renderer errors to kiosk.log for debugging white screen issues
+  // Log renderer events to kiosk.log for debugging
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
     logLine(`renderer: did-fail-load code=${code} desc=${desc} url=${url}`)
   })
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     logLine(`renderer: render-process-gone reason=${details.reason} exitCode=${details.exitCode}`)
   })
+  mainWindow.webContents.on('dom-ready', () => {
+    logLine('renderer: dom-ready')
+  })
+  mainWindow.webContents.on('did-finish-load', () => {
+    logLine('renderer: did-finish-load')
+  })
   mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
-    if (level >= 2) logLine(`renderer console[${level}]: ${message} (${sourceId}:${line})`)
+    logLine(`renderer console[${level}]: ${message} (${sourceId}:${line})`)
   })
 
   if (isDev) {
