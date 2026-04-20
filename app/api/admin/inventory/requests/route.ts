@@ -38,10 +38,41 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
+    // Enrich with staff names for full request history timeline
+    const actorIds = Array.from(
+      new Set(
+        (requests || [])
+          .flatMap((r: any) => [r.created_by, r.approved_by, r.issued_by])
+          .map((v: any) => String(v || '').trim())
+          .filter(Boolean),
+      ),
+    )
+    let staffById: Record<string, { id: string; full_name: string | null; role: string | null }> = {}
+    if (actorIds.length > 0) {
+      const { data: staffRows } = await supabase
+        .from('staff')
+        .select('id, full_name, role')
+        .in('id', actorIds)
+      for (const s of staffRows || []) {
+        staffById[String((s as any).id)] = {
+          id: String((s as any).id),
+          full_name: ((s as any).full_name as string) || null,
+          role: ((s as any).role as string) || null,
+        }
+      }
+    }
+
+    const enrichedRequests = (requests || []).map((r: any) => ({
+      ...r,
+      created_by_staff: r.created_by ? staffById[String(r.created_by)] || null : null,
+      approved_by_staff: r.approved_by ? staffById[String(r.approved_by)] || null : null,
+      issued_by_staff: r.issued_by ? staffById[String(r.issued_by)] || null : null,
+    }))
+
     return json({
       ok: true,
       data: {
-        requests,
+        requests: enrichedRequests,
       },
     })
   } catch (error: any) {
@@ -90,9 +121,20 @@ export async function POST(request: Request) {
       if (newStatus === 'issued' && !['approved_full', 'approved_partial'].includes(req.status)) return json({ error: 'invalid-transition' }, 400)
       if (newStatus === 'received' && req.status !== 'issued') return json({ error: 'invalid-transition' }, 400)
 
+      const actorUserId = access.staffMember?.id || null
+      const nowIso = new Date().toISOString()
+      const patch: Record<string, any> = { status: newStatus, updated_at: nowIso }
+      if (newStatus === 'issued') {
+        patch.issued_at = nowIso
+        patch.issued_by = actorUserId
+      }
+      if (newStatus === 'received') {
+        patch.received_at = nowIso
+      }
+
       const { error: updErr } = await supabase
         .from('inventory_requests')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .update(patch)
         .eq('id', requestId)
       if (updErr) throw updErr
 

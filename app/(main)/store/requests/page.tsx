@@ -40,6 +40,15 @@ type InventoryRequest = {
   decision_comment: string | null
   created_at: string
   approved_at: string | null
+  issued_at: string | null
+  received_at: string | null
+  created_by: string | null
+  approved_by: string | null
+  issued_by: string | null
+  received_qty_confirmed: number | null
+  created_by_staff?: { id: string; full_name: string | null; role: string | null } | null
+  approved_by_staff?: { id: string; full_name: string | null; role: string | null } | null
+  issued_by_staff?: { id: string; full_name: string | null; role: string | null } | null
   company?: { id: string; name: string; code: string | null } | null
   source_location?: InventoryLocation | null
   target_location?: InventoryLocation | null
@@ -78,6 +87,15 @@ function normalizeRequest(raw: any): InventoryRequest {
     decision_comment: raw?.decision_comment || null,
     created_at: raw?.created_at || null,
     approved_at: raw?.approved_at || null,
+    issued_at: raw?.issued_at || null,
+    received_at: raw?.received_at || null,
+    created_by: raw?.created_by ? String(raw.created_by) : null,
+    approved_by: raw?.approved_by ? String(raw.approved_by) : null,
+    issued_by: raw?.issued_by ? String(raw.issued_by) : null,
+    received_qty_confirmed: raw?.received_qty_confirmed == null ? null : Number(raw.received_qty_confirmed || 0),
+    created_by_staff: firstOrSelf(raw?.created_by_staff),
+    approved_by_staff: firstOrSelf(raw?.approved_by_staff),
+    issued_by_staff: firstOrSelf(raw?.issued_by_staff),
     company: firstOrSelf(raw?.company),
     source_location: firstOrSelf(raw?.source_location),
     target_location: firstOrSelf(raw?.target_location),
@@ -89,6 +107,15 @@ function normalizeRequest(raw: any): InventoryRequest {
       item: firstOrSelf(item?.item),
     })),
   }
+}
+
+function actorLabel(
+  staff: { full_name: string | null; role: string | null } | null | undefined,
+  fallbackId: string | null | undefined,
+) {
+  if (staff?.full_name) return staff.full_name
+  if (fallbackId) return `ID ${fallbackId.slice(0, 8)}`
+  return '—'
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -612,6 +639,48 @@ export default function StoreRequestsPage() {
                         ) : null}
                       </div>
                       <RequestStatusBadge status={request.status} />
+                    </div>
+                    <div className="mt-3 grid gap-1 text-[11px] text-slate-400">
+                      <div className="flex justify-between gap-3">
+                        <span>Кто создал</span>
+                        <span className="text-slate-300">{actorLabel(request.created_by_staff, request.created_by)}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>Кто одобрил</span>
+                        <span className="text-slate-300">{actorLabel(request.approved_by_staff, request.approved_by)}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>Кто выдал</span>
+                        <span className="text-slate-300">{actorLabel(request.issued_by_staff, request.issued_by)}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>Кто принял</span>
+                        <span className="text-slate-300">—</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>Когда выдали</span>
+                        <span className="text-slate-300">{formatDateTime(request.issued_at)}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>Когда получили</span>
+                        <span className="text-slate-300">{formatDateTime(request.received_at)}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>Подтверждено при получении</span>
+                        <span className="text-slate-300">
+                          {request.received_qty_confirmed == null ? '—' : formatQty(request.received_qty_confirmed)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-xl border border-white/6 bg-black/20 p-2.5">
+                      {asArray(request.items).slice(0, 5).map((item) => (
+                        <div key={item.id} className="flex items-center justify-between text-[11px] text-slate-300">
+                          <span className="truncate pr-2">{item.item?.name || 'Товар'}</span>
+                          <span className="shrink-0 text-slate-400">
+                            {formatQty(Number(item.requested_qty || 0))} → {formatQty(Number(item.approved_qty || 0))}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))
