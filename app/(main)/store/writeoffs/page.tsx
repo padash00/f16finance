@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArchiveX, Loader2, MoreHorizontal, RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -116,6 +116,9 @@ export default function StoreWriteoffsPage() {
   const [reason, setReason] = useState('')
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<WriteoffLine[]>([emptyLine()])
+  const [quickQuery, setQuickQuery] = useState('')
+  const [quickError, setQuickError] = useState<string | null>(null)
+  const quickInputRef = useRef<HTMLInputElement>(null)
 
   const load = async () => {
     setLoading(true)
@@ -145,6 +148,69 @@ export default function StoreWriteoffsPage() {
       .filter((balance) => balance.location_id === locationId && Number(balance.quantity || 0) > 0)
       .sort((a, b) => (a.item?.name || '').localeCompare(b.item?.name || ''))
   }, [data?.balances, locationId])
+
+  const quickCandidates = useMemo(() => {
+    const q = quickQuery.trim().toLowerCase()
+    if (!q) return []
+    return selectedBalances
+      .filter((balance) => {
+        const barcode = String(balance.item?.barcode || '').toLowerCase()
+        const name = String(balance.item?.name || '').toLowerCase()
+        return barcode.includes(q) || name.includes(q)
+      })
+      .slice(0, 8)
+  }, [quickQuery, selectedBalances])
+
+  const upsertWriteoffLine = (itemId: string, mode: 'increment' | 'set' = 'increment') => {
+    const inLocation = selectedBalances.find((balance) => balance.item_id === itemId)
+    if (!inLocation) return false
+
+    setLines((current) => {
+      const idx = current.findIndex((line) => line.item_id === itemId)
+      if (idx >= 0) {
+        return current.map((line, lineIndex) => {
+          if (lineIndex !== idx) return line
+          const nextQty = mode === 'increment' ? parseQty(line.quantity) + 1 : Math.max(1, parseQty(line.quantity))
+          return { ...line, quantity: String(nextQty) }
+        })
+      }
+      const nextLine: WriteoffLine = { item_id: itemId, quantity: '1', comment: '' }
+      const hasOnlyEmpty = current.length === 1 && !current[0].item_id && !current[0].quantity && !current[0].comment
+      return hasOnlyEmpty ? [nextLine] : [...current, nextLine]
+    })
+    return true
+  }
+
+  const handleQuickAdd = () => {
+    setQuickError(null)
+    const q = quickQuery.trim()
+    if (!q) return
+
+    const exactBarcode = selectedBalances.find((balance) => String(balance.item?.barcode || '').trim() === q)
+    if (exactBarcode) {
+      upsertWriteoffLine(exactBarcode.item_id, 'increment')
+      setQuickQuery('')
+      return
+    }
+
+    const byContains = selectedBalances.filter((balance) => {
+      const barcode = String(balance.item?.barcode || '').toLowerCase()
+      const name = String(balance.item?.name || '').toLowerCase()
+      const query = q.toLowerCase()
+      return barcode.includes(query) || name.includes(query)
+    })
+
+    if (byContains.length === 1) {
+      upsertWriteoffLine(byContains[0].item_id, 'increment')
+      setQuickQuery('')
+      return
+    }
+    if (byContains.length === 0) {
+      setQuickError('Товар не найден в выбранной локации.')
+      return
+    }
+    setQuickError('Найдено несколько товаров — выбери ниже.')
+  }
 
   const createWriteoff = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -250,6 +316,50 @@ export default function StoreWriteoffsPage() {
           </div>
 
           <form onSubmit={createWriteoff} className="space-y-5">
+            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.05] p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  ref={quickInputRef}
+                  value={quickQuery}
+                  onChange={(event) => {
+                    setQuickQuery(event.target.value)
+                    if (quickError) setQuickError(null)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      handleQuickAdd()
+                    }
+                  }}
+                  placeholder="Сканируй штрихкод или введи название товара"
+                  className="min-w-[260px] flex-1"
+                />
+                <Button type="button" onClick={handleQuickAdd}>
+                  Добавить товар
+                </Button>
+              </div>
+              {quickError ? <p className="mt-2 text-xs text-rose-300">{quickError}</p> : null}
+              {quickCandidates.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {quickCandidates.map((balance) => (
+                    <button
+                      key={`quick-${balance.location_id}-${balance.item_id}`}
+                      type="button"
+                      onClick={() => {
+                        upsertWriteoffLine(balance.item_id, 'increment')
+                        setQuickQuery('')
+                        setQuickError(null)
+                        quickInputRef.current?.focus()
+                      }}
+                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-200 hover:bg-white/[0.08]"
+                    >
+                      {balance.item?.name || 'Товар'} · {balance.item?.barcode || '—'} · {formatQty(Number(balance.quantity || 0))}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Локация</Label>
