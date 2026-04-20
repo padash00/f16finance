@@ -316,7 +316,7 @@ export function CatalogPageContent() {
   const [importError, setImportError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [bulkDialog, setBulkDialog] = useState<null | 'deactivate' | 'deleteEmpty' | 'deleteAll'>(null)
+  const [bulkDialog, setBulkDialog] = useState<null | 'deactivate' | 'deleteEmpty' | 'deleteAll' | 'resetBalances'>(null)
   const [bulkPhrase, setBulkPhrase] = useState('')
   const [bulkLoading, setBulkLoading] = useState(false)
 
@@ -553,8 +553,16 @@ export function CatalogPageContent() {
     if (!bulkDialog) return
     setBulkLoading(true)
     try {
-      const action = bulkDialog === 'deactivate' ? 'deactivateAllItems' : bulkDialog === 'deleteAll' ? 'deleteAllItems' : 'deleteEmptyBalanceItems'
-      const confirm = bulkDialog === 'deactivate' ? 'ОТКЛЮЧИТЬ ВСЕ' : bulkDialog === 'deleteAll' ? 'УДАЛИТЬ ВСЁ' : 'УДАЛИТЬ ПУСТЫЕ'
+      const action =
+        bulkDialog === 'deactivate' ? 'deactivateAllItems'
+        : bulkDialog === 'deleteAll' ? 'deleteAllItems'
+        : bulkDialog === 'resetBalances' ? 'resetAllBalances'
+        : 'deleteEmptyBalanceItems'
+      const confirm =
+        bulkDialog === 'deactivate' ? 'ОТКЛЮЧИТЬ ВСЕ'
+        : bulkDialog === 'deleteAll' ? 'УДАЛИТЬ ВСЁ'
+        : bulkDialog === 'resetBalances' ? 'ОБНУЛИТЬ ОСТАТКИ'
+        : 'УДАЛИТЬ ПУСТЫЕ'
       if (bulkPhrase.trim() !== confirm) {
         showToast('Неверная фраза подтверждения')
         return
@@ -570,6 +578,8 @@ export function CatalogPageContent() {
         showToast(`Скрыто позиций: ${json.data?.count ?? 0}`)
       } else if (bulkDialog === 'deleteAll') {
         showToast(`Удалено всё: ${json.data?.deleted ?? 0} позиций`)
+      } else if (bulkDialog === 'resetBalances') {
+        showToast(`Обнулено остатков: ${json.data?.deleted ?? 0} строк`)
       } else {
         showToast(`Удалено: ${json.data?.deleted ?? 0}, не удалось: ${json.data?.failed ?? 0}`)
       }
@@ -619,6 +629,9 @@ export function CatalogPageContent() {
           <Button variant="outline" size="sm" onClick={() => exportToExcel(filtered)}>
             <Download className="w-3.5 h-3.5 mr-1.5" />
             Экспорт Excel
+          </Button>
+          <Button variant="outline" size="sm" className="text-sky-700 border-sky-500/40" onClick={() => { setBulkDialog('resetBalances'); setBulkPhrase('') }}>
+            Обнулить остатки
           </Button>
           <Button variant="outline" size="sm" className="text-amber-700 border-amber-500/40" onClick={() => { setBulkDialog('deactivate'); setBulkPhrase('') }}>
             Скрыть все в каталоге
@@ -1136,6 +1149,7 @@ export function CatalogPageContent() {
             <DialogTitle>
               {bulkDialog === 'deactivate' ? 'Скрыть все позиции в каталоге'
                 : bulkDialog === 'deleteAll' ? 'Удалить весь каталог'
+                : bulkDialog === 'resetBalances' ? 'Обнулить остатки каталога/склада/витрины'
                 : 'Удалить товары без остатков'}
             </DialogTitle>
             <DialogDescription>
@@ -1143,13 +1157,18 @@ export function CatalogPageContent() {
                 ? 'Все товары станут неактивными (не исчезнут из базы). Для POS и отчётов они не будут предлагаться.'
                 : bulkDialog === 'deleteAll'
                 ? 'Будут удалены ВСЕ товары организации включая остатки на складе и витринах. Это действие необратимо.'
+                : bulkDialog === 'resetBalances'
+                ? 'Обнулит остатки на всех catalog/warehouse/point_display/backroom локациях организации. Сами товары, история движений и приёмок останутся. Нужен чтобы перезалить Excel с нуля после ошибочного импорта в не ту точку.'
                 : 'Будут удалены только позиции с нулевым остатком на всех локациях. Если у товара есть приёмки, продажи или другая история, удаление может не пройти — такие строки будут пропущены.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
             <Label className="text-xs text-muted-foreground">
               Введите фразу: <span className="font-mono text-foreground">
-                {bulkDialog === 'deactivate' ? 'ОТКЛЮЧИТЬ ВСЕ' : bulkDialog === 'deleteAll' ? 'УДАЛИТЬ ВСЁ' : 'УДАЛИТЬ ПУСТЫЕ'}
+                {bulkDialog === 'deactivate' ? 'ОТКЛЮЧИТЬ ВСЕ'
+                  : bulkDialog === 'deleteAll' ? 'УДАЛИТЬ ВСЁ'
+                  : bulkDialog === 'resetBalances' ? 'ОБНУЛИТЬ ОСТАТКИ'
+                  : 'УДАЛИТЬ ПУСТЫЕ'}
               </span>
             </Label>
             <Input value={bulkPhrase} onChange={(e) => setBulkPhrase(e.target.value)} placeholder="Точно как указано выше" autoComplete="off" />

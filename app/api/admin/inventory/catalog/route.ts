@@ -503,6 +503,47 @@ export async function POST(request: Request) {
     }
 
     // -----------------------------------------------------------------------
+    // resetAllBalances — обнулить ВСЕ остатки (inventory_balances) организации,
+    // не трогая сами товары. Используется чтобы перезалить Excel без мусора
+    // и FK-проблем (inventory_movements/point_sale_items блокируют delete items).
+    // -----------------------------------------------------------------------
+    if (body.action === 'resetAllBalances') {
+      const confirm = String(body.confirm || '').trim()
+      if (confirm !== 'ОБНУЛИТЬ ОСТАТКИ') {
+        return json({ error: 'Введите фразу подтверждения: ОБНУЛИТЬ ОСТАТКИ' }, 400)
+      }
+
+      const orgId = await resolveEffectiveOrganizationId({
+        supabase,
+        activeOrganizationId: access.activeOrganization?.id || null,
+      })
+      if (!orgId) return json({ error: 'Укажите организацию' }, 400)
+
+      const { data: locRows, error: locErr } = await supabase
+        .from('inventory_locations')
+        .select('id')
+        .eq('organization_id', orgId)
+        .in('location_type', ['catalog', 'warehouse', 'point_display', 'backroom'])
+
+      if (locErr) throw locErr
+
+      const locIds = (locRows || []).map((r: { id: string }) => r.id)
+      if (locIds.length === 0) return json({ ok: true, data: { deleted: 0 } })
+
+      let deleted = 0
+      for (const slice of chunkArray(locIds, 100)) {
+        const { count, error: delErr } = await supabase
+          .from('inventory_balances')
+          .delete({ count: 'exact' })
+          .in('location_id', slice)
+        if (delErr) throw delErr
+        deleted += Number(count || 0)
+      }
+
+      return json({ ok: true, data: { deleted, locations: locIds.length } })
+    }
+
+    // -----------------------------------------------------------------------
     // deactivateAllItems — скрыть все позиции каталога (is_active = false)
     // -----------------------------------------------------------------------
     if (body.action === 'deactivateAllItems') {
