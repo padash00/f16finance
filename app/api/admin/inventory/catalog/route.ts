@@ -394,13 +394,65 @@ export async function POST(request: Request) {
       if (rowsWithStock.length > 0 && orgId) {
         const { data: catList, error: catLocErr } = await supabase
           .from('inventory_locations')
-          .select('id, name, code')
+          .select('id, name, code, company_id')
           .eq('location_type', 'catalog')
           .eq('is_active', true)
           .eq('organization_id', orgId)
 
         if (catLocErr) throw catLocErr
-        const catalogId = pickCentralCatalogId(catList)
+
+        // Остатки из Excel едут только в компанию с включённым магазином (point_display active).
+        const { data: enabledLocs, error: enabledErr } = await supabase
+          .from('inventory_locations')
+          .select('company_id')
+          .eq('location_type', 'point_display')
+          .eq('is_active', true)
+          .eq('organization_id', orgId)
+          .not('company_id', 'is', null)
+        if (enabledErr) throw enabledErr
+        const storeEnabledCompanyIds = new Set(
+          (enabledLocs || []).map((r: any) => String(r.company_id)).filter(Boolean),
+        )
+
+        const requestedCompanyId = String(body.company_id || '').trim() || null
+        const eligibleCatalogs = (catList || []).filter((c: any) =>
+          c?.company_id ? storeEnabledCompanyIds.has(String(c.company_id)) : false,
+        )
+
+        let catalogId: string | undefined
+        if (requestedCompanyId) {
+          const picked = (catList || []).find((c: any) => String(c?.company_id || '') === requestedCompanyId)
+          if (!picked?.id) {
+            return json({ error: 'catalog-not-found-for-company' }, 400)
+          }
+          if (!storeEnabledCompanyIds.has(requestedCompanyId)) {
+            return json({ error: 'store-not-enabled-for-company' }, 400)
+          }
+          catalogId = String(picked.id)
+        } else if (eligibleCatalogs.length === 1) {
+          catalogId = String(eligibleCatalogs[0].id)
+        } else if (eligibleCatalogs.length === 0) {
+          return json(
+            {
+              error:
+                'Нет точек с включённым магазином (point_display active). Включите магазин в нужной точке или уберите колонку «Остаток» из файла.',
+            },
+            400,
+          )
+        } else {
+          return json(
+            {
+              error: 'store-ambiguous-company-required',
+              companies: eligibleCatalogs.map((c: any) => ({ id: String(c.company_id), name: String(c.name || '') })),
+            },
+            400,
+          )
+        }
+
+        if (!catalogId) {
+          // Safety fallback — не должно сработать после проверок выше.
+          catalogId = pickCentralCatalogId(catList as any)
+        }
         if (!catalogId) {
           return json(
             {
