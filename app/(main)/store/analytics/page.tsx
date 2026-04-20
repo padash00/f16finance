@@ -1,10 +1,18 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Boxes, RefreshCw, Store } from 'lucide-react'
+import { AlertTriangle, Boxes, MoreHorizontal, RefreshCw, Store } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { formatMoney } from '@/lib/core/format'
 
 type InventoryLocation = {
@@ -232,10 +240,22 @@ export default function StoreAnalyticsPage() {
             </p>
           </div>
 
-          <Button variant="outline" onClick={() => void load()} disabled={loading} className="rounded-2xl">
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="rounded-2xl">
+                <MoreHorizontal className="mr-2 h-4 w-4" />
+                Действия
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Управление аналитикой</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => void load()} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Обновить данные
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </Card>
 

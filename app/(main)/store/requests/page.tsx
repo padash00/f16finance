@@ -1,10 +1,18 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, ClipboardList, Loader2, PackageCheck, RefreshCw, XCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ClipboardList, Loader2, MoreHorizontal, PackageCheck, RefreshCw, XCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { formatMoney } from '@/lib/core/format'
@@ -332,10 +340,26 @@ export default function StoreRequestsPage() {
             placeholder="Поиск по точке, товару или комментарию"
             className="w-full sm:w-80"
           />
-          <Button variant="outline" onClick={load} disabled={loading}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            Обновить
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <MoreHorizontal className="mr-2 h-4 w-4" />
+                Действия
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Управление заявками</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={load} disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Обновить список
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSearch('')} disabled={!search.trim()}>
+                <XCircle className="h-4 w-4" />
+                Сбросить поиск
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -471,34 +495,39 @@ export default function StoreRequestsPage() {
                       </div>
 
                       <div className="rounded-2xl border border-white/6 bg-slate-900/70 p-4">
-                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Быстрые действия</div>
-                        <div className="mt-4 flex flex-col gap-3">
+                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Решение по заявке</div>
+                        <div className="mt-4 flex gap-2">
                           <Button
-                            onClick={() => submitDecision(request, true, true)}
-                            disabled={savingId === request.id}
-                            className="justify-start"
-                          >
-                            {savingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                            Одобрить полностью
-                          </Button>
-                          <Button
-                            variant="outline"
                             onClick={() => submitDecision(request, true, false)}
                             disabled={savingId === request.id}
-                            className="justify-start"
+                            className="flex-1 justify-start"
                           >
-                            <PackageCheck className="mr-2 h-4 w-4" />
-                            Одобрить по количествам
+                            {savingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackageCheck className="mr-2 h-4 w-4" />}
+                            Сохранить решение
                           </Button>
-                          <Button
-                            variant="destructive"
-                            onClick={() => submitDecision(request, false, false)}
-                            disabled={savingId === request.id}
-                            className="justify-start"
-                          >
-                            <XCircle className="mr-2 h-4 w-4" />
-                            Отклонить заявку
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="icon" disabled={savingId === request.id}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                              <DropdownMenuLabel>Доп. действия</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => submitDecision(request, true, true)}>
+                                <CheckCircle2 className="h-4 w-4" />
+                                Одобрить полностью
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => submitDecision(request, true, false)}>
+                                <PackageCheck className="h-4 w-4" />
+                                Одобрить по количествам
+                              </DropdownMenuItem>
+                              <DropdownMenuItem variant="destructive" onClick={() => submitDecision(request, false, false)}>
+                                <XCircle className="h-4 w-4" />
+                                Отклонить заявку
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     </div>
@@ -532,17 +561,26 @@ export default function StoreRequestsPage() {
                       </div>
                       <RequestStatusBadge status={request.status} />
                     </div>
-                    <div className="mt-3 flex gap-2">
-                      {['approved_full', 'approved_partial'].includes(request.status) && (
-                        <Button size="sm" variant="outline" className="h-7 gap-1 text-xs border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10" disabled={savingId === request.id} onClick={() => transitionStatus(request.id, 'issued')}>
-                          {savingId === request.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <PackageCheck className="h-3 w-3" />}
-                          Выдать
-                        </Button>
-                      )}
-                      {request.status === 'issued' && (
-                        <Button size="sm" variant="outline" className="h-7 gap-1 text-xs border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10" disabled={savingId === request.id} onClick={() => transitionStatus(request.id, 'received')}>
-                          {savingId === request.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                          Получено
+                    <div className="mt-3">
+                      {['approved_full', 'approved_partial', 'issued'].includes(request.status) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className={`h-7 gap-1 text-xs ${request.status === 'issued'
+                            ? 'border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10'
+                            : 'border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10'
+                            }`}
+                          disabled={savingId === request.id}
+                          onClick={() => transitionStatus(request.id, request.status === 'issued' ? 'received' : 'issued')}
+                        >
+                          {savingId === request.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : request.status === 'issued' ? (
+                            <CheckCircle2 className="h-3 w-3" />
+                          ) : (
+                            <PackageCheck className="h-3 w-3" />
+                          )}
+                          {request.status === 'issued' ? 'Отметить полученной' : 'Отметить выданной'}
                         </Button>
                       )}
                     </div>

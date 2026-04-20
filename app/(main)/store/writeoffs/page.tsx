@@ -1,10 +1,18 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArchiveX, Loader2, RefreshCw } from 'lucide-react'
+import { ArchiveX, Loader2, MoreHorizontal, RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -202,10 +210,32 @@ export default function StoreWriteoffsPage() {
             </p>
           </div>
 
-          <Button variant="outline" onClick={() => void load()} disabled={loading} className="rounded-2xl">
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Обновить
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="rounded-2xl">
+                <MoreHorizontal className="mr-2 h-4 w-4" />
+                Действия
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Управление списаниями</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => void load()} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Обновить данные
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setReason('')
+                  setComment('')
+                  setLines([emptyLine()])
+                }}
+              >
+                <ArchiveX className="h-4 w-4" />
+                Очистить форму
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </Card>
 
