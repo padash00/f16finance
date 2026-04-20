@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, MoreHorizontal, PackagePlus, RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -153,6 +153,9 @@ export default function StoreReceiptsPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<ReceiptLine[]>([emptyLine()])
+  const [quickQuery, setQuickQuery] = useState('')
+  const [quickError, setQuickError] = useState<string | null>(null)
+  const quickInputRef = useRef<HTMLInputElement>(null)
 
   const load = async () => {
     setLoading(true)
@@ -184,6 +187,83 @@ export default function StoreReceiptsPage() {
   const receiptTotal = useMemo(() => {
     return lines.reduce((sum, line) => sum + parseQty(line.quantity) * parseMoney(line.unit_cost), 0)
   }, [lines])
+
+  const quickMatches = useMemo(() => {
+    const q = quickQuery.trim().toLowerCase()
+    if (!q) return []
+    return (data?.items || [])
+      .filter((item) => {
+        const barcode = String(item.barcode || '').toLowerCase()
+        const name = String(item.name || '').toLowerCase()
+        return barcode.includes(q) || name.includes(q)
+      })
+      .slice(0, 8)
+  }, [data?.items, quickQuery])
+
+  const upsertReceiptLine = (itemId: string, mode: 'increment' | 'set' = 'increment') => {
+    const item = (data?.items || []).find((row) => row.id === itemId)
+    if (!item) return false
+
+    setLines((current) => {
+      const existingIndex = current.findIndex((line) => line.item_id === itemId)
+      if (existingIndex >= 0) {
+        return current.map((line, idx) => {
+          if (idx !== existingIndex) return line
+          const currentQty = parseQty(line.quantity)
+          const nextQty = mode === 'increment' ? currentQty + 1 : Math.max(1, currentQty)
+          return {
+            ...line,
+            quantity: String(nextQty),
+            unit_cost: line.unit_cost || String(item.default_purchase_price || ''),
+          }
+        })
+      }
+
+      const nextLine: ReceiptLine = {
+        item_id: itemId,
+        quantity: '1',
+        unit_cost: String(item.default_purchase_price || ''),
+        comment: '',
+      }
+      const hasOnlyEmpty = current.length === 1 && !current[0].item_id && !current[0].quantity && !current[0].unit_cost && !current[0].comment
+      if (hasOnlyEmpty) return [nextLine]
+      return [...current, nextLine]
+    })
+    return true
+  }
+
+  const handleQuickAdd = () => {
+    setQuickError(null)
+    const q = quickQuery.trim()
+    if (!q) return
+
+    const exactBarcode = (data?.items || []).find((item) => String(item.barcode || '').trim() === q)
+    if (exactBarcode) {
+      upsertReceiptLine(exactBarcode.id, 'increment')
+      setQuickQuery('')
+      return
+    }
+
+    const byContains = (data?.items || []).filter((item) => {
+      const barcode = String(item.barcode || '').toLowerCase()
+      const name = String(item.name || '').toLowerCase()
+      const query = q.toLowerCase()
+      return barcode.includes(query) || name.includes(query)
+    })
+
+    if (byContains.length === 1) {
+      upsertReceiptLine(byContains[0].id, 'increment')
+      setQuickQuery('')
+      return
+    }
+
+    if (byContains.length === 0) {
+      setQuickError('Товар не найден. Проверь штрихкод или название.')
+      return
+    }
+
+    setQuickError('Найдено несколько товаров — выбери ниже из подсказок.')
+  }
 
   const createReceipt = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -302,6 +382,50 @@ export default function StoreReceiptsPage() {
           </div>
 
           <form onSubmit={createReceipt} className="space-y-5">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  ref={quickInputRef}
+                  value={quickQuery}
+                  onChange={(event) => {
+                    setQuickQuery(event.target.value)
+                    if (quickError) setQuickError(null)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      handleQuickAdd()
+                    }
+                  }}
+                  placeholder="Сканируй штрихкод или введи название товара"
+                  className="min-w-[260px] flex-1"
+                />
+                <Button type="button" onClick={handleQuickAdd}>
+                  Добавить товар
+                </Button>
+              </div>
+              {quickError ? <p className="mt-2 text-xs text-rose-300">{quickError}</p> : null}
+              {quickMatches.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {quickMatches.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        upsertReceiptLine(item.id, 'increment')
+                        setQuickQuery('')
+                        setQuickError(null)
+                        quickInputRef.current?.focus()
+                      }}
+                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-200 hover:bg-white/[0.08]"
+                    >
+                      {item.name} · {item.barcode}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Каталог</Label>
