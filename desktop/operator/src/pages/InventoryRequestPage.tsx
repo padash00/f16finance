@@ -95,7 +95,7 @@ export default function InventoryRequestPage({
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const all = context?.items || []
+    const all = (context?.items || []).filter((item) => Number(item.warehouse_qty || 0) > 0)
     if (!q) return all
     return all.filter(
       (i) =>
@@ -124,6 +124,28 @@ export default function InventoryRequestPage({
         comment: '',
       }]
     })
+  }
+
+  function handleSearchEnter() {
+    const q = search.trim()
+    if (!q) return
+    const all = (context?.items || []).filter((item) => Number(item.warehouse_qty || 0) > 0)
+    const exactBarcode = all.find((item) => String(item.barcode || '').trim() === q)
+    if (exactBarcode) {
+      addToCart(exactBarcode.id)
+      setSearch('')
+      return
+    }
+    const query = q.toLowerCase()
+    const oneMatch = all.filter((item) => {
+      const name = String(item.name || '').toLowerCase()
+      const barcode = String(item.barcode || '').toLowerCase()
+      return name.includes(query) || barcode.includes(query)
+    })
+    if (oneMatch.length === 1) {
+      addToCart(oneMatch[0].id)
+      setSearch('')
+    }
   }
 
   function setCartQty(itemId: string, qty: number) {
@@ -223,6 +245,12 @@ export default function InventoryRequestPage({
                 ref={searchRef}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleSearchEnter()
+                  }
+                }}
                 placeholder="Поиск товара по названию или штрихкоду..."
                 className="h-8 pl-7 text-xs"
                 autoFocus
@@ -263,7 +291,7 @@ export default function InventoryRequestPage({
                         <p className={`truncate font-medium ${inCart ? 'text-blue-300' : 'text-foreground'}`}>{item.name}</p>
                         <p className="text-[10px] text-muted-foreground">
                           {item.barcode || '—'}
-                          {' · '}склад: <span className={Number(item.warehouse_qty) <= 0 ? 'text-rose-400' : 'text-foreground'}>{item.warehouse_qty ?? 0}</span> {item.unit || 'шт'}
+                          {' · '}склад: <span className="text-foreground">{item.warehouse_qty ?? 0}</span> {item.unit || 'шт'}
                         </p>
                       </div>
                       <div className={`ml-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition ${inCart ? 'bg-blue-500/30 text-blue-300' : 'bg-white/[0.06] text-muted-foreground hover:bg-blue-500/20 hover:text-blue-300'}`}>

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createInventoryRequest } from '@/lib/server/repositories/inventory'
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { notifyInventoryRequestCreated } from '@/lib/server/telegram'
 
 type Body = {
   action: 'createRequest'
@@ -113,13 +114,8 @@ export async function GET(request: Request) {
 
     const { sourceLocation, targetLocation } = await resolvePointInventoryContext(supabase, device.company_id)
 
-    const [{ data: items, error: itemsError }, { data: balances, error: balancesError }, { data: requests, error: requestsError }] =
+    const [{ data: balances, error: balancesError }, { data: requests, error: requestsError }] =
       await Promise.all([
-        supabase
-          .from('inventory_items')
-          .select('id, name, barcode, unit, sale_price, category:category_id(id, name)')
-          .eq('is_active', true)
-          .order('name', { ascending: true }),
         supabase
           .from('inventory_balances')
           .select('item_id, quantity')
@@ -134,11 +130,27 @@ export async function GET(request: Request) {
           .limit(20),
       ])
 
-    if (itemsError) throw itemsError
     if (balancesError) throw balancesError
     if (requestsError) throw requestsError
 
-    const balanceMap = new Map<string, number>((balances || []).map((row: any) => [row.item_id, Number(row.quantity || 0)]))
+    const balanceRows = (balances || [])
+      .map((row: any) => ({ item_id: String(row.item_id || ''), quantity: Number(row.quantity || 0) }))
+      .filter((row: any) => row.item_id && row.quantity > 0)
+
+    const itemIds = [...new Set(balanceRows.map((row) => row.item_id))]
+    let items: any[] = []
+    if (itemIds.length > 0) {
+      const { data: fetchedItems, error: itemsError } = await supabase
+        .from('inventory_items')
+        .select('id, name, barcode, unit, sale_price, category:category_id(id, name)')
+        .eq('is_active', true)
+        .in('id', itemIds)
+        .order('name', { ascending: true })
+      if (itemsError) throw itemsError
+      items = fetchedItems || []
+    }
+
+    const balanceMap = new Map<string, number>(balanceRows.map((row) => [row.item_id, row.quantity]))
 
     return json({
       ok: true,
@@ -218,6 +230,44 @@ export async function POST(request: Request) {
         item_count: items.length,
       },
     })
+
+    void (async () => {
+      try {
+        const itemIds = items.map((item) => item.item_id)
+        const { data: itemRows } = await supabase
+          .from('inventory_items')
+          .select('id, name, unit')
+          .in('id', itemIds)
+        const itemMap: Record<string, { name: string; unit: string }> = {}
+        for (const row of itemRows || []) itemMap[String((row as any).id)] = { name: String((row as any).name || ''), unit: String((row as any).unit || 'шт') }
+
+        const { data: staffRows } = await supabase
+          .from('staff')
+          .select('telegram_chat_id')
+          .eq('company_id', device.company_id)
+          .in('role', ['owner', 'manager'])
+          .not('telegram_chat_id', 'is', null)
+
+        const chatIds = [
+          ...(staffRows || []).map((s: any) => String(s.telegram_chat_id)),
+          process.env.TELEGRAM_ADMIN_CHAT_ID,
+        ].filter(Boolean) as string[]
+
+        await notifyInventoryRequestCreated({
+          companyName: device.company?.name || device.company_id,
+          createdByName: actor.operatorId || null,
+          comment: body.payload?.comment?.trim() || null,
+          items: items.map((i) => ({
+            name: itemMap[i.item_id]?.name || i.item_id,
+            requested_qty: i.requested_qty,
+            unit: itemMap[i.item_id]?.unit || 'шт',
+          })),
+          chatIds: [...new Set(chatIds)],
+        })
+      } catch {
+        /* do not break request flow */
+      }
+    })()
 
     return json({ ok: true, data: { request_id: requestId } })
   } catch (error: any) {
