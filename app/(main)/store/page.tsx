@@ -32,6 +32,18 @@ type StoreOverviewResponse = {
   requests: Array<{ id: string; status: string }>
   receipts: Array<{ id: string }>
   movements: Array<{ id: string }>
+  writeoffs: Array<{ id: string; reason?: string | null; comment?: string | null }>
+}
+
+type AuditTimelineEntry = {
+  id: string
+  actor_user_id: string | null
+  entity_type: string
+  entity_id: string
+  action: string
+  payload?: Record<string, unknown> | null
+  created_at: string
+  actor_staff?: { full_name: string | null; role: string | null } | null
 }
 
 type GlobalFilters = {
@@ -73,6 +85,7 @@ function MetricCard({
 
 export default function StoreOverviewPage() {
   const [overview, setOverview] = useState<StoreOverviewResponse | null>(null)
+  const [timeline, setTimeline] = useState<AuditTimelineEntry[]>([])
   const [filters, setFilters] = useState<GlobalFilters>({
     q: '',
     company_id: '',
@@ -127,12 +140,21 @@ export default function StoreOverviewPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch('/api/admin/store/overview', { cache: 'no-store' })
-        const json = await res.json().catch(() => null)
-        if (!res.ok || !json?.ok) return
-        setOverview(json.data as StoreOverviewResponse)
+        const [resOverview, resTimeline] = await Promise.all([
+          fetch('/api/admin/store/overview', { cache: 'no-store' }),
+          fetch('/api/admin/store/audit-timeline?limit=20', { cache: 'no-store' }),
+        ])
+        const jsonOverview = await resOverview.json().catch(() => null)
+        if (resOverview.ok && jsonOverview?.ok) {
+          setOverview(jsonOverview.data as StoreOverviewResponse)
+        }
+        const jsonTimeline = await resTimeline.json().catch(() => null)
+        if (resTimeline.ok && jsonTimeline?.ok) {
+          setTimeline(Array.isArray(jsonTimeline?.data?.timeline) ? jsonTimeline.data.timeline : [])
+        }
       } catch {
         setOverview(null)
+        setTimeline([])
       }
     }
 
@@ -152,6 +174,8 @@ export default function StoreOverviewPage() {
       showcases: (overview?.locations || []).filter((item) => item.location_type === 'point_display').length,
       lowStock: lowStock.length,
       receipts: (overview?.receipts || []).length,
+      unresolvedWriteoffs: (overview?.writeoffs || []).filter((w) => !String(w.reason || '').trim() || !String(w.comment || '').trim()).length,
+      receiptMismatch: requests.filter((item) => item.status === 'disputed').length,
     }
   }, [overview])
 
@@ -327,6 +351,18 @@ export default function StoreOverviewPage() {
           <MetricCard label="Низкий остаток" value={metrics.lowStock} hint="Позиции под контролем" />
           <MetricCard label="Последние приёмки" value={metrics.receipts} hint="Документы прихода" />
         </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-rose-200/80">Неразобранные списания</p>
+            <p className="mt-1 text-2xl font-semibold text-rose-200">{metrics.unresolvedWriteoffs}</p>
+            <p className="mt-1 text-xs text-rose-200/80">Без причины или без комментария</p>
+          </div>
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-amber-200/80">Расхождения</p>
+            <p className="mt-1 text-2xl font-semibold text-amber-200">{metrics.receiptMismatch}</p>
+            <p className="mt-1 text-xs text-amber-200/80">Заявки со статусом disputed</p>
+          </div>
+        </div>
 
         {topLowStock.length > 0 ? (
           <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4">
@@ -366,6 +402,37 @@ export default function StoreOverviewPage() {
           <div className="p-5">
             <InventoryPageContent forcedView="overview" />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-white/10 bg-card/70 shadow-[0_18px_50px_rgba(0,0,0,0.14)]">
+        <CardHeader className="border-b border-white/10">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <History className="h-4 w-4 text-violet-300" />
+            Единый журнал действий
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4">
+          {timeline.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Действий пока нет.</p>
+          ) : (
+            <div className="space-y-2">
+              {timeline.map((entry) => (
+                <div key={entry.id} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-slate-100">{entry.entity_type} · {entry.action}</span>
+                    <span className="text-slate-400">{new Date(entry.created_at).toLocaleString('ru-RU')}</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-2 text-slate-400">
+                    <span>ID: {String(entry.entity_id || '').slice(0, 8)}</span>
+                    <span>
+                      {(entry.actor_staff?.full_name || '').trim() || (entry.actor_user_id ? `ID ${entry.actor_user_id.slice(0, 8)}` : 'Система')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
