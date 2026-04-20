@@ -109,26 +109,35 @@ type SalaryPointRule = Pick<
   'id' | 'company_id' | 'scope' | 'event' | 'name' | 'priority' | 'is_active' | 'stop_processing' | 'conditions' | 'actions'
 >
 
+type SalaryRulesBundle = {
+  weekRules: SalaryPointRule[]
+  shiftRules: SalaryPointRule[]
+}
+
 async function listSalaryPointRules(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
   companyIds: string[] | null,
-) {
+): Promise<SalaryRulesBundle> {
   let query = supabase
     .from('point_rules')
     .select('id,company_id,scope,event,name,priority,is_active,stop_processing,conditions,actions')
     .eq('scope', 'salary')
-    .eq('event', 'salary.week.computed')
+    .in('event', ['salary.week.computed', 'salary.shift.computed'])
     .eq('is_active', true)
     .order('priority', { ascending: true })
 
   if (companyIds) {
-    if (companyIds.length === 0) return []
+    if (companyIds.length === 0) return { weekRules: [], shiftRules: [] }
     query = query.or(`company_id.is.null,company_id.in.(${companyIds.map((id) => `"${id}"`).join(',')})`)
   }
 
   const { data, error } = await query
   if (error) throw error
-  return (data || []) as SalaryPointRule[]
+  const rows = (data || []) as SalaryPointRule[]
+  return {
+    weekRules: rows.filter((r) => r.event === 'salary.week.computed'),
+    shiftRules: rows.filter((r) => r.event === 'salary.shift.computed'),
+  }
 }
 
 function applySalaryPointRules(params: {
@@ -303,7 +312,7 @@ async function ensureSalaryWeekSnapshot(params: {
   actorUserId: string | null
   companyIds?: string[] | null
   references?: Awaited<ReturnType<typeof listSalaryReferenceData>>
-  pointRules?: SalaryPointRule[]
+  pointRules?: SalaryRulesBundle
 }) {
   const weekEnd = addDaysISO(params.weekStart, 6)
   const references = params.references || (await listSalaryReferenceData(params.supabase, { companyIds: params.companyIds || null }))
@@ -319,6 +328,7 @@ async function ensureSalaryWeekSnapshot(params: {
     operatorId: params.operatorId,
     companies: references.companies,
     rules: references.rules,
+    shiftRules: (params.pointRules?.shiftRules || []) as PointRuleRow[],
     assignments: references.assignments,
     incomes: operatorData.incomes,
     adjustments: operatorData.adjustments,
@@ -326,7 +336,7 @@ async function ensureSalaryWeekSnapshot(params: {
   })
   const { summary } = applySalaryPointRules({
     summary: rawSummary,
-    rules: params.pointRules || [],
+    rules: params.pointRules?.weekRules || [],
   })
 
   const { data: existingWeek, error: existingWeekError } = await params.supabase

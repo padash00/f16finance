@@ -22,6 +22,10 @@ export type PointRuleActionType =
   | 'set_min_net'
   | 'cap_net'
   | 'tag'
+  | 'set_base_per_shift'
+  | 'set_senior_operator_bonus'
+  | 'set_senior_cashier_bonus'
+  | 'set_threshold_bonus'
 
 export type PointRuleAction = {
   type: PointRuleActionType
@@ -147,4 +151,61 @@ export function evaluatePointRules(params: {
   }
 
   return { matchedRules, effects }
+}
+
+export type ShiftOverrides = {
+  basePerShift: number | null
+  seniorOperatorBonus: number | null
+  seniorCashierBonus: number | null
+  thresholdBonusDelta: number
+  matchedRules: Array<{ id: string; name: string }>
+}
+
+export function resolveShiftOverrides(params: {
+  rules: PointRuleRow[]
+  companyId: string | null
+  shiftType: 'day' | 'night'
+  turnover: number
+}): ShiftOverrides {
+  const scoped = params.rules.filter(
+    (rule) => !rule.company_id || rule.company_id === params.companyId,
+  )
+  const context: RuleEvaluationContext = {
+    shift: {
+      type: params.shiftType,
+      turnover: params.turnover,
+      company_id: params.companyId,
+    },
+  }
+  const { matchedRules, effects } = evaluatePointRules({ rules: scoped, context })
+
+  const result: ShiftOverrides = {
+    basePerShift: null,
+    seniorOperatorBonus: null,
+    seniorCashierBonus: null,
+    thresholdBonusDelta: 0,
+    matchedRules,
+  }
+
+  for (const effect of effects) {
+    const amount = normalizeAmount(effect.amount)
+    switch (effect.type) {
+      case 'set_base_per_shift':
+        result.basePerShift = amount
+        break
+      case 'set_senior_operator_bonus':
+        result.seniorOperatorBonus = amount
+        break
+      case 'set_senior_cashier_bonus':
+        result.seniorCashierBonus = amount
+        break
+      case 'set_threshold_bonus':
+        result.thresholdBonusDelta += amount
+        break
+      default:
+        break
+    }
+  }
+
+  return result
 }

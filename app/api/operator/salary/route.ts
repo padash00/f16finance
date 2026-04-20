@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { addDaysISO, mondayOfDate, toISODateLocal } from '@/lib/core/date'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { calculateOperatorWeekSummary } from '@/lib/domain/salary'
+import type { PointRuleRow } from '@/lib/domain/point-rules'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestOperatorContext } from '@/lib/server/request-auth'
 import { listOperatorSalaryData, listSalaryReferenceData } from '@/lib/server/repositories/salary'
@@ -25,12 +26,34 @@ function currentWeekStart() {
   return toISODateLocal(mondayOfDate(new Date()))
 }
 
+async function listShiftPointRules(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  companyIds: string[],
+): Promise<PointRuleRow[]> {
+  let query = supabase
+    .from('point_rules')
+    .select('id,company_id,scope,event,name,description,priority,is_active,stop_processing,conditions,actions')
+    .eq('scope', 'salary')
+    .eq('event', 'salary.shift.computed')
+    .eq('is_active', true)
+    .order('priority', { ascending: true })
+
+  if (companyIds.length > 0) {
+    query = query.or(`company_id.is.null,company_id.in.(${companyIds.map((id) => `"${id}"`).join(',')})`)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data || []) as PointRuleRow[]
+}
+
 async function ensureSalaryWeekSnapshotLite(params: {
   supabase: ReturnType<typeof createAdminSupabaseClient>
   operatorId: string
   weekStart: string
   references: Awaited<ReturnType<typeof listSalaryReferenceData>>
   companyIds: string[]
+  shiftRules?: PointRuleRow[]
 }) {
   const weekEnd = addDaysISO(params.weekStart, 6)
   const operatorData = await listOperatorSalaryData(params.supabase, {
@@ -45,6 +68,7 @@ async function ensureSalaryWeekSnapshotLite(params: {
     operatorId: params.operatorId,
     companies: params.references.companies,
     rules: params.references.rules,
+    shiftRules: params.shiftRules,
     assignments: params.references.assignments,
     incomes: operatorData.incomes,
     adjustments: operatorData.adjustments,
@@ -174,13 +198,17 @@ export async function GET(request: Request) {
     if (operatorAssignmentsError) throw operatorAssignmentsError
 
     const operatorCompanyIds = [...new Set((operatorAssignments || []).map((item: any) => String(item.company_id || '')).filter(Boolean))] as string[]
-    const references = await listSalaryReferenceData(supabase, { companyIds: operatorCompanyIds })
+    const [references, shiftRules] = await Promise.all([
+      listSalaryReferenceData(supabase, { companyIds: operatorCompanyIds }),
+      listShiftPointRules(supabase, operatorCompanyIds),
+    ])
     const snapshot = await ensureSalaryWeekSnapshotLite({
       supabase,
       operatorId: context.operator.id,
       weekStart,
       references,
       companyIds: operatorCompanyIds,
+      shiftRules,
     })
 
     const [paymentsRes, allocationsRes, adjustmentsRes, debtsRes, recentWeeksRes] = await Promise.all([

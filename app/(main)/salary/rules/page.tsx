@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState, useCallback, useRef, Suspense } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
+import { SalaryVariantsTab } from '@/components/admin/salary-variants-tab'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Plus,
   Save,
@@ -701,6 +703,13 @@ function SalaryRulesContent() {
             }
           />
 
+          <Tabs defaultValue="base" className="space-y-6">
+            <TabsList className="bg-gray-900/40 border border-white/5 backdrop-blur-xl">
+              <TabsTrigger value="base">Базовые правила</TabsTrigger>
+              <TabsTrigger value="variants">Варианты по выручке</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="base" className="space-y-6">
           {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <Card className="p-4 bg-gray-900/40 backdrop-blur-xl border-white/5">
@@ -1258,6 +1267,12 @@ function SalaryRulesContent() {
               </span>
             </div>
           </div>
+            </TabsContent>
+
+            <TabsContent value="variants">
+              <SalaryVariantsTab companies={companyOptions} />
+            </TabsContent>
+          </Tabs>
         </div>
     </>
   )

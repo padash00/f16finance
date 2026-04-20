@@ -1,4 +1,5 @@
 import { DEFAULT_COMPANY_CODES, DEFAULT_SHIFT_BASE_PAY } from '@/lib/core/constants'
+import { resolveShiftOverrides, type PointRuleRow } from './point-rules'
 
 export type AdjustmentKind = 'debt' | 'fine' | 'bonus' | 'advance'
 export type ShiftType = 'day' | 'night'
@@ -260,15 +261,6 @@ function getRuleForShift(
   return ruleMap.get(`${companyCode}_${shift}`)
 }
 
-function calculateRoleBonusForAssignment(
-  rule: SalaryRule | undefined,
-  assignmentRole: SalaryOperatorCompanyAssignment['role_in_company'] | undefined,
-) {
-  if (assignmentRole === 'senior_operator') return toAmount(rule?.senior_operator_bonus)
-  if (assignmentRole === 'senior_cashier') return toAmount(rule?.senior_cashier_bonus)
-  return 0
-}
-
 function calculateThresholdBonus(rule: SalaryRule | undefined, turnover: number) {
   let bonus = 0
 
@@ -278,6 +270,50 @@ function calculateThresholdBonus(rule: SalaryRule | undefined, turnover: number)
   if (threshold2 > 0 && turnover >= threshold2) bonus += toAmount(rule?.threshold2_bonus)
 
   return bonus
+}
+
+function computeShiftCompensation(params: {
+  rule: SalaryRule | undefined
+  shiftRules: PointRuleRow[] | undefined
+  companyId: string | null
+  shiftType: ShiftType
+  turnover: number
+  assignmentRole: SalaryOperatorCompanyAssignment['role_in_company'] | undefined
+}) {
+  const override = params.shiftRules && params.shiftRules.length > 0
+    ? resolveShiftOverrides({
+        rules: params.shiftRules,
+        companyId: params.companyId,
+        shiftType: params.shiftType,
+        turnover: params.turnover,
+      })
+    : null
+
+  const basePerShift =
+    override?.basePerShift != null
+      ? override.basePerShift
+      : toAmount(params.rule?.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
+
+  const seniorOperatorBonus =
+    override?.seniorOperatorBonus != null
+      ? override.seniorOperatorBonus
+      : toAmount(params.rule?.senior_operator_bonus)
+  const seniorCashierBonus =
+    override?.seniorCashierBonus != null
+      ? override.seniorCashierBonus
+      : toAmount(params.rule?.senior_cashier_bonus)
+
+  const roleBonus =
+    params.assignmentRole === 'senior_operator'
+      ? seniorOperatorBonus
+      : params.assignmentRole === 'senior_cashier'
+        ? seniorCashierBonus
+        : 0
+
+  const autoBonus =
+    calculateThresholdBonus(params.rule, params.turnover) + (override?.thresholdBonusDelta || 0)
+
+  return { basePerShift, roleBonus, autoBonus }
 }
 
 function createOperatorCompanyRoleMap(params: {
@@ -345,6 +381,7 @@ export function calculateOperatorSalarySummary(params: {
   operatorId: string
   companies: SalaryCompany[]
   rules: SalaryRule[]
+  shiftRules?: PointRuleRow[]
   assignments?: SalaryOperatorCompanyAssignment[]
   incomes: SalaryIncomeRow[]
   adjustments: SalaryAdjustmentRow[]
@@ -369,14 +406,19 @@ export function calculateOperatorSalarySummary(params: {
 
   for (const shift of aggregated.values()) {
     const rule = getRuleForShift(ruleMap, shift.companyCode, shift.shift)
-    const basePerShift = toAmount(rule?.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
     const assignmentRole = operatorCompanyRoleMap.get(`${shift.operatorId}_${shift.companyCode}`)
-    const roleBonus = calculateRoleBonusForAssignment(rule, assignmentRole)
-    const bonus = calculateThresholdBonus(rule, shift.turnover)
+    const { basePerShift, roleBonus, autoBonus } = computeShiftCompensation({
+      rule,
+      shiftRules: params.shiftRules,
+      companyId: shift.companyId,
+      shiftType: shift.shift,
+      turnover: shift.turnover,
+      assignmentRole,
+    })
 
     shifts += 1
     baseSalary += basePerShift
-    autoBonuses += bonus
+    autoBonuses += autoBonus
     roleBonuses += roleBonus
   }
 
@@ -427,6 +469,7 @@ export function calculateOperatorShiftBreakdown(params: {
   operatorId: string
   companies: SalaryCompany[]
   rules: SalaryRule[]
+  shiftRules?: PointRuleRow[]
   assignments?: SalaryOperatorCompanyAssignment[]
   incomes: SalaryIncomeRow[]
   options?: CalculationOptions
@@ -494,17 +537,22 @@ export function calculateOperatorShiftBreakdown(params: {
 
   const breakdown = Array.from(aggregated.values()).map((shift) => {
     const rule = getRuleForShift(ruleMap, shift.companyCode, shift.shift)
-    const baseSalary = toAmount(rule?.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
     const assignmentRole = operatorCompanyRoleMap.get(`${params.operatorId}_${shift.companyCode}`)
-    const roleBonus = calculateRoleBonusForAssignment(rule, assignmentRole)
-    const autoBonus = calculateThresholdBonus(rule, shift.totalIncome)
+    const { basePerShift, roleBonus, autoBonus } = computeShiftCompensation({
+      rule,
+      shiftRules: params.shiftRules,
+      companyId: shift.companyId,
+      shiftType: shift.shift,
+      turnover: shift.totalIncome,
+      assignmentRole,
+    })
 
     return {
       ...shift,
-      baseSalary,
+      baseSalary: basePerShift,
       autoBonus,
       roleBonus,
-      salary: baseSalary + autoBonus + roleBonus,
+      salary: basePerShift + autoBonus + roleBonus,
     }
   })
 
@@ -516,6 +564,7 @@ export function calculateOperatorWeekSummary(params: {
   operatorId: string
   companies: SalaryCompany[]
   rules: SalaryRule[]
+  shiftRules?: PointRuleRow[]
   assignments?: SalaryOperatorCompanyAssignment[]
   incomes: SalaryIncomeRow[]
   adjustments: SalaryAdjustmentRow[]
@@ -526,6 +575,7 @@ export function calculateOperatorWeekSummary(params: {
     operatorId: params.operatorId,
     companies: params.companies,
     rules: params.rules,
+    shiftRules: params.shiftRules,
     assignments: params.assignments,
     incomes: params.incomes,
     options: params.options,
@@ -697,6 +747,7 @@ export function calculateSalaryBoard(params: {
   operators: SalaryOperatorMeta[]
   companies: SalaryCompany[]
   rules: SalaryRule[]
+  shiftRules?: PointRuleRow[]
   assignments?: SalaryOperatorCompanyAssignment[]
   incomes: SalaryIncomeRow[]
   adjustments: SalaryAdjustmentRow[]
@@ -763,18 +814,23 @@ export function calculateSalaryBoard(params: {
 
   for (const shift of aggregated.values()) {
     const rule = getRuleForShift(ruleMap, shift.companyCode, shift.shift)
-    const basePerShift = toAmount(rule?.base_per_shift ?? DEFAULT_SHIFT_BASE_PAY)
     const assignmentRole = operatorCompanyRoleMap.get(`${shift.operatorId}_${shift.companyCode}`)
-    const roleBonus = calculateRoleBonusForAssignment(rule, assignmentRole)
-    const bonus = calculateThresholdBonus(rule, shift.turnover)
+    const { basePerShift, roleBonus, autoBonus } = computeShiftCompensation({
+      rule,
+      shiftRules: params.shiftRules,
+      companyId: shift.companyId,
+      shiftType: shift.shift,
+      turnover: shift.turnover,
+      assignmentRole,
+    })
 
     const stat = ensureOperator(shift.operatorId)
     stat.basePerShift = basePerShift
     stat.shifts += 1
     stat.baseSalary += basePerShift
-    stat.autoBonuses += bonus
+    stat.autoBonuses += autoBonus
     stat.roleBonuses += roleBonus
-    stat.totalSalary += basePerShift + bonus + roleBonus
+    stat.totalSalary += basePerShift + autoBonus + roleBonus
   }
 
   for (const adjustment of params.adjustments) {

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { addDaysISO, mondayOfDate, toISODateLocal } from '@/lib/core/date'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
 import { calculateOperatorWeekSummary } from '@/lib/domain/salary'
+import type { PointRuleRow } from '@/lib/domain/point-rules'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { getRequestOperatorContext, listActiveOperatorLeadAssignments } from '@/lib/server/request-auth'
 import { listOperatorSalaryData, listSalaryReferenceData } from '@/lib/server/repositories/salary'
@@ -63,6 +64,7 @@ export async function GET(request: Request) {
       operatorData,
       leadAssignments,
       weekRowRes,
+      shiftRules,
     ] = await Promise.all([
       supabase
         .from('tasks')
@@ -98,6 +100,21 @@ export async function GET(request: Request) {
         .eq('operator_id', context.operator.id)
         .eq('week_start', weekStart)
         .maybeSingle(),
+      (async () => {
+        let q = supabase
+          .from('point_rules')
+          .select('id,company_id,scope,event,name,description,priority,is_active,stop_processing,conditions,actions')
+          .eq('scope', 'salary')
+          .eq('event', 'salary.shift.computed')
+          .eq('is_active', true)
+          .order('priority', { ascending: true })
+        if (operatorCompanyIds.length > 0) {
+          q = q.or(`company_id.is.null,company_id.in.(${operatorCompanyIds.map((id) => `"${id}"`).join(',')})`)
+        }
+        const { data, error } = await q
+        if (error) throw error
+        return (data || []) as PointRuleRow[]
+      })(),
     ])
 
     if (tasksRes.error) throw tasksRes.error
@@ -135,6 +152,7 @@ export async function GET(request: Request) {
       operatorId: context.operator.id,
       companies: references.companies,
       rules: references.rules,
+      shiftRules,
       assignments: references.assignments,
       incomes: operatorData.incomes,
       adjustments: operatorData.adjustments,
