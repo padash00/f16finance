@@ -132,9 +132,10 @@ export async function GET(request: Request) {
       if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
     }
 
-    const [catalogLoc, warehouseLoc] = await Promise.all([
+    const [catalogLoc, warehouseLoc, showcaseLoc] = await Promise.all([
       ensureCompanyLocation(supabase, companyId, 'catalog'),
       ensureCompanyLocation(supabase, companyId, 'warehouse'),
+      ensureCompanyLocation(supabase, companyId, 'point_display'),
     ])
 
     const { data: balanceRows, error: balErr } = await supabase
@@ -195,6 +196,7 @@ export async function GET(request: Request) {
     return json({
       ok: true,
       data: {
+        showcase: showcaseLoc,
         catalog: catalogLoc,
         warehouse: warehouseLoc,
         companies: companies || [],
