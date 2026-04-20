@@ -118,6 +118,15 @@ function actorLabel(
   return '—'
 }
 
+function requestTimeline(request: InventoryRequest) {
+  return [
+    { key: 'created', label: 'Создана', at: request.created_at, by: actorLabel(request.created_by_staff, request.created_by) },
+    { key: 'approved', label: 'Одобрена', at: request.approved_at, by: actorLabel(request.approved_by_staff, request.approved_by) },
+    { key: 'issued', label: 'Выдана', at: request.issued_at, by: actorLabel(request.issued_by_staff, request.issued_by) },
+    { key: 'received', label: 'Получена', at: request.received_at, by: '—' },
+  ]
+}
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—'
   const parsed = new Date(value)
@@ -189,6 +198,10 @@ export default function StoreRequestsPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [actorFilter, setActorFilter] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   const [decisionDrafts, setDecisionDrafts] = useState<Record<string, DecisionDraft>>({})
 
   const load = async () => {
@@ -222,8 +235,30 @@ export default function StoreRequestsPage() {
 
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return requests
     return requests.filter((request) => {
+      if (statusFilter !== 'all' && request.status !== statusFilter) return false
+
+      const createdAt = request.created_at ? new Date(request.created_at) : null
+      if (fromDate) {
+        const from = new Date(`${fromDate}T00:00:00`)
+        if (createdAt && createdAt < from) return false
+      }
+      if (toDate) {
+        const to = new Date(`${toDate}T23:59:59`)
+        if (createdAt && createdAt > to) return false
+      }
+
+      const actorQ = actorFilter.trim().toLowerCase()
+      if (actorQ) {
+        const actorText = [
+          actorLabel(request.created_by_staff, request.created_by),
+          actorLabel(request.approved_by_staff, request.approved_by),
+          actorLabel(request.issued_by_staff, request.issued_by),
+        ].join(' ').toLowerCase()
+        if (!actorText.includes(actorQ)) return false
+      }
+
+      if (!q) return true
       const haystack = [
         request.company?.name,
         request.source_location?.name,
@@ -236,7 +271,7 @@ export default function StoreRequestsPage() {
         .toLowerCase()
       return haystack.includes(q)
     })
-  }, [requests, search])
+  }, [requests, search, statusFilter, actorFilter, fromDate, toDate])
 
   const pendingRequests = filteredRequests.filter((request) => request.status === 'new' || request.status === 'disputed')
   const approvedRequests = filteredRequests.filter((request) =>
@@ -389,6 +424,45 @@ export default function StoreRequestsPage() {
           </DropdownMenu>
         </div>
       </div>
+
+      <Card className="border-white/10 bg-slate-950/70 p-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none"
+          >
+            <option value="all">Все статусы</option>
+            <option value="new">Новая</option>
+            <option value="approved_full">Одобрена полностью</option>
+            <option value="approved_partial">Одобрена частично</option>
+            <option value="issued">Выдана</option>
+            <option value="received">Получена</option>
+            <option value="rejected">Отклонена</option>
+            <option value="disputed">Спор</option>
+          </select>
+          <Input
+            value={actorFilter}
+            onChange={(event) => setActorFilter(event.target.value)}
+            placeholder="Кто создавал/одобрял/выдавал"
+          />
+          <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+          <Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setStatusFilter('all')
+              setActorFilter('')
+              setFromDate('')
+              setToDate('')
+              setSearch('')
+            }}
+          >
+            Сбросить фильтры
+          </Button>
+        </div>
+      </Card>
 
       {error ? (
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>
@@ -670,6 +744,18 @@ export default function StoreRequestsPage() {
                         <span className="text-slate-300">
                           {request.received_qty_confirmed == null ? '—' : formatQty(request.received_qty_confirmed)}
                         </span>
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-xl border border-white/6 bg-black/20 p-2.5">
+                      <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-slate-500">Журнал заявки</p>
+                      <div className="mb-2 space-y-1.5">
+                        {requestTimeline(request).map((step) => (
+                          <div key={step.key} className="flex items-center justify-between gap-3 text-[11px]">
+                            <span className="text-slate-400">{step.label}</span>
+                            <span className="text-slate-300">{formatDateTime(step.at)}</span>
+                            <span className="max-w-[45%] truncate text-right text-slate-400">{step.by}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                     <div className="mt-3 rounded-xl border border-white/6 bg-black/20 p-2.5">

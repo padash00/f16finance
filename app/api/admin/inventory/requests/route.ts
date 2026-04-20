@@ -132,10 +132,25 @@ export async function POST(request: Request) {
         patch.received_at = nowIso
       }
 
-      const { error: updErr } = await supabase
+      let { error: updErr } = await supabase
         .from('inventory_requests')
         .update(patch)
         .eq('id', requestId)
+
+      // Backward compatibility: if DB column received_by is not deployed yet,
+      // retry without it so status transition keeps working.
+      if (updErr && newStatus === 'received') {
+        const msg = String((updErr as any)?.message || '')
+        if (msg.toLowerCase().includes('received_by')) {
+          const fallbackPatch = { ...patch }
+          delete (fallbackPatch as any).received_by
+          const fallback = await supabase
+            .from('inventory_requests')
+            .update(fallbackPatch)
+            .eq('id', requestId)
+          updErr = fallback.error
+        }
+      }
       if (updErr) throw updErr
 
       return json({ ok: true, data: { status: newStatus } })
