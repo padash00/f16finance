@@ -707,7 +707,7 @@ export default function WarehousePage() {
           </Button>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
             <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Позиций</p>
             <p className="mt-1.5 text-2xl font-semibold">{balances.length}</p>
@@ -726,14 +726,14 @@ export default function WarehousePage() {
           </div>
           <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
             <p className="text-[11px] uppercase tracking-widest text-blue-300/70">Стоимость</p>
-            <p className="mt-1.5 text-sm font-semibold text-blue-200">{fmtMoney(totalPurchase)} / {fmtMoney(totalSale)} ₸</p>
+            <p className="mt-1.5 break-words text-sm font-semibold text-blue-200">{fmtMoney(totalPurchase)} / {fmtMoney(totalSale)} ₸</p>
             <p className="text-[10px] text-blue-400/70">закуп / продажа</p>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
-        <Card className="border-white/10 bg-card/70">
+      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_430px]">
+        <Card className="min-w-0 border-white/10 bg-card/70">
           <CardHeader className="border-b border-white/10 pb-3">
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle className="flex items-center gap-2 text-sm mr-auto">
@@ -891,7 +891,7 @@ export default function WarehousePage() {
           </CardContent>
         </Card>
 
-        <Card className="border-white/10 bg-card/70">
+        <Card className="min-w-0 border-white/10 bg-card/70 2xl:sticky 2xl:top-4 2xl:self-start">
           <CardHeader className="border-b border-white/10 pb-3">
             <CardTitle className="flex items-center gap-2 text-sm">
               <PackagePlus className="h-4 w-4 text-emerald-300" />
@@ -899,7 +899,7 @@ export default function WarehousePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
-            <div className="grid grid-cols-4 gap-0.5 rounded-xl border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+            <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1 text-xs">
               {([
                 ['barcode', 'Штрихкод', Barcode],
                 ['catalog', 'Каталог', Search],
@@ -914,10 +914,10 @@ export default function WarehousePage() {
                     setExcelRows([])
                     if (mode !== 'backroom') resetBackroom()
                   }}
-                  className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 transition ${addMode === mode ? 'bg-white/10 text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 transition ${addMode === mode ? 'bg-white/10 text-foreground font-medium shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'}`}
                 >
-                  <Icon className="h-3.5 w-3.5" />
-                  {label}
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{label}</span>
                 </button>
               ))}
             </div>
@@ -1068,7 +1068,7 @@ export default function WarehousePage() {
                   className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/20 bg-white/[0.02] py-5 text-center transition hover:border-amber-400/40 hover:bg-white/[0.04]"
                 >
                   <Boxes className="h-7 w-7 text-amber-300" />
-                  <p className="text-xs font-medium text-foreground">
+                  <p className="max-w-full break-all px-3 text-xs font-medium text-foreground">
                     {backroomFileName ? `Файл: ${backroomFileName}` : 'Загрузить Excel / DOCX с остатками подсобки'}
                   </p>
                   <p className="text-[10px] text-muted-foreground">Формат: Штрихкод | Название | Количество</p>
@@ -1097,21 +1097,25 @@ export default function WarehousePage() {
 
                 {(backroomMatched.length > 0 || backroomUnmatched.length > 0) && (
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between text-[10px] uppercase tracking-wider">
-                      <span className="text-emerald-300/80">Найдено: {backroomMatched.length}</span>
-                      <span className="text-rose-300/80">Не найдено: {backroomUnmatched.length}</span>
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider">
+                      <span className="rounded-md border border-emerald-500/20 bg-emerald-500/[0.08] px-2 py-1 text-emerald-300/90">
+                        Найдено: {backroomMatched.length}
+                      </span>
+                      <span className="rounded-md border border-rose-500/20 bg-rose-500/[0.08] px-2 py-1 text-rose-300/90">
+                        Не найдено: {backroomUnmatched.length}
+                      </span>
                       <button
                         type="button"
                         onClick={resetBackroom}
-                        className="text-muted-foreground hover:text-foreground"
+                        className="ml-auto text-muted-foreground hover:text-foreground"
                       >
                         Сбросить
                       </button>
                     </div>
 
                     {backroomMatched.length > 0 && (
-                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] max-h-80 overflow-y-auto">
-                        <table className="w-full text-[11px]">
+                      <div className="max-h-80 overflow-auto rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04]">
+                        <table className="min-w-[560px] w-full text-[11px]">
                           <thead className="sticky top-0 bg-[#0f172a]/95 backdrop-blur">
                             <tr className="text-left text-muted-foreground">
                               <th className="px-2 py-1.5 font-normal">Товар</th>
@@ -1126,10 +1130,10 @@ export default function WarehousePage() {
                               return (
                                 <tr key={m.item_id} className="hover:bg-white/[0.03]">
                                   <td className="px-2 py-1.5 align-top">
-                                    <div className="truncate font-medium">{m.catalog_name}</div>
-                                    <div className="text-[10px] font-mono text-muted-foreground">{m.barcode}</div>
+                                    <div className="break-words font-medium">{m.catalog_name}</div>
+                                    <div className="break-all text-[10px] font-mono text-muted-foreground">{m.barcode}</div>
                                     {nameMismatch && (
-                                      <div className="text-[10px] text-amber-300/80">
+                                      <div className="break-words text-[10px] text-amber-300/80">
                                         В файле: «{m.excel_name}»
                                       </div>
                                     )}
@@ -1164,9 +1168,9 @@ export default function WarehousePage() {
                         </summary>
                         <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-[11px]">
                           {backroomUnmatched.map((u, i) => (
-                            <li key={`${u.barcode}-${i}`} className="flex justify-between gap-2 text-muted-foreground">
-                              <span className="font-mono">{u.barcode}</span>
-                              <span className="truncate flex-1">{u.name}</span>
+                            <li key={`${u.barcode}-${i}`} className="grid grid-cols-[1fr,2fr,auto] items-start gap-2 text-muted-foreground">
+                              <span className="break-all font-mono">{u.barcode}</span>
+                              <span className="break-words">{u.name}</span>
                               <span className="text-rose-300">{u.quantity}</span>
                             </li>
                           ))}
