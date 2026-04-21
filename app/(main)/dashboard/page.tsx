@@ -831,6 +831,12 @@ export default function SmartDashboardPage() {
     return () => { supabase.removeChannel(channel) }
   }, [isAuthenticated])
 
+  const companyById = useMemo(() => {
+    const map: Record<string, Company> = {}
+    for (const c of companies) map[c.id] = c
+    return map
+  }, [companies])
+
   useEffect(() => {
     if (!isAuthenticated) return
     let mounted = true
@@ -939,12 +945,6 @@ export default function SmartDashboardPage() {
     })()
     return () => { mounted = false }
   }, [isAuthenticated])
-
-  const companyById = useMemo(() => {
-    const map: Record<string, Company> = {}
-    for (const c of companies) map[c.id] = c
-    return map
-  }, [companies])
 
   const hasExtraCompany = useMemo(
     () => companies.some(c => (c.code || '').toLowerCase() === 'extra'),
