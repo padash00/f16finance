@@ -51,7 +51,8 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
-    // Enrich with staff names for full request history timeline
+    // Enrich with actor names for full request history timeline.
+    // Actors may be staff (admin web UI) or operators (point desktop — created_by stores operator_auth.user_id).
     const actorIds = Array.from(
       new Set(
         (requests || [])
@@ -60,26 +61,40 @@ export async function GET(request: Request) {
           .filter(Boolean),
       ),
     )
-    let staffById: Record<string, { id: string; full_name: string | null; role: string | null }> = {}
+    const actorById: Record<string, { id: string; full_name: string | null; role: string | null }> = {}
     if (actorIds.length > 0) {
-      const { data: staffRows } = await supabase
-        .from('staff')
-        .select('id, full_name, role')
-        .in('id', actorIds)
+      const [{ data: staffRows }, { data: operatorAuthRows }] = await Promise.all([
+        supabase.from('staff').select('id, full_name, role').in('id', actorIds),
+        supabase
+          .from('operator_auth')
+          .select('user_id, role, operator:operator_id(name, short_name)')
+          .in('user_id', actorIds),
+      ])
       for (const s of staffRows || []) {
-        staffById[String((s as any).id)] = {
+        actorById[String((s as any).id)] = {
           id: String((s as any).id),
           full_name: ((s as any).full_name as string) || null,
           role: ((s as any).role as string) || null,
+        }
+      }
+      for (const row of operatorAuthRows || []) {
+        const userId = String((row as any).user_id || '').trim()
+        if (!userId || actorById[userId]) continue
+        const op = Array.isArray((row as any).operator) ? (row as any).operator[0] : (row as any).operator
+        const name = op?.name || op?.short_name || null
+        actorById[userId] = {
+          id: userId,
+          full_name: name,
+          role: ((row as any).role as string) || 'operator',
         }
       }
     }
 
     const enrichedRequests = (requests || []).map((r: any) => ({
       ...r,
-      created_by_staff: r.created_by ? staffById[String(r.created_by)] || null : null,
-      approved_by_staff: r.approved_by ? staffById[String(r.approved_by)] || null : null,
-      issued_by_staff: r.issued_by ? staffById[String(r.issued_by)] || null : null,
+      created_by_staff: r.created_by ? actorById[String(r.created_by)] || null : null,
+      approved_by_staff: r.approved_by ? actorById[String(r.approved_by)] || null : null,
+      issued_by_staff: r.issued_by ? actorById[String(r.issued_by)] || null : null,
     }))
 
     return json({
