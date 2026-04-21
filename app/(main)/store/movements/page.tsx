@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { ArchiveX, History, RefreshCw, Search } from 'lucide-react'
 import Link from 'next/link'
 
@@ -85,7 +85,7 @@ function movementTypeClass(type: string) {
   return 'border-white/10 bg-white/[0.05] text-muted-foreground'
 }
 
-export default function StoreMovementsPage() {
+function StoreMovementsPageContent() {
   const [data, setData] = useState<MovementsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -257,5 +257,13 @@ export default function StoreMovementsPage() {
         </div>
       </Card>
     </div>
+  )
+}
+
+export default function StoreMovementsPage() {
+  return (
+    <Suspense fallback={null}>
+      <StoreMovementsPageContent />
+    </Suspense>
   )
 }

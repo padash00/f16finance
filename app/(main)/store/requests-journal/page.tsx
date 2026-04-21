@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
@@ -201,7 +201,7 @@ function requestTimeline(request: InventoryRequest) {
   ]
 }
 
-export default function StoreRequestsJournalPage() {
+function StoreRequestsJournalPageContent() {
   const [requests, setRequests] = useState<InventoryRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -546,5 +546,13 @@ export default function StoreRequestsJournalPage() {
         </div>
       </Card>
     </div>
+  )
+}
+
+export default function StoreRequestsJournalPage() {
+  return (
+    <Suspense fallback={null}>
+      <StoreRequestsJournalPageContent />
+    </Suspense>
   )
 }

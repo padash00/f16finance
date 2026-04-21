@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AlertCircle, CheckCircle2, ClipboardList, History, Loader2, MoreHorizontal, PackageCheck, RefreshCw, XCircle } from 'lucide-react'
 
@@ -193,7 +193,7 @@ function requestItemsCount(request: InventoryRequest) {
   return asArray(request.items).reduce((sum, item) => sum + Number(item.requested_qty || 0), 0)
 }
 
-export default function StoreRequestsPage() {
+function StoreRequestsPageContent() {
   const [requests, setRequests] = useState<InventoryRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -770,5 +770,13 @@ export default function StoreRequestsPage() {
         </div>
       ) : null}
     </div>
+  )
+}
+
+export default function StoreRequestsPage() {
+  return (
+    <Suspense fallback={null}>
+      <StoreRequestsPageContent />
+    </Suspense>
   )
 }

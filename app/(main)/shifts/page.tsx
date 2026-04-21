@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import React, { Suspense, useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
@@ -249,7 +249,7 @@ function buildShiftConflicts(shifts: Shift[], companyNames: Record<string, strin
     .sort((a, b) => a.date.localeCompare(b.date) || a.operatorName.localeCompare(b.operatorName))
 }
 
-export default function ShiftsPage() {
+function ShiftsPageContent() {
   const realtimeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const defaultWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const [urlState, setUrlState] = useUrlState({
@@ -1816,5 +1816,13 @@ function EditableShiftCell({
         <AlertTriangle className="pointer-events-none absolute right-1 top-1 h-3.5 w-3.5 text-amber-400" />
       )}
     </td>
+  )
+}
+
+export default function ShiftsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ShiftsPageContent />
+    </Suspense>
   )
 }

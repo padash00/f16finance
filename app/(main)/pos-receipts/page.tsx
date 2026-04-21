@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { Suspense, useState, useEffect, useCallback } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -218,7 +218,7 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function PosReceiptsPage() {
+function PosReceiptsPageContent() {
   const [sales, setSales] = useState<Sale[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -521,5 +521,13 @@ export default function PosReceiptsPage() {
         <ReceiptDetailModal sale={selectedSale} onClose={() => setSelectedSale(null)} />
       )}
     </>
+  )
+}
+
+export default function PosReceiptsPage() {
+  return (
+    <Suspense fallback={null}>
+      <PosReceiptsPageContent />
+    </Suspense>
   )
 }

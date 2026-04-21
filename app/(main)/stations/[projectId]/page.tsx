@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Monitor, Clock, Banknote,
@@ -914,7 +914,7 @@ function MapEditor({ projectId, companyId, zones, stations, decorations, cellSiz
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function StationsPage() {
+function StationsPageContent() {
   const params = useParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -3423,5 +3423,13 @@ export default function StationsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function StationsPage() {
+  return (
+    <Suspense fallback={null}>
+      <StationsPageContent />
+    </Suspense>
   )
 }

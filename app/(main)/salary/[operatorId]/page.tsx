@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { useParams, useSearchParams } from 'next/navigation'
 import {
@@ -55,7 +55,7 @@ function Modal(props: { title: string; subtitle?: string; onClose: () => void; c
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"><div className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#10182b] p-6 shadow-2xl shadow-black/40"><div className="mb-6 flex items-start justify-between gap-4"><div><h3 className="text-xl font-semibold text-white">{props.title}</h3>{props.subtitle ? <p className="mt-1 text-sm text-slate-400">{props.subtitle}</p> : null}</div><Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-300 hover:bg-white/10" onClick={props.onClose}>Закрыть</Button></div>{props.children}</div></div>
 }
 
-export default function OperatorSalaryDetailPage() {
+function OperatorSalaryDetailPageContent() {
   const params = useParams<{ operatorId?: string | string[] }>()
   const searchParams = useSearchParams()
 
@@ -570,5 +570,13 @@ export default function OperatorSalaryDetailPage() {
         </Modal>
       ) : null}
     </>
+  )
+}
+
+export default function OperatorSalaryDetailPage() {
+  return (
+    <Suspense fallback={null}>
+      <OperatorSalaryDetailPageContent />
+    </Suspense>
   )
 }
