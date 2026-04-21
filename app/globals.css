@@ -238,6 +238,7 @@
 
 .app-shell-layout {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
@@ -245,6 +246,7 @@
 
 .app-main {
   flex: 1;
+  min-width: 0;
   overflow: auto;
   padding-top: 4rem;
 }
