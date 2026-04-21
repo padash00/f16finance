@@ -21,6 +21,19 @@ function normalizeQty(value: unknown) {
   return Math.round((amount + Number.EPSILON) * 1000) / 1000
 }
 
+function humanizeDecisionError(raw: string | null | undefined): string {
+  const code = String(raw || '').trim()
+  if (code === 'inventory-request-not-found') return 'Заявка не найдена'
+  if (code === 'inventory-request-already-decided') return 'Решение по заявке уже принято'
+  if (code === 'inventory-request-decision-items-required') return 'Не переданы позиции заявки'
+  if (code === 'inventory-request-decision-line-missing') return 'В решении отсутствует одна из позиций заявки'
+  if (code === 'inventory-request-approved-qty-invalid') return 'Количество не может быть отрицательным'
+  if (code === 'inventory-request-approved-qty-too-high') {
+    return 'В базе пока старая функция: одобрить больше запрошенного нельзя. Примените миграцию 20260421_inventory_decide_request_allow_overapproval.sql.'
+  }
+  return code || 'Не удалось обработать заявку'
+}
+
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -255,6 +268,6 @@ export async function POST(request: Request) {
       area: 'api/admin/inventory/requests.POST',
       message: error?.message || 'error',
     })
-    return json({ error: error?.message || 'Не удалось обработать заявку магазина' }, 500)
+    return json({ error: humanizeDecisionError(error?.message) }, 500)
   }
 }
