@@ -289,15 +289,34 @@ export default function AddIncomePage() {
           is_virtual: false,
         }
 
-        const response = await fetch('/api/admin/incomes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'createIncome',
-            payload,
-          }),
-        })
-        const json = await response.json().catch(() => null)
+        const submit = async (force: boolean) =>
+          fetch('/api/admin/incomes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'createIncome',
+              payload,
+              force,
+            }),
+          })
+
+        let response = await submit(false)
+        let json = await response.json().catch(() => null)
+
+        if (response.status === 409 && json?.duplicate) {
+          const d = json.duplicate
+          const msg =
+            `Уже есть доход за ${d.date}, смена "${d.shift === 'day' ? 'день' : 'ночь'}" на ${formatMoney(d.total)}` +
+            (d.comment ? ` (${d.comment})` : '') +
+            `.\n\nВсё равно создать дубль?`
+          if (!window.confirm(msg)) {
+            setSaving(false)
+            return
+          }
+          response = await submit(true)
+          json = await response.json().catch(() => null)
+        }
+
         if (!response.ok) throw new Error(json?.error || 'Не удалось сохранить доход')
         await logIncomeAudit({
           entityId: String(json?.data?.id || `${date}:${companyId}`),

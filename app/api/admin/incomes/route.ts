@@ -21,6 +21,7 @@ type Body =
         comment: string | null
         is_virtual?: boolean | null
       }
+      force?: boolean
     }
   | {
       action: 'createIncomeBatch'
@@ -186,6 +187,37 @@ export async function POST(req: Request) {
         Number(insertPayload.online_amount || 0) +
         Number(insertPayload.card_amount || 0)
       if (totalAmount <= 0) return json({ error: 'Сумма дохода обязательна' }, 400)
+
+      if (!body.force && !insertPayload.is_virtual) {
+        const { data: dup } = await supabase
+          .from('incomes')
+          .select('id, date, shift, cash_amount, kaspi_amount, online_amount, card_amount, comment, operator_id')
+          .eq('date', insertPayload.date)
+          .eq('company_id', insertPayload.company_id)
+          .eq('shift', insertPayload.shift)
+          .eq('cash_amount', insertPayload.cash_amount)
+          .eq('kaspi_amount', insertPayload.kaspi_amount)
+          .eq('online_amount', insertPayload.online_amount)
+          .eq('card_amount', insertPayload.card_amount)
+          .limit(1)
+          .maybeSingle()
+        if (dup) {
+          return json({
+            error: 'duplicate',
+            duplicate: {
+              id: dup.id,
+              date: dup.date,
+              shift: dup.shift,
+              total:
+                Number(dup.cash_amount || 0) +
+                Number(dup.kaspi_amount || 0) +
+                Number(dup.online_amount || 0) +
+                Number(dup.card_amount || 0),
+              comment: dup.comment,
+            },
+          }, 409)
+        }
+      }
 
       const { data, error } = await supabase.from('incomes').insert([insertPayload]).select('*').single()
       if (error) throw error

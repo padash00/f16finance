@@ -318,15 +318,35 @@ export default function AddExpensePage() {
         comment: comment.trim() || null,
       }
 
-      const response = await fetch('/api/admin/expenses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'createExpense',
-          payload,
-        }),
-      })
-      const json = await response.json().catch(() => null)
+      const submit = async (force: boolean) =>
+        fetch('/api/admin/expenses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'createExpense',
+            payload,
+            force,
+          }),
+        })
+
+      let response = await submit(false)
+      let json = await response.json().catch(() => null)
+
+      if (response.status === 409 && json?.duplicate) {
+        const d = json.duplicate
+        const msg =
+          `Уже есть расход за ${d.date}: "${d.category}" на ${Formatters.moneyDetailed(d.total)}` +
+          (d.comment ? ` (${d.comment})` : '') +
+          `.\n\nВсё равно создать дубль?`
+        if (!window.confirm(msg)) {
+          savingRef.current = false
+          setSaving(false)
+          return
+        }
+        response = await submit(true)
+        json = await response.json().catch(() => null)
+      }
+
       if (!response.ok) throw new Error(json?.error || 'Не удалось сохранить расход')
 
       await logExpenseAudit({
