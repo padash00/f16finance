@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
+import { listOrganizationCompanyIds } from '@/lib/server/organizations'
 import { createRequestSupabaseClient, getRequestAccessContext } from '@/lib/server/request-auth'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 
@@ -14,6 +15,14 @@ function getSupabase(req: Request) {
     : createRequestSupabaseClient(req)
 }
 
+function currentMonthRange() {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  const toIso = (d: Date) => d.toISOString().slice(0, 10)
+  return { from: toIso(start), to: toIso(end) }
+}
+
 export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
@@ -25,9 +34,50 @@ export async function GET(req: Request) {
       .select('id, name, accounting_group, monthly_budget')
       .order('name')
     if (result.error) throw result.error
-    const data = result.data ?? []
+    const categories = result.data ?? []
 
-    return json({ data: data ?? [] })
+    const withUsage = String(new URL(req.url).searchParams.get('with_usage') || '').trim() === '1'
+    if (!withUsage) {
+      return json({ data: categories })
+    }
+
+    const { from, to } = currentMonthRange()
+    const allowedCompanyIds = await listOrganizationCompanyIds({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    let spentQuery = supabase
+      .from('expenses')
+      .select('category, cash_amount, kaspi_amount')
+      .gte('date', from)
+      .lte('date', to)
+    if (allowedCompanyIds) {
+      if (allowedCompanyIds.length === 0) {
+        return json({
+          data: categories.map((c: any) => ({ ...c, spent_this_month: 0 })),
+          period: { from, to },
+        })
+      }
+      spentQuery = spentQuery.in('company_id', allowedCompanyIds)
+    }
+    const { data: spentRows, error: spentError } = await spentQuery
+    if (spentError) throw spentError
+
+    const byCategory = new Map<string, number>()
+    for (const row of spentRows || []) {
+      const key = String((row as any).category || '').trim()
+      if (!key) continue
+      const total = Number((row as any).cash_amount || 0) + Number((row as any).kaspi_amount || 0)
+      byCategory.set(key, (byCategory.get(key) || 0) + total)
+    }
+
+    const enriched = categories.map((c: any) => ({
+      ...c,
+      spent_this_month: byCategory.get(String(c.name || '').trim()) || 0,
+    }))
+
+    return json({ data: enriched, period: { from, to } })
   } catch (error: any) {
     await writeSystemErrorLogSafe({ scope: 'server', area: 'api/admin/expense-categories GET', message: error?.message || 'error' })
     return json({ error: error?.message || 'Ошибка сервера' }, 500)

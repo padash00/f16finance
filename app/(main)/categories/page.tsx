@@ -30,6 +30,7 @@ type Category = {
   type?: string | null
   accounting_group: FinancialGroup | null
   monthly_budget: number | null
+  spent_this_month?: number | null
   created_at?: string
 }
 
@@ -59,7 +60,7 @@ export default function CategoriesPage() {
 
   const loadCategories = async () => {
     setLoading(true)
-    const response = await fetch('/api/admin/expense-categories', { cache: 'no-store' })
+    const response = await fetch('/api/admin/expense-categories?with_usage=1', { cache: 'no-store' })
     const body = await response.json().catch(() => null)
 
     if (!response.ok) {
@@ -261,9 +262,51 @@ export default function CategoriesPage() {
                           {getFinancialGroupLabel(cat.accounting_group)}
                         </span>
                         {cat.monthly_budget && cat.monthly_budget > 0 ? (
-                          <p className="text-xs text-amber-400 mt-1 flex items-center gap-1">
-                            <Banknote className="w-3 h-3" /> Бюджет: {cat.monthly_budget.toLocaleString('ru-RU')} ₸/мес
-                          </p>
+                          (() => {
+                            const budget = Number(cat.monthly_budget || 0)
+                            const spent = Number(cat.spent_this_month || 0)
+                            const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0
+                            const overBy = Math.max(0, spent - budget)
+                            const barColor =
+                              pct >= 100
+                                ? 'bg-red-500'
+                                : pct >= 90
+                                  ? 'bg-red-400'
+                                  : pct >= 70
+                                    ? 'bg-amber-400'
+                                    : 'bg-emerald-400'
+                            const textColor =
+                              pct >= 100
+                                ? 'text-red-400'
+                                : pct >= 90
+                                  ? 'text-red-300'
+                                  : pct >= 70
+                                    ? 'text-amber-400'
+                                    : 'text-emerald-400'
+                            return (
+                              <div className="mt-2 space-y-1">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                    <Banknote className="w-3 h-3" /> Бюджет
+                                  </span>
+                                  <span className={textColor}>
+                                    {spent.toLocaleString('ru-RU')} / {budget.toLocaleString('ru-RU')} ₸ ({pct}%)
+                                  </span>
+                                </div>
+                                <div className="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+                                  <div
+                                    className={`h-full transition-all ${barColor}`}
+                                    style={{ width: `${Math.min(100, pct)}%` }}
+                                  />
+                                </div>
+                                {overBy > 0 ? (
+                                  <p className="text-[10px] text-red-400">
+                                    Превышение на {overBy.toLocaleString('ru-RU')} ₸
+                                  </p>
+                                ) : null}
+                              </div>
+                            )
+                          })()
                         ) : null}
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
