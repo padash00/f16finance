@@ -140,6 +140,7 @@ const navSections: NavSection[] = [
       { href: '/store/catalog', label: 'Каталог', icon: Tags, note: 'Товары, категории и поставщики' },
       { href: '/store/receipts', label: 'Приемка', icon: PackagePlus, note: 'Документы прихода на склад' },
       { href: '/store/requests', label: 'Заявки', icon: ClipboardList, note: 'Заявки точек и одобрение' },
+      { href: '/store/requests-journal', label: 'Журнал заявок', icon: History, note: 'История всех заявок с переходами' },
       { href: '/store/analytics', label: 'Аналитика точек', icon: Store, note: 'Остатки и движение по витринам' },
       { href: '/store/consumables', label: 'Расходники', icon: Package2, note: 'Нормы и контроль остатков' },
       { href: '/store/writeoffs', label: 'Списания', icon: ArchiveX, note: 'Брак и служебные расходы' },

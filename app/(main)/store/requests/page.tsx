@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, ClipboardList, Loader2, MoreHorizontal, PackageCheck, RefreshCw, XCircle } from 'lucide-react'
+import Link from 'next/link'
+import { AlertCircle, CheckCircle2, ClipboardList, History, Loader2, MoreHorizontal, PackageCheck, RefreshCw, XCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -441,6 +442,12 @@ export default function StoreRequestsPage() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
+          <Link href="/store/requests-journal">
+            <Button variant="outline" className="gap-2">
+              <History className="h-4 w-4" />
+              Журнал заявок
+            </Button>
+          </Link>
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -556,7 +563,7 @@ export default function StoreRequestsPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+      <div className="grid gap-6">
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-sm font-medium text-white">
             <AlertCircle className="h-4 w-4 text-violet-300" />
@@ -687,162 +694,6 @@ export default function StoreRequestsPage() {
           )}
         </div>
 
-        <div className="space-y-6">
-          <Card className="border-white/10 bg-slate-950/70 p-5">
-            <div className="flex items-center gap-2 text-sm font-medium text-white">
-              <PackageCheck className="h-4 w-4 text-cyan-300" />
-              Уже согласовано
-            </div>
-            <div className="mt-4 space-y-3">
-              {approvedRequests.length === 0 ? (
-                <p className="text-sm text-slate-400">Пока нет одобренных заявок.</p>
-              ) : (
-                approvedRequests.slice(0, 6).map((request) => (
-                  <div key={request.id} className="rounded-2xl border border-white/6 bg-slate-900/70 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-white">
-                          {request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-400">
-                          {asArray(request.items).length || 0} позиций · {formatDateTime(request.approved_at || request.created_at)}
-                        </div>
-                      </div>
-                      <RequestStatusBadge status={request.status} />
-                    </div>
-                    <div className="mt-3">
-                      {['approved_full', 'approved_partial', 'issued'].includes(request.status) && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className={`h-7 gap-1 text-xs ${request.status === 'issued'
-                            ? 'border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10'
-                            : 'border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10'
-                            }`}
-                          disabled={savingId === request.id}
-                          onClick={() => transitionStatus(request.id, request.status === 'issued' ? 'received' : 'issued')}
-                        >
-                          {savingId === request.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : request.status === 'issued' ? (
-                            <CheckCircle2 className="h-3 w-3" />
-                          ) : (
-                            <PackageCheck className="h-3 w-3" />
-                          )}
-                          {request.status === 'issued' ? 'Отметить полученной' : 'Отметить выданной'}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-
-          <Card className="border-white/10 bg-slate-950/70 p-5">
-            <div className="flex items-center gap-2 text-sm font-medium text-white">
-              <ClipboardList className="h-4 w-4 text-blue-300" />
-              История решений
-            </div>
-            <div className="mt-4 space-y-3">
-              {historyRequests.length === 0 ? (
-                <p className="text-sm text-slate-400">История появится после первых отклоненных или подтвержденных заявок.</p>
-              ) : (
-                historyRequests.slice(0, 8).map((request) => (
-                  <div key={request.id} className="rounded-2xl border border-white/6 bg-slate-900/70 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-white">
-                          {request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-400">{formatDateTime(request.approved_at || request.created_at)}</div>
-                        {request.decision_comment ? (
-                          <div className="mt-2 line-clamp-2 text-xs text-slate-500">{request.decision_comment}</div>
-                        ) : null}
-                      </div>
-                      <RequestStatusBadge status={request.status} />
-                    </div>
-                    <div className="mt-3 grid gap-1 text-[11px] text-slate-400">
-                      <div className="flex justify-between gap-3">
-                        <span>Кто создал</span>
-                        <span className="text-slate-300">{actorLabel(request.created_by_staff, request.created_by)}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span>Кто одобрил</span>
-                        <span className="text-slate-300">{actorLabel(request.approved_by_staff, request.approved_by)}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span>Кто выдал</span>
-                        <span className="text-slate-300">{actorLabel(request.issued_by_staff, request.issued_by)}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span>Кто принял</span>
-                        <span className="text-slate-300">—</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span>Когда выдали</span>
-                        <span className="text-slate-300">{formatDateTime(request.issued_at)}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span>Когда получили</span>
-                        <span className="text-slate-300">{formatDateTime(request.received_at)}</span>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span>Подтверждено при получении</span>
-                        <span className="text-slate-300">
-                          {request.received_qty_confirmed == null ? '—' : formatQty(request.received_qty_confirmed)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-3 rounded-xl border border-white/6 bg-black/20 p-2.5">
-                      <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-slate-500">Журнал заявки</p>
-                      <div className="mb-2 space-y-1.5">
-                        {requestTimeline(request).map((step) => (
-                          <div key={step.key} className="flex items-center justify-between gap-3 text-[11px]">
-                            <span className="text-slate-400">{step.label}</span>
-                            <span className="text-slate-300">{formatDateTime(step.at)}</span>
-                            <span className="max-w-[45%] truncate text-right text-slate-400">{step.by}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="mt-3 rounded-xl border border-white/6 bg-black/20 p-2.5">
-                      {asArray(request.items).slice(0, 5).map((item) => (
-                        <div key={item.id} className="flex items-center justify-between text-[11px] text-slate-300">
-                          <span className="truncate pr-2">{item.item?.name || 'Товар'}</span>
-                          <span className="shrink-0 text-slate-400">
-                            {formatQty(Number(item.requested_qty || 0))} → {formatQty(Number(item.approved_qty || 0))}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-
-          <Card className="border-white/10 bg-slate-950/70 p-5">
-            <div className="flex items-center gap-2 text-sm font-medium text-white">
-              <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-              Сводка по объему
-            </div>
-            <div className="mt-4 space-y-3 text-sm text-slate-300">
-              <div className="flex items-center justify-between rounded-xl border border-white/6 bg-slate-900/70 px-4 py-3">
-                <span>Запрошено единиц</span>
-                <span className="font-semibold text-white">{stats.totalRequested}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-white/6 bg-slate-900/70 px-4 py-3">
-                <span>Одобрено единиц</span>
-                <span className="font-semibold text-white">{stats.totalApproved}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-white/6 bg-slate-900/70 px-4 py-3">
-                <span>Потенциальный товарный поток</span>
-                <span className="font-semibold text-white">{formatMoney(stats.totalApproved)}</span>
-              </div>
-            </div>
-          </Card>
-        </div>
       </div>
     </div>
   )
