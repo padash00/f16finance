@@ -17,6 +17,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { formatMoney } from '@/lib/core/format'
+import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
 
 type InventoryLocation = {
   id: string
@@ -198,12 +199,18 @@ export default function StoreRequestsPage() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [actorFilter, setActorFilter] = useState('')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  const [filters, setFilters] = useUrlState({
+    q: '',
+    status: 'all',
+    actor: '',
+    from: '',
+    to: '',
+  })
+  const [searchInput, setSearchInput] = useState(filters.q)
+  const debouncedSearch = useDebouncedValue(searchInput, 300)
   const [decisionDrafts, setDecisionDrafts] = useState<Record<string, DecisionDraft>>({})
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [bulkSaving, setBulkSaving] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -216,6 +223,7 @@ export default function StoreRequestsPage() {
       }
       const normalizedRequests = asArray(json.data.requests).map(normalizeRequest).filter((request) => request.id)
       setRequests(normalizedRequests)
+      setSelectedIds((prev) => prev.filter((id) => normalizedRequests.some((request) => request.id === id)))
       setDecisionDrafts((prev) => {
         const next = { ...prev }
         for (const request of normalizedRequests) {
@@ -235,37 +243,29 @@ export default function StoreRequestsPage() {
   }, [])
 
   useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const q = params.get('q')
-      const status = params.get('status')
-      const actor = params.get('actor')
-      const from = params.get('from')
-      const to = params.get('to')
-      if (q) setSearch(q)
-      if (status) setStatusFilter(status)
-      if (actor) setActorFilter(actor)
-      if (from) setFromDate(from)
-      if (to) setToDate(to)
-    } catch { /* ignore query parse errors */ }
-  }, [])
+    setSearchInput(filters.q)
+  }, [filters.q])
+
+  useEffect(() => {
+    setFilters({ q: debouncedSearch })
+  }, [debouncedSearch, setFilters])
 
   const filteredRequests = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = filters.q.trim().toLowerCase()
     return requests.filter((request) => {
-      if (statusFilter !== 'all' && request.status !== statusFilter) return false
+      if (filters.status !== 'all' && request.status !== filters.status) return false
 
       const createdAt = request.created_at ? new Date(request.created_at) : null
-      if (fromDate) {
-        const from = new Date(`${fromDate}T00:00:00`)
+      if (filters.from) {
+        const from = new Date(`${filters.from}T00:00:00`)
         if (createdAt && createdAt < from) return false
       }
-      if (toDate) {
-        const to = new Date(`${toDate}T23:59:59`)
+      if (filters.to) {
+        const to = new Date(`${filters.to}T23:59:59`)
         if (createdAt && createdAt > to) return false
       }
 
-      const actorQ = actorFilter.trim().toLowerCase()
+      const actorQ = filters.actor.trim().toLowerCase()
       if (actorQ) {
         const actorText = [
           actorLabel(request.created_by_staff, request.created_by),
@@ -288,7 +288,7 @@ export default function StoreRequestsPage() {
         .toLowerCase()
       return haystack.includes(q)
     })
-  }, [requests, search, statusFilter, actorFilter, fromDate, toDate])
+  }, [requests, filters])
 
   const pendingRequests = filteredRequests.filter((request) => request.status === 'new' || request.status === 'disputed')
   const approvedRequests = filteredRequests.filter((request) =>
@@ -395,6 +395,44 @@ export default function StoreRequestsPage() {
     }
   }
 
+  const toggleSelected = (requestId: string, checked: boolean) => {
+    setSelectedIds((prev) => (checked ? (prev.includes(requestId) ? prev : [...prev, requestId]) : prev.filter((id) => id !== requestId)))
+  }
+
+  const toggleSelectAllPending = (checked: boolean) => {
+    const pendingIds = pendingRequests.map((request) => request.id)
+    setSelectedIds((prev) => (checked ? Array.from(new Set([...prev, ...pendingIds])) : prev.filter((id) => !pendingIds.includes(id))))
+  }
+
+  const runBulkAction = async (action: 'approve-full' | 'reject') => {
+    if (!selectedIds.length) return
+    setBulkSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const response = await fetch('/api/admin/inventory/requests/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestIds: selectedIds, action }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось выполнить массовое действие')
+      const succeeded = Array.isArray(json?.data?.succeeded) ? json.data.succeeded.length : 0
+      const failed = Array.isArray(json?.data?.failed) ? json.data.failed.length : 0
+      setSuccess(
+        action === 'approve-full'
+          ? `Одобрено ${succeeded} из ${selectedIds.length}${failed ? `, не удалось ${failed}` : ''}.`
+          : `Отклонено ${succeeded} из ${selectedIds.length}${failed ? `, не удалось ${failed}` : ''}.`,
+      )
+      setSelectedIds([])
+      await load()
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось выполнить массовое действие')
+    } finally {
+      setBulkSaving(false)
+    }
+  }
+
   const exportRequestsCsv = () => {
     const rows = filteredRequests.map((request) => ({
       request_id: request.id,
@@ -449,8 +487,8 @@ export default function StoreRequestsPage() {
             </Button>
           </Link>
           <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
             placeholder="Поиск по точке, товару или комментарию"
             className="w-full sm:w-80"
           />
@@ -468,7 +506,13 @@ export default function StoreRequestsPage() {
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 Обновить список
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSearch('')} disabled={!search.trim()}>
+              <DropdownMenuItem
+                onClick={() => {
+                  setSearchInput('')
+                  setFilters({ q: '' })
+                }}
+                disabled={!filters.q.trim()}
+              >
                 <XCircle className="h-4 w-4" />
                 Сбросить поиск
               </DropdownMenuItem>
@@ -480,8 +524,8 @@ export default function StoreRequestsPage() {
       <Card className="border-white/10 bg-slate-950/70 p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
+            value={filters.status}
+            onChange={(event) => setFilters({ status: event.target.value })}
             className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none"
           >
             <option value="all">Все статусы</option>
@@ -494,21 +538,18 @@ export default function StoreRequestsPage() {
             <option value="disputed">Спор</option>
           </select>
           <Input
-            value={actorFilter}
-            onChange={(event) => setActorFilter(event.target.value)}
+            value={filters.actor}
+            onChange={(event) => setFilters({ actor: event.target.value })}
             placeholder="Кто создавал/одобрял/выдавал"
           />
-          <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
-          <Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+          <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} />
+          <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} />
           <Button
             type="button"
             variant="outline"
             onClick={() => {
-              setStatusFilter('all')
-              setActorFilter('')
-              setFromDate('')
-              setToDate('')
-              setSearch('')
+              setSearchInput('')
+              setFilters({ status: 'all', actor: '', from: '', to: '', q: '' })
             }}
           >
             Сбросить фильтры
@@ -566,6 +607,12 @@ export default function StoreRequestsPage() {
       <div className="grid gap-6">
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-sm font-medium text-white">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-violet-500"
+              checked={pendingRequests.length > 0 && pendingRequests.every((request) => selectedIds.includes(request.id))}
+              onChange={(event) => toggleSelectAllPending(event.target.checked)}
+            />
             <AlertCircle className="h-4 w-4 text-violet-300" />
             Очередь на решение
           </div>
@@ -592,6 +639,12 @@ export default function StoreRequestsPage() {
                     <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-violet-500"
+                            checked={selectedIds.includes(request.id)}
+                            onChange={(event) => toggleSelected(request.id, event.target.checked)}
+                          />
                           <span className="text-base font-semibold text-white">
                             {request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'}
                           </span>
@@ -695,6 +748,27 @@ export default function StoreRequestsPage() {
         </div>
 
       </div>
+
+      {selectedIds.length > 0 ? (
+        <div className="sticky bottom-4 z-30 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-500/30 bg-slate-950/95 px-4 py-3 shadow-2xl">
+          <div className="text-sm text-violet-100">
+            Выбрано заявок: <span className="font-semibold">{selectedIds.length}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => runBulkAction('approve-full')} disabled={bulkSaving} className="gap-2">
+              {bulkSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Одобрить полностью
+            </Button>
+            <Button variant="destructive" onClick={() => runBulkAction('reject')} disabled={bulkSaving} className="gap-2">
+              <XCircle className="h-4 w-4" />
+              Отклонить
+            </Button>
+            <Button variant="outline" onClick={() => setSelectedIds([])} disabled={bulkSaving}>
+              Снять выбор
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

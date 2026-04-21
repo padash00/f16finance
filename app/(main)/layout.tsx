@@ -1,4 +1,5 @@
 import { Breadcrumbs } from '@/components/breadcrumbs'
+import { KeyboardShortcuts } from '@/components/keyboard-shortcuts'
 import { Sidebar } from '@/components/sidebar'
 import { TopNav } from '@/components/topnav'
 
@@ -6,6 +7,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="app-shell-layout">
       <TopNav />
+      <KeyboardShortcuts />
       <Sidebar desktopEnabled={false} />
       <main className="app-main relative isolate min-h-0">
         <div

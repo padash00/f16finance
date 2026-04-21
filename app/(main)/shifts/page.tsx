@@ -34,6 +34,7 @@ import {
 import { ru } from 'date-fns/locale/ru'
 
 import type { Company } from '@/lib/core/types'
+import { useUrlState } from '@/lib/hooks/use-url-state'
 
 type Shift = {
   id: string
@@ -250,14 +251,21 @@ function buildShiftConflicts(shifts: Shift[], companyNames: Record<string, strin
 
 export default function ShiftsPage() {
   const realtimeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [currentDate, setCurrentDate] = useState(new Date())
+  const defaultWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const [urlState, setUrlState] = useUrlState({
+    weekStart: defaultWeekStart,
+    q: '',
+    operator: 'all',
+  })
+  const currentDate = useMemo(() => {
+    const date = new Date(`${urlState.weekStart}T12:00:00`)
+    return Number.isNaN(date.getTime()) ? new Date() : date
+  }, [urlState.weekStart])
   const [companies, setCompanies] = useState<Company[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [companySearch, setCompanySearch] = useState('')
-  const [selectedOperator, setSelectedOperator] = useState('all')
   const [copyingWeek, setCopyingWeek] = useState(false)
   const [bulkAssigning, setBulkAssigning] = useState(false)
   const [publishingCompanyId, setPublishingCompanyId] = useState<string | null>(null)
@@ -439,8 +447,8 @@ export default function ShiftsPage() {
   }, [conflicts])
 
   const visibleCompanies = useMemo(() => {
-    const query = companySearch.trim().toLowerCase()
-    const selectedNormalized = selectedOperator === 'all' ? '' : normalizeOperatorName(selectedOperator)
+    const query = urlState.q.trim().toLowerCase()
+    const selectedNormalized = urlState.operator === 'all' ? '' : normalizeOperatorName(urlState.operator)
 
     return companies.filter((company) => {
       const code = (company.code || '').toLowerCase()
@@ -460,7 +468,7 @@ export default function ShiftsPage() {
         )
       })
     })
-  }, [companies, companySearch, selectedOperator, shiftsMap, weekDays])
+  }, [companies, urlState.q, urlState.operator, shiftsMap, weekDays])
 
   const assignableCompanies = useMemo(
     () =>
@@ -607,10 +615,10 @@ export default function ShiftsPage() {
   }, [visibleCompanies, weekDays, shiftsMap])
 
   const selectedOperatorAssignments = useMemo(() => {
-    if (selectedOperator === 'all') return 0
-    const selectedNormalized = normalizeOperatorName(selectedOperator)
+    if (urlState.operator === 'all') return 0
+    const selectedNormalized = normalizeOperatorName(urlState.operator)
     return shifts.filter((shift) => normalizeOperatorName(shift.operator_name) === selectedNormalized).length
-  }, [selectedOperator, shifts])
+  }, [urlState.operator, shifts])
 
   useEffect(() => {
     if (!bulkCompanyId && assignableCompanies.length > 0) {
@@ -655,9 +663,18 @@ export default function ShiftsPage() {
     }
   }, [assignableCompanies, panelCompanyId])
 
-  const goToPrevWeek = () => setCurrentDate(subWeeks(currentDate, 1))
-  const goToNextWeek = () => setCurrentDate(addWeeks(currentDate, 1))
-  const goToToday = () => setCurrentDate(new Date())
+  const goToPrevWeek = () =>
+    setUrlState({
+      weekStart: format(startOfWeek(subWeeks(currentDate, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+    })
+  const goToNextWeek = () =>
+    setUrlState({
+      weekStart: format(startOfWeek(addWeeks(currentDate, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+    })
+  const goToToday = () =>
+    setUrlState({
+      weekStart: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+    })
 
   const handleCopyPreviousWeek = async () => {
     setCopyingWeek(true)
@@ -981,10 +998,10 @@ export default function ShiftsPage() {
             <Card className="border-border bg-card p-4">
               <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">По фильтру</div>
               <div className="mt-2 text-2xl font-semibold text-foreground">
-                {selectedOperator === 'all' ? visibleCompanies.length : selectedOperatorAssignments}
+                {urlState.operator === 'all' ? visibleCompanies.length : selectedOperatorAssignments}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                {selectedOperator === 'all' ? 'активных точек видно' : 'смен у выбранного оператора'}
+                {urlState.operator === 'all' ? 'активных точек видно' : 'смен у выбранного оператора'}
               </div>
             </Card>
           </div>
@@ -994,16 +1011,16 @@ export default function ShiftsPage() {
               <label className="relative block">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
-                  value={companySearch}
-                  onChange={(e) => setCompanySearch(e.target.value)}
+                  value={urlState.q}
+                  onChange={(e) => setUrlState({ q: e.target.value })}
                   placeholder="Поиск по компании или коду"
                   className="h-10 w-full rounded-2xl border border-border bg-background pl-10 pr-4 text-sm text-foreground outline-none ring-0 transition-colors placeholder:text-muted-foreground focus:border-accent"
                 />
               </label>
 
               <select
-                value={selectedOperator}
-                onChange={(e) => setSelectedOperator(e.target.value)}
+                value={urlState.operator}
+                onChange={(e) => setUrlState({ operator: e.target.value })}
                 className="h-10 rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors focus:border-accent"
               >
                 <option value="all">Все операторы</option>
@@ -1177,9 +1194,9 @@ export default function ShiftsPage() {
                 shiftsMap={shiftsMap}
                 refetchData={fetchScheduleData}
                 loading={loading}
-                selectedOperator={selectedOperator}
+                selectedOperator={urlState.operator}
                 conflictCellKeys={conflictCellKeys}
-                companySearch={companySearch}
+                companySearch={urlState.q}
                 workflowStateByCell={workflowStateByCell}
               />
 

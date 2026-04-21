@@ -9,6 +9,7 @@ import { Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, Credi
 import { AdminPageHeader, AdminTableViewport, adminTableStickyTheadClass } from '@/components/admin/admin-page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { addDaysISO, formatRuDate, mondayOfDate, toISODateLocal, todayISO } from '@/lib/core/date'
 import { formatMoney } from '@/lib/core/format'
 import { getOperatorDisplayName } from '@/lib/core/operator-name'
@@ -494,7 +495,29 @@ export default function SalaryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading ? <tr><td colSpan={13} className="px-4 py-16 text-center text-slate-400"><div className="inline-flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" />Загрузка данных...</div></td></tr> : null}
+                  {loading ? (
+                    <tr>
+                      <td colSpan={13} className="px-4 py-6">
+                        <div className="space-y-3">
+                          {Array.from({ length: 6 }).map((_, idx) => (
+                            <div key={idx} className="flex gap-2">
+                              <Skeleton className="h-10 w-48" />
+                              <Skeleton className="h-10 w-16" />
+                              <Skeleton className="h-10 w-24" />
+                              <Skeleton className="h-10 w-24" />
+                              <Skeleton className="h-10 w-24" />
+                              <Skeleton className="h-10 w-24" />
+                              <Skeleton className="h-10 w-24" />
+                              <Skeleton className="h-10 w-24" />
+                              <Skeleton className="h-10 w-24" />
+                              <Skeleton className="h-10 w-24" />
+                              <Skeleton className="h-10 w-24" />
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
                   {!loading && operators.length === 0 ? <tr><td colSpan={13} className="px-4 py-16 text-center text-slate-400">В этой неделе пока нет строк для отображения.</td></tr> : null}
                   {!loading ? operators.map((item) => {
                     const st = statusMeta(item.week.status)
@@ -614,7 +637,27 @@ export default function SalaryPage() {
               <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void loadStaffSalary()}><RefreshCw className="h-4 w-4" /></Button>
             </div>
             {staffSalaryLoading ? (
-              <div className="flex items-center justify-center p-12 text-slate-400"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Загрузка...</div>
+              <div className="space-y-4 p-5">
+                {Array.from({ length: 4 }).map((_, idx) => (
+                  <div key={idx} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-11 w-11 rounded-2xl" />
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-40" />
+                          <Skeleton className="h-3 w-28" />
+                        </div>
+                      </div>
+                      <Skeleton className="h-9 w-28 rounded-xl" />
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                      {Array.from({ length: 5 }).map((__, i) => (
+                        <Skeleton key={i} className="h-16 rounded-2xl" />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : !staffSalary || staffSalary.staff.length === 0 ? (
               <div className="p-10 text-center text-sm text-slate-500">Нет административных сотрудников. Добавьте записи в таблицу <code className="rounded bg-white/10 px-1">staff</code>.</div>
             ) : (

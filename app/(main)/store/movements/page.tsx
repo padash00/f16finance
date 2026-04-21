@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatMoney } from '@/lib/core/format'
+import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
 
 type InventoryLocation = {
   id: string
@@ -88,8 +89,12 @@ export default function StoreMovementsPage() {
   const [data, setData] = useState<MovementsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'all' | string>('all')
+  const [filters, setFilters] = useUrlState({
+    q: '',
+    type: 'all',
+  })
+  const [queryInput, setQueryInput] = useState(filters.q)
+  const debouncedQuery = useDebouncedValue(queryInput, 300)
 
   const load = async () => {
     setLoading(true)
@@ -126,10 +131,18 @@ export default function StoreMovementsPage() {
     void load()
   }, [])
 
+  useEffect(() => {
+    setQueryInput(filters.q)
+  }, [filters.q])
+
+  useEffect(() => {
+    setFilters({ q: debouncedQuery })
+  }, [debouncedQuery, setFilters])
+
   const filteredMovements = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = filters.q.trim().toLowerCase()
     return (data?.movements || []).filter((movement) => {
-      if (typeFilter !== 'all' && movement.movement_type !== typeFilter) return false
+      if (filters.type !== 'all' && movement.movement_type !== filters.type) return false
       if (!q) return true
       const haystack = [
         movement.item?.name,
@@ -145,7 +158,7 @@ export default function StoreMovementsPage() {
         .toLowerCase()
       return haystack.includes(q)
     })
-  }, [data?.movements, query, typeFilter])
+  }, [data?.movements, filters])
 
   return (
     <div className="space-y-6">
@@ -181,9 +194,9 @@ export default function StoreMovementsPage() {
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по товару, точке, штрихкоду или комментарию" className="pl-10" />
+            <Input value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder="Поиск по товару, точке, штрихкоду или комментарию" className="pl-10" />
           </div>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <Select value={filters.type} onValueChange={(value) => setFilters({ type: value })}>
             <SelectTrigger><SelectValue placeholder="Все операции" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Все операции</SelectItem>

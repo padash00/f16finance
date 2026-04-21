@@ -20,7 +20,7 @@ type NotificationItem = {
 type NotificationGroup = {
   id: string
   label: string
-  icon: 'clipboard' | 'cake' | 'receipt'
+  icon: 'clipboard' | 'cake' | 'receipt' | 'alert'
   href: string
   count: number
   items: NotificationItem[]
@@ -185,6 +185,109 @@ export async function GET(request: Request) {
       }
     } catch {
       // point_debts table may not exist in all deployments — silently skip
+    }
+
+    // ── Low stock alerts (showcase empty / warehouse below threshold) ───────
+    try {
+      let locationsQuery = supabase
+        .from('inventory_locations')
+        .select('id, company_id, name, location_type, company:companies!company_id(name)')
+        .in('location_type', ['warehouse', 'point_display'])
+        .eq('is_active', true)
+      if (allowedCompanyIds) locationsQuery = locationsQuery.in('company_id', allowedCompanyIds)
+
+      const { data: locations, error: locationsError } = await locationsQuery
+      if (locationsError) throw locationsError
+      const locationIds = (locations || []).map((row: any) => String(row.id)).filter(Boolean)
+      if (locationIds.length > 0) {
+        const { data: balanceRows, error: balancesError } = await supabase
+          .from('inventory_balances')
+          .select('item_id, location_id, quantity')
+          .in('location_id', locationIds)
+        if (balancesError) throw balancesError
+
+        const itemIds = Array.from(
+          new Set((balanceRows || []).map((row: any) => String(row.item_id || '')).filter(Boolean)),
+        )
+        if (itemIds.length > 0) {
+          const { data: items, error: itemsError } = await supabase
+            .from('inventory_items')
+            .select('id, name, low_stock_threshold')
+            .in('id', itemIds)
+          if (itemsError) throw itemsError
+
+          const locationMap = new Map<string, any>((locations || []).map((row: any) => [String(row.id), row]))
+          const itemMap = new Map<string, any>((items || []).map((row: any) => [String(row.id), row]))
+          const grouped = new Map<
+            string,
+            {
+              companyId: string
+              companyName: string
+              itemId: string
+              itemName: string
+              threshold: number
+              warehouseQty: number
+              showcaseQty: number
+            }
+          >()
+
+          for (const row of balanceRows || []) {
+            const item = itemMap.get(String((row as any).item_id || ''))
+            const location = locationMap.get(String((row as any).location_id || ''))
+            const company = Array.isArray(location?.company) ? location.company[0] : location?.company
+            const threshold = Number(item?.low_stock_threshold || 0)
+            if (!item?.name || !location?.company_id || threshold <= 0) continue
+
+            const key = `${location.company_id}:${row.item_id}`
+            const prev = grouped.get(key) || {
+              companyId: String(location.company_id),
+              companyName: String(company?.name || 'Точка'),
+              itemId: String(row.item_id || ''),
+              itemName: String(item.name),
+              threshold,
+              warehouseQty: 0,
+              showcaseQty: 0,
+            }
+
+            const qty = Number((row as any).quantity || 0)
+            if (location.location_type === 'warehouse') prev.warehouseQty += qty
+            if (location.location_type === 'point_display') prev.showcaseQty += qty
+            grouped.set(key, prev)
+          }
+
+          const lowStock = Array.from(grouped.values()).filter(
+            (entry) => entry.showcaseQty <= 0 || entry.warehouseQty < entry.threshold,
+          )
+
+          if (lowStock.length > 0) {
+            const items: NotificationItem[] = lowStock.slice(0, 5).map((entry) => ({
+              id: `${entry.companyId}:${entry.itemId}`,
+              title: entry.itemName,
+              subtitle:
+                entry.showcaseQty <= 0
+                  ? `${entry.companyName} · витрина 0`
+                  : `${entry.companyName} · склад ${entry.warehouseQty.toLocaleString('ru-RU')} < мин ${entry.threshold.toLocaleString('ru-RU')}`,
+              href: `/store/showcase?company_id=${entry.companyId}`,
+              date: null,
+            }))
+
+            groups.push({
+              id: 'low-stock',
+              label: 'Низкие остатки',
+              icon: 'alert',
+              href: '/store/showcase',
+              count: lowStock.length,
+              items,
+            })
+          }
+        }
+      }
+    } catch (e) {
+      await writeSystemErrorLogSafe({
+        scope: 'server',
+        area: 'api/admin/notifications.low-stock',
+        message: (e as any)?.message || 'low-stock-section-failed',
+      })
     }
 
     const total = groups.reduce((sum, g) => sum + g.count, 0)

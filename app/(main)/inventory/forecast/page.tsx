@@ -7,6 +7,7 @@ import { PackageSearch, RefreshCw, AlertTriangle, TrendingDown, Clock, CheckCirc
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCompanies } from '@/hooks/use-companies'
 import { InventoryLegacyRedirect } from '../legacy-redirect'
@@ -286,9 +287,18 @@ export function InventoryForecastPageContent() {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-muted-foreground">
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Загрузка...
+            <div className="space-y-0">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-7 gap-4 border-b border-white/5 px-4 py-3">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-14 justify-self-end" />
+                  <Skeleton className="h-4 w-14 justify-self-end" />
+                  <Skeleton className="h-4 w-12 justify-self-end" />
+                  <Skeleton className="h-6 w-20 justify-self-center rounded-full" />
+                  <Skeleton className="h-7 w-16 justify-self-end" />
+                </div>
+              ))}
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">

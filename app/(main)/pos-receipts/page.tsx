@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Printer, Search, ChevronLeft, ChevronRight, Receipt, RefreshCw } from 'lucide-react'
+import { useUrlState } from '@/lib/hooks/use-url-state'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -220,16 +221,18 @@ function ReceiptDetailModal({ sale, onClose }: { sale: Sale; onClose: () => void
 export default function PosReceiptsPage() {
   const [sales, setSales] = useState<Sale[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Filters
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [search, setSearch] = useState('')
-  const [companyId, setCompanyId] = useState('')
-  const [locationId, setLocationId] = useState('')
+  const [filters, setFilters] = useUrlState({
+    page: '1',
+    date_from: '',
+    date_to: '',
+    search: '',
+    company_id: '',
+    location_id: '',
+  })
+  const [searchInput, setSearchInput] = useState(filters.search)
 
   // Companies & locations
   const [companies, setCompanies] = useState<Company[]>([])
@@ -239,6 +242,7 @@ export default function PosReceiptsPage() {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
 
   const pageSize = 20
+  const page = Math.max(1, Number(filters.page || '1') || 1)
   const totalPages = Math.ceil(total / pageSize)
 
   // Load companies & locations on mount
@@ -256,16 +260,20 @@ export default function PosReceiptsPage() {
     void loadBootstrap()
   }, [])
 
+  useEffect(() => {
+    setSearchInput(filters.search)
+  }, [filters.search])
+
   const load = useCallback(async (p: number = page) => {
     setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams()
-      if (companyId) params.set('company_id', companyId)
-      if (locationId) params.set('location_id', locationId)
-      if (dateFrom) params.set('date_from', dateFrom)
-      if (dateTo) params.set('date_to', dateTo)
-      if (search) params.set('search', search)
+      if (filters.company_id) params.set('company_id', filters.company_id)
+      if (filters.location_id) params.set('location_id', filters.location_id)
+      if (filters.date_from) params.set('date_from', filters.date_from)
+      if (filters.date_to) params.set('date_to', filters.date_to)
+      if (filters.search) params.set('search', filters.search)
       params.set('page', String(p))
 
       const res = await fetch(`/api/pos/receipts?${params.toString()}`)
@@ -278,19 +286,18 @@ export default function PosReceiptsPage() {
     } finally {
       setLoading(false)
     }
-  }, [companyId, locationId, dateFrom, dateTo, search, page])
+  }, [filters, page])
 
   useEffect(() => {
     void load(page)
   }, [load, page])
 
   function handleSearch() {
-    setPage(1)
-    void load(1)
+    setFilters({ search: searchInput, page: '1' })
   }
 
-  const filteredLocations = companyId
-    ? locations.filter((l) => l.company_id === companyId)
+  const filteredLocations = filters.company_id
+    ? locations.filter((l) => l.company_id === filters.company_id)
     : locations
 
   return (
@@ -327,8 +334,8 @@ export default function PosReceiptsPage() {
                 <label className="text-xs text-muted-foreground">Дата от</label>
                 <input
                   type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
+                  value={filters.date_from}
+                  onChange={(e) => setFilters({ date_from: e.target.value, page: '1' })}
                   className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>
@@ -337,8 +344,8 @@ export default function PosReceiptsPage() {
                 <label className="text-xs text-muted-foreground">Дата до</label>
                 <input
                   type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
+                  value={filters.date_to}
+                  onChange={(e) => setFilters({ date_to: e.target.value, page: '1' })}
                   className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>
@@ -347,8 +354,10 @@ export default function PosReceiptsPage() {
                 <div className="flex flex-col gap-1 min-w-[160px]">
                   <label className="text-xs text-muted-foreground">Компания</label>
                   <select
-                    value={companyId}
-                    onChange={(e) => { setCompanyId(e.target.value); setLocationId('') }}
+                    value={filters.company_id}
+                    onChange={(e) => {
+                      setFilters({ company_id: e.target.value, location_id: '', page: '1' })
+                    }}
                     className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="">Все компании</option>
@@ -363,8 +372,8 @@ export default function PosReceiptsPage() {
                 <div className="flex flex-col gap-1 min-w-[160px]">
                   <label className="text-xs text-muted-foreground">Точка</label>
                   <select
-                    value={locationId}
-                    onChange={(e) => setLocationId(e.target.value)}
+                    value={filters.location_id}
+                    onChange={(e) => setFilters({ location_id: e.target.value, page: '1' })}
                     className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="">Все точки</option>
@@ -380,8 +389,8 @@ export default function PosReceiptsPage() {
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }}
                     placeholder="Последние 6 символов ID или сумма..."
                     className="pl-10"
@@ -487,7 +496,7 @@ export default function PosReceiptsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => setFilters({ page: String(Math.max(1, page - 1)) })}
                 disabled={page <= 1 || loading}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -496,7 +505,7 @@ export default function PosReceiptsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => setFilters({ page: String(Math.min(totalPages, page + 1)) })}
                 disabled={page >= totalPages || loading}
               >
                 Вперёд

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Bell, Cake, ClipboardList, Receipt } from 'lucide-react'
+import { AlertTriangle, Bell, Cake, ClipboardList, Receipt } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -17,7 +17,7 @@ type NotificationItem = {
 type NotificationGroup = {
   id: string
   label: string
-  icon: 'clipboard' | 'cake' | 'receipt'
+  icon: 'clipboard' | 'cake' | 'receipt' | 'alert'
   href: string
   count: number
   items: NotificationItem[]
@@ -27,6 +27,7 @@ const iconMap = {
   clipboard: ClipboardList,
   cake: Cake,
   receipt: Receipt,
+  alert: AlertTriangle,
 } as const
 
 const REFRESH_INTERVAL_MS = 60_000

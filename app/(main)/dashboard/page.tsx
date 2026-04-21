@@ -152,6 +152,19 @@ type FeedItem = {
   isAnomaly?: boolean
 }
 
+type DashboardWidgetData = {
+  kpis: {
+    requestsPending: number
+    openShifts: number
+    lowStock: number
+    unpaidDebts: number
+    activeOperators: number
+  }
+  revenue14d: Array<{ date: string; value: number }>
+  topPoints: Array<{ name: string; value: number }>
+  birthdays: Array<{ id: string; title: string; subtitle?: string | null }>
+}
+
 // ==================== UTILS ====================
 
 const DateUtils = {
@@ -747,6 +760,7 @@ export default function SmartDashboardPage() {
   const [overdueCount, setOverdueCount] = useState<number | null>(null)
   const [overdueDismissed, setOverdueDismissed] = useState(false)
   const [realtimeKey, setRealtimeKey] = useState(0)
+  const [widgetData, setWidgetData] = useState<DashboardWidgetData | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -816,6 +830,66 @@ export default function SmartDashboardPage() {
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [isAuthenticated])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let mounted = true
+    ;(async () => {
+      try {
+        const [dashboardBody, notificationsBody, shiftsBody] = await Promise.all([
+          fetchJson<{ data?: { week_by_day?: Record<string, number> } }>('/api/admin/dashboard'),
+          fetchJson<{ data?: { groups?: Array<{ id: string; count: number; items?: Array<{ id: string; title: string; subtitle?: string | null }> }> } }>(
+            '/api/admin/notifications',
+          ),
+          fetchJson<{ schedule?: { shifts?: Array<{ date: string; operator_name: string }>; operators?: Array<{ id: string }> } }>(
+            `/api/admin/shifts?weekStart=${DateUtils.addDaysISO(DateUtils.todayISO(), -((new Date().getDay() + 6) % 7))}&includeSchedule=1`,
+          ),
+        ])
+
+        if (!mounted) return
+        const groups = notificationsBody.data?.groups || []
+        const requestsPending = groups.find((g) => g.id === 'requests')?.count || 0
+        const lowStock = groups.find((g) => g.id === 'low-stock')?.count || 0
+        const unpaidDebts = groups.find((g) => g.id === 'debts')?.count || 0
+        const birthdays = groups.find((g) => g.id === 'birthdays')?.items || []
+
+        const today = DateUtils.todayISO()
+        const openShifts = (shiftsBody.schedule?.shifts || []).filter((shift) => shift.date >= today && !!shift.operator_name).length
+        const activeOperators = (shiftsBody.schedule?.operators || []).length
+
+        const weekByDay = dashboardBody.data?.week_by_day || {}
+        const revenue14d = Object.entries(weekByDay)
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .slice(-14)
+          .map(([date, value]) => ({ date, value: Number(value || 0) }))
+
+          const pointMap: Record<string, number> = {}
+        for (const row of incomes) {
+          if (row.date < DateUtils.addDaysISO(DateUtils.todayISO(), -13) || row.date > DateUtils.todayISO()) continue
+            const key = companyById[row.company_id]?.name || '—'
+          const amount =
+            Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0) + Number(row.card_amount || 0) + Number(row.online_amount || 0)
+          pointMap[key] = (pointMap[key] || 0) + amount
+        }
+        const topPoints = Object.entries(pointMap)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([name, value]) => ({ name, value }))
+
+        setWidgetData({
+          kpis: { requestsPending, openShifts, lowStock, unpaidDebts, activeOperators },
+          revenue14d,
+          topPoints,
+          birthdays,
+        })
+      } catch {
+        if (mounted) setWidgetData(null)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [isAuthenticated, incomes, companyById])
 
   // Today stats fetch
   useEffect(() => {
@@ -1234,6 +1308,64 @@ export default function SmartDashboardPage() {
             onDateToChange={onDateToChange}
             onToggleExtra={() => setIncludeExtra(v => !v)}
           />
+
+          {widgetData && (
+            <>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                <MiniStat label="Заявки ждут решения" value={widgetData.kpis.requestsPending} prev={0} icon={<CheckCircle2 className="w-4 h-4" />} />
+                <MiniStat label="Открытые смены" value={widgetData.kpis.openShifts} prev={0} icon={<Calendar className="w-4 h-4" />} />
+                <MiniStat label="Низкие остатки" value={widgetData.kpis.lowStock} prev={0} icon={<AlertTriangle className="w-4 h-4" />} />
+                <MiniStat label="Неоплаченные долги" value={widgetData.kpis.unpaidDebts} prev={0} icon={<Wallet className="w-4 h-4" />} />
+                <MiniStat label="Активные операторы" value={widgetData.kpis.activeOperators} prev={0} icon={<Activity className="w-4 h-4" />} />
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+                  <h3 className="mb-3 text-sm font-semibold text-white">Выручка за 14 дней</h3>
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={widgetData.revenue14d}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.12} stroke="#374151" vertical={false} />
+                        <XAxis dataKey="date" tickFormatter={(v) => DateUtils.formatShort(String(v))} stroke="#6b7280" fontSize={10} />
+                        <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.moneyDetailed(Number(v))} />
+                        <Tooltip formatter={(v: any) => Formatters.moneyDetailed(Number(v))} />
+                        <Line type="monotone" dataKey="value" stroke={COLORS.income} strokeWidth={2} dot={false} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+
+                <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+                  <h3 className="mb-3 text-sm font-semibold text-white">Топ-5 точек по выручке (14 дней)</h3>
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={widgetData.topPoints}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.12} stroke="#374151" vertical={false} />
+                        <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
+                        <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.moneyDetailed(Number(v))} />
+                        <Tooltip formatter={(v: any) => Formatters.moneyDetailed(Number(v))} />
+                        <Bar dataKey="value" fill={COLORS.profit} radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+              </div>
+
+              {widgetData.birthdays.length > 0 && (
+                <Card className="p-4 border-0 bg-gray-800/50 backdrop-blur-sm">
+                  <h3 className="mb-3 text-sm font-semibold text-white">Сегодня / Ближайшие дни рождения</h3>
+                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                    {widgetData.birthdays.slice(0, 6).map((item) => (
+                      <div key={item.id} className="rounded-xl border border-gray-700 bg-gray-900/50 px-3 py-2">
+                        <p className="text-sm text-white">{item.title}</p>
+                        <p className="text-xs text-gray-400">{item.subtitle || 'Сотрудник'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </>
+          )}
 
           {/* Overdue tasks banner */}
           {overdueCount !== null && !overdueDismissed && (

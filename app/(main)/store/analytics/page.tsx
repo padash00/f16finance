@@ -5,6 +5,7 @@ import { AlertTriangle, Boxes, MoreHorizontal, RefreshCw, Store } from 'lucide-r
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -273,7 +274,25 @@ export default function StoreAnalyticsPage() {
 
           <div className="mt-4 space-y-3">
             {loading ? (
-              <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-muted-foreground">Загружаем аналитику точек...</div>
+              Array.from({ length: 3 }).map((_, idx) => (
+                <div key={idx} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-3 w-28" />
+                    </div>
+                    <Skeleton className="h-6 w-14 rounded-full" />
+                  </div>
+                  <div className="mt-4 grid gap-2 md:grid-cols-4">
+                    {Array.from({ length: 4 }).map((__, i) => (
+                      <div key={i} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                        <Skeleton className="h-3 w-20" />
+                        <Skeleton className="mt-2 h-4 w-16" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
             ) : pointAnalytics.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-muted-foreground">Витрины пока пустые, поэтому аналитика ещё не собралась.</div>
             ) : (
@@ -338,7 +357,20 @@ export default function StoreAnalyticsPage() {
 
           <div className="mt-4 space-y-3">
             {loading ? (
-              <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">Проверяем риски...</div>
+              Array.from({ length: 4 }).map((_, idx) => (
+                <div key={idx} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-3 w-32" />
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="h-3 w-12" />
+                    </div>
+                  </div>
+                </div>
+              ))
             ) : riskyBalances.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">Критичных остатков на витринах сейчас нет.</div>
             ) : (

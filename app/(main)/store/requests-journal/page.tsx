@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
 
 type InventoryLocation = {
   id: string
@@ -204,11 +205,15 @@ export default function StoreRequestsJournalPage() {
   const [requests, setRequests] = useState<InventoryRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [actorFilter, setActorFilter] = useState('')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  const [filters, setFilters] = useUrlState({
+    q: '',
+    status: 'all',
+    actor: '',
+    from: '',
+    to: '',
+  })
+  const [searchInput, setSearchInput] = useState(filters.q)
+  const debouncedSearch = useDebouncedValue(searchInput, 300)
 
   const load = async () => {
     setLoading(true)
@@ -232,20 +237,28 @@ export default function StoreRequestsJournalPage() {
     load()
   }, [])
 
+  useEffect(() => {
+    setSearchInput(filters.q)
+  }, [filters.q])
+
+  useEffect(() => {
+    setFilters({ q: debouncedSearch })
+  }, [debouncedSearch, setFilters])
+
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const actorQ = actorFilter.trim().toLowerCase()
+    const q = filters.q.trim().toLowerCase()
+    const actorQ = filters.actor.trim().toLowerCase()
     return requests
       .filter((request) => {
-        if (statusFilter !== 'all' && request.status !== statusFilter) return false
+        if (filters.status !== 'all' && request.status !== filters.status) return false
 
         const createdAt = request.created_at ? new Date(request.created_at) : null
-        if (fromDate) {
-          const from = new Date(`${fromDate}T00:00:00`)
+        if (filters.from) {
+          const from = new Date(`${filters.from}T00:00:00`)
           if (createdAt && createdAt < from) return false
         }
-        if (toDate) {
-          const to = new Date(`${toDate}T23:59:59`)
+        if (filters.to) {
+          const to = new Date(`${filters.to}T23:59:59`)
           if (createdAt && createdAt > to) return false
         }
 
@@ -280,7 +293,7 @@ export default function StoreRequestsJournalPage() {
         const rightAt = new Date(right.created_at || 0).getTime()
         return rightAt - leftAt
       })
-  }, [requests, search, statusFilter, actorFilter, fromDate, toDate])
+  }, [requests, filters])
 
   const stats = useMemo(() => {
     const count = (status: string) => requests.filter((r) => r.status === status).length
@@ -389,13 +402,13 @@ export default function StoreRequestsJournalPage() {
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Поиск: точка, товар, комментарий"
               className="pl-10"
             />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={filters.status} onValueChange={(value) => setFilters({ status: value })}>
             <SelectTrigger>
               <SelectValue placeholder="Все статусы" />
             </SelectTrigger>
@@ -411,20 +424,17 @@ export default function StoreRequestsJournalPage() {
             </SelectContent>
           </Select>
           <Input
-            value={actorFilter}
-            onChange={(event) => setActorFilter(event.target.value)}
+            value={filters.actor}
+            onChange={(event) => setFilters({ actor: event.target.value })}
             placeholder="Кто создавал/одобрял/выдавал"
           />
-          <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} placeholder="От" />
-          <Input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} placeholder="До" />
+          <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} placeholder="От" />
+          <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} placeholder="До" />
           <Button
             variant="outline"
             onClick={() => {
-              setStatusFilter('all')
-              setActorFilter('')
-              setFromDate('')
-              setToDate('')
-              setSearch('')
+              setSearchInput('')
+              setFilters({ status: 'all', actor: '', from: '', to: '', q: '' })
             }}
           >
             Сбросить

@@ -11,10 +11,14 @@
             "id": "d388afd16d579fdb",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Граф"
+              "type": "markdown",
+              "state": {
+                "file": "Архитектура проекта.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Архитектура проекта"
             }
           }
         ]
@@ -178,11 +182,15 @@
   },
   "active": "d388afd16d579fdb",
   "lastOpenFiles": [
-    "Orda — Полный план реализации.md",
-    "Claude Sessions/2026-04-16.md",
     "Без названия.canvas",
-    "Claude Sessions/2026-04-15.md",
+    "Orda — Полный план реализации.md",
     "Claude Sessions/2026-04-14.md",
+    "Claude Sessions/2026-04-15.md",
+    "Claude Sessions/2026-04-16.md",
+    "Claude Sessions/2026-04-17.md",
+    "Claude Sessions/2026-04-18.md",
+    "Анализ кода — что улучшить.md",
+    "Архитектура проекта.md",
     "Добро пожаловать.md",
     "Claude Sessions",
     "Без названия.base",

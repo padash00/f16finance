@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
 import { InventoryLegacyRedirect } from '../legacy-redirect'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -301,9 +302,9 @@ export function AbcAnalysisPageContent() {
           {[0, 1, 2].map((i) => (
             <Card key={i}>
               <CardContent className="p-4">
-                <div className="h-4 w-16 rounded bg-white/10 animate-pulse mb-2" />
-                <div className="h-7 w-24 rounded bg-white/10 animate-pulse mb-1" />
-                <div className="h-3 w-20 rounded bg-white/10 animate-pulse" />
+                <Skeleton className="mb-2 h-4 w-16" />
+                <Skeleton className="mb-1 h-7 w-24" />
+                <Skeleton className="h-3 w-20" />
               </CardContent>
             </Card>
           ))}
@@ -435,11 +436,11 @@ export function AbcAnalysisPageContent() {
                   key={i}
                   className="flex items-center gap-4 px-4 py-3 border-b border-white/5"
                 >
-                  <div className="h-4 w-6 rounded bg-white/10 animate-pulse" />
-                  <div className="h-5 w-8 rounded bg-white/10 animate-pulse" />
-                  <div className="h-4 flex-1 rounded bg-white/10 animate-pulse" />
-                  <div className="h-4 w-20 rounded bg-white/10 animate-pulse" />
-                  <div className="h-4 w-24 rounded bg-white/10 animate-pulse" />
+                  <Skeleton className="h-4 w-6" />
+                  <Skeleton className="h-5 w-8" />
+                  <Skeleton className="h-4 flex-1" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-24" />
                 </div>
               ))}
             </div>

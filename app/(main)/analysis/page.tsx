@@ -5,6 +5,7 @@ import { buildStyledSheet, createWorkbook, downloadWorkbook } from '@/lib/excel/
 import { FloatingAssistant } from "@/components/ai/floating-assistant"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { PageSnapshot } from "@/lib/ai/types"
 import { supabase } from "@/lib/supabaseClient"
 import {
@@ -1618,12 +1619,26 @@ export default function AIAnalysisPage() {
           />
 
           {loading && (
-            <div className="p-12 text-center">
-              <div className="relative inline-block">
-                <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-500/30 border-t-purple-500" />
-                <BrainCircuit className="w-8 h-8 text-purple-400 absolute top-4 left-4" />
+            <div className="space-y-6">
+              <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+                <Skeleton className="h-6 w-64" />
+                <Skeleton className="mt-2 h-4 w-72" />
+                <Skeleton className="mt-6 h-80 w-full" />
+              </Card>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm lg:col-span-2">
+                  <Skeleton className="h-5 w-56" />
+                  <Skeleton className="mt-4 h-64 w-full" />
+                </Card>
+                <Card className="p-6 border-0 bg-gray-800/50 backdrop-blur-sm">
+                  <Skeleton className="h-5 w-40" />
+                  <div className="mt-4 space-y-3">
+                    {Array.from({ length: 5 }).map((_, idx) => (
+                      <Skeleton key={idx} className="h-10 w-full" />
+                    ))}
+                  </div>
+                </Card>
               </div>
-              <p className="text-gray-400 mt-4">Анализируем данные и строим прогнозы...</p>
             </div>
           )}
 
