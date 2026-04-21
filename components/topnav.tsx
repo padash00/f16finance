@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 
 import { AppLogoMark } from '@/components/app-brand-mark'
+import { NotificationsBell } from '@/components/notifications-bell'
 import { Button } from '@/components/ui/button'
 import { SITE_NAME } from '@/lib/core/site'
 import { cn } from '@/lib/utils'
@@ -561,6 +562,8 @@ export function TopNav() {
               <Command className="h-3 w-3" />K
             </span>
           </button>
+
+          <NotificationsBell />
 
           <OrganizationMenu
             organizations={session.organizations}
