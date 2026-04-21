@@ -1328,7 +1328,12 @@ export default function SmartDashboardPage() {
                         <CartesianGrid strokeDasharray="3 3" opacity={0.12} stroke="#374151" vertical={false} />
                         <XAxis dataKey="date" tickFormatter={(v) => DateUtils.formatShort(String(v))} stroke="#6b7280" fontSize={10} />
                         <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.moneyDetailed(Number(v))} />
-                        <Tooltip formatter={(v: any) => Formatters.moneyDetailed(Number(v))} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(139,92,246,.25)', borderRadius: 12 }}
+                          itemStyle={{ color: '#fff' }}
+                          labelStyle={{ color: '#9ca3af', fontSize: 12 }}
+                          formatter={(v: any) => Formatters.moneyDetailed(Number(v))}
+                        />
                         <Line type="monotone" dataKey="value" stroke={COLORS.income} strokeWidth={2} dot={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
@@ -1343,7 +1348,12 @@ export default function SmartDashboardPage() {
                         <CartesianGrid strokeDasharray="3 3" opacity={0.12} stroke="#374151" vertical={false} />
                         <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
                         <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.moneyDetailed(Number(v))} />
-                        <Tooltip formatter={(v: any) => Formatters.moneyDetailed(Number(v))} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(139,92,246,.25)', borderRadius: 12 }}
+                          itemStyle={{ color: '#fff' }}
+                          labelStyle={{ color: '#9ca3af', fontSize: 12 }}
+                          formatter={(v: any) => Formatters.moneyDetailed(Number(v))}
+                        />
                         <Bar dataKey="value" fill={COLORS.profit} radius={[6, 6, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -1898,7 +1908,12 @@ function CategoryPie(props: { title: string; data: CategoryData[]; total: number
                     <Cell key={i} fill={e.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: any) => [Formatters.moneyDetailed(Number(v)), '']} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(139,92,246,.25)', borderRadius: 12 }}
+                  itemStyle={{ color: '#fff' }}
+                  labelStyle={{ color: '#9ca3af', fontSize: 12 }}
+                  formatter={(v: any) => [Formatters.moneyDetailed(Number(v)), '']}
+                />
               </RePieChart>
             </ResponsiveContainer>
           </div>
@@ -2098,7 +2113,12 @@ function Details(props: {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.12} stroke="#374151" />
                 <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
                 <YAxis stroke="#6b7280" fontSize={10} tickFormatter={(v) => Formatters.moneyDetailed(v)} />
-                <Tooltip formatter={(v: any) => Formatters.moneyDetailed(Number(v))} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(139,92,246,.25)', borderRadius: 12 }}
+                  itemStyle={{ color: '#fff' }}
+                  labelStyle={{ color: '#9ca3af', fontSize: 12 }}
+                  formatter={(v: any) => Formatters.moneyDetailed(Number(v))}
+                />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                   {paymentStats.map((e, i) => (
                     <Cell key={i} fill={e.color} />
