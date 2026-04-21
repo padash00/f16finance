@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useCompanies } from '@/hooks/use-companies'
-import { Plus, Pencil, Trash2, Save, X, CreditCard, RefreshCw } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, CreditCard, GitCompareArrows, ListOrdered, Pencil, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
 
 type Row = {
   id: string
@@ -14,6 +14,20 @@ type Row = {
   note: string | null
 }
 
+type ReconRow = {
+  date: string
+  company_id: string
+  company_name: string
+  terminal: number
+  incomes: number
+  diff: number
+}
+
+type ReconTotals = { terminal: number; incomes: number; diff: number }
+type ReconData = { rows: ReconRow[]; totals: ReconTotals }
+
+type Tab = 'entries' | 'reconciliation'
+
 const fmt = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₸'
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -21,6 +35,8 @@ const monthAgoISO = () => { const d = new Date(); d.setDate(d.getDate() - 30); r
 
 export default function KaspiTerminalPage() {
   const { companies } = useCompanies()
+
+  const [tab, setTab] = useState<Tab>('entries')
 
   // Фильтры
   const [from, setFrom] = useState(monthAgoISO())
@@ -31,6 +47,12 @@ export default function KaspiTerminalPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Сверка
+  const [recon, setRecon] = useState<ReconData | null>(null)
+  const [reconLoading, setReconLoading] = useState(false)
+  const [reconError, setReconError] = useState<string | null>(null)
+  const [reconTolerance, setReconTolerance] = useState('100')
 
   // Новая запись
   const [newDate, setNewDate] = useState(todayISO())
@@ -64,6 +86,28 @@ export default function KaspiTerminalPage() {
   }, [from, to, filterCompany])
 
   useEffect(() => { load() }, [load])
+
+  const loadRecon = useCallback(async () => {
+    setReconLoading(true)
+    setReconError(null)
+    try {
+      const params = new URLSearchParams({ from, to })
+      if (filterCompany) params.set('company_id', filterCompany)
+      const res = await fetch(`/api/admin/kaspi-terminal/reconciliation?${params}`, { cache: 'no-store' })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`)
+      setRecon(body.data as ReconData)
+    } catch (e: any) {
+      setReconError(e.message)
+      setRecon(null)
+    } finally {
+      setReconLoading(false)
+    }
+  }, [from, to, filterCompany])
+
+  useEffect(() => {
+    if (tab === 'reconciliation') loadRecon()
+  }, [tab, loadRecon])
 
   const mutate = async (payload: unknown) => {
     const res = await fetch('/api/admin/kaspi-terminal', {
@@ -125,6 +169,25 @@ export default function KaspiTerminalPage() {
         </div>
       </div>
 
+      {/* Вкладки */}
+      <div className="flex gap-1 border-b border-border">
+        {([
+          { id: 'entries' as const, label: 'Записи', icon: ListOrdered },
+          { id: 'reconciliation' as const, label: 'Сверка с доходами', icon: GitCompareArrows },
+        ]).map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === id ? 'border-blue-500 text-blue-400' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Фильтры */}
       <Card className="p-4 border-border bg-card">
         <div className="flex flex-wrap gap-3 items-end">
@@ -146,10 +209,29 @@ export default function KaspiTerminalPage() {
               {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Обновить
+          {tab === 'reconciliation' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground">Допуск ±₸</label>
+              <input
+                type="number"
+                value={reconTolerance}
+                onChange={(e) => setReconTolerance(e.target.value)}
+                min="0"
+                step="1"
+                className="bg-input border border-border rounded-lg px-3 py-2 text-sm focus:border-blue-500 w-28"
+              />
+            </div>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={tab === 'reconciliation' ? loadRecon : load}
+            disabled={tab === 'reconciliation' ? reconLoading : loading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-1 ${(tab === 'reconciliation' ? reconLoading : loading) ? 'animate-spin' : ''}`} />
+            Обновить
           </Button>
-          {totalAmount > 0 && (
+          {tab === 'entries' && totalAmount > 0 && (
             <div className="ml-auto text-sm font-medium text-blue-300">
               Итого: {fmt(totalAmount)}
             </div>
@@ -157,6 +239,8 @@ export default function KaspiTerminalPage() {
         </div>
       </Card>
 
+      {tab === 'entries' && (
+      <>
       {/* Форма добавления */}
       <Card className="p-4 border-border bg-card">
         <h2 className="text-sm font-semibold text-foreground mb-3">Добавить запись</h2>
@@ -279,6 +363,146 @@ export default function KaspiTerminalPage() {
           </table>
         )}
       </Card>
+      </>
+      )}
+
+      {tab === 'reconciliation' && (
+        <ReconciliationView
+          data={recon}
+          loading={reconLoading}
+          error={reconError}
+          tolerance={Math.max(0, Number(reconTolerance) || 0)}
+        />
+      )}
     </div>
+  )
+}
+
+function ReconciliationView({
+  data,
+  loading,
+  error,
+  tolerance,
+}: {
+  data: ReconData | null
+  loading: boolean
+  error: string | null
+  tolerance: number
+}) {
+  const rows = data?.rows || []
+  const totals = data?.totals || { terminal: 0, incomes: 0, diff: 0 }
+
+  const problemCount = useMemo(
+    () => rows.filter((r) => Math.abs(r.diff) > tolerance).length,
+    [rows, tolerance],
+  )
+  const cleanCount = rows.length - problemCount
+
+  return (
+    <>
+      <Card className="p-4 border-border bg-card">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Сверка терминала с доходами</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Сравнение суммы с Kaspi POS терминала и Kaspi-поступлений в доходах за день × точку.
+              Допуск ±{tolerance.toLocaleString('ru-RU')} ₸ — расхождения в пределах допуска считаются совпадением.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3 min-w-[360px]">
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+              <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Терминал</p>
+              <p className="text-sm font-bold text-blue-300">{fmt(totals.terminal)}</p>
+            </div>
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+              <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Доходы</p>
+              <p className="text-sm font-bold text-emerald-300">{fmt(totals.incomes)}</p>
+            </div>
+            <div className={`rounded-lg border px-3 py-2 ${
+              Math.abs(totals.diff) > tolerance
+                ? 'border-red-500/30 bg-red-500/5'
+                : 'border-white/10 bg-white/5'
+            }`}>
+              <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Разница</p>
+              <p className={`text-sm font-bold ${
+                Math.abs(totals.diff) > tolerance ? 'text-red-300' : 'text-muted-foreground'
+              }`}>
+                {totals.diff > 0 ? '+' : ''}{fmt(totals.diff)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="border-border bg-card overflow-hidden">
+        {error && <div className="px-4 py-3 text-sm text-rose-400 border-b border-border">{error}</div>}
+        {loading && <div className="px-4 py-6 text-center text-sm text-muted-foreground">Загрузка...</div>}
+        {!loading && rows.length === 0 && !error && (
+          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+            Нет данных за выбранный период
+          </div>
+        )}
+        {!loading && rows.length > 0 && (
+          <>
+            <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-white/[0.02] text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                Расхождений: <strong className="text-red-300">{problemCount}</strong>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                Совпадений (в допуске): <strong className="text-emerald-300">{cleanCount}</strong>
+              </span>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-3 text-left">Дата</th>
+                  <th className="px-4 py-3 text-left">Точка</th>
+                  <th className="px-4 py-3 text-right">Терминал</th>
+                  <th className="px-4 py-3 text-right">Доходы (Kaspi)</th>
+                  <th className="px-4 py-3 text-right">Разница</th>
+                  <th className="px-4 py-3 text-center">Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const abs = Math.abs(r.diff)
+                  const isOk = abs <= tolerance
+                  const rowBg = isOk ? '' : r.diff > 0 ? 'bg-amber-500/[0.04]' : 'bg-red-500/[0.04]'
+                  return (
+                    <tr key={`${r.date}|${r.company_id}`} className={`border-b border-border/50 ${rowBg}`}>
+                      <td className="px-4 py-3 font-medium">{r.date}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{r.company_name}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-blue-300">{fmt(r.terminal)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-emerald-300">{fmt(r.incomes)}</td>
+                      <td
+                        className={`px-4 py-3 text-right font-bold ${
+                          isOk ? 'text-muted-foreground' : r.diff > 0 ? 'text-amber-300' : 'text-red-300'
+                        }`}
+                      >
+                        {r.diff > 0 ? '+' : ''}{fmt(r.diff)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {isOk ? (
+                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <CheckCircle2 className="w-3 h-3" /> OK
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
+                            <AlertTriangle className="w-3 h-3" />
+                            {r.diff > 0 ? 'Не внесли' : 'Лишний доход'}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </>
+        )}
+      </Card>
+    </>
   )
 }
