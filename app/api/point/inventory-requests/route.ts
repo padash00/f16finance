@@ -157,10 +157,12 @@ export async function GET(request: Request) {
         },
         sourceLocation,
         targetLocation,
-        items: (items || []).map((item: any) => ({
-          ...item,
-          warehouse_qty: balanceMap.get(item.id) || 0,
-        })),
+        items: (items || [])
+          .map((item: any) => ({
+            ...item,
+            warehouse_qty: balanceMap.get(item.id) || 0,
+          }))
+          .filter((item: any) => item.warehouse_qty > 0),
         requests: requests || [],
       },
     })
