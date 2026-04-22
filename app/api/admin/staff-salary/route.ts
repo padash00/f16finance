@@ -78,7 +78,7 @@ export async function GET(req: Request) {
         .order('name'),
       supabase
         .from('debts')
-        .select('id, operator_id, amount, status, week_start, comment, client_name')
+        .select('id, operator_id, amount, status, week_start, comment, client_name, created_at')
         .eq('status', 'active')
         .not('operator_id', 'is', null),
     ])
@@ -146,6 +146,7 @@ export async function GET(req: Request) {
         kind: 'debt',
         amount: Number(row.amount || 0),
         date: String(row.week_start || new Date().toISOString().slice(0, 10)),
+        created_at: row.created_at ? String(row.created_at) : null,
         comment: row.comment || row.client_name || 'Долг из операторской программы',
         status: String(row.status || 'active'),
       }))
