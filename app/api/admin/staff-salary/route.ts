@@ -7,6 +7,21 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+function getSalarySlotRange(payDate: string, slot: 'first' | 'second' | string) {
+  const [yearRaw, monthRaw] = String(payDate || '').split('-')
+  const year = Number(yearRaw)
+  const month = Number(monthRaw)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return null
+  }
+  const mm = String(month).padStart(2, '0')
+  if (slot === 'first') {
+    return { from: `${year}-${mm}-01`, to: `${year}-${mm}-15` }
+  }
+  const endDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  return { from: `${year}-${mm}-16`, to: `${year}-${mm}-${String(endDay).padStart(2, '0')}` }
+}
+
 // Only super_admin and owner can access staff salary
 async function checkAccess(req: Request) {
   const access = await getRequestAccessContext(req)
@@ -30,7 +45,7 @@ export async function GET(req: Request) {
 
     const supabase = createAdminSupabaseClient()
 
-    const [staffRes, adjRes, paymentsRes, rulesRes] = await Promise.all([
+    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtsRes] = await Promise.all([
       supabase
         .from('staff')
         .select('id, full_name, short_name, role, monthly_salary, extra_day_company_code, extra_day_shift_type, telegram_chat_id, is_active')
@@ -49,13 +64,64 @@ export async function GET(req: Request) {
         .from('operator_salary_rules')
         .select('company_code, shift_type, base_per_shift')
         .eq('is_active', true),
+      supabase
+        .from('operators')
+        .select('id, name, short_name, role, telegram_chat_id, is_active, is_admin_staff')
+        .eq('is_active', true)
+        .eq('is_admin_staff', true)
+        .order('name'),
+      supabase
+        .from('debts')
+        .select('id, operator_id, amount, status, week_start, comment, client_name')
+        .eq('status', 'active')
+        .not('operator_id', 'is', null),
     ])
 
     if (staffRes.error) throw staffRes.error
+    if (adjRes.error) throw adjRes.error
+    if (paymentsRes.error) throw paymentsRes.error
+    if (rulesRes.error) throw rulesRes.error
+    if (adminOpsRes.error) throw adminOpsRes.error
+    if (adminOpDebtsRes.error) throw adminOpDebtsRes.error
+
+    const baseStaff = (staffRes.data ?? []).map((row: any) => ({
+      ...row,
+      source_type: 'staff',
+    }))
+    const staffIdSet = new Set(baseStaff.map((row: any) => String(row.id)))
+
+    const adminOps = (adminOpsRes.data ?? []) as any[]
+    const virtualStaffFromOperators = adminOps
+      .filter((op) => !staffIdSet.has(String(op.id)))
+      .map((op) => ({
+        id: String(op.id),
+        full_name: String(op.name || 'Админ-сотрудник'),
+        short_name: op.short_name || null,
+        role: op.role || 'other',
+        monthly_salary: 0,
+        extra_day_company_code: null,
+        extra_day_shift_type: null,
+        telegram_chat_id: op.telegram_chat_id || null,
+        is_active: true,
+        source_type: 'operator',
+      }))
+
+    const adminOperatorIdSet = new Set(adminOps.map((op) => String(op.id)))
+    const syntheticDebtAdjustments = ((adminOpDebtsRes.data ?? []) as any[])
+      .filter((row) => row.operator_id && adminOperatorIdSet.has(String(row.operator_id)))
+      .map((row) => ({
+        id: `operator-debt:${String(row.id)}`,
+        staff_id: String(row.operator_id),
+        kind: 'debt',
+        amount: Number(row.amount || 0),
+        date: String(row.week_start || new Date().toISOString().slice(0, 10)),
+        comment: row.comment || row.client_name || 'Долг из операторской программы',
+        status: String(row.status || 'active'),
+      }))
 
     return json({
-      staff: staffRes.data ?? [],
-      adjustments: adjRes.data ?? [],
+      staff: [...baseStaff, ...virtualStaffFromOperators],
+      adjustments: [...(adjRes.data ?? []), ...syntheticDebtAdjustments],
       payments: paymentsRes.data ?? [],
       salaryRules: rulesRes.data ?? [],
     })
@@ -142,6 +208,9 @@ export async function POST(req: Request) {
       if (!staff_id || !pay_date) return json({ error: 'staff_id и pay_date обязательны' }, 400)
       const total = Math.round((cash_amount || 0) + (kaspi_amount || 0))
       if (total <= 0) return json({ error: 'Сумма выплаты должна быть > 0' }, 400)
+      const normalizedSlot = (slot || 'other') as 'first' | 'second' | string
+      const slotRange = getSalarySlotRange(pay_date, normalizedSlot)
+      if (!slotRange) return json({ error: 'Некорректная дата выплаты' }, 400)
 
       // Get staff name for expense comment
       const { data: staffMember } = await supabase.from('staff').select('full_name').eq('id', staff_id).single()
@@ -182,12 +251,21 @@ export async function POST(req: Request) {
 
       if (payErr) throw payErr
 
-      // 3. Mark all active adjustments for this staff as paid
-      await supabase
+      // 3. Mark active adjustments as paid for selected slot.
+      // For second slot we include carry-over unpaid adjustments (<= slot end),
+      // so if payout was skipped on 15th and paid later, debts still accumulate.
+      let adjustmentsQuery = supabase
         .from('staff_adjustments')
         .update({ status: 'paid' })
         .eq('staff_id', staff_id)
         .eq('status', 'active')
+        .lte('date', slotRange.to)
+
+      if (normalizedSlot === 'first') {
+        adjustmentsQuery = adjustmentsQuery.gte('date', slotRange.from)
+      }
+
+      await adjustmentsQuery
 
       await writeAuditLog(supabase, { entityType: 'staff-payment', entityId: String(payment.id), action: 'create', payload: { staff_id, total, pay_date, slot, expense_id: expenseId } })
       return json({ ok: true, payment, expense_id: expenseId })
