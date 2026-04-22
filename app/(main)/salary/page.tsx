@@ -45,24 +45,19 @@ function getSalarySlotRange(payDate: string, slot: 'first' | 'second') {
   return { from: `${year}-${mm}-16`, to: `${year}-${mm}-${String(endDay).padStart(2, '0')}` }
 }
 
-function monthStartFromIsoDate(isoDate: string) {
-  return `${isoDate.slice(0, 7)}-01`
+function monthPrefixFromIsoDate(isoDate: string) {
+  return isoDate.slice(0, 7)
 }
 
 function filterStaffAdjustmentsForSlot(
   adjs: StaffAdjustment[],
   staffId: string,
   period?: { from: string; to: string } | null,
-  slot?: 'first' | 'second',
 ) {
   return adjs.filter((a) => {
     if (a.staff_id !== staffId || a.status !== 'active') return false
     if (!period) return true
-    if (slot === 'second') {
-      const monthStart = monthStartFromIsoDate(period.to)
-      return a.date >= monthStart && a.date <= period.to
-    }
-    return a.date >= period.from && a.date <= period.to
+    return a.date <= period.to
   })
 }
 
@@ -70,9 +65,8 @@ function calcStaffToPay(
   s: StaffMember,
   adjs: StaffAdjustment[],
   period?: { from: string; to: string } | null,
-  slot?: 'first' | 'second',
 ) {
-  const active = filterStaffAdjustmentsForSlot(adjs, s.id, period, slot)
+  const active = filterStaffAdjustmentsForSlot(adjs, s.id, period)
   const half = Math.round(s.monthly_salary / 2)
   const bonuses = active.filter(a => a.kind === 'bonus').reduce((sum, a) => sum + a.amount, 0)
   const debts = active.filter(a => a.kind === 'debt').reduce((sum, a) => sum + a.amount, 0)
@@ -212,6 +206,7 @@ export default function SalaryPage() {
   const [staffAdjSaving, setStaffAdjSaving] = useState(false)
   const [staffPayDate, setStaffPayDate] = useState(todayISO())
   const [staffPaySlot, setStaffPaySlot] = useState<'first' | 'second'>('first')
+  const [staffPayCompanyId, setStaffPayCompanyId] = useState('')
   const [staffPayCash, setStaffPayCash] = useState('')
   const [staffPayKaspi, setStaffPayKaspi] = useState('')
   const [staffPayComment, setStaffPayComment] = useState('')
@@ -221,6 +216,7 @@ export default function SalaryPage() {
     return day <= 15 ? 'first' : 'second'
   }, [])
   const currentStaffSalaryPeriod = useMemo(() => getSalarySlotRange(todayISO(), currentStaffSalarySlot), [currentStaffSalarySlot])
+  const currentStaffSalaryMonthPrefix = useMemo(() => monthPrefixFromIsoDate(todayISO()), [])
 
   const loadStaffSalary = useCallback(async () => {
     setStaffSalaryLoading(true)
@@ -261,14 +257,15 @@ export default function SalaryPage() {
   const submitStaffPayment = async (e: FormEvent) => {
     e.preventDefault()
     if (!staffPayModal) return
+    if (!staffPayCompanyId) return setError('Выберите компанию для расхода по зарплате')
     const cash = parseMoney(staffPayCash), kaspi = parseMoney(staffPayKaspi)
     if (cash + kaspi <= 0) return setError('Сумма выплаты должна быть > 0')
     setStaffPaySaving(true); setError(null)
     try {
-      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'createPayment', staff_id: staffPayModal.id, pay_date: staffPayDate, slot: staffPaySlot, cash_amount: cash, kaspi_amount: kaspi, comment: staffPayComment.trim() || null }) })
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'createPayment', staff_id: staffPayModal.id, pay_date: staffPayDate, slot: staffPaySlot, company_id: staffPayCompanyId, cash_amount: cash, kaspi_amount: kaspi, comment: staffPayComment.trim() || null }) })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Ошибка')
-      setStaffPayModal(null); setStaffPayCash(''); setStaffPayKaspi(''); setStaffPayComment('')
+      setStaffPayModal(null); setStaffPayCash(''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId('')
       await loadStaffSalary()
     } catch (e: any) { setError(e?.message || 'Не удалось провести выплату') }
     finally { setStaffPaySaving(false) }
@@ -705,14 +702,15 @@ export default function SalaryPage() {
             ) : (
               <div className="divide-y divide-white/5">
                 {staffSalary.staff.map((s) => {
-                  const calc = calcStaffToPay(s, staffSalary.adjustments, currentStaffSalaryPeriod, currentStaffSalarySlot)
+                  const calc = calcStaffToPay(s, staffSalary.adjustments, currentStaffSalaryPeriod)
                   const activeAdjs = filterStaffAdjustmentsForSlot(
                     staffSalary.adjustments,
                     s.id,
                     currentStaffSalaryPeriod,
-                    currentStaffSalarySlot,
                   )
-                  const recentPayments = staffSalary.payments.filter(p => p.staff_id === s.id).slice(0, 3)
+                  const recentPayments = staffSalary.payments
+                    .filter((p) => p.staff_id === s.id && String(p.pay_date || '').startsWith(currentStaffSalaryMonthPrefix))
+                    .slice(0, 3)
                   const isOperatorBased = s.source_type === 'operator'
                   return (
                     <div key={s.id} className="p-5">
@@ -732,7 +730,7 @@ export default function SalaryPage() {
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" disabled={isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
                           <Button type="button" disabled={isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
-                          <Button type="button" disabled={isOperatorBased} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment('') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
+                          <Button type="button" disabled={isOperatorBased} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
                         </div>
                       </div>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -890,7 +888,7 @@ export default function SalaryPage() {
       ) : null}
 
       {staffPayModal ? (
-        <Modal title="Выплата зарплаты" subtitle={`${staffPayModal.full_name} · к выплате ${money(calcStaffToPay(staffPayModal, staffSalary?.adjustments || [], getSalarySlotRange(staffPayDate, staffPaySlot), staffPaySlot).toPay)}`} onClose={() => setStaffPayModal(null)}>
+        <Modal title="Выплата зарплаты" subtitle={`${staffPayModal.full_name} · к выплате ${money(calcStaffToPay(staffPayModal, staffSalary?.adjustments || [], getSalarySlotRange(staffPayDate, staffPaySlot)).toPay)}`} onClose={() => setStaffPayModal(null)}>
           <form className="space-y-4" onSubmit={submitStaffPayment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
@@ -903,6 +901,15 @@ export default function SalaryPage() {
               <div>
                 <label className="mb-2 block text-sm text-slate-300">Дата выплаты</label>
                 <input className={input} type="date" value={staffPayDate} onChange={e => setStaffPayDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">Компания (расход)</label>
+                <select className={selectCls} value={staffPayCompanyId} onChange={e => setStaffPayCompanyId(e.target.value)}>
+                  <option value="">Выберите компанию</option>
+                  {(data?.companies || []).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name || c.code || c.id}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="mb-2 block text-sm text-slate-300">Наличные</label>
