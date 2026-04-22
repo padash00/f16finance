@@ -506,6 +506,7 @@ export function calculateOperatorShiftBreakdown(params: {
     const online = toAmount(row.online_amount)
     const card = toAmount(row.card_amount)
     const totalIncome = cash + kaspi + online + card
+    if (totalIncome <= 0) continue
 
     if (existing) {
       existing.totalIncome += totalIncome
