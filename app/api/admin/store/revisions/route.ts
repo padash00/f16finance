@@ -44,6 +44,10 @@ export async function GET(request: Request) {
     if (!canManageStore(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const url = new URL(request.url)
+    const scopeParam = String(url.searchParams.get('scope') || 'all')
+    const scope: 'all' | 'warehouse' | 'showcase' =
+      scopeParam === 'warehouse' || scopeParam === 'showcase' ? scopeParam : 'all'
     const companyScope = await resolveCompanyScope({
       activeOrganizationId: access.activeOrganization?.id || null,
       isSuperAdmin: access.isSuperAdmin,
@@ -54,6 +58,12 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     }
     const data = await fetchStoreRevisions(supabase as any, inventoryScope)
+    const locationType = scope === 'showcase' ? 'point_display' : scope === 'warehouse' ? 'warehouse' : null
+    if (locationType) {
+      data.locations = (data.locations || []).filter((l: any) => l?.location_type === locationType)
+      data.balances = (data.balances || []).filter((b: any) => b?.location?.location_type === locationType)
+      data.stocktakes = (data.stocktakes || []).filter((s: any) => s?.location?.location_type === locationType)
+    }
     return json({ ok: true, data })
   } catch (error: any) {
     await writeSystemErrorLogSafe({

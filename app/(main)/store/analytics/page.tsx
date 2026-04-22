@@ -75,6 +75,7 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 export default function StoreAnalyticsPage() {
+  const [tab, setTab] = useState<'showcase' | 'warehouse'>('showcase')
   const [data, setData] = useState<AnalyticsResponse['data'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -215,6 +216,23 @@ export default function StoreAnalyticsPage() {
     })
   }, [data?.balances, data?.movements, pointLocations])
 
+  const warehouseAnalytics = useMemo(() => {
+    const stockBalances = (data?.balances || []).filter((b) => b.location?.location_type === 'warehouse')
+    const totalStockQty = stockBalances.reduce((sum, b) => sum + Number(b.quantity || 0), 0)
+    const totalStockValue = stockBalances.reduce(
+      (sum, b) => sum + Number(b.quantity || 0) * Number((b as any).item?.default_purchase_price || 0),
+      0,
+    )
+    const topByValue = [...stockBalances]
+      .map((b) => ({
+        ...b,
+        stockValue: Number(b.quantity || 0) * Number((b as any).item?.default_purchase_price || 0),
+      }))
+      .sort((a, b) => b.stockValue - a.stockValue)
+      .slice(0, 10)
+    return { totalStockQty, totalStockValue, topByValue }
+  }, [data?.balances])
+
   const riskyBalances = useMemo(() => {
     return (data?.balances || [])
       .filter((balance) => balance.location?.location_type === 'point_display')
@@ -260,10 +278,28 @@ export default function StoreAnalyticsPage() {
         </div>
       </Card>
 
+      <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+        <button
+          type="button"
+          onClick={() => setTab('showcase')}
+          className={`rounded-lg px-3 py-2 text-sm ${tab === 'showcase' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}
+        >
+          Витрина (продажи)
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('warehouse')}
+          className={`rounded-lg px-3 py-2 text-sm ${tab === 'warehouse' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}
+        >
+          Склад (запасы)
+        </button>
+      </div>
+
       {error ? (
         <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
       ) : null}
 
+      {tab === 'showcase' ? (
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_400px]">
         <Card className="border-white/10 p-5">
           <div className="flex items-center gap-2">
@@ -392,6 +428,40 @@ export default function StoreAnalyticsPage() {
           </div>
         </Card>
       </section>
+      ) : (
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_400px]">
+          <Card className="border-white/10 p-5">
+            <div className="flex items-center gap-2">
+              <Boxes className="h-4 w-4 text-cyan-300" />
+              <h2 className="text-lg font-semibold text-foreground">Складские запасы</h2>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">Общая картина по подсобке.</p>
+            <div className="mt-4 grid gap-2 md:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Ед. товара</p>
+                <p className="mt-1 font-semibold text-foreground">{formatQty(warehouseAnalytics.totalStockQty)}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Стоимость запасов</p>
+                <p className="mt-1 font-semibold text-foreground">{formatMoney(warehouseAnalytics.totalStockValue)}</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="border-white/10 p-5">
+            <h2 className="text-lg font-semibold text-foreground">Топ по стоимости (склад)</h2>
+            <div className="mt-4 space-y-2">
+              {warehouseAnalytics.topByValue.map((row: any) => (
+                <div key={`${row.location_id}:${row.item_id}`} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-medium">{row.item?.name || 'Товар'}</p>
+                    <p className="text-xs">{formatMoney(row.stockValue)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </section>
+      )}
     </div>
   )
 }

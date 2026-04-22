@@ -1,5 +1,4 @@
--- Catalog-модель в operator-продаже: списание происходит с catalog компании,
--- проверка остатка — по виртуальной витрине (catalog - warehouse).
+-- Physical showcase model in operator sale: decrement point_display directly.
 -- p_location_id остаётся в сигнатуре для обратной совместимости — пишется
 -- в point_sales.location_id (ведёт на point_display для истории), но фактическое
 -- списание остатка выполняется на catalog-локации той же компании.
@@ -36,10 +35,7 @@ declare
   v_qty numeric;
   v_unit_price numeric;
   v_line_total numeric;
-  v_catalog_loc_id uuid;
-  v_warehouse_loc_id uuid;
-  v_catalog_qty numeric;
-  v_warehouse_qty numeric;
+  v_showcase_loc_id uuid;
   v_showcase_qty numeric;
   v_item_name text;
 begin
@@ -63,23 +59,16 @@ begin
     raise exception 'point-sale-kaspi-split-mismatch';
   end if;
 
-  -- Находим catalog и warehouse локации компании для фактического списания
-  select id into v_catalog_loc_id
+  -- Находим point_display локацию компании для фактического списания
+  select id into v_showcase_loc_id
   from public.inventory_locations
-  where company_id = p_company_id and location_type = 'catalog' and is_active = true
+  where company_id = p_company_id and location_type = 'point_display' and is_active = true
   limit 1;
 
-  if v_catalog_loc_id is null then
-    raise exception 'point-sale-catalog-location-missing';
+  if v_showcase_loc_id is null then
+    raise exception 'point-sale-showcase-location-missing';
   end if;
-
-  select id into v_warehouse_loc_id
-  from public.inventory_locations
-  where company_id = p_company_id and location_type = 'warehouse' and is_active = true
-  limit 1;
-  -- warehouse может не быть (тогда витрина = catalog)
-
-  -- Валидация: по витрине (catalog - warehouse) должно хватать на всё
+  -- Валидация: по point_display должно хватать на всё
   for v_item in select * from jsonb_array_elements(p_items)
   loop
     v_item_id := (v_item ->> 'item_id')::uuid;
@@ -94,20 +83,10 @@ begin
       raise exception 'point-sale-unit-price-invalid';
     end if;
 
-    select coalesce(quantity, 0) into v_catalog_qty
+    select coalesce(quantity, 0) into v_showcase_qty
     from public.inventory_balances
-    where location_id = v_catalog_loc_id and item_id = v_item_id;
-    v_catalog_qty := coalesce(v_catalog_qty, 0);
-
-    v_warehouse_qty := 0;
-    if v_warehouse_loc_id is not null then
-      select coalesce(quantity, 0) into v_warehouse_qty
-      from public.inventory_balances
-      where location_id = v_warehouse_loc_id and item_id = v_item_id;
-      v_warehouse_qty := coalesce(v_warehouse_qty, 0);
-    end if;
-
-    v_showcase_qty := greatest(0, v_catalog_qty - v_warehouse_qty);
+    where location_id = v_showcase_loc_id and item_id = v_item_id;
+    v_showcase_qty := coalesce(v_showcase_qty, 0);
 
     if v_qty > v_showcase_qty + 0.0001 then
       select name into v_item_name from public.inventory_items where id = v_item_id;
@@ -175,8 +154,8 @@ begin
       nullif(trim(coalesce(v_item ->> 'comment', '')), '')
     );
 
-    -- Списываем с catalog (не с point_display) — виртуальная витрина уменьшится автоматически
-    perform public.inventory_apply_balance_delta(v_catalog_loc_id, v_item_id, -v_qty);
+    -- Списываем с point_display
+    perform public.inventory_apply_balance_delta(v_showcase_loc_id, v_item_id, -v_qty);
 
     insert into public.inventory_movements (
       item_id,
@@ -192,7 +171,7 @@ begin
     values (
       v_item_id,
       'sale',
-      v_catalog_loc_id,
+      v_showcase_loc_id,
       v_qty,
       v_line_total,
       'point_sale',

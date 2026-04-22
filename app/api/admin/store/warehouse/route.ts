@@ -23,7 +23,11 @@ function normalizeQty(v: unknown) {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
 }
 
-async function ensureCompanyLocation(supabase: any, companyId: string, locationType: 'warehouse' | 'catalog') {
+async function ensureCompanyLocation(
+  supabase: any,
+  companyId: string,
+  locationType: 'warehouse' | 'point_display',
+) {
   const { data: existing, error: fetchErr } = await supabase
     .from('inventory_locations')
     .select('id, name, code, location_type, is_active')
@@ -42,8 +46,8 @@ async function ensureCompanyLocation(supabase: any, companyId: string, locationT
   if (compErr) throw compErr
   if (!company?.id) throw new Error('company-not-found')
 
-  const prefix = locationType === 'warehouse' ? 'WH' : 'CAT'
-  const namePrefix = locationType === 'warehouse' ? 'Склад' : 'Каталог'
+  const prefix = locationType === 'warehouse' ? 'WH' : 'PD'
+  const namePrefix = locationType === 'warehouse' ? 'Склад' : 'Витрина'
   const { data: created, error: insErr } = await supabase
     .from('inventory_locations')
     .insert({
@@ -61,7 +65,7 @@ async function ensureCompanyLocation(supabase: any, companyId: string, locationT
   return created
 }
 
-// ─── GET: catalog + warehouse balances for a company ────────────────────────
+// ─── GET: warehouse + showcase balances for a company ───────────────────────
 
 export async function GET(request: Request) {
   try {
@@ -92,6 +96,7 @@ export async function GET(request: Request) {
         data: {
           catalog: null,
           warehouse: null,
+          showcase: null,
           companies: [],
           balances: [],
           categories: [],
@@ -120,6 +125,7 @@ export async function GET(request: Request) {
         data: {
           catalog: null,
           warehouse: null,
+          showcase: null,
           companies: companies || [],
           balances: [],
           categories: [],
@@ -138,18 +144,18 @@ export async function GET(request: Request) {
       }
     }
 
-    const [catalog, warehouse] = await Promise.all([
-      ensureCompanyLocation(supabase, companyId, 'catalog'),
+    const [warehouse, showcase] = await Promise.all([
       ensureCompanyLocation(supabase, companyId, 'warehouse'),
+      ensureCompanyLocation(supabase, companyId, 'point_display'),
     ])
 
     const { data: balanceRows, error: balErr } = await supabase
       .from('inventory_balances')
       .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name))')
-      .in('location_id', [catalog.id, warehouse.id])
+      .in('location_id', [warehouse.id, showcase.id])
     if (balErr) throw balErr
 
-    // Merge by item_id: {item, catalog_quantity, warehouse_quantity, showcase_quantity}
+    // Merge by item_id: physical warehouse + showcase
     const byItem = new Map<string, any>()
     for (const row of balanceRows || []) {
       const itemId = row.item_id
@@ -159,24 +165,24 @@ export async function GET(request: Request) {
         bucket = {
           item_id: itemId,
           item: row.item,
-          catalog_quantity: 0,
+          showcase_quantity: 0,
           warehouse_quantity: 0,
           updated_at: row.updated_at,
         }
         byItem.set(itemId, bucket)
       }
-      if (row.location_id === catalog.id) bucket.catalog_quantity = Number(row.quantity) || 0
-      else if (row.location_id === warehouse.id) bucket.warehouse_quantity = Number(row.quantity) || 0
+      if (row.location_id === warehouse.id) bucket.warehouse_quantity = Number(row.quantity) || 0
+      else if (row.location_id === showcase.id) bucket.showcase_quantity = Number(row.quantity) || 0
       if (row.updated_at > bucket.updated_at) bucket.updated_at = row.updated_at
     }
 
     const balances = Array.from(byItem.values())
       .map((b) => ({
         ...b,
-        quantity: b.catalog_quantity, // back-compat: "quantity" = catalog total
-        showcase_quantity: Math.max(0, b.catalog_quantity - b.warehouse_quantity),
+        catalog_quantity: b.warehouse_quantity + b.showcase_quantity, // back-compat field name
+        quantity: b.warehouse_quantity + b.showcase_quantity,
       }))
-      .sort((a, b) => b.catalog_quantity - a.catalog_quantity)
+      .sort((a, b) => b.quantity - a.quantity)
 
     const { data: categories } = await supabase
       .from('inventory_categories')
@@ -186,8 +192,9 @@ export async function GET(request: Request) {
     return json({
       ok: true,
       data: {
-        catalog,
+        catalog: null,
         warehouse,
+        showcase,
         companies: companies || [],
         balances,
         categories: categories || [],
@@ -261,7 +268,7 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { item } })
     }
 
-    // ── addStock: adds to CATALOG (total store stock) ──────────────────────────
+    // ── addStock: add/set stock in physical warehouse ─────────────────────────
     if (body.action === 'addStock') {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
@@ -287,18 +294,18 @@ export async function POST(request: Request) {
       const needLookup = rawItems.filter((i) => !i.item_id && i.barcode)
       const barcodes = [...new Set(needLookup.map((i) => i.barcode!))]
 
-      let catalogByBarcode: Record<string, string> = {}
+      let itemByBarcode: Record<string, string> = {}
       if (barcodes.length > 0) {
         const { data: found } = await supabase
           .from('inventory_items')
           .select('id, barcode')
           .in('barcode', barcodes)
           .eq('is_active', true)
-        ;(found || []).forEach((row: any) => { catalogByBarcode[row.barcode] = row.id })
+        ;(found || []).forEach((row: any) => { itemByBarcode[row.barcode] = row.id })
       }
 
       const orgId = access.activeOrganization?.id || null
-      const toCreate = needLookup.filter((i) => i.barcode && !catalogByBarcode[i.barcode!] && i.name)
+      const toCreate = needLookup.filter((i) => i.barcode && !itemByBarcode[i.barcode!] && i.name)
 
       if (toCreate.length > 0) {
         const inserts = toCreate.map((i) => ({
@@ -314,27 +321,27 @@ export async function POST(request: Request) {
           .from('inventory_items')
           .upsert(inserts, { onConflict: 'barcode', ignoreDuplicates: false })
           .select('id, barcode')
-        ;(created || []).forEach((row: any) => { catalogByBarcode[row.barcode] = row.id })
+        ;(created || []).forEach((row: any) => { itemByBarcode[row.barcode] = row.id })
       }
 
       const resolvedItems: Array<{ item_id: string; quantity: number; unit_cost: number }> = []
       for (const raw of rawItems) {
-        const itemId = raw.item_id || (raw.barcode ? catalogByBarcode[raw.barcode] : undefined)
+        const itemId = raw.item_id || (raw.barcode ? itemByBarcode[raw.barcode] : undefined)
         if (!itemId) continue
         resolvedItems.push({ item_id: itemId, quantity: raw.quantity, unit_cost: raw.unit_cost })
       }
 
       if (resolvedItems.length === 0) return json({ error: 'no-items-resolved' }, 400)
 
-      const catalog = await ensureCompanyLocation(supabase, companyId, 'catalog')
+      const warehouse = await ensureCompanyLocation(supabase, companyId, 'warehouse')
       const actorUserId = access.staffMember?.id || null
       const mode = String(body.mode || 'add') === 'set' ? 'set' : 'add'
       const now = new Date().toISOString()
 
       if (mode === 'set') {
-        // SET mode: upsert catalog to exact quantities (Wipon sync)
+        // SET mode: upsert warehouse to exact quantities
         const upserts = resolvedItems.map((item) => ({
-          location_id: catalog.id,
+          location_id: warehouse.id,
           item_id: item.item_id,
           quantity: item.quantity,
           updated_at: now,
@@ -350,10 +357,10 @@ export async function POST(request: Request) {
           movement_type: 'set_stock',
           quantity: item.quantity,
           unit_cost: item.unit_cost,
-          to_location_id: catalog.id,
-          reference_type: 'catalog_set',
+          to_location_id: warehouse.id,
+          reference_type: 'warehouse_set',
           reference_id: null,
-          comment: String(body.comment || '').trim() || 'Синхронизация с Wipon',
+          comment: String(body.comment || '').trim() || 'Синхронизация подсобки',
           created_by: actorUserId,
           created_at: now,
         }))
@@ -361,8 +368,8 @@ export async function POST(request: Request) {
 
         await writeAuditLog(supabase, {
           actorUserId,
-          entityType: 'inventory-catalog-stock',
-          entityId: catalog.id,
+          entityType: 'inventory-warehouse-stock',
+          entityId: warehouse.id,
           action: 'set_stock',
           payload: { company_id: companyId, items_count: resolvedItems.length },
         })
@@ -370,20 +377,20 @@ export async function POST(request: Request) {
         return json({ ok: true, data: { mode: 'set', resolved: resolvedItems.length, skipped: rawItems.length - resolvedItems.length } })
       }
 
-      // ADD mode: receipt-style add to catalog
+      // ADD mode: receipt-style add to warehouse
       const result = await postInventoryReceipt(supabase, {
-        location_id: catalog.id,
+        location_id: warehouse.id,
         received_at: now,
         supplier_id: null,
-        comment: String(body.comment || '').trim() || 'Добавлено через каталог',
+        comment: String(body.comment || '').trim() || 'Добавлено в подсобку',
         created_by: actorUserId,
         items: resolvedItems,
       })
 
       await writeAuditLog(supabase, {
         actorUserId,
-        entityType: 'inventory-catalog-stock',
-        entityId: catalog.id,
+        entityType: 'inventory-warehouse-stock',
+        entityId: warehouse.id,
         action: 'add_stock',
         payload: { company_id: companyId, items_count: resolvedItems.length },
       })
@@ -405,20 +412,7 @@ export async function POST(request: Request) {
       const qty = normalizeQty(body.quantity)
       if (qty < 0) return json({ error: 'quantity-invalid' }, 400)
 
-      const [catalog, warehouse] = await Promise.all([
-        ensureCompanyLocation(supabase, companyId, 'catalog'),
-        ensureCompanyLocation(supabase, companyId, 'warehouse'),
-      ])
-
-      // Enforce: warehouse <= catalog
-      const { data: catalogBal } = await supabase
-        .from('inventory_balances')
-        .select('quantity')
-        .eq('location_id', catalog.id)
-        .eq('item_id', itemId)
-        .maybeSingle()
-      const catalogQty = Number(catalogBal?.quantity || 0)
-      if (qty > catalogQty) return json({ error: 'warehouse-exceeds-catalog', catalogQty }, 400)
+      const warehouse = await ensureCompanyLocation(supabase, companyId, 'warehouse')
 
       const actorUserId = access.staffMember?.id || null
       const now = new Date().toISOString()
@@ -430,12 +424,12 @@ export async function POST(request: Request) {
 
       await supabase.from('inventory_movements').insert({
         item_id: itemId,
-        movement_type: 'warehouse_set',
+        movement_type: 'inventory_adjustment',
         quantity: qty,
         to_location_id: warehouse.id,
-        reference_type: 'warehouse_alloc',
+        reference_type: 'warehouse_set',
         reference_id: null,
-        comment: String(body.comment || '').trim() || 'Аллокация склад/витрина',
+        comment: String(body.comment || '').trim() || 'Установка остатка подсобки',
         created_by: actorUserId,
         created_at: now,
       })
@@ -451,7 +445,7 @@ export async function POST(request: Request) {
       return json({ ok: true })
     }
 
-    // ── previewBackroomUpload: match Excel barcodes to catalog, show diff ─────
+    // ── previewBackroomUpload: match Excel barcodes and warehouse diff ─────────
     // Input: { action, company_id, items: [{barcode, quantity, name?}] }
     // Output: { matched: [...], unmatched: [...] } — ничего не меняет в БД.
     if (body.action === 'previewBackroomUpload') {
@@ -501,25 +495,25 @@ export async function POST(request: Request) {
         })
       }
 
-      const [catalog, warehouse] = await Promise.all([
-        ensureCompanyLocation(supabase, companyId, 'catalog'),
+      const [warehouse, showcase] = await Promise.all([
         ensureCompanyLocation(supabase, companyId, 'warehouse'),
+        ensureCompanyLocation(supabase, companyId, 'point_display'),
       ])
 
       const matchedItemIds = [...byBarcode.values()].map((v) => v.id)
-      const curCatalog = new Map<string, number>()
       const curWarehouse = new Map<string, number>()
+      const curShowcase = new Map<string, number>()
       if (matchedItemIds.length) {
         const { data: bal } = await supabase
           .from('inventory_balances')
           .select('location_id, item_id, quantity')
-          .in('location_id', [catalog.id, warehouse.id])
+          .in('location_id', [warehouse.id, showcase.id])
           .in('item_id', matchedItemIds)
         for (const row of bal || []) {
           const q = Number((row as any).quantity || 0)
           const iid = String((row as any).item_id)
-          if ((row as any).location_id === catalog.id) curCatalog.set(iid, q)
-          else if ((row as any).location_id === warehouse.id) curWarehouse.set(iid, q)
+          if ((row as any).location_id === warehouse.id) curWarehouse.set(iid, q)
+          else if ((row as any).location_id === showcase.id) curShowcase.set(iid, q)
         }
       }
 
@@ -531,23 +525,23 @@ export async function POST(request: Request) {
           unmatched.push({ barcode: r.barcode, name: r.name || '', quantity: r.quantity })
           continue
         }
-        const curC = curCatalog.get(item.id) || 0
         const curW = curWarehouse.get(item.id) || 0
+        const curS = curShowcase.get(item.id) || 0
         const newW = r.quantity
-        const newC = Math.max(curC, newW) // catalog не даёт упасть ниже warehouse
+        const newC = newW + curS
         matched.push({
           item_id: item.id,
           barcode: item.barcode,
           catalog_name: item.name,
           excel_name: r.name || null,
           unit: item.unit,
-          current_catalog: curC,
+          current_catalog: curW + curS,
           current_warehouse: curW,
-          current_showcase: Math.max(0, curC - curW),
+          current_showcase: curS,
           new_warehouse: newW,
           new_catalog: newC,
-          new_showcase: Math.max(0, newC - newW),
-          catalog_changed: newC !== curC,
+          new_showcase: curS,
+          catalog_changed: newC !== (curW + curS),
         })
       }
 
@@ -564,7 +558,7 @@ export async function POST(request: Request) {
       })
     }
 
-    // ── applyBackroomUpload: set warehouse=qty, catalog=max(catalog,qty) ──────
+    // ── applyBackroomUpload: set warehouse from parsed file ────────────────────
     if (body.action === 'applyBackroomUpload') {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
@@ -584,24 +578,9 @@ export async function POST(request: Request) {
 
       if (rows.length === 0) return json({ error: 'items-required' }, 400)
 
-      const [catalog, warehouse] = await Promise.all([
-        ensureCompanyLocation(supabase, companyId, 'catalog'),
-        ensureCompanyLocation(supabase, companyId, 'warehouse'),
-      ])
+      const warehouse = await ensureCompanyLocation(supabase, companyId, 'warehouse')
       const actorUserId = access.staffMember?.id || null
       const now = new Date().toISOString()
-
-      // Upsert catalog balances
-      const catalogUpserts = rows.map((r) => ({
-        location_id: catalog.id,
-        item_id: r.item_id,
-        quantity: r.new_catalog,
-        updated_at: now,
-      }))
-      const { error: catErr } = await supabase
-        .from('inventory_balances')
-        .upsert(catalogUpserts, { onConflict: 'location_id,item_id' })
-      if (catErr) throw catErr
 
       // Upsert warehouse balances
       const warehouseUpserts = rows.map((r) => ({
@@ -615,7 +594,7 @@ export async function POST(request: Request) {
         .upsert(warehouseUpserts, { onConflict: 'location_id,item_id' })
       if (whErr) throw whErr
 
-      // Audit movements (inventory_adjustment — соответствует check-ограничению)
+      // Audit movements
       const movements = rows
         .filter((r) => r.new_warehouse > 0)
         .map((r) => ({
@@ -644,7 +623,7 @@ export async function POST(request: Request) {
       return json({ ok: true, data: { updated: rows.length } })
     }
 
-    // ── deleteStock: remove item entirely from catalog + warehouse ────────────
+    // ── deleteStock: remove item from warehouse + showcase ────────────────────
     if (body.action === 'deleteStock') {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
@@ -661,21 +640,21 @@ export async function POST(request: Request) {
 
       if (!deleteAll && itemIds.length === 0) return json({ error: 'item-ids-required' }, 400)
 
-      const [catalog, warehouse] = await Promise.all([
-        ensureCompanyLocation(supabase, companyId, 'catalog'),
+      const [warehouse, showcase] = await Promise.all([
         ensureCompanyLocation(supabase, companyId, 'warehouse'),
+        ensureCompanyLocation(supabase, companyId, 'point_display'),
       ])
       const actorUserId = access.staffMember?.id || null
 
-      let deleteQuery = supabase.from('inventory_balances').delete().in('location_id', [catalog.id, warehouse.id])
+      let deleteQuery = supabase.from('inventory_balances').delete().in('location_id', [warehouse.id, showcase.id])
       if (!deleteAll) deleteQuery = deleteQuery.in('item_id', itemIds)
       const { error: delErr } = await deleteQuery
       if (delErr) throw delErr
 
       await writeAuditLog(supabase, {
         actorUserId,
-        entityType: 'inventory-catalog-stock',
-        entityId: catalog.id,
+        entityType: 'inventory-warehouse-stock',
+        entityId: warehouse.id,
         action: 'delete_stock',
         payload: { company_id: companyId, delete_all: deleteAll, item_ids: deleteAll ? [] : itemIds },
       })

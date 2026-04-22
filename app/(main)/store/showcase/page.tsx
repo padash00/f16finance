@@ -41,7 +41,7 @@ type WarehouseLocation = { id: string; name: string } | null
 
 type BalanceItem = {
   item_id: string
-  quantity: number           // showcase qty = catalog - warehouse
+  quantity: number
   catalog_quantity: number
   warehouse_quantity: number
   item: {
@@ -423,7 +423,7 @@ export default function ShowcasePage() {
                         </div>
                         <div className="ml-3 shrink-0 flex gap-3 text-right">
                           <div>
-                            <p className="text-[10px] text-muted-foreground">каталог</p>
+                            <p className="text-[10px] text-muted-foreground">итого</p>
                             <p className="text-sm font-semibold text-foreground">{b.catalog_quantity}</p>
                           </div>
                           <div>
@@ -552,7 +552,7 @@ export default function ShowcasePage() {
                             const bal = balances.find((b) => b.item_id === line.item_id)
                             return bal ? (
                               <p className="text-[10px] text-muted-foreground">
-                                Каталог: <span className="font-medium text-foreground">{bal.catalog_quantity}</span>
+                                Итого: <span className="font-medium text-foreground">{bal.catalog_quantity}</span>
                                 {' · '}Склад: <span className="font-medium text-amber-300">{bal.warehouse_quantity}</span>
                                 {' · '}Витрина: <span className="font-medium text-blue-300">{bal.quantity}</span>
                               </p>

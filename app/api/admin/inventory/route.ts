@@ -61,7 +61,9 @@ type ItemBody = {
 type ReceiptBody = {
   action: 'createReceipt'
   payload: {
-    location_id: string
+    location_id?: string
+    company_id?: string
+    location_type?: 'warehouse' | 'point_display'
     supplier_id?: string | null
     received_at: string
     invoice_number?: string | null
@@ -104,7 +106,9 @@ type DecideRequestBody = {
 type WriteoffBody = {
   action: 'createWriteoff'
   payload: {
-    location_id: string
+    location_id?: string
+    company_id?: string
+    location_type?: 'warehouse' | 'point_display'
     written_at: string
     reason: string
     comment?: string | null
@@ -119,7 +123,9 @@ type WriteoffBody = {
 type StocktakeBody = {
   action: 'createStocktake'
   payload: {
-    location_id: string
+    location_id?: string
+    company_id?: string
+    location_type?: 'warehouse' | 'point_display'
     counted_at: string
     comment?: string | null
     items: Array<{
@@ -224,6 +230,30 @@ function canManageInventory(access: {
   staffRole: 'manager' | 'marketer' | 'owner' | 'other'
 }) {
   return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+}
+
+async function resolveLocationId(
+  supabase: any,
+  inventoryScope: { organizationId: string | null; allowedCompanyIds: string[] | null; isSuperAdmin: boolean },
+  payload: { location_id?: string; company_id?: string; location_type?: 'warehouse' | 'point_display' },
+) {
+  const explicitLocationId = String(payload.location_id || '').trim()
+  if (explicitLocationId) return explicitLocationId
+
+  const companyId = String(payload.company_id || '').trim()
+  const locationType = payload.location_type
+  if (!companyId || !locationType) return ''
+
+  await ensureInventoryCompanyAccess(supabase as any, companyId, inventoryScope)
+  const { data: location, error } = await supabase
+    .from('inventory_locations')
+    .select('id')
+    .eq('company_id', companyId)
+    .eq('location_type', locationType)
+    .eq('is_active', true)
+    .maybeSingle()
+  if (error) throw error
+  return String(location?.id || '')
 }
 
 export async function GET(request: Request) {
@@ -364,7 +394,11 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'createReceipt') {
-      const locationId = String(body.payload?.location_id || '').trim()
+      const locationId = await resolveLocationId(supabase as any, inventoryScope, {
+        location_id: body.payload?.location_id,
+        company_id: body.payload?.company_id,
+        location_type: body.payload?.location_type,
+      })
       const receivedAt = String(body.payload?.received_at || '').trim()
       const items = Array.isArray(body.payload?.items) ? body.payload.items : []
 
@@ -509,7 +543,11 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'createWriteoff') {
-      const locationId = String(body.payload?.location_id || '').trim()
+      const locationId = await resolveLocationId(supabase as any, inventoryScope, {
+        location_id: body.payload?.location_id,
+        company_id: body.payload?.company_id,
+        location_type: body.payload?.location_type,
+      })
       const writtenAt = String(body.payload?.written_at || '').trim()
       const reason = String(body.payload?.reason || '').trim()
       const items = Array.isArray(body.payload?.items) ? body.payload.items : []
@@ -555,7 +593,11 @@ export async function POST(request: Request) {
     }
 
     if (body.action === 'createStocktake') {
-      const locationId = String(body.payload?.location_id || '').trim()
+      const locationId = await resolveLocationId(supabase as any, inventoryScope, {
+        location_id: body.payload?.location_id,
+        company_id: body.payload?.company_id,
+        location_type: body.payload?.location_type,
+      })
       const countedAt = String(body.payload?.counted_at || '').trim()
       const items = Array.isArray(body.payload?.items) ? body.payload.items : []
 

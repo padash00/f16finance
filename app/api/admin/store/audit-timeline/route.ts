@@ -21,6 +21,7 @@ const STORE_AUDIT_ENTITY_TYPES = [
   'inventory-writeoff',
   'inventory-warehouse-alloc',
   'inventory-catalog-stock',
+  'inventory-warehouse-stock',
 ]
 
 export async function GET(request: Request) {

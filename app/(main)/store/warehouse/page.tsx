@@ -72,7 +72,7 @@ type StockLine = {
   isNew?: boolean
 }
 
-type AddMode = 'barcode' | 'catalog' | 'excel' | 'backroom'
+type AddMode = 'barcode' | 'items' | 'excel' | 'warehouseFile'
 
 type BackroomMatchRow = {
   item_id: string
@@ -109,7 +109,6 @@ function parseNum(v: string) {
 export default function WarehousePage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
-  const [catalogLoc, setCatalogLoc] = useState<LocationRef | null>(null)
   const [warehouseLoc, setWarehouseLoc] = useState<LocationRef | null>(null)
   const [balances, setBalances] = useState<BalanceItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -132,9 +131,9 @@ export default function WarehousePage() {
   const [newItemUnit, setNewItemUnit] = useState('шт')
   const [creatingItem, setCreatingItem] = useState(false)
 
-  const [catalogSearch, setCatalogSearch] = useState('')
-  const [catalogItems, setCatalogItems] = useState<any[]>([])
-  const [catalogLoading, setCatalogLoading] = useState(false)
+  const [itemSearch, setItemSearch] = useState('')
+  const [itemSearchResults, setItemSearchResults] = useState<any[]>([])
+  const [itemSearchLoading, setItemSearchLoading] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
 
   const [excelRows, setExcelRows] = useState<StockLine[]>([])
@@ -152,14 +151,14 @@ export default function WarehousePage() {
   const [editWhVal, setEditWhVal] = useState('')
   const [savingWh, setSavingWh] = useState(false)
 
-  const [backroomFileName, setBackroomFileName] = useState<string | null>(null)
-  const [backroomParseError, setBackroomParseError] = useState<string | null>(null)
-  const [backroomLoading, setBackroomLoading] = useState(false)
-  const [backroomMatched, setBackroomMatched] = useState<BackroomMatchRow[]>([])
-  const [backroomUnmatched, setBackroomUnmatched] = useState<BackroomUnmatchedRow[]>([])
-  const [backroomApplying, setBackroomApplying] = useState(false)
-  const [backroomDone, setBackroomDone] = useState<string | null>(null)
-  const backroomFileRef = useRef<HTMLInputElement>(null)
+  const [warehouseFileName, setWarehouseFileName] = useState<string | null>(null)
+  const [warehouseFileError, setWarehouseFileError] = useState<string | null>(null)
+  const [warehouseFileLoading, setWarehouseFileLoading] = useState(false)
+  const [warehouseFileMatched, setWarehouseFileMatched] = useState<BackroomMatchRow[]>([])
+  const [warehouseFileUnmatched, setWarehouseFileUnmatched] = useState<BackroomUnmatchedRow[]>([])
+  const [warehouseFileApplying, setWarehouseFileApplying] = useState(false)
+  const [warehouseFileDone, setWarehouseFileDone] = useState<string | null>(null)
+  const warehouseFileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async (companyId?: string | null) => {
     setLoading(true)
@@ -173,7 +172,6 @@ export default function WarehousePage() {
       const d = json.data
       setCompanies(d.companies || [])
       setSelectedCompanyId(d.selectedCompanyId)
-      setCatalogLoc(d.catalog)
       setWarehouseLoc(d.warehouse)
       setBalances(d.balances || [])
       setCategories(d.categories || [])
@@ -197,22 +195,22 @@ export default function WarehousePage() {
   }, [])
 
   useEffect(() => {
-    if (addMode !== 'catalog') return
+    if (addMode !== 'items') return
     const t = setTimeout(async () => {
-      if (!catalogSearch.trim() && !selectedCategory) { setCatalogItems([]); return }
-      setCatalogLoading(true)
+      if (!itemSearch.trim() && !selectedCategory) { setItemSearchResults([]); return }
+      setItemSearchLoading(true)
       try {
         const params = new URLSearchParams()
-        if (catalogSearch.trim()) params.set('q', catalogSearch.trim())
+        if (itemSearch.trim()) params.set('q', itemSearch.trim())
         if (selectedCategory) params.set('category_id', selectedCategory)
         const res = await fetch(`/api/admin/inventory/catalog?${params}`, { cache: 'no-store' })
         const json = await res.json().catch(() => null)
-        setCatalogItems(json?.data?.items || [])
-      } catch { setCatalogItems([]) }
-      finally { setCatalogLoading(false) }
+        setItemSearchResults(json?.data?.items || [])
+      } catch { setItemSearchResults([]) }
+      finally { setItemSearchLoading(false) }
     }, 300)
     return () => clearTimeout(t)
-  }, [catalogSearch, selectedCategory, addMode])
+  }, [itemSearch, selectedCategory, addMode])
 
   async function handleBarcodeLookup(e: React.FormEvent) {
     e.preventDefault()
@@ -455,24 +453,24 @@ export default function WarehousePage() {
   }
 
   function resetBackroom() {
-    setBackroomFileName(null)
-    setBackroomParseError(null)
-    setBackroomMatched([])
-    setBackroomUnmatched([])
-    setBackroomDone(null)
-    if (backroomFileRef.current) backroomFileRef.current.value = ''
+    setWarehouseFileName(null)
+    setWarehouseFileError(null)
+    setWarehouseFileMatched([])
+    setWarehouseFileUnmatched([])
+    setWarehouseFileDone(null)
+    if (warehouseFileRef.current) warehouseFileRef.current.value = ''
   }
 
   async function handleBackroomFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !selectedCompanyId) return
     e.target.value = ''
-    setBackroomParseError(null)
-    setBackroomMatched([])
-    setBackroomUnmatched([])
-    setBackroomDone(null)
-    setBackroomFileName(file.name)
-    setBackroomLoading(true)
+    setWarehouseFileError(null)
+    setWarehouseFileMatched([])
+    setWarehouseFileUnmatched([])
+    setWarehouseFileDone(null)
+    setWarehouseFileName(file.name)
+    setWarehouseFileLoading(true)
 
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || ''
@@ -502,8 +500,8 @@ export default function WarehousePage() {
 
       const parsed = parseRowsFromTable(rows)
       if (parsed.length === 0) {
-        setBackroomParseError('Не найдено строк. Формат: Штрихкод | Название | Количество (последние две могут быть любыми из числовых).')
-        setBackroomLoading(false)
+        setWarehouseFileError('Не найдено строк. Формат: Штрихкод | Название | Количество (последние две могут быть любыми из числовых).')
+        setWarehouseFileLoading(false)
         return
       }
 
@@ -512,8 +510,8 @@ export default function WarehousePage() {
         .map((l) => ({ barcode: l.barcode, quantity: parseNum(l.quantity), name: l.name || undefined }))
 
       if (items.length === 0) {
-        setBackroomParseError('В файле нет строк с штрихкодом и количеством.')
-        setBackroomLoading(false)
+        setWarehouseFileError('В файле нет строк с штрихкодом и количеством.')
+        setWarehouseFileLoading(false)
         return
       }
 
@@ -524,20 +522,20 @@ export default function WarehousePage() {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка предпросмотра')
-      setBackroomMatched(json.data?.matched || [])
-      setBackroomUnmatched(json.data?.unmatched || [])
+      setWarehouseFileMatched(json.data?.matched || [])
+      setWarehouseFileUnmatched(json.data?.unmatched || [])
     } catch (err: any) {
-      setBackroomParseError(err?.message || 'Не удалось обработать файл.')
+      setWarehouseFileError(err?.message || 'Не удалось обработать файл.')
     } finally {
-      setBackroomLoading(false)
+      setWarehouseFileLoading(false)
     }
   }
 
   async function handleBackroomApply() {
-    if (!selectedCompanyId || backroomMatched.length === 0) return
-    setBackroomApplying(true)
+    if (!selectedCompanyId || warehouseFileMatched.length === 0) return
+    setWarehouseFileApplying(true)
     try {
-      const items = backroomMatched.map((m) => ({
+      const items = warehouseFileMatched.map((m) => ({
         item_id: m.item_id,
         new_warehouse: m.new_warehouse,
         new_catalog: m.new_catalog,
@@ -549,12 +547,12 @@ export default function WarehousePage() {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Ошибка применения')
-      setBackroomDone(`Обновлено: ${json.data?.updated ?? items.length}`)
+      setWarehouseFileDone(`Обновлено: ${json.data?.updated ?? items.length}`)
       await load(selectedCompanyId)
     } catch (err: any) {
-      setBackroomParseError(err?.message || 'Не удалось применить.')
+      setWarehouseFileError(err?.message || 'Не удалось применить.')
     } finally {
-      setBackroomApplying(false)
+      setWarehouseFileApplying(false)
     }
   }
 
@@ -651,11 +649,7 @@ export default function WarehousePage() {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) {
-        if (json?.error === 'warehouse-exceeds-catalog') {
-          alert(`Склад не может быть больше каталога (${json.catalogQty})`)
-        } else {
-          alert(json?.error || 'Ошибка сохранения')
-        }
+        alert(json?.error || 'Ошибка сохранения')
         return
       }
       setEditingWh(null)
@@ -698,7 +692,7 @@ export default function WarehousePage() {
               {warehouseLoc ? warehouseLoc.name : 'Склад'}
             </h1>
             <p className="mt-1 text-sm text-slate-400">
-              Каталог — всего товаров. Склад — часть в подсобке. Витрина = каталог − склад.
+              Физические остатки: отдельно подсобка и витрина. Итого = подсобка + витрина.
             </p>
           </div>
 
@@ -732,7 +726,7 @@ export default function WarehousePage() {
             <p className="mt-1.5 text-2xl font-semibold">{balances.length}</p>
           </div>
           <div className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-sky-300/70">Каталог</p>
+            <p className="text-[11px] uppercase tracking-widest text-sky-300/70">Итого</p>
             <p className="mt-1.5 text-2xl font-semibold text-sky-200">{totalCatalogQty}</p>
           </div>
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
@@ -835,7 +829,7 @@ export default function WarehousePage() {
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground flex-1">
                     {selectedIds.size > 0 ? `Выбрано: ${selectedIds.size}` : 'Товар'}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wider text-sky-300/70 w-16 text-right">Каталог</span>
+                  <span className="text-[10px] uppercase tracking-wider text-sky-300/70 w-16 text-right">Итого</span>
                   <span className="text-[10px] uppercase tracking-wider text-amber-300/70 w-20 text-right">Склад</span>
                   <span className="text-[10px] uppercase tracking-wider text-emerald-300/70 w-16 text-right">Витрина</span>
                 </div>
@@ -929,9 +923,9 @@ export default function WarehousePage() {
             <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1 text-xs">
               {([
                 ['barcode', 'Штрихкод', Barcode],
-                ['catalog', 'Каталог', Search],
+                ['items', 'Товары', Search],
                 ['excel', 'Excel', FileSpreadsheet],
-                ['backroom', 'Подсобка', Boxes],
+                ['warehouseFile', 'Файл подсобки', Boxes],
               ] as const).map(([mode, label, Icon]) => (
                 <button
                   key={mode}
@@ -939,7 +933,7 @@ export default function WarehousePage() {
                     setAddMode(mode)
                     setLines([])
                     setExcelRows([])
-                    if (mode !== 'backroom') resetBackroom()
+                    if (mode !== 'warehouseFile') resetBackroom()
                   }}
                   className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 transition ${addMode === mode ? 'bg-white/10 text-foreground font-medium shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'}`}
                 >
@@ -1019,14 +1013,14 @@ export default function WarehousePage() {
               </div>
             )}
 
-            {addMode === 'catalog' && (
+            {addMode === 'items' && (
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
-                      value={catalogSearch}
-                      onChange={(e) => setCatalogSearch(e.target.value)}
+                      value={itemSearch}
+                      onChange={(e) => setItemSearch(e.target.value)}
                       placeholder="Поиск по каталогу..."
                       className="h-8 pl-8 text-xs"
                     />
@@ -1045,12 +1039,12 @@ export default function WarehousePage() {
                   )}
                 </div>
                 <div className="max-h-52 overflow-y-auto space-y-1 rounded-xl border border-white/10 bg-black/20 p-1">
-                  {catalogLoading ? (
+                  {itemSearchLoading ? (
                     <div className="flex h-20 items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
-                  ) : catalogItems.length === 0 ? (
+                  ) : itemSearchResults.length === 0 ? (
                     <p className="py-4 text-center text-xs text-muted-foreground">Введите название или выберите категорию</p>
                   ) : (
-                    catalogItems.map((item: any) => (
+                    itemSearchResults.map((item: any) => (
                       <button
                         key={item.id}
                         onClick={() => addCatalogItem(item)}
@@ -1083,7 +1077,7 @@ export default function WarehousePage() {
               </div>
             )}
 
-            {addMode === 'backroom' && (
+            {addMode === 'warehouseFile' && (
               <div className="space-y-3">
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2.5 text-[11px] text-amber-200/90">
                   Загрузка остатков <b>в подсобку</b>. Сопоставление по штрихкоду — новые товары <b>не создаются</b>.
@@ -1091,45 +1085,45 @@ export default function WarehousePage() {
                 </div>
 
                 <div
-                  onClick={() => backroomFileRef.current?.click()}
+                  onClick={() => warehouseFileRef.current?.click()}
                   className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/20 bg-white/[0.02] py-5 text-center transition hover:border-amber-400/40 hover:bg-white/[0.04]"
                 >
                   <Boxes className="h-7 w-7 text-amber-300" />
                   <p className="max-w-full break-all px-3 text-xs font-medium text-foreground">
-                    {backroomFileName ? `Файл: ${backroomFileName}` : 'Загрузить Excel / DOCX с остатками подсобки'}
+                    {warehouseFileName ? `Файл: ${warehouseFileName}` : 'Загрузить Excel / DOCX с остатками подсобки'}
                   </p>
                   <p className="text-[10px] text-muted-foreground">Формат: Штрихкод | Название | Количество</p>
                 </div>
                 <input
-                  ref={backroomFileRef}
+                  ref={warehouseFileRef}
                   type="file"
                   accept=".xlsx,.xls,.csv,.docx"
                   className="hidden"
                   onChange={handleBackroomFile}
-                  disabled={!selectedCompanyId || backroomLoading}
+                  disabled={!selectedCompanyId || warehouseFileLoading}
                 />
 
-                {backroomLoading && (
+                {warehouseFileLoading && (
                   <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Сопоставляю штрихкоды…
                   </p>
                 )}
 
-                {backroomParseError && <p className="text-xs text-rose-400">{backroomParseError}</p>}
-                {backroomDone && (
+                {warehouseFileError && <p className="text-xs text-rose-400">{warehouseFileError}</p>}
+                {warehouseFileDone && (
                   <p className="flex items-center gap-1.5 text-xs text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> {backroomDone}
+                    <CheckCircle2 className="h-3.5 w-3.5" /> {warehouseFileDone}
                   </p>
                 )}
 
-                {(backroomMatched.length > 0 || backroomUnmatched.length > 0) && (
+                {(warehouseFileMatched.length > 0 || warehouseFileUnmatched.length > 0) && (
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider">
                       <span className="rounded-md border border-emerald-500/20 bg-emerald-500/[0.08] px-2 py-1 text-emerald-300/90">
-                        Найдено: {backroomMatched.length}
+                        Найдено: {warehouseFileMatched.length}
                       </span>
                       <span className="rounded-md border border-rose-500/20 bg-rose-500/[0.08] px-2 py-1 text-rose-300/90">
-                        Не найдено: {backroomUnmatched.length}
+                        Не найдено: {warehouseFileUnmatched.length}
                       </span>
                       <button
                         type="button"
@@ -1140,19 +1134,19 @@ export default function WarehousePage() {
                       </button>
                     </div>
 
-                    {backroomMatched.length > 0 && (
+                    {warehouseFileMatched.length > 0 && (
                       <div className="max-h-80 overflow-auto rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04]">
                         <table className="min-w-[560px] w-full text-[11px]">
                           <thead className="sticky top-0 bg-[#0f172a]/95 backdrop-blur">
                             <tr className="text-left text-muted-foreground">
                               <th className="px-2 py-1.5 font-normal">Товар</th>
-                              <th className="px-2 py-1.5 font-normal text-right">Каталог</th>
+                              <th className="px-2 py-1.5 font-normal text-right">Итого</th>
                               <th className="px-2 py-1.5 font-normal text-right">Подсобка</th>
                               <th className="px-2 py-1.5 font-normal text-right">Витрина</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-white/[0.05]">
-                            {backroomMatched.map((m) => {
+                            {warehouseFileMatched.map((m) => {
                               const nameMismatch = m.excel_name && m.excel_name.trim().toLowerCase() !== m.catalog_name.trim().toLowerCase()
                               return (
                                 <tr key={m.item_id} className="hover:bg-white/[0.03]">
@@ -1188,13 +1182,13 @@ export default function WarehousePage() {
                       </div>
                     )}
 
-                    {backroomUnmatched.length > 0 && (
+                    {warehouseFileUnmatched.length > 0 && (
                       <details className="rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-2">
                         <summary className="cursor-pointer text-xs font-medium text-rose-200">
-                          Не найдены по штрихкоду ({backroomUnmatched.length}) — будут пропущены
+                          Не найдены по штрихкоду ({warehouseFileUnmatched.length}) — будут пропущены
                         </summary>
                         <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-[11px]">
-                          {backroomUnmatched.map((u, i) => (
+                          {warehouseFileUnmatched.map((u, i) => (
                             <li key={`${u.barcode}-${i}`} className="grid grid-cols-[1fr,2fr,auto] items-start gap-2 text-muted-foreground">
                               <span className="break-all font-mono">{u.barcode}</span>
                               <span className="break-words">{u.name}</span>
@@ -1205,14 +1199,14 @@ export default function WarehousePage() {
                       </details>
                     )}
 
-                    {backroomMatched.length > 0 && (
+                    {warehouseFileMatched.length > 0 && (
                       <Button
                         onClick={handleBackroomApply}
-                        disabled={backroomApplying}
+                        disabled={warehouseFileApplying}
                         className="w-full bg-amber-600 hover:bg-amber-700"
                       >
-                        {backroomApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Boxes className="mr-2 h-4 w-4" />}
-                        Применить ({backroomMatched.length} поз.)
+                        {warehouseFileApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Boxes className="mr-2 h-4 w-4" />}
+                        Применить ({warehouseFileMatched.length} поз.)
                       </Button>
                     )}
                   </div>
@@ -1275,8 +1269,8 @@ export default function WarehousePage() {
                   </div>
                   <p className="text-[10px] text-muted-foreground">
                     {stockMode === 'add'
-                      ? 'Прибавится к каталогу (общий остаток магазина).'
-                      : 'Остаток в каталоге будет заменён (синхронизация с Wipon).'}
+                      ? 'Прибавится к остатку подсобки.'
+                      : 'Остаток подсобки будет заменён (синхронизация с Wipon).'}
                   </p>
                 </div>
 

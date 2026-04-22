@@ -23,7 +23,7 @@ type InventoryLocation = {
   id: string
   name: string
   code: string | null
-  location_type: 'catalog' | 'warehouse' | 'point_display'
+  location_type: 'warehouse' | 'point_display'
 }
 
 type InventorySupplier = {
@@ -174,12 +174,13 @@ export default function StoreReceiptsPage() {
   const [savedTemplates, setSavedTemplates] = useState<Array<{ name: string; lines: ReceiptLine[] }>>([])
   const [bulkMarkupPercent, setBulkMarkupPercent] = useState('')
   const [bulkSalePrice, setBulkSalePrice] = useState('')
+  const [scope, setScope] = useState<'all' | 'warehouse' | 'showcase'>('all')
 
   const load = async () => {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/admin/store/receipts', { cache: 'no-store' })
+      const response = await fetch(`/api/admin/store/receipts?scope=${scope}`, { cache: 'no-store' })
       const json = (await response.json().catch(() => null)) as ReceiptsResponse | null
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить приемку')
       const normalized = {
@@ -205,7 +206,7 @@ export default function StoreReceiptsPage() {
       if (q) setQuickQuery(q)
     } catch { /* ignore query parse errors */ }
     void load()
-  }, [])
+  }, [scope])
 
   useEffect(() => {
     try {
@@ -515,6 +516,12 @@ export default function StoreReceiptsPage() {
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div>
       ) : null}
 
+      <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+        <button type="button" onClick={() => setScope('all')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'all' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Все</button>
+        <button type="button" onClick={() => setScope('warehouse')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'warehouse' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Подсобка</button>
+        <button type="button" onClick={() => setScope('showcase')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'showcase' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Витрина</button>
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card className="border-white/10 p-5">
           <div className="mb-4">
@@ -603,12 +610,14 @@ export default function StoreReceiptsPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Каталог</Label>
+                <Label>Куда</Label>
                 <Select value={locationId} onValueChange={setLocationId}>
-                  <SelectTrigger><SelectValue placeholder="Выберите каталог" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Выберите локацию" /></SelectTrigger>
                   <SelectContent>
                     {(data?.locations || []).map((location) => (
-                      <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>
+                      <SelectItem key={location.id} value={location.id}>
+                        {location.location_type === 'warehouse' ? 'Подсобка' : 'Витрина'} · {location.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

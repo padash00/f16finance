@@ -1,4 +1,4 @@
--- Catalog-модель в operator-возврате: возврат увеличивает catalog компании.
+-- Physical showcase model in operator return: return increments point_display.
 -- p_location_id остаётся в сигнатуре для обратной совместимости — пишется
 -- в point_returns.location_id (ведёт на point_display для истории).
 
@@ -39,7 +39,7 @@ declare
   v_returned_qty numeric;
   v_sale_item_id uuid;
   v_sale record;
-  v_catalog_loc_id uuid;
+  v_showcase_loc_id uuid;
 begin
   if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
     raise exception 'point-return-items-required';
@@ -85,14 +85,14 @@ begin
     raise exception 'point-return-payment-method-mismatch';
   end if;
 
-  -- Находим catalog локацию компании для фактического возврата остатка
-  select id into v_catalog_loc_id
+  -- Находим point_display локацию компании для фактического возврата остатка
+  select id into v_showcase_loc_id
   from public.inventory_locations
-  where company_id = p_company_id and location_type = 'catalog' and is_active = true
+  where company_id = p_company_id and location_type = 'point_display' and is_active = true
   limit 1;
 
-  if v_catalog_loc_id is null then
-    raise exception 'point-return-catalog-location-missing';
+  if v_showcase_loc_id is null then
+    raise exception 'point-return-showcase-location-missing';
   end if;
 
   insert into public.point_returns (
@@ -199,8 +199,8 @@ begin
       nullif(trim(coalesce(v_item ->> 'comment', '')), '')
     );
 
-    -- Возвращаем на catalog (не на point_display)
-    perform public.inventory_apply_balance_delta(v_catalog_loc_id, v_item_id, v_qty);
+    -- Возвращаем на point_display
+    perform public.inventory_apply_balance_delta(v_showcase_loc_id, v_item_id, v_qty);
 
     insert into public.inventory_movements (
       item_id,
@@ -216,7 +216,7 @@ begin
     values (
       v_item_id,
       'return',
-      v_catalog_loc_id,
+      v_showcase_loc_id,
       v_qty,
       v_line_total,
       'point_return',

@@ -15,7 +15,7 @@ type InventoryLocation = {
   id: string
   name: string
   code: string | null
-  location_type: 'catalog' | 'warehouse' | 'point_display'
+  location_type: 'warehouse' | 'point_display'
   company?: { id: string; name: string; code: string | null } | null
 }
 
@@ -92,6 +92,7 @@ function StoreMovementsPageContent() {
   const [filters, setFilters] = useUrlState({
     q: '',
     type: 'all',
+    place: 'all',
   })
   const [queryInput, setQueryInput] = useState(filters.q)
   const debouncedQuery = useDebouncedValue(queryInput, 300)
@@ -100,7 +101,9 @@ function StoreMovementsPageContent() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/admin/store/movements', { cache: 'no-store' })
+      const scope =
+        filters.place === 'warehouse' ? 'warehouse' : filters.place === 'showcase' ? 'showcase' : 'all'
+      const response = await fetch(`/api/admin/store/movements?scope=${scope}`, { cache: 'no-store' })
       const json = (await response.json().catch(() => null)) as MovementsResponse | null
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить движения')
 
@@ -129,7 +132,7 @@ function StoreMovementsPageContent() {
 
   useEffect(() => {
     void load()
-  }, [])
+  }, [filters.place])
 
   useEffect(() => {
     setQueryInput(filters.q)
@@ -143,6 +146,16 @@ function StoreMovementsPageContent() {
     const q = filters.q.trim().toLowerCase()
     return (data?.movements || []).filter((movement) => {
       if (filters.type !== 'all' && movement.movement_type !== filters.type) return false
+      if (filters.place !== 'all') {
+        const fromType = movement.from_location?.location_type || null
+        const toType = movement.to_location?.location_type || null
+        if (filters.place === 'warehouse' && fromType !== 'warehouse' && toType !== 'warehouse') return false
+        if (filters.place === 'showcase' && fromType !== 'point_display' && toType !== 'point_display') return false
+        if (
+          filters.place === 'between' &&
+          !((fromType === 'warehouse' && toType === 'point_display') || (fromType === 'point_display' && toType === 'warehouse'))
+        ) return false
+      }
       if (!q) return true
       const haystack = [
         movement.item?.name,
@@ -191,7 +204,7 @@ function StoreMovementsPageContent() {
       </Card>
 
       <Card className="border-white/10 p-5">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder="Поиск по товару, точке, штрихкоду или комментарию" className="pl-10" />
@@ -207,6 +220,15 @@ function StoreMovementsPageContent() {
               <SelectItem value="return">Возврат</SelectItem>
               <SelectItem value="writeoff">Списание</SelectItem>
               <SelectItem value="inventory_adjustment">Корректировка</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filters.place} onValueChange={(value) => setFilters({ place: value })}>
+            <SelectTrigger><SelectValue placeholder="Все места" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все места</SelectItem>
+              <SelectItem value="warehouse">В подсобке</SelectItem>
+              <SelectItem value="showcase">На витрине</SelectItem>
+              <SelectItem value="between">Между подсобкой и витриной</SelectItem>
             </SelectContent>
           </Select>
         </div>

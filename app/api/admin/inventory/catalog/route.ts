@@ -71,37 +71,36 @@ export async function GET(request: Request) {
 
     if (itemsError) throw itemsError
 
-    // Fetch balances with location type to split warehouse vs showcase
+    // Fetch balances with location type: total = warehouse + point_display
     const { data: balances, error: balancesError } = await supabase
       .from('inventory_balances')
       .select('item_id, quantity, loc:inventory_locations(location_type)')
 
     if (balancesError) throw balancesError
 
-    // Новая модель: catalog = итого, warehouse = аллокация, showcase = catalog - warehouse (виртуально)
-    const catalogMap: Record<string, number> = {}
+    // Физическая модель: total = warehouse + point_display
     const warehouseMap: Record<string, number> = {}
+    const showcaseMap: Record<string, number> = {}
     for (const b of balances || []) {
       const locType = (Array.isArray(b.loc) ? b.loc[0] : b.loc)?.location_type
       const qty = b.quantity || 0
-      if (locType === 'catalog') {
-        catalogMap[b.item_id] = (catalogMap[b.item_id] || 0) + qty
-      } else if (locType === 'warehouse') {
+      if (locType === 'warehouse') {
         warehouseMap[b.item_id] = (warehouseMap[b.item_id] || 0) + qty
+      } else if (locType === 'point_display') {
+        showcaseMap[b.item_id] = (showcaseMap[b.item_id] || 0) + qty
       }
     }
 
     // Normalize items (category may come back as array from supabase joins)
     const normalized = (items || []).map((item: any) => {
-      const catalogQty = catalogMap[item.id] || 0
       const wh = warehouseMap[item.id] || 0
-      const sh = Math.max(0, catalogQty - wh)
+      const sh = showcaseMap[item.id] || 0
       return {
         ...item,
         category: Array.isArray(item.category) ? item.category[0] || null : item.category || null,
         warehouse_qty: wh,
         showcase_qty: sh,
-        total_balance: catalogQty,
+        total_balance: wh + sh,
       }
     })
 
@@ -523,7 +522,7 @@ export async function POST(request: Request) {
         .from('inventory_locations')
         .select('id')
         .eq('organization_id', orgId)
-        .in('location_type', ['catalog', 'warehouse', 'point_display', 'backroom'])
+        .in('location_type', ['warehouse', 'point_display'])
 
       if (locErr) throw locErr
 

@@ -24,7 +24,11 @@ function normalizeQty(v: unknown) {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0
 }
 
-async function ensureCompanyLocation(supabase: any, companyId: string, locationType: 'warehouse' | 'catalog' | 'point_display') {
+async function ensureCompanyLocation(
+  supabase: any,
+  companyId: string,
+  locationType: 'warehouse' | 'point_display',
+) {
   const { data: existing } = await supabase
     .from('inventory_locations')
     .select('id, name, code, location_type, is_active')
@@ -40,8 +44,8 @@ async function ensureCompanyLocation(supabase: any, companyId: string, locationT
     .maybeSingle()
   if (!company?.id) throw new Error('company-not-found')
 
-  const prefix = locationType === 'warehouse' ? 'WH' : locationType === 'catalog' ? 'CAT' : 'PD'
-  const namePrefix = locationType === 'warehouse' ? 'Склад' : locationType === 'catalog' ? 'Каталог' : 'Витрина'
+  const prefix = locationType === 'warehouse' ? 'WH' : 'PD'
+  const namePrefix = locationType === 'warehouse' ? 'Склад' : 'Витрина'
   const { data: created, error: insErr } = await supabase
     .from('inventory_locations')
     .insert({
@@ -58,7 +62,7 @@ async function ensureCompanyLocation(supabase: any, companyId: string, locationT
   return created
 }
 
-// ─── GET: showcase = catalog - warehouse (virtual) ────────────────────────────
+// ─── GET: showcase from physical point_display ────────────────────────────────
 
 export async function GET(request: Request) {
   try {
@@ -132,8 +136,7 @@ export async function GET(request: Request) {
       if (!companyScope.allowedCompanyIds.includes(companyId)) return json({ error: 'forbidden' }, 403)
     }
 
-    const [catalogLoc, warehouseLoc, showcaseLoc] = await Promise.all([
-      ensureCompanyLocation(supabase, companyId, 'catalog'),
+    const [warehouseLoc, showcaseLoc] = await Promise.all([
       ensureCompanyLocation(supabase, companyId, 'warehouse'),
       ensureCompanyLocation(supabase, companyId, 'point_display'),
     ])
@@ -141,10 +144,10 @@ export async function GET(request: Request) {
     const { data: balanceRows, error: balErr } = await supabase
       .from('inventory_balances')
       .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, low_stock_threshold, category_id, category:category_id(id, name))')
-      .in('location_id', [catalogLoc.id, warehouseLoc.id])
+      .in('location_id', [showcaseLoc.id, warehouseLoc.id])
     if (balErr) throw balErr
 
-    // Compute showcase = catalog - warehouse per item
+    // Compute balances from physical warehouse + point_display
     const byItem = new Map<string, any>()
     for (const row of balanceRows || []) {
       const itemId = row.item_id
@@ -154,27 +157,24 @@ export async function GET(request: Request) {
         bucket = {
           item_id: itemId,
           item: row.item,
-          catalog_quantity: 0,
+          showcase_quantity: 0,
           warehouse_quantity: 0,
           updated_at: row.updated_at,
         }
         byItem.set(itemId, bucket)
       }
-      if (row.location_id === catalogLoc.id) bucket.catalog_quantity = Number(row.quantity) || 0
+      if (row.location_id === showcaseLoc.id) bucket.showcase_quantity = Number(row.quantity) || 0
       else if (row.location_id === warehouseLoc.id) bucket.warehouse_quantity = Number(row.quantity) || 0
       if (row.updated_at > bucket.updated_at) bucket.updated_at = row.updated_at
     }
 
     const balances = Array.from(byItem.values())
-      .map((b) => {
-        const showcaseQty = Math.max(0, b.catalog_quantity - b.warehouse_quantity)
-        return {
-          ...b,
-          quantity: showcaseQty, // back-compat: "quantity" = showcase
-          showcase_quantity: showcaseQty,
-        }
-      })
-      .filter((b) => b.showcase_quantity > 0 || b.catalog_quantity > 0)
+      .map((b) => ({
+        ...b,
+        quantity: b.showcase_quantity, // back-compat
+        catalog_quantity: b.warehouse_quantity + b.showcase_quantity,
+      }))
+      .filter((b) => b.showcase_quantity > 0 || b.warehouse_quantity > 0)
       .sort((a, b) => b.showcase_quantity - a.showcase_quantity)
 
     // Items available in warehouse for request dropdown
@@ -197,7 +197,6 @@ export async function GET(request: Request) {
       ok: true,
       data: {
         showcase: showcaseLoc,
-        catalog: catalogLoc,
         warehouse: warehouseLoc,
         companies: companies || [],
         balances,
@@ -248,8 +247,7 @@ export async function POST(request: Request) {
 
       if (items.length === 0) return json({ error: 'items-required' }, 400)
 
-      // Source = warehouse (decreases on approval → virtual showcase auto-grows)
-      // Target = point_display (legacy, kept for inventory_decide_request compatibility)
+      // Source = warehouse, target = point_display.
       const [warehouseLoc, showcaseLoc] = await Promise.all([
         ensureCompanyLocation(supabase, companyId, 'warehouse'),
         ensureCompanyLocation(supabase, companyId, 'point_display'),
@@ -317,7 +315,7 @@ export async function POST(request: Request) {
       return json({ ok: true, data: result })
     }
 
-    // ── returnToWarehouse: just increment warehouse (showcase is virtual) ──────
+    // ── returnToWarehouse: move stock showcase -> warehouse ────────────────────
     if (body.action === 'returnToWarehouse') {
       const companyId = String(body.company_id || '').trim()
       if (!companyId) return json({ error: 'company-id-required' }, 400)
@@ -333,8 +331,8 @@ export async function POST(request: Request) {
 
       if (items.length === 0) return json({ error: 'items-required' }, 400)
 
-      const [catalogLoc, warehouseLoc] = await Promise.all([
-        ensureCompanyLocation(supabase, companyId, 'catalog'),
+      const [showcaseLoc, warehouseLoc] = await Promise.all([
+        ensureCompanyLocation(supabase, companyId, 'point_display'),
         ensureCompanyLocation(supabase, companyId, 'warehouse'),
       ])
 
@@ -342,11 +340,11 @@ export async function POST(request: Request) {
       const now = new Date().toISOString()
 
       for (const item of items) {
-        // Check showcase (catalog - warehouse) has enough
-        const { data: cBal } = await supabase
+        // Check showcase has enough
+        const { data: sBal } = await supabase
           .from('inventory_balances')
           .select('quantity')
-          .eq('location_id', catalogLoc.id)
+          .eq('location_id', showcaseLoc.id)
           .eq('item_id', item.item_id)
           .maybeSingle()
         const { data: wBal } = await supabase
@@ -355,21 +353,24 @@ export async function POST(request: Request) {
           .eq('location_id', warehouseLoc.id)
           .eq('item_id', item.item_id)
           .maybeSingle()
-        const catalogQty = Number(cBal?.quantity || 0)
+        const showcaseQty = Number(sBal?.quantity || 0)
         const warehouseQty = Number(wBal?.quantity || 0)
-        const showcaseQty = Math.max(0, catalogQty - warehouseQty)
         if (item.quantity > showcaseQty) {
           return json({ error: 'showcase-insufficient', item_id: item.item_id, showcase: showcaseQty, requested: item.quantity }, 400)
         }
 
+        const newShowcase = showcaseQty - item.quantity
         const newWarehouse = warehouseQty + item.quantity
+        await supabase
+          .from('inventory_balances')
+          .upsert({ location_id: showcaseLoc.id, item_id: item.item_id, quantity: newShowcase, updated_at: now }, { onConflict: 'location_id,item_id' })
         await supabase
           .from('inventory_balances')
           .upsert({ location_id: warehouseLoc.id, item_id: item.item_id, quantity: newWarehouse, updated_at: now }, { onConflict: 'location_id,item_id' })
 
         await supabase.from('inventory_movements').insert({
           item_id: item.item_id,
-          from_location_id: null,
+          from_location_id: showcaseLoc.id,
           to_location_id: warehouseLoc.id,
           quantity: item.quantity,
           movement_type: 'transfer',

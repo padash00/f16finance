@@ -14,7 +14,7 @@ type InventoryLocation = {
   id: string
   name: string
   code: string | null
-  location_type: 'catalog' | 'warehouse' | 'point_display'
+  location_type: 'warehouse' | 'point_display'
   company?: { id: string; name: string; code: string | null } | null
 }
 
@@ -103,12 +103,13 @@ export default function StoreRevisionsPage() {
   const [countedAt, setCountedAt] = useState(new Date().toISOString().slice(0, 10))
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<RevisionLine[]>([])
+  const [scope, setScope] = useState<'all' | 'warehouse' | 'showcase'>('all')
 
   const load = async () => {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/admin/store/revisions', { cache: 'no-store' })
+      const response = await fetch(`/api/admin/store/revisions?scope=${scope}`, { cache: 'no-store' })
       const json = (await response.json().catch(() => null)) as RevisionsResponse | null
       if (!response.ok || !json?.ok || !json.data) throw new Error(json?.error || 'Не удалось загрузить ревизии')
       setData(json.data)
@@ -123,7 +124,7 @@ export default function StoreRevisionsPage() {
 
   useEffect(() => {
     void load()
-  }, [])
+  }, [scope])
 
   const activeLocations = data?.locations || []
   const selectedLocation = activeLocations.find((location) => location.id === locationId) || null
@@ -232,6 +233,12 @@ export default function StoreRevisionsPage() {
       {error ? <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
       {success ? <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div> : null}
 
+      <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+        <button type="button" onClick={() => setScope('all')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'all' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Все</button>
+        <button type="button" onClick={() => setScope('warehouse')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'warehouse' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Подсобка</button>
+        <button type="button" onClick={() => setScope('showcase')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'showcase' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Витрина</button>
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card className="border-white/10 p-5">
           <div className="mb-4">
@@ -248,7 +255,7 @@ export default function StoreRevisionsPage() {
                   <SelectContent>
                     {activeLocations.map((location) => (
                       <SelectItem key={location.id} value={location.id}>
-                        {location.location_type === 'catalog' ? 'Каталог' : location.location_type === 'warehouse' ? 'Склад' : 'Витрина'} · {location.company?.name || location.name}
+                        {location.location_type === 'warehouse' ? 'Подсобка' : 'Витрина'} · {location.company?.name || location.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

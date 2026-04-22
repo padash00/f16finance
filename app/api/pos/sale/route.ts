@@ -183,7 +183,7 @@ export async function POST(request: Request) {
           .from('inventory_locations')
           .select('id, location_type')
           .eq('company_id', companyId)
-          .in('location_type', ['catalog', 'warehouse'])
+          .in('location_type', ['point_display', 'warehouse'])
           .eq('is_active', true),
       ])
 
@@ -197,12 +197,11 @@ export async function POST(request: Request) {
       return json({ error: 'invalid-location' }, 400)
     }
 
-    const catalogLocId = (companyLocations || []).find((l: any) => l.location_type === 'catalog')?.id
-    const warehouseLocId = (companyLocations || []).find((l: any) => l.location_type === 'warehouse')?.id
-    if (!catalogLocId) return json({ error: 'catalog-location-missing' }, 400)
+    const pointDisplayLocId = (companyLocations || []).find((l: any) => l.location_type === 'point_display')?.id
+    if (!pointDisplayLocId) return json({ error: 'point-display-location-missing' }, 400)
 
-    // Баланс витрины = catalog - warehouse (виртуально)
-    const balanceLocs = [catalogLocId, warehouseLocId].filter(Boolean) as string[]
+    // Физическая витрина: продажи допускаются только по прямому остатку point_display
+    const balanceLocs = [pointDisplayLocId]
     const { data: balanceRows, error: balanceError } = await supabase
       .from('inventory_balances')
       .select('item_id, location_id, quantity')
@@ -210,12 +209,10 @@ export async function POST(request: Request) {
       .in('item_id', itemIds)
     if (balanceError) throw balanceError
 
-    const catalogMap = new Map<string, number>()
-    const warehouseMap = new Map<string, number>()
+    const showcaseMap = new Map<string, number>()
     for (const row of balanceRows || []) {
       const q = Number(row.quantity || 0)
-      if (row.location_id === catalogLocId) catalogMap.set(row.item_id, q)
-      else if (row.location_id === warehouseLocId) warehouseMap.set(row.item_id, q)
+      if (row.location_id === pointDisplayLocId) showcaseMap.set(row.item_id, q)
     }
 
     const itemMap = new Map((itemRows || []).map((row: any) => [row.id, row]))
@@ -227,9 +224,7 @@ export async function POST(request: Request) {
         return json({ error: `item-not-found:${item.item_id}` }, 400)
       }
 
-      const catalogQ = catalogMap.get(item.item_id) || 0
-      const warehouseQ = warehouseMap.get(item.item_id) || 0
-      const showcaseQ = Math.max(0, catalogQ - warehouseQ)
+      const showcaseQ = showcaseMap.get(item.item_id) || 0
       if (item.quantity > showcaseQ + 0.0001) {
         return json({ error: `Недостаточно остатка на витрине для товара «${dbItem.name}» (доступно: ${showcaseQ})` }, 400)
       }
@@ -417,7 +412,7 @@ export async function POST(request: Request) {
 
     if (!saleId) throw new Error('pos-sale-save-failed')
 
-    checkAndNotifyLowStock(itemIds, catalogLocId).catch(() => null)
+    checkAndNotifyLowStock(itemIds, pointDisplayLocId).catch(() => null)
 
     const { data: receiptSale, error: receiptError } = await supabase
       .from('point_sales')
