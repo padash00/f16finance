@@ -137,18 +137,13 @@ export async function GET(request: Request) {
       .map((row: any) => ({ item_id: String(row.item_id || ''), quantity: Number(row.quantity || 0) }))
       .filter((row: any) => row.item_id && row.quantity > 0)
 
-    const itemIds = [...new Set(balanceRows.map((row) => row.item_id))]
-    let items: any[] = []
-    if (itemIds.length > 0) {
-      const { data: fetchedItems, error: itemsError } = await supabase
-        .from('inventory_items')
-        .select('id, name, barcode, unit, sale_price, category:category_id(id, name)')
-        .eq('is_active', true)
-        .in('id', itemIds)
-        .order('name', { ascending: true })
-      if (itemsError) throw itemsError
-      items = fetchedItems || []
-    }
+    const { data: fetchedItems, error: itemsError } = await supabase
+      .from('inventory_items')
+      .select('id, name, barcode, unit, sale_price, category:category_id(id, name)')
+      .eq('is_active', true)
+      .order('name', { ascending: true })
+    if (itemsError) throw itemsError
+    const items: any[] = fetchedItems || []
 
     const balanceMap = new Map<string, number>(balanceRows.map((row) => [row.item_id, row.quantity]))
 
