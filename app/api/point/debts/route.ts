@@ -4,8 +4,9 @@ import { weekStartUtcISO } from '@/lib/core/date'
 import { writeAuditLog, writeNotificationLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { requirePointDevice } from '@/lib/server/point-devices'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
-import { sendOperatorDebtTelegramSnapshot } from '@/lib/server/services/salary'
+import { buildPointDebtTelegramMessage, sendOperatorDebtTelegramSnapshot } from '@/lib/server/services/salary'
 import { validateAdminToken } from '@/lib/server/admin-tokens'
+import { sendTelegram } from '@/lib/server/telegram'
 
 type CreateDebtBody = {
   action: 'createDebt'
@@ -104,35 +105,53 @@ async function normalizePointDebtDebtor(params: {
   supabase: any
   rawOperatorId: string | null
   payloadClientName: string | null
-}): Promise<{ operatorId: string | null; clientName: string | null }> {
+}): Promise<{
+  operatorId: string | null
+  clientName: string | null
+  staffChatId: string | null
+  staffName: string | null
+}> {
   const raw = params.rawOperatorId?.trim() || null
   let clientName = params.payloadClientName?.trim() || null
 
   if (!raw) {
-    return { operatorId: null, clientName }
+    return { operatorId: null, clientName, staffChatId: null, staffName: null }
   }
 
   if (raw.startsWith('staff:')) {
     const staffId = raw.slice('staff:'.length)
     if (!DEBTOR_UUID_RE.test(staffId)) {
-      return { operatorId: null, clientName }
+      return { operatorId: null, clientName, staffChatId: null, staffName: null }
     }
+    let staffChatId: string | null = null
+    let staffName: string | null = null
     if (!clientName) {
       const { data: st, error } = await params.supabase
         .from('staff')
-        .select('full_name, short_name')
+        .select('full_name, short_name, telegram_chat_id')
         .eq('id', staffId)
         .maybeSingle()
       if (error) throw error
       clientName = (st?.short_name || st?.full_name || '').trim() || null
+      staffChatId = st?.telegram_chat_id ? String(st.telegram_chat_id).trim() : null
+      staffName = (st?.short_name || st?.full_name || '').trim() || null
+    } else {
+      const { data: st, error } = await params.supabase
+        .from('staff')
+        .select('full_name, short_name, telegram_chat_id')
+        .eq('id', staffId)
+        .maybeSingle()
+      if (error) throw error
+      staffChatId = st?.telegram_chat_id ? String(st.telegram_chat_id).trim() : null
+      staffName = (st?.short_name || st?.full_name || '').trim() || null
     }
-    return { operatorId: null, clientName }
+    return { operatorId: null, clientName, staffChatId, staffName }
   }
 
   if (raw.startsWith('orgmember:')) {
     const omId = raw.slice('orgmember:'.length)
     if (!DEBTOR_UUID_RE.test(omId)) {
-      return { operatorId: null, clientName }
+      return { operatorId: null, clientName, staffChatId: null, staffName: null }
     }
     if (!clientName) {
       const { data: om, error } = await params.supabase
@@ -143,10 +162,10 @@ async function normalizePointDebtDebtor(params: {
       if (error) throw error
       clientName = om?.email?.trim() || null
     }
-    return { operatorId: null, clientName }
+    return { operatorId: null, clientName, staffChatId: null, staffName: null }
   }
 
-  return { operatorId: raw, clientName }
+  return { operatorId: raw, clientName, staffChatId: null, staffName: null }
 }
 
 async function findAggregateDebt(params: {
@@ -349,7 +368,7 @@ export async function POST(request: Request) {
       if (!itemName) return json({ error: 'item-name-required' }, 400)
       if (totalAmount <= 0) return json({ error: 'amount-required' }, 400)
 
-      let { operatorId, clientName } = await normalizePointDebtDebtor({
+      let { operatorId, clientName, staffChatId, staffName } = await normalizePointDebtDebtor({
         supabase,
         rawOperatorId: payload.operator_id?.trim() || null,
         payloadClientName: payload.client_name?.trim() || null,
@@ -468,6 +487,7 @@ export async function POST(request: Request) {
               total: totalAmount,
               pointName: device.name,
               companyName: device.company?.name || null,
+              comment: note,
             },
           })
 
@@ -496,6 +516,63 @@ export async function POST(request: Request) {
             payload: {
               kind: 'point-debt-notify',
               operator_id: operator.id,
+              point_device_id: device.id,
+              error: notificationError?.message || 'telegram-send-failed',
+            },
+          })
+        }
+      }
+
+      if (!operator?.id && staffChatId) {
+        try {
+          const safeName = (staffName || clientName || 'Сотрудник').trim()
+          const { data: staffDebtRows } = await supabase
+            .from('debts')
+            .select('amount')
+            .is('operator_id', null)
+            .eq('client_name', safeName)
+            .eq('week_start', weekStart)
+            .eq('status', 'active')
+          const weekDebtTotal = (staffDebtRows || []).reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0)
+          const text = buildPointDebtTelegramMessage({
+            debtorName: safeName,
+            weekStart,
+            weekDebtTotal,
+            lastItem: {
+              name: itemName,
+              qty: quantity,
+              total: totalAmount,
+              pointName: device.name || 'Точка',
+              companyName: device.company?.name || device.company_id,
+              comment: note,
+            },
+          })
+          await sendTelegram(text, staffChatId)
+
+          await writeNotificationLog(supabase, {
+            channel: 'telegram',
+            recipient: staffChatId,
+            status: 'sent',
+            payload: {
+              kind: 'point-debt-notify-staff',
+              point_device_id: device.id,
+              point_device_name: device.name,
+              company_id: device.company_id,
+              company_name: device.company?.name || null,
+              client_name: safeName,
+              item_name: itemName,
+              quantity,
+              total_amount: totalAmount,
+              week_start: weekStart,
+            },
+          })
+        } catch (notificationError: any) {
+          await writeNotificationLog(supabase, {
+            channel: 'telegram',
+            recipient: staffChatId,
+            status: 'failed',
+            payload: {
+              kind: 'point-debt-notify-staff',
               point_device_id: device.id,
               error: notificationError?.message || 'telegram-send-failed',
             },

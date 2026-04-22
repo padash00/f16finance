@@ -90,6 +90,33 @@ export function buildSalaryTelegramMessage(params: {
   return text
 }
 
+export function buildPointDebtTelegramMessage(params: {
+  debtorName: string
+  weekStart: string
+  weekDebtTotal: number
+  lastItem: {
+    name: string
+    qty: number
+    total: number
+    pointName?: string | null
+    companyName?: string | null
+    comment?: string | null
+  }
+}) {
+  const place = [params.lastItem.pointName, params.lastItem.companyName].filter(Boolean).join(' · ')
+  let text = `<b>🧾 Новый долг</b>\n\n`
+  text += `👤 ${escapeHtml(params.debtorName)}\n`
+  text += `🛒 ${escapeHtml(params.lastItem.name)} × ${params.lastItem.qty}\n`
+  text += `💵 Сумма позиции: <b>${formatMoney(params.lastItem.total)}</b>\n`
+  if (place) text += `📍 ${escapeHtml(place)}\n`
+  text += `🗓 Неделя: <code>${escapeHtml(params.weekStart)}</code>\n`
+  if (params.lastItem.comment?.trim()) {
+    text += `💬 ${escapeHtml(params.lastItem.comment.trim())}\n`
+  }
+  text += `\n📌 Долг за неделю: <b>${formatMoney(params.weekDebtTotal)}</b>`
+  return text
+}
+
 export async function sendOperatorDebtTelegramSnapshot(
   supabase: AdminSupabaseClient,
   params: {
@@ -103,6 +130,7 @@ export async function sendOperatorDebtTelegramSnapshot(
       total: number
       pointName?: string | null
       companyName?: string | null
+      comment?: string | null
     }
   },
 ) {
@@ -110,20 +138,19 @@ export async function sendOperatorDebtTelegramSnapshot(
     return { sent: false as const, reason: 'telegram-missing' }
   }
 
-  const snapshot = await getOperatorSalarySnapshot(supabase, {
-    operatorId: params.operatorId,
-    dateFrom: params.weekStart,
-    dateTo: addDaysISO(params.weekStart, 6),
-    weekStart: params.weekStart,
-  })
+  const { data: debtRows, error: debtError } = await supabase
+    .from('debts')
+    .select('amount')
+    .eq('operator_id', params.operatorId)
+    .eq('week_start', params.weekStart)
+    .eq('status', 'active')
+  if (debtError) throw debtError
+  const weekDebtTotal = (debtRows || []).reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0)
 
-  const text = buildSalaryTelegramMessage({
-    operatorName: params.operatorName,
-    dateFrom: params.weekStart,
-    dateTo: addDaysISO(params.weekStart, 6),
-    weekStart: snapshot.weekStart,
-    weekEnd: snapshot.weekEnd,
-    summary: snapshot,
+  const text = buildPointDebtTelegramMessage({
+    debtorName: params.operatorName,
+    weekStart: params.weekStart,
+    weekDebtTotal,
     lastItem: params.lastItem,
   })
 
