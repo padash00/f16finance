@@ -233,6 +233,16 @@ export async function POST(req: Request) {
       const payDate = new Date(pay_date)
       const monthLabel = payDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
+      const { data: previousPayments, error: previousPaymentsError } = await supabase
+        .from('staff_salary_payments')
+        .select('pay_date')
+        .eq('staff_id', staff_id)
+        .lte('pay_date', pay_date)
+        .order('pay_date', { ascending: false })
+        .limit(1)
+      if (previousPaymentsError) throw previousPaymentsError
+      const previousPayDate = previousPayments?.[0]?.pay_date ? String(previousPayments[0].pay_date) : null
+
       // 1. Create expense record (required for consistency with salary expenses flow)
       const expenseComment = `Зарплата: ${staffMember?.full_name || 'сотрудник'}${slotLabel ? ` (${slotLabel} ${monthLabel})` : ''}`
       const expenseResult = await supabase
@@ -275,6 +285,7 @@ export async function POST(req: Request) {
         .eq('staff_id', staff_id)
         .eq('status', 'active')
         .lte('date', pay_date)
+        .gt('date', previousPayDate || '0001-01-01')
       if (adjPayError) throw adjPayError
 
       await writeAuditLog(supabase, { entityType: 'staff-payment', entityId: String(payment.id), action: 'create', payload: { staff_id, total, pay_date, slot, expense_id: expenseId } })

@@ -52,21 +52,34 @@ function monthPrefixFromIsoDate(isoDate: string) {
 function filterStaffAdjustmentsForSlot(
   adjs: StaffAdjustment[],
   staffId: string,
+  payments: StaffPayment[],
   period?: { from: string; to: string } | null,
 ) {
+  const periodEnd = period?.to || '9999-12-31'
+  const lastPaymentDate =
+    payments
+      .filter((p) => p.staff_id === staffId && String(p.pay_date || '') <= periodEnd)
+      .map((p) => String(p.pay_date || ''))
+      .filter(Boolean)
+      .sort()
+      .pop() || null
+
   return adjs.filter((a) => {
     if (a.staff_id !== staffId || a.status !== 'active') return false
     if (!period) return true
-    return a.date <= period.to
+    if (a.date > period.to) return false
+    if (lastPaymentDate && a.date <= lastPaymentDate) return false
+    return true
   })
 }
 
 function calcStaffToPay(
   s: StaffMember,
   adjs: StaffAdjustment[],
+  payments: StaffPayment[],
   period?: { from: string; to: string } | null,
 ) {
-  const active = filterStaffAdjustmentsForSlot(adjs, s.id, period)
+  const active = filterStaffAdjustmentsForSlot(adjs, s.id, payments, period)
   const half = Math.round(s.monthly_salary / 2)
   const bonuses = active.filter(a => a.kind === 'bonus').reduce((sum, a) => sum + a.amount, 0)
   const debts = active.filter(a => a.kind === 'debt').reduce((sum, a) => sum + a.amount, 0)
@@ -702,10 +715,11 @@ export default function SalaryPage() {
             ) : (
               <div className="divide-y divide-white/5">
                 {staffSalary.staff.map((s) => {
-                  const calc = calcStaffToPay(s, staffSalary.adjustments, currentStaffSalaryPeriod)
+                  const calc = calcStaffToPay(s, staffSalary.adjustments, staffSalary.payments, currentStaffSalaryPeriod)
                   const activeAdjs = filterStaffAdjustmentsForSlot(
                     staffSalary.adjustments,
                     s.id,
+                    staffSalary.payments,
                     currentStaffSalaryPeriod,
                   )
                   const recentPayments = staffSalary.payments
@@ -888,7 +902,7 @@ export default function SalaryPage() {
       ) : null}
 
       {staffPayModal ? (
-        <Modal title="Выплата зарплаты" subtitle={`${staffPayModal.full_name} · к выплате ${money(calcStaffToPay(staffPayModal, staffSalary?.adjustments || [], getSalarySlotRange(staffPayDate, staffPaySlot)).toPay)}`} onClose={() => setStaffPayModal(null)}>
+        <Modal title="Выплата зарплаты" subtitle={`${staffPayModal.full_name} · к выплате ${money(calcStaffToPay(staffPayModal, staffSalary?.adjustments || [], staffSalary?.payments || [], getSalarySlotRange(staffPayDate, staffPaySlot)).toPay)}`} onClose={() => setStaffPayModal(null)}>
           <form className="space-y-4" onSubmit={submitStaffPayment}>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
