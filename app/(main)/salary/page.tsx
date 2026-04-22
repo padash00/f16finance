@@ -224,6 +224,7 @@ export default function SalaryPage() {
   const [staffAdjModal, setStaffAdjModal] = useState<StaffMember | null>(null)
   const [staffPayModal, setStaffPayModal] = useState<StaffMember | null>(null)
   const [staffAdjKind, setStaffAdjKind] = useState<'debt' | 'fine' | 'bonus' | 'advance'>('fine')
+  const [staffAdjCompanyId, setStaffAdjCompanyId] = useState('')
   const [staffAdjAmount, setStaffAdjAmount] = useState('')
   const [staffAdjDate, setStaffAdjDate] = useState(todayISO())
   const [staffAdjComment, setStaffAdjComment] = useState('')
@@ -258,12 +259,13 @@ export default function SalaryPage() {
     if (!staffAdjModal) return
     const amount = parseMoney(staffAdjAmount)
     if (amount <= 0) return setError('Сумма должна быть > 0')
+    if (staffAdjKind === 'advance' && !staffAdjCompanyId) return setError('Для аванса выберите компанию')
     setStaffAdjSaving(true); setError(null)
     try {
-      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addAdjustment', staff_id: staffAdjModal.id, kind: staffAdjKind, amount, date: staffAdjDate, comment: staffAdjComment.trim() || null }) })
+      const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addAdjustment', staff_id: staffAdjModal.id, kind: staffAdjKind, amount, date: staffAdjDate, company_id: staffAdjKind === 'advance' ? staffAdjCompanyId : null, comment: staffAdjComment.trim() || null }) })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json?.error || 'Ошибка')
-      setStaffAdjModal(null); setStaffAdjAmount(''); setStaffAdjComment('')
+      setStaffAdjModal(null); setStaffAdjAmount(''); setStaffAdjComment(''); setStaffAdjCompanyId('')
       await loadStaffSalary()
     } catch (e: any) { setError(e?.message || 'Не удалось сохранить') }
     finally { setStaffAdjSaving(false) }
@@ -759,7 +761,7 @@ export default function SalaryPage() {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          <Button type="button" disabled={isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
+                          <Button type="button" disabled={isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
                           <Button type="button" disabled={isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
                           <Button type="button" disabled={isOperatorBased || isMonthClosed} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
                         </div>
@@ -907,6 +909,17 @@ export default function SalaryPage() {
                 <label className="mb-2 block text-sm text-slate-300">Дата</label>
                 <input className={input} type="date" value={staffAdjDate} onChange={e => setStaffAdjDate(e.target.value)} />
               </div>
+              {staffAdjKind === 'advance' ? (
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm text-slate-300">Компания (расход по авансу)</label>
+                  <select className={selectCls} value={staffAdjCompanyId} onChange={e => setStaffAdjCompanyId(e.target.value)}>
+                    <option value="">Выберите компанию</option>
+                    {(data?.companies || []).map((c) => (
+                      <option key={c.id} value={c.id}>{c.name || c.code || c.id}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div className="md:col-span-2">
                 <label className="mb-2 block text-sm text-slate-300">Сумма</label>
                 <input className={input} type="text" placeholder="0" value={staffAdjAmount} onChange={e => setStaffAdjAmount(e.target.value)} />

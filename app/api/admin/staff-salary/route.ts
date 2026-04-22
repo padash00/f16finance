@@ -174,10 +174,14 @@ export async function POST(req: Request) {
 
     // ── Add adjustment (debt / fine / bonus / advance) ──────────────────────
     if (action === 'addAdjustment') {
-      const { staff_id, kind, amount, date, comment } = body
+      const { staff_id, kind, amount, date, comment, company_id } = body
       if (!staff_id || !kind || !amount) return json({ error: 'staff_id, kind, amount обязательны' }, 400)
       if (!['debt', 'fine', 'bonus', 'advance'].includes(kind)) return json({ error: 'Неверный kind' }, 400)
       if (amount <= 0) return json({ error: 'Сумма должна быть > 0' }, 400)
+
+      if (kind === 'advance' && !company_id) {
+        return json({ error: 'Для аванса нужно выбрать компанию' }, 400)
+      }
 
       const { data, error } = await supabase
         .from('staff_adjustments')
@@ -186,6 +190,29 @@ export async function POST(req: Request) {
         .single()
 
       if (error) throw error
+
+      if (kind === 'advance') {
+        const { data: staffMember } = await supabase
+          .from('staff')
+          .select('full_name')
+          .eq('id', staff_id)
+          .maybeSingle()
+        const advanceComment = comment?.trim() || `Аванс: ${staffMember?.full_name || 'сотрудник'}`
+        const { error: expenseError } = await supabase
+          .from('expenses')
+          .insert({
+            date: date || new Date().toISOString().slice(0, 10),
+            company_id,
+            category: 'Аванс',
+            cash_amount: Math.round(amount),
+            kaspi_amount: 0,
+            comment: advanceComment,
+            source_type: 'salary_advance',
+            source_id: `staff-adjustment:${String(data.id)}`,
+          })
+        if (expenseError) throw expenseError
+      }
+
       await writeAuditLog(supabase, { entityType: 'staff-adjustment', entityId: data.id, action: 'create', payload: { staff_id, kind, amount, date } })
       return json({ ok: true, data })
     }
