@@ -80,8 +80,7 @@ export async function GET(req: Request) {
       supabase
         .from('debts')
         .select('id, operator_id, amount, status, week_start, comment, client_name, created_at')
-        .eq('status', 'active')
-        .not('operator_id', 'is', null),
+        .eq('status', 'active'),
     ])
 
     if (staffRes.error) throw staffRes.error
@@ -102,12 +101,15 @@ export async function GET(req: Request) {
       const staffId = String((row as any).id)
       const telegram = String((row as any).telegram_chat_id || '').trim()
       if (telegram) staffByTelegram.set(telegram, staffId)
-      const nameKey = normalizePersonName((row as any).full_name || (row as any).short_name || '')
-      if (nameKey) staffByName.set(nameKey, staffId)
+      const fullNameKey = normalizePersonName((row as any).full_name || '')
+      const shortNameKey = normalizePersonName((row as any).short_name || '')
+      if (fullNameKey) staffByName.set(fullNameKey, staffId)
+      if (shortNameKey) staffByName.set(shortNameKey, staffId)
     }
 
     const adminOps = (adminOpsRes.data ?? []) as any[]
     const canonicalStaffIdByOperatorId = new Map<string, string>()
+    const canonicalByAdminOpName = new Map<string, string>()
     for (const op of adminOps) {
       const opId = String(op.id)
       const opTelegram = String(op.telegram_chat_id || '').trim()
@@ -116,7 +118,9 @@ export async function GET(req: Request) {
         (opTelegram && staffByTelegram.get(opTelegram)) ||
         (opNameKey && staffByName.get(opNameKey)) ||
         null
-      canonicalStaffIdByOperatorId.set(opId, matchedStaffId || opId)
+      const canonicalId = matchedStaffId || opId
+      canonicalStaffIdByOperatorId.set(opId, canonicalId)
+      if (opNameKey) canonicalByAdminOpName.set(opNameKey, canonicalId)
     }
 
     const virtualStaffFromOperators = adminOps
@@ -140,17 +144,41 @@ export async function GET(req: Request) {
 
     const adminOperatorIdSet = new Set(adminOps.map((op) => String(op.id)))
     const syntheticDebtAdjustments = ((adminOpDebtsRes.data ?? []) as any[])
-      .filter((row) => row.operator_id && adminOperatorIdSet.has(String(row.operator_id)))
-      .map((row) => ({
-        id: `operator-debt:${String(row.id)}`,
-        staff_id: canonicalStaffIdByOperatorId.get(String(row.operator_id)) || String(row.operator_id),
-        kind: 'debt',
-        amount: Number(row.amount || 0),
-        date: String(row.week_start || new Date().toISOString().slice(0, 10)),
-        created_at: row.created_at ? String(row.created_at) : null,
-        comment: row.comment || row.client_name || 'Долг из операторской программы',
-        status: String(row.status || 'active'),
-      }))
+      .map((row) => {
+        const operatorId = row.operator_id ? String(row.operator_id) : null
+        if (operatorId && adminOperatorIdSet.has(operatorId)) {
+          return {
+            id: `operator-debt:${String(row.id)}`,
+            staff_id: canonicalStaffIdByOperatorId.get(operatorId) || operatorId,
+            kind: 'debt',
+            amount: Number(row.amount || 0),
+            date: String(row.week_start || new Date().toISOString().slice(0, 10)),
+            created_at: row.created_at ? String(row.created_at) : null,
+            comment: row.comment || row.client_name || 'Долг из операторской программы',
+            status: String(row.status || 'active'),
+          }
+        }
+
+        // Debts created for staff/owners from point app come as operator_id = null + client_name.
+        const clientNameKey = normalizePersonName(row.client_name || '')
+        const matchedStaffId = clientNameKey
+          ? staffByName.get(clientNameKey) || canonicalByAdminOpName.get(clientNameKey) || null
+          : null
+        if (matchedStaffId) {
+          return {
+            id: `operator-debt:${String(row.id)}`,
+            staff_id: matchedStaffId,
+            kind: 'debt',
+            amount: Number(row.amount || 0),
+            date: String(row.week_start || new Date().toISOString().slice(0, 10)),
+            created_at: row.created_at ? String(row.created_at) : null,
+            comment: row.comment || row.client_name || 'Долг из операторской программы',
+            status: String(row.status || 'active'),
+          }
+        }
+        return null
+      })
+      .filter(Boolean)
 
     return json({
       can_edit: access.isSuperAdmin,
