@@ -49,6 +49,10 @@ function monthPrefixFromIsoDate(isoDate: string) {
   return isoDate.slice(0, 7)
 }
 
+function monthPrefixFromPaymentDate(paymentDate: string | null | undefined) {
+  return String(paymentDate || '').slice(0, 7)
+}
+
 function filterStaffAdjustmentsForSlot(
   adjs: StaffAdjustment[],
   staffId: string,
@@ -729,6 +733,12 @@ export default function SalaryPage() {
                     staffSalary.payments,
                     currentStaffSalaryPeriod,
                   )
+                  const currentMonthPayments = staffSalary.payments.filter(
+                    (p) => p.staff_id === s.id && monthPrefixFromPaymentDate(p.pay_date) === currentStaffSalaryMonthPrefix,
+                  )
+                  const hasFirstPayoutThisMonth = currentMonthPayments.some((p) => p.slot === 'first')
+                  const hasSecondPayoutThisMonth = currentMonthPayments.some((p) => p.slot === 'second')
+                  const isMonthClosed = hasFirstPayoutThisMonth && hasSecondPayoutThisMonth
                   const recentPayments = staffSalary.payments
                     .filter((p) => p.staff_id === s.id && String(p.pay_date || '').startsWith(currentStaffSalaryMonthPrefix))
                     .slice(0, 3)
@@ -751,9 +761,12 @@ export default function SalaryPage() {
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" disabled={isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
                           <Button type="button" disabled={isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
-                          <Button type="button" disabled={isOperatorBased} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
+                          <Button type="button" disabled={isOperatorBased || isMonthClosed} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
                         </div>
                       </div>
+                      {isMonthClosed ? (
+                        <div className="mt-2 text-xs text-amber-300">Месяц закрыт: оба слота выплаты уже проведены. Следующая выплата доступна в следующем месяце.</div>
+                      ) : null}
                       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-slate-500">Пол-оклада</div><div className="mt-1 text-sm font-semibold text-white">{money(calc.half)}</div></div>
                         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-center"><div className="text-[11px] uppercase tracking-wide text-emerald-400/70">Бонусы</div><div className="mt-1 text-sm font-semibold text-emerald-300">+{money(calc.bonuses)}</div></div>

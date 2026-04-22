@@ -240,9 +240,32 @@ export async function POST(req: Request) {
       if (!company_id) return json({ error: 'company_id обязателен' }, 400)
       const total = Math.round((cash_amount || 0) + (kaspi_amount || 0))
       if (total <= 0) return json({ error: 'Сумма выплаты должна быть > 0' }, 400)
-      const normalizedSlot = slot === 'first' || slot === 'second' ? slot : 'other'
+      if (slot !== 'first' && slot !== 'second') {
+        return json({ error: 'Слот выплаты должен быть first или second' }, 400)
+      }
+      const normalizedSlot = slot
       const monthRange = monthRangeFromDate(pay_date)
       if (!monthRange) return json({ error: 'Некорректная дата выплаты' }, 400)
+
+      const { data: monthPayments, error: monthPaymentsError } = await supabase
+        .from('staff_salary_payments')
+        .select('id, slot, pay_date')
+        .eq('staff_id', staff_id)
+        .gte('pay_date', monthRange.from)
+        .lte('pay_date', monthRange.to)
+      if (monthPaymentsError) throw monthPaymentsError
+
+      const monthPaidSlots = new Set(
+        (monthPayments || [])
+          .map((row: any) => String(row.slot || ''))
+          .filter((value) => value === 'first' || value === 'second'),
+      )
+      if (monthPaidSlots.has('first') && monthPaidSlots.has('second')) {
+        return json(
+          { error: `Месяц ${monthRange.monthKey} уже закрыт по выплатам. Следующая выплата доступна в следующем месяце.` },
+          409,
+        )
+      }
 
       // Prevent duplicate payout for the same employee/slot/month.
       const { data: duplicatePayment, error: duplicatePaymentError } = await supabase
