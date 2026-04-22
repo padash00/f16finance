@@ -14,6 +14,20 @@ function normalizePersonName(value: string | null | undefined) {
     .replace(/\s+/g, ' ')
 }
 
+function monthRangeFromDate(payDate: string) {
+  const [yearRaw, monthRaw] = String(payDate || '').split('-')
+  const year = Number(yearRaw)
+  const month = Number(monthRaw)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null
+  const mm = String(month).padStart(2, '0')
+  const endDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  return {
+    monthKey: `${year}-${mm}`,
+    from: `${year}-${mm}-01`,
+    to: `${year}-${mm}-${String(endDay).padStart(2, '0')}`,
+  }
+}
+
 // Only super_admin and owner can access staff salary
 async function checkAccess(req: Request) {
   const access = await getRequestAccessContext(req)
@@ -226,22 +240,45 @@ export async function POST(req: Request) {
       if (!company_id) return json({ error: 'company_id обязателен' }, 400)
       const total = Math.round((cash_amount || 0) + (kaspi_amount || 0))
       if (total <= 0) return json({ error: 'Сумма выплаты должна быть > 0' }, 400)
+      const normalizedSlot = slot === 'first' || slot === 'second' ? slot : 'other'
+      const monthRange = monthRangeFromDate(pay_date)
+      if (!monthRange) return json({ error: 'Некорректная дата выплаты' }, 400)
+
+      // Prevent duplicate payout for the same employee/slot/month.
+      const { data: duplicatePayment, error: duplicatePaymentError } = await supabase
+        .from('staff_salary_payments')
+        .select('id, pay_date')
+        .eq('staff_id', staff_id)
+        .eq('slot', normalizedSlot)
+        .gte('pay_date', monthRange.from)
+        .lte('pay_date', monthRange.to)
+        .limit(1)
+        .maybeSingle()
+      if (duplicatePaymentError) throw duplicatePaymentError
+      if (duplicatePayment?.id) {
+        return json(
+          { error: `Выплата за слот "${normalizedSlot}" в ${monthRange.monthKey} уже проведена (${duplicatePayment.pay_date})` },
+          409,
+        )
+      }
 
       // Get staff name for expense comment
       const { data: staffMember } = await supabase.from('staff').select('full_name').eq('id', staff_id).single()
-      const slotLabel = slot === 'first' ? '1–15' : slot === 'second' ? '16–конец месяца' : ''
+      const slotLabel = normalizedSlot === 'first' ? '1–15' : normalizedSlot === 'second' ? '16–конец месяца' : ''
       const payDate = new Date(pay_date)
       const monthLabel = payDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
       const { data: previousPayments, error: previousPaymentsError } = await supabase
         .from('staff_salary_payments')
-        .select('pay_date')
+        .select('pay_date, created_at')
         .eq('staff_id', staff_id)
         .lte('pay_date', pay_date)
         .order('pay_date', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(1)
       if (previousPaymentsError) throw previousPaymentsError
       const previousPayDate = previousPayments?.[0]?.pay_date ? String(previousPayments[0].pay_date) : null
+      const previousPayCreatedAt = previousPayments?.[0]?.created_at ? String(previousPayments[0].created_at) : null
 
       // 1. Create expense record (required for consistency with salary expenses flow)
       const expenseComment = `Зарплата: ${staffMember?.full_name || 'сотрудник'}${slotLabel ? ` (${slotLabel} ${monthLabel})` : ''}`
@@ -255,7 +292,7 @@ export async function POST(req: Request) {
           kaspi_amount: Math.round(kaspi_amount || 0),
           comment: expenseComment,
           source_type: 'salary_payment',
-          source_id: `staff:${staff_id}:date:${pay_date}`,
+          source_id: `staff:${staff_id}:month:${monthRange.monthKey}:slot:${normalizedSlot}`,
         })
         .select('id')
         .single()
@@ -268,7 +305,7 @@ export async function POST(req: Request) {
         .insert({
           staff_id,
           pay_date,
-          slot: slot || 'other',
+          slot: normalizedSlot,
           amount: total,
           comment: comment?.trim() || null,
         })
@@ -277,16 +314,33 @@ export async function POST(req: Request) {
 
       if (payErr) throw payErr
 
-      // 3. Mark all active adjustments up to payment date as paid.
-      // This preserves carry-over between payouts across month boundary.
-      const { error: adjPayError } = await supabase
+      // 3. Mark active adjustments since previous payout up to current payout date as paid.
+      const { data: candidateAdjustments, error: adjFetchError } = await supabase
         .from('staff_adjustments')
-        .update({ status: 'paid' })
+        .select('id, date, created_at')
         .eq('staff_id', staff_id)
         .eq('status', 'active')
         .lte('date', pay_date)
-        .gt('date', previousPayDate || '0001-01-01')
-      if (adjPayError) throw adjPayError
+      if (adjFetchError) throw adjFetchError
+
+      const idsToClose = (candidateAdjustments || [])
+        .filter((row: any) => {
+          if (!previousPayDate) return true
+          const rowCreatedAt = row?.created_at ? String(row.created_at) : null
+          if (rowCreatedAt && previousPayCreatedAt) return rowCreatedAt > previousPayCreatedAt
+          if (rowCreatedAt && !previousPayCreatedAt) return true
+          if (!rowCreatedAt && previousPayCreatedAt) return false
+          return String(row?.date || '') > previousPayDate
+        })
+        .map((row: any) => String(row.id))
+
+      if (idsToClose.length > 0) {
+        const { error: adjPayError } = await supabase
+          .from('staff_adjustments')
+          .update({ status: 'paid' })
+          .in('id', idsToClose)
+        if (adjPayError) throw adjPayError
+      }
 
       await writeAuditLog(supabase, { entityType: 'staff-payment', entityId: String(payment.id), action: 'create', payload: { staff_id, total, pay_date, slot, expense_id: expenseId } })
       return json({ ok: true, payment, expense_id: expenseId })

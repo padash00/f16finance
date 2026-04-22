@@ -30,8 +30,8 @@ type ShiftBreakdown = { id: string; date: string; shift: string; companyCode: st
 
 // ─── Admin staff salary types ─────────────────────────────────────────────────
 type StaffMember = { id: string; full_name: string; short_name: string | null; role: string; monthly_salary: number; extra_day_company_code: string | null; extra_day_shift_type: string | null; telegram_chat_id: string | null; source_type?: 'staff' | 'operator' }
-type StaffAdjustment = { id: string; staff_id: string; kind: 'debt' | 'fine' | 'bonus' | 'advance'; amount: number; date: string; comment: string | null; status: string }
-type StaffPayment = { id: string; staff_id: string; pay_date: string; slot: string; amount: number; comment: string | null }
+type StaffAdjustment = { id: string; staff_id: string; kind: 'debt' | 'fine' | 'bonus' | 'advance'; amount: number; date: string; comment: string | null; status: string; created_at?: string | null }
+type StaffPayment = { id: string; staff_id: string; pay_date: string; slot: string; amount: number; comment: string | null; created_at?: string | null }
 type StaffSalaryData = { staff: StaffMember[]; adjustments: StaffAdjustment[]; payments: StaffPayment[]; salaryRules: { company_code: string; shift_type: string; base_per_shift: number }[] }
 
 function getSalarySlotRange(payDate: string, slot: 'first' | 'second') {
@@ -56,19 +56,26 @@ function filterStaffAdjustmentsForSlot(
   period?: { from: string; to: string } | null,
 ) {
   const periodEnd = period?.to || '9999-12-31'
-  const lastPaymentDate =
+  const lastPayment =
     payments
       .filter((p) => p.staff_id === staffId && String(p.pay_date || '') <= periodEnd)
-      .map((p) => String(p.pay_date || ''))
-      .filter(Boolean)
-      .sort()
-      .pop() || null
+      .sort((a, b) => {
+        const byDate = String(b.pay_date || '').localeCompare(String(a.pay_date || ''))
+        if (byDate !== 0) return byDate
+        return String(b.created_at || '').localeCompare(String(a.created_at || ''))
+      })[0] || null
 
   return adjs.filter((a) => {
     if (a.staff_id !== staffId || a.status !== 'active') return false
     if (!period) return true
     if (a.date > period.to) return false
-    if (lastPaymentDate && a.date <= lastPaymentDate) return false
+    if (!lastPayment) return true
+    if (a.created_at && lastPayment.created_at) {
+      return String(a.created_at) > String(lastPayment.created_at)
+    }
+    if (a.created_at && !lastPayment.created_at) return true
+    if (!a.created_at && lastPayment.created_at) return false
+    if (a.date <= String(lastPayment.pay_date || '')) return false
     return true
   })
 }
