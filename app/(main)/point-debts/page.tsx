@@ -228,7 +228,7 @@ export default function PointDebtsPage() {
       return
     }
     const ok = window.confirm(
-      `Списать ${selectedIds.length} поз. на сумму ${money(selectedTotal)}? Позиции исчезнут из долгов точки; агрегат по неделе уменьшится (как при оплате с кассы).`,
+      `Списать ${selectedIds.length} поз. на сумму ${money(selectedTotal)}? Позиции исчезнут только с этой страницы (долги с точки). Зарплата и колонка "Долги" не изменятся.`,
     )
     if (!ok) return
     setSettling(true)
@@ -373,7 +373,7 @@ export default function PointDebtsPage() {
           <span className="font-semibold">{data.pointClientAggregateHint.count}</span> активных агрегатов на сумму{' '}
           <span className="font-semibold">{money(data.pointClientAggregateHint.amount)}</span> (
           <code className="rounded bg-black/20 px-1">point-client</code>), но позиций сканера нет. Обычно это уже исправлено
-          выравниванием недели (UTC); если снова пусто — проверьте, что позиции не списаны и{' '}
+          выравниванием недели (UTC); если снова пусто — проверьте, что позиции не списаны на этой странице и{' '}
           <code className="rounded bg-black/20 px-1">week_start</code> в БД совпадает с выбранной неделей.
         </Card>
       ) : null}
@@ -509,9 +509,9 @@ export default function PointDebtsPage() {
 
       <Card className="border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
         <p>
-          Доступ с правами как у страницы «Зарплата». Списание выбранных строк повторяет логику оплаты с кассы: позиции
-          помечаются закрытыми, недельный агрегат <code className="rounded bg-white/10 px-1">debts</code> уменьшается. Для
-          полного закрытия всех долгов оператора за неделю по-прежнему можно использовать кнопку на странице зарплаты.
+          Доступ с правами как у страницы «Зарплата». Списание выбранных строк здесь влияет только на список{' '}
+          <code className="rounded bg-white/10 px-1">point_debt_items</code> (информативная витрина долгов с точки) и не
+          изменяет расчёты зарплаты / колонку «Долги».
         </p>
       </Card>
     </div>

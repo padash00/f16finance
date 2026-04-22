@@ -24,42 +24,6 @@ function normalizeMoney(value: unknown) {
   return Math.max(0, Math.round(amount))
 }
 
-async function findAggregateDebt(params: {
-  supabase: any
-  companyId: string
-  operatorId?: string | null
-  clientName: string
-  weekStart: string
-}) {
-  let query = params.supabase
-    .from('debts')
-    .select('id, amount, comment, client_name, operator_id')
-    .eq('company_id', params.companyId)
-    .eq('week_start', params.weekStart)
-    .eq('status', 'active')
-
-  if (params.operatorId) {
-    query = query.eq('operator_id', params.operatorId)
-  } else {
-    query = query.is('operator_id', null).eq('client_name', params.clientName)
-  }
-
-  const { data, error } = await query
-  if (error) throw error
-  if (!data || data.length === 0) return null
-
-  if (data.length > 1) {
-    const [keep, ...extras] = data as any[]
-    const mergedAmount = data.reduce((sum: number, r: any) => sum + normalizeMoney(r.amount), 0)
-    await params.supabase.from('debts').update({ amount: mergedAmount }).eq('id', keep.id)
-    const extraIds = extras.map((r: any) => r.id)
-    await params.supabase.from('debts').delete().in('id', extraIds)
-    return { ...keep, amount: mergedAmount }
-  }
-
-  return data[0]
-}
-
 async function settleOneDebtItem(params: {
   supabase: any
   item: {
@@ -80,22 +44,6 @@ async function settleOneDebtItem(params: {
     .eq('status', 'active')
 
   if (payUpdateError) throw payUpdateError
-
-  const aggDebt = await findAggregateDebt({
-    supabase,
-    companyId: item.company_id,
-    operatorId: item.operator_id || null,
-    clientName: ((item.client_name || 'Должник').trim() || 'Должник') as string,
-    weekStart: item.week_start,
-  })
-  if (aggDebt) {
-    const next = Math.max(0, normalizeMoney(aggDebt.amount) - normalizeMoney(item.total_amount))
-    if (next <= 0) {
-      await supabase.from('debts').update({ status: 'paid' }).eq('id', aggDebt.id)
-    } else {
-      await supabase.from('debts').update({ amount: next }).eq('id', aggDebt.id)
-    }
-  }
 }
 
 export async function GET(req: Request) {
