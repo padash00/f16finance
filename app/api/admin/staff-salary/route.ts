@@ -47,7 +47,8 @@ export async function GET(req: Request) {
   try {
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
-    if (!access.isSuperAdmin) return json({ error: 'forbidden' }, 403)
+    const canView = access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+    if (!canView) return json({ error: 'forbidden' }, 403)
 
     const supabase = createAdminSupabaseClient()
 
@@ -152,6 +153,7 @@ export async function GET(req: Request) {
       }))
 
     return json({
+      can_edit: access.isSuperAdmin,
       staff: [...baseStaff, ...virtualStaffFromOperators],
       adjustments: [...(adjRes.data ?? []), ...syntheticDebtAdjustments],
       payments: paymentsRes.data ?? [],

@@ -32,7 +32,7 @@ type ShiftBreakdown = { id: string; date: string; shift: string; companyCode: st
 type StaffMember = { id: string; full_name: string; short_name: string | null; role: string; monthly_salary: number; extra_day_company_code: string | null; extra_day_shift_type: string | null; telegram_chat_id: string | null; source_type?: 'staff' | 'operator' }
 type StaffAdjustment = { id: string; staff_id: string; kind: 'debt' | 'fine' | 'bonus' | 'advance'; amount: number; date: string; comment: string | null; status: string; created_at?: string | null }
 type StaffPayment = { id: string; staff_id: string; pay_date: string; slot: string; amount: number; comment: string | null; created_at?: string | null }
-type StaffSalaryData = { staff: StaffMember[]; adjustments: StaffAdjustment[]; payments: StaffPayment[]; salaryRules: { company_code: string; shift_type: string; base_per_shift: number }[] }
+type StaffSalaryData = { can_edit?: boolean; staff: StaffMember[]; adjustments: StaffAdjustment[]; payments: StaffPayment[]; salaryRules: { company_code: string; shift_type: string; base_per_shift: number }[] }
 
 function getSalarySlotRange(payDate: string, slot: 'first' | 'second') {
   const [yearRaw, monthRaw] = String(payDate || '').split('-')
@@ -253,9 +253,11 @@ export default function SalaryPage() {
     finally { setStaffSalaryLoading(false) }
   }, [])
   useEffect(() => { void loadStaffSalary() }, [loadStaffSalary])
+  const canEditStaffSalary = staffSalary?.can_edit === true
 
   const submitStaffAdjustment = async (e: FormEvent) => {
     e.preventDefault()
+    if (!canEditStaffSalary) return setError('Доступ только для просмотра')
     if (!staffAdjModal) return
     const amount = parseMoney(staffAdjAmount)
     if (amount <= 0) return setError('Сумма должна быть > 0')
@@ -272,6 +274,7 @@ export default function SalaryPage() {
   }
 
   const submitStaffExtraDay = async (staffId: string) => {
+    if (!canEditStaffSalary) return setError('Доступ только для просмотра')
     try {
       const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'addExtraDay', staff_id: staffId, date: todayISO() }) })
       const json = await res.json().catch(() => null)
@@ -282,6 +285,7 @@ export default function SalaryPage() {
 
   const submitStaffPayment = async (e: FormEvent) => {
     e.preventDefault()
+    if (!canEditStaffSalary) return setError('Доступ только для просмотра')
     if (!staffPayModal) return
     if (!staffPayCompanyId) return setError('Выберите компанию для расхода по зарплате')
     const cash = parseMoney(staffPayCash), kaspi = parseMoney(staffPayKaspi)
@@ -298,6 +302,7 @@ export default function SalaryPage() {
   }
 
   const removeStaffAdjustment = async (id: string) => {
+    if (!canEditStaffSalary) return setError('Доступ только для просмотра')
     if (!window.confirm('Аннулировать корректировку?')) return
     try {
       await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'removeAdjustment', id }) })
@@ -306,6 +311,7 @@ export default function SalaryPage() {
   }
 
   const deleteStaffPayment = async (id: string, amount: number) => {
+    if (!canEditStaffSalary) return setError('Доступ только для просмотра')
     if (!window.confirm(`Аннулировать выплату ${money(amount)}?`)) return
     try {
       const res = await fetch('/api/admin/staff-salary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deletePayment', id }) })
@@ -761,9 +767,9 @@ export default function SalaryPage() {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          <Button type="button" disabled={isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
-                          <Button type="button" disabled={isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
-                          <Button type="button" disabled={isOperatorBased || isMonthClosed} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
+                          <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffAdjModal(s); setStaffAdjKind('fine'); setStaffAdjCompanyId(data?.companies?.[0]?.id || ''); setStaffAdjAmount(''); setStaffAdjDate(todayISO()); setStaffAdjComment('') }}><Plus className="mr-1.5 h-3.5 w-3.5" />Корректировка</Button>
+                          <Button type="button" disabled={!canEditStaffSalary || isOperatorBased} variant="outline" className="h-9 rounded-xl border-white/10 bg-white/5 text-xs text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void submitStaffExtraDay(s.id)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Доп. выход</Button>
+                          <Button type="button" disabled={!canEditStaffSalary || isOperatorBased || isMonthClosed} className="h-9 rounded-xl bg-emerald-500 text-xs text-white hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setStaffPayModal(s); setStaffPayDate(todayISO()); setStaffPaySlot(hasFirstPayoutThisMonth ? 'second' : 'first'); setStaffPayCash(calc.toPay > 0 ? String(calc.toPay) : ''); setStaffPayKaspi(''); setStaffPayComment(''); setStaffPayCompanyId(data?.companies?.[0]?.id || '') }}><Wallet className="mr-1.5 h-3.5 w-3.5" />Выплатить</Button>
                         </div>
                       </div>
                       {isMonthClosed ? (
@@ -789,7 +795,7 @@ export default function SalaryPage() {
                                 <span className="text-slate-500">{adj.date}</span>
                                 {adj.comment ? <span className="text-slate-400">{adj.comment}</span> : null}
                               </div>
-                              {!adj.id.startsWith('operator-debt:') ? (
+                              {!adj.id.startsWith('operator-debt:') && canEditStaffSalary ? (
                                 <button type="button" className="ml-3 shrink-0 text-slate-500 transition hover:text-rose-300" onClick={() => void removeStaffAdjustment(adj.id)}><X className="h-3.5 w-3.5" /></button>
                               ) : null}
                             </div>
@@ -803,7 +809,9 @@ export default function SalaryPage() {
                             {recentPayments.map(p => (
                               <div key={p.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300">
                                 <span>{p.pay_date} · {money(p.amount)} · {p.slot === 'first' ? '1–15' : p.slot === 'second' ? '16–конец' : 'разово'}</span>
-                                <button type="button" title="Аннулировать" onClick={() => void deleteStaffPayment(p.id, p.amount)} className="ml-1 text-slate-600 hover:text-rose-400 transition"><X className="h-3.5 w-3.5" /></button>
+                                {canEditStaffSalary ? (
+                                  <button type="button" title="Аннулировать" onClick={() => void deleteStaffPayment(p.id, p.amount)} className="ml-1 text-slate-600 hover:text-rose-400 transition"><X className="h-3.5 w-3.5" /></button>
+                                ) : null}
                               </div>
                             ))}
                           </div>
