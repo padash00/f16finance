@@ -407,11 +407,14 @@ export async function POST(req: Request) {
       const idsToClose = (candidateAdjustments || [])
         .filter((row: any) => {
           if (!previousPayDate) return true
+          const rowDate = String(row?.date || '')
+          if (rowDate < previousPayDate) return false
+          if (rowDate > previousPayDate) return true
           const rowCreatedAt = row?.created_at ? String(row.created_at) : null
           if (rowCreatedAt && previousPayCreatedAt) return rowCreatedAt > previousPayCreatedAt
           if (rowCreatedAt && !previousPayCreatedAt) return true
           if (!rowCreatedAt && previousPayCreatedAt) return false
-          return String(row?.date || '') > previousPayDate
+          return false
         })
         .map((row: any) => String(row.id))
 

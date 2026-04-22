@@ -72,14 +72,17 @@ function filterStaffAdjustmentsForSlot(
   return adjs.filter((a) => {
     if (a.staff_id !== staffId || a.status !== 'active') return false
     if (!period) return true
+    if (a.date < period.from) return false
     if (a.date > period.to) return false
     if (!lastPayment) return true
+    const lastPayDate = String(lastPayment.pay_date || '')
+    if (a.date < lastPayDate) return false
+    if (a.date > lastPayDate) return true
     if (a.created_at && lastPayment.created_at) {
       return String(a.created_at) > String(lastPayment.created_at)
     }
     if (a.created_at && !lastPayment.created_at) return true
     if (!a.created_at && lastPayment.created_at) return false
-    if (a.date <= String(lastPayment.pay_date || '')) return false
     return true
   })
 }
