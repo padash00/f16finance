@@ -45,18 +45,34 @@ function getSalarySlotRange(payDate: string, slot: 'first' | 'second') {
   return { from: `${year}-${mm}-16`, to: `${year}-${mm}-${String(endDay).padStart(2, '0')}` }
 }
 
+function monthStartFromIsoDate(isoDate: string) {
+  return `${isoDate.slice(0, 7)}-01`
+}
+
+function filterStaffAdjustmentsForSlot(
+  adjs: StaffAdjustment[],
+  staffId: string,
+  period?: { from: string; to: string } | null,
+  slot?: 'first' | 'second',
+) {
+  return adjs.filter((a) => {
+    if (a.staff_id !== staffId || a.status !== 'active') return false
+    if (!period) return true
+    if (slot === 'second') {
+      const monthStart = monthStartFromIsoDate(period.to)
+      return a.date >= monthStart && a.date <= period.to
+    }
+    return a.date >= period.from && a.date <= period.to
+  })
+}
+
 function calcStaffToPay(
   s: StaffMember,
   adjs: StaffAdjustment[],
   period?: { from: string; to: string } | null,
   slot?: 'first' | 'second',
 ) {
-  const active = adjs.filter(a => {
-    if (a.staff_id !== s.id || a.status !== 'active') return false
-    if (!period) return true
-    if (slot === 'second') return a.date <= period.to
-    return a.date >= period.from && a.date <= period.to
-  })
+  const active = filterStaffAdjustmentsForSlot(adjs, s.id, period, slot)
   const half = Math.round(s.monthly_salary / 2)
   const bonuses = active.filter(a => a.kind === 'bonus').reduce((sum, a) => sum + a.amount, 0)
   const debts = active.filter(a => a.kind === 'debt').reduce((sum, a) => sum + a.amount, 0)
@@ -690,7 +706,12 @@ export default function SalaryPage() {
               <div className="divide-y divide-white/5">
                 {staffSalary.staff.map((s) => {
                   const calc = calcStaffToPay(s, staffSalary.adjustments, currentStaffSalaryPeriod, currentStaffSalarySlot)
-                  const activeAdjs = staffSalary.adjustments.filter(a => a.staff_id === s.id && a.status === 'active')
+                  const activeAdjs = filterStaffAdjustmentsForSlot(
+                    staffSalary.adjustments,
+                    s.id,
+                    currentStaffSalaryPeriod,
+                    currentStaffSalarySlot,
+                  )
                   const recentPayments = staffSalary.payments.filter(p => p.staff_id === s.id).slice(0, 3)
                   const isOperatorBased = s.source_type === 'operator'
                   return (

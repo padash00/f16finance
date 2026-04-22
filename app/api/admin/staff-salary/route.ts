@@ -22,6 +22,13 @@ function getSalarySlotRange(payDate: string, slot: 'first' | 'second' | string) 
   return { from: `${year}-${mm}-16`, to: `${year}-${mm}-${String(endDay).padStart(2, '0')}` }
 }
 
+function normalizePersonName(value: string | null | undefined) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+}
+
 // Only super_admin and owner can access staff salary
 async function checkAccess(req: Request) {
   const access = await getRequestAccessContext(req)
@@ -89,10 +96,35 @@ export async function GET(req: Request) {
       source_type: 'staff',
     }))
     const staffIdSet = new Set(baseStaff.map((row: any) => String(row.id)))
+    const staffByTelegram = new Map<string, string>()
+    const staffByName = new Map<string, string>()
+    for (const row of baseStaff) {
+      const staffId = String((row as any).id)
+      const telegram = String((row as any).telegram_chat_id || '').trim()
+      if (telegram) staffByTelegram.set(telegram, staffId)
+      const nameKey = normalizePersonName((row as any).full_name || (row as any).short_name || '')
+      if (nameKey) staffByName.set(nameKey, staffId)
+    }
 
     const adminOps = (adminOpsRes.data ?? []) as any[]
+    const canonicalStaffIdByOperatorId = new Map<string, string>()
+    for (const op of adminOps) {
+      const opId = String(op.id)
+      const opTelegram = String(op.telegram_chat_id || '').trim()
+      const opNameKey = normalizePersonName(op.name || op.short_name || '')
+      const matchedStaffId =
+        (opTelegram && staffByTelegram.get(opTelegram)) ||
+        (opNameKey && staffByName.get(opNameKey)) ||
+        null
+      canonicalStaffIdByOperatorId.set(opId, matchedStaffId || opId)
+    }
+
     const virtualStaffFromOperators = adminOps
-      .filter((op) => !staffIdSet.has(String(op.id)))
+      .filter((op) => {
+        const opId = String(op.id)
+        if (staffIdSet.has(opId)) return false
+        return canonicalStaffIdByOperatorId.get(opId) === opId
+      })
       .map((op) => ({
         id: String(op.id),
         full_name: String(op.name || 'Админ-сотрудник'),
@@ -111,7 +143,7 @@ export async function GET(req: Request) {
       .filter((row) => row.operator_id && adminOperatorIdSet.has(String(row.operator_id)))
       .map((row) => ({
         id: `operator-debt:${String(row.id)}`,
-        staff_id: String(row.operator_id),
+        staff_id: canonicalStaffIdByOperatorId.get(String(row.operator_id)) || String(row.operator_id),
         kind: 'debt',
         amount: Number(row.amount || 0),
         date: String(row.week_start || new Date().toISOString().slice(0, 10)),
@@ -263,6 +295,8 @@ export async function POST(req: Request) {
 
       if (normalizedSlot === 'first') {
         adjustmentsQuery = adjustmentsQuery.gte('date', slotRange.from)
+      } else if (normalizedSlot === 'second') {
+        adjustmentsQuery = adjustmentsQuery.gte('date', `${slotRange.to.slice(0, 7)}-01`)
       }
 
       await adjustmentsQuery
