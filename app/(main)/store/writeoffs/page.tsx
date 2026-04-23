@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArchiveX, Loader2, MoreHorizontal, RefreshCw } from 'lucide-react'
+import { ArchiveX, Loader2, MoreHorizontal, Package, RefreshCw, Search, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -16,7 +16,9 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatMoney } from '@/lib/core/format'
 
 type InventoryLocation = {
@@ -122,6 +124,8 @@ export default function StoreWriteoffsPage() {
   const [templateName, setTemplateName] = useState('')
   const [savedTemplates, setSavedTemplates] = useState<Array<{ name: string; lines: WriteoffLine[]; reason: string }>>([])
   const [scope, setScope] = useState<'all' | 'warehouse' | 'showcase'>('all')
+  const [formSheetOpen, setFormSheetOpen] = useState(false)
+  const [writeoffSearch, setWriteoffSearch] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -348,67 +352,199 @@ export default function StoreWriteoffsPage() {
     URL.revokeObjectURL(url)
   }
 
+  const filteredWriteoffs = useMemo(() => {
+    const q = writeoffSearch.trim().toLowerCase()
+    const list = data?.writeoffs || []
+    if (!q) return list
+    return list.filter((w) => {
+      const parts = [
+        w.location?.company?.name,
+        w.location?.name,
+        w.reason,
+        w.comment,
+        ...(w.items || []).map((i) => i.item?.name || ''),
+      ]
+      return parts.filter(Boolean).join(' ').toLowerCase().includes(q)
+    })
+  }, [data?.writeoffs, writeoffSearch])
+
+  const totalWriteoffsAmount = useMemo(() => {
+    return (data?.writeoffs || []).reduce((s, w) => s + Number(w.total_amount || 0), 0)
+  }, [data?.writeoffs])
+
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 pt-5 md:px-6">
-      <Card className="border-white/10 bg-gradient-to-br from-white/[0.05] via-white/[0.03] to-transparent p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-2xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-rose-400/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200">
-              <ArchiveX className="h-3.5 w-3.5" />
-              Списания
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">Списание склада и витрин</h1>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Отдельный экран для брака, служебного расхода, порчи и любых непригодных остатков по складу или точке.
-            </p>
+    <TooltipProvider delayDuration={200}>
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10">
+            <ArchiveX className="h-5 w-5 text-rose-300" />
           </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="rounded-2xl">
-                <MoreHorizontal className="mr-2 h-4 w-4" />
-                Действия
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Управление списаниями</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void load()} disabled={loading}>
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                Обновить данные
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setReason('')
-                  setComment('')
-                  setLines([emptyLine()])
-                }}
-              >
-                <ArchiveX className="h-4 w-4" />
-                Очистить форму
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-foreground">Списания</h1>
+            <p className="truncate text-xs text-muted-foreground">Брак, просрочка, служебный расход — по складу и витринам</p>
+          </div>
         </div>
-      </Card>
 
-      {error ? <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
-      {success ? <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div> : null}
-
-      <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
-        <button type="button" onClick={() => setScope('all')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'all' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Все</button>
-        <button type="button" onClick={() => setScope('warehouse')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'warehouse' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Подсобка</button>
-        <button type="button" onClick={() => setScope('showcase')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'showcase' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Витрина</button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+            {(['all', 'warehouse', 'showcase'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setScope(s)}
+                className={`rounded-md px-3 py-1.5 transition ${scope === s ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                {s === 'all' ? 'Все' : s === 'warehouse' ? 'Подсобка' : 'Витрина'}
+              </button>
+            ))}
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Обновить
+          </Button>
+          <Button size="sm" onClick={() => setFormSheetOpen(true)} className="h-9 gap-1.5 bg-rose-600 hover:bg-rose-700">
+            <ArchiveX className="h-3.5 w-3.5" />
+            Новое списание
+          </Button>
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <Card className="border-white/10 p-5">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-foreground">Новый документ списания</h2>
-            <p className="text-sm text-muted-foreground">Сначала локация и причина, потом только нужные позиции.</p>
-          </div>
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <Card className="border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Документов</p>
+          <p className="mt-1 text-xl font-semibold">{(data?.writeoffs || []).length}</p>
+        </Card>
+        <Card className="border-rose-500/20 bg-rose-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-rose-300/70">Сумма всех списаний</p>
+          <p className="mt-1 truncate text-xl font-semibold text-rose-200" title={formatMoney(totalWriteoffsAmount)}>{formatMoney(totalWriteoffsAmount)}</p>
+        </Card>
+        <Card className="border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Причин</p>
+          <p className="mt-1 text-xl font-semibold">{new Set((data?.writeoffs || []).map((w) => w.reason).filter(Boolean)).size}</p>
+        </Card>
+      </div>
 
-          <form onSubmit={createWriteoff} className="space-y-5">
+      {error ? <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div> : null}
+      {success ? <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">{success}</div> : null}
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={writeoffSearch}
+            onChange={(e) => setWriteoffSearch(e.target.value)}
+            placeholder="Поиск по локации, причине, товару..."
+            className="h-9 pl-9"
+          />
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="h-9 gap-1.5">
+              <MoreHorizontal className="h-3.5 w-3.5" />
+              Действия
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Списания</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setFormSheetOpen(true)}>
+              <ArchiveX className="h-4 w-4" />
+              Новый документ
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                setReason('')
+                setComment('')
+                setLines([emptyLine()])
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+              Очистить форму
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Main table */}
+      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+        {loading ? (
+          <div className="flex h-60 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : filteredWriteoffs.length === 0 ? (
+          <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+            <Package className="h-8 w-8 opacity-50" />
+            {writeoffSearch ? 'Ничего не найдено' : 'Списаний пока нет — нажмите «Новое списание»'}
+          </div>
+        ) : (
+          <div className="max-h-[calc(100vh-380px)] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="w-24 py-2.5 pl-4 pr-2 font-normal">Дата</th>
+                  <th className="w-48 py-2.5 px-2 font-normal">Локация</th>
+                  <th className="py-2.5 px-2 font-normal">Причина</th>
+                  <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
+                  <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal text-rose-300/70">Сумма</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {filteredWriteoffs.map((writeoff) => (
+                  <tr key={writeoff.id} className="transition hover:bg-white/[0.02]">
+                    <td className="w-24 py-2.5 pl-4 pr-2 align-middle">
+                      <span className="text-xs text-muted-foreground">{formatDate(writeoff.written_at)}</span>
+                    </td>
+                    <td className="w-48 py-2.5 px-2 align-middle">
+                      <span className="line-clamp-1 text-xs text-muted-foreground">{writeoff.location?.company?.name || writeoff.location?.name || '—'}</span>
+                    </td>
+                    <td className="min-w-0 max-w-0 py-2.5 px-2 align-middle">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <p className="truncate text-sm font-medium">{writeoff.reason || '—'}</p>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-md">
+                          {writeoff.reason || '—'}
+                          {writeoff.comment ? <div className="mt-1 text-xs text-muted-foreground">{writeoff.comment}</div> : null}
+                          {(writeoff.items || []).length ? (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {(writeoff.items || []).map((i) => `${i.item?.name || 'Товар'} · ${formatQty(Number(i.quantity || 0))}`).join(', ')}
+                            </div>
+                          ) : null}
+                        </TooltipContent>
+                      </Tooltip>
+                      {writeoff.comment ? <p className="truncate text-[11px] text-muted-foreground">{writeoff.comment}</p> : null}
+                    </td>
+                    <td className="w-20 py-2.5 px-2 text-right align-middle">
+                      <span className="text-sm font-semibold">{(writeoff.items || []).length}</span>
+                    </td>
+                    <td className="w-32 py-2.5 px-2 pr-4 text-right align-middle">
+                      <span className="text-sm font-semibold text-rose-300">{formatMoney(Number(writeoff.total_amount || 0))}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Create writeoff Sheet */}
+      <Sheet open={formSheetOpen} onOpenChange={setFormSheetOpen}>
+        <SheetContent className="w-full sm:max-w-2xl flex flex-col gap-0 p-0">
+          <SheetHeader className="border-b border-white/10 p-5">
+            <SheetTitle className="flex items-center gap-2">
+              <ArchiveX className="h-5 w-5 text-rose-300" />
+              Новый документ списания
+            </SheetTitle>
+            <SheetDescription>
+              Сначала локация и причина, потом только нужные позиции.
+            </SheetDescription>
+          </SheetHeader>
+          <form onSubmit={createWriteoff} className="flex-1 space-y-5 overflow-y-auto p-5">
             <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.05] p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Input
@@ -458,7 +594,7 @@ export default function StoreWriteoffsPage() {
               <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Шаблоны и экспорт</p>
               <div className="flex flex-wrap gap-2">
                 <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Название шаблона" className="min-w-[220px] flex-1" />
-                <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить шаблон</Button>
+                <Button type="button" variant="outline" onClick={saveTemplate}>Сохранить</Button>
                 <Button type="button" variant="outline" onClick={exportCsv}>Экспорт CSV</Button>
               </div>
               {savedTemplates.length > 0 && (
@@ -500,11 +636,11 @@ export default function StoreWriteoffsPage() {
 
               <div className="space-y-1.5">
                 <Label>Комментарий</Label>
-                <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Подробности по документу" />
+                <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Подробности по документу" rows={2} />
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
               Доступно в локации: <span className="font-medium text-foreground">{selectedLocation?.company?.name || selectedLocation?.name || '—'}</span>
               {' · '}
               {selectedBalances.length} товарных позиций
@@ -512,7 +648,7 @@ export default function StoreWriteoffsPage() {
 
             <div className="space-y-3">
               {lines.map((line, index) => (
-                <div key={`writeoff-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.5fr)_140px_minmax(0,1fr)_110px]">
+                <div key={`writeoff-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.5fr)_120px_minmax(0,1fr)_auto]">
                   <div className="space-y-1.5">
                     <Label>Товар</Label>
                     <Select
@@ -548,8 +684,8 @@ export default function StoreWriteoffsPage() {
                   </div>
 
                   <div className="flex items-end">
-                    <Button type="button" variant="outline" className="w-full" onClick={() => setLines((current) => current.length === 1 ? current : current.filter((_, itemIndex) => itemIndex !== index))}>
-                      Убрать
+                    <Button type="button" variant="ghost" size="icon" onClick={() => setLines((current) => current.length === 1 ? current : current.filter((_, itemIndex) => itemIndex !== index))}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -560,56 +696,16 @@ export default function StoreWriteoffsPage() {
               <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, emptyLine()])}>
                 Добавить строку
               </Button>
-              <div className="text-sm text-muted-foreground">
-                Сумма списаний в истории: <span className="font-semibold text-foreground">{formatMoney((data?.writeoffs || []).reduce((sum, item) => sum + Number(item.total_amount || 0), 0))}</span>
-              </div>
             </div>
 
-            <Button type="submit" disabled={saving} className="rounded-2xl">
+            <Button type="submit" disabled={saving} className="w-full">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArchiveX className="mr-2 h-4 w-4" />}
               Провести списание
             </Button>
           </form>
-        </Card>
-
-        <div className="space-y-6">
-          <Card className="border-white/10 p-5">
-            <h2 className="text-lg font-semibold text-foreground">Последние списания</h2>
-            <p className="mt-1 text-sm text-muted-foreground">История по складу и витринам с суммой и причинами.</p>
-
-            <div className="mt-4 space-y-3">
-              {(data?.writeoffs || []).length ? (
-                data!.writeoffs.slice(0, 10).map((writeoff) => (
-                  <div key={writeoff.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-medium text-foreground">{writeoff.location?.company?.name || writeoff.location?.name || 'Локация'}</div>
-                        <div className="text-sm text-muted-foreground">{writeoff.reason}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold text-foreground">{formatMoney(Number(writeoff.total_amount || 0))}</div>
-                        <div className="text-xs text-muted-foreground">{formatDate(writeoff.written_at)}</div>
-                      </div>
-                    </div>
-                    {writeoff.comment ? <div className="mt-3 text-sm text-slate-300">{writeoff.comment}</div> : null}
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                      {(writeoff.items || []).slice(0, 4).map((item) => (
-                        <span key={item.id} className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-                          {item.item?.name || 'Товар'} · {formatQty(Number(item.quantity || 0))}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-sm text-muted-foreground">
-                  Пока нет списаний.
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-      </div>
+        </SheetContent>
+      </Sheet>
     </div>
+    </TooltipProvider>
   )
 }
