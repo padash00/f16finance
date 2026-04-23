@@ -436,7 +436,7 @@ export async function POST(req: Request) {
       if (!id) return json({ error: 'id обязателен' }, 400)
       const { data: paymentRow, error: paymentFetchError } = await supabase
         .from('staff_salary_payments')
-        .select('id, staff_id, pay_date, slot')
+        .select('id, staff_id, pay_date, slot, amount')
         .eq('id', id)
         .maybeSingle()
       if (paymentFetchError) throw paymentFetchError
@@ -447,12 +447,41 @@ export async function POST(req: Request) {
 
       const sourceId = `staff:${String(paymentRow.staff_id)}:month:${monthRange.monthKey}:slot:${String(paymentRow.slot || '')}`
 
-      const { error: expensesDeleteError } = await supabase
+      const { data: exactExpenseRows, error: exactExpenseFetchError } = await supabase
         .from('expenses')
-        .delete()
+        .select('id')
         .eq('source_type', 'salary_payment')
         .eq('source_id', sourceId)
-      if (expensesDeleteError) throw expensesDeleteError
+      if (exactExpenseFetchError) throw exactExpenseFetchError
+
+      let expenseIdsToDelete = (exactExpenseRows || []).map((row: any) => String(row.id)).filter(Boolean)
+
+      // Fallback for legacy rows where source_id may differ:
+      // use same staff/month prefix + payment date and pick by matching total amount.
+      if (expenseIdsToDelete.length === 0) {
+        const sourcePrefix = `staff:${String(paymentRow.staff_id)}:month:${monthRange.monthKey}:slot:`
+        const expectedTotal = Math.round(Number(paymentRow.amount || 0))
+        const { data: fallbackRows, error: fallbackFetchError } = await supabase
+          .from('expenses')
+          .select('id, cash_amount, kaspi_amount, source_id')
+          .eq('source_type', 'salary_payment')
+          .eq('date', String(paymentRow.pay_date || ''))
+          .like('source_id', `${sourcePrefix}%`)
+        if (fallbackFetchError) throw fallbackFetchError
+
+        expenseIdsToDelete = (fallbackRows || [])
+          .filter((row: any) => Math.round(Number(row.cash_amount || 0) + Number(row.kaspi_amount || 0)) === expectedTotal)
+          .map((row: any) => String(row.id))
+          .filter(Boolean)
+      }
+
+      if (expenseIdsToDelete.length > 0) {
+        const { error: expensesDeleteError } = await supabase
+          .from('expenses')
+          .delete()
+          .in('id', expenseIdsToDelete)
+        if (expensesDeleteError) throw expensesDeleteError
+      }
 
       const { error: paymentDeleteError } = await supabase.from('staff_salary_payments').delete().eq('id', id)
       if (paymentDeleteError) throw paymentDeleteError
@@ -461,9 +490,14 @@ export async function POST(req: Request) {
         entityType: 'staff-payment',
         entityId: String(id),
         action: 'delete',
-        payload: { source_id: sourceId },
+        payload: { source_id: sourceId, deleted_expense_ids: expenseIdsToDelete },
       })
-      return json({ ok: true, deleted_payment_id: id, deleted_expense_source_id: sourceId })
+      return json({
+        ok: true,
+        deleted_payment_id: id,
+        deleted_expense_source_id: sourceId,
+        deleted_expense_count: expenseIdsToDelete.length,
+      })
     }
 
     // ── Update staff salary / extra day config ──────────────────────────────
