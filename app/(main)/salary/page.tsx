@@ -245,6 +245,35 @@ export default function SalaryPage() {
   }, [])
   const currentStaffSalaryPeriod = useMemo(() => getSalarySlotRange(todayISO(), currentStaffSalarySlot), [currentStaffSalarySlot])
   const currentStaffSalaryMonthPrefix = useMemo(() => monthPrefixFromIsoDate(todayISO()), [])
+  const staffPayPreview = useMemo(() => {
+    if (!staffPayModal || !staffSalary) return null
+    const period = getSalarySlotRange(staffPayDate, staffPaySlot)
+    const closingAdjustments = filterStaffAdjustmentsForSlot(
+      staffSalary.adjustments,
+      staffPayModal.id,
+      staffSalary.payments,
+      period,
+    )
+    const calc = calcStaffToPay(staffPayModal, staffSalary.adjustments, staffSalary.payments, period)
+    const payCashAmount = parseMoney(staffPayCash)
+    const payKaspiAmount = parseMoney(staffPayKaspi)
+    const payTotal = payCashAmount + payKaspiAmount
+    const companyName =
+      (data?.companies || []).find((c) => c.id === staffPayCompanyId)?.name ||
+      (data?.companies || []).find((c) => c.id === staffPayCompanyId)?.code ||
+      staffPayCompanyId ||
+      'Не выбрана'
+
+    return {
+      period,
+      calc,
+      closingAdjustments,
+      payCashAmount,
+      payKaspiAmount,
+      payTotal,
+      companyName,
+    }
+  }, [staffPayModal, staffSalary, staffPayDate, staffPaySlot, staffPayCash, staffPayKaspi, staffPayCompanyId, data?.companies])
 
   const loadStaffSalary = useCallback(async () => {
     setStaffSalaryLoading(true)
@@ -978,6 +1007,29 @@ export default function SalaryPage() {
                 <input className={input} type="text" placeholder="0" value={staffPayKaspi} onChange={e => setStaffPayKaspi(e.target.value)} />
               </div>
             </div>
+            {staffPayPreview ? (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs text-slate-300">
+                <div className="mb-2 text-sm font-medium text-white">Предпросмотр проводки</div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div>Период: <span className="text-white">{staffPayPreview.period ? `${staffPayPreview.period.from} - ${staffPayPreview.period.to}` : '—'}</span></div>
+                  <div>Закроется корректировок: <span className="text-white">{staffPayPreview.closingAdjustments.length}</span></div>
+                  <div>Расход (компания): <span className="text-white">{staffPayPreview.companyName}</span></div>
+                  <div>Расход (нал/Kaspi): <span className="text-white">{money(staffPayPreview.payCashAmount)} / {money(staffPayPreview.payKaspiAmount)}</span></div>
+                  <div>К выплате по расчёту: <span className="text-white">{money(staffPayPreview.calc.toPay)}</span></div>
+                  <div>Сейчас будет выплачено: <span className="text-white">{money(staffPayPreview.payTotal)}</span></div>
+                </div>
+                {staffPayPreview.closingAdjustments.length > 0 ? (
+                  <div className="mt-3 max-h-28 space-y-1 overflow-y-auto pr-1">
+                    {staffPayPreview.closingAdjustments.map((adj) => (
+                      <div key={adj.id} className="flex items-center justify-between rounded-lg border border-white/10 px-2 py-1">
+                        <span className="text-slate-400">{adj.date} · {adj.kind}</span>
+                        <span className="text-white">{money(adj.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <textarea className={textarea} placeholder="Комментарий" value={staffPayComment} onChange={e => setStaffPayComment(e.target.value)} />
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">Итого: <span className="font-semibold text-white">{money(parseMoney(staffPayCash) + parseMoney(staffPayKaspi))}</span></div>
             <div className="flex justify-end gap-3">
