@@ -32,7 +32,20 @@ type ShiftBreakdown = { id: string; date: string; shift: string; companyCode: st
 type StaffMember = { id: string; full_name: string; short_name: string | null; role: string; monthly_salary: number; extra_day_company_code: string | null; extra_day_shift_type: string | null; telegram_chat_id: string | null; source_type?: 'staff' | 'operator' }
 type StaffAdjustment = { id: string; staff_id: string; kind: 'debt' | 'fine' | 'bonus' | 'advance'; amount: number; date: string; comment: string | null; status: string; created_at?: string | null }
 type StaffPayment = { id: string; staff_id: string; pay_date: string; slot: string; amount: number; comment: string | null; created_at?: string | null }
-type StaffSalaryData = { can_edit?: boolean; staff: StaffMember[]; adjustments: StaffAdjustment[]; payments: StaffPayment[]; salaryRules: { company_code: string; shift_type: string; base_per_shift: number }[] }
+type StaffSalaryData = {
+  can_edit?: boolean
+  staff: StaffMember[]
+  adjustments: StaffAdjustment[]
+  payments: StaffPayment[]
+  salaryRules: { company_code: string; shift_type: string; base_per_shift: number }[]
+  consistency?: {
+    has_issues: boolean
+    missing_payment_expense_count: number
+    orphan_payment_expense_count: number
+    missing_advance_expense_count: number
+    orphan_advance_expense_count: number
+  }
+}
 
 function getSalarySlotRange(payDate: string, slot: 'first' | 'second') {
   const [yearRaw, monthRaw] = String(payDate || '').split('-')
@@ -735,6 +748,15 @@ export default function SalaryPage() {
                 <div>
                   <h2 className="text-lg font-semibold text-white">Зарплатная ведомость Административных сотрудников</h2>
                   <p className="text-sm text-slate-400">Фиксированный оклад, выплата 1-го и 15-го. Бонусы, штрафы, долги, авансы, доп. выходы.</p>
+                  {staffSalary?.consistency?.has_issues ? (
+                    <p className="mt-2 text-xs text-amber-300">
+                      Проверка консистентности: отсутствуют/лишние расходы по зарплате ({staffSalary.consistency.missing_payment_expense_count}
+                      /{staffSalary.consistency.orphan_payment_expense_count}) и авансам ({staffSalary.consistency.missing_advance_expense_count}
+                      /{staffSalary.consistency.orphan_advance_expense_count}).
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-emerald-300">Проверка консистентности: выплаты и авансы синхронизированы с расходами.</p>
+                  )}
                 </div>
               </div>
               <Button type="button" variant="outline" className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" onClick={() => void loadStaffSalary()}><RefreshCw className="h-4 w-4" /></Button>

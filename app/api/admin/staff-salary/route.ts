@@ -52,7 +52,7 @@ export async function GET(req: Request) {
 
     const supabase = createAdminSupabaseClient()
 
-    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtsRes] = await Promise.all([
+    const [staffRes, adjRes, paymentsRes, rulesRes, adminOpsRes, adminOpDebtsRes, expensesRes] = await Promise.all([
       supabase
         .from('staff')
         .select('id, full_name, short_name, role, monthly_salary, extra_day_company_code, extra_day_shift_type, telegram_chat_id, is_active')
@@ -81,6 +81,10 @@ export async function GET(req: Request) {
         .from('debts')
         .select('id, operator_id, amount, status, week_start, comment, client_name, created_at')
         .eq('status', 'active'),
+      supabase
+        .from('expenses')
+        .select('id, source_type, source_id')
+        .in('source_type', ['salary_payment', 'salary_advance']),
     ])
 
     if (staffRes.error) throw staffRes.error
@@ -89,6 +93,7 @@ export async function GET(req: Request) {
     if (rulesRes.error) throw rulesRes.error
     if (adminOpsRes.error) throw adminOpsRes.error
     if (adminOpDebtsRes.error) throw adminOpDebtsRes.error
+    if (expensesRes.error) throw expensesRes.error
 
     const baseStaff = (staffRes.data ?? []).map((row: any) => ({
       ...row,
@@ -180,12 +185,60 @@ export async function GET(req: Request) {
       })
       .filter(Boolean)
 
+    const paymentRows = (paymentsRes.data ?? []) as any[]
+    const adjustmentRows = (adjRes.data ?? []) as any[]
+    const expenseRows = (expensesRes.data ?? []) as any[]
+
+    const expectedPaymentSourceIds = new Set<string>()
+    for (const payment of paymentRows) {
+      const staffId = String(payment?.staff_id || '')
+      const payDate = String(payment?.pay_date || '')
+      const slot = String(payment?.slot || '')
+      const monthRange = monthRangeFromDate(payDate)
+      if (!staffId || !monthRange || !slot) continue
+      expectedPaymentSourceIds.add(`staff:${staffId}:month:${monthRange.monthKey}:slot:${slot}`)
+    }
+    const actualPaymentSourceIds = new Set<string>(
+      expenseRows
+        .filter((row) => String(row?.source_type || '') === 'salary_payment')
+        .map((row) => String(row?.source_id || ''))
+        .filter((value) => value.startsWith('staff:')),
+    )
+    const missingPaymentExpenseCount = [...expectedPaymentSourceIds].filter((id) => !actualPaymentSourceIds.has(id)).length
+    const orphanPaymentExpenseCount = [...actualPaymentSourceIds].filter((id) => !expectedPaymentSourceIds.has(id)).length
+
+    const expectedAdvanceSourceIds = new Set<string>(
+      adjustmentRows
+        .filter((row) => String(row?.kind || '') === 'advance' && String(row?.status || 'active') === 'active')
+        .map((row) => `staff-adjustment:${String(row?.id || '')}`)
+        .filter((value) => value !== 'staff-adjustment:'),
+    )
+    const actualAdvanceSourceIds = new Set<string>(
+      expenseRows
+        .filter((row) => String(row?.source_type || '') === 'salary_advance')
+        .map((row) => String(row?.source_id || ''))
+        .filter((value) => value.startsWith('staff-adjustment:')),
+    )
+    const missingAdvanceExpenseCount = [...expectedAdvanceSourceIds].filter((id) => !actualAdvanceSourceIds.has(id)).length
+    const orphanAdvanceExpenseCount = [...actualAdvanceSourceIds].filter((id) => !expectedAdvanceSourceIds.has(id)).length
+
     return json({
       can_edit: access.isSuperAdmin,
       staff: [...baseStaff, ...virtualStaffFromOperators],
       adjustments: [...(adjRes.data ?? []), ...syntheticDebtAdjustments],
       payments: paymentsRes.data ?? [],
       salaryRules: rulesRes.data ?? [],
+      consistency: {
+        has_issues:
+          missingPaymentExpenseCount > 0 ||
+          orphanPaymentExpenseCount > 0 ||
+          missingAdvanceExpenseCount > 0 ||
+          orphanAdvanceExpenseCount > 0,
+        missing_payment_expense_count: missingPaymentExpenseCount,
+        orphan_payment_expense_count: orphanPaymentExpenseCount,
+        missing_advance_expense_count: missingAdvanceExpenseCount,
+        orphan_advance_expense_count: orphanAdvanceExpenseCount,
+      },
     })
   } catch (e: any) {
     return json({ error: e?.message || 'Error' }, 500)
