@@ -86,6 +86,8 @@ export default function PointDebtsPage() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [settling, setSettling] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debtorFilter, setDebtorFilter] = useState<string>('')
 
   const weekEnd = useMemo(() => addDaysISO(weekStart, 6), [weekStart])
 
@@ -130,7 +132,40 @@ export default function PointDebtsPage() {
 
   const items = data?.items || []
   const legacyRows = data?.legacyAggregates ?? []
-  const allSelected = items.length > 0 && items.every((r) => selected[r.id])
+  const filteredItems = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return items.filter((r) => {
+      if (debtorFilter && r.debtor_name !== debtorFilter) return false
+      if (!q) return true
+      const haystack = [
+        r.debtor_name,
+        r.company_name,
+        r.point_device_name || '',
+        r.item_name,
+        r.barcode || '',
+        r.comment || '',
+        r.created_by_name,
+      ]
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [items, debtorFilter, searchQuery])
+  const debtorOptions = useMemo(
+    () =>
+      Array.from(new Set(items.map((r) => r.debtor_name)))
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, 'ru')),
+    [items],
+  )
+  const filteredTotals = useMemo(
+    () => ({
+      count: filteredItems.length,
+      amount: filteredItems.reduce((s, r) => s + Number(r.total_amount || 0), 0),
+    }),
+    [filteredItems],
+  )
+  const allSelected = filteredItems.length > 0 && filteredItems.every((r) => selected[r.id])
   const someSelected = items.some((r) => selected[r.id])
   const selectedIds = useMemo(() => items.filter((r) => selected[r.id]).map((r) => r.id), [items, selected])
   const selectedTotal = useMemo(
@@ -139,11 +174,11 @@ export default function PointDebtsPage() {
   )
 
   const toggleAll = () => {
-    if (!items.length) return
+    if (!filteredItems.length) return
     if (allSelected) setSelected({})
     else {
       const next: Record<string, boolean> = {}
-      for (const r of items) next[r.id] = true
+      for (const r of filteredItems) next[r.id] = true
       setSelected(next)
     }
   }
@@ -341,10 +376,46 @@ export default function PointDebtsPage() {
                 ))}
               </select>
             </div>
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Поиск: должник, товар, комментарий..."
+              className="h-9 min-w-[240px] rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white placeholder:text-slate-500 focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30"
+            />
+            <select
+              className="h-9 min-w-[200px] rounded-xl border border-white/10 bg-slate-900 px-3 text-sm text-white focus:border-amber-400/40 focus:outline-none focus:ring-1 focus:ring-amber-400/30 [color-scheme:dark]"
+              value={debtorFilter}
+              onChange={(e) => setDebtorFilter(e.target.value)}
+            >
+              <option value="">Все должники</option>
+              {debtorOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            {(searchQuery || debtorFilter) ? (
+              <button
+                type="button"
+                className="h-9 rounded-xl border border-white/10 bg-white/5 px-3 text-xs text-slate-300 hover:bg-white/10"
+                onClick={() => {
+                  setSearchQuery('')
+                  setDebtorFilter('')
+                }}
+              >
+                Сбросить фильтры
+              </button>
+            ) : null}
             {data ? (
               <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-amber-200">
                 Позиций: <span className="font-semibold text-white">{data.totals.count}</span> · на сумму{' '}
                 <span className="font-semibold text-white">{money(data.totals.amount)}</span>
+              </span>
+            ) : null}
+            {data ? (
+              <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-sky-200">
+                По фильтру: <span className="font-semibold text-white">{filteredTotals.count}</span> ·{' '}
+                <span className="font-semibold text-white">{money(filteredTotals.amount)}</span>
               </span>
             ) : null}
             {data && (data.legacyTotals?.count ?? 0) > 0 ? (
@@ -394,19 +465,15 @@ export default function PointDebtsPage() {
                   </button>
                 </th>
                 <th className="px-3 py-3 text-left">Должник</th>
-                <th className="px-3 py-3 text-left">Компания</th>
-                <th className="px-3 py-3 text-left">Точка (устр.)</th>
-                <th className="px-3 py-3 text-left">Товар</th>
-                <th className="px-3 py-3 text-left">Штрихкод</th>
+                <th className="px-3 py-3 text-left">Компания / точка</th>
+                <th className="px-3 py-3 text-left">Товар / штрихкод</th>
                 <th className="px-3 py-3 text-right">Кол-во</th>
                 <th className="px-3 py-3 text-right">Цена</th>
                 <th className="px-3 py-3 text-right">Сумма</th>
-                <th className="px-3 py-3 text-left">Комментарий</th>
-                <th className="px-3 py-3 text-left">Оформил</th>
                 <th className="px-3 py-3 text-left">
                   <span className="inline-flex items-center gap-1">
                     <CalendarDays className="h-3.5 w-3.5" />
-                    Создано
+                    Комментарий / оформил / создано
                   </span>
                 </th>
               </tr>
@@ -414,7 +481,7 @@ export default function PointDebtsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-16 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-16 text-center text-slate-400">
                     <div className="inline-flex items-center gap-2">
                       <Loader2 className="h-5 w-5 animate-spin" />
                       Загрузка…
@@ -424,7 +491,7 @@ export default function PointDebtsPage() {
               ) : null}
               {!loading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-16 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-16 text-center text-slate-400">
                     Нет активных позиций сканера (<code className="text-slate-500">point_debt_items</code>) за эту
                     неделю.
                     {legacyRows.length > 0 ? (
@@ -435,8 +502,15 @@ export default function PointDebtsPage() {
                   </td>
                 </tr>
               ) : null}
+              {!loading && items.length > 0 && filteredItems.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
+                    По текущим фильтрам ничего не найдено.
+                  </td>
+                </tr>
+              ) : null}
               {!loading
-                ? items.map((r) => (
+                ? filteredItems.map((r) => (
                     <tr key={r.id} className="border-t border-white/5 align-top text-slate-200">
                       <td className="px-2 py-3 text-center">
                         <button type="button" className="text-slate-400 hover:text-white" onClick={() => toggleOne(r.id)}>
@@ -444,19 +518,23 @@ export default function PointDebtsPage() {
                         </button>
                       </td>
                       <td className="px-3 py-3 font-medium text-white">{r.debtor_name}</td>
-                      <td className="px-3 py-3 text-slate-300">{r.company_name}</td>
-                      <td className="px-3 py-3 text-slate-400">{r.point_device_name || '—'}</td>
-                      <td className="px-3 py-3 text-white">{r.item_name}</td>
-                      <td className="px-3 py-3 font-mono text-xs text-slate-400">{r.barcode || '—'}</td>
+                      <td className="px-3 py-3 text-xs">
+                        <div className="text-slate-300">{r.company_name}</div>
+                        <div className="text-slate-500">{r.point_device_name || '—'}</div>
+                      </td>
+                      <td className="px-3 py-3 text-xs">
+                        <div className="text-white">{r.item_name}</div>
+                        <div className="font-mono text-slate-500">{r.barcode || '—'}</div>
+                      </td>
                       <td className="px-3 py-3 text-right tabular-nums">{r.quantity}</td>
                       <td className="px-3 py-3 text-right tabular-nums">{money(r.unit_price)}</td>
                       <td className="px-3 py-3 text-right font-medium tabular-nums text-amber-200">{money(r.total_amount)}</td>
-                      <td className="max-w-[200px] truncate px-3 py-3 text-xs text-slate-400" title={r.comment || ''}>
-                        {r.comment || '—'}
-                      </td>
-                      <td className="px-3 py-3 text-xs text-slate-400">{r.created_by_name}</td>
                       <td className="px-3 py-3 text-xs text-slate-500">
-                        {r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '—'}
+                        <div className="max-w-[280px] truncate text-slate-400" title={r.comment || ''}>
+                          {r.comment || '—'}
+                        </div>
+                        <div>{r.created_by_name}</div>
+                        <div>{r.created_at ? new Date(r.created_at).toLocaleString('ru-RU') : '—'}</div>
                       </td>
                     </tr>
                   ))
