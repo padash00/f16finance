@@ -434,9 +434,36 @@ export async function POST(req: Request) {
     if (action === 'deletePayment') {
       const { id } = body
       if (!id) return json({ error: 'id обязателен' }, 400)
-      const { error } = await supabase.from('staff_salary_payments').delete().eq('id', id)
-      if (error) throw error
-      return json({ ok: true })
+      const { data: paymentRow, error: paymentFetchError } = await supabase
+        .from('staff_salary_payments')
+        .select('id, staff_id, pay_date, slot')
+        .eq('id', id)
+        .maybeSingle()
+      if (paymentFetchError) throw paymentFetchError
+      if (!paymentRow?.id) return json({ error: 'Выплата не найдена' }, 404)
+
+      const monthRange = monthRangeFromDate(String(paymentRow.pay_date || ''))
+      if (!monthRange) return json({ error: 'Некорректная дата выплаты' }, 400)
+
+      const sourceId = `staff:${String(paymentRow.staff_id)}:month:${monthRange.monthKey}:slot:${String(paymentRow.slot || '')}`
+
+      const { error: expensesDeleteError } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('source_type', 'salary_payment')
+        .eq('source_id', sourceId)
+      if (expensesDeleteError) throw expensesDeleteError
+
+      const { error: paymentDeleteError } = await supabase.from('staff_salary_payments').delete().eq('id', id)
+      if (paymentDeleteError) throw paymentDeleteError
+
+      await writeAuditLog(supabase, {
+        entityType: 'staff-payment',
+        entityId: String(id),
+        action: 'delete',
+        payload: { source_id: sourceId },
+      })
+      return json({ ok: true, deleted_payment_id: id, deleted_expense_source_id: sourceId })
     }
 
     // ── Update staff salary / extra day config ──────────────────────────────
