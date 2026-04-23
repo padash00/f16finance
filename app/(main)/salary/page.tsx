@@ -276,7 +276,7 @@ export default function SalaryPage() {
   const saveChatId = async (e: FormEvent) => { e.preventDefault(); if (!chatTarget) return; const trimmed = chatValue.trim(); if (trimmed && !/^-?\d+$/.test(trimmed)) return setError('telegram_chat_id должен быть числом'); setChatSaving(true); setError(null); try { await post({ action: 'updateOperatorChatId', operatorId: chatTarget.operator.id, telegram_chat_id: trimmed || null }); setChatTarget(null); await load(true) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось сохранить Telegram chat_id') } finally { setChatSaving(false) } }
   const sendOne = async (operatorId: string) => { setSendingId(operatorId); setError(null); try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) throw new Error(json?.error || `Ошибка отправки (${res.status})`) } catch (e: any) { console.error(e); setError(e?.message || 'Не удалось отправить расчёт в Telegram') } finally { setSendingId(null) } }
   const sendAll = async () => { if (loading || broadcastSending || !broadcastTargets.length) return; setBroadcastSending(true); setBroadcastDone(0); setBroadcastTotal(broadcastTargets.length); setBroadcastErrors([]); setError(null); try { for (let i = 0; i < broadcastTargets.length; i += 1) { const item = broadcastTargets[i]; try { const res = await fetch('/api/telegram/salary-snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operatorId: item.operator.id, dateFrom: weekStart, dateTo: weekEnd, weekStart }) }); const json = await res.json().catch(() => null); if (!res.ok) setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${json?.error || `HTTP ${res.status}`}`]) } catch (e: any) { setBroadcastErrors((prev) => [...prev, `${getOperatorDisplayName(item.operator)}: ${e?.message || 'ошибка'}`]) } setBroadcastDone(i + 1); await new Promise((r) => setTimeout(r, 250)) } } finally { setBroadcastSending(false) } }
-  const [tab, setTab] = useState<'operators' | 'staff'>('operators')
+  const [tab, setTab] = useState<'operators' | 'staff' | 'events'>('operators')
   const [markDebtId, setMarkDebtId] = useState<string | null>(null)
   const [markDebtSaving, setMarkDebtSaving] = useState(false)
 
@@ -333,6 +333,44 @@ export default function SalaryPage() {
       companyName,
     }
   }, [staffPayModal, staffSalary, staffPayDate, staffPaySlot, staffPayCash, staffPayKaspi, staffPayCompanyId, data?.companies])
+  const staffGlobalTimeline = useMemo(() => {
+    if (!staffSalary) return [] as Array<StaffTimelineEvent & { staff_name: string }>
+    const staffNameById = new Map<string, string>(
+      (staffSalary.staff || []).map((s) => [s.id, s.full_name || s.short_name || s.id]),
+    )
+    const items: Array<StaffTimelineEvent & { staff_name: string }> = []
+    for (const adj of staffSalary.adjustments || []) {
+      items.push({
+        id: `adj:${adj.id}`,
+        date: adj.date,
+        created_at: adj.created_at || null,
+        kind: adj.kind,
+        amount: Number(adj.amount || 0),
+        comment: adj.comment || null,
+        status: adj.status || 'active',
+        staff_name: staffNameById.get(adj.staff_id) || adj.staff_id,
+      })
+    }
+    for (const pay of staffSalary.payments || []) {
+      items.push({
+        id: `pay:${pay.id}`,
+        date: pay.pay_date,
+        created_at: pay.created_at || null,
+        kind: 'payment',
+        amount: Number(pay.amount || 0),
+        comment: pay.comment || null,
+        status: 'active',
+        staff_name: staffNameById.get(pay.staff_id) || pay.staff_id,
+      })
+    }
+    return items
+      .sort((a, b) => {
+        const byDate = String(b.date || '').localeCompare(String(a.date || ''))
+        if (byDate !== 0) return byDate
+        return String(b.created_at || '').localeCompare(String(a.created_at || ''))
+      })
+      .slice(0, 300)
+  }, [staffSalary])
 
   const loadStaffSalary = useCallback(async () => {
     setStaffSalaryLoading(true)
@@ -582,6 +620,15 @@ export default function SalaryPage() {
                     className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'staff' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                   >
                     Административные сотрудники
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === 'events'}
+                    onClick={() => setTab('events')}
+                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${tab === 'events' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    Лента событий
                   </button>
                 </div>
                 {tab === 'operators' ? (
@@ -965,6 +1012,73 @@ export default function SalaryPage() {
               </div>
             )}
           </Card>
+          )}
+
+          {/* ── EVENTS TAB ─────────────────────────────────────────────────── */}
+          {tab === 'events' && (
+            <Card className="overflow-hidden border-white/10 bg-white/[0.04]">
+              <div className="flex items-center justify-between gap-4 border-b border-white/10 p-5">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl bg-cyan-500/15 p-3 text-cyan-300">
+                    <CalendarDays className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Лента событий</h2>
+                    <p className="text-sm text-slate-400">Общий поток выплат и корректировок по административным сотрудникам.</p>
+                  </div>
+                </div>
+                <div className="text-xs text-slate-400">
+                  Событий: <span className="font-semibold text-white">{staffGlobalTimeline.length}</span>
+                </div>
+              </div>
+              <div className="p-5">
+                {staffSalaryLoading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 8 }).map((_, idx) => (
+                      <Skeleton key={idx} className="h-10 rounded-xl" />
+                    ))}
+                  </div>
+                ) : staffGlobalTimeline.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center text-sm text-slate-500">
+                    Пока нет событий для отображения.
+                  </div>
+                ) : (
+                  <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
+                    {staffGlobalTimeline.map((ev) => {
+                      const isPayment = ev.kind === 'payment'
+                      const tone = isPayment
+                        ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                        : ev.kind === 'bonus'
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                          : ev.kind === 'advance'
+                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                            : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                      const label = isPayment
+                        ? 'выплата'
+                        : ev.kind === 'bonus'
+                          ? 'бонус'
+                          : ev.kind === 'advance'
+                            ? 'аванс'
+                            : ev.kind === 'fine'
+                              ? 'штраф'
+                              : 'долг'
+                      return (
+                        <div key={ev.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
+                            <span className="text-slate-300">{ev.staff_name}</span>
+                            <span className="text-slate-500">{ev.date}</span>
+                            {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
+                            {ev.comment ? <span className="truncate text-slate-400">{ev.comment}</span> : null}
+                          </div>
+                          <span className="ml-3 shrink-0 font-medium text-white">{money(ev.amount)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </Card>
           )}
 
         </div>
