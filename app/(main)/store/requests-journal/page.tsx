@@ -7,6 +7,7 @@ import {
   ClipboardList,
   History,
   Loader2,
+  Package,
   PackageCheck,
   RefreshCw,
   Search,
@@ -17,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
 
 type InventoryLocation = {
@@ -343,211 +345,223 @@ function StoreRequestsJournalPageContent() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 pt-5 md:px-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-200">
-            <History className="h-3.5 w-3.5" />
-            Магазин / Журнал заявок
+    <TooltipProvider delayDuration={200}>
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10">
+            <History className="h-5 w-5 text-blue-300" />
           </div>
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-white">Журнал заявок</h1>
-            <p className="mt-2 max-w-3xl text-sm text-slate-400">
-              Полная история заявок со всеми переходами: кто создал, кто одобрил, кто выдал и кто принял товар — с
-              датой каждого действия и комментариями.
-            </p>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-foreground">Журнал заявок</h1>
+            <p className="truncate text-xs text-muted-foreground">История: создана → одобрена → выдана → получена</p>
           </div>
         </div>
 
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={load} disabled={loading} className="rounded-2xl">
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 gap-1.5">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
-          <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0} className="rounded-2xl">
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0} className="h-9 gap-1.5">
             Экспорт CSV
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Card className="border-slate-500/20 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Всего</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{stats.total}</p>
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
+        <Card className="border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Всего</p>
+          <p className="mt-1 text-xl font-semibold">{stats.total}</p>
         </Card>
-        <Card className="border-violet-500/20 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Новые</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{stats.newCount}</p>
+        <Card className="border-violet-500/20 bg-violet-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-violet-300/70">Новые</p>
+          <p className="mt-1 text-xl font-semibold text-violet-200">{stats.newCount}</p>
         </Card>
-        <Card className="border-emerald-500/20 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Одобрены</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{stats.approved}</p>
+        <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Одобрены</p>
+          <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.approved}</p>
         </Card>
-        <Card className="border-cyan-500/20 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Выданы</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{stats.issued}</p>
+        <Card className="border-cyan-500/20 bg-cyan-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-cyan-300/70">Выданы</p>
+          <p className="mt-1 text-xl font-semibold text-cyan-200">{stats.issued}</p>
         </Card>
-        <Card className="border-blue-500/20 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Получены</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{stats.received}</p>
+        <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-blue-300/70">Получены</p>
+          <p className="mt-1 text-xl font-semibold text-blue-200">{stats.received}</p>
         </Card>
-        <Card className="border-red-500/20 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Отклонены</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{stats.rejected}</p>
+        <Card className="border-red-500/20 bg-red-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-red-300/70">Отклонены</p>
+          <p className="mt-1 text-xl font-semibold text-red-200">{stats.rejected}</p>
         </Card>
       </div>
 
-      <Card className="border-white/10 bg-slate-950/70 p-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[2fr_1.2fr_1fr_1fr_1fr_0.7fr]">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Поиск: точка, товар, комментарий"
-              className="pl-10"
-            />
-          </div>
-          <Select value={filters.status} onValueChange={(value) => setFilters({ status: value })}>
-            <SelectTrigger>
-              <SelectValue placeholder="Все статусы" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все статусы</SelectItem>
-              <SelectItem value="new">Новая</SelectItem>
-              <SelectItem value="approved_full">Одобрена полностью</SelectItem>
-              <SelectItem value="approved_partial">Одобрена частично</SelectItem>
-              <SelectItem value="issued">Выдана</SelectItem>
-              <SelectItem value="received">Получена</SelectItem>
-              <SelectItem value="rejected">Отклонена</SelectItem>
-              <SelectItem value="disputed">Спор</SelectItem>
-            </SelectContent>
-          </Select>
+      {error ? <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-200">{error}</div> : null}
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            value={filters.actor}
-            onChange={(event) => setFilters({ actor: event.target.value })}
-            placeholder="Кто создавал/одобрял/выдавал"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Поиск: точка, товар, комментарий"
+            className="h-9 pl-9"
           />
-          <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} placeholder="От" />
-          <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} placeholder="До" />
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSearchInput('')
-              setFilters({ status: 'all', actor: '', from: '', to: '', q: '' })
-            }}
-          >
-            Сбросить
-          </Button>
         </div>
+        <Select value={filters.status} onValueChange={(value) => setFilters({ status: value })}>
+          <SelectTrigger className="h-9 w-[200px]"><SelectValue placeholder="Все статусы" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все статусы</SelectItem>
+            <SelectItem value="new">Новая</SelectItem>
+            <SelectItem value="approved_full">Одобрена полностью</SelectItem>
+            <SelectItem value="approved_partial">Одобрена частично</SelectItem>
+            <SelectItem value="issued">Выдана</SelectItem>
+            <SelectItem value="received">Получена</SelectItem>
+            <SelectItem value="rejected">Отклонена</SelectItem>
+            <SelectItem value="disputed">Спор</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          value={filters.actor}
+          onChange={(event) => setFilters({ actor: event.target.value })}
+          placeholder="Кто создавал/одобрял"
+          className="h-9 w-[220px]"
+        />
+        <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} className="h-9 w-[150px]" />
+        <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} className="h-9 w-[150px]" />
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9"
+          onClick={() => {
+            setSearchInput('')
+            setFilters({ status: 'all', actor: '', from: '', to: '', q: '' })
+          }}
+        >
+          Сбросить
+        </Button>
+      </div>
+
+      {/* Main table */}
+      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+        {loading ? (
+          <div className="flex h-60 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+            <Package className="h-8 w-8 opacity-50" />
+            По этим фильтрам ничего не найдено
+          </div>
+        ) : (
+          <div className="max-h-[calc(100vh-340px)] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="w-32 py-2.5 pl-4 pr-2 font-normal">Создана</th>
+                  <th className="py-2.5 px-2 font-normal">Точка</th>
+                  <th className="w-36 py-2.5 px-2 font-normal">Статус</th>
+                  <th className="w-32 py-2.5 px-2 font-normal">Создал</th>
+                  <th className="w-32 py-2.5 px-2 font-normal">Одобрил</th>
+                  <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
+                  <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal">Запрос → Одобр</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {filtered.map((request) => {
+                  const items = asArray(request.items)
+                  const requested = items.reduce((sum, i) => sum + Number(i.requested_qty || 0), 0)
+                  const approved = items.reduce((sum, i) => sum + Number(i.approved_qty || 0), 0)
+                  const timeline = requestTimeline(request)
+                  const pointName = request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'
+                  return (
+                    <tr key={request.id} className="transition hover:bg-white/[0.02]">
+                      <td className="w-32 py-2.5 pl-4 pr-2 align-middle">
+                        <span className="text-xs text-muted-foreground">{formatDateTime(request.created_at)}</span>
+                      </td>
+                      <td className="min-w-0 max-w-0 py-2.5 px-2 align-middle">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p className="truncate text-sm font-medium">{pointName}</p>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="start" className="max-w-md">
+                            <div className="space-y-1 text-xs">
+                              <div className="font-semibold">{pointName}</div>
+                              <div className="text-muted-foreground">Источник: {request.source_location?.name || '—'}</div>
+                              <div className="text-muted-foreground">Витрина: {request.target_location?.name || '—'}</div>
+                              {request.comment ? <div className="mt-1 border-t border-white/10 pt-1">Заявка: {request.comment}</div> : null}
+                              {request.decision_comment ? <div>Решение: {request.decision_comment}</div> : null}
+                              <div className="mt-1 border-t border-white/10 pt-1 space-y-0.5">
+                                {timeline.map((step) => (
+                                  <div key={step.key} className="flex justify-between gap-3">
+                                    <span className="text-muted-foreground">{step.label}:</span>
+                                    <span>{step.by} · {formatDateTime(step.at)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {request.source_location?.name || '—'} → {request.target_location?.name || '—'}
+                        </p>
+                      </td>
+                      <td className="w-36 py-2.5 px-2 align-middle">
+                        <RequestStatusBadge status={request.status} />
+                      </td>
+                      <td className="min-w-0 w-32 py-2.5 px-2 align-middle">
+                        <p className="truncate text-xs text-muted-foreground" title={actorLabel(request.created_by_staff, request.created_by)}>
+                          {actorLabel(request.created_by_staff, request.created_by)}
+                        </p>
+                      </td>
+                      <td className="min-w-0 w-32 py-2.5 px-2 align-middle">
+                        <p className="truncate text-xs text-muted-foreground" title={actorLabel(request.approved_by_staff, request.approved_by)}>
+                          {actorLabel(request.approved_by_staff, request.approved_by)}
+                        </p>
+                      </td>
+                      <td className="w-20 py-2.5 px-2 text-right align-middle">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-sm font-semibold">{items.length}</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="end" className="max-w-md">
+                            {items.length === 0 ? 'Нет позиций' : (
+                              <div className="space-y-1 text-xs">
+                                {items.map((item) => (
+                                  <div key={item.id} className="flex justify-between gap-3">
+                                    <span>{item.item?.name || 'Товар'}</span>
+                                    <span className="text-muted-foreground">
+                                      {formatQty(Number(item.requested_qty || 0))} → {formatQty(Number(item.approved_qty || 0))}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      </td>
+                      <td className="w-32 py-2.5 px-2 pr-4 text-right align-middle">
+                        <span className="text-xs text-muted-foreground">{formatQty(requested)}</span>
+                        <span className="mx-1 text-xs text-muted-foreground">→</span>
+                        <span className="text-sm font-semibold text-emerald-300">{formatQty(approved)}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
-      {error ? (
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>
-      ) : null}
-
-      <Card className="border-white/10 bg-slate-950/70 p-5">
-        <div className="flex items-center gap-2 text-sm font-medium text-white">
-          <ClipboardList className="h-4 w-4 text-blue-300" />
-          История заявок · {filtered.length} из {requests.length}
-        </div>
-
-        <div className="mt-4 space-y-3">
-          {loading ? (
-            <div className="flex items-center gap-3 rounded-xl border border-dashed border-white/10 px-4 py-8 text-sm text-slate-400">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Загружаем журнал...
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-slate-500">
-              По этим фильтрам ничего не найдено.
-            </div>
-          ) : (
-            filtered.map((request) => (
-              <div key={request.id} className="rounded-2xl border border-white/6 bg-slate-900/70 p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold text-white">
-                        {request.company?.name ||
-                          request.target_location?.company?.name ||
-                          request.target_location?.name ||
-                          'Точка'}
-                      </span>
-                      <RequestStatusBadge status={request.status} />
-                      <span className="text-xs text-slate-500">ID {request.id.slice(0, 8)}</span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-400">
-                      <span>Создал: {actorLabel(request.created_by_staff, request.created_by)}</span>
-                      <span>Одобрил: {actorLabel(request.approved_by_staff, request.approved_by)}</span>
-                      <span>Источник: {request.source_location?.name || '—'}</span>
-                      <span>Витрина: {request.target_location?.name || '—'}</span>
-                      <span>Позиций: {asArray(request.items).length}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-4 md:grid-cols-[1.4fr_1fr]">
-                  <div className="rounded-xl border border-white/5 bg-black/20 p-3">
-                    <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-slate-500">Журнал заявки</p>
-                    <div className="space-y-2">
-                      {requestTimeline(request).map((step) => (
-                        <div
-                          key={step.key}
-                          className="grid grid-cols-[80px_1fr_auto] items-center gap-3 text-xs"
-                        >
-                          <span className="text-slate-500">{step.label}</span>
-                          <span className="truncate text-slate-200">{step.by}</span>
-                          <span className="text-slate-400">{formatDateTime(step.at)}</span>
-                        </div>
-                      ))}
-                      {request.received_qty_confirmed != null ? (
-                        <div className="grid grid-cols-[80px_1fr_auto] items-center gap-3 text-xs">
-                          <span className="text-slate-500">Принято</span>
-                          <span className="text-slate-400">Подтверждено количество</span>
-                          <span className="text-slate-200">{formatQty(request.received_qty_confirmed)}</span>
-                        </div>
-                      ) : null}
-                    </div>
-                    {request.comment ? (
-                      <div className="mt-3 border-t border-white/5 pt-2 text-xs text-slate-300">
-                        <span className="text-slate-500">Комментарий заявки: </span>
-                        {request.comment}
-                      </div>
-                    ) : null}
-                    {request.decision_comment ? (
-                      <div className="mt-2 text-xs text-slate-300">
-                        <span className="text-slate-500">Комментарий решения: </span>
-                        {request.decision_comment}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="rounded-xl border border-white/5 bg-black/20 p-3">
-                    <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-slate-500">Позиции</p>
-                    <div className="space-y-1.5">
-                      {asArray(request.items).length === 0 ? (
-                        <p className="text-xs text-slate-500">Нет позиций</p>
-                      ) : (
-                        asArray(request.items).map((item) => (
-                          <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
-                            <span className="truncate text-slate-200">{item.item?.name || 'Товар'}</span>
-                            <span className="shrink-0 text-slate-400">
-                              {formatQty(Number(item.requested_qty || 0))} →{' '}
-                              <span className="text-slate-200">{formatQty(Number(item.approved_qty || 0))}</span>
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </Card>
+      <p className="text-center text-xs text-muted-foreground">
+        История заявок · {filtered.length} из {requests.length}
+      </p>
     </div>
+    </TooltipProvider>
   )
 }
 
