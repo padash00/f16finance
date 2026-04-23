@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { AlertCircle, CheckCircle2, ClipboardList, History, Loader2, MoreHorizontal, PackageCheck, RefreshCw, XCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ClipboardList, History, Loader2, MoreHorizontal, PackageCheck, RefreshCw, Search, XCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -15,8 +15,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { formatMoney } from '@/lib/core/format'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
 
 type InventoryLocation = {
@@ -463,315 +464,296 @@ function StoreRequestsPageContent() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 pt-5 md:px-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-200">
-            <ClipboardList className="h-3.5 w-3.5" />
-            Магазин / Заявки
+    <TooltipProvider delayDuration={200}>
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10">
+            <ClipboardList className="h-5 w-5 text-violet-300" />
           </div>
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-white">Заявки точек</h1>
-            <p className="mt-2 max-w-3xl text-sm text-slate-400">
-              Рабочий экран руководителя: новые заявки на пополнение витрин, быстрые решения по количеству и понятная
-              история того, что уже согласовано или отклонено.
-            </p>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-foreground">Заявки точек</h1>
+            <p className="truncate text-xs text-muted-foreground">Решения по пополнению витрин со склада</p>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <Link href="/store/requests-journal">
-            <Button variant="outline" className="gap-2">
-              <History className="h-4 w-4" />
-              Журнал заявок
+            <Button variant="outline" size="sm" className="h-9 gap-1.5">
+              <History className="h-3.5 w-3.5" />
+              Журнал
             </Button>
           </Link>
-          <Input
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Поиск по точке, товару или комментарию"
-            className="w-full sm:w-80"
-          />
+          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-9 gap-1.5">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Обновить
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <MoreHorizontal className="mr-2 h-4 w-4" />
+              <Button variant="outline" size="sm" className="h-9 gap-1.5">
+                <MoreHorizontal className="h-3.5 w-3.5" />
                 Действия
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Управление заявками</DropdownMenuLabel>
+              <DropdownMenuLabel>Заявки</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={load} disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                Обновить список
+              <DropdownMenuItem onClick={exportRequestsCsv}>
+                <ClipboardList className="h-4 w-4" />
+                Экспорт CSV
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
                   setSearchInput('')
-                  setFilters({ q: '' })
+                  setFilters({ status: 'all', actor: '', from: '', to: '', q: '' })
                 }}
-                disabled={!filters.q.trim()}
               >
                 <XCircle className="h-4 w-4" />
-                Сбросить поиск
+                Сбросить фильтры
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      <Card className="border-white/10 bg-slate-950/70 p-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <select
-            value={filters.status}
-            onChange={(event) => setFilters({ status: event.target.value })}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none"
-          >
-            <option value="all">Все статусы</option>
-            <option value="new">Новая</option>
-            <option value="approved_full">Одобрена полностью</option>
-            <option value="approved_partial">Одобрена частично</option>
-            <option value="issued">Выдана</option>
-            <option value="received">Получена</option>
-            <option value="rejected">Отклонена</option>
-            <option value="disputed">Спор</option>
-          </select>
-          <Input
-            value={filters.actor}
-            onChange={(event) => setFilters({ actor: event.target.value })}
-            placeholder="Кто создавал/одобрял/выдавал"
-          />
-          <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} />
-          <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setSearchInput('')
-              setFilters({ status: 'all', actor: '', from: '', to: '', q: '' })
-            }}
-          >
-            Сбросить фильтры
-          </Button>
-          <Button type="button" variant="outline" onClick={exportRequestsCsv}>
-            Экспорт CSV
-          </Button>
-        </div>
-      </Card>
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Card className="border-violet-500/20 bg-violet-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-violet-300/70">Новые заявки</p>
+          <p className="mt-1 text-xl font-semibold text-violet-200">{stats.pending}</p>
+        </Card>
+        <Card className="border-cyan-500/20 bg-cyan-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-cyan-300/70">К выдаче</p>
+          <p className="mt-1 text-xl font-semibold text-cyan-200">{stats.approved}</p>
+        </Card>
+        <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-blue-300/70">История</p>
+          <p className="mt-1 text-xl font-semibold text-blue-200">{stats.history}</p>
+        </Card>
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Запрошено</p>
+          <p className="mt-1 text-xl font-semibold text-amber-200">{stats.totalRequested}</p>
+        </Card>
+        <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Одобрено</p>
+          <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.totalApproved}</p>
+        </Card>
+      </div>
 
-      {error ? (
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>
-      ) : null}
-      {success ? (
-        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {success}
+      {error ? <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-200">{error}</div> : null}
+      {success ? <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-200">{success}</div> : null}
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Поиск по точке, товару или комментарию"
+            className="h-9 pl-9"
+          />
         </div>
-      ) : null}
+        <Select value={filters.status} onValueChange={(value) => setFilters({ status: value })}>
+          <SelectTrigger className="h-9 w-[200px]"><SelectValue placeholder="Все статусы" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все статусы</SelectItem>
+            <SelectItem value="new">Новая</SelectItem>
+            <SelectItem value="approved_full">Одобрена полностью</SelectItem>
+            <SelectItem value="approved_partial">Одобрена частично</SelectItem>
+            <SelectItem value="issued">Выдана</SelectItem>
+            <SelectItem value="received">Получена</SelectItem>
+            <SelectItem value="rejected">Отклонена</SelectItem>
+            <SelectItem value="disputed">Спор</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          value={filters.actor}
+          onChange={(event) => setFilters({ actor: event.target.value })}
+          placeholder="Кто создавал/одобрял"
+          className="h-9 w-[220px]"
+        />
+        <Input type="date" value={filters.from} onChange={(event) => setFilters({ from: event.target.value })} className="h-9 w-[150px]" />
+        <Input type="date" value={filters.to} onChange={(event) => setFilters({ to: event.target.value })} className="h-9 w-[150px]" />
+      </div>
 
       {stats.pending > 0 && (
-        <div className="flex items-center gap-3 rounded-2xl border border-violet-500/30 bg-violet-500/10 px-5 py-3">
-          <AlertCircle className="h-5 w-5 text-violet-300 shrink-0" />
+        <div className="flex items-center gap-3 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5">
+          <AlertCircle className="h-4 w-4 shrink-0 text-violet-300" />
           <span className="text-sm font-semibold text-violet-200">{stats.pending} {stats.pending === 1 ? 'новая заявка ждёт' : 'новых заявки ждут'} решения</span>
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <Card className="border-violet-500/20 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Новые заявки</p>
-          <p className="mt-3 text-3xl font-semibold text-white">{stats.pending}</p>
-          <p className="mt-2 text-sm text-slate-400">Ждут решения руководителя или superadmin.</p>
-        </Card>
-        <Card className="border-cyan-500/20 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">К выдаче</p>
-          <p className="mt-3 text-3xl font-semibold text-white">{stats.approved}</p>
-          <p className="mt-2 text-sm text-slate-400">Одобренные заявки, которые уже можно отрабатывать по складу.</p>
-        </Card>
-        <Card className="border-blue-500/20 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">История</p>
-          <p className="mt-3 text-3xl font-semibold text-white">{stats.history}</p>
-          <p className="mt-2 text-sm text-slate-400">Полученные или отклоненные документы за последнее время.</p>
-        </Card>
-        <Card className="border-amber-500/20 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Запрошено</p>
-          <p className="mt-3 text-3xl font-semibold text-white">{stats.totalRequested}</p>
-          <p className="mt-2 text-sm text-slate-400">Суммарное количество позиций в очереди на согласование.</p>
-        </Card>
-        <Card className="border-emerald-500/20 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Одобрено</p>
-          <p className="mt-3 text-3xl font-semibold text-white">{stats.totalApproved}</p>
-          <p className="mt-2 text-sm text-slate-400">Количество уже подтвержденных к выдаче единиц товара.</p>
-        </Card>
-      </div>
+      {/* Pending queue */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-violet-500"
+            checked={pendingRequests.length > 0 && pendingRequests.every((request) => selectedIds.includes(request.id))}
+            onChange={(event) => toggleSelectAllPending(event.target.checked)}
+          />
+          <AlertCircle className="h-4 w-4 text-violet-300" />
+          Очередь на решение
+          <span className="text-xs text-muted-foreground">({pendingRequests.length})</span>
+        </div>
 
-      <div className="grid gap-6">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-white">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-violet-500"
-              checked={pendingRequests.length > 0 && pendingRequests.every((request) => selectedIds.includes(request.id))}
-              onChange={(event) => toggleSelectAllPending(event.target.checked)}
-            />
-            <AlertCircle className="h-4 w-4 text-violet-300" />
-            Очередь на решение
-          </div>
+        {loading ? (
+          <Card className="border-white/10 bg-card/70 p-6 text-sm text-muted-foreground">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Загрузка заявок...
+            </div>
+          </Card>
+        ) : pendingRequests.length === 0 ? (
+          <Card className="border-white/10 bg-card/70 p-6 text-sm text-muted-foreground">
+            В очереди нет новых заявок. Здесь будут появляться запросы кассиров на пополнение витрин.
+          </Card>
+        ) : (
+          pendingRequests.map((request) => {
+            const draft = decisionDrafts[request.id] || createDecisionDraft(request)
+            const requestTotal = (request.items || []).reduce((sum, item) => sum + Number(item.requested_qty || 0), 0)
 
-          {loading ? (
-            <Card className="border-white/10 bg-slate-950/70 p-6 text-sm text-slate-400">
-              <div className="flex items-center gap-3">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Загрузка заявок...
-              </div>
-            </Card>
-          ) : pendingRequests.length === 0 ? (
-            <Card className="border-white/10 bg-slate-950/70 p-6 text-sm text-slate-400">
-              В очереди нет новых заявок. Здесь будут появляться запросы кассиров на пополнение витрин.
-            </Card>
-          ) : (
-            pendingRequests.map((request) => {
-              const draft = decisionDrafts[request.id] || createDecisionDraft(request)
-              const requestTotal = (request.items || []).reduce((sum, item) => sum + Number(item.requested_qty || 0), 0)
-
-              return (
-                <Card key={request.id} className="overflow-hidden border-white/10 bg-slate-950/70">
-                  <div className="border-b border-white/5 px-5 py-4">
-                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-violet-500"
-                            checked={selectedIds.includes(request.id)}
-                            onChange={(event) => toggleSelected(request.id, event.target.checked)}
-                          />
-                          <span className="text-base font-semibold text-white">
-                            {request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'}
-                          </span>
-                          <RequestStatusBadge status={request.status} />
-                        </div>
-                        <div className="flex flex-wrap gap-3 text-xs text-slate-400">
-                          <span>Создана: {formatDateTime(request.created_at)}</span>
-                          <span>Создал: {actorLabel(request.created_by_staff, request.created_by)}</span>
-                          <span>Одобрил: {actorLabel(request.approved_by_staff, request.approved_by)}</span>
-                          <span>Источник: {request.source_location?.name || 'Склад'}</span>
-                          <span>Витрина: {request.target_location?.name || '—'}</span>
-                          <span>Позиций: {requestTotal}</span>
-                        </div>
-                        {request.comment ? <p className="text-sm text-slate-300">{request.comment}</p> : null}
-                      </div>
+            return (
+              <Card key={request.id} className="overflow-hidden border-white/10 bg-card/70">
+                <div className="border-b border-white/5 px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-violet-500"
+                      checked={selectedIds.includes(request.id)}
+                      onChange={(event) => toggleSelected(request.id, event.target.checked)}
+                    />
+                    <span className="text-base font-semibold text-foreground">
+                      {request.company?.name || request.target_location?.company?.name || request.target_location?.name || 'Точка'}
+                    </span>
+                    <RequestStatusBadge status={request.status} />
+                    <div className="ml-auto flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                      <span>{formatDateTime(request.created_at)}</span>
+                      <span>Создал: {actorLabel(request.created_by_staff, request.created_by)}</span>
+                      <span>Источник: {request.source_location?.name || 'Склад'}</span>
+                      <span>Позиций: {requestTotal}</span>
                     </div>
                   </div>
+                  {request.comment ? <p className="mt-2 text-sm text-muted-foreground">{request.comment}</p> : null}
+                </div>
 
-                  <div className="space-y-4 px-5 py-5">
-                    <div className="space-y-3">
-                        {asArray(request.items).map((item) => (
-                          <div
-                            key={item.id}
-                          className="grid gap-3 rounded-2xl border border-white/6 bg-slate-900/70 p-4 md:grid-cols-[1.4fr_0.7fr_0.7fr]"
-                        >
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-medium text-white">{item.item?.name || 'Товар'}</div>
-                            <div className="mt-1 text-xs text-slate-500">{item.item?.barcode || 'Без штрихкода'}</div>
-                            {item.comment ? <div className="mt-2 text-xs text-slate-400">{item.comment}</div> : null}
-                          </div>
-                          <div>
-                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Запрос</div>
-                            <div className="mt-2 text-lg font-semibold text-white">{formatQty(Number(item.requested_qty || 0))}</div>
-                          </div>
-                          <div>
-                            <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Одобрить</div>
+                <div className="space-y-3 px-4 py-3">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <th className="py-2 pr-2 font-normal">Товар</th>
+                        <th className="w-28 py-2 px-2 font-normal">Штрихкод</th>
+                        <th className="w-20 py-2 px-2 text-right font-normal">Запрос</th>
+                        <th className="w-28 py-2 px-2 text-right font-normal">Одобрить</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.04]">
+                      {asArray(request.items).map((item) => (
+                        <tr key={item.id}>
+                          <td className="min-w-0 max-w-0 py-2 pr-2 align-middle">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <p className="truncate text-sm font-medium">{item.item?.name || 'Товар'}</p>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" align="start" className="max-w-md">
+                                {item.item?.name || 'Товар'}
+                                {item.comment ? <div className="mt-1 text-xs text-muted-foreground">{item.comment}</div> : null}
+                              </TooltipContent>
+                            </Tooltip>
+                            {item.comment ? <p className="truncate text-[11px] text-muted-foreground">{item.comment}</p> : null}
+                          </td>
+                          <td className="w-28 py-2 px-2 align-middle">
+                            <span className="font-mono text-[11px] text-muted-foreground">{item.item?.barcode || '—'}</span>
+                          </td>
+                          <td className="w-20 py-2 px-2 text-right align-middle">
+                            <span className="text-sm font-semibold">{formatQty(Number(item.requested_qty || 0))}</span>
+                          </td>
+                          <td className="w-28 py-2 px-2 text-right align-middle">
                             <Input
                               value={draft.quantities[item.id] ?? formatQty(Number(item.requested_qty || 0))}
                               onChange={(event) => updateDraftQty(request.id, item.id, event.target.value)}
-                              className="mt-2"
+                              className="h-8 text-right"
                               inputMode="decimal"
                             />
-                          </div>
-                        </div>
+                          </td>
+                        </tr>
                       ))}
-                    </div>
+                    </tbody>
+                  </table>
 
-                    <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-                      <div className="space-y-2">
-                        <label className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-                          Комментарий к решению
-                        </label>
-                        <Textarea
-                          value={draft.decisionComment}
-                          onChange={(event) => updateDraft(request.id, { decisionComment: event.target.value })}
-                          placeholder="Например: выдать срочно, часть товара заменить, проверить остаток по конкретной позиции"
-                          className="min-h-24"
-                        />
-                      </div>
-
-                      <div className="rounded-2xl border border-white/6 bg-slate-900/70 p-4">
-                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Решение по заявке</div>
-                        <div className="mt-4 flex gap-2">
-                          <Button
-                            onClick={() => submitDecision(request, true, false)}
-                            disabled={savingId === request.id}
-                            className="flex-1 justify-start"
-                          >
-                            {savingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackageCheck className="mr-2 h-4 w-4" />}
-                            Сохранить решение
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <Textarea
+                      value={draft.decisionComment}
+                      onChange={(event) => updateDraft(request.id, { decisionComment: event.target.value })}
+                      placeholder="Комментарий к решению (необязательно)"
+                      rows={2}
+                      className="text-sm"
+                    />
+                    <div className="flex items-start gap-2">
+                      <Button
+                        onClick={() => submitDecision(request, true, false)}
+                        disabled={savingId === request.id}
+                        className="gap-2"
+                      >
+                        {savingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
+                        Сохранить
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="icon" disabled={savingId === request.id}>
+                            <MoreHorizontal className="h-4 w-4" />
                           </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="outline" size="icon" disabled={savingId === request.id}>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                              <DropdownMenuLabel>Доп. действия</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => submitDecision(request, true, true)}>
-                                <CheckCircle2 className="h-4 w-4" />
-                                Одобрить полностью
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => submitDecision(request, true, false)}>
-                                <PackageCheck className="h-4 w-4" />
-                                Одобрить по количествам
-                              </DropdownMenuItem>
-                              <DropdownMenuItem variant="destructive" onClick={() => submitDecision(request, false, false)}>
-                                <XCircle className="h-4 w-4" />
-                                Отклонить заявку
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                          <DropdownMenuLabel>Доп. действия</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => submitDecision(request, true, true)}>
+                            <CheckCircle2 className="h-4 w-4" />
+                            Одобрить полностью
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => submitDecision(request, true, false)}>
+                            <PackageCheck className="h-4 w-4" />
+                            Одобрить по количествам
+                          </DropdownMenuItem>
+                          <DropdownMenuItem variant="destructive" onClick={() => submitDecision(request, false, false)}>
+                            <XCircle className="h-4 w-4" />
+                            Отклонить заявку
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
-                </Card>
-              )
-            })
-          )}
-        </div>
-
+                </div>
+              </Card>
+            )
+          })
+        )}
       </div>
 
       {selectedIds.length > 0 ? (
-        <div className="sticky bottom-4 z-30 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-500/30 bg-slate-950/95 px-4 py-3 shadow-2xl">
+        <div className="sticky bottom-4 z-30 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-500/30 bg-[#0f172a]/95 px-4 py-3 shadow-2xl backdrop-blur">
           <div className="text-sm text-violet-100">
             Выбрано заявок: <span className="font-semibold">{selectedIds.length}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => runBulkAction('approve-full')} disabled={bulkSaving} className="gap-2">
+            <Button size="sm" onClick={() => runBulkAction('approve-full')} disabled={bulkSaving} className="gap-2">
               {bulkSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Одобрить полностью
+              Одобрить
             </Button>
-            <Button variant="destructive" onClick={() => runBulkAction('reject')} disabled={bulkSaving} className="gap-2">
+            <Button size="sm" variant="destructive" onClick={() => runBulkAction('reject')} disabled={bulkSaving} className="gap-2">
               <XCircle className="h-4 w-4" />
               Отклонить
             </Button>
-            <Button variant="outline" onClick={() => setSelectedIds([])} disabled={bulkSaving}>
+            <Button size="sm" variant="outline" onClick={() => setSelectedIds([])} disabled={bulkSaving}>
               Снять выбор
             </Button>
           </div>
         </div>
       ) : null}
     </div>
+    </TooltipProvider>
   )
 }
 
