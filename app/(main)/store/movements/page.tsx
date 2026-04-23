@@ -1,13 +1,14 @@
 'use client'
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
-import { ArchiveX, History, RefreshCw, Search } from 'lucide-react'
+import { ArchiveX, ArrowRight, History, Loader2, Package, RefreshCw, Search } from 'lucide-react'
 import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatMoney } from '@/lib/core/format'
 import { useDebouncedValue, useUrlState } from '@/lib/hooks/use-url-state'
 
@@ -173,112 +174,177 @@ function StoreMovementsPageContent() {
     })
   }, [data?.movements, filters])
 
+  const stats = useMemo(() => {
+    const list = filteredMovements
+    const total = list.reduce((s, m) => s + Number(m.total_amount || 0), 0)
+    const receipts = list.filter((m) => m.movement_type === 'receipt').length
+    const transfers = list.filter((m) => m.movement_type === 'transfer_to_point').length
+    return { count: list.length, total, receipts, transfers }
+  }, [filteredMovements])
+
   return (
-    <div className="space-y-6">
-      <Card className="border-white/10 bg-gradient-to-br from-white/[0.05] via-white/[0.03] to-transparent p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-2xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1 text-xs text-violet-200">
-              <History className="h-3.5 w-3.5" />
-              Журнал движений
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">Все товарные операции в одном потоке</h1>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Здесь удобно смотреть приёмки, выдачу на точки, продажи, долги, возвраты и корректировки без лишних карточек от других разделов.
-            </p>
+    <TooltipProvider delayDuration={200}>
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10">
+            <History className="h-5 w-5 text-violet-300" />
           </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-foreground">Журнал движений</h1>
+            <p className="truncate text-xs text-muted-foreground">Приёмки, выдачи, продажи, долги, возвраты и корректировки</p>
+          </div>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Link href="/store/writeoffs">
-              <Button variant="outline" className="rounded-2xl gap-2">
-                <ArchiveX className="h-4 w-4" />
-                Создать списание
-              </Button>
-            </Link>
-            <Button variant="outline" onClick={() => void load()} disabled={loading} className="rounded-2xl">
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Обновить
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Link href="/store/writeoffs">
+            <Button variant="outline" size="sm" className="h-9 gap-1.5">
+              <ArchiveX className="h-3.5 w-3.5" />
+              Списание
             </Button>
-          </div>
+          </Link>
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Обновить
+          </Button>
         </div>
-      </Card>
+      </div>
 
-      <Card className="border-white/10 p-5">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_220px]">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder="Поиск по товару, точке, штрихкоду или комментарию" className="pl-10" />
-          </div>
-          <Select value={filters.type} onValueChange={(value) => setFilters({ type: value })}>
-            <SelectTrigger><SelectValue placeholder="Все операции" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все операции</SelectItem>
-              <SelectItem value="receipt">Приемка</SelectItem>
-              <SelectItem value="transfer_to_point">Выдача на точку</SelectItem>
-              <SelectItem value="sale">Продажа</SelectItem>
-              <SelectItem value="debt">Долг</SelectItem>
-              <SelectItem value="return">Возврат</SelectItem>
-              <SelectItem value="writeoff">Списание</SelectItem>
-              <SelectItem value="inventory_adjustment">Корректировка</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={filters.place} onValueChange={(value) => setFilters({ place: value })}>
-            <SelectTrigger><SelectValue placeholder="Все места" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все места</SelectItem>
-              <SelectItem value="warehouse">В подсобке</SelectItem>
-              <SelectItem value="showcase">На витрине</SelectItem>
-              <SelectItem value="between">Между подсобкой и витриной</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </Card>
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Card className="border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Всего движений</p>
+          <p className="mt-1 text-xl font-semibold">{stats.count}</p>
+        </Card>
+        <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Приёмок</p>
+          <p className="mt-1 text-xl font-semibold text-emerald-200">{stats.receipts}</p>
+        </Card>
+        <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-blue-300/70">Выдач на точку</p>
+          <p className="mt-1 text-xl font-semibold text-blue-200">{stats.transfers}</p>
+        </Card>
+        <Card className="border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Сумма</p>
+          <p className="mt-1 truncate text-xl font-semibold" title={formatMoney(stats.total)}>{formatMoney(stats.total)}</p>
+        </Card>
+      </div>
 
       {error ? (
-        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div>
       ) : null}
 
-      <Card className="border-white/10 p-5">
-        <div className="space-y-3">
-          {loading ? (
-            <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-muted-foreground">Загружаем движения...</div>
-          ) : filteredMovements.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-muted-foreground">По этим фильтрам движений не найдено.</div>
-          ) : (
-            filteredMovements.map((movement) => (
-              <div key={movement.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${movementTypeClass(movement.movement_type)}`}>
-                        {movementTypeLabel(movement.movement_type)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">{formatDateTime(movement.created_at)}</span>
-                    </div>
-                    <div className="mt-2 text-sm font-semibold text-foreground">{movement.item?.name || 'Товар'}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {(movement.from_location?.company?.name || movement.from_location?.name || '—')} → {(movement.to_location?.company?.name || movement.to_location?.name || '—')}
-                    </div>
-                    {movement.comment ? <div className="mt-2 text-sm text-muted-foreground">{movement.comment}</div> : null}
-                  </div>
-
-                  <div className="grid min-w-[220px] gap-2 md:text-right">
-                    <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                      <p className="text-xs text-muted-foreground">Количество</p>
-                      <p className="mt-1 font-semibold text-foreground">{formatQty(movement.quantity)} {movement.item?.unit || 'шт'}</p>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                      <p className="text-xs text-muted-foreground">Сумма</p>
-                      <p className="mt-1 font-semibold text-foreground">{formatMoney(Number(movement.total_amount || 0))}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={queryInput} onChange={(event) => setQueryInput(event.target.value)} placeholder="Поиск по товару, точке, штрихкоду или комментарию" className="h-9 pl-9" />
         </div>
+        <Select value={filters.type} onValueChange={(value) => setFilters({ type: value })}>
+          <SelectTrigger className="h-9 w-[180px]"><SelectValue placeholder="Все операции" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все операции</SelectItem>
+            <SelectItem value="receipt">Приемка</SelectItem>
+            <SelectItem value="transfer_to_point">Выдача на точку</SelectItem>
+            <SelectItem value="sale">Продажа</SelectItem>
+            <SelectItem value="debt">Долг</SelectItem>
+            <SelectItem value="return">Возврат</SelectItem>
+            <SelectItem value="writeoff">Списание</SelectItem>
+            <SelectItem value="inventory_adjustment">Корректировка</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filters.place} onValueChange={(value) => setFilters({ place: value })}>
+          <SelectTrigger className="h-9 w-[200px]"><SelectValue placeholder="Все места" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все места</SelectItem>
+            <SelectItem value="warehouse">В подсобке</SelectItem>
+            <SelectItem value="showcase">На витрине</SelectItem>
+            <SelectItem value="between">Между подсобкой и витриной</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Main table */}
+      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+        {loading ? (
+          <div className="flex h-60 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : filteredMovements.length === 0 ? (
+          <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+            <Package className="h-8 w-8 opacity-50" />
+            По этим фильтрам движений не найдено
+          </div>
+        ) : (
+          <div className="max-h-[calc(100vh-340px)] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="w-36 py-2.5 pl-4 pr-2 font-normal">Дата</th>
+                  <th className="w-40 py-2.5 px-2 font-normal">Тип</th>
+                  <th className="py-2.5 px-2 font-normal">Товар</th>
+                  <th className="py-2.5 px-2 font-normal">Направление</th>
+                  <th className="w-24 py-2.5 px-2 text-right font-normal">Кол-во</th>
+                  <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal">Сумма</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {filteredMovements.map((movement) => {
+                  const from = movement.from_location?.company?.name || movement.from_location?.name || '—'
+                  const to = movement.to_location?.company?.name || movement.to_location?.name || '—'
+                  return (
+                    <tr key={movement.id} className="transition hover:bg-white/[0.02]">
+                      <td className="w-36 py-2.5 pl-4 pr-2 align-middle">
+                        <span className="text-xs text-muted-foreground">{formatDateTime(movement.created_at)}</span>
+                      </td>
+                      <td className="w-40 py-2.5 px-2 align-middle">
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${movementTypeClass(movement.movement_type)}`}>
+                          {movementTypeLabel(movement.movement_type)}
+                        </span>
+                      </td>
+                      <td className="min-w-0 max-w-0 py-2.5 px-2 align-middle">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p className="truncate text-sm font-medium">{movement.item?.name || 'Товар'}</p>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="start" className="max-w-md">
+                            {movement.item?.name || 'Товар'}
+                            {movement.comment ? <div className="mt-1 text-xs text-muted-foreground">{movement.comment}</div> : null}
+                          </TooltipContent>
+                        </Tooltip>
+                        {movement.comment ? <p className="truncate text-[11px] text-muted-foreground">{movement.comment}</p> : null}
+                      </td>
+                      <td className="min-w-0 max-w-0 py-2.5 px-2 align-middle">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                              <span className="truncate">{from}</span>
+                              <ArrowRight className="h-3 w-3 shrink-0 opacity-60" />
+                              <span className="truncate">{to}</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="start" className="max-w-md">
+                            {from} → {to}
+                          </TooltipContent>
+                        </Tooltip>
+                      </td>
+                      <td className="w-24 py-2.5 px-2 text-right align-middle">
+                        <span className="text-sm font-semibold">{formatQty(movement.quantity)} <span className="text-xs text-muted-foreground">{movement.item?.unit || 'шт'}</span></span>
+                      </td>
+                      <td className="w-32 py-2.5 px-2 pr-4 text-right align-middle">
+                        <span className="text-sm font-semibold">{formatMoney(Number(movement.total_amount || 0))}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
+    </TooltipProvider>
   )
 }
 
