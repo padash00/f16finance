@@ -897,11 +897,6 @@ export default function SalaryPage() {
                   const recentPayments = staffSalary.payments
                     .filter((p) => p.staff_id === s.id && String(p.pay_date || '').startsWith(currentStaffSalaryMonthPrefix))
                     .slice(0, 3)
-                  const timeline = buildStaffTimelineEvents({
-                    staffId: s.id,
-                    adjustments: staffSalary.adjustments,
-                    payments: staffSalary.payments,
-                  })
                   const isOperatorBased = s.source_type === 'operator'
                   return (
                     <div key={s.id} className="p-5">
@@ -966,43 +961,6 @@ export default function SalaryPage() {
                                 ) : null}
                               </div>
                             ))}
-                          </div>
-                        </div>
-                      ) : null}
-                      {timeline.length > 0 ? (
-                        <div className="mt-3">
-                          <div className="mb-1 text-xs text-slate-500">Лента событий:</div>
-                          <div className="space-y-1.5">
-                            {timeline.map((ev) => {
-                              const isPayment = ev.kind === 'payment'
-                              const tone = isPayment
-                                ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
-                                : ev.kind === 'bonus'
-                                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                                  : ev.kind === 'advance'
-                                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                                    : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
-                              const label = isPayment
-                                ? 'выплата'
-                                : ev.kind === 'bonus'
-                                  ? 'бонус'
-                                  : ev.kind === 'advance'
-                                    ? 'аванс'
-                                    : ev.kind === 'fine'
-                                      ? 'штраф'
-                                      : 'долг'
-                              return (
-                                <div key={ev.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
-                                  <div className="flex items-center gap-2">
-                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
-                                    <span className="text-slate-400">{ev.date}</span>
-                                    {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
-                                    {ev.comment ? <span className="text-slate-400">{ev.comment}</span> : null}
-                                  </div>
-                                  <span className="font-medium text-white">{money(ev.amount)}</span>
-                                </div>
-                              )
-                            })}
                           </div>
                         </div>
                       ) : null}
