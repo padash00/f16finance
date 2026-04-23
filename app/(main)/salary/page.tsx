@@ -274,6 +274,13 @@ export default function SalaryPage() {
   )
   const broadcastTargets = useMemo(() => (data?.operators || []).filter((i) => i.operator.is_active && i.operator.telegram_chat_id), [data?.operators])
   const summaryText = useMemo(() => { const top = [...(data?.operators || [])].sort((a, b) => b.week.remainingAmount - a.week.remainingAmount)[0]; return top && top.week.remainingAmount > 0 ? `Самый большой остаток у ${getOperatorDisplayName(top.operator)}: ${money(top.week.remainingAmount)}.` : 'На этой неделе остатки закрыты или ещё не сформированы.' }, [data?.operators])
+  const [operatorEventsOperatorId, setOperatorEventsOperatorId] = useState<'all' | string>('all')
+  const [operatorEventsKind, setOperatorEventsKind] = useState<'all' | OperatorTimelineEventKind>('all')
+  const [operatorEventsStatus, setOperatorEventsStatus] = useState<'all' | 'active' | 'voided'>('all')
+  const [operatorEventsQuery, setOperatorEventsQuery] = useState('')
+  const [operatorEventsDateFrom, setOperatorEventsDateFrom] = useState('')
+  const [operatorEventsDateTo, setOperatorEventsDateTo] = useState('')
+  const [operatorEventsLimit, setOperatorEventsLimit] = useState(100)
   const operatorGlobalTimeline = useMemo(() => {
     const items: OperatorTimelineEvent[] = []
     for (const item of data?.operators || []) {
@@ -451,13 +458,6 @@ export default function SalaryPage() {
   const [tab, setTab] = useState<'operators' | 'operator-events' | 'staff' | 'events'>('operators')
   const [markDebtId, setMarkDebtId] = useState<string | null>(null)
   const [markDebtSaving, setMarkDebtSaving] = useState(false)
-  const [operatorEventsOperatorId, setOperatorEventsOperatorId] = useState<'all' | string>('all')
-  const [operatorEventsKind, setOperatorEventsKind] = useState<'all' | OperatorTimelineEventKind>('all')
-  const [operatorEventsStatus, setOperatorEventsStatus] = useState<'all' | 'active' | 'voided'>('all')
-  const [operatorEventsQuery, setOperatorEventsQuery] = useState('')
-  const [operatorEventsDateFrom, setOperatorEventsDateFrom] = useState('')
-  const [operatorEventsDateTo, setOperatorEventsDateTo] = useState('')
-  const [operatorEventsLimit, setOperatorEventsLimit] = useState(100)
 
   // ─── Admin staff salary state ───────────────────────────────────────────
   const [staffSalary, setStaffSalary] = useState<StaffSalaryData | null>(null)
