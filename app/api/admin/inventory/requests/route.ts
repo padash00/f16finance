@@ -66,10 +66,12 @@ export async function GET(request: Request) {
       ),
     )
     const actorById: Record<string, { id: string; full_name: string | null; role: string | null }> = {}
+    const approvedActorFallbackByRequestId: Record<string, string> = {}
     if (actorIds.length > 0) {
       const [
         { data: staffRows },
-        { data: operatorAuthRows },
+        { data: operatorAuthByUserRows },
+        { data: operatorAuthByIdRows },
         { data: orgMemberRows },
       ] = await Promise.all([
         supabase.from('staff').select('id, full_name, role').in('id', actorIds),
@@ -77,6 +79,10 @@ export async function GET(request: Request) {
           .from('operator_auth')
           .select('user_id, role, operator:operator_id(name, short_name)')
           .in('user_id', actorIds),
+        supabase
+          .from('operator_auth')
+          .select('id, user_id, role, operator:operator_id(name, short_name)')
+          .in('id', actorIds),
         access.activeOrganization?.id
           ? supabase
               .from('organization_members')
@@ -128,7 +134,7 @@ export async function GET(request: Request) {
           role: staffMeta?.role || ((m as any).role as string) || null,
         }
       }
-      for (const row of operatorAuthRows || []) {
+      for (const row of operatorAuthByUserRows || []) {
         const userId = String((row as any).user_id || '').trim()
         if (!userId || actorById[userId]) continue
         const op = Array.isArray((row as any).operator) ? (row as any).operator[0] : (row as any).operator
@@ -139,12 +145,101 @@ export async function GET(request: Request) {
           role: ((row as any).role as string) || 'operator',
         }
       }
+      for (const row of operatorAuthByIdRows || []) {
+        const authId = String((row as any).id || '').trim()
+        if (!authId || actorById[authId]) continue
+        const op = Array.isArray((row as any).operator) ? (row as any).operator[0] : (row as any).operator
+        const name = op?.name || op?.short_name || null
+        actorById[authId] = {
+          id: authId,
+          full_name: name,
+          role: ((row as any).role as string) || 'operator',
+        }
+      }
+    }
+
+    const requestsNeedingApprovedFallback = (requests || []).filter(
+      (r: any) => r?.approved_at && !r?.approved_by,
+    )
+    if (requestsNeedingApprovedFallback.length > 0) {
+      const requestIds = requestsNeedingApprovedFallback
+        .map((r: any) => String(r?.id || '').trim())
+        .filter(Boolean)
+      if (requestIds.length > 0) {
+        const { data: auditRows } = await supabase
+          .from('audit_log')
+          .select('entity_id, action, actor_user_id, created_at')
+          .eq('entity_type', 'inventory-request')
+          .in('entity_id', requestIds)
+          .in('action', ['approve', 'reject'])
+          .order('created_at', { ascending: false })
+
+        const fallbackActorIds: string[] = []
+        for (const row of auditRows || []) {
+          const entityId = String((row as any).entity_id || '').trim()
+          const actorUserId = String((row as any).actor_user_id || '').trim()
+          if (!entityId || !actorUserId || approvedActorFallbackByRequestId[entityId]) continue
+          approvedActorFallbackByRequestId[entityId] = actorUserId
+          fallbackActorIds.push(actorUserId)
+        }
+        const unresolvedFallbackActorIds = Array.from(
+          new Set(fallbackActorIds.filter((id) => !actorById[id])),
+        )
+        if (unresolvedFallbackActorIds.length > 0) {
+          const [{ data: fallbackMembers }] = await Promise.all([
+            access.activeOrganization?.id
+              ? supabase
+                  .from('organization_members')
+                  .select('user_id, staff_id, role, email')
+                  .eq('organization_id', access.activeOrganization.id)
+                  .eq('status', 'active')
+                  .in('user_id', unresolvedFallbackActorIds)
+              : Promise.resolve({ data: [] as any[] }),
+          ])
+          const fallbackMemberStaffIds = Array.from(
+            new Set(
+              (fallbackMembers || [])
+                .map((row: any) => String(row?.staff_id || '').trim())
+                .filter(Boolean),
+            ),
+          )
+          const { data: fallbackStaff } =
+            fallbackMemberStaffIds.length > 0
+              ? await supabase.from('staff').select('id, full_name, role').in('id', fallbackMemberStaffIds)
+              : ({ data: [] as any[] } as any)
+          const fallbackStaffById = new Map<string, { full_name: string | null; role: string | null }>()
+          for (const s of fallbackStaff || []) {
+            const id = String((s as any).id || '').trim()
+            if (!id) continue
+            fallbackStaffById.set(id, {
+              full_name: ((s as any).full_name as string) || null,
+              role: ((s as any).role as string) || null,
+            })
+          }
+          for (const m of fallbackMembers || []) {
+            const userId = String((m as any).user_id || '').trim()
+            if (!userId || actorById[userId]) continue
+            const staffId = String((m as any).staff_id || '').trim()
+            const staffMeta = staffId ? fallbackStaffById.get(staffId) : null
+            const fallbackEmail = String((m as any).email || '').trim() || null
+            actorById[userId] = {
+              id: userId,
+              full_name: staffMeta?.full_name || fallbackEmail,
+              role: staffMeta?.role || ((m as any).role as string) || null,
+            }
+          }
+        }
+      }
     }
 
     const enrichedRequests = (requests || []).map((r: any) => ({
       ...r,
       created_by_staff: r.created_by ? actorById[String(r.created_by)] || null : null,
-      approved_by_staff: r.approved_by ? actorById[String(r.approved_by)] || null : null,
+      approved_by_staff:
+        (r.approved_by ? actorById[String(r.approved_by)] || null : null) ||
+        (approvedActorFallbackByRequestId[String(r.id || '')]
+          ? actorById[approvedActorFallbackByRequestId[String(r.id || '')]] || null
+          : null),
       issued_by_staff: r.issued_by ? actorById[String(r.issued_by)] || null : null,
     }))
 
