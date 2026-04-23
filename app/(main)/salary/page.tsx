@@ -298,6 +298,13 @@ export default function SalaryPage() {
   const [staffPayKaspi, setStaffPayKaspi] = useState('')
   const [staffPayComment, setStaffPayComment] = useState('')
   const [staffPaySaving, setStaffPaySaving] = useState(false)
+  const [eventsStaffId, setEventsStaffId] = useState<'all' | string>('all')
+  const [eventsKind, setEventsKind] = useState<'all' | StaffTimelineEvent['kind']>('all')
+  const [eventsStatus, setEventsStatus] = useState<'all' | 'active' | 'voided'>('all')
+  const [eventsQuery, setEventsQuery] = useState('')
+  const [eventsDateFrom, setEventsDateFrom] = useState('')
+  const [eventsDateTo, setEventsDateTo] = useState('')
+  const [eventsLimit, setEventsLimit] = useState(100)
   const currentStaffSalarySlot = useMemo<'first' | 'second'>(() => {
     const day = Number(todayISO().slice(8, 10))
     return day <= 15 ? 'first' : 'second'
@@ -334,11 +341,11 @@ export default function SalaryPage() {
     }
   }, [staffPayModal, staffSalary, staffPayDate, staffPaySlot, staffPayCash, staffPayKaspi, staffPayCompanyId, data?.companies])
   const staffGlobalTimeline = useMemo(() => {
-    if (!staffSalary) return [] as Array<StaffTimelineEvent & { staff_name: string }>
+    if (!staffSalary) return [] as Array<StaffTimelineEvent & { staff_id: string; staff_name: string }>
     const staffNameById = new Map<string, string>(
       (staffSalary.staff || []).map((s) => [s.id, s.full_name || s.short_name || s.id]),
     )
-    const items: Array<StaffTimelineEvent & { staff_name: string }> = []
+    const items: Array<StaffTimelineEvent & { staff_id: string; staff_name: string }> = []
     for (const adj of staffSalary.adjustments || []) {
       items.push({
         id: `adj:${adj.id}`,
@@ -348,6 +355,7 @@ export default function SalaryPage() {
         amount: Number(adj.amount || 0),
         comment: adj.comment || null,
         status: adj.status || 'active',
+        staff_id: adj.staff_id,
         staff_name: staffNameById.get(adj.staff_id) || adj.staff_id,
       })
     }
@@ -360,6 +368,7 @@ export default function SalaryPage() {
         amount: Number(pay.amount || 0),
         comment: pay.comment || null,
         status: 'active',
+        staff_id: pay.staff_id,
         staff_name: staffNameById.get(pay.staff_id) || pay.staff_id,
       })
     }
@@ -371,6 +380,52 @@ export default function SalaryPage() {
       })
       .slice(0, 300)
   }, [staffSalary])
+  const filteredStaffGlobalTimeline = useMemo(() => {
+    const query = eventsQuery.trim().toLowerCase()
+    return staffGlobalTimeline
+      .filter((ev) => (eventsStaffId === 'all' ? true : ev.staff_id === eventsStaffId))
+      .filter((ev) => (eventsKind === 'all' ? true : ev.kind === eventsKind))
+      .filter((ev) => {
+        if (eventsStatus === 'all') return true
+        if (eventsStatus === 'voided') return ev.status === 'voided'
+        return ev.status !== 'voided'
+      })
+      .filter((ev) => (eventsDateFrom ? ev.date >= eventsDateFrom : true))
+      .filter((ev) => (eventsDateTo ? ev.date <= eventsDateTo : true))
+      .filter((ev) => {
+        if (!query) return true
+        return (
+          ev.staff_name.toLowerCase().includes(query) ||
+          String(ev.comment || '').toLowerCase().includes(query) ||
+          ev.kind.toLowerCase().includes(query)
+        )
+      })
+  }, [staffGlobalTimeline, eventsStaffId, eventsKind, eventsStatus, eventsDateFrom, eventsDateTo, eventsQuery])
+  const visibleStaffGlobalTimeline = useMemo(
+    () => filteredStaffGlobalTimeline.slice(0, eventsLimit),
+    [filteredStaffGlobalTimeline, eventsLimit],
+  )
+  const groupedVisibleEvents = useMemo(() => {
+    const groups = new Map<string, typeof visibleStaffGlobalTimeline>()
+    for (const ev of visibleStaffGlobalTimeline) {
+      const dateKey = String(ev.date || '')
+      const list = groups.get(dateKey) || []
+      list.push(ev)
+      groups.set(dateKey, list)
+    }
+    return Array.from(groups.entries())
+  }, [visibleStaffGlobalTimeline])
+  const eventsSummary = useMemo(() => {
+    const total = filteredStaffGlobalTimeline.length
+    const payments = filteredStaffGlobalTimeline
+      .filter((ev) => ev.kind === 'payment' && ev.status !== 'voided')
+      .reduce((sum, ev) => sum + Number(ev.amount || 0), 0)
+    const deductions = filteredStaffGlobalTimeline
+      .filter((ev) => ev.kind === 'debt' || ev.kind === 'fine' || ev.kind === 'advance')
+      .filter((ev) => ev.status !== 'voided')
+      .reduce((sum, ev) => sum + Number(ev.amount || 0), 0)
+    return { total, payments, deductions }
+  }, [filteredStaffGlobalTimeline])
 
   const loadStaffSalary = useCallback(async () => {
     setStaffSalaryLoading(true)
@@ -990,49 +1045,125 @@ export default function SalaryPage() {
                 </div>
               </div>
               <div className="p-5">
+                <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                  <input
+                    className={input}
+                    type="text"
+                    value={eventsQuery}
+                    onChange={(e) => setEventsQuery(e.target.value)}
+                    placeholder="Поиск: сотрудник, комментарий, тип"
+                  />
+                  <select className={selectCls} value={eventsStaffId} onChange={(e) => setEventsStaffId(e.target.value as any)}>
+                    <option value="all">Все сотрудники</option>
+                    {(staffSalary?.staff || []).map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.full_name || s.short_name || s.id}
+                      </option>
+                    ))}
+                  </select>
+                  <select className={selectCls} value={eventsKind} onChange={(e) => setEventsKind(e.target.value as any)}>
+                    <option value="all">Все типы</option>
+                    <option value="payment">Выплаты</option>
+                    <option value="bonus">Бонусы</option>
+                    <option value="fine">Штрафы</option>
+                    <option value="debt">Долги</option>
+                    <option value="advance">Авансы</option>
+                  </select>
+                  <select className={selectCls} value={eventsStatus} onChange={(e) => setEventsStatus(e.target.value as any)}>
+                    <option value="all">Любой статус</option>
+                    <option value="active">Активные</option>
+                    <option value="voided">Аннулированные</option>
+                  </select>
+                  <input className={input} type="date" value={eventsDateFrom} onChange={(e) => setEventsDateFrom(e.target.value)} />
+                  <input className={input} type="date" value={eventsDateTo} onChange={(e) => setEventsDateTo(e.target.value)} />
+                </div>
+                <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                    Событий: <span className="font-semibold text-white">{eventsSummary.total}</span>
+                  </span>
+                  <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-sky-200">
+                    Выплаты: <span className="font-semibold text-white">{money(eventsSummary.payments)}</span>
+                  </span>
+                  <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1 text-rose-200">
+                    Удержания: <span className="font-semibold text-white">{money(eventsSummary.deductions)}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-slate-300 hover:bg-white/[0.08]"
+                    onClick={() => {
+                      setEventsQuery('')
+                      setEventsStaffId('all')
+                      setEventsKind('all')
+                      setEventsStatus('all')
+                      setEventsDateFrom('')
+                      setEventsDateTo('')
+                      setEventsLimit(100)
+                    }}
+                  >
+                    Сбросить фильтры
+                  </button>
+                </div>
                 {staffSalaryLoading ? (
                   <div className="space-y-2">
                     {Array.from({ length: 8 }).map((_, idx) => (
                       <Skeleton key={idx} className="h-10 rounded-xl" />
                     ))}
                   </div>
-                ) : staffGlobalTimeline.length === 0 ? (
+                ) : filteredStaffGlobalTimeline.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center text-sm text-slate-500">
                     Пока нет событий для отображения.
                   </div>
                 ) : (
                   <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
-                    {staffGlobalTimeline.map((ev) => {
-                      const isPayment = ev.kind === 'payment'
-                      const tone = isPayment
-                        ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
-                        : ev.kind === 'bonus'
-                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                          : ev.kind === 'advance'
-                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                            : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
-                      const label = isPayment
-                        ? 'выплата'
-                        : ev.kind === 'bonus'
-                          ? 'бонус'
-                          : ev.kind === 'advance'
-                            ? 'аванс'
-                            : ev.kind === 'fine'
-                              ? 'штраф'
-                              : 'долг'
-                      return (
-                        <div key={ev.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
-                            <span className="text-slate-300">{ev.staff_name}</span>
-                            <span className="text-slate-500">{ev.date}</span>
-                            {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
-                            {ev.comment ? <span className="truncate text-slate-400">{ev.comment}</span> : null}
-                          </div>
-                          <span className="ml-3 shrink-0 font-medium text-white">{money(ev.amount)}</span>
+                    {groupedVisibleEvents.map(([dateKey, events]) => (
+                      <div key={dateKey} className="space-y-2">
+                        <div className="sticky top-0 z-10 rounded-lg bg-slate-900/90 px-2 py-1 text-[11px] text-slate-400 backdrop-blur">
+                          {formatRuDate(dateKey)}
                         </div>
-                      )
-                    })}
+                        {events.map((ev) => {
+                          const isPayment = ev.kind === 'payment'
+                          const tone = isPayment
+                            ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                            : ev.kind === 'bonus'
+                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                              : ev.kind === 'advance'
+                                ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                                : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                          const label = isPayment
+                            ? 'выплата'
+                            : ev.kind === 'bonus'
+                              ? 'бонус'
+                              : ev.kind === 'advance'
+                                ? 'аванс'
+                                : ev.kind === 'fine'
+                                  ? 'штраф'
+                                  : 'долг'
+                          return (
+                            <div key={ev.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
+                                <span className="text-slate-300">{ev.staff_name}</span>
+                                {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
+                                {ev.comment ? <span className="truncate text-slate-400">{ev.comment}</span> : null}
+                              </div>
+                              <span className="ml-3 shrink-0 font-medium text-white">{money(ev.amount)}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                    {visibleStaffGlobalTimeline.length < filteredStaffGlobalTimeline.length ? (
+                      <div className="flex justify-center pt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                          onClick={() => setEventsLimit((prev) => prev + 100)}
+                        >
+                          Показать ещё
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
