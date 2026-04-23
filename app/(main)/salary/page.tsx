@@ -32,6 +32,15 @@ type ShiftBreakdown = { id: string; date: string; shift: string; companyCode: st
 type StaffMember = { id: string; full_name: string; short_name: string | null; role: string; monthly_salary: number; extra_day_company_code: string | null; extra_day_shift_type: string | null; telegram_chat_id: string | null; source_type?: 'staff' | 'operator' }
 type StaffAdjustment = { id: string; staff_id: string; kind: 'debt' | 'fine' | 'bonus' | 'advance'; amount: number; date: string; comment: string | null; status: string; created_at?: string | null }
 type StaffPayment = { id: string; staff_id: string; pay_date: string; slot: string; amount: number; comment: string | null; created_at?: string | null }
+type StaffTimelineEvent = {
+  id: string
+  date: string
+  created_at?: string | null
+  kind: 'payment' | 'bonus' | 'fine' | 'debt' | 'advance'
+  amount: number
+  comment: string | null
+  status?: string
+}
 type StaffSalaryData = {
   can_edit?: boolean
   staff: StaffMember[]
@@ -113,6 +122,43 @@ function calcStaffToPay(
   const fines = active.filter(a => a.kind === 'fine').reduce((sum, a) => sum + a.amount, 0)
   const advances = active.filter(a => a.kind === 'advance').reduce((sum, a) => sum + a.amount, 0)
   return { half, bonuses, debts, fines, advances, toPay: half + bonuses - debts - fines - advances }
+}
+
+function buildStaffTimelineEvents(params: {
+  staffId: string
+  adjustments: StaffAdjustment[]
+  payments: StaffPayment[]
+}) {
+  const adjustmentEvents: StaffTimelineEvent[] = params.adjustments
+    .filter((a) => a.staff_id === params.staffId)
+    .map((a) => ({
+      id: `adj:${a.id}`,
+      date: a.date,
+      created_at: a.created_at || null,
+      kind: a.kind,
+      amount: Number(a.amount || 0),
+      comment: a.comment || null,
+      status: a.status || 'active',
+    }))
+  const paymentEvents: StaffTimelineEvent[] = params.payments
+    .filter((p) => p.staff_id === params.staffId)
+    .map((p) => ({
+      id: `pay:${p.id}`,
+      date: p.pay_date,
+      created_at: p.created_at || null,
+      kind: 'payment',
+      amount: Number(p.amount || 0),
+      comment: p.comment || null,
+      status: 'active',
+    }))
+
+  return [...adjustmentEvents, ...paymentEvents]
+    .sort((a, b) => {
+      const byDate = String(b.date || '').localeCompare(String(a.date || ''))
+      if (byDate !== 0) return byDate
+      return String(b.created_at || '').localeCompare(String(a.created_at || ''))
+    })
+    .slice(0, 12)
 }
 
 const roleLabel: Record<string, string> = { owner: 'Владелец', manager: 'Руководитель', marketer: 'Маркетолог', super_admin: 'Супер-админ', other: 'Сотрудник' }
@@ -804,6 +850,11 @@ export default function SalaryPage() {
                   const recentPayments = staffSalary.payments
                     .filter((p) => p.staff_id === s.id && String(p.pay_date || '').startsWith(currentStaffSalaryMonthPrefix))
                     .slice(0, 3)
+                  const timeline = buildStaffTimelineEvents({
+                    staffId: s.id,
+                    adjustments: staffSalary.adjustments,
+                    payments: staffSalary.payments,
+                  })
                   const isOperatorBased = s.source_type === 'operator'
                   return (
                     <div key={s.id} className="p-5">
@@ -868,6 +919,43 @@ export default function SalaryPage() {
                                 ) : null}
                               </div>
                             ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {timeline.length > 0 ? (
+                        <div className="mt-3">
+                          <div className="mb-1 text-xs text-slate-500">Лента событий:</div>
+                          <div className="space-y-1.5">
+                            {timeline.map((ev) => {
+                              const isPayment = ev.kind === 'payment'
+                              const tone = isPayment
+                                ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                                : ev.kind === 'bonus'
+                                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                                  : ev.kind === 'advance'
+                                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                                    : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                              const label = isPayment
+                                ? 'выплата'
+                                : ev.kind === 'bonus'
+                                  ? 'бонус'
+                                  : ev.kind === 'advance'
+                                    ? 'аванс'
+                                    : ev.kind === 'fine'
+                                      ? 'штраф'
+                                      : 'долг'
+                              return (
+                                <div key={ev.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>{label}</span>
+                                    <span className="text-slate-400">{ev.date}</span>
+                                    {ev.status === 'voided' ? <span className="text-slate-500">(аннулировано)</span> : null}
+                                    {ev.comment ? <span className="text-slate-400">{ev.comment}</span> : null}
+                                  </div>
+                                  <span className="font-medium text-white">{money(ev.amount)}</span>
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
                       ) : null}
