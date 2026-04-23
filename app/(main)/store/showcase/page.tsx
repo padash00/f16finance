@@ -32,6 +32,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Search } from 'lucide-react'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -123,6 +126,8 @@ export default function ShowcasePage() {
   const [sending, setSending] = useState(false)
   const [sendSuccess, setSendSuccess] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+
+  const [stockSearch, setStockSearch] = useState('')
 
   // Return to warehouse panel
   const [showReturnPanel, setShowReturnPanel] = useState(false)
@@ -274,257 +279,294 @@ export default function ShowcasePage() {
   // ─── Render ───────────────────────────────────────────────────────────────────
 
   const newRequestsCount = pendingRequests.filter((r) => r.status === 'new').length
+  const totalShowcaseQty = balances.reduce((s, b) => s + Number(b.quantity || 0), 0)
+
+  const filteredBalances = balances.filter((b) => {
+    if (!stockSearch.trim()) return true
+    const q = stockSearch.toLowerCase()
+    return (
+      b.item?.name?.toLowerCase().includes(q) ||
+      b.item?.barcode?.toLowerCase().includes(q)
+    )
+  })
 
   return (
-    <div className="space-y-5">
+    <TooltipProvider delayDuration={200}>
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
       {/* Header */}
-      <section className="rounded-3xl border border-blue-500/20 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.15),transparent_36%),linear-gradient(180deg,rgba(17,24,39,0.96),rgba(15,23,42,0.96))] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs text-blue-300">
-              <Store className="h-3.5 w-3.5" />
-              Витрина точки
-            </div>
-            <h1 className="mt-3 text-2xl font-semibold text-white">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10">
+            <Store className="h-5 w-5 text-blue-300" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-foreground">
               {showcase ? showcase.name : 'Витрина'}
             </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Товары на витрине вашей точки. Запросите пополнение со склада — менеджер одобрит и товар появится автоматически.
+            <p className="truncate text-xs text-muted-foreground">
+              {warehouse ? `Склад: ${warehouse.name}` : 'Склад не настроен'}
             </p>
-            {warehouse && (
-              <p className="mt-1 text-xs text-slate-500">Склад: {warehouse.name}</p>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-start gap-2">
-            {/* Company selector */}
-            {companies.length > 1 && (
-              <div className="relative">
-                <select
-                  value={selectedCompanyId || ''}
-                  onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
-                  className="appearance-none rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 pr-8 text-sm text-foreground outline-none focus:border-blue-400/50"
-                >
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              </div>
-            )}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-1.5">
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                  Действия
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Управление витриной</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => { setShowRequestPanel(true); setShowReturnPanel(false) }}>
-                  <ClipboardList className="h-3.5 w-3.5" />
-                  Запросить со склада
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={balances.length === 0}
-                  onClick={() => { setShowReturnPanel(true); setShowRequestPanel(false) }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Вернуть на склад
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled={loading} onClick={() => void load()}>
-                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-                  Обновить данные
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="mt-4 grid grid-cols-3 gap-3">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Позиций</p>
-            <p className="mt-1.5 text-2xl font-semibold">{balances.length}</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Ед. товара</p>
-            <p className="mt-1.5 text-2xl font-semibold">{balances.reduce((s, b) => s + Number(b.quantity || 0), 0)}</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Заявок в работе</p>
-            <p className={`mt-1.5 text-2xl font-semibold ${newRequestsCount > 0 ? 'text-amber-400' : ''}`}>{newRequestsCount}</p>
-          </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {companies.length > 1 && (
+            <div className="relative">
+              <select
+                value={selectedCompanyId || ''}
+                onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
+                className="h-9 appearance-none rounded-lg border border-white/10 bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-blue-400/50"
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            </div>
+          )}
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Обновить
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { setShowReturnPanel(true); setShowRequestPanel(false) }}
+            disabled={balances.length === 0}
+            className="h-9 gap-1.5"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Вернуть на склад
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => { setShowRequestPanel(true); setShowReturnPanel(false) }}
+            className="h-9 gap-1.5 bg-blue-600 hover:bg-blue-700"
+          >
+            <ClipboardList className="h-3.5 w-3.5" />
+            Запросить со склада
+          </Button>
         </div>
+      </div>
 
-        {sendSuccess && (
-          <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">
-            <CheckCircle2 className="h-4 w-4" />
-            Заявка отправлена — менеджер получил уведомление
+      {/* Stats strip */}
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Позиций</p>
+          <p className="mt-1 text-xl font-semibold">{balances.length}</p>
+        </Card>
+        <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-blue-300/70">Ед. товара на витрине</p>
+          <p className="mt-1 text-xl font-semibold text-blue-200">{totalShowcaseQty}</p>
+        </Card>
+        <Card className={`p-3 ${newRequestsCount > 0 ? 'border-amber-500/20 bg-amber-500/[0.05]' : 'border-white/10 bg-white/[0.03]'}`}>
+          <p className={`text-[10px] uppercase tracking-widest ${newRequestsCount > 0 ? 'text-amber-300/70' : 'text-muted-foreground'}`}>Заявок в работе</p>
+          <p className={`mt-1 text-xl font-semibold ${newRequestsCount > 0 ? 'text-amber-300' : ''}`}>{newRequestsCount}</p>
+        </Card>
+      </div>
+
+      {sendSuccess && (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">
+          <CheckCircle2 className="h-4 w-4" />
+          Заявка отправлена — менеджер получил уведомление
+        </div>
+      )}
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={stockSearch}
+            onChange={(e) => setStockSearch(e.target.value)}
+            placeholder="Поиск по названию или штрихкоду..."
+            className="h-9 pl-9"
+          />
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="h-9 gap-1.5">
+              <MoreHorizontal className="h-3.5 w-3.5" />
+              Действия
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Управление витриной</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => { setShowRequestPanel(true); setShowReturnPanel(false) }}>
+              <ClipboardList className="h-3.5 w-3.5" />
+              Запросить со склада
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={balances.length === 0}
+              onClick={() => { setShowReturnPanel(true); setShowRequestPanel(false) }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Вернуть на склад
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Main table */}
+      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+        {loading ? (
+          <div className="flex h-60 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : !showcase ? (
+          <div className="flex h-60 flex-col items-center justify-center gap-2 text-muted-foreground">
+            <Store className="h-8 w-8 opacity-30" />
+            <p className="text-sm">Витрина не активирована для этой точки</p>
+            <p className="text-xs">Обратитесь к администратору</p>
+          </div>
+        ) : error ? (
+          <div className="flex h-60 items-center justify-center gap-2 text-rose-400">
+            <AlertCircle className="h-4 w-4" />
+            <span className="text-sm">{error}</span>
+          </div>
+        ) : filteredBalances.length === 0 ? (
+          <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+            <ShoppingBag className="h-8 w-8 opacity-50" />
+            {stockSearch ? 'Ничего не найдено' : 'Витрина пустая — запросите товар со склада'}
+          </div>
+        ) : (
+          <div className="max-h-[calc(100vh-380px)] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="py-2.5 pl-4 pr-2 font-normal">Товар</th>
+                  <th className="w-36 py-2.5 px-2 font-normal">Штрихкод</th>
+                  <th className="w-36 py-2.5 px-2 font-normal">Категория</th>
+                  <th className="w-20 py-2.5 px-2 text-right font-normal">Итого</th>
+                  <th className="w-20 py-2.5 px-2 text-right font-normal text-amber-300/70">Подсобка</th>
+                  <th className="w-24 py-2.5 px-2 text-right font-normal text-blue-300/70">Витрина</th>
+                  <th className="w-24 py-2.5 px-2 pr-4 text-right font-normal">Цена</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {filteredBalances.map((b) => {
+                  const qty = Number(b.quantity)
+                  const threshold = b.item?.low_stock_threshold ?? null
+                  const isLow = threshold !== null ? qty <= threshold : qty <= 0
+                  const isZero = qty <= 0
+                  const qtyColor = isZero ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-blue-300'
+                  const rowBg = isLow && !isZero ? 'bg-amber-500/[0.03]' : isZero ? 'bg-rose-500/[0.03]' : ''
+                  return (
+                    <tr key={b.item_id} className={`transition hover:bg-white/[0.02] ${rowBg}`}>
+                      <td className="min-w-0 max-w-0 py-2.5 pl-4 pr-2 align-middle">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p className="truncate text-sm font-medium">{b.item?.name || 'Товар'}</p>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="start" className="max-w-md">
+                            {b.item?.name || 'Товар'}
+                          </TooltipContent>
+                        </Tooltip>
+                        {isLow && !isZero && threshold !== null && (
+                          <p className="text-[10px] text-amber-400">⚠ мало (мин: {threshold})</p>
+                        )}
+                      </td>
+                      <td className="w-36 py-2.5 px-2 align-middle">
+                        <span className="truncate font-mono text-xs text-muted-foreground">{b.item?.barcode || '—'}</span>
+                      </td>
+                      <td className="w-36 py-2.5 px-2 align-middle">
+                        <span className="line-clamp-1 text-xs text-muted-foreground">{b.item?.category?.name || '—'}</span>
+                      </td>
+                      <td className="w-20 py-2.5 px-2 text-right align-middle">
+                        <span className="text-sm font-semibold">{b.catalog_quantity}</span>
+                      </td>
+                      <td className="w-20 py-2.5 px-2 text-right align-middle">
+                        <span className="text-sm font-semibold text-amber-300">{b.warehouse_quantity}</span>
+                      </td>
+                      <td className="w-24 py-2.5 px-2 text-right align-middle">
+                        <span className={`text-sm font-semibold ${qtyColor}`}>{b.quantity}</span>
+                        <span className="ml-1 text-[10px] text-muted-foreground">{b.item?.unit || 'шт'}</span>
+                      </td>
+                      <td className="w-24 py-2.5 px-2 pr-4 text-right align-middle">
+                        <span className="text-xs text-muted-foreground">{b.item?.sale_price ? `${b.item.sale_price} ₸` : '—'}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
-      </section>
+      </Card>
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
-        {/* LEFT: showcase stock */}
-        <div className="space-y-5">
-          <Card className="border-white/10 bg-card/70">
-            <CardHeader className="border-b border-white/10 pb-3">
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <Package className="h-4 w-4 text-blue-300" />
-                Остатки на витрине
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex h-40 items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : !showcase ? (
-                <div className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">
-                  <Store className="h-8 w-8 opacity-30" />
-                  <p className="text-sm">Витрина не активирована для этой точки</p>
-                  <p className="text-xs">Обратитесь к администратору для подключения магазина</p>
-                </div>
-              ) : error ? (
-                <div className="flex h-40 items-center justify-center gap-2 text-rose-400">
-                  <AlertCircle className="h-4 w-4" />
-                  <span className="text-sm">{error}</span>
-                </div>
-              ) : balances.length === 0 ? (
-                <div className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">
-                  <ShoppingBag className="h-8 w-8 opacity-30" />
-                  <p className="text-sm">Витрина пустая</p>
-                  <p className="text-xs">Запросите товар со склада</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-white/[0.06]">
-                  {balances.map((b) => {
-                    const qty = Number(b.quantity)
-                    const threshold = b.item?.low_stock_threshold ?? null
-                    const isLow = threshold !== null ? qty <= threshold : qty <= 0
-                    const isZero = qty <= 0
-                    const qtyColor = isZero ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-emerald-400'
-                    const rowBg = isLow && !isZero ? 'bg-amber-500/[0.04]' : isZero ? 'bg-rose-500/[0.04]' : ''
-                    return (
-                      <div key={b.item_id} className={`flex items-center justify-between px-4 py-3 ${rowBg}`}>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{b.item?.name || 'Товар'}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {b.item?.barcode || ''}
-                            {b.item?.category ? ` · ${b.item.category.name}` : ''}
-                          </p>
-                          {isLow && !isZero && threshold !== null && (
-                            <p className="text-[10px] text-amber-400">⚠ мало (мин: {threshold})</p>
-                          )}
-                        </div>
-                        <div className="ml-3 shrink-0 flex gap-3 text-right">
-                          <div>
-                            <p className="text-[10px] text-muted-foreground">итого</p>
-                            <p className="text-sm font-semibold text-foreground">{b.catalog_quantity}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-muted-foreground">склад</p>
-                            <p className="text-sm font-semibold text-amber-300">{b.warehouse_quantity}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-muted-foreground">витрина</p>
-                            <p className={`text-sm font-semibold ${qtyColor}`}>{b.quantity}</p>
-                          </div>
-                          <div className="self-end pb-0.5">
-                            <p className="text-[10px] text-muted-foreground">{b.item?.unit || 'шт'}</p>
-                            {b.item?.sale_price ? (
-                              <p className="text-[10px] text-muted-foreground">{b.item.sale_price} ₸</p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Request history */}
-          <Card className="border-white/10 bg-card/70">
-            <CardHeader className="border-b border-white/10 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <ClipboardList className="h-4 w-4 text-violet-300" />
-                  История заявок
-                </CardTitle>
-                <Link
-                  href="/store/requests"
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-violet-300 transition-colors"
-                >
-                  Все заявки
-                  <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent className="divide-y divide-white/[0.06] p-0">
-              {loading ? (
-                <div className="flex h-24 items-center justify-center">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
-              ) : pendingRequests.length === 0 ? (
-                <div className="flex h-24 flex-col items-center justify-center gap-1 text-muted-foreground">
-                  <ClipboardList className="h-5 w-5 opacity-30" />
-                  <p className="text-xs">Заявок пока нет</p>
-                </div>
-              ) : (
-                pendingRequests.map((req) => (
-                  <div key={req.id} className="px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-muted-foreground">{formatDate(req.created_at)}</span>
-                      <Badge variant={statusVariant(req.status)} className="text-[10px]">
-                        {statusLabel(req.status)}
-                      </Badge>
-                    </div>
-                    {req.comment && <p className="mt-1 text-xs text-muted-foreground">{req.comment}</p>}
-                    <div className="mt-2 space-y-0.5">
-                      {req.items.slice(0, 4).map((item) => (
-                        <div key={item.id} className="flex items-center justify-between text-[11px] text-muted-foreground">
-                          <span className="truncate">{item.item?.name || 'Товар'}</span>
-                          <span className="ml-2 shrink-0 font-mono">
-                            {item.requested_qty}
-                            {item.approved_qty !== null ? ` → ${item.approved_qty}` : ''}
-                          </span>
-                        </div>
-                      ))}
-                      {req.items.length > 4 && (
-                        <p className="text-[10px] text-muted-foreground">+{req.items.length - 4} ещё</p>
-                      )}
-                    </div>
+      {/* Request history */}
+      <Card className="border-white/10 bg-card/70">
+        <CardHeader className="border-b border-white/10 pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <ClipboardList className="h-4 w-4 text-violet-300" />
+              История заявок
+            </CardTitle>
+            <Link
+              href="/store/requests"
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-violet-300 transition-colors"
+            >
+              Все заявки
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex h-24 items-center justify-center">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : pendingRequests.length === 0 ? (
+            <div className="flex h-24 flex-col items-center justify-center gap-1 text-muted-foreground">
+              <ClipboardList className="h-5 w-5 opacity-30" />
+              <p className="text-xs">Заявок пока нет</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-white/[0.06]">
+              {pendingRequests.map((req) => (
+                <div key={req.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">{formatDate(req.created_at)}</span>
+                    <Badge variant={statusVariant(req.status)} className="text-[10px]">
+                      {statusLabel(req.status)}
+                    </Badge>
                   </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                  {req.comment && <p className="mt-1 text-xs text-muted-foreground">{req.comment}</p>}
+                  <div className="mt-2 grid gap-0.5 md:grid-cols-2">
+                    {req.items.slice(0, 8).map((item) => (
+                      <div key={item.id} className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                        <span className="truncate">{item.item?.name || 'Товар'}</span>
+                        <span className="shrink-0 font-mono">
+                          {item.requested_qty}
+                          {item.approved_qty !== null ? ` → ${item.approved_qty}` : ''}
+                        </span>
+                      </div>
+                    ))}
+                    {req.items.length > 8 && (
+                      <p className="text-[10px] text-muted-foreground">+{req.items.length - 8} ещё</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* RIGHT: request panel */}
-        {showRequestPanel && (
-          <Card className="border-blue-500/20 bg-card/70">
-            <CardHeader className="border-b border-white/10 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <ClipboardList className="h-4 w-4 text-blue-300" />
-                  Заявка на пополнение
-                </CardTitle>
-                <button onClick={() => setShowRequestPanel(false)} className="text-muted-foreground hover:text-foreground">
-                  ✕
-                </button>
-              </div>
-              {warehouse && (
-                <p className="mt-1 text-[11px] text-muted-foreground">Со склада: {warehouse.name}</p>
-              )}
-            </CardHeader>
-            <CardContent className="p-4">
+      {/* Request Sheet */}
+      <Sheet open={showRequestPanel} onOpenChange={setShowRequestPanel}>
+        <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0">
+          <SheetHeader className="border-b border-white/10 p-5">
+            <SheetTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-blue-300" />
+              Заявка на пополнение
+            </SheetTitle>
+            <SheetDescription>
+              {warehouse ? `Со склада: ${warehouse.name}` : 'Склад не настроен — обратитесь к администратору'}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto p-5">
               {!warehouse ? (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
                   Склад для этой точки не настроен. Сначала добавьте товары на склад.
@@ -623,24 +665,23 @@ export default function ShowcasePage() {
                   </Button>
                 </form>
               )}
-            </CardContent>
-          </Card>
-        )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
-        {/* Return to warehouse panel */}
-        {showReturnPanel && (
-          <Card className="border-amber-500/20 bg-card/70">
-            <CardHeader className="border-b border-white/10 pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <Trash2 className="h-4 w-4 text-amber-300" />
-                  Возврат на склад
-                </CardTitle>
-                <button onClick={() => setShowReturnPanel(false)} className="text-muted-foreground hover:text-foreground">✕</button>
-              </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">Товары спишутся с витрины и добавятся на склад</p>
-            </CardHeader>
-            <CardContent className="p-4">
+      {/* Return Sheet */}
+      <Sheet open={showReturnPanel} onOpenChange={setShowReturnPanel}>
+        <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0">
+          <SheetHeader className="border-b border-white/10 p-5">
+            <SheetTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-amber-300" />
+              Возврат на склад
+            </SheetTitle>
+            <SheetDescription>
+              Товары спишутся с витрины и добавятся на склад.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto p-5">
               {balances.length === 0 ? (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
                   Витрина пустая — нечего возвращать.
@@ -706,10 +747,10 @@ export default function ShowcasePage() {
                   </Button>
                 </form>
               )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
+    </TooltipProvider>
   )
 }
