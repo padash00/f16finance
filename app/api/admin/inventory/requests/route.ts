@@ -23,6 +23,7 @@ function normalizeQty(value: unknown) {
 
 function humanizeDecisionError(raw: string | null | undefined): string {
   const code = String(raw || '').trim()
+  const lowered = code.toLowerCase()
   if (code === 'inventory-request-not-found') return 'Заявка не найдена'
   if (code === 'inventory-request-already-decided') return 'Решение по заявке уже принято'
   if (code === 'inventory-request-decision-items-required') return 'Не переданы позиции заявки'
@@ -30,6 +31,9 @@ function humanizeDecisionError(raw: string | null | undefined): string {
   if (code === 'inventory-request-approved-qty-invalid') return 'Количество не может быть отрицательным'
   if (code === 'inventory-request-approved-qty-too-high') {
     return 'В базе пока старая функция: одобрить больше запрошенного нельзя. Примените миграцию 20260421_inventory_decide_request_allow_overapproval.sql.'
+  }
+  if (code === 'inventory-insufficient-stock' || lowered.includes('inventory-insufficient-stock') || lowered.includes('inventory_balances_quantity_check')) {
+    return 'Недостаточно остатка на складе для одобрения в текущем количестве. Уменьшите количество по позициям или пополните склад.'
   }
   return code || 'Не удалось обработать заявку'
 }
@@ -63,18 +67,65 @@ export async function GET(request: Request) {
     )
     const actorById: Record<string, { id: string; full_name: string | null; role: string | null }> = {}
     if (actorIds.length > 0) {
-      const [{ data: staffRows }, { data: operatorAuthRows }] = await Promise.all([
+      const [
+        { data: staffRows },
+        { data: operatorAuthRows },
+        { data: orgMemberRows },
+      ] = await Promise.all([
         supabase.from('staff').select('id, full_name, role').in('id', actorIds),
         supabase
           .from('operator_auth')
           .select('user_id, role, operator:operator_id(name, short_name)')
           .in('user_id', actorIds),
+        access.activeOrganization?.id
+          ? supabase
+              .from('organization_members')
+              .select('user_id, staff_id, role, email')
+              .eq('organization_id', access.activeOrganization.id)
+              .eq('status', 'active')
+              .in('user_id', actorIds)
+          : Promise.resolve({ data: [] as any[] }),
       ])
       for (const s of staffRows || []) {
         actorById[String((s as any).id)] = {
           id: String((s as any).id),
           full_name: ((s as any).full_name as string) || null,
           role: ((s as any).role as string) || null,
+        }
+      }
+      const memberRows = (orgMemberRows || []) as any[]
+      const memberStaffIds = Array.from(
+        new Set(
+          memberRows
+            .map((row) => String(row?.staff_id || '').trim())
+            .filter(Boolean),
+        ),
+      )
+      const staffById = new Map<string, { full_name: string | null; role: string | null }>()
+      if (memberStaffIds.length > 0) {
+        const { data: staffByMemberRows } = await supabase
+          .from('staff')
+          .select('id, full_name, role')
+          .in('id', memberStaffIds)
+        for (const s of staffByMemberRows || []) {
+          const id = String((s as any).id || '').trim()
+          if (!id) continue
+          staffById.set(id, {
+            full_name: ((s as any).full_name as string) || null,
+            role: ((s as any).role as string) || null,
+          })
+        }
+      }
+      for (const m of memberRows) {
+        const userId = String((m as any).user_id || '').trim()
+        if (!userId || actorById[userId]) continue
+        const staffId = String((m as any).staff_id || '').trim()
+        const staffMeta = staffId ? staffById.get(staffId) : null
+        const fallbackEmail = String((m as any).email || '').trim() || null
+        actorById[userId] = {
+          id: userId,
+          full_name: staffMeta?.full_name || fallbackEmail,
+          role: staffMeta?.role || ((m as any).role as string) || null,
         }
       }
       for (const row of operatorAuthRows || []) {
@@ -149,7 +200,7 @@ export async function POST(request: Request) {
       if (newStatus === 'issued' && !['approved_full', 'approved_partial'].includes(req.status)) return json({ error: 'invalid-transition' }, 400)
       if (newStatus === 'received' && req.status !== 'issued') return json({ error: 'invalid-transition' }, 400)
 
-      const actorUserId = access.staffMember?.id || null
+      const actorUserId = access.user?.id || null
       const nowIso = new Date().toISOString()
       const patch: Record<string, any> = { status: newStatus, updated_at: nowIso }
       if (newStatus === 'issued') {
@@ -186,7 +237,7 @@ export async function POST(request: Request) {
 
     if (body.action !== 'decideRequest') return json({ error: 'invalid-action' }, 400)
 
-    const actorUserId = access.staffMember?.id || null
+    const actorUserId = access.user?.id || null
     const requestId = String(body.requestId || '').trim()
     if (!requestId) return json({ error: 'request-id-required' }, 400)
     await ensureInventoryRequestAccess(supabase as any, requestId, inventoryScope)

@@ -20,6 +20,17 @@ function normalizeQty(value: unknown) {
   return Math.round((amount + Number.EPSILON) * 1000) / 1000
 }
 
+function humanizeDecisionError(raw: string | null | undefined) {
+  const code = String(raw || '').trim()
+  const lowered = code.toLowerCase()
+  if (code === 'inventory-insufficient-stock' || lowered.includes('inventory-insufficient-stock') || lowered.includes('inventory_balances_quantity_check')) {
+    return 'Недостаточно остатка на складе для полного одобрения'
+  }
+  if (code === 'already-decided') return 'Заявка уже обработана'
+  if (code === 'not-found') return 'Заявка не найдена'
+  return code || 'failed'
+}
+
 export async function POST(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -45,7 +56,7 @@ export async function POST(request: Request) {
 
     const succeeded: string[] = []
     const failed: Array<{ requestId: string; error: string }> = []
-    const actorUserId = access.staffMember?.id || null
+    const actorUserId = access.user?.id || null
 
     for (const requestId of requestIds) {
       try {
@@ -78,7 +89,7 @@ export async function POST(request: Request) {
         })
         succeeded.push(requestId)
       } catch (error: any) {
-        failed.push({ requestId, error: String(error?.message || 'failed') })
+        failed.push({ requestId, error: humanizeDecisionError(String(error?.message || 'failed')) })
       }
     }
 
