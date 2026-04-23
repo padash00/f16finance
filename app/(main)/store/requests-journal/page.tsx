@@ -478,6 +478,8 @@ function StoreRequestsJournalPageContent() {
                       <span className="text-xs text-slate-500">ID {request.id.slice(0, 8)}</span>
                     </div>
                     <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-400">
+                      <span>Создал: {actorLabel(request.created_by_staff, request.created_by)}</span>
+                      <span>Одобрил: {actorLabel(request.approved_by_staff, request.approved_by)}</span>
                       <span>Источник: {request.source_location?.name || '—'}</span>
                       <span>Витрина: {request.target_location?.name || '—'}</span>
                       <span>Позиций: {asArray(request.items).length}</span>

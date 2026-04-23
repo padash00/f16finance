@@ -652,6 +652,8 @@ function StoreRequestsPageContent() {
                         </div>
                         <div className="flex flex-wrap gap-3 text-xs text-slate-400">
                           <span>Создана: {formatDateTime(request.created_at)}</span>
+                          <span>Создал: {actorLabel(request.created_by_staff, request.created_by)}</span>
+                          <span>Одобрил: {actorLabel(request.approved_by_staff, request.approved_by)}</span>
                           <span>Источник: {request.source_location?.name || 'Склад'}</span>
                           <span>Витрина: {request.target_location?.name || '—'}</span>
                           <span>Позиций: {requestTotal}</span>
