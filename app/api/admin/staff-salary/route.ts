@@ -251,8 +251,28 @@ export async function POST(req: Request) {
     if (action === 'removeAdjustment') {
       const { id } = body
       if (!id) return json({ error: 'id обязателен' }, 400)
-      const { error } = await supabase.from('staff_adjustments').update({ status: 'voided' }).eq('id', id)
-      if (error) throw error
+      const { data: adjRow, error: adjFetchError } = await supabase
+        .from('staff_adjustments')
+        .select('id, kind')
+        .eq('id', id)
+        .maybeSingle()
+      if (adjFetchError) throw adjFetchError
+      if (!adjRow?.id) return json({ error: 'Корректировка не найдена' }, 404)
+
+      // Advance adjustments create an expense row; remove it on void for consistency.
+      if (String(adjRow.kind || '') === 'advance') {
+        const sourceId = `staff-adjustment:${String(adjRow.id)}`
+        const { error: expensesDeleteError } = await supabase
+          .from('expenses')
+          .delete()
+          .eq('source_type', 'salary_advance')
+          .eq('source_id', sourceId)
+        if (expensesDeleteError) throw expensesDeleteError
+      }
+
+      const { error: adjVoidError } = await supabase.from('staff_adjustments').update({ status: 'voided' }).eq('id', id)
+      if (adjVoidError) throw adjVoidError
+      await writeAuditLog(supabase, { entityType: 'staff-adjustment', entityId: String(id), action: 'void' })
       return json({ ok: true })
     }
 
