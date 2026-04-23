@@ -1,14 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ClipboardCheck, Loader2, RefreshCw, ScanSearch } from 'lucide-react'
+import { ClipboardCheck, Loader2, Package, RefreshCw, ScanSearch, Search, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 type InventoryLocation = {
   id: string
@@ -104,6 +106,8 @@ export default function StoreRevisionsPage() {
   const [comment, setComment] = useState('')
   const [lines, setLines] = useState<RevisionLine[]>([])
   const [scope, setScope] = useState<'all' | 'warehouse' | 'showcase'>('all')
+  const [formSheetOpen, setFormSheetOpen] = useState(false)
+  const [revisionSearch, setRevisionSearch] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -208,45 +212,192 @@ export default function StoreRevisionsPage() {
     }
   }
 
-  return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 pt-5 md:px-6">
-      <Card className="border-white/10 bg-gradient-to-br from-white/[0.05] via-white/[0.03] to-transparent p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-2xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-200">
-              <ScanSearch className="h-3.5 w-3.5" />
-              Ревизия
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">Ревизия склада и витрин</h1>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Полная проверка остатков по складу или точке с фиксацией факта и автоматической корректировкой расхождений.
-            </p>
-          </div>
+  const filteredRevisions = useMemo(() => {
+    const q = revisionSearch.trim().toLowerCase()
+    const list = data?.stocktakes || []
+    if (!q) return list
+    return list.filter((r) => {
+      const parts = [
+        r.location?.company?.name,
+        r.location?.name,
+        r.comment,
+        ...(r.items || []).map((i) => i.item?.name || ''),
+      ]
+      return parts.filter(Boolean).join(' ').toLowerCase().includes(q)
+    })
+  }, [data?.stocktakes, revisionSearch])
 
-          <Button variant="outline" onClick={() => void load()} disabled={loading} className="rounded-2xl">
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+  const revisionsStats = useMemo(() => {
+    const list = data?.stocktakes || []
+    const withMismatch = list.filter((r) => (r.items || []).some((i) => Number(i.delta_qty || 0) !== 0)).length
+    const totalShortage = list.reduce((s, r) => s + (r.items || []).reduce((s2, i) => s2 + (Number(i.delta_qty || 0) < 0 ? Math.abs(Number(i.delta_qty || 0)) : 0), 0), 0)
+    const totalSurplus = list.reduce((s, r) => s + (r.items || []).reduce((s2, i) => s2 + (Number(i.delta_qty || 0) > 0 ? Number(i.delta_qty || 0) : 0), 0), 0)
+    return { count: list.length, withMismatch, totalShortage, totalSurplus }
+  }, [data?.stocktakes])
+
+  return (
+    <TooltipProvider delayDuration={200}>
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/20 bg-cyan-500/10">
+            <ScanSearch className="h-5 w-5 text-cyan-300" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-foreground">Ревизии</h1>
+            <p className="truncate text-xs text-muted-foreground">Сверка фактических остатков с системой</p>
+          </div>
+        </div>
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 text-xs">
+            {(['all', 'warehouse', 'showcase'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setScope(s)}
+                className={`rounded-md px-3 py-1.5 transition ${scope === s ? 'bg-white/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                {s === 'all' ? 'Все' : s === 'warehouse' ? 'Подсобка' : 'Витрина'}
+              </button>
+            ))}
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
+          <Button size="sm" onClick={() => setFormSheetOpen(true)} className="h-9 gap-1.5 bg-cyan-600 hover:bg-cyan-700">
+            <ClipboardCheck className="h-3.5 w-3.5" />
+            Новый акт
+          </Button>
         </div>
-      </Card>
-
-      {error ? <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div> : null}
-      {success ? <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div> : null}
-
-      <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
-        <button type="button" onClick={() => setScope('all')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'all' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Все</button>
-        <button type="button" onClick={() => setScope('warehouse')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'warehouse' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Подсобка</button>
-        <button type="button" onClick={() => setScope('showcase')} className={`rounded-lg px-3 py-2 text-sm ${scope === 'showcase' ? 'bg-white/10 text-foreground' : 'text-muted-foreground'}`}>Витрина</button>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <Card className="border-white/10 p-5">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-foreground">Новый акт ревизии</h2>
-            <p className="text-sm text-muted-foreground">Подтяни остатки системы, исправь факт и проведи один чистый акт.</p>
-          </div>
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Card className="border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Актов</p>
+          <p className="mt-1 text-xl font-semibold">{revisionsStats.count}</p>
+        </Card>
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">С расхождениями</p>
+          <p className="mt-1 text-xl font-semibold text-amber-200">{revisionsStats.withMismatch}</p>
+        </Card>
+        <Card className="border-rose-500/20 bg-rose-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-rose-300/70">Недостача (всего)</p>
+          <p className="mt-1 text-xl font-semibold text-rose-200">{formatQty(revisionsStats.totalShortage)}</p>
+        </Card>
+        <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Излишек (всего)</p>
+          <p className="mt-1 text-xl font-semibold text-emerald-200">{formatQty(revisionsStats.totalSurplus)}</p>
+        </Card>
+      </div>
 
-          <form onSubmit={createRevision} className="space-y-5">
+      {error ? <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-300">{error}</div> : null}
+      {success ? <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-300">{success}</div> : null}
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={revisionSearch}
+            onChange={(e) => setRevisionSearch(e.target.value)}
+            placeholder="Поиск по локации, товару, комментарию..."
+            className="h-9 pl-9"
+          />
+        </div>
+      </div>
+
+      {/* Main table */}
+      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+        {loading ? (
+          <div className="flex h-60 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : filteredRevisions.length === 0 ? (
+          <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+            <Package className="h-8 w-8 opacity-50" />
+            {revisionSearch ? 'Ничего не найдено' : 'Ревизий пока нет — нажмите «Новый акт»'}
+          </div>
+        ) : (
+          <div className="max-h-[calc(100vh-380px)] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="w-24 py-2.5 pl-4 pr-2 font-normal">Дата</th>
+                  <th className="w-48 py-2.5 px-2 font-normal">Локация</th>
+                  <th className="py-2.5 px-2 font-normal">Комментарий</th>
+                  <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
+                  <th className="w-24 py-2.5 px-2 text-right font-normal">Недостача</th>
+                  <th className="w-24 py-2.5 px-2 pr-4 text-right font-normal">Излишек</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {filteredRevisions.map((revision) => {
+                  const items = revision.items || []
+                  const shortage = items.reduce((s, i) => s + (Number(i.delta_qty || 0) < 0 ? Math.abs(Number(i.delta_qty || 0)) : 0), 0)
+                  const surplus = items.reduce((s, i) => s + (Number(i.delta_qty || 0) > 0 ? Number(i.delta_qty || 0) : 0), 0)
+                  const mismatches = items.filter((i) => Number(i.delta_qty || 0) !== 0)
+                  return (
+                    <tr key={revision.id} className="transition hover:bg-white/[0.02]">
+                      <td className="w-24 py-2.5 pl-4 pr-2 align-middle">
+                        <span className="text-xs text-muted-foreground">{formatDate(revision.counted_at)}</span>
+                      </td>
+                      <td className="w-48 py-2.5 px-2 align-middle">
+                        <span className="line-clamp-1 text-xs text-muted-foreground">{revision.location?.company?.name || revision.location?.name || '—'}</span>
+                      </td>
+                      <td className="min-w-0 max-w-0 py-2.5 px-2 align-middle">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p className="truncate text-sm">{revision.comment || <span className="text-muted-foreground">Без комментария</span>}</p>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="start" className="max-w-md">
+                            {revision.comment || 'Без комментария'}
+                            {mismatches.length ? (
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {mismatches.map((i) => `${i.item?.name || 'Товар'}: ${Number(i.delta_qty) > 0 ? '+' : ''}${formatQty(Number(i.delta_qty || 0))}`).join(', ')}
+                              </div>
+                            ) : null}
+                          </TooltipContent>
+                        </Tooltip>
+                      </td>
+                      <td className="w-20 py-2.5 px-2 text-right align-middle">
+                        <span className="text-sm font-semibold">{items.length}</span>
+                      </td>
+                      <td className="w-24 py-2.5 px-2 text-right align-middle">
+                        <span className={`text-sm font-semibold ${shortage > 0 ? 'text-rose-300' : 'text-muted-foreground'}`}>
+                          {shortage > 0 ? `-${formatQty(shortage)}` : '—'}
+                        </span>
+                      </td>
+                      <td className="w-24 py-2.5 px-2 pr-4 text-right align-middle">
+                        <span className={`text-sm font-semibold ${surplus > 0 ? 'text-emerald-300' : 'text-muted-foreground'}`}>
+                          {surplus > 0 ? `+${formatQty(surplus)}` : '—'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Create revision Sheet */}
+      <Sheet open={formSheetOpen} onOpenChange={setFormSheetOpen}>
+        <SheetContent className="w-full sm:max-w-3xl flex flex-col gap-0 p-0">
+          <SheetHeader className="border-b border-white/10 p-5">
+            <SheetTitle className="flex items-center gap-2">
+              <ClipboardCheck className="h-5 w-5 text-cyan-300" />
+              Новый акт ревизии
+            </SheetTitle>
+            <SheetDescription>
+              Подтяни остатки системы, исправь факт и проведи один чистый акт.
+            </SheetDescription>
+          </SheetHeader>
+          <form onSubmit={createRevision} className="flex-1 space-y-5 overflow-y-auto p-5">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Локация</Label>
@@ -270,16 +421,16 @@ export default function StoreRevisionsPage() {
 
             <div className="space-y-1.5">
               <Label>Комментарий</Label>
-              <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Кто проверял и что важно зафиксировать" />
+              <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Кто проверял и что важно зафиксировать" rows={2} />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
               <span>
                 Локация: <span className="font-medium text-foreground">{selectedLocation?.company?.name || selectedLocation?.name || '—'}</span>
               </span>
               <span>Позиций в системе: <span className="font-medium text-foreground">{selectedBalances.length}</span></span>
-              <Button type="button" variant="outline" className="ml-auto" onClick={loadFromBalances}>
-                Подтянуть остатки системы
+              <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={loadFromBalances}>
+                Подтянуть остатки
               </Button>
             </div>
 
@@ -289,7 +440,7 @@ export default function StoreRevisionsPage() {
                 const actualQty = parseQty(line.actual_qty)
                 const deltaQty = actualQty - expectedQty
                 return (
-                  <div key={`revision-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.35fr)_110px_110px_minmax(0,1fr)_110px]">
+                  <div key={`revision-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.35fr)_100px_100px_minmax(0,1fr)_110px_auto]">
                     <div className="space-y-1.5">
                       <Label>Товар</Label>
                       <Select
@@ -329,19 +480,23 @@ export default function StoreRevisionsPage() {
                       <Input value={line.comment} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, comment: event.target.value } : item))} placeholder="Причина расхождения" />
                     </div>
 
-                    <div className="flex flex-col justify-between gap-2">
+                    <div className="space-y-1.5">
+                      <Label>Δ</Label>
                       <div className={`rounded-xl border px-3 py-2 text-center text-sm ${deltaQty === 0 ? 'border-white/10 bg-white/[0.03] text-muted-foreground' : deltaQty > 0 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-rose-500/30 bg-rose-500/10 text-rose-200'}`}>
-                        {deltaQty === 0 ? 'Без расхождения' : `${deltaQty > 0 ? '+' : ''}${formatQty(deltaQty)}`}
+                        {deltaQty === 0 ? '—' : `${deltaQty > 0 ? '+' : ''}${formatQty(deltaQty)}`}
                       </div>
-                      <Button type="button" variant="outline" className="w-full" onClick={() => setLines((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
-                        Убрать
+                    </div>
+
+                    <div className="flex items-end">
+                      <Button type="button" variant="ghost" size="icon" onClick={() => setLines((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
                 )
               }) : (
-                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-sm text-muted-foreground">
-                  Пока нет строк ревизии. Можно подтянуть остатки системы или добавить строки вручную.
+                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-muted-foreground">
+                  Пока нет строк. Подтяни остатки системы или добавь строки вручную.
                 </div>
               )}
             </div>
@@ -357,53 +512,14 @@ export default function StoreRevisionsPage() {
               </div>
             </div>
 
-            <Button type="submit" disabled={saving} className="rounded-2xl">
+            <Button type="submit" disabled={saving} className="w-full">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheck className="mr-2 h-4 w-4" />}
               Провести ревизию
             </Button>
           </form>
-        </Card>
-
-        <div className="space-y-6">
-          <Card className="border-white/10 p-5">
-            <h2 className="text-lg font-semibold text-foreground">Последние ревизии</h2>
-            <p className="mt-1 text-sm text-muted-foreground">История актов проверки по складу и витринам.</p>
-
-            <div className="mt-4 space-y-3">
-              {(data?.stocktakes || []).length ? (
-                data!.stocktakes.slice(0, 10).map((revision) => {
-                  const mismatches = (revision.items || []).filter((item) => Number(item.delta_qty || 0) !== 0)
-                  return (
-                    <div key={revision.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="font-medium text-foreground">{revision.location?.company?.name || revision.location?.name || 'Локация'}</div>
-                          <div className="text-sm text-muted-foreground">{formatDate(revision.counted_at)}</div>
-                        </div>
-                        <div className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-200">
-                          Расхождений: {mismatches.length}
-                        </div>
-                      </div>
-                      {revision.comment ? <div className="mt-3 text-sm text-slate-300">{revision.comment}</div> : null}
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        {mismatches.slice(0, 4).map((item) => (
-                          <span key={item.id} className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1">
-                            {item.item?.name || 'Товар'} · {Number(item.delta_qty || 0) > 0 ? '+' : ''}{formatQty(Number(item.delta_qty || 0))}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })
-              ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-sm text-muted-foreground">
-                  Пока нет ревизий.
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-      </div>
+        </SheetContent>
+      </Sheet>
     </div>
+    </TooltipProvider>
   )
 }
