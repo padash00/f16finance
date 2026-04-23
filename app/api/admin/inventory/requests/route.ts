@@ -38,6 +38,17 @@ function humanizeDecisionError(raw: string | null | undefined): string {
   return code || 'Не удалось обработать заявку'
 }
 
+function normalizeUserDisplayName(user: any): string | null {
+  const meta = (user?.user_metadata || {}) as Record<string, unknown>
+  const fullName = typeof meta.full_name === 'string' ? meta.full_name.trim() : ''
+  const name = typeof meta.name === 'string' ? meta.name.trim() : ''
+  const email = typeof user?.email === 'string' ? user.email.trim() : ''
+  if (fullName) return fullName
+  if (name) return name
+  if (email) return email
+  return null
+}
+
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
@@ -230,6 +241,30 @@ export async function GET(request: Request) {
           }
         }
       }
+    }
+
+    const unresolvedActorIds = Array.from(
+      new Set(
+        actorIds.filter((id) => !actorById[id]),
+      ),
+    )
+    if (unresolvedActorIds.length > 0 && hasAdminSupabaseCredentials()) {
+      const admin = createAdminSupabaseClient()
+      await Promise.all(
+        unresolvedActorIds.map(async (userId) => {
+          try {
+            const { data, error } = await admin.auth.admin.getUserById(userId)
+            if (error || !data?.user) return
+            actorById[userId] = {
+              id: userId,
+              full_name: normalizeUserDisplayName(data.user),
+              role: null,
+            }
+          } catch {
+            // ignore unresolved ids, keep fallback rendering as ID on UI
+          }
+        }),
+      )
     }
 
     const enrichedRequests = (requests || []).map((r: any) => ({
