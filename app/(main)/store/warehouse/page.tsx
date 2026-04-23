@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +36,19 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -150,6 +163,9 @@ export default function WarehousePage() {
   const [editingWh, setEditingWh] = useState<string | null>(null)
   const [editWhVal, setEditWhVal] = useState('')
   const [savingWh, setSavingWh] = useState(false)
+
+  const [addSheetOpen, setAddSheetOpen] = useState(false)
+  const [backroomSheetOpen, setBackroomSheetOpen] = useState(false)
 
   const [warehouseFileName, setWarehouseFileName] = useState<string | null>(null)
   const [warehouseFileError, setWarehouseFileError] = useState<string | null>(null)
@@ -680,168 +696,179 @@ export default function WarehousePage() {
   const fmtMoney = (n: number) => n.toLocaleString('ru-RU', { maximumFractionDigits: 0 })
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-3xl border border-amber-500/20 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.15),transparent_36%),linear-gradient(180deg,rgba(17,24,39,0.96),rgba(15,23,42,0.96))] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs text-amber-300">
-              <Warehouse className="h-3.5 w-3.5" />
-              Склад точки
-            </div>
-            <h1 className="mt-3 text-2xl font-semibold text-white">
+    <TooltipProvider delayDuration={200}>
+    <div className="mx-auto w-full max-w-screen-2xl space-y-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+            <Warehouse className="h-5 w-5 text-amber-300" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-foreground">
               {warehouseLoc ? warehouseLoc.name : 'Склад'}
             </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Физические остатки: отдельно подсобка и витрина. Итого = подсобка + витрина.
+            <p className="truncate text-xs text-muted-foreground">
+              Итого = подсобка + витрина
             </p>
           </div>
+        </div>
 
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {companies.length > 1 && (
-            <div className="flex flex-col gap-1">
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Точка</Label>
-              <div className="relative">
-                <select
-                  value={selectedCompanyId || ''}
-                  onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
-                  className="appearance-none rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
-                >
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              </div>
+            <div className="relative">
+              <select
+                value={selectedCompanyId || ''}
+                onChange={(e) => { setSelectedCompanyId(e.target.value); void load(e.target.value) }}
+                className="h-9 appearance-none rounded-lg border border-white/10 bg-white/[0.04] pl-3 pr-8 text-sm text-foreground outline-none focus:border-amber-400/50"
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
             </div>
           )}
-
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-8 gap-1.5 self-start">
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} className="h-9 gap-1.5">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
+          <Button variant="outline" size="sm" onClick={() => { setAddMode('warehouseFile'); setBackroomSheetOpen(true) }} className="h-9 gap-1.5">
+            <Boxes className="h-3.5 w-3.5" />
+            Файл подсобки
+          </Button>
+          <Button size="sm" onClick={() => { setAddMode('barcode'); setAddSheetOpen(true) }} className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+            <PackagePlus className="h-3.5 w-3.5" />
+            Добавить товары
+          </Button>
         </div>
+      </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Позиций</p>
-            <p className="mt-1.5 text-2xl font-semibold">{balances.length}</p>
-          </div>
-          <div className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-sky-300/70">Итого</p>
-            <p className="mt-1.5 text-2xl font-semibold text-sky-200">{totalCatalogQty}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-amber-300/70">Склад</p>
-            <p className="mt-1.5 text-2xl font-semibold text-amber-300">{totalWarehouseQty}</p>
-          </div>
-          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-emerald-300/70">Витрина</p>
-            <p className="mt-1.5 text-2xl font-semibold text-emerald-300">{totalShowcaseQty}</p>
-          </div>
-          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-widest text-blue-300/70">Стоимость</p>
-            <p className="mt-1.5 break-words text-sm font-semibold text-blue-200">{fmtMoney(totalPurchase)} / {fmtMoney(totalSale)} ₸</p>
-            <p className="text-[10px] text-blue-400/70">закуп / продажа</p>
-          </div>
+      {/* Stats strip */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Card className="border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Позиций</p>
+          <p className="mt-1 text-xl font-semibold">{balances.length}</p>
+        </Card>
+        <Card className="border-sky-500/20 bg-sky-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-sky-300/70">Итого</p>
+          <p className="mt-1 text-xl font-semibold text-sky-200">{totalCatalogQty}</p>
+        </Card>
+        <Card className="border-amber-500/20 bg-amber-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Подсобка</p>
+          <p className="mt-1 text-xl font-semibold text-amber-300">{totalWarehouseQty}</p>
+        </Card>
+        <Card className="border-emerald-500/20 bg-emerald-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-emerald-300/70">Витрина</p>
+          <p className="mt-1 text-xl font-semibold text-emerald-300">{totalShowcaseQty}</p>
+        </Card>
+        <Card className="border-blue-500/20 bg-blue-500/[0.05] p-3">
+          <p className="text-[10px] uppercase tracking-widest text-blue-300/70">Стоимость (закуп / продажа)</p>
+          <p className="mt-1 truncate text-sm font-semibold text-blue-200" title={`${fmtMoney(totalPurchase)} / ${fmtMoney(totalSale)} ₸`}>
+            {fmtMoney(totalPurchase)} / {fmtMoney(totalSale)} ₸
+          </p>
+        </Card>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={stockSearch}
+            onChange={(e) => setStockSearch(e.target.value)}
+            placeholder="Поиск по названию или штрихкоду..."
+            className="h-9 pl-9"
+          />
         </div>
-      </section>
+        {selectedIds.size > 0 && (
+          <span className="rounded-md border border-rose-500/20 bg-rose-500/[0.06] px-2.5 py-1 text-xs text-rose-300">
+            Выбрано: {selectedIds.size}
+          </span>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="h-9 gap-1.5">
+              <MoreHorizontal className="h-3.5 w-3.5" />
+              Действия
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Операции со складом</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled={selectedIds.size === 0 || deleting} onClick={() => setDeleteConfirm('selected')}>
+              <Trash2 className="h-3.5 w-3.5" />
+              Удалить выбранные ({selectedIds.size})
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={balances.length === 0 || deleting}
+              onClick={() => setDeleteConfirm('all')}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Очистить весь склад
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
-      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_430px]">
-        <Card className="min-w-0 border-white/10 bg-card/70">
-          <CardHeader className="border-b border-white/10 pb-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className="flex items-center gap-2 text-sm mr-auto">
-                <Package className="h-4 w-4 text-amber-300" />
-                Остатки
-              </CardTitle>
-              <div className="relative w-40">
-                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  value={stockSearch}
-                  onChange={(e) => setStockSearch(e.target.value)}
-                  placeholder="Поиск..."
-                  className="h-7 pl-7 text-xs"
-                />
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
-                    <MoreHorizontal className="h-3.5 w-3.5" />
-                    Действия
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Операции со складом</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem disabled={selectedIds.size === 0 || deleting} onClick={() => setDeleteConfirm('selected')}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Удалить выбранные ({selectedIds.size})
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    disabled={balances.length === 0 || deleting}
-                    onClick={() => setDeleteConfirm('all')}
+      {/* Main table */}
+      <Card className="overflow-hidden border-white/10 bg-card/70 p-0">
+        {loading ? (
+          <div className="flex h-60 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : error ? (
+          <div className="flex h-60 items-center justify-center gap-2 text-rose-400">
+            <AlertCircle className="h-4 w-4" />
+            <span className="text-sm">{error}</span>
+          </div>
+        ) : filteredBalances.length === 0 ? (
+          <div className="flex h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+            <Package className="h-8 w-8 text-muted-foreground/50" />
+            {stockSearch ? 'Ничего не найдено' : 'Каталог пустой — нажмите «Добавить товары»'}
+          </div>
+        ) : (
+          <div className="max-h-[calc(100vh-320px)] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
+                <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="w-10 py-2.5 pl-4 pr-2">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 accent-amber-400 cursor-pointer"
+                      checked={filteredBalances.length > 0 && filteredBalances.every((b) => selectedIds.has(b.item_id))}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedIds((prev) => new Set([...prev, ...filteredBalances.map((b) => b.item_id)]))
+                        } else {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev)
+                            filteredBalances.forEach((b) => next.delete(b.item_id))
+                            return next
+                          })
+                        }
+                      }}
+                    />
+                  </th>
+                  <th className="py-2.5 px-2 font-normal">Товар</th>
+                  <th className="w-36 py-2.5 px-2 font-normal">Штрихкод</th>
+                  <th className="w-36 py-2.5 px-2 font-normal">Категория</th>
+                  <th className="w-20 py-2.5 px-2 text-right font-normal text-sky-300/70">Итого</th>
+                  <th className="w-28 py-2.5 px-2 text-right font-normal text-amber-300/70">Подсобка</th>
+                  <th className="w-20 py-2.5 px-2 pr-4 text-right font-normal text-emerald-300/70">Витрина</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {filteredBalances.map((b) => (
+                  <tr
+                    key={b.item_id}
+                    className={`transition hover:bg-white/[0.02] ${selectedIds.has(b.item_id) ? 'bg-rose-500/[0.05]' : ''}`}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Очистить весь склад
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem disabled={loading} onClick={() => void load()}>
-                    <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-                    Обновить данные
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {loading ? (
-              <div className="flex h-40 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : error ? (
-              <div className="flex h-40 items-center justify-center gap-2 text-rose-400">
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-sm">{error}</span>
-              </div>
-            ) : filteredBalances.length === 0 ? (
-              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                {stockSearch ? 'Ничего не найдено' : 'Каталог пустой — загрузите товары справа'}
-              </div>
-            ) : (
-              <div>
-                <div className="flex items-center gap-3 px-4 py-2 bg-white/[0.02] border-b border-white/[0.06]">
-                  <input
-                    type="checkbox"
-                    className="h-3.5 w-3.5 accent-amber-400 cursor-pointer"
-                    checked={filteredBalances.length > 0 && filteredBalances.every((b) => selectedIds.has(b.item_id))}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedIds((prev) => new Set([...prev, ...filteredBalances.map((b) => b.item_id)]))
-                      } else {
-                        setSelectedIds((prev) => {
-                          const next = new Set(prev)
-                          filteredBalances.forEach((b) => next.delete(b.item_id))
-                          return next
-                        })
-                      }
-                    }}
-                  />
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground flex-1">
-                    {selectedIds.size > 0 ? `Выбрано: ${selectedIds.size}` : 'Товар'}
-                  </span>
-                  <span className="text-[10px] uppercase tracking-wider text-sky-300/70 w-16 text-right">Итого</span>
-                  <span className="text-[10px] uppercase tracking-wider text-amber-300/70 w-20 text-right">Склад</span>
-                  <span className="text-[10px] uppercase tracking-wider text-emerald-300/70 w-16 text-right">Витрина</span>
-                </div>
-                <div className="divide-y divide-white/[0.06]">
-                  {filteredBalances.map((b) => (
-                    <div
-                      key={b.item_id}
-                      className={`flex items-center gap-3 px-4 py-2.5 transition ${selectedIds.has(b.item_id) ? 'bg-rose-500/[0.06]' : ''}`}
-                    >
+                    <td className="w-10 py-2.5 pl-4 pr-2 align-middle">
                       <input
                         type="checkbox"
-                        className="h-3.5 w-3.5 accent-amber-400 cursor-pointer shrink-0"
+                        className="h-3.5 w-3.5 accent-amber-400 cursor-pointer"
                         checked={selectedIds.has(b.item_id)}
                         onChange={(e) => {
                           setSelectedIds((prev) => {
@@ -851,90 +878,96 @@ export default function WarehousePage() {
                           })
                         }}
                       />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{b.item?.name || 'Товар'}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {b.item?.barcode || ''}
-                          {b.item?.category ? ` · ${b.item.category.name}` : ''}
-                        </p>
-                      </div>
-                      <div className="shrink-0 w-16 text-right">
-                        <p className="text-sm font-semibold text-sky-200">{b.catalog_quantity}</p>
-                      </div>
-                      <div className="shrink-0 w-20 text-right">
-                        {editingWh === b.item_id ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <Input
-                              value={editWhVal}
-                              onChange={(e) => setEditWhVal(e.target.value)}
-                              className="h-6 w-12 text-xs text-center px-1"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') void handleSetWarehouse(b.item_id)
-                                if (e.key === 'Escape') { setEditingWh(null); setEditWhVal('') }
-                              }}
-                            />
-                            <button
-                              onClick={() => void handleSetWarehouse(b.item_id)}
-                              disabled={savingWh}
-                              className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
-                            >
-                              {savingWh ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                            </button>
-                            <button
-                              onClick={() => { setEditingWh(null); setEditWhVal('') }}
-                              className="text-muted-foreground hover:text-rose-400"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        ) : (
+                    </td>
+                    <td className="min-w-0 max-w-0 py-2.5 px-2 align-middle">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <p className="truncate text-sm font-medium">{b.item?.name || 'Товар'}</p>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-md">
+                          {b.item?.name || 'Товар'}
+                        </TooltipContent>
+                      </Tooltip>
+                    </td>
+                    <td className="w-36 py-2.5 px-2 align-middle">
+                      <span className="truncate font-mono text-xs text-muted-foreground">{b.item?.barcode || '—'}</span>
+                    </td>
+                    <td className="w-36 py-2.5 px-2 align-middle">
+                      <span className="line-clamp-1 text-xs text-muted-foreground">{b.item?.category?.name || '—'}</span>
+                    </td>
+                    <td className="w-20 py-2.5 px-2 text-right align-middle">
+                      <span className="text-sm font-semibold text-sky-200">{b.catalog_quantity}</span>
+                    </td>
+                    <td className="w-28 py-2.5 px-2 text-right align-middle">
+                      {editingWh === b.item_id ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <Input
+                            value={editWhVal}
+                            onChange={(e) => setEditWhVal(e.target.value)}
+                            className="h-7 w-14 px-1 text-center text-xs"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') void handleSetWarehouse(b.item_id)
+                              if (e.key === 'Escape') { setEditingWh(null); setEditWhVal('') }
+                            }}
+                          />
                           <button
-                            onClick={() => { setEditingWh(b.item_id); setEditWhVal(String(b.warehouse_quantity)) }}
-                            className="flex items-center justify-end gap-1 text-sm font-semibold text-amber-300 hover:text-amber-200 w-full"
+                            onClick={() => void handleSetWarehouse(b.item_id)}
+                            disabled={savingWh}
+                            className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
                           >
-                            {b.warehouse_quantity}
-                            <Pencil className="h-3 w-3 opacity-50" />
+                            {savingWh ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                           </button>
-                        )}
-                      </div>
-                      <div className="shrink-0 w-16 text-right">
-                        <p className="text-sm font-semibold text-emerald-300">{b.showcase_quantity}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                          <button
+                            onClick={() => { setEditingWh(null); setEditWhVal('') }}
+                            className="text-muted-foreground hover:text-rose-400"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setEditingWh(b.item_id); setEditWhVal(String(b.warehouse_quantity)) }}
+                          className="inline-flex items-center justify-end gap-1 text-sm font-semibold text-amber-300 hover:text-amber-200"
+                        >
+                          {b.warehouse_quantity}
+                          <Pencil className="h-3 w-3 opacity-40" />
+                        </button>
+                      )}
+                    </td>
+                    <td className="w-20 py-2.5 px-2 pr-4 text-right align-middle">
+                      <span className="text-sm font-semibold text-emerald-300">{b.showcase_quantity}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
-        <Card className="min-w-0 border-white/10 bg-card/70 2xl:sticky 2xl:top-4 2xl:self-start">
-          <CardHeader className="border-b border-white/10 pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <PackagePlus className="h-4 w-4 text-emerald-300" />
-              Операции со складом
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Один сценарий за раз: выберите режим ниже и выполните действие.
-            </p>
-          </CardHeader>
-          <CardContent className="p-4 space-y-4">
-            <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1 text-xs">
+      {/* Add Sheet */}
+      <Sheet open={addSheetOpen} onOpenChange={setAddSheetOpen}>
+        <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0">
+          <SheetHeader className="border-b border-white/10 p-5">
+            <SheetTitle className="flex items-center gap-2">
+              <PackagePlus className="h-5 w-5 text-emerald-300" />
+              Добавить товары в подсобку
+            </SheetTitle>
+            <SheetDescription>
+              Выберите способ ниже — можно собирать позиции из нескольких источников.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 space-y-4 overflow-y-auto p-5">
+            <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1 text-xs">
               {([
                 ['barcode', 'Штрихкод', Barcode],
-                ['items', 'Товары', Search],
+                ['items', 'Каталог', Search],
                 ['excel', 'Excel', FileSpreadsheet],
-                ['warehouseFile', 'Файл подсобки', Boxes],
               ] as const).map(([mode, label, Icon]) => (
                 <button
                   key={mode}
-                  onClick={() => {
-                    setAddMode(mode)
-                    setLines([])
-                    setExcelRows([])
-                    if (mode !== 'warehouseFile') resetBackroom()
-                  }}
+                  onClick={() => { setAddMode(mode); setLines([]); setExcelRows([]) }}
                   className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 transition ${addMode === mode ? 'bg-white/10 text-foreground font-medium shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'}`}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -1077,143 +1110,6 @@ export default function WarehousePage() {
               </div>
             )}
 
-            {addMode === 'warehouseFile' && (
-              <div className="space-y-3">
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2.5 text-[11px] text-amber-200/90">
-                  Загрузка остатков <b>в подсобку</b>. Сопоставление по штрихкоду — новые товары <b>не создаются</b>.
-                  Каталог поднимется до warehouse, витрина = каталог − подсобка.
-                </div>
-
-                <div
-                  onClick={() => warehouseFileRef.current?.click()}
-                  className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/20 bg-white/[0.02] py-5 text-center transition hover:border-amber-400/40 hover:bg-white/[0.04]"
-                >
-                  <Boxes className="h-7 w-7 text-amber-300" />
-                  <p className="max-w-full break-all px-3 text-xs font-medium text-foreground">
-                    {warehouseFileName ? `Файл: ${warehouseFileName}` : 'Загрузить Excel / DOCX с остатками подсобки'}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">Формат: Штрихкод | Название | Количество</p>
-                </div>
-                <input
-                  ref={warehouseFileRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv,.docx"
-                  className="hidden"
-                  onChange={handleBackroomFile}
-                  disabled={!selectedCompanyId || warehouseFileLoading}
-                />
-
-                {warehouseFileLoading && (
-                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Сопоставляю штрихкоды…
-                  </p>
-                )}
-
-                {warehouseFileError && <p className="text-xs text-rose-400">{warehouseFileError}</p>}
-                {warehouseFileDone && (
-                  <p className="flex items-center gap-1.5 text-xs text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> {warehouseFileDone}
-                  </p>
-                )}
-
-                {(warehouseFileMatched.length > 0 || warehouseFileUnmatched.length > 0) && (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider">
-                      <span className="rounded-md border border-emerald-500/20 bg-emerald-500/[0.08] px-2 py-1 text-emerald-300/90">
-                        Найдено: {warehouseFileMatched.length}
-                      </span>
-                      <span className="rounded-md border border-rose-500/20 bg-rose-500/[0.08] px-2 py-1 text-rose-300/90">
-                        Не найдено: {warehouseFileUnmatched.length}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={resetBackroom}
-                        className="ml-auto text-muted-foreground hover:text-foreground"
-                      >
-                        Сбросить
-                      </button>
-                    </div>
-
-                    {warehouseFileMatched.length > 0 && (
-                      <div className="max-h-80 overflow-auto rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04]">
-                        <table className="min-w-[560px] w-full text-[11px]">
-                          <thead className="sticky top-0 bg-[#0f172a]/95 backdrop-blur">
-                            <tr className="text-left text-muted-foreground">
-                              <th className="px-2 py-1.5 font-normal">Товар</th>
-                              <th className="px-2 py-1.5 font-normal text-right">Итого</th>
-                              <th className="px-2 py-1.5 font-normal text-right">Подсобка</th>
-                              <th className="px-2 py-1.5 font-normal text-right">Витрина</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/[0.05]">
-                            {warehouseFileMatched.map((m) => {
-                              const nameMismatch = m.excel_name && m.excel_name.trim().toLowerCase() !== m.catalog_name.trim().toLowerCase()
-                              return (
-                                <tr key={m.item_id} className="hover:bg-white/[0.03]">
-                                  <td className="px-2 py-1.5 align-top">
-                                    <div className="break-words font-medium">{m.catalog_name}</div>
-                                    <div className="break-all text-[10px] font-mono text-muted-foreground">{m.barcode}</div>
-                                    {nameMismatch && (
-                                      <div className="break-words text-[10px] text-amber-300/80">
-                                        В файле: «{m.excel_name}»
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="px-2 py-1.5 text-right align-top">
-                                    <div className="text-sky-200 font-semibold">{m.new_catalog}</div>
-                                    <div className="text-[10px] text-muted-foreground">
-                                      было {m.current_catalog}
-                                      {m.catalog_changed && <span className="text-amber-300/80"> ↑</span>}
-                                    </div>
-                                  </td>
-                                  <td className="px-2 py-1.5 text-right align-top">
-                                    <div className="text-amber-300 font-semibold">{m.new_warehouse}</div>
-                                    <div className="text-[10px] text-muted-foreground">было {m.current_warehouse}</div>
-                                  </td>
-                                  <td className="px-2 py-1.5 text-right align-top">
-                                    <div className="text-emerald-300 font-semibold">{m.new_showcase}</div>
-                                    <div className="text-[10px] text-muted-foreground">было {m.current_showcase}</div>
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {warehouseFileUnmatched.length > 0 && (
-                      <details className="rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-2">
-                        <summary className="cursor-pointer text-xs font-medium text-rose-200">
-                          Не найдены по штрихкоду ({warehouseFileUnmatched.length}) — будут пропущены
-                        </summary>
-                        <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-[11px]">
-                          {warehouseFileUnmatched.map((u, i) => (
-                            <li key={`${u.barcode}-${i}`} className="grid grid-cols-[1fr,2fr,auto] items-start gap-2 text-muted-foreground">
-                              <span className="break-all font-mono">{u.barcode}</span>
-                              <span className="break-words">{u.name}</span>
-                              <span className="text-rose-300">{u.quantity}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    )}
-
-                    {warehouseFileMatched.length > 0 && (
-                      <Button
-                        onClick={handleBackroomApply}
-                        disabled={warehouseFileApplying}
-                        className="w-full bg-amber-600 hover:bg-amber-700"
-                      >
-                        {warehouseFileApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Boxes className="mr-2 h-4 w-4" />}
-                        Применить ({warehouseFileMatched.length} поз.)
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
             {pendingLines.length > 0 && (
               <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-2 max-h-64 overflow-y-auto">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground px-1">К добавлению ({pendingLines.length})</p>
@@ -1291,9 +1187,153 @@ export default function WarehousePage() {
                 </Button>
               </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Backroom file Sheet */}
+      <Sheet open={backroomSheetOpen} onOpenChange={(o) => { setBackroomSheetOpen(o); if (!o) resetBackroom() }}>
+        <SheetContent className="w-full sm:max-w-2xl flex flex-col gap-0 p-0">
+          <SheetHeader className="border-b border-white/10 p-5">
+            <SheetTitle className="flex items-center gap-2">
+              <Boxes className="h-5 w-5 text-amber-300" />
+              Загрузка файла подсобки
+            </SheetTitle>
+            <SheetDescription>
+              Сопоставление по штрихкоду. Новые товары не создаются. Каталог поднимется до warehouse, витрина = каталог − подсобка.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 space-y-3 overflow-y-auto p-5">
+            <div
+              onClick={() => warehouseFileRef.current?.click()}
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/20 bg-white/[0.02] py-6 text-center transition hover:border-amber-400/40 hover:bg-white/[0.04]"
+            >
+              <Boxes className="h-8 w-8 text-amber-300" />
+              <p className="max-w-full break-all px-3 text-xs font-medium text-foreground">
+                {warehouseFileName ? `Файл: ${warehouseFileName}` : 'Загрузить Excel / DOCX с остатками подсобки'}
+              </p>
+              <p className="text-[10px] text-muted-foreground">Формат: Штрихкод | Название | Количество</p>
+            </div>
+            <input
+              ref={warehouseFileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,.docx"
+              className="hidden"
+              onChange={handleBackroomFile}
+              disabled={!selectedCompanyId || warehouseFileLoading}
+            />
+
+            {warehouseFileLoading && (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Сопоставляю штрихкоды…
+              </p>
+            )}
+
+            {warehouseFileError && <p className="text-xs text-rose-400">{warehouseFileError}</p>}
+            {warehouseFileDone && (
+              <p className="flex items-center gap-1.5 text-xs text-emerald-400">
+                <CheckCircle2 className="h-3.5 w-3.5" /> {warehouseFileDone}
+              </p>
+            )}
+
+            {(warehouseFileMatched.length > 0 || warehouseFileUnmatched.length > 0) && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider">
+                  <span className="rounded-md border border-emerald-500/20 bg-emerald-500/[0.08] px-2 py-1 text-emerald-300/90">
+                    Найдено: {warehouseFileMatched.length}
+                  </span>
+                  <span className="rounded-md border border-rose-500/20 bg-rose-500/[0.08] px-2 py-1 text-rose-300/90">
+                    Не найдено: {warehouseFileUnmatched.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={resetBackroom}
+                    className="ml-auto text-muted-foreground hover:text-foreground"
+                  >
+                    Сбросить
+                  </button>
+                </div>
+
+                {warehouseFileMatched.length > 0 && (
+                  <div className="max-h-[50vh] overflow-auto rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04]">
+                    <table className="w-full text-[11px]">
+                      <thead className="sticky top-0 bg-[#0f172a]/95 backdrop-blur">
+                        <tr className="text-left text-muted-foreground">
+                          <th className="px-2 py-1.5 font-normal">Товар</th>
+                          <th className="w-20 px-2 py-1.5 font-normal text-right">Итого</th>
+                          <th className="w-24 px-2 py-1.5 font-normal text-right">Подсобка</th>
+                          <th className="w-20 px-2 py-1.5 font-normal text-right">Витрина</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.05]">
+                        {warehouseFileMatched.map((m) => {
+                          const nameMismatch = m.excel_name && m.excel_name.trim().toLowerCase() !== m.catalog_name.trim().toLowerCase()
+                          return (
+                            <tr key={m.item_id} className="hover:bg-white/[0.03]">
+                              <td className="min-w-0 max-w-0 px-2 py-1.5 align-top">
+                                <div className="truncate font-medium" title={m.catalog_name}>{m.catalog_name}</div>
+                                <div className="truncate text-[10px] font-mono text-muted-foreground">{m.barcode}</div>
+                                {nameMismatch && (
+                                  <div className="truncate text-[10px] text-amber-300/80" title={m.excel_name || ''}>
+                                    В файле: «{m.excel_name}»
+                                  </div>
+                                )}
+                              </td>
+                              <td className="w-20 px-2 py-1.5 text-right align-top">
+                                <div className="text-sky-200 font-semibold">{m.new_catalog}</div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  было {m.current_catalog}
+                                  {m.catalog_changed && <span className="text-amber-300/80"> ↑</span>}
+                                </div>
+                              </td>
+                              <td className="w-24 px-2 py-1.5 text-right align-top">
+                                <div className="text-amber-300 font-semibold">{m.new_warehouse}</div>
+                                <div className="text-[10px] text-muted-foreground">было {m.current_warehouse}</div>
+                              </td>
+                              <td className="w-20 px-2 py-1.5 text-right align-top">
+                                <div className="text-emerald-300 font-semibold">{m.new_showcase}</div>
+                                <div className="text-[10px] text-muted-foreground">было {m.current_showcase}</div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {warehouseFileUnmatched.length > 0 && (
+                  <details className="rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-2">
+                    <summary className="cursor-pointer text-xs font-medium text-rose-200">
+                      Не найдены по штрихкоду ({warehouseFileUnmatched.length}) — будут пропущены
+                    </summary>
+                    <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-[11px]">
+                      {warehouseFileUnmatched.map((u, i) => (
+                        <li key={`${u.barcode}-${i}`} className="grid grid-cols-[1fr,2fr,auto] items-start gap-2 text-muted-foreground">
+                          <span className="truncate font-mono" title={u.barcode}>{u.barcode}</span>
+                          <span className="truncate" title={u.name}>{u.name}</span>
+                          <span className="text-rose-300">{u.quantity}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
+                {warehouseFileMatched.length > 0 && (
+                  <Button
+                    onClick={handleBackroomApply}
+                    disabled={warehouseFileApplying}
+                    className="w-full bg-amber-600 hover:bg-amber-700"
+                  >
+                    {warehouseFileApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Boxes className="mr-2 h-4 w-4" />}
+                    Применить ({warehouseFileMatched.length} поз.)
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -1329,5 +1369,6 @@ export default function WarehousePage() {
         </div>
       )}
     </div>
+    </TooltipProvider>
   )
 }
