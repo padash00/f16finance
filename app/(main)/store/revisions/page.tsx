@@ -119,6 +119,7 @@ export default function StoreRevisionsPage() {
   const [formSheetOpen, setFormSheetOpen] = useState(false)
   const [revisionSearch, setRevisionSearch] = useState('')
   const [formPrefilled, setFormPrefilled] = useState(false)
+  const [barcodeQuery, setBarcodeQuery] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -151,6 +152,15 @@ export default function StoreRevisionsPage() {
   const itemById = useMemo(() => {
     const map = new Map<string, InventoryItem>()
     for (const item of data?.items || []) map.set(item.id, item)
+    return map
+  }, [data?.items])
+  const itemByBarcode = useMemo(() => {
+    const map = new Map<string, InventoryItem>()
+    for (const item of data?.items || []) {
+      const barcode = String(item.barcode || '').trim()
+      if (!barcode) continue
+      map.set(barcode, item)
+    }
     return map
   }, [data?.items])
 
@@ -232,6 +242,32 @@ export default function StoreRevisionsPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const addItemByBarcode = () => {
+    const barcode = barcodeQuery.trim()
+    if (!barcode) return
+    const found = itemByBarcode.get(barcode)
+    if (!found) {
+      setError('Товар с таким штрихкодом не найден в каталоге')
+      return
+    }
+    const alreadyAdded = lines.some((line) => line.item_id === found.id)
+    if (alreadyAdded) {
+      setError('Этот товар уже добавлен в акт')
+      return
+    }
+    const expectedQty = Number(selectedBalances.find((b) => b.item_id === found.id)?.quantity || 0)
+    setLines((current) => [
+      ...current,
+      {
+        item_id: found.id,
+        actual_qty: formatQty(expectedQty),
+        comment: '',
+      },
+    ])
+    setBarcodeQuery('')
+    setError(null)
   }
 
   const filteredRevisions = useMemo(() => {
@@ -504,6 +540,26 @@ export default function StoreRevisionsPage() {
               </Button>
             </div>
 
+            <div className="flex flex-wrap items-end gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+              <div className="min-w-[220px] flex-1 space-y-1.5">
+                <Label>Добавить по штрихкоду</Label>
+                <Input
+                  value={barcodeQuery}
+                  onChange={(event) => setBarcodeQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      addItemByBarcode()
+                    }
+                  }}
+                  placeholder="Сканируй или введи штрихкод"
+                />
+              </div>
+              <Button type="button" variant="outline" onClick={addItemByBarcode}>
+                Добавить по штрихкоду
+              </Button>
+            </div>
+
             <div className="space-y-3">
               {lines.length ? lines.map((line, index) => {
                 const expectedQty = Number(selectedBalances.find((item) => item.item_id === line.item_id)?.quantity || 0)
@@ -519,11 +575,23 @@ export default function StoreRevisionsPage() {
                         <Select
                           value={line.item_id || `__empty__revision_${index}`}
                           onValueChange={(value) =>
-                            setLines((current) =>
-                              current.map((item, itemIndex) =>
-                                itemIndex === index ? { ...item, item_id: value.startsWith('__empty__') ? '' : value } : item,
-                              ),
-                            )
+                            setLines((current) => {
+                              const nextItemId = value.startsWith('__empty__') ? '' : value
+                              if (!nextItemId) {
+                                return current.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, item_id: '' } : item,
+                                )
+                              }
+                              const duplicateExists = current.some((item, itemIndex) => itemIndex !== index && item.item_id === nextItemId)
+                              if (duplicateExists) {
+                                setError('Этот товар уже добавлен в акт')
+                                return current
+                              }
+                              setError(null)
+                              return current.map((item, itemIndex) =>
+                                itemIndex === index ? { ...item, item_id: nextItemId } : item,
+                              )
+                            })
                           }
                         >
                           <SelectTrigger className="min-w-0"><SelectValue placeholder="Выберите товар" /></SelectTrigger>
