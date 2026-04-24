@@ -5,6 +5,7 @@ import { ArchiveX, Loader2, MoreHorizontal, Package, RefreshCw, Search, Trash2 }
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +17,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatMoney } from '@/lib/core/format'
@@ -126,6 +126,8 @@ export default function StoreWriteoffsPage() {
   const [scope, setScope] = useState<'all' | 'warehouse' | 'showcase'>('all')
   const [formSheetOpen, setFormSheetOpen] = useState(false)
   const [writeoffSearch, setWriteoffSearch] = useState('')
+  const [selectedWriteoff, setSelectedWriteoff] = useState<InventoryWriteoff | null>(null)
+  const [writeoffDetailsOpen, setWriteoffDetailsOpen] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -490,6 +492,7 @@ export default function StoreWriteoffsPage() {
                   <th className="py-2.5 px-2 font-normal">Причина</th>
                   <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
                   <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal text-rose-300/70">Сумма</th>
+                  <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Акт</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
@@ -524,6 +527,19 @@ export default function StoreWriteoffsPage() {
                     <td className="w-32 py-2.5 px-2 pr-4 text-right align-middle">
                       <span className="text-sm font-semibold text-rose-300">{formatMoney(Number(writeoff.total_amount || 0))}</span>
                     </td>
+                    <td className="w-28 py-2.5 px-2 pr-4 text-right align-middle">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedWriteoff(writeoff)
+                          setWriteoffDetailsOpen(true)
+                        }}
+                      >
+                        Открыть
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -532,18 +548,18 @@ export default function StoreWriteoffsPage() {
         )}
       </Card>
 
-      {/* Create writeoff Sheet */}
-      <Sheet open={formSheetOpen} onOpenChange={setFormSheetOpen}>
-        <SheetContent className="w-full sm:max-w-2xl flex flex-col gap-0 p-0">
-          <SheetHeader className="border-b border-white/10 p-5">
-            <SheetTitle className="flex items-center gap-2">
+      {/* Create writeoff dialog */}
+      <Dialog open={formSheetOpen} onOpenChange={setFormSheetOpen}>
+        <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1300px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-white/10 p-5 text-left">
+            <DialogTitle className="flex items-center gap-2">
               <ArchiveX className="h-5 w-5 text-rose-300" />
               Новый документ списания
-            </SheetTitle>
-            <SheetDescription>
+            </DialogTitle>
+            <DialogDescription>
               Сначала локация и причина, потом только нужные позиции.
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
           <form onSubmit={createWriteoff} className="flex-1 space-y-5 overflow-y-auto p-5">
             <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.05] p-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -647,8 +663,10 @@ export default function StoreWriteoffsPage() {
             </div>
 
             <div className="space-y-3">
-              {lines.map((line, index) => (
-                <div key={`writeoff-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.5fr)_120px_minmax(0,1fr)_auto]">
+              {lines.map((line, index) => {
+                const selectedBalance = selectedBalances.find((balance) => balance.item_id === line.item_id)
+                return (
+                <div key={`writeoff-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.3fr)_180px_120px_minmax(0,1fr)_auto]">
                   <div className="space-y-1.5">
                     <Label>Товар</Label>
                     <Select
@@ -674,6 +692,11 @@ export default function StoreWriteoffsPage() {
                   </div>
 
                   <div className="space-y-1.5">
+                    <Label>Штрихкод</Label>
+                    <Input value={selectedBalance?.item?.barcode || '—'} readOnly className="bg-white/[0.03]" />
+                  </div>
+
+                  <div className="space-y-1.5">
                     <Label>Списать</Label>
                     <Input value={line.quantity} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: event.target.value } : item))} placeholder="0" />
                   </div>
@@ -689,7 +712,7 @@ export default function StoreWriteoffsPage() {
                     </Button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -703,8 +726,62 @@ export default function StoreWriteoffsPage() {
               Провести списание
             </Button>
           </form>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={writeoffDetailsOpen} onOpenChange={setWriteoffDetailsOpen}>
+        <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-white/10 p-5 text-left">
+            <DialogTitle>Детали списания</DialogTitle>
+            <DialogDescription>
+              {selectedWriteoff
+                ? `${formatDate(selectedWriteoff.written_at)} · ${selectedWriteoff.location?.company?.name || selectedWriteoff.location?.name || 'Локация'}`
+                : 'Проведенный акт списания'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto p-5">
+            {!selectedWriteoff ? (
+              <p className="text-sm text-muted-foreground">Документ не выбран.</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="text-sm text-muted-foreground">
+                  Причина: <span className="text-foreground">{selectedWriteoff.reason || '—'}</span>
+                  {selectedWriteoff.comment ? (
+                    <span> · Комментарий: <span className="text-foreground">{selectedWriteoff.comment}</span></span>
+                  ) : null}
+                  <span> · Сумма: <span className="text-foreground">{formatMoney(Number(selectedWriteoff.total_amount || 0))}</span></span>
+                </div>
+                <div className="overflow-auto rounded-xl border border-white/10">
+                  <table className="w-full text-sm">
+                    <thead className="bg-white/[0.03]">
+                      <tr className="text-left text-xs text-muted-foreground">
+                        <th className="px-3 py-2 font-normal">Товар</th>
+                        <th className="px-3 py-2 font-normal">Штрихкод</th>
+                        <th className="px-3 py-2 text-right font-normal">Количество</th>
+                        <th className="px-3 py-2 text-right font-normal">Себестоимость</th>
+                        <th className="px-3 py-2 text-right font-normal">Сумма</th>
+                        <th className="px-3 py-2 font-normal">Комментарий</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(selectedWriteoff.items || []).map((item) => (
+                        <tr key={item.id} className="border-t border-white/[0.06]">
+                          <td className="px-3 py-2">{item.item?.name || 'Товар'}</td>
+                          <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{item.item?.barcode || '—'}</td>
+                          <td className="px-3 py-2 text-right">{formatQty(Number(item.quantity || 0))}</td>
+                          <td className="px-3 py-2 text-right">{formatMoney(Number(item.unit_cost || 0))}</td>
+                          <td className="px-3 py-2 text-right">{formatMoney(Number(item.total_cost || 0))}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{item.comment || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
     </TooltipProvider>
   )
