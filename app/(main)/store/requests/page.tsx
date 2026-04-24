@@ -33,6 +33,8 @@ type InventoryRequestItem = {
   requested_qty: number
   approved_qty: number | null
   comment: string | null
+  available_qty?: number
+  enough_for_requested?: boolean
   item?: { id: string; name: string; barcode: string } | null
 }
 
@@ -107,6 +109,8 @@ function normalizeRequest(raw: any): InventoryRequest {
       requested_qty: Number(item?.requested_qty || 0),
       approved_qty: item?.approved_qty == null ? null : Number(item.approved_qty || 0),
       comment: item?.comment || null,
+      available_qty: item?.available_qty == null ? undefined : Number(item.available_qty || 0),
+      enough_for_requested: typeof item?.enough_for_requested === 'boolean' ? item.enough_for_requested : undefined,
       item: firstOrSelf(item?.item),
     })),
   }
@@ -646,6 +650,7 @@ function StoreRequestsPageContent() {
                         <th className="py-2 pr-2 font-normal">Товар</th>
                         <th className="w-28 py-2 px-2 font-normal">Штрихкод</th>
                         <th className="w-20 py-2 px-2 text-right font-normal">Запрос</th>
+                        <th className="w-28 py-2 px-2 text-right font-normal">На складе</th>
                         <th className="w-28 py-2 px-2 text-right font-normal">Одобрить</th>
                       </tr>
                     </thead>
@@ -669,6 +674,24 @@ function StoreRequestsPageContent() {
                           </td>
                           <td className="w-20 py-2 px-2 text-right align-middle">
                             <span className="text-sm font-semibold">{formatQty(Number(item.requested_qty || 0))}</span>
+                          </td>
+                          <td className="w-28 py-2 px-2 text-right align-middle">
+                            <div className="flex flex-col items-end">
+                              <span
+                                className={`text-sm font-semibold ${
+                                  item.enough_for_requested === false ? 'text-red-300' : 'text-emerald-300'
+                                }`}
+                              >
+                                {formatQty(Number(item.available_qty || 0))}
+                              </span>
+                              <span
+                                className={`text-[10px] ${
+                                  item.enough_for_requested === false ? 'text-red-400/80' : 'text-emerald-400/80'
+                                }`}
+                              >
+                                {item.enough_for_requested === false ? 'Не хватает' : 'Хватает'}
+                              </span>
+                            </div>
                           </td>
                           <td className="w-28 py-2 px-2 text-right align-middle">
                             <Input

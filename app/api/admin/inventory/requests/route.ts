@@ -66,6 +66,37 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     })
 
+    const sourceLocationIds = Array.from(
+      new Set(
+        (requests || [])
+          .map((r: any) => String(r?.source_location_id || '').trim())
+          .filter(Boolean),
+      ),
+    )
+    const itemIds = Array.from(
+      new Set(
+        (requests || [])
+          .flatMap((r: any) => (Array.isArray(r?.items) ? r.items : []))
+          .map((it: any) => String(it?.item_id || '').trim())
+          .filter(Boolean),
+      ),
+    )
+    const balanceByLocationAndItem: Record<string, number> = {}
+    if (sourceLocationIds.length > 0 && itemIds.length > 0) {
+      const { data: balanceRows, error: balanceErr } = await supabase
+        .from('inventory_balances')
+        .select('location_id, item_id, quantity')
+        .in('location_id', sourceLocationIds)
+        .in('item_id', itemIds)
+      if (balanceErr) throw balanceErr
+      for (const row of balanceRows || []) {
+        const locationId = String((row as any)?.location_id || '').trim()
+        const itemId = String((row as any)?.item_id || '').trim()
+        if (!locationId || !itemId) continue
+        balanceByLocationAndItem[`${locationId}:${itemId}`] = Number((row as any)?.quantity || 0)
+      }
+    }
+
     // Enrich with actor names for full request history timeline.
     // Actors may be staff (admin web UI) or operators (point desktop — created_by stores operator_auth.user_id).
     const actorIds = Array.from(
@@ -77,6 +108,7 @@ export async function GET(request: Request) {
       ),
     )
     const actorById: Record<string, { id: string; full_name: string | null; role: string | null }> = {}
+    const creatorOperatorFallbackByRequestId: Record<string, string> = {}
     const approvedActorFallbackByRequestId: Record<string, string> = {}
     if (actorIds.length > 0) {
       const [
@@ -242,6 +274,58 @@ export async function GET(request: Request) {
         }
       }
     }
+    const requestsNeedingCreatorFallback = (requests || []).filter(
+      (r: any) => r?.created_by && !actorById[String(r.created_by)],
+    )
+    if (requestsNeedingCreatorFallback.length > 0) {
+      const requestIds = requestsNeedingCreatorFallback
+        .map((r: any) => String(r?.id || '').trim())
+        .filter(Boolean)
+      if (requestIds.length > 0) {
+        const { data: createAuditRows } = await supabase
+          .from('audit_log')
+          .select('entity_id, action, payload, created_at')
+          .eq('entity_type', 'inventory-request')
+          .eq('action', 'create')
+          .in('entity_id', requestIds)
+          .order('created_at', { ascending: false })
+        const operatorIds: string[] = []
+        for (const row of createAuditRows || []) {
+          const entityId = String((row as any).entity_id || '').trim()
+          const payload = ((row as any).payload || {}) as Record<string, unknown>
+          const operatorId = String(payload?.operator_id || '').trim()
+          if (!entityId || !operatorId || creatorOperatorFallbackByRequestId[entityId]) continue
+          creatorOperatorFallbackByRequestId[entityId] = operatorId
+          operatorIds.push(operatorId)
+        }
+        const uniqueOperatorIds = Array.from(new Set(operatorIds))
+        if (uniqueOperatorIds.length > 0) {
+          const { data: operatorRows } = await supabase
+            .from('operators')
+            .select('id, name, short_name')
+            .in('id', uniqueOperatorIds)
+          const operatorById = new Map<string, { name: string | null }>()
+          for (const row of operatorRows || []) {
+            const id = String((row as any).id || '').trim()
+            if (!id) continue
+            operatorById.set(id, {
+              name: ((row as any).name as string) || ((row as any).short_name as string) || null,
+            })
+          }
+          for (const [requestId, operatorId] of Object.entries(creatorOperatorFallbackByRequestId)) {
+            const operatorName = operatorById.get(operatorId)?.name
+            if (!operatorName) continue
+            const syntheticId = `operator:${operatorId}`
+            actorById[syntheticId] = {
+              id: syntheticId,
+              full_name: operatorName,
+              role: 'operator',
+            }
+            creatorOperatorFallbackByRequestId[requestId] = syntheticId
+          }
+        }
+      }
+    }
 
     const unresolvedActorIds = Array.from(
       new Set(
@@ -267,16 +351,47 @@ export async function GET(request: Request) {
       )
     }
 
-    const enrichedRequests = (requests || []).map((r: any) => ({
-      ...r,
-      created_by_staff: r.created_by ? actorById[String(r.created_by)] || null : null,
-      approved_by_staff:
-        (r.approved_by ? actorById[String(r.approved_by)] || null : null) ||
-        (approvedActorFallbackByRequestId[String(r.id || '')]
-          ? actorById[approvedActorFallbackByRequestId[String(r.id || '')]] || null
-          : null),
-      issued_by_staff: r.issued_by ? actorById[String(r.issued_by)] || null : null,
-    }))
+    const currentUserFallback = access.user
+      ? {
+          id: String(access.user.id),
+          full_name: normalizeUserDisplayName(access.user),
+          role: access.isSuperAdmin ? 'owner' : access.staffRole,
+        }
+      : null
+
+    const enrichedRequests = (requests || []).map((r: any) => {
+      const sourceLocationId = String(r?.source_location_id || '').trim()
+      const enrichedItems = Array.isArray(r?.items)
+        ? r.items.map((item: any) => {
+            const itemId = String(item?.item_id || '').trim()
+            const key = sourceLocationId && itemId ? `${sourceLocationId}:${itemId}` : ''
+            const availableQty = key ? Number(balanceByLocationAndItem[key] || 0) : 0
+            const requestedQty = Number(item?.requested_qty || 0)
+            const enoughForRequested = availableQty + 0.000001 >= requestedQty
+            return {
+              ...item,
+              available_qty: Math.round((availableQty + Number.EPSILON) * 1000) / 1000,
+              enough_for_requested: enoughForRequested,
+            }
+          })
+        : []
+      return {
+        ...r,
+        items: enrichedItems,
+        created_by_staff:
+          (r.created_by ? actorById[String(r.created_by)] || null : null) ||
+          (creatorOperatorFallbackByRequestId[String(r.id || '')]
+            ? actorById[creatorOperatorFallbackByRequestId[String(r.id || '')]] || null
+            : null),
+        approved_by_staff:
+          (r.approved_by ? actorById[String(r.approved_by)] || null : null) ||
+          (approvedActorFallbackByRequestId[String(r.id || '')]
+            ? actorById[approvedActorFallbackByRequestId[String(r.id || '')]] || null
+            : null) ||
+          (r.approved_at && !r.approved_by ? currentUserFallback : null),
+        issued_by_staff: r.issued_by ? actorById[String(r.issued_by)] || null : null,
+      }
+    })
 
     return json({
       ok: true,
