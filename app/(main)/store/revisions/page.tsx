@@ -412,7 +412,7 @@ export default function StoreRevisionsPage() {
           if (!open) setFormPrefilled(false)
         }}
       >
-        <DialogContent className="flex h-[90vh] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
+        <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-white/10 p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
               <ClipboardCheck className="h-5 w-5 text-cyan-300" />
