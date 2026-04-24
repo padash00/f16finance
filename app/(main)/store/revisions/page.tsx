@@ -154,6 +154,13 @@ export default function StoreRevisionsPage() {
     for (const item of data?.items || []) map.set(item.id, item)
     return map
   }, [data?.items])
+  const balanceItemById = useMemo(() => {
+    const map = new Map<string, InventoryItem>()
+    for (const balance of selectedBalances) {
+      if (balance.item?.id) map.set(balance.item.id, balance.item)
+    }
+    return map
+  }, [selectedBalances])
   const itemByBarcode = useMemo(() => {
     const map = new Map<string, InventoryItem>()
     for (const item of data?.items || []) {
@@ -565,7 +572,9 @@ export default function StoreRevisionsPage() {
                 const expectedQty = Number(selectedBalances.find((item) => item.item_id === line.item_id)?.quantity || 0)
                 const actualQty = parseQty(line.actual_qty)
                 const deltaQty = actualQty - expectedQty
-                const lineItem = line.item_id ? itemById.get(line.item_id) || null : null
+                const lineItem = line.item_id
+                  ? itemById.get(line.item_id) || balanceItemById.get(line.item_id) || null
+                  : null
                 const isManualLine = !line.item_id
                 return (
                   <div key={`revision-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.35fr)_100px_100px_minmax(0,1fr)_110px_auto]">
