@@ -5,10 +5,10 @@ import { ClipboardCheck, Loader2, Package, RefreshCw, ScanSearch, Search, Trash2
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -108,6 +108,7 @@ export default function StoreRevisionsPage() {
   const [scope, setScope] = useState<'all' | 'warehouse' | 'showcase'>('all')
   const [formSheetOpen, setFormSheetOpen] = useState(false)
   const [revisionSearch, setRevisionSearch] = useState('')
+  const [formPrefilled, setFormPrefilled] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -149,6 +150,12 @@ export default function StoreRevisionsPage() {
         })),
     )
   }
+
+  useEffect(() => {
+    if (!formSheetOpen || !locationId || !selectedBalances.length || formPrefilled) return
+    loadFromBalances()
+    setFormPrefilled(true)
+  }, [formSheetOpen, locationId, selectedBalances, formPrefilled])
 
   const totals = useMemo(() => {
     const rows = lines
@@ -267,7 +274,14 @@ export default function StoreRevisionsPage() {
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Обновить
           </Button>
-          <Button size="sm" onClick={() => setFormSheetOpen(true)} className="h-9 gap-1.5 bg-cyan-600 hover:bg-cyan-700">
+          <Button
+            size="sm"
+            onClick={() => {
+              setFormPrefilled(false)
+              setFormSheetOpen(true)
+            }}
+            className="h-9 gap-1.5 bg-cyan-600 hover:bg-cyan-700"
+          >
             <ClipboardCheck className="h-3.5 w-3.5" />
             Новый акт
           </Button>
@@ -385,23 +399,35 @@ export default function StoreRevisionsPage() {
         )}
       </Card>
 
-      {/* Create revision Sheet */}
-      <Sheet open={formSheetOpen} onOpenChange={setFormSheetOpen}>
-        <SheetContent className="w-full sm:max-w-3xl flex flex-col gap-0 p-0">
-          <SheetHeader className="border-b border-white/10 p-5">
-            <SheetTitle className="flex items-center gap-2">
+      {/* Create revision dialog */}
+      <Dialog
+        open={formSheetOpen}
+        onOpenChange={(open) => {
+          setFormSheetOpen(open)
+          if (!open) setFormPrefilled(false)
+        }}
+      >
+        <DialogContent className="flex max-h-[90vh] w-[min(1000px,96vw)] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-white/10 p-5 text-left">
+            <DialogTitle className="flex items-center gap-2">
               <ClipboardCheck className="h-5 w-5 text-cyan-300" />
               Новый акт ревизии
-            </SheetTitle>
-            <SheetDescription>
+            </DialogTitle>
+            <DialogDescription>
               Подтяни остатки системы, исправь факт и проведи один чистый акт.
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
           <form onSubmit={createRevision} className="flex-1 space-y-5 overflow-y-auto p-5">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Локация</Label>
-                <Select value={locationId} onValueChange={setLocationId}>
+                <Select
+                  value={locationId}
+                  onValueChange={(value) => {
+                    setLocationId(value)
+                    setFormPrefilled(false)
+                  }}
+                >
                   <SelectTrigger><SelectValue placeholder="Выберите локацию" /></SelectTrigger>
                   <SelectContent>
                     {activeLocations.map((location) => (
@@ -453,12 +479,14 @@ export default function StoreRevisionsPage() {
                           )
                         }
                       >
-                        <SelectTrigger><SelectValue placeholder="Выберите товар" /></SelectTrigger>
+                        <SelectTrigger className="min-w-0"><SelectValue placeholder="Выберите товар" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value={`__empty__revision_${index}`}>Выберите товар</SelectItem>
                           {(data?.items || []).map((item) => (
-                            <SelectItem key={`${index}-${item.id}`} value={item.id}>
-                              {item.name} · {item.barcode}
+                            <SelectItem key={`${index}-${item.id}`} value={item.id} title={`${item.name} · ${item.barcode}`}>
+                              <span className="block max-w-[420px] truncate">
+                                {item.name} · {item.barcode}
+                              </span>
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -517,8 +545,8 @@ export default function StoreRevisionsPage() {
               Провести ревизию
             </Button>
           </form>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
     </TooltipProvider>
   )
