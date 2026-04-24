@@ -43,7 +43,7 @@ export default function StoreCatalogPage() {
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold text-white">Каталог магазина</h1>
           <p className="truncate text-xs text-muted-foreground">
-            Центральный склад и витрины на точках. Импорт Excel: колонка «Остаток» идёт на склад.
+            Общий остаток точки (Каталог), склад и витрина. Импорт Excel: колонка «Остаток» идёт в Каталог.
           </p>
         </div>
       </div>
