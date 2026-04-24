@@ -598,8 +598,11 @@ export default function StoreWriteoffsPage() {
                         quickInputRef.current?.focus()
                       }}
                       className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-200 hover:bg-white/[0.08]"
+                      title={`${balance.item?.name || 'Товар'} · ${balance.item?.barcode || '—'} · ${formatQty(Number(balance.quantity || 0))}`}
                     >
-                      {balance.item?.name || 'Товар'} · {balance.item?.barcode || '—'} · {formatQty(Number(balance.quantity || 0))}
+                      <span className="block max-w-[340px] truncate">
+                        {balance.item?.name || 'Товар'} · {balance.item?.barcode || '—'} · {formatQty(Number(balance.quantity || 0))}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -679,12 +682,18 @@ export default function StoreWriteoffsPage() {
                         )
                       }
                     >
-                      <SelectTrigger><SelectValue placeholder="Выберите товар" /></SelectTrigger>
+                      <SelectTrigger className="min-w-0 [&>span]:truncate"><SelectValue placeholder="Выберите товар" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value={`__empty__writeoff_${index}`}>Выберите товар</SelectItem>
                         {selectedBalances.map((balance) => (
-                          <SelectItem key={`${index}-${balance.item_id}`} value={balance.item_id}>
-                            {balance.item?.name || 'Товар'} · {formatQty(Number(balance.quantity || 0))}
+                          <SelectItem
+                            key={`${index}-${balance.item_id}`}
+                            value={balance.item_id}
+                            title={`${balance.item?.name || 'Товар'} · ${formatQty(Number(balance.quantity || 0))}`}
+                          >
+                            <span className="block max-w-[420px] truncate">
+                              {balance.item?.name || 'Товар'} · {formatQty(Number(balance.quantity || 0))}
+                            </span>
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -752,7 +761,7 @@ export default function StoreWriteoffsPage() {
                   <span> · Сумма: <span className="text-foreground">{formatMoney(Number(selectedWriteoff.total_amount || 0))}</span></span>
                 </div>
                 <div className="overflow-auto rounded-xl border border-white/10">
-                  <table className="w-full text-sm">
+                  <table className="w-full table-fixed text-sm">
                     <thead className="bg-white/[0.03]">
                       <tr className="text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-normal">Товар</th>
@@ -766,7 +775,9 @@ export default function StoreWriteoffsPage() {
                     <tbody>
                       {(selectedWriteoff.items || []).map((item) => (
                         <tr key={item.id} className="border-t border-white/[0.06]">
-                          <td className="px-3 py-2">{item.item?.name || 'Товар'}</td>
+                          <td className="px-3 py-2" title={item.item?.name || 'Товар'}>
+                            <span className="block truncate">{item.item?.name || 'Товар'}</span>
+                          </td>
                           <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{item.item?.barcode || '—'}</td>
                           <td className="px-3 py-2 text-right">{formatQty(Number(item.quantity || 0))}</td>
                           <td className="px-3 py-2 text-right">{formatMoney(Number(item.unit_cost || 0))}</td>

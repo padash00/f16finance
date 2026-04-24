@@ -725,7 +725,7 @@ export default function StoreRevisionsPage() {
                   ) : null}
                 </div>
                 <div className="overflow-auto rounded-xl border border-white/10">
-                  <table className="w-full text-sm">
+                  <table className="w-full table-fixed text-sm">
                     <thead className="bg-white/[0.03]">
                       <tr className="text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-normal">Товар</th>
@@ -739,7 +739,9 @@ export default function StoreRevisionsPage() {
                     <tbody>
                       {(selectedRevision.items || []).map((item) => (
                         <tr key={item.id} className="border-t border-white/[0.06]">
-                          <td className="px-3 py-2">{item.item?.name || 'Товар'}</td>
+                          <td className="px-3 py-2" title={item.item?.name || 'Товар'}>
+                            <span className="block truncate">{item.item?.name || 'Товар'}</span>
+                          </td>
                           <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{item.item?.barcode || '—'}</td>
                           <td className="px-3 py-2 text-right">{formatQty(Number(item.expected_qty || 0))}</td>
                           <td className="px-3 py-2 text-right">{formatQty(Number(item.actual_qty || 0))}</td>
