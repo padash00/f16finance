@@ -35,6 +35,7 @@ type CatalogItem = {
   notes: string | null
   is_active: boolean
   item_type: string
+  catalog_qty?: number
   warehouse_qty: number
   showcase_qty: number
   total_balance: number
@@ -365,15 +366,16 @@ export function CatalogPageContent() {
   // Totals across all filtered items (not just current page)
   const totals = filtered.reduce(
     (acc, item) => {
+      const catalogQty = Number(item.catalog_qty ?? item.total_balance ?? 0)
       acc.warehouseQty += item.warehouse_qty
       acc.showcaseQty  += item.showcase_qty
-      acc.totalQty     += item.total_balance
+      acc.totalQty     += catalogQty
       acc.warehousePurchase += item.warehouse_qty * item.default_purchase_price
       acc.warehouseSale     += item.warehouse_qty * item.sale_price
       acc.showcasePurchase  += item.showcase_qty  * item.default_purchase_price
       acc.showcaseSale      += item.showcase_qty  * item.sale_price
-      acc.totalPurchase     += item.total_balance * item.default_purchase_price
-      acc.totalSale         += item.total_balance * item.sale_price
+      acc.totalPurchase     += catalogQty * item.default_purchase_price
+      acc.totalSale         += catalogQty * item.sale_price
       return acc
     },
     {
@@ -823,7 +825,7 @@ export function CatalogPageContent() {
                       <th className="px-3 py-2.5 text-center font-medium text-muted-foreground text-xs">Ед.</th>
                       <th className="px-3 py-2.5 text-right font-medium text-muted-foreground text-xs">Склад</th>
                       <th className="px-3 py-2.5 text-right font-medium text-muted-foreground text-xs">Витрина</th>
-                      <th className="px-3 py-2.5 text-right font-medium text-muted-foreground text-xs">Итого</th>
+                      <th className="px-3 py-2.5 text-right font-medium text-muted-foreground text-xs">Каталог</th>
                       <th className="px-3 py-2.5 text-center font-medium text-muted-foreground text-xs w-20">Действия</th>
                     </tr>
                   </thead>
@@ -867,11 +869,11 @@ export function CatalogPageContent() {
                             ) : <span className="text-muted-foreground">—</span>}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {item.total_balance > 0 ? (
+                            {(Number(item.catalog_qty ?? item.total_balance) || 0) > 0 ? (
                               <div className="space-y-0.5">
-                                <div className="text-emerald-400 font-semibold">{item.total_balance.toLocaleString('ru-RU')} {item.unit}</div>
-                                <div className="text-[10px] text-muted-foreground">зак: {(item.total_balance * item.default_purchase_price).toLocaleString('ru-RU')} ₸</div>
-                                <div className="text-[10px] text-muted-foreground">пр: {(item.total_balance * item.sale_price).toLocaleString('ru-RU')} ₸</div>
+                                <div className="text-emerald-400 font-semibold">{(Number(item.catalog_qty ?? item.total_balance) || 0).toLocaleString('ru-RU')} {item.unit}</div>
+                                <div className="text-[10px] text-muted-foreground">зак: {((Number(item.catalog_qty ?? item.total_balance) || 0) * item.default_purchase_price).toLocaleString('ru-RU')} ₸</div>
+                                <div className="text-[10px] text-muted-foreground">пр: {((Number(item.catalog_qty ?? item.total_balance) || 0) * item.sale_price).toLocaleString('ru-RU')} ₸</div>
                               </div>
                             ) : <span className="text-muted-foreground">—</span>}
                           </td>
