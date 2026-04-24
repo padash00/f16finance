@@ -8,10 +8,18 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+function canManageInventory(access: {
+  isSuperAdmin: boolean
+  staffRole: 'manager' | 'marketer' | 'owner' | 'other'
+}) {
+  return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+}
+
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    if (!canManageInventory(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const url = new URL(request.url)

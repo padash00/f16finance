@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { resolveCompanyScope } from '@/lib/server/organizations'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { writeSystemErrorLogSafe } from '@/lib/server/audit'
 
@@ -7,16 +8,49 @@ function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status })
 }
 
+function canManageInventory(access: {
+  isSuperAdmin: boolean
+  staffRole: 'manager' | 'marketer' | 'owner' | 'other'
+}) {
+  return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
+}
+
 export async function GET(request: Request) {
   try {
     const access = await getRequestAccessContext(request)
     if ('response' in access) return access.response
+    if (!canManageInventory(access)) return json({ error: 'forbidden' }, 403)
 
     const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
     const url = new URL(request.url)
     const companyId = url.searchParams.get('company_id') || ''
     const locationId = url.searchParams.get('location_id') || ''
     const days = 30 // analyze last 30 days for velocity
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+    if (companyScope.allowedCompanyIds && companyScope.allowedCompanyIds.length === 0) {
+      return json({ ok: true, data: [], period_days: days })
+    }
+    if (companyScope.allowedCompanyIds && companyId && !companyScope.allowedCompanyIds.includes(companyId)) {
+      return json({ error: 'forbidden-company' }, 403)
+    }
+    const scopedCompanyIds = companyScope.allowedCompanyIds || null
+
+    let locationsQuery = supabase
+      .from('inventory_locations')
+      .select('id, company_id')
+      .eq('is_active', true)
+      .not('company_id', 'is', null)
+    if (companyId) locationsQuery = locationsQuery.eq('company_id', companyId)
+    if (scopedCompanyIds) locationsQuery = locationsQuery.in('company_id', scopedCompanyIds)
+    const { data: scopedLocations, error: scopedLocationsError } = await locationsQuery
+    if (scopedLocationsError) throw scopedLocationsError
+    const scopedLocationIds = new Set((scopedLocations || []).map((row: any) => String(row.id || '')).filter(Boolean))
+    if (locationId && !scopedLocationIds.has(locationId)) {
+      return json({ error: 'forbidden-location' }, 403)
+    }
 
     const dateFrom = new Date()
     dateFrom.setDate(dateFrom.getDate() - days)
@@ -33,6 +67,7 @@ export async function GET(request: Request) {
     // Filter by company/location
     const filtered = (saleItems || []).filter((si: any) => {
       const sale = Array.isArray(si.point_sales) ? si.point_sales[0] : si.point_sales
+      if (scopedCompanyIds && !scopedCompanyIds.includes(String(sale?.company_id || ''))) return false
       if (companyId && sale?.company_id !== companyId) return false
       if (locationId && sale?.location_id !== locationId) return false
       return true
@@ -53,6 +88,8 @@ export async function GET(request: Request) {
       .from('inventory_balances')
       .select('item_id, quantity, location_id')
     if (locationId) balanceQuery = balanceQuery.eq('location_id', locationId)
+    else if (scopedLocationIds.size > 0) balanceQuery = balanceQuery.in('location_id', Array.from(scopedLocationIds))
+    else balanceQuery = balanceQuery.eq('location_id', '__none__')
 
     const { data: balances, error: balError } = await balanceQuery
     if (balError) throw balError
