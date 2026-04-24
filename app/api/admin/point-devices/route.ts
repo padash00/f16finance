@@ -10,6 +10,7 @@ type PointFeatureFlags = {
   income_report: boolean
   debt_report: boolean
   kaspi_daily_split: boolean
+  start_cash_prompt?: boolean
   arena_enabled?: boolean
   /** Экран смены подставляет суммы из сессий арены (Electron). */
   arena_shift_auto_totals?: boolean
@@ -76,6 +77,9 @@ function normalizeFlags(input: Partial<PointFeatureFlags> | null | undefined): P
     debt_report: input?.debt_report === true,
     kaspi_daily_split: input?.kaspi_daily_split === true,
   }
+  if (input?.start_cash_prompt !== undefined) {
+    flags.start_cash_prompt = input.start_cash_prompt === true
+  }
   // arena_* are per-point flags, store only if explicitly provided
   if (input?.arena_enabled !== undefined) {
     flags.arena_enabled = input.arena_enabled === true
@@ -87,6 +91,27 @@ function normalizeFlags(input: Partial<PointFeatureFlags> | null | undefined): P
     flags.arena_defer_income_to_shift = input.arena_defer_income_to_shift === true
   }
   return flags
+}
+
+function normalizeAssignmentFlags(input: Partial<PointFeatureFlags> | null | undefined): Partial<PointFeatureFlags> | null {
+  if (!input || typeof input !== 'object') return null
+  const allowedKeys: Array<keyof PointFeatureFlags> = [
+    'shift_report',
+    'income_report',
+    'debt_report',
+    'kaspi_daily_split',
+    'start_cash_prompt',
+    'arena_enabled',
+    'arena_shift_auto_totals',
+    'arena_defer_income_to_shift',
+  ]
+  const flags: Partial<PointFeatureFlags> = {}
+  for (const key of allowedKeys) {
+    if (input[key] !== undefined && input[key] !== null) {
+      flags[key] = input[key] === true
+    }
+  }
+  return Object.keys(flags).length > 0 ? flags : null
 }
 
 function normalizeShiftReportChatId(value: string | null | undefined) {
@@ -267,7 +292,7 @@ export async function POST(request: Request) {
         project_id: project.id,
         company_id: a.company_id,
         point_mode: a.point_mode?.trim() || null,
-        feature_flags: a.feature_flags ? normalizeFlags(a.feature_flags) : null,
+        feature_flags: normalizeAssignmentFlags(a.feature_flags),
       }))
       const { error: companiesError } = await supabase
         .from('point_project_companies')
@@ -334,7 +359,7 @@ export async function POST(request: Request) {
         project_id: projectId,
         company_id: a.company_id,
         point_mode: a.point_mode?.trim() || null,
-        feature_flags: a.feature_flags ? normalizeFlags(a.feature_flags) : null,
+        feature_flags: normalizeAssignmentFlags(a.feature_flags),
       }))
       const { error: insertError } = await supabase.from('point_project_companies').insert(companyRows)
       if (insertError) throw insertError

@@ -7,3 +7,5 @@ tsconfig.tsbuildinfo
 .claude/settings.local.json
 __pycache__/
 *.py[cod]
+
+.vercel

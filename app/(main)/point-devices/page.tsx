@@ -35,17 +35,16 @@ type PointFeatureFlags = {
   income_report: boolean
   debt_report: boolean
   kaspi_daily_split: boolean
+  start_cash_prompt: boolean
+  arena_enabled: boolean
+  arena_shift_auto_totals: boolean
+  arena_defer_income_to_shift: boolean
 }
 
 type CompanyAssignment = {
   company_id: string
   point_mode: string    // '' = inherit from project
-  feature_flags: {
-    debt_report: boolean | null       // null = inherit
-    kaspi_daily_split: boolean | null // null = inherit
-    arena_enabled: boolean | null     // null = inherit
-    arena_shift_auto_totals: boolean | null // null = inherit — сводка смены из сессий арены
-  }
+  feature_flags: Record<keyof PointFeatureFlags, boolean | null>
 }
 
 type ProjectCompany = Company & {
@@ -91,6 +90,10 @@ const DEFAULT_FLAGS: PointFeatureFlags = {
   income_report: true,
   debt_report: false,
   kaspi_daily_split: false,
+  start_cash_prompt: false,
+  arena_enabled: false,
+  arena_shift_auto_totals: false,
+  arena_defer_income_to_shift: false,
 }
 
 const DEFAULT_FORM: ProjectForm = {
@@ -109,6 +112,55 @@ const MODE_LABELS: Record<string, string> = {
   debts: 'Долги и доп. операции',
 }
 
+const PROJECT_FLAG_OPTIONS: Array<{
+  key: keyof PointFeatureFlags
+  label: string
+  hint: string
+}> = [
+  {
+    key: 'shift_report',
+    label: 'Сменные отчёты',
+    hint: 'Форма смены: наличные, Kaspi, итоги → Telegram и зарплата.',
+  },
+  {
+    key: 'income_report',
+    label: 'Доходы',
+    hint: 'Отдельная форма доходов в операторке.',
+  },
+  {
+    key: 'debt_report',
+    label: 'Долги и сканер',
+    hint: 'Сканер долгов и товарные операции для подходящих режимов.',
+  },
+  {
+    key: 'kaspi_daily_split',
+    label: 'Суточная сверка Kaspi',
+    hint: 'Для ночной смены: Kaspi до 00:00 и после 00:00.',
+  },
+  {
+    key: 'start_cash_prompt',
+    label: 'Старт кассы',
+    hint: 'При входе оператор указывает мелочь на начало смены.',
+  },
+  {
+    key: 'arena_enabled',
+    label: 'Арена / станции',
+    hint: 'Открывает экран станций, тарифов и игровых сессий.',
+  },
+  {
+    key: 'arena_shift_auto_totals',
+    label: 'Автоитоги арены',
+    hint: 'Резерв под автоматическую сводку смены из сессий арены.',
+  },
+  {
+    key: 'arena_defer_income_to_shift',
+    label: 'Арена без авто-доходов',
+    hint: 'Не пишет доход при старте тарифа, учёт идёт через сменный отчёт.',
+  },
+]
+
+const POINT_OVERRIDE_OPTIONS = PROJECT_FLAG_OPTIONS.filter((option) => option.key !== 'shift_report' && option.key !== 'income_report')
+
 function formatDateTime(value: string | null) {
   if (!value) return 'Ещё не выходило в сеть'
   return new Date(value).toLocaleString('ru-RU', {
@@ -124,10 +176,14 @@ function emptyAssignment(company_id: string): CompanyAssignment {
     company_id,
     point_mode: '',
     feature_flags: {
+      shift_report: null,
+      income_report: null,
       debt_report: null,
       kaspi_daily_split: null,
+      start_cash_prompt: null,
       arena_enabled: null,
       arena_shift_auto_totals: null,
+      arena_defer_income_to_shift: null,
     },
   }
 }
@@ -163,7 +219,7 @@ function CompanyAssignmentEditor({
 
   function updateFlag(
     companyId: string,
-    key: 'debt_report' | 'kaspi_daily_split' | 'arena_enabled' | 'arena_shift_auto_totals',
+    key: keyof PointFeatureFlags,
     value: boolean | null,
   ) {
     onChange(assignments.map((a) =>
@@ -173,9 +229,20 @@ function CompanyAssignmentEditor({
     ))
   }
 
+  const selectedCompanies = allCompanies.filter((company) => selectedIds.has(company.id))
+  const availableCompanies = allCompanies.filter((company) => !selectedIds.has(company.id))
+  const orderedCompanies = [...selectedCompanies, ...availableCompanies]
+
   return (
-    <div className="space-y-2">
-      {allCompanies.map((c) => {
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-muted-foreground">
+        <span>
+          В проекте: <b className="text-cyan-200">{assignments.length}</b> из {allCompanies.length} точек
+        </span>
+        <span>Нажми «Добавить» или «Убрать», а «Настройки» откроют режимы конкретной точки.</span>
+      </div>
+
+      {orderedCompanies.map((c) => {
         const selected = selectedIds.has(c.id)
         const assignment = assignments.find((a) => a.company_id === c.id)
         const isExpanded = expanded[c.id] === true
@@ -196,11 +263,11 @@ function CompanyAssignmentEditor({
                 : 'border-white/10 bg-black/20'
             }`}
           >
-            <div className="flex items-center gap-2 px-3 py-2">
+            <div className="flex flex-wrap items-center gap-2 px-3 py-2">
               <button
                 type="button"
                 onClick={() => toggle(c.id)}
-                className={`flex flex-1 items-center gap-2 text-sm text-left ${
+                className={`flex min-w-0 flex-1 items-center gap-2 text-sm text-left ${
                   selected ? 'text-cyan-200' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -212,7 +279,7 @@ function CompanyAssignmentEditor({
                   </span>
                 )}
               </button>
-              {selected && (
+              {selected ? (
                 <>
                   <button
                     type="button"
@@ -226,6 +293,14 @@ function CompanyAssignmentEditor({
                     <X className="h-3.5 w-3.5 text-cyan-400 hover:text-red-400" />
                   </button>
                 </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => toggle(c.id)}
+                  className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/15"
+                >
+                  + Добавить
+                </button>
               )}
             </div>
 
@@ -251,19 +326,16 @@ function CompanyAssignmentEditor({
                 </label>
 
                 <div className="space-y-1.5">
-                  <span className="text-sm text-muted-foreground">Флаги (null = наследовать)</span>
+                  <span className="text-sm text-muted-foreground">Что включено на этой точке</span>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {([
-                      ['debt_report', 'Долги и сканер', projectFlags.debt_report],
-                      ['kaspi_daily_split', 'Суточная сверка Kaspi', projectFlags.kaspi_daily_split],
-                      ['arena_enabled', 'Арена / Станции', false],
-                      ['arena_shift_auto_totals', 'Смена: авто из сессий арены', false],
-                    ] as [keyof typeof assignment.feature_flags, string, boolean][]).map(([key, label, projectDefault]) => {
+                    {POINT_OVERRIDE_OPTIONS.map(({ key, label, hint }) => {
+                      const projectDefault = projectFlags[key] === true
                       const val = assignment.feature_flags[key]
                       return (
                         <div key={key} className="rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
                           <div className="mb-1.5 font-medium text-foreground">{label}</div>
-                          <div className="flex gap-2">
+                          <p className="mb-2 min-h-8 text-[11px] leading-relaxed text-muted-foreground">{hint}</p>
+                          <div className="flex flex-wrap gap-2">
                             {([
                               [null, `Проект (${projectDefault ? 'вкл' : 'выкл'})`],
                               [true, 'Включить'],
@@ -368,12 +440,15 @@ function ProjectFormPanel({
         />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        {([
-          ['shift_report', 'Сменные отчёты', 'Форма смены: наличные, Kaspi, итоги → Telegram и salary.'],
-          ['income_report', 'Доходы', 'Отдельная форма доходов. Зарезервировано.'],
-          ['debt_report', 'Долги и сканер', 'По умолчанию для точек без своей настройки.'],
-        ] as [string, string, string][]).map(([key, label, hint]) => (
+      <div className="space-y-2">
+        <div>
+          <p className="text-sm font-medium text-foreground">Функции проекта по умолчанию</p>
+          <p className="text-xs text-muted-foreground">
+            Эти настройки наследуют все точки проекта. Внутри конкретной точки можно сделать исключение.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {PROJECT_FLAG_OPTIONS.map(({ key, label, hint }) => (
           <label
             key={key}
             className="flex flex-col gap-1.5 cursor-pointer rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm"
@@ -394,7 +469,8 @@ function ProjectFormPanel({
             </div>
             <p className="pl-6 text-xs leading-relaxed text-muted-foreground">{hint}</p>
           </label>
-        ))}
+          ))}
+        </div>
       </div>
 
       <div className="flex justify-end gap-2">
@@ -457,23 +533,13 @@ export default function PointDevicesPage() {
   function buildApiAssignments(assignments: CompanyAssignment[]) {
     return assignments.map((a) => {
       const hasMode = a.point_mode && a.point_mode !== ''
-      const hasFlagDebt = a.feature_flags.debt_report !== null
-      const hasFlagKaspi = a.feature_flags.kaspi_daily_split !== null
-      const hasFlagArena = a.feature_flags.arena_enabled !== null
-      const hasFlagArenaShiftAuto = a.feature_flags.arena_shift_auto_totals !== null
+      const featureFlags = Object.fromEntries(
+        Object.entries(a.feature_flags).filter(([, value]) => value !== null),
+      )
       return {
         company_id: a.company_id,
         point_mode: hasMode ? a.point_mode : null,
-        feature_flags: (hasFlagDebt || hasFlagKaspi || hasFlagArena || hasFlagArenaShiftAuto)
-          ? {
-              shift_report: true,
-              income_report: true,
-              debt_report: a.feature_flags.debt_report ?? false,
-              kaspi_daily_split: a.feature_flags.kaspi_daily_split ?? false,
-              arena_enabled: a.feature_flags.arena_enabled ?? false,
-              arena_shift_auto_totals: a.feature_flags.arena_shift_auto_totals ?? false,
-            }
-          : null,
+        feature_flags: Object.keys(featureFlags).length > 0 ? featureFlags : null,
       }
     })
   }
@@ -514,10 +580,14 @@ export default function PointDevicesPage() {
         company_id: c.id,
         point_mode: c.point_mode || '',
         feature_flags: {
+          shift_report: (c.feature_flags as any)?.shift_report ?? null,
+          income_report: (c.feature_flags as any)?.income_report ?? null,
           debt_report: c.feature_flags?.debt_report ?? null,
           kaspi_daily_split: c.feature_flags?.kaspi_daily_split ?? null,
+          start_cash_prompt: (c.feature_flags as any)?.start_cash_prompt ?? null,
           arena_enabled: (c.feature_flags as any)?.arena_enabled ?? null,
           arena_shift_auto_totals: (c.feature_flags as any)?.arena_shift_auto_totals ?? null,
+          arena_defer_income_to_shift: (c.feature_flags as any)?.arena_defer_income_to_shift ?? null,
         },
       })),
       shift_report_chat_id: project.shift_report_chat_id || '',
@@ -527,6 +597,10 @@ export default function PointDevicesPage() {
         income_report: project.feature_flags.income_report !== false,
         debt_report: project.feature_flags.debt_report === true,
         kaspi_daily_split: project.feature_flags.kaspi_daily_split === true,
+        start_cash_prompt: project.feature_flags.start_cash_prompt === true,
+        arena_enabled: project.feature_flags.arena_enabled === true,
+        arena_shift_auto_totals: project.feature_flags.arena_shift_auto_totals === true,
+        arena_defer_income_to_shift: project.feature_flags.arena_defer_income_to_shift === true,
       },
     })
   }
@@ -763,10 +837,14 @@ export default function PointDevicesPage() {
                               {c.feature_flags && (
                                 <div className="pl-5 text-[11px] text-amber-300">
                                   {[
+                                    c.feature_flags.shift_report === true && 'смены',
+                                    c.feature_flags.income_report === true && 'доходы',
                                     c.feature_flags.debt_report === true && 'долги',
                                     c.feature_flags.kaspi_daily_split === true && 'kaspi-split',
+                                    (c.feature_flags as any)?.start_cash_prompt === true && 'старт кассы',
                                     (c.feature_flags as any)?.arena_enabled === true && 'арена',
                                     (c.feature_flags as any)?.arena_shift_auto_totals === true && 'смена-арена-авто',
+                                    (c.feature_flags as any)?.arena_defer_income_to_shift === true && 'арена без авто-доходов',
                                   ].filter(Boolean).join(', ') || null}
                                 </div>
                               )}
@@ -817,11 +895,7 @@ export default function PointDevicesPage() {
 
                       {/* Feature flags */}
                       <div className="grid gap-2 content-start">
-                        {([
-                          ['shift_report', 'Сменные отчёты'],
-                          ['income_report', 'Доходы'],
-                          ['debt_report', 'Долги и сканер'],
-                        ] as [string, string][]).map(([key, label]) => (
+                        {PROJECT_FLAG_OPTIONS.map(({ key, label }) => (
                           <div
                             key={key}
                             className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${
