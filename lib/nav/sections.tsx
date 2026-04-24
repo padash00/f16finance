@@ -1,6 +1,7 @@
 import {
   ArchiveX,
   BarChart3,
+  BookOpen,
   BrainCircuit,
   Briefcase,
   Building2,
@@ -185,6 +186,7 @@ export const navSections: NavSection[] = [
     items: [
       { href: '/settings', label: 'Настройки системы', icon: Settings2, note: 'Компании и справочники' },
       { href: '/access', label: 'Права и пароли', icon: Shield, note: 'Доступ ролей и аккаунты' },
+      { href: '/knowledge-admin', label: 'База знаний', icon: BookOpen, note: 'FAQ, правила и чек-листы', badge: 'new', badgeColor: 'green' },
       { href: '/telegram', label: 'Telegram Bot', icon: MessageSquareText, note: 'Уведомления и команды', badge: 'new', badgeColor: 'blue' },
       { href: '/point-devices', label: 'Точки и устройства', icon: Building2, note: 'Токены и программы точек' },
       { href: '/logs', label: 'Логирование', icon: Logs, note: 'Аудит, уведомления и события' },

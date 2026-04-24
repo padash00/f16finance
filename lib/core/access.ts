@@ -110,6 +110,7 @@ export const ADMIN_PATHS = [
   '/settings',
   '/telegram',
   '/access',
+  '/knowledge-admin',
   '/pass',
   '/categories',
   '/inventory',
@@ -211,6 +212,7 @@ const OWNER_PATHS = [
   '/tasks',
   '/shifts',
   '/shifts/*',
+  '/knowledge-admin',
 ] as const
 
 export const STAFF_ROLE_MATRIX: Record<StaffRole, RoleMatrixEntry> = {
@@ -444,6 +446,7 @@ export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
     pages: [
       { path: '/settings', label: 'Настройки системы' },
       { path: '/access', label: 'Права и пароли' },
+      { path: '/knowledge-admin', label: 'База знаний и чек-листы' },
       { path: '/telegram', label: 'Telegram Bot' },
       { path: '/point-devices', label: 'Точки и устройства' },
       { path: '/logs', label: 'Логирование' },
