@@ -213,7 +213,7 @@ export async function GET(request: Request) {
         let locationsQuery = supabase
           .from('inventory_locations')
           .select('id, company_id, location_type, company:companies!company_id(name)')
-          .in('location_type', ['catalog', 'warehouse'])
+          .in('location_type', ['catalog_total', 'warehouse'])
           .in('company_id', enabledCompanyIds)
         const { data: locations, error: locationsError } = await locationsQuery
         if (locationsError) throw locationsError
@@ -269,7 +269,7 @@ export async function GET(request: Request) {
               }
 
               const qty = Number((row as any).quantity || 0)
-              if (location.location_type === 'catalog') prev.catalogQty += qty
+              if (location.location_type === 'catalog_total') prev.catalogQty += qty
               if (location.location_type === 'warehouse') prev.warehouseQty += qty
               grouped.set(key, prev)
             }

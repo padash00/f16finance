@@ -63,7 +63,7 @@ type ReceiptBody = {
   payload: {
     location_id?: string
     company_id?: string
-    location_type?: 'warehouse' | 'point_display'
+    location_type?: 'warehouse' | 'point_display' | 'catalog_total'
     supplier_id?: string | null
     received_at: string
     invoice_number?: string | null
@@ -108,7 +108,7 @@ type WriteoffBody = {
   payload: {
     location_id?: string
     company_id?: string
-    location_type?: 'warehouse' | 'point_display'
+    location_type?: 'warehouse' | 'point_display' | 'catalog_total'
     written_at: string
     reason: string
     comment?: string | null
@@ -125,7 +125,7 @@ type StocktakeBody = {
   payload: {
     location_id?: string
     company_id?: string
-    location_type?: 'warehouse' | 'point_display'
+    location_type?: 'warehouse' | 'point_display' | 'catalog_total'
     counted_at: string
     comment?: string | null
     items: Array<{
@@ -235,7 +235,7 @@ function canManageInventory(access: {
 async function resolveLocationId(
   supabase: any,
   inventoryScope: { organizationId: string | null; allowedCompanyIds: string[] | null; isSuperAdmin: boolean },
-  payload: { location_id?: string; company_id?: string; location_type?: 'warehouse' | 'point_display' },
+  payload: { location_id?: string; company_id?: string; location_type?: 'warehouse' | 'point_display' | 'catalog_total' },
 ) {
   const explicitLocationId = String(payload.location_id || '').trim()
   if (explicitLocationId) return explicitLocationId

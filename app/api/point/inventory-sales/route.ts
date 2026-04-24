@@ -189,11 +189,11 @@ async function resolveStockLocations(supabase: any, companyId: string) {
     .from('inventory_locations')
     .select('id, location_type')
     .eq('company_id', companyId)
-    .in('location_type', ['catalog', 'warehouse'])
+    .in('location_type', ['catalog_total', 'warehouse'])
     .eq('is_active', true)
 
   if (error) throw error
-  const catalogId = (data || []).find((row: any) => row.location_type === 'catalog')?.id || null
+  const catalogId = (data || []).find((row: any) => row.location_type === 'catalog_total')?.id || null
   const warehouseId = (data || []).find((row: any) => row.location_type === 'warehouse')?.id || null
   if (!catalogId) throw new Error('inventory-sale-catalog-location-missing')
   return { catalogId, warehouseId }

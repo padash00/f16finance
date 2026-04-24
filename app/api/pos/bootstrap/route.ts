@@ -35,7 +35,7 @@ export async function GET(request: Request) {
       supabase
         .from('inventory_locations')
         .select('id, company_id, location_type')
-        .in('location_type', ['catalog', 'warehouse'])
+        .in('location_type', ['catalog_total', 'warehouse'])
         .eq('is_active', true),
       supabase
         .from('inventory_items')
@@ -62,10 +62,10 @@ export async function GET(request: Request) {
 
     // Catalog-модель: витрина = catalog - warehouse по компании.
     // Ключ — catalog/warehouse location_id, значение — company_id.
-    const catalogByCompany = new Map<string, string>() // company_id → catalog_loc_id
+    const catalogByCompany = new Map<string, string>() // company_id → catalog_total_loc_id
     const warehouseByCompany = new Map<string, string>() // company_id → warehouse_loc_id
     for (const l of allLocations || []) {
-      if (l.location_type === 'catalog') catalogByCompany.set(l.company_id, l.id)
+      if (l.location_type === 'catalog_total') catalogByCompany.set(l.company_id, l.id)
       else if (l.location_type === 'warehouse') warehouseByCompany.set(l.company_id, l.id)
     }
 

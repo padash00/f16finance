@@ -18,13 +18,13 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return out
 }
 
-/** Остаток из импорта всегда на каталог организации: main-catalog → имя с «катал» → первый по алфавиту (ru). */
+/** Остаток из импорта всегда на company catalog_total: код CT-* → имя с «катал» → первый по алфавиту (ru). */
 function pickCentralCatalogId(
   rows: Array<{ id: string; name?: string | null; code?: string | null }> | null | undefined,
 ): string | undefined {
   const list = rows || []
   if (!list.length) return undefined
-  const byCode = list.find((r) => String(r.code || '').toLowerCase() === 'main-catalog')
+  const byCode = list.find((r) => String(r.code || '').toLowerCase().startsWith('ct-'))
   if (byCode?.id) return String(byCode.id)
   const byName = list.find((r) => /катал/i.test(String(r.name || '')))
   if (byName?.id) return String(byName.id)
@@ -71,36 +71,38 @@ export async function GET(request: Request) {
 
     if (itemsError) throw itemsError
 
-    // Fetch balances with location type: total = warehouse + point_display
+    // Fetch balances with location type: showcase is derived from catalog_total - warehouse
     const { data: balances, error: balancesError } = await supabase
       .from('inventory_balances')
       .select('item_id, quantity, loc:inventory_locations(location_type)')
 
     if (balancesError) throw balancesError
 
-    // Физическая модель: total = warehouse + point_display
+    // catalog_total model: showcase = max(0, catalog_total - warehouse)
+    const catalogMap: Record<string, number> = {}
     const warehouseMap: Record<string, number> = {}
-    const showcaseMap: Record<string, number> = {}
     for (const b of balances || []) {
       const locType = (Array.isArray(b.loc) ? b.loc[0] : b.loc)?.location_type
       const qty = b.quantity || 0
-      if (locType === 'warehouse') {
+      if (locType === 'catalog_total') {
+        catalogMap[b.item_id] = (catalogMap[b.item_id] || 0) + qty
+      } else if (locType === 'warehouse') {
         warehouseMap[b.item_id] = (warehouseMap[b.item_id] || 0) + qty
-      } else if (locType === 'point_display') {
-        showcaseMap[b.item_id] = (showcaseMap[b.item_id] || 0) + qty
       }
     }
 
     // Normalize items (category may come back as array from supabase joins)
     const normalized = (items || []).map((item: any) => {
       const wh = warehouseMap[item.id] || 0
-      const sh = showcaseMap[item.id] || 0
+      const cat = catalogMap[item.id] || 0
+      const sh = Math.max(0, cat - wh)
       return {
         ...item,
         category: Array.isArray(item.category) ? item.category[0] || null : item.category || null,
+        catalog_qty: cat,
         warehouse_qty: wh,
         showcase_qty: sh,
-        total_balance: wh + sh,
+        total_balance: cat,
       }
     })
 
@@ -394,7 +396,7 @@ export async function POST(request: Request) {
         const { data: catList, error: catLocErr } = await supabase
           .from('inventory_locations')
           .select('id, name, code, company_id')
-          .eq('location_type', 'catalog')
+          .eq('location_type', 'catalog_total')
           .eq('is_active', true)
           .eq('organization_id', orgId)
 
@@ -456,7 +458,7 @@ export async function POST(request: Request) {
           return json(
             {
               error:
-                'В организации нет активного каталога (catalog location) — создайте каталог для компании, чтобы записать остатки из Excel.',
+                'В организации нет активного каталога (catalog_total) — создайте каталог для компании, чтобы записать остатки из Excel.',
             },
             400,
           )
@@ -522,7 +524,7 @@ export async function POST(request: Request) {
         .from('inventory_locations')
         .select('id')
         .eq('organization_id', orgId)
-        .in('location_type', ['warehouse', 'point_display'])
+        .in('location_type', ['warehouse', 'point_display', 'catalog_total'])
 
       if (locErr) throw locErr
 

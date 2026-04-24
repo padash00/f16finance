@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       .from('inventory_locations')
       .select('id, company_id, location_type')
       .in('company_id', companyIds)
-      .in('location_type', ['catalog', 'warehouse'])
+      .in('location_type', ['catalog_total', 'warehouse'])
       .eq('is_active', true)
 
     if (locError) throw locError
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
       const type = String((row as any).location_type || '')
       if (!id || !companyId) continue
       locCompanyType.set(id, { companyId, type })
-      if (type === 'catalog') catalogLocIds.push(id)
+      if (type === 'catalog_total') catalogLocIds.push(id)
       else if (type === 'warehouse') warehouseLocIds.push(id)
     }
 
@@ -111,7 +111,7 @@ export async function GET(request: Request) {
         const meta = locCompanyType.get(locId)
         if (!itemId || !meta) continue
         const key = `${meta.companyId}:${itemId}`
-        if (meta.type === 'catalog') catalogByCompanyItem.set(key, (catalogByCompanyItem.get(key) || 0) + qty)
+        if (meta.type === 'catalog_total') catalogByCompanyItem.set(key, (catalogByCompanyItem.get(key) || 0) + qty)
         else if (meta.type === 'warehouse') warehouseByCompanyItem.set(key, (warehouseByCompanyItem.get(key) || 0) + qty)
       }
 

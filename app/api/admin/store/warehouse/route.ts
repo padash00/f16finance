@@ -26,7 +26,7 @@ function normalizeQty(v: unknown) {
 async function ensureCompanyLocation(
   supabase: any,
   companyId: string,
-  locationType: 'warehouse' | 'point_display',
+  locationType: 'warehouse' | 'point_display' | 'catalog_total',
 ) {
   const { data: existing, error: fetchErr } = await supabase
     .from('inventory_locations')
@@ -46,8 +46,8 @@ async function ensureCompanyLocation(
   if (compErr) throw compErr
   if (!company?.id) throw new Error('company-not-found')
 
-  const prefix = locationType === 'warehouse' ? 'WH' : 'PD'
-  const namePrefix = locationType === 'warehouse' ? 'Склад' : 'Витрина'
+  const prefix = locationType === 'warehouse' ? 'WH' : locationType === 'point_display' ? 'PD' : 'CT'
+  const namePrefix = locationType === 'warehouse' ? 'Склад' : locationType === 'point_display' ? 'Витрина' : 'Каталог'
   const { data: created, error: insErr } = await supabase
     .from('inventory_locations')
     .insert({
@@ -144,18 +144,19 @@ export async function GET(request: Request) {
       }
     }
 
-    const [warehouse, showcase] = await Promise.all([
+    const [warehouse, showcase, catalog] = await Promise.all([
       ensureCompanyLocation(supabase, companyId, 'warehouse'),
       ensureCompanyLocation(supabase, companyId, 'point_display'),
+      ensureCompanyLocation(supabase, companyId, 'catalog_total'),
     ])
 
     const { data: balanceRows, error: balErr } = await supabase
       .from('inventory_balances')
       .select('location_id, item_id, quantity, updated_at, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price, category_id, category:category_id(id, name))')
-      .in('location_id', [warehouse.id, showcase.id])
+      .in('location_id', [warehouse.id, showcase.id, catalog.id])
     if (balErr) throw balErr
 
-    // Merge by item_id: physical warehouse + showcase
+    // Merge by item_id: warehouse + catalog_total (showcase is derived)
     const byItem = new Map<string, any>()
     for (const row of balanceRows || []) {
       const itemId = row.item_id
@@ -165,22 +166,23 @@ export async function GET(request: Request) {
         bucket = {
           item_id: itemId,
           item: row.item,
-          showcase_quantity: 0,
+          showcase_quantity: 0, // derived below
           warehouse_quantity: 0,
+          catalog_quantity: 0,
           updated_at: row.updated_at,
         }
         byItem.set(itemId, bucket)
       }
       if (row.location_id === warehouse.id) bucket.warehouse_quantity = Number(row.quantity) || 0
-      else if (row.location_id === showcase.id) bucket.showcase_quantity = Number(row.quantity) || 0
+      else if (row.location_id === catalog.id) bucket.catalog_quantity = Number(row.quantity) || 0
       if (row.updated_at > bucket.updated_at) bucket.updated_at = row.updated_at
     }
 
     const balances = Array.from(byItem.values())
       .map((b) => ({
         ...b,
-        catalog_quantity: b.warehouse_quantity + b.showcase_quantity, // back-compat field name
-        quantity: b.warehouse_quantity + b.showcase_quantity,
+        showcase_quantity: Math.max(0, Number(b.catalog_quantity || 0) - Number(b.warehouse_quantity || 0)),
+        quantity: Number(b.catalog_quantity || 0),
       }))
       .sort((a, b) => b.quantity - a.quantity)
 
@@ -192,7 +194,7 @@ export async function GET(request: Request) {
     return json({
       ok: true,
       data: {
-        catalog: null,
+        catalog,
         warehouse,
         showcase,
         companies: companies || [],
@@ -495,25 +497,26 @@ export async function POST(request: Request) {
         })
       }
 
-      const [warehouse, showcase] = await Promise.all([
+      const [warehouse, showcase, catalog] = await Promise.all([
         ensureCompanyLocation(supabase, companyId, 'warehouse'),
         ensureCompanyLocation(supabase, companyId, 'point_display'),
+        ensureCompanyLocation(supabase, companyId, 'catalog_total'),
       ])
 
       const matchedItemIds = [...byBarcode.values()].map((v) => v.id)
       const curWarehouse = new Map<string, number>()
-      const curShowcase = new Map<string, number>()
+      const curCatalog = new Map<string, number>()
       if (matchedItemIds.length) {
         const { data: bal } = await supabase
           .from('inventory_balances')
           .select('location_id, item_id, quantity')
-          .in('location_id', [warehouse.id, showcase.id])
+          .in('location_id', [warehouse.id, showcase.id, catalog.id])
           .in('item_id', matchedItemIds)
         for (const row of bal || []) {
           const q = Number((row as any).quantity || 0)
           const iid = String((row as any).item_id)
           if ((row as any).location_id === warehouse.id) curWarehouse.set(iid, q)
-          else if ((row as any).location_id === showcase.id) curShowcase.set(iid, q)
+          else if ((row as any).location_id === catalog.id) curCatalog.set(iid, q)
         }
       }
 
@@ -526,9 +529,10 @@ export async function POST(request: Request) {
           continue
         }
         const curW = curWarehouse.get(item.id) || 0
-        const curS = curShowcase.get(item.id) || 0
+        const curC = curCatalog.get(item.id) || 0
+        const curS = Math.max(0, curC - curW)
         const newW = r.quantity
-        const newC = newW + curS
+        const newC = curC
         matched.push({
           item_id: item.id,
           barcode: item.barcode,
@@ -536,12 +540,14 @@ export async function POST(request: Request) {
           excel_name: r.name || null,
           unit: item.unit,
           current_catalog: curW + curS,
+          current_catalog_total: curC,
           current_warehouse: curW,
           current_showcase: curS,
           new_warehouse: newW,
           new_catalog: newC,
-          new_showcase: curS,
-          catalog_changed: newC !== (curW + curS),
+          new_showcase: Math.max(0, newC - newW),
+          warehouse_exceeds_catalog: newW > newC,
+          catalog_changed: newC !== curC,
         })
       }
 
