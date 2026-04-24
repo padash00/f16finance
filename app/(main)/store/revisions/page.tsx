@@ -120,6 +120,8 @@ export default function StoreRevisionsPage() {
   const [revisionSearch, setRevisionSearch] = useState('')
   const [formPrefilled, setFormPrefilled] = useState(false)
   const [barcodeQuery, setBarcodeQuery] = useState('')
+  const [selectedRevision, setSelectedRevision] = useState<InventoryRevision | null>(null)
+  const [revisionDetailsOpen, setRevisionDetailsOpen] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -407,6 +409,7 @@ export default function StoreRevisionsPage() {
                   <th className="w-24 py-2.5 px-2 pr-4 text-right font-normal">Излишек</th>
                   <th className="w-28 py-2.5 px-2 text-right font-normal">Сумма (прод.)</th>
                   <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Сумма (закуп.)</th>
+                  <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Акт</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
@@ -475,6 +478,19 @@ export default function StoreRevisionsPage() {
                         <span className={`text-sm font-semibold ${purchaseAmount > 0 ? 'text-cyan-200' : 'text-muted-foreground'}`}>
                           {purchaseAmount > 0 ? `${Math.round(purchaseAmount).toLocaleString('ru-RU')} ₸` : '—'}
                         </span>
+                      </td>
+                      <td className="w-28 py-2.5 px-2 pr-4 text-right align-middle">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedRevision(revision)
+                            setRevisionDetailsOpen(true)
+                          }}
+                        >
+                          Открыть
+                        </Button>
                       </td>
                     </tr>
                   )
@@ -577,7 +593,7 @@ export default function StoreRevisionsPage() {
                   : null
                 const isManualLine = !line.item_id
                 return (
-                  <div key={`revision-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.35fr)_100px_100px_minmax(0,1fr)_110px_auto]">
+                  <div key={`revision-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.2fr)_160px_100px_100px_minmax(0,1fr)_110px_auto]">
                     <div className="space-y-1.5">
                       <Label>Товар</Label>
                       {isManualLine ? (
@@ -607,9 +623,9 @@ export default function StoreRevisionsPage() {
                           <SelectContent>
                             <SelectItem value={`__empty__revision_${index}`}>Выберите товар</SelectItem>
                             {(data?.items || []).map((item) => (
-                              <SelectItem key={`${index}-${item.id}`} value={item.id} title={`${item.name} · ${item.barcode}`}>
+                              <SelectItem key={`${index}-${item.id}`} value={item.id} title={`${item.name}`}>
                                 <span className="block max-w-[420px] truncate">
-                                  {item.name} · {item.barcode}
+                                  {item.name}
                                 </span>
                               </SelectItem>
                             ))}
@@ -618,13 +634,18 @@ export default function StoreRevisionsPage() {
                       ) : (
                         <div
                           className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-foreground"
-                          title={`${lineItem?.name || 'Товар'} · ${lineItem?.barcode || '—'}`}
+                          title={`${lineItem?.name || 'Товар'}`}
                         >
                           <span className="block truncate">
-                            {lineItem?.name || 'Товар'} · {lineItem?.barcode || '—'}
+                            {lineItem?.name || 'Товар'}
                           </span>
                         </div>
                       )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label>Штрихкод</Label>
+                      <Input value={lineItem?.barcode || '—'} readOnly className="bg-white/[0.03]" />
                     </div>
 
                     <div className="space-y-1.5">
@@ -679,6 +700,59 @@ export default function StoreRevisionsPage() {
               Провести ревизию
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={revisionDetailsOpen} onOpenChange={setRevisionDetailsOpen}>
+        <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-white/10 p-5 text-left">
+            <DialogTitle>Детали ревизии</DialogTitle>
+            <DialogDescription>
+              {selectedRevision
+                ? `${formatDate(selectedRevision.counted_at)} · ${selectedRevision.location?.company?.name || selectedRevision.location?.name || 'Локация'}`
+                : 'Проведенный акт ревизии'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto p-5">
+            {!selectedRevision ? (
+              <p className="text-sm text-muted-foreground">Акт не выбран.</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="text-sm text-muted-foreground">
+                  Провел: <span className="text-foreground">{actorLabel(selectedRevision.created_by_staff, selectedRevision.created_by || null)}</span>
+                  {selectedRevision.comment ? (
+                    <span> · Комментарий: <span className="text-foreground">{selectedRevision.comment}</span></span>
+                  ) : null}
+                </div>
+                <div className="overflow-auto rounded-xl border border-white/10">
+                  <table className="w-full text-sm">
+                    <thead className="bg-white/[0.03]">
+                      <tr className="text-left text-xs text-muted-foreground">
+                        <th className="px-3 py-2 font-normal">Товар</th>
+                        <th className="px-3 py-2 font-normal">Штрихкод</th>
+                        <th className="px-3 py-2 text-right font-normal">Система</th>
+                        <th className="px-3 py-2 text-right font-normal">Факт</th>
+                        <th className="px-3 py-2 text-right font-normal">Δ</th>
+                        <th className="px-3 py-2 font-normal">Комментарий</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(selectedRevision.items || []).map((item) => (
+                        <tr key={item.id} className="border-t border-white/[0.06]">
+                          <td className="px-3 py-2">{item.item?.name || 'Товар'}</td>
+                          <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{item.item?.barcode || '—'}</td>
+                          <td className="px-3 py-2 text-right">{formatQty(Number(item.expected_qty || 0))}</td>
+                          <td className="px-3 py-2 text-right">{formatQty(Number(item.actual_qty || 0))}</td>
+                          <td className="px-3 py-2 text-right">{Number(item.delta_qty || 0) > 0 ? '+' : ''}{formatQty(Number(item.delta_qty || 0))}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{item.comment || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
