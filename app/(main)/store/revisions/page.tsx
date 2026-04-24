@@ -138,6 +138,11 @@ export default function StoreRevisionsPage() {
       .filter((balance) => balance.location_id === locationId)
       .sort((a, b) => (a.item?.name || '').localeCompare(b.item?.name || ''))
   }, [data?.balances, locationId])
+  const itemById = useMemo(() => {
+    const map = new Map<string, InventoryItem>()
+    for (const item of data?.items || []) map.set(item.id, item)
+    return map
+  }, [data?.items])
 
   const loadFromBalances = () => {
     setLines(
@@ -407,7 +412,7 @@ export default function StoreRevisionsPage() {
           if (!open) setFormPrefilled(false)
         }}
       >
-        <DialogContent className="flex max-h-[90vh] w-[min(1000px,96vw)] flex-col gap-0 overflow-hidden p-0">
+        <DialogContent className="flex h-[90vh] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-white/10 p-5 text-left">
             <DialogTitle className="flex items-center gap-2">
               <ClipboardCheck className="h-5 w-5 text-cyan-300" />
@@ -426,6 +431,7 @@ export default function StoreRevisionsPage() {
                   onValueChange={(value) => {
                     setLocationId(value)
                     setFormPrefilled(false)
+                    setLines([])
                   }}
                 >
                   <SelectTrigger><SelectValue placeholder="Выберите локацию" /></SelectTrigger>
@@ -465,32 +471,45 @@ export default function StoreRevisionsPage() {
                 const expectedQty = Number(selectedBalances.find((item) => item.item_id === line.item_id)?.quantity || 0)
                 const actualQty = parseQty(line.actual_qty)
                 const deltaQty = actualQty - expectedQty
+                const lineItem = line.item_id ? itemById.get(line.item_id) || null : null
+                const isManualLine = !line.item_id
                 return (
                   <div key={`revision-${index}`} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 md:grid-cols-[minmax(0,1.35fr)_100px_100px_minmax(0,1fr)_110px_auto]">
                     <div className="space-y-1.5">
                       <Label>Товар</Label>
-                      <Select
-                        value={line.item_id || `__empty__revision_${index}`}
-                        onValueChange={(value) =>
-                          setLines((current) =>
-                            current.map((item, itemIndex) =>
-                              itemIndex === index ? { ...item, item_id: value.startsWith('__empty__') ? '' : value } : item,
-                            ),
-                          )
-                        }
-                      >
-                        <SelectTrigger className="min-w-0"><SelectValue placeholder="Выберите товар" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={`__empty__revision_${index}`}>Выберите товар</SelectItem>
-                          {(data?.items || []).map((item) => (
-                            <SelectItem key={`${index}-${item.id}`} value={item.id} title={`${item.name} · ${item.barcode}`}>
-                              <span className="block max-w-[420px] truncate">
-                                {item.name} · {item.barcode}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {isManualLine ? (
+                        <Select
+                          value={line.item_id || `__empty__revision_${index}`}
+                          onValueChange={(value) =>
+                            setLines((current) =>
+                              current.map((item, itemIndex) =>
+                                itemIndex === index ? { ...item, item_id: value.startsWith('__empty__') ? '' : value } : item,
+                              ),
+                            )
+                          }
+                        >
+                          <SelectTrigger className="min-w-0"><SelectValue placeholder="Выберите товар" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={`__empty__revision_${index}`}>Выберите товар</SelectItem>
+                            {(data?.items || []).map((item) => (
+                              <SelectItem key={`${index}-${item.id}`} value={item.id} title={`${item.name} · ${item.barcode}`}>
+                                <span className="block max-w-[420px] truncate">
+                                  {item.name} · {item.barcode}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div
+                          className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-foreground"
+                          title={`${lineItem?.name || 'Товар'} · ${lineItem?.barcode || '—'}`}
+                        >
+                          <span className="block truncate">
+                            {lineItem?.name || 'Товар'} · {lineItem?.barcode || '—'}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
