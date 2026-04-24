@@ -40,7 +40,7 @@ type KnowledgeArticle = {
   content: string
   tags: string[] | null
   audience: string[] | null
-  severity: 'info' | 'warning' | 'critical'
+  severity: 'info' | 'normal' | 'warning' | 'critical'
   related_fine_amount: number | null
   related_bonus_amount: number | null
   is_published: boolean
@@ -65,10 +65,10 @@ type ChecklistItem = {
   knowledge_article_id: string | null
   title: string
   description: string | null
-  answer_type: 'checkbox' | 'text' | 'number' | 'photo' | 'select'
+  answer_type: 'boolean' | 'text' | 'number' | 'photo' | 'choice'
   is_required: boolean
   requires_photo: boolean
-  severity: 'info' | 'warning' | 'critical'
+  severity: 'info' | 'normal' | 'warning' | 'critical'
   fine_amount: number | null
   bonus_amount: number | null
   sort_order: number
@@ -99,6 +99,7 @@ const KIND_LABELS: Record<CategoryKind, string> = {
 
 const SEVERITY_LABELS = {
   info: 'Информация',
+  normal: 'Обычно',
   warning: 'Важно',
   critical: 'Критично',
 }
@@ -141,8 +142,8 @@ const emptyItem = {
   knowledge_article_id: '',
   title: '',
   description: '',
-  answer_type: 'checkbox' as const,
-  severity: 'info' as const,
+  answer_type: 'boolean' as const,
+  severity: 'normal' as const,
   fine_amount: '',
   bonus_amount: '',
   sort_order: 100,
@@ -361,8 +362,8 @@ export default function KnowledgeAdminPage() {
   ]
 
   return (
-    <main className="min-h-screen bg-[#07111c] px-5 py-8 text-slate-100">
-      <section className="mx-auto flex max-w-7xl flex-col gap-6">
+    <main className="min-h-screen overflow-x-hidden bg-[#07111c] px-4 py-8 text-slate-100 sm:px-6">
+      <section className="mx-auto flex w-full max-w-[1760px] flex-col gap-6">
         <div className="overflow-hidden rounded-[2rem] border border-amber-400/20 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.24),transparent_32%),linear-gradient(135deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] p-8 shadow-2xl shadow-black/30">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
@@ -383,6 +384,8 @@ export default function KnowledgeAdminPage() {
             </div>
           </div>
         </div>
+
+        <WorkflowGuide />
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">
@@ -447,8 +450,12 @@ export default function KnowledgeAdminPage() {
         ) : (
           <>
             {tab === 'articles' && (
-              <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
+              <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(460px,520px)]">
                 <Panel title="Материалы для операторов" icon={FileText}>
+                  <TabHint
+                    title="Что здесь создавать?"
+                    text="Это сами правила и ответы: как открыть смену, что делать если не работает Kaspi, когда штраф, когда премия, как разговаривать с клиентом."
+                  />
                   <div className="mb-4 flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
                     <Search className="h-4 w-4 text-slate-500" />
                     <input
@@ -555,15 +562,19 @@ export default function KnowledgeAdminPage() {
             )}
 
             {tab === 'checklists' && (
-              <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
+              <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(460px,520px)]">
                 <Panel title="Шаблоны чек-листов" icon={ClipboardList}>
+                  <TabHint
+                    title="Как работает чек-лист?"
+                    text="Сначала создаётся шаблон смены, например «Приём смены». Потом внутрь добавляются пункты: проверить кассу, чистоту, склад, терминал, фото-отчёт."
+                  />
                   <div className="grid gap-4">
                     {data.templates.map((template) => (
-                      <div key={template.id} className="rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
+                      <div key={template.id} className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div>
-                            <h3 className="text-xl font-black">{template.title}</h3>
-                            <p className="mt-1 text-sm text-slate-400">{template.description || 'Без описания'}</p>
+                          <div className="min-w-0">
+                            <h3 className="break-words text-xl font-black">{template.title}</h3>
+                            <p className="mt-1 break-words text-sm leading-6 text-slate-400">{template.description || 'Без описания'}</p>
                             <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
                               <Badge>{template.role_scope}</Badge>
                               <Badge>{template.shift_scope}</Badge>
@@ -577,13 +588,13 @@ export default function KnowledgeAdminPage() {
                         </div>
                         <div className="mt-4 grid gap-2">
                           {(itemsByTemplate.get(template.id) ?? []).map((item) => (
-                            <div key={item.id} className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 sm:flex-row sm:items-center sm:justify-between">
-                              <div>
+                            <div key={item.id} className="flex min-w-0 flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0">
                                 <div className="flex items-center gap-2">
                                   <CheckSquare className="h-4 w-4 text-emerald-300" />
-                                  <p className="font-bold">{item.title}</p>
+                                  <p className="break-words font-bold">{item.title}</p>
                                 </div>
-                                <p className="mt-1 text-xs text-slate-500">{item.description || 'Без пояснения'}</p>
+                                <p className="mt-1 break-words text-xs leading-5 text-slate-500">{item.description || 'Без пояснения'}</p>
                               </div>
                               <RowActions
                                 onEdit={() =>
@@ -682,11 +693,11 @@ export default function KnowledgeAdminPage() {
                         <div className="space-y-2">
                           <FieldLabel>Ответ</FieldLabel>
                           <SelectInput value={itemForm.answer_type} onChange={(event) => setItemForm({ ...itemForm, answer_type: event.target.value })}>
-                            <option value="checkbox">Галочка</option>
+                            <option value="boolean">Галочка</option>
                             <option value="text">Текст</option>
                             <option value="number">Число</option>
                             <option value="photo">Фото</option>
-                            <option value="select">Выбор</option>
+                            <option value="choice">Выбор</option>
                           </SelectInput>
                         </div>
                       </div>
@@ -713,16 +724,20 @@ export default function KnowledgeAdminPage() {
             )}
 
             {tab === 'categories' && (
-              <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
+              <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(460px,520px)]">
                 <Panel title="Категории базы знаний" icon={Layers3}>
+                  <TabHint
+                    title="Зачем категории?"
+                    text="Категории группируют материалы: правила клуба, зарплата и премии, штрафы, FAQ, проблемы техники, магазин и касса."
+                  />
                   <div className="grid gap-3 md:grid-cols-2">
                     {data.categories.map((category) => (
-                      <div key={category.id} className="rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
+                      <div key={category.id} className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
                         <div className="flex items-start justify-between gap-3">
-                          <div>
+                          <div className="min-w-0">
                             <Badge>{KIND_LABELS[category.kind]}</Badge>
-                            <h3 className="mt-3 text-xl font-black">{category.title}</h3>
-                            <p className="mt-2 text-sm text-slate-400">{category.description || 'Без описания'}</p>
+                            <h3 className="mt-3 break-words text-xl font-black">{category.title}</h3>
+                            <p className="mt-2 break-words text-sm leading-6 text-slate-400">{category.description || 'Без описания'}</p>
                           </div>
                           <RowActions
                             onEdit={() => setCategoryForm({ ...category, description: category.description || '' })}
@@ -784,14 +799,57 @@ function StatCard({ label, value }: { label: string; value: number }) {
   )
 }
 
+function WorkflowGuide() {
+  const steps = [
+    {
+      number: '01',
+      title: 'Создай категории',
+      text: 'Например: правила смены, штрафы, премии, FAQ, магазин, технические проблемы.',
+    },
+    {
+      number: '02',
+      title: 'Наполни статьи',
+      text: 'В статьях пишем понятную инструкцию: что делать, что запрещено, какой штраф или бонус.',
+    },
+    {
+      number: '03',
+      title: 'Собери чек-листы',
+      text: 'Шаблон смены связывает пункты с правилами, чтобы оператор не гадал, а проходил порядок.',
+    },
+  ]
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-3">
+      {steps.map((step) => (
+        <div key={step.number} className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
+          <div className="mb-4 inline-flex rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-black text-amber-200">
+            Шаг {step.number}
+          </div>
+          <h3 className="break-words text-lg font-black text-slate-100">{step.title}</h3>
+          <p className="mt-2 break-words text-sm leading-6 text-slate-400">{step.text}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function TabHint({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="mb-5 rounded-3xl border border-sky-400/20 bg-sky-400/10 p-4">
+      <p className="break-words text-sm font-black text-sky-100">{title}</p>
+      <p className="mt-1 break-words text-sm leading-6 text-slate-300">{text}</p>
+    </div>
+  )
+}
+
 function Panel({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
-    <section className="rounded-[2rem] border border-slate-800 bg-slate-900/55 p-5 shadow-2xl shadow-black/20">
+    <section className="min-w-0 overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-900/55 p-5 shadow-2xl shadow-black/20">
       <div className="mb-5 flex items-center gap-3">
         <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-300/10 text-amber-200">
           <Icon className="h-5 w-5" />
         </div>
-        <h2 className="text-xl font-black">{title}</h2>
+        <h2 className="min-w-0 break-words text-xl font-black">{title}</h2>
       </div>
       {children}
     </section>
@@ -810,19 +868,19 @@ function ArticleCard({
   onDelete: () => void
 }) {
   return (
-    <article className="rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
+    <article className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="flex flex-wrap gap-2">
             {category && <Badge>{category.title}</Badge>}
             <Badge>{SEVERITY_LABELS[article.severity]}</Badge>
             <Badge>{article.is_published ? 'Опубликовано' : 'Черновик'}</Badge>
           </div>
-          <h3 className="mt-3 text-xl font-black">{article.title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-400">{article.summary || article.content.slice(0, 180)}</p>
+          <h3 className="mt-3 break-words text-xl font-black">{article.title}</h3>
+          <p className="mt-2 break-words text-sm leading-6 text-slate-400">{article.summary || article.content.slice(0, 180)}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {(article.tags ?? []).map((tag) => (
-              <span key={tag} className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">
+              <span key={tag} className="max-w-full break-words rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">
                 #{tag}
               </span>
             ))}
@@ -835,7 +893,7 @@ function ArticleCard({
 }
 
 function Badge({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-xs font-bold text-amber-100">{children}</span>
+  return <span className="max-w-full break-words rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-xs font-bold text-amber-100">{children}</span>
 }
 
 function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
