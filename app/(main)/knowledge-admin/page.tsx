@@ -150,6 +150,16 @@ const emptyItem = {
   requires_photo: false,
 }
 
+function normalizeKnowledgeResponse(payload: Partial<KnowledgeResponse> | null | undefined): KnowledgeResponse {
+  return {
+    categories: Array.isArray(payload?.categories) ? payload.categories : [],
+    articles: Array.isArray(payload?.articles) ? payload.articles : [],
+    templates: Array.isArray(payload?.templates) ? payload.templates : [],
+    items: Array.isArray(payload?.items) ? payload.items : [],
+    companies: Array.isArray(payload?.companies) ? payload.companies : [],
+  }
+}
+
 function splitList(value: string) {
   return value
     .split(',')
@@ -252,10 +262,11 @@ export default function KnowledgeAdminPage() {
       const response = await fetch('/api/admin/knowledge', { cache: 'no-store' })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'Не удалось загрузить базу знаний')
-      setData(payload)
+      const normalized = normalizeKnowledgeResponse(payload)
+      setData(normalized)
       setItemForm((current: any) => ({
         ...current,
-        template_id: current.template_id || payload.templates?.[0]?.id || '',
+        template_id: current.template_id || normalized.templates[0]?.id || '',
       }))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Неизвестная ошибка')
