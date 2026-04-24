@@ -1092,13 +1092,19 @@ export async function postInventoryStocktake(
   return Array.isArray(data) ? data[0] || null : data || null
 }
 
+const PLURAL_RELATION_KEYS = new Set(['items'])
+
 function mapNestedRow<T>(row: T): T {
   if (!row || typeof row !== 'object') return row
   const next: any = Array.isArray(row) ? [] : { ...row }
   for (const key of Object.keys(next)) {
     const value = next[key]
     if (Array.isArray(value)) {
-      next[key] = value.length === 1 && value[0] && typeof value[0] === 'object' ? mapNestedRow(value[0]) : value.map(mapNestedRow)
+      if (PLURAL_RELATION_KEYS.has(key)) {
+        next[key] = value.map(mapNestedRow)
+      } else {
+        next[key] = value.length === 1 && value[0] && typeof value[0] === 'object' ? mapNestedRow(value[0]) : value.map(mapNestedRow)
+      }
       continue
     }
     if (value && typeof value === 'object') {
