@@ -1023,6 +1023,19 @@ export function CatalogPageContent() {
             {/* Preview */}
             {preview && importStatus !== 'done' && (
               <div className="mt-4 space-y-3">
+                {/*
+                 * Import action can be needed even when item cards are unchanged:
+                 * stock_qty from Excel still has to be written into catalog_total.
+                 */}
+                {(() => {
+                  const cardChangesCount = preview.new_items.length + preview.updated_items.length
+                  const hasStockSync = (preview.stock_rows || 0) > 0
+                  const canApplyImport = cardChangesCount > 0 || hasStockSync
+                  const applyLabel = hasStockSync
+                    ? `Применить импорт (карточки: ${cardChangesCount}, остатки: ${preview.stock_rows})`
+                    : `Применить импорт (${cardChangesCount} позиций)`
+                  return (
+                    <>
                 <h3 className="font-medium text-sm">Результат анализа</h3>
 
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1055,6 +1068,11 @@ export function CatalogPageContent() {
                 {(preview.stock_rows || 0) > 0 ? (
                   <p className="text-xs text-blue-600 dark:text-blue-400">
                     Остаток для {preview.stock_rows} строк из файла будет записан в каталог (итого по магазину).
+                  </p>
+                ) : null}
+                {preview.new_items.length === 0 && preview.updated_items.length === 0 && (preview.stock_rows || 0) > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    По карточкам изменений нет, но остатки будут обновлены из файла.
                   </p>
                 ) : null}
 
@@ -1101,12 +1119,15 @@ export function CatalogPageContent() {
                 <div className="flex gap-2 pt-1">
                   <Button
                     onClick={confirmImport}
-                    disabled={importStatus === 'importing' || (preview.new_items.length === 0 && preview.updated_items.length === 0)}
+                    disabled={importStatus === 'importing' || !canApplyImport}
                   >
-                    {importStatus === 'importing' ? 'Импортирую...' : `Применить импорт (${preview.new_items.length + preview.updated_items.length} позиций)`}
+                    {importStatus === 'importing' ? 'Импортирую...' : applyLabel}
                   </Button>
                   <Button variant="ghost" onClick={resetImport}>Отмена</Button>
                 </div>
+                    </>
+                  )
+                })()}
               </div>
             )}
 
