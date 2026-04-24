@@ -26,6 +26,8 @@ type InventoryItem = {
   barcode: string
   unit: string
   item_type: string
+  sale_price?: number
+  default_purchase_price?: number
 }
 
 type InventoryBalance = {
@@ -39,6 +41,8 @@ type InventoryRevision = {
   id: string
   counted_at: string
   comment: string | null
+  created_by?: string | null
+  created_by_staff?: { id: string; full_name: string | null; role: string | null } | null
   location?: InventoryLocation | null
   items?: Array<{
     id: string
@@ -92,6 +96,12 @@ function formatDate(value: string | null | undefined) {
     month: '2-digit',
     year: 'numeric',
   }).format(parsed)
+}
+
+function actorLabel(staff: { full_name: string | null } | null | undefined, fallbackId: string | null | undefined) {
+  if (staff?.full_name) return staff.full_name
+  if (fallbackId) return `ID ${String(fallbackId).slice(0, 8)}`
+  return '—'
 }
 
 export default function StoreRevisionsPage() {
@@ -346,11 +356,14 @@ export default function StoreRevisionsPage() {
               <thead className="sticky top-0 z-10 bg-[#0f172a]/95 backdrop-blur">
                 <tr className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="w-24 py-2.5 pl-4 pr-2 font-normal">Дата</th>
+                  <th className="w-40 py-2.5 px-2 font-normal">Провел</th>
                   <th className="w-48 py-2.5 px-2 font-normal">Локация</th>
                   <th className="py-2.5 px-2 font-normal">Комментарий</th>
                   <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
                   <th className="w-24 py-2.5 px-2 text-right font-normal">Недостача</th>
                   <th className="w-24 py-2.5 px-2 pr-4 text-right font-normal">Излишек</th>
+                  <th className="w-28 py-2.5 px-2 text-right font-normal">Сумма (прод.)</th>
+                  <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Сумма (закуп.)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
@@ -358,11 +371,26 @@ export default function StoreRevisionsPage() {
                   const items = revision.items || []
                   const shortage = items.reduce((s, i) => s + (Number(i.delta_qty || 0) < 0 ? Math.abs(Number(i.delta_qty || 0)) : 0), 0)
                   const surplus = items.reduce((s, i) => s + (Number(i.delta_qty || 0) > 0 ? Number(i.delta_qty || 0) : 0), 0)
+                  const saleAmount = items.reduce((s, i) => {
+                    const deltaAbs = Math.abs(Number(i.delta_qty || 0))
+                    const salePrice = Number(i.item?.sale_price || 0)
+                    return s + deltaAbs * salePrice
+                  }, 0)
+                  const purchaseAmount = items.reduce((s, i) => {
+                    const deltaAbs = Math.abs(Number(i.delta_qty || 0))
+                    const purchasePrice = Number(i.item?.default_purchase_price || 0)
+                    return s + deltaAbs * purchasePrice
+                  }, 0)
                   const mismatches = items.filter((i) => Number(i.delta_qty || 0) !== 0)
                   return (
                     <tr key={revision.id} className="transition hover:bg-white/[0.02]">
                       <td className="w-24 py-2.5 pl-4 pr-2 align-middle">
                         <span className="text-xs text-muted-foreground">{formatDate(revision.counted_at)}</span>
+                      </td>
+                      <td className="w-40 py-2.5 px-2 align-middle">
+                        <span className="line-clamp-1 text-xs text-muted-foreground">
+                          {actorLabel(revision.created_by_staff, revision.created_by || null)}
+                        </span>
                       </td>
                       <td className="w-48 py-2.5 px-2 align-middle">
                         <span className="line-clamp-1 text-xs text-muted-foreground">{revision.location?.company?.name || revision.location?.name || '—'}</span>
@@ -393,6 +421,16 @@ export default function StoreRevisionsPage() {
                       <td className="w-24 py-2.5 px-2 pr-4 text-right align-middle">
                         <span className={`text-sm font-semibold ${surplus > 0 ? 'text-emerald-300' : 'text-muted-foreground'}`}>
                           {surplus > 0 ? `+${formatQty(surplus)}` : '—'}
+                        </span>
+                      </td>
+                      <td className="w-28 py-2.5 px-2 text-right align-middle">
+                        <span className={`text-sm font-semibold ${saleAmount > 0 ? 'text-amber-200' : 'text-muted-foreground'}`}>
+                          {saleAmount > 0 ? `${Math.round(saleAmount).toLocaleString('ru-RU')} ₸` : '—'}
+                        </span>
+                      </td>
+                      <td className="w-28 py-2.5 px-2 pr-4 text-right align-middle">
+                        <span className={`text-sm font-semibold ${purchaseAmount > 0 ? 'text-cyan-200' : 'text-muted-foreground'}`}>
+                          {purchaseAmount > 0 ? `${Math.round(purchaseAmount).toLocaleString('ru-RU')} ₸` : '—'}
                         </span>
                       </td>
                     </tr>

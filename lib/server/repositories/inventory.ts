@@ -458,7 +458,7 @@ export async function fetchStoreRevisions(supabase: AnySupabase, scope?: Invento
       .order('updated_at', { ascending: false }),
     supabase
       .from('inventory_stocktakes')
-      .select('id, location_id, counted_at, comment, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode, unit))')
+      .select('id, location_id, counted_at, comment, created_by, created_at, location:location_id(id, name, code, location_type, company_id, organization_id, company:company_id(id, name, code)), items:inventory_stocktake_items(id, item_id, expected_qty, actual_qty, delta_qty, comment, item:item_id(id, name, barcode, unit, sale_price, default_purchase_price))')
       .order('created_at', { ascending: false })
       .limit(80),
   ])

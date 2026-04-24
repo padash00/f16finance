@@ -17,6 +17,17 @@ function canManageStore(access: {
   return access.isSuperAdmin || access.staffRole === 'owner' || access.staffRole === 'manager'
 }
 
+function normalizeUserDisplayName(user: any): string | null {
+  const meta = (user?.user_metadata || {}) as Record<string, unknown>
+  const fullName = typeof meta.full_name === 'string' ? meta.full_name.trim() : ''
+  const name = typeof meta.name === 'string' ? meta.name.trim() : ''
+  const email = typeof user?.email === 'string' ? user.email.trim() : ''
+  if (fullName) return fullName
+  if (name) return name
+  if (email) return email
+  return null
+}
+
 type Body = {
   action: 'createRevision'
   payload: {
@@ -58,6 +69,92 @@ export async function GET(request: Request) {
       isSuperAdmin: access.isSuperAdmin,
     }
     const data = await fetchStoreRevisions(supabase as any, inventoryScope)
+    const actorIds = Array.from(
+      new Set(
+        (data.stocktakes || [])
+          .map((s: any) => String(s?.created_by || '').trim())
+          .filter(Boolean),
+      ),
+    )
+    if (actorIds.length > 0) {
+      const actorById: Record<string, { id: string; full_name: string | null; role: string | null }> = {}
+      const [{ data: staffRows }, { data: memberRows }] = await Promise.all([
+        supabase.from('staff').select('id, full_name, role').in('id', actorIds),
+        access.activeOrganization?.id
+          ? supabase
+              .from('organization_members')
+              .select('user_id, staff_id, role')
+              .eq('organization_id', access.activeOrganization.id)
+              .eq('status', 'active')
+              .in('user_id', actorIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ])
+      for (const row of staffRows || []) {
+        const id = String((row as any)?.id || '').trim()
+        if (!id) continue
+        actorById[id] = {
+          id,
+          full_name: ((row as any)?.full_name as string) || null,
+          role: ((row as any)?.role as string) || null,
+        }
+      }
+      const staffIds = Array.from(
+        new Set(
+          (memberRows || [])
+            .map((m: any) => String(m?.staff_id || '').trim())
+            .filter(Boolean),
+        ),
+      )
+      const staffById = new Map<string, { full_name: string | null; role: string | null }>()
+      if (staffIds.length > 0) {
+        const { data: staffByMemberRows } = await supabase
+          .from('staff')
+          .select('id, full_name, role')
+          .in('id', staffIds)
+        for (const row of staffByMemberRows || []) {
+          const id = String((row as any)?.id || '').trim()
+          if (!id) continue
+          staffById.set(id, {
+            full_name: ((row as any)?.full_name as string) || null,
+            role: ((row as any)?.role as string) || null,
+          })
+        }
+      }
+      for (const row of memberRows || []) {
+        const userId = String((row as any)?.user_id || '').trim()
+        if (!userId || actorById[userId]) continue
+        const staffId = String((row as any)?.staff_id || '').trim()
+        const staffMeta = staffId ? staffById.get(staffId) : null
+        actorById[userId] = {
+          id: userId,
+          full_name: staffMeta?.full_name || null,
+          role: staffMeta?.role || ((row as any)?.role as string) || null,
+        }
+      }
+      const unresolvedIds = actorIds.filter((id) => !actorById[id])
+      if (unresolvedIds.length > 0 && hasAdminSupabaseCredentials()) {
+        const admin = createAdminSupabaseClient()
+        await Promise.all(
+          unresolvedIds.map(async (userId) => {
+            try {
+              const { data: authUser, error } = await admin.auth.admin.getUserById(userId)
+              if (error || !authUser?.user) return
+              actorById[userId] = {
+                id: userId,
+                full_name: normalizeUserDisplayName(authUser.user),
+                role: null,
+              }
+            } catch {
+              // ignore unresolved legacy actor ids
+            }
+          }),
+        )
+      }
+      data.stocktakes = (data.stocktakes || []).map((s: any) => ({
+        ...s,
+        created_by_staff: s?.created_by ? actorById[String(s.created_by)] || null : null,
+      }))
+    }
     const locationType = scope === 'showcase' ? 'point_display' : scope === 'warehouse' ? 'warehouse' : null
     if (locationType) {
       data.locations = (data.locations || []).filter((l: any) => l?.location_type === locationType)
