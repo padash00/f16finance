@@ -50,9 +50,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
          occurred_at, decided_at, decided_by, decision_notes,
          created_at, updated_at,
          company:company_id ( id, name, code ),
-         subject:subject_staff_id ( id, full_name, short_name ),
-         reporter:reported_by ( id, full_name, short_name ),
-         decider:decided_by ( id, full_name, short_name ),
+         subject:staff!subject_staff_id ( id, full_name, short_name ),
+         reporter:staff!reported_by ( id, full_name, short_name ),
+         decider:staff!decided_by ( id, full_name, short_name ),
          article:article_id ( id, title, slug )`,
       )
       .eq('id', id)

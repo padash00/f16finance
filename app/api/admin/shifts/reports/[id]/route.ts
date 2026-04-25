@@ -37,8 +37,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
          z_report_url, x_report_url, totals_json,
          handover_from_shift_id, closed_by, created_at, updated_at,
          company:company_id ( id, name, code ),
-         operator:operator_id ( id, full_name, short_name ),
-         closer:closed_by ( id, full_name, short_name )`,
+         operator:staff!operator_id ( id, full_name, short_name ),
+         closer:staff!closed_by ( id, full_name, short_name )`,
       )
       .eq('id', id)
       .maybeSingle()
@@ -74,8 +74,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           `id, template_id, status, started_at, completed_at, scheduled_at,
            responses, fines_total, bonuses_total, run_by, co_signed_by,
            template:template_id ( id, title, schedule_type, recurrence_minutes, blocks_shift ),
-           runner:run_by ( id, full_name, short_name ),
-           cosigner:co_signed_by ( id, full_name, short_name )`,
+           runner:staff!run_by ( id, full_name, short_name ),
+           cosigner:staff!co_signed_by ( id, full_name, short_name )`,
         )
         .eq('shift_id', id)
         .order('started_at', { ascending: false }),
@@ -85,8 +85,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           `id, kind, title, description, fine_amount, bonus_amount,
            severity, status, source, occurred_at,
            subject_staff_id, reported_by, article_id, checklist_run_id,
-           subject:subject_staff_id ( id, full_name, short_name ),
-           reporter:reported_by ( id, full_name, short_name ),
+           subject:staff!subject_staff_id ( id, full_name, short_name ),
+           reporter:staff!reported_by ( id, full_name, short_name ),
            article:article_id ( id, title, slug )`,
         )
         .eq('shift_id', id)

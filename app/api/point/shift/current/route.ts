@@ -21,7 +21,7 @@ export async function GET(request: Request) {
       `id, company_id, organization_id, operator_id, point_device_id,
        status, shift_type, opened_at, closed_at,
        opening_cash, opening_notes, handover_from_shift_id,
-       operator:operator_id ( id, full_name, short_name )`,
+       operator:staff!operator_id ( id, full_name, short_name )`,
     )
     .eq('company_id', device.company_id)
     .eq('status', 'open')

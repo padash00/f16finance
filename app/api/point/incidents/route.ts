@@ -40,8 +40,8 @@ export async function GET(request: Request) {
     .select(
       `id, shift_id, kind, title, description, severity, status,
        fine_amount, bonus_amount, photo_urls, occurred_at,
-       subject:subject_staff_id ( id, full_name, short_name ),
-       reporter:reported_by ( id, full_name, short_name )`,
+       subject:staff!subject_staff_id ( id, full_name, short_name ),
+       reporter:staff!reported_by ( id, full_name, short_name )`,
     )
     .eq('company_id', device.company_id)
     .order('occurred_at', { ascending: false })
