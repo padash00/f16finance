@@ -5,11 +5,14 @@ import Link from 'next/link'
 import {
   ArrowLeft,
   CalendarRange,
+  CheckCircle2,
+  Circle,
   Coins,
   ExternalLink,
   Loader2,
   RefreshCw,
   Wallet,
+  XCircle,
 } from 'lucide-react'
 
 import { AdminPageHeader } from '@/components/admin/admin-page-header'
@@ -65,6 +68,35 @@ type Return = {
   source: string
 }
 
+type ChecklistRun = {
+  id: string
+  template_id: string
+  status: 'in_progress' | 'completed' | 'skipped' | 'failed'
+  started_at: string
+  completed_at: string | null
+  scheduled_at: string | null
+  responses: Record<string, any> | null
+  fines_total: number
+  bonuses_total: number
+  template: {
+    id: string
+    title: string
+    schedule_type: 'opening' | 'periodic' | 'closing' | 'onboarding' | 'handover'
+    recurrence_minutes: number | null
+    blocks_shift: boolean
+  } | null
+  runner: { id: string; name: string; short_name: string | null } | null
+  cosigner: { id: string; name: string; short_name: string | null } | null
+}
+
+const SCHEDULE_LABEL: Record<string, string> = {
+  opening: 'Открытие',
+  periodic: 'Обход',
+  closing: 'Закрытие',
+  onboarding: 'Онбординг',
+  handover: 'Передача',
+}
+
 const STATUS_LABEL: Record<string, string> = {
   open: 'Открыта',
   closed: 'Закрыта',
@@ -95,6 +127,7 @@ export default function ShiftReportDetailPage({
   const [shift, setShift] = useState<ShiftDetail | null>(null)
   const [sales, setSales] = useState<Sale[]>([])
   const [returns, setReturns] = useState<Return[]>([])
+  const [runs, setRuns] = useState<ChecklistRun[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -108,6 +141,7 @@ export default function ShiftReportDetailPage({
       setShift((data?.data?.shift || null) as ShiftDetail | null)
       setSales((data?.data?.sales || []) as Sale[])
       setReturns((data?.data?.returns || []) as Return[])
+      setRuns((data?.data?.checklist_runs || []) as ChecklistRun[])
     } catch (e: any) {
       setError(e?.message || 'Ошибка загрузки')
     } finally {
@@ -280,6 +314,78 @@ export default function ShiftReportDetailPage({
               )}
             </Card>
           )}
+
+          <Card className="overflow-hidden border-white/10">
+            <div className="border-b border-white/5 px-4 py-2 text-sm font-medium text-white">
+              Чек-листы • {runs.length}
+            </div>
+            <div className="divide-y divide-white/5">
+              {runs.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-slate-400">Чек-листы за смену не запускались</div>
+              ) : (
+                runs.map((run) => {
+                  const respKeys = Object.keys((run.responses || {}) as object)
+                  const passed = respKeys.filter((k) => {
+                    const r = (run.responses as any)[k]
+                    return r?.passed === true || r?.value === true
+                  }).length
+                  return (
+                    <div key={run.id} className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {run.status === 'completed' ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                        ) : run.status === 'failed' ? (
+                          <XCircle className="h-4 w-4 text-rose-400" />
+                        ) : (
+                          <Circle className="h-4 w-4 text-amber-400" />
+                        )}
+                        <span className="text-sm text-white">
+                          {run.template?.title || 'Без названия'}
+                        </span>
+                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase text-slate-400">
+                          {SCHEDULE_LABEL[run.template?.schedule_type || ''] ||
+                            run.template?.schedule_type ||
+                            ''}
+                        </span>
+                        {run.template?.blocks_shift && (
+                          <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] uppercase text-rose-300">
+                            blocks
+                          </span>
+                        )}
+                        <span className="ml-auto text-xs text-slate-400">
+                          {fmtDateTime(run.started_at)}
+                          {run.completed_at && <> → {fmtDateTime(run.completed_at)}</>}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                        {run.runner && (
+                          <span>
+                            Исполнитель: {run.runner.short_name || run.runner.name}
+                          </span>
+                        )}
+                        {run.cosigner && (
+                          <span>
+                            Co-sign: {run.cosigner.short_name || run.cosigner.name}
+                          </span>
+                        )}
+                        {respKeys.length > 0 && (
+                          <span>
+                            Отвечено: {passed}/{respKeys.length}
+                          </span>
+                        )}
+                        {Number(run.fines_total) > 0 && (
+                          <span className="text-rose-300">−{fmtMoney(run.fines_total)}</span>
+                        )}
+                        {Number(run.bonuses_total) > 0 && (
+                          <span className="text-emerald-300">+{fmtMoney(run.bonuses_total)}</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </Card>
 
           <Card className="overflow-hidden border-white/10">
             <div className="border-b border-white/5 px-4 py-2 text-sm font-medium text-white">

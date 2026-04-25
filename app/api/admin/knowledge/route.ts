@@ -38,6 +38,9 @@ type TemplatePayload = {
   description?: string | null
   role_scope?: string | null
   shift_scope?: string | null
+  schedule_type?: string | null
+  recurrence_minutes?: number | null
+  blocks_shift?: boolean | null
   sort_order?: number | null
   is_active?: boolean | null
 }
@@ -73,6 +76,7 @@ const CATEGORY_KINDS = new Set(['rules', 'faq', 'salary', 'problem', 'checklist'
 const SEVERITIES = new Set(['info', 'normal', 'warning', 'critical'])
 const ROLE_SCOPES = new Set(['operator', 'cashier', 'senior_operator', 'senior_cashier', 'any'])
 const SHIFT_SCOPES = new Set(['day', 'night', 'opening', 'closing', 'handover', 'any'])
+const SCHEDULE_TYPES = new Set(['opening', 'periodic', 'closing', 'onboarding', 'handover'])
 const ANSWER_TYPES = new Set(['boolean', 'text', 'number', 'photo', 'choice'])
 
 function json(data: unknown, status = 200) {
@@ -474,6 +478,12 @@ export async function POST(req: Request) {
           requestedCompanyId: body.payload.company_id,
         })
       }
+      const scheduleType = SCHEDULE_TYPES.has(String(body.payload.schedule_type || 'opening'))
+        ? String(body.payload.schedule_type || 'opening')
+        : 'opening'
+      const recurrenceMinutes =
+        scheduleType === 'periodic' ? Math.max(0, Number(body.payload.recurrence_minutes || 0)) || null : null
+
       const payload = {
         organization_id: organizationId,
         company_id: body.payload.company_id || null,
@@ -481,6 +491,9 @@ export async function POST(req: Request) {
         description: body.payload.description?.trim() || null,
         role_scope: ROLE_SCOPES.has(String(body.payload.role_scope || 'operator')) ? String(body.payload.role_scope || 'operator') : 'operator',
         shift_scope: SHIFT_SCOPES.has(String(body.payload.shift_scope || 'any')) ? String(body.payload.shift_scope || 'any') : 'any',
+        schedule_type: scheduleType,
+        recurrence_minutes: recurrenceMinutes,
+        blocks_shift: body.payload.blocks_shift === true,
         sort_order: sortOrder(body.payload.sort_order),
         is_active: body.payload.is_active !== false,
       }

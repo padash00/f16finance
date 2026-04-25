@@ -54,6 +54,9 @@ type ChecklistTemplate = {
   description: string | null
   role_scope: string
   shift_scope: string
+  schedule_type: 'opening' | 'periodic' | 'closing' | 'onboarding' | 'handover'
+  recurrence_minutes: number | null
+  blocks_shift: boolean
   is_active: boolean
   sort_order: number
 }
@@ -132,8 +135,19 @@ const emptyTemplate = {
   company_id: '',
   role_scope: 'operator',
   shift_scope: 'any',
+  schedule_type: 'opening' as const,
+  recurrence_minutes: '',
+  blocks_shift: false,
   sort_order: 100,
   is_active: true,
+}
+
+const SCHEDULE_TYPE_LABELS: Record<string, string> = {
+  opening: 'Открытие',
+  periodic: 'Обход (по расписанию)',
+  closing: 'Закрытие',
+  onboarding: 'Онбординг',
+  handover: 'Передача',
 }
 
 const emptyItem = {
@@ -578,11 +592,25 @@ export default function KnowledgeAdminPage() {
                             <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
                               <Badge>{template.role_scope}</Badge>
                               <Badge>{template.shift_scope}</Badge>
+                              <Badge>{SCHEDULE_TYPE_LABELS[template.schedule_type] || template.schedule_type}</Badge>
+                              {template.schedule_type === 'periodic' && template.recurrence_minutes && (
+                                <Badge>каждые {template.recurrence_minutes} мин</Badge>
+                              )}
+                              {template.blocks_shift && <Badge>блокирует</Badge>}
                               <Badge>{template.is_active ? 'active' : 'off'}</Badge>
                             </div>
                           </div>
                           <RowActions
-                            onEdit={() => setTemplateForm({ ...template, company_id: template.company_id || '', description: template.description || '' })}
+                            onEdit={() =>
+                              setTemplateForm({
+                                ...template,
+                                company_id: template.company_id || '',
+                                description: template.description || '',
+                                schedule_type: template.schedule_type || 'opening',
+                                recurrence_minutes: template.recurrence_minutes ?? '',
+                                blocks_shift: !!template.blocks_shift,
+                              })
+                            }
                             onDelete={() => send('deleteTemplate', undefined, template.id)}
                           />
                         </div>
@@ -653,6 +681,53 @@ export default function KnowledgeAdminPage() {
                           </SelectInput>
                         </div>
                       </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <FieldLabel>Когда срабатывает</FieldLabel>
+                          <SelectInput
+                            value={templateForm.schedule_type}
+                            onChange={(event) =>
+                              setTemplateForm({ ...templateForm, schedule_type: event.target.value })
+                            }
+                          >
+                            {Object.entries(SCHEDULE_TYPE_LABELS).map(([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ))}
+                          </SelectInput>
+                        </div>
+                        {templateForm.schedule_type === 'periodic' && (
+                          <div className="space-y-2">
+                            <FieldLabel>Интервал (мин)</FieldLabel>
+                            <TextInput
+                              type="number"
+                              min={5}
+                              step={5}
+                              value={templateForm.recurrence_minutes}
+                              onChange={(event) =>
+                                setTemplateForm({
+                                  ...templateForm,
+                                  recurrence_minutes: event.target.value,
+                                })
+                              }
+                              placeholder="60"
+                            />
+                          </div>
+                        )}
+                      </div>
+                      {templateForm.schedule_type === 'opening' && (
+                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={!!templateForm.blocks_shift}
+                            onChange={(event) =>
+                              setTemplateForm({ ...templateForm, blocks_shift: event.target.checked })
+                            }
+                          />
+                          Блокирует работу до прохождения
+                        </label>
+                      )}
                       <FormActions saving={saving} reset={() => setTemplateForm(emptyTemplate)} isEditing={Boolean(templateForm.id)} />
                     </form>
                   </Panel>

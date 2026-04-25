@@ -53,7 +53,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return json({ error: 'forbidden' }, 403)
     }
 
-    const [salesRes, returnsRes] = await Promise.all([
+    const [salesRes, returnsRes, runsRes] = await Promise.all([
       supabase
         .from('point_sales')
         .select(
@@ -68,6 +68,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         )
         .eq('shift_id', id)
         .order('returned_at', { ascending: false }),
+      supabase
+        .from('checklist_runs')
+        .select(
+          `id, template_id, status, started_at, completed_at, scheduled_at,
+           responses, fines_total, bonuses_total, run_by, co_signed_by,
+           template:template_id ( id, title, schedule_type, recurrence_minutes, blocks_shift ),
+           runner:run_by ( id, name, short_name ),
+           cosigner:co_signed_by ( id, name, short_name )`,
+        )
+        .eq('shift_id', id)
+        .order('started_at', { ascending: false }),
     ])
 
     return json({
@@ -76,6 +87,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         shift,
         sales: salesRes.data || [],
         returns: returnsRes.data || [],
+        checklist_runs: runsRes.data || [],
       },
     })
   } catch (error) {
