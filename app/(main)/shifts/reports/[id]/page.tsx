@@ -42,8 +42,8 @@ type ShiftDetail = {
   totals_json: Record<string, any> | null
   handover_from_shift_id: string | null
   company?: { id: string; name: string; code: string | null } | null
-  operator?: { id: string; name: string; short_name: string | null } | null
-  closer?: { id: string; name: string; short_name: string | null } | null
+  operator?: { id: string; full_name: string; short_name: string | null } | null
+  closer?: { id: string; full_name: string; short_name: string | null } | null
 }
 
 type Sale = {
@@ -84,8 +84,8 @@ type Incident = {
   source: 'manual' | 'checklist' | 'auto' | 'import'
   occurred_at: string
   checklist_run_id: string | null
-  subject?: { id: string; name: string; short_name: string | null } | null
-  reporter?: { id: string; name: string; short_name: string | null } | null
+  subject?: { id: string; full_name: string; short_name: string | null } | null
+  reporter?: { id: string; full_name: string; short_name: string | null } | null
   article?: { id: string; title: string; slug: string } | null
 }
 
@@ -112,8 +112,8 @@ type ChecklistRun = {
     recurrence_minutes: number | null
     blocks_shift: boolean
   } | null
-  runner: { id: string; name: string; short_name: string | null } | null
-  cosigner: { id: string; name: string; short_name: string | null } | null
+  runner: { id: string; full_name: string; short_name: string | null } | null
+  cosigner: { id: string; full_name: string; short_name: string | null } | null
 }
 
 const SCHEDULE_LABEL: Record<string, string> = {
@@ -240,11 +240,11 @@ export default function ShiftReportDetailPage({
                 {STATUS_LABEL[shift.status] || shift.status}
               </div>
               <div className="mt-2 text-xs text-slate-500">
-                Оператор: {shift.operator?.short_name || shift.operator?.name || '—'}
+                Оператор: {shift.operator?.short_name || shift.operator?.full_name || '—'}
               </div>
               {shift.closer && (
                 <div className="text-xs text-slate-500">
-                  Закрыл: {shift.closer.short_name || shift.closer.name}
+                  Закрыл: {shift.closer.short_name || shift.closer.full_name}
                 </div>
               )}
               {shift.handover_from_shift_id && (
@@ -391,12 +391,12 @@ export default function ShiftReportDetailPage({
                       <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-400">
                         {run.runner && (
                           <span>
-                            Исполнитель: {run.runner.short_name || run.runner.name}
+                            Исполнитель: {run.runner.short_name || run.runner.full_name}
                           </span>
                         )}
                         {run.cosigner && (
                           <span>
-                            Co-sign: {run.cosigner.short_name || run.cosigner.name}
+                            Co-sign: {run.cosigner.short_name || run.cosigner.full_name}
                           </span>
                         )}
                         {respKeys.length > 0 && (
@@ -467,10 +467,10 @@ export default function ShiftReportDetailPage({
                     )}
                     <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-400">
                       {inc.subject && (
-                        <span>Сотрудник: {inc.subject.short_name || inc.subject.name}</span>
+                        <span>Сотрудник: {inc.subject.short_name || inc.subject.full_name}</span>
                       )}
                       {inc.reporter && (
-                        <span>Кто записал: {inc.reporter.short_name || inc.reporter.name}</span>
+                        <span>Кто записал: {inc.reporter.short_name || inc.reporter.full_name}</span>
                       )}
                       {Number(inc.fine_amount) > 0 && (
                         <span className="text-rose-300">−{fmtMoney(inc.fine_amount)}</span>

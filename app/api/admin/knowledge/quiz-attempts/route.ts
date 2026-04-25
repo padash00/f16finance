@@ -29,7 +29,7 @@ export async function GET(request: Request) {
       .select(
         `id, organization_id, staff_id, status, started_at, completed_at,
          score, total_questions, correct_answers,
-         staff:staff_id ( id, name, short_name, role )`,
+         staff:staff_id ( id, full_name, short_name, role )`,
       )
       .order('started_at', { ascending: false })
       .limit(limit)

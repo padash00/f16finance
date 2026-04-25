@@ -52,8 +52,8 @@ export async function GET(request: Request) {
          occurred_at, decided_at, decided_by, decision_notes,
          created_at, updated_at,
          company:company_id ( id, name, code ),
-         subject:subject_staff_id ( id, name, short_name ),
-         reporter:reported_by ( id, name, short_name ),
+         subject:subject_staff_id ( id, full_name, short_name ),
+         reporter:reported_by ( id, full_name, short_name ),
          article:article_id ( id, title, slug )`,
       )
       .order('occurred_at', { ascending: false })

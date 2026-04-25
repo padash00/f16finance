@@ -34,7 +34,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
          opened_at, closed_at, opening_cash, closing_cash, closing_kaspi,
          totals_json,
          company:company_id ( id, name, code ),
-         operator:operator_id ( id, name, short_name )`,
+         operator:operator_id ( id, full_name, short_name )`,
       )
       .eq('id', id)
       .maybeSingle()

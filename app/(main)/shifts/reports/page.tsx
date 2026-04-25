@@ -23,7 +23,7 @@ type ShiftRow = {
   z_report_url: string | null
   x_report_url: string | null
   company?: { id: string; name: string; code: string | null } | null
-  operator?: { id: string; name: string; short_name: string | null } | null
+  operator?: { id: string; full_name: string; short_name: string | null } | null
 }
 
 const SHIFT_TYPE_LABEL: Record<string, string> = {
@@ -171,7 +171,7 @@ export default function ShiftReportsPage() {
                     <tr key={row.id} className="hover:bg-white/5">
                       <td className="px-3 py-2 text-white">{row.company?.name || '—'}</td>
                       <td className="px-3 py-2 text-slate-200">
-                        {row.operator?.short_name || row.operator?.name || '—'}
+                        {row.operator?.short_name || row.operator?.full_name || '—'}
                       </td>
                       <td className="px-3 py-2 text-slate-300">
                         {SHIFT_TYPE_LABEL[row.shift_type] || row.shift_type}

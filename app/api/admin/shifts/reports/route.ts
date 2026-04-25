@@ -40,7 +40,7 @@ export async function GET(request: Request) {
          opening_cash, closing_cash, closing_kaspi, totals_json,
          z_report_url, x_report_url, handover_from_shift_id,
          company:company_id ( id, name, code ),
-         operator:operator_id ( id, name, short_name )`,
+         operator:operator_id ( id, full_name, short_name )`,
       )
       .order('opened_at', { ascending: false })
       .limit(limit)

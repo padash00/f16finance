@@ -39,7 +39,7 @@ export async function GET(request: Request) {
       .from('knowledge_article_confirmations')
       .select(
         `id, article_id, article_version, staff_id, shift_id, confirmed_at,
-         staff:staff_id ( id, name, short_name, role ),
+         staff:staff_id ( id, full_name, short_name, role ),
          article:article_id ( id, title, slug, version )`,
       )
       .order('confirmed_at', { ascending: false })

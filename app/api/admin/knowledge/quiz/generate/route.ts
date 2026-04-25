@@ -47,13 +47,13 @@ export async function POST(request: Request) {
 
     const { data: staff } = await supabase
       .from('staff')
-      .select('id, name, organization_id')
+      .select('id, full_name')
       .eq('id', body.staff_id)
       .maybeSingle()
 
     if (!staff) return json({ error: 'staff-not-found' }, 404)
 
-    const orgId = (staff as any).organization_id
+    const orgId = access.activeOrganization?.id || null
 
     let articleQuery = supabase
       .from('knowledge_articles')

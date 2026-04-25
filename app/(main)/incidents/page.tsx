@@ -21,8 +21,8 @@ type IncidentRow = {
   source: 'manual' | 'checklist' | 'auto' | 'import'
   occurred_at: string
   company?: { id: string; name: string; code: string | null } | null
-  subject?: { id: string; name: string; short_name: string | null } | null
-  reporter?: { id: string; name: string; short_name: string | null } | null
+  subject?: { id: string; full_name: string; short_name: string | null } | null
+  reporter?: { id: string; full_name: string; short_name: string | null } | null
   article?: { id: string; title: string; slug: string } | null
 }
 
@@ -267,7 +267,7 @@ export default function IncidentsPage() {
                     </td>
                     <td className="px-3 py-2 text-slate-300">{row.company?.name || '—'}</td>
                     <td className="px-3 py-2 text-slate-300">
-                      {row.subject?.short_name || row.subject?.name || '—'}
+                      {row.subject?.short_name || row.subject?.full_name || '—'}
                     </td>
                     <td className="px-3 py-2 text-slate-400">{row.source}</td>
                     <td className="px-3 py-2 text-right text-rose-300">{fmtMoney(row.fine_amount)}</td>
