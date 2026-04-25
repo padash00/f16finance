@@ -52,6 +52,14 @@ export function ConsumablesPageContent() {
   const [success, setSuccess] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<Tab>('balances')
+  const [balancesQuery, setBalancesQuery] = useState('')
+
+  // Quick add consumable
+  const [newItemName, setNewItemName] = useState('')
+  const [newItemBarcode, setNewItemBarcode] = useState('')
+  const [newItemUnit, setNewItemUnit] = useState('шт')
+  const [newItemAlertThreshold, setNewItemAlertThreshold] = useState('')
+  const [creatingItem, setCreatingItem] = useState(false)
 
   // Norm form state
   const [normItemId, setNormItemId] = useState('')
@@ -116,6 +124,48 @@ export function ConsumablesPageContent() {
     }
   }
 
+  async function handleCreateConsumable() {
+    const name = newItemName.trim()
+    const barcode = newItemBarcode.trim()
+    if (!name) return setError('Введите название расходника')
+    if (!barcode) return setError('Введите штрихкод расходника')
+
+    setCreatingItem(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const res = await fetch('/api/admin/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createItem',
+          payload: {
+            name,
+            barcode,
+            unit: newItemUnit.trim() || 'шт',
+            sale_price: 0,
+            default_purchase_price: 0,
+            item_type: 'consumable',
+            low_stock_threshold: newItemAlertThreshold.trim() ? Number(newItemAlertThreshold) : null,
+          },
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Не удалось добавить расходник')
+
+      setNewItemName('')
+      setNewItemBarcode('')
+      setNewItemUnit('шт')
+      setNewItemAlertThreshold('')
+      setSuccess('Расходник добавлен. Теперь задайте норму по точке.')
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось добавить расходник')
+    } finally {
+      setCreatingItem(false)
+    }
+  }
+
   function startEditNorm(norm: ConsumptionNorm) {
     setEditingNormId(norm.id)
     setNormItemId(norm.item_id)
@@ -173,6 +223,40 @@ export function ConsumablesPageContent() {
       {error && <div className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">{error}</div>}
       {success && <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">{success}</div>}
 
+      <Card className="border-border/70 bg-background/60 p-4">
+        <div className="mb-3 text-sm font-medium">Добавить расходник для контроля</div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+          <Field label="Название">
+            <Input value={newItemName} onChange={(e) => setNewItemName(e.target.value)} placeholder="Туалетная бумага, пакеты, салфетки..." />
+          </Field>
+          <Field label="Штрихкод">
+            <Input value={newItemBarcode} onChange={(e) => setNewItemBarcode(e.target.value)} placeholder="Сканируйте или введите штрихкод" />
+          </Field>
+          <Field label="Ед. изм.">
+            <Input value={newItemUnit} onChange={(e) => setNewItemUnit(e.target.value)} placeholder="шт / рул / упак" />
+          </Field>
+          <Field label="Мин. остаток (опц.)">
+            <Input
+              value={newItemAlertThreshold}
+              onChange={(e) => setNewItemAlertThreshold(e.target.value)}
+              placeholder="Напр. 5"
+              type="number"
+              min="0"
+              step="1"
+            />
+          </Field>
+          <div className="flex items-end">
+            <Button onClick={handleCreateConsumable} disabled={creatingItem} className="w-full">
+              {creatingItem ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Добавить расходник
+            </Button>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          После добавления задайте норму потребления по точке во вкладке «Нормы».
+        </p>
+      </Card>
+
       <div className="flex gap-2 border-b border-border/50">
         {(['balances', 'norms'] as Tab[]).map((t) => (
           <button
@@ -188,13 +272,29 @@ export function ConsumablesPageContent() {
 
       {tab === 'balances' && (
         <div className="space-y-6">
+          <Card className="border-border/70 bg-background/60 p-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
+              <Field label="Поиск расходника">
+                <Input
+                  value={balancesQuery}
+                  onChange={(e) => setBalancesQuery(e.target.value)}
+                  placeholder="Название или штрихкод"
+                />
+              </Field>
+              <div className="text-xs text-muted-foreground">🟢 запас есть · 🟡 скоро закончится · 🔴 критично</div>
+            </div>
+          </Card>
           {pointLocations.length === 0 && (
             <Card className="border-border/70 bg-background/60 p-6 text-center text-sm text-muted-foreground">
               Нет активных точек продаж
             </Card>
           )}
           {pointLocations.map((location) => {
-            const items = data?.items || []
+            const items = (data?.items || []).filter((item) => {
+              const q = balancesQuery.trim().toLowerCase()
+              if (!q) return true
+              return item.name.toLowerCase().includes(q) || String(item.barcode || '').toLowerCase().includes(q)
+            })
             return (
               <Card key={location.id} className="border-border/70 bg-background/60">
                 <div className="border-b border-border/50 px-4 py-3">
@@ -209,6 +309,7 @@ export function ConsumablesPageContent() {
                       <thead>
                         <tr className="border-b border-border/50 text-xs text-muted-foreground">
                           <th className="px-4 py-2 text-left font-medium">Товар</th>
+                          <th className="px-4 py-2 text-left font-medium">Штрихкод</th>
                           <th className="px-4 py-2 text-right font-medium">Остаток</th>
                           <th className="px-4 py-2 text-right font-medium">Норма/мес</th>
                           <th className="px-4 py-2 text-right font-medium">Хватит на</th>
@@ -229,6 +330,7 @@ export function ConsumablesPageContent() {
                                 <span className="font-medium">{item.name}</span>
                                 {item.category && <span className="ml-2 text-xs text-muted-foreground">{item.category.name}</span>}
                               </td>
+                              <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{item.barcode || '—'}</td>
                               <td className="px-4 py-2 text-right tabular-nums">
                                 {qty} {item.unit}
                               </td>
