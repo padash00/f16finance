@@ -44,7 +44,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: run } = await supabase
     .from('checklist_runs')
-    .select('id, shift_id, template_id, status, responses')
+    .select('id, shift_id, template_id, status, responses, run_by')
     .eq('id', id)
     .maybeSingle()
 
@@ -72,7 +72,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: items } = await supabase
     .from('checklist_items')
-    .select('id, fine_amount, bonus_amount, severity, is_required, title')
+    .select('id, fine_amount, bonus_amount, severity, is_required, title, knowledge_article_id')
     .eq('template_id', (run as any).template_id)
 
   const itemsArr = (items || []) as any[]
@@ -92,6 +92,69 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { error } = await supabase.from('checklist_runs').update(update).eq('id', id)
   if (error) return json({ error: 'checklist-run-complete-failed', detail: error.message }, 400)
+
+  // Auto-incidents: для каждого item с фактическим штрафом/бонусом создаём инцидент.
+  // Только при targetStatus !== 'skipped'.
+  if (targetStatus !== 'skipped') {
+    const subjectStaffId = (run as any).run_by || null
+    const reportedBy = body.co_signed_by || (run as any).run_by || null
+    const incidents: any[] = []
+    for (const item of itemsArr) {
+      const r = (mergedResponses as any)[item.id]
+      const passed = r?.passed === true || r?.value === true
+      const fine = Number(item.fine_amount || 0)
+      const bonus = Number(item.bonus_amount || 0)
+      if (!passed && item.is_required && fine > 0) {
+        incidents.push({
+          kind: 'violation',
+          title: item.title || 'Нарушение чек-листа',
+          description: r?.note || r?.comment || null,
+          fine,
+          bonus: 0,
+          severity: item.severity || 'normal',
+          checklist_item_id: item.id,
+          knowledge_article_id: item.knowledge_article_id || null,
+        })
+      }
+      if (passed && bonus > 0) {
+        incidents.push({
+          kind: 'bonus',
+          title: item.title || 'Бонус по чек-листу',
+          description: r?.note || r?.comment || null,
+          fine: 0,
+          bonus,
+          severity: item.severity || 'normal',
+          checklist_item_id: item.id,
+          knowledge_article_id: item.knowledge_article_id || null,
+        })
+      }
+    }
+
+    for (const inc of incidents) {
+      const { error: incError } = await supabase.rpc('incidents_create', {
+        p_company_id: (shift as any).company_id,
+        p_kind: inc.kind,
+        p_title: inc.title,
+        p_description: inc.description,
+        p_subject_staff_id: subjectStaffId,
+        p_reported_by: reportedBy,
+        p_reported_by_user_id: null,
+        p_article_id: inc.knowledge_article_id,
+        p_severity: inc.severity,
+        p_fine_amount: inc.fine,
+        p_bonus_amount: inc.bonus,
+        p_photo_urls: [],
+        p_shift_id: (shift as any).id,
+        p_source: 'checklist',
+        p_checklist_run_id: id,
+        p_checklist_item_id: inc.checklist_item_id,
+        p_status: 'confirmed',
+      })
+      if (incError) {
+        console.warn('auto-incident create failed', incError.message)
+      }
+    }
+  }
 
   await writeAuditLog(supabase as any, {
     action: 'checklist_run.complete',

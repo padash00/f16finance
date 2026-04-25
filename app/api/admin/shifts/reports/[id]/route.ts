@@ -53,7 +53,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return json({ error: 'forbidden' }, 403)
     }
 
-    const [salesRes, returnsRes, runsRes] = await Promise.all([
+    const [salesRes, returnsRes, runsRes, incidentsRes] = await Promise.all([
       supabase
         .from('point_sales')
         .select(
@@ -79,7 +79,28 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         )
         .eq('shift_id', id)
         .order('started_at', { ascending: false }),
+      supabase
+        .from('incidents')
+        .select(
+          `id, kind, title, description, fine_amount, bonus_amount,
+           severity, status, source, occurred_at,
+           subject_staff_id, reported_by, article_id, checklist_run_id,
+           subject:subject_staff_id ( id, name, short_name ),
+           reporter:reported_by ( id, name, short_name ),
+           article:article_id ( id, title, slug )`,
+        )
+        .eq('shift_id', id)
+        .order('occurred_at', { ascending: false }),
     ])
+
+    const incidents = (incidentsRes.data || []) as any[]
+    let finesTotal = 0
+    let bonusesTotal = 0
+    for (const inc of incidents) {
+      if (inc.status !== 'confirmed') continue
+      if (inc.kind === 'violation') finesTotal += Number(inc.fine_amount || 0)
+      if (inc.kind === 'bonus') bonusesTotal += Number(inc.bonus_amount || 0)
+    }
 
     return json({
       ok: true,
@@ -88,6 +109,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         sales: salesRes.data || [],
         returns: returnsRes.data || [],
         checklist_runs: runsRes.data || [],
+        incidents,
+        incidents_summary: {
+          fines_total: finesTotal,
+          bonuses_total: bonusesTotal,
+          count: incidents.length,
+        },
       },
     })
   } catch (error) {

@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarRange,
   CheckCircle2,
@@ -11,6 +12,9 @@ import {
   ExternalLink,
   Loader2,
   RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  StickyNote,
   Wallet,
   XCircle,
 } from 'lucide-react'
@@ -66,6 +70,29 @@ type Return = {
   comment: string | null
   returned_at: string
   source: string
+}
+
+type Incident = {
+  id: string
+  kind: 'violation' | 'bonus' | 'note'
+  title: string
+  description: string | null
+  fine_amount: number
+  bonus_amount: number
+  severity: 'info' | 'normal' | 'warning' | 'critical'
+  status: 'draft' | 'confirmed' | 'disputed' | 'voided'
+  source: 'manual' | 'checklist' | 'auto' | 'import'
+  occurred_at: string
+  checklist_run_id: string | null
+  subject?: { id: string; name: string; short_name: string | null } | null
+  reporter?: { id: string; name: string; short_name: string | null } | null
+  article?: { id: string; title: string; slug: string } | null
+}
+
+type IncidentsSummary = {
+  fines_total: number
+  bonuses_total: number
+  count: number
 }
 
 type ChecklistRun = {
@@ -128,6 +155,8 @@ export default function ShiftReportDetailPage({
   const [sales, setSales] = useState<Sale[]>([])
   const [returns, setReturns] = useState<Return[]>([])
   const [runs, setRuns] = useState<ChecklistRun[]>([])
+  const [incidents, setIncidents] = useState<Incident[]>([])
+  const [incidentsSummary, setIncidentsSummary] = useState<IncidentsSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -142,6 +171,8 @@ export default function ShiftReportDetailPage({
       setSales((data?.data?.sales || []) as Sale[])
       setReturns((data?.data?.returns || []) as Return[])
       setRuns((data?.data?.checklist_runs || []) as ChecklistRun[])
+      setIncidents((data?.data?.incidents || []) as Incident[])
+      setIncidentsSummary((data?.data?.incidents_summary || null) as IncidentsSummary | null)
     } catch (e: any) {
       setError(e?.message || 'Ошибка загрузки')
     } finally {
@@ -383,6 +414,73 @@ export default function ShiftReportDetailPage({
                     </div>
                   )
                 })
+              )}
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden border-white/10">
+            <div className="flex items-center gap-2 border-b border-white/5 px-4 py-2 text-sm font-medium text-white">
+              <AlertTriangle className="h-4 w-4 text-amber-400" />
+              <span>Инциденты • {incidents.length}</span>
+              {incidentsSummary && incidentsSummary.fines_total > 0 && (
+                <span className="ml-auto text-xs text-rose-300">
+                  −{fmtMoney(incidentsSummary.fines_total)}
+                </span>
+              )}
+              {incidentsSummary && incidentsSummary.bonuses_total > 0 && (
+                <span className={`text-xs text-emerald-300 ${incidentsSummary.fines_total > 0 ? '' : 'ml-auto'}`}>
+                  +{fmtMoney(incidentsSummary.bonuses_total)}
+                </span>
+              )}
+            </div>
+            <div className="divide-y divide-white/5">
+              {incidents.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-slate-400">
+                  За эту смену инцидентов нет
+                </div>
+              ) : (
+                incidents.map((inc) => (
+                  <div key={inc.id} className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {inc.kind === 'violation' ? (
+                        <ShieldAlert className="h-4 w-4 text-rose-400" />
+                      ) : inc.kind === 'bonus' ? (
+                        <Sparkles className="h-4 w-4 text-emerald-400" />
+                      ) : (
+                        <StickyNote className="h-4 w-4 text-slate-400" />
+                      )}
+                      <span className="text-sm text-white">{inc.title}</span>
+                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase text-slate-400">
+                        {inc.source}
+                      </span>
+                      {inc.status !== 'confirmed' && (
+                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase text-amber-300">
+                          {inc.status}
+                        </span>
+                      )}
+                      <span className="ml-auto text-xs text-slate-400">
+                        {fmtDateTime(inc.occurred_at)}
+                      </span>
+                    </div>
+                    {inc.description && (
+                      <div className="mt-1 text-xs text-slate-400">{inc.description}</div>
+                    )}
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                      {inc.subject && (
+                        <span>Сотрудник: {inc.subject.short_name || inc.subject.name}</span>
+                      )}
+                      {inc.reporter && (
+                        <span>Кто записал: {inc.reporter.short_name || inc.reporter.name}</span>
+                      )}
+                      {Number(inc.fine_amount) > 0 && (
+                        <span className="text-rose-300">−{fmtMoney(inc.fine_amount)}</span>
+                      )}
+                      {Number(inc.bonus_amount) > 0 && (
+                        <span className="text-emerald-300">+{fmtMoney(inc.bonus_amount)}</span>
+                      )}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </Card>
