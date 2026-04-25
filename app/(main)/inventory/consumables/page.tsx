@@ -16,6 +16,27 @@ type ConsumptionNorm = { id: string; item_id: string; location_id: string; month
 type PointLimit = { id: string; item_id: string; company_id: string; monthly_limit_qty: number }
 type Balance = { location_id: string; item_id: string; quantity: number; item?: { id: string; name: string } | null; location?: { id: string; name: string; location_type: string; company_id: string | null } | null }
 type InventoryLocation = { id: string; name: string; location_type: string; company_id: string | null; company?: { id: string; name: string; code: string | null } | null }
+type ConsumableIssueItem = {
+  id: string
+  requested_qty: number
+  approved_qty: number
+  item?: { id: string; name: string; barcode: string; unit: string } | null
+}
+type ConsumableIssue = {
+  id: string
+  created_at: string | null
+  approved_at: string | null
+  issued_at: string | null
+  received_at: string | null
+  issued_by: string | null
+  approved_by: string | null
+  created_by: string | null
+  status: string
+  comment: string | null
+  company?: { id: string; name: string } | null
+  target_location?: { id: string; name: string } | null
+  items: ConsumableIssueItem[]
+}
 
 type DashboardData = {
   items: ConsumableItem[]
@@ -24,9 +45,10 @@ type DashboardData = {
   balances: Balance[]
   locations: InventoryLocation[]
   companies: Array<{ id: string; name: string; code: string | null }>
+  issues?: ConsumableIssue[]
 }
 
-type Tab = 'balances' | 'norms'
+type Tab = 'balances' | 'issues' | 'norms'
 
 function stockStatus(quantity: number, norm: ConsumptionNorm | undefined): { icon: string; label: string } {
   if (!norm) return { icon: '⚪', label: 'Нет нормы' }
@@ -67,6 +89,12 @@ export function ConsumablesPageContent() {
   const [normMonthlyQty, setNormMonthlyQty] = useState('')
   const [normAlertDays, setNormAlertDays] = useState('14')
   const [editingNormId, setEditingNormId] = useState<string | null>(null)
+  const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [issueLocationId, setIssueLocationId] = useState('')
+  const [issueItemId, setIssueItemId] = useState('')
+  const [issuePackQty, setIssuePackQty] = useState('1')
+  const [issuePackSize, setIssuePackSize] = useState('1')
+  const [issueComment, setIssueComment] = useState('')
 
   async function loadData() {
     setLoading(true)
@@ -119,6 +147,50 @@ export function ConsumablesPageContent() {
       await loadData()
     } catch (e: any) {
       setError(e?.message || 'Ошибка сохранения нормы')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleCreateIssue() {
+    const packs = Number(issuePackQty || 0)
+    const packSize = Number(issuePackSize || 0)
+    const requestedQty = packs * packSize
+    if (!issueDate) return setError('Укажите дату выдачи')
+    if (!issueLocationId) return setError('Выберите точку')
+    if (!issueItemId) return setError('Выберите расходник')
+    if (!Number.isFinite(packs) || packs <= 0) return setError('Укажите корректное кол-во упаковок')
+    if (!Number.isFinite(packSize) || packSize <= 0) return setError('Укажите корректную емкость упаковки')
+    if (!Number.isFinite(requestedQty) || requestedQty <= 0) return setError('Некорректное итоговое количество')
+
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const lineComment = `упаковки=${packs};в_упаковке=${packSize}`
+      const response = await fetch('/api/admin/inventory/consumables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'recordIssue',
+          payload: {
+            point_location_id: issueLocationId,
+            issue_date: issueDate,
+            comment: issueComment.trim() || null,
+            items: [{ item_id: issueItemId, requested_qty: requestedQty, comment: lineComment }],
+          },
+        }),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.ok) throw new Error(json?.error || 'Не удалось записать выдачу')
+      setIssueItemId('')
+      setIssuePackQty('1')
+      setIssuePackSize('1')
+      setIssueComment('')
+      setSuccess('Выдача зафиксирована и автоматически списана со склада')
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось записать выдачу')
     } finally {
       setSaving(false)
     }
@@ -258,14 +330,14 @@ export function ConsumablesPageContent() {
       </Card>
 
       <div className="flex gap-2 border-b border-border/50">
-        {(['balances', 'norms'] as Tab[]).map((t) => (
+        {(['balances', 'issues', 'norms'] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-medium transition-colors ${tab === t ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
-            {t === 'balances' ? 'Остатки' : 'Нормы'}
+            {t === 'balances' ? 'Остатки' : t === 'issues' ? 'Выдача по точкам' : 'Нормы'}
           </button>
         ))}
       </div>
@@ -361,6 +433,103 @@ export function ConsumablesPageContent() {
               </Card>
             )
           })}
+        </div>
+      )}
+
+      {tab === 'issues' && (
+        <div className="space-y-6">
+          <Card className="border-border/70 bg-background/60 p-4">
+            <div className="mb-3 text-sm font-medium">Новая выдача расходников</div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-6">
+              <Field label="Дата">
+                <Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+              </Field>
+              <Field label="Точка">
+                <Select value={issueLocationId} onValueChange={setIssueLocationId}>
+                  <SelectTrigger><SelectValue placeholder="Выберите точку" /></SelectTrigger>
+                  <SelectContent>
+                    {pointLocations.map((loc) => (
+                      <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Расходник">
+                <Select value={issueItemId} onValueChange={setIssueItemId}>
+                  <SelectTrigger><SelectValue placeholder="Выберите расходник" /></SelectTrigger>
+                  <SelectContent>
+                    {(data?.items || []).map((item) => (
+                      <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Кол-во упаковок">
+                <Input type="number" min="0" step="0.001" value={issuePackQty} onChange={(e) => setIssuePackQty(e.target.value)} />
+              </Field>
+              <Field label="В упаковке (шт)">
+                <Input type="number" min="0" step="0.001" value={issuePackSize} onChange={(e) => setIssuePackSize(e.target.value)} />
+              </Field>
+              <Field label="Итого (шт)">
+                <Input
+                  value={`${Number(issuePackQty || 0) * Number(issuePackSize || 0) || 0}`}
+                  readOnly
+                />
+              </Field>
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-end">
+              <Field label="Комментарий (опц.)">
+                <Input value={issueComment} onChange={(e) => setIssueComment(e.target.value)} placeholder="Например: выдали на выходные / срочная выдача" />
+              </Field>
+              <Button onClick={handleCreateIssue} disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Записать выдачу
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="border-border/70 bg-background/60">
+            <div className="border-b border-border/50 px-4 py-3 text-sm font-medium">Журнал выдач</div>
+            {(data?.issues || []).length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-muted-foreground">Выдач пока нет</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full table-fixed text-sm">
+                  <thead>
+                    <tr className="border-b border-border/50 text-xs text-muted-foreground">
+                      <th className="px-4 py-2 text-left font-medium">Дата</th>
+                      <th className="px-4 py-2 text-left font-medium">Точка</th>
+                      <th className="px-4 py-2 text-left font-medium">Расходник</th>
+                      <th className="px-4 py-2 text-right font-medium">Выдано</th>
+                      <th className="px-4 py-2 text-left font-medium">Кто выдал</th>
+                      <th className="px-4 py-2 text-left font-medium">Комментарий</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data?.issues || []).flatMap((issue) => {
+                      const markerComment = String(issue.comment || '').replace('[consumable-issue]', '').trim()
+                      const markerDate = markerComment.split('·')[0]?.trim() || ''
+                      const dateText = markerDate || (issue.received_at || issue.issued_at || issue.approved_at || issue.created_at || '').slice(0, 10)
+                      const who = issue.issued_by || issue.approved_by || issue.created_by || '—'
+                      return issue.items.map((line) => (
+                        <tr key={`${issue.id}:${line.id}`} className="border-b border-border/30 last:border-0 hover:bg-muted/20">
+                          <td className="px-4 py-2 tabular-nums">{dateText || '—'}</td>
+                          <td className="px-4 py-2 truncate" title={issue.target_location?.name || ''}>{issue.target_location?.name || '—'}</td>
+                          <td className="px-4 py-2 truncate" title={line.item?.name || ''}>
+                            <span className="font-medium">{line.item?.name || '—'}</span>
+                            <span className="ml-2 font-mono text-xs text-muted-foreground">{line.item?.barcode || '—'}</span>
+                          </td>
+                          <td className="px-4 py-2 text-right tabular-nums">{Number(line.approved_qty || line.requested_qty || 0)} {line.item?.unit || 'шт'}</td>
+                          <td className="px-4 py-2 text-muted-foreground">{who}</td>
+                          <td className="px-4 py-2 truncate text-muted-foreground" title={markerComment || ''}>{markerComment || '—'}</td>
+                        </tr>
+                      ))
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
         </div>
       )}
 
