@@ -5,6 +5,7 @@ import { Loader2, MoreHorizontal, Package, PackagePlus, RefreshCw, Search, Trash
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +17,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatMoney } from '@/lib/core/format'
@@ -179,6 +179,8 @@ export default function StoreReceiptsPage() {
   const [scope, setScope] = useState<'all' | 'warehouse' | 'showcase'>('all')
   const [formSheetOpen, setFormSheetOpen] = useState(false)
   const [receiptSearch, setReceiptSearch] = useState('')
+  const [selectedReceipt, setSelectedReceipt] = useState<InventoryReceipt | null>(null)
+  const [receiptDetailsOpen, setReceiptDetailsOpen] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -616,6 +618,7 @@ export default function StoreReceiptsPage() {
                   <th className="w-32 py-2.5 px-2 font-normal">Накладная</th>
                   <th className="w-20 py-2.5 px-2 text-right font-normal">Позиций</th>
                   <th className="w-32 py-2.5 px-2 pr-4 text-right font-normal text-emerald-300/70">Сумма</th>
+                  <th className="w-28 py-2.5 px-2 pr-4 text-right font-normal">Акт</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
@@ -650,6 +653,19 @@ export default function StoreReceiptsPage() {
                     <td className="w-32 py-2.5 px-2 pr-4 text-right align-middle">
                       <span className="text-sm font-semibold text-emerald-300">{formatMoney(receipt.total_amount || 0)}</span>
                     </td>
+                    <td className="w-28 py-2.5 px-2 pr-4 text-right align-middle">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedReceipt(receipt)
+                          setReceiptDetailsOpen(true)
+                        }}
+                      >
+                        Открыть
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -658,18 +674,18 @@ export default function StoreReceiptsPage() {
         )}
       </Card>
 
-      {/* Create receipt Sheet */}
-      <Sheet open={formSheetOpen} onOpenChange={setFormSheetOpen}>
-        <SheetContent className="w-full sm:max-w-3xl flex flex-col gap-0 p-0">
-          <SheetHeader className="border-b border-white/10 p-5">
-            <SheetTitle className="flex items-center gap-2">
+      {/* Create receipt dialog */}
+      <Dialog open={formSheetOpen} onOpenChange={setFormSheetOpen}>
+        <DialogContent className="flex h-[90vh] !w-[96vw] !max-w-[96vw] sm:!max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-white/10 p-5 text-left">
+            <DialogTitle className="flex items-center gap-2">
               <PackagePlus className="h-5 w-5 text-emerald-300" />
               Новый документ приёмки
-            </SheetTitle>
-            <SheetDescription>
+            </DialogTitle>
+            <DialogDescription>
               Каталог, поставщик, дата и товарные строки. Приход увеличивает общий остаток и обновляет цены.
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
           <form onSubmit={createReceipt} className="flex-1 space-y-5 overflow-y-auto p-5">
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -708,8 +724,9 @@ export default function StoreReceiptsPage() {
                         quickInputRef.current?.focus()
                       }}
                       className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-200 hover:bg-white/[0.08]"
+                      title={`${item.name} · ${item.barcode}`}
                     >
-                      {item.name} · {item.barcode}
+                      <span className="block max-w-[340px] truncate">{item.name} · {item.barcode}</span>
                     </button>
                   ))}
                 </div>
@@ -798,8 +815,10 @@ export default function StoreReceiptsPage() {
             </div>
 
             <div className="space-y-3">
-              {lines.map((line, index) => (
-                <div key={index} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[minmax(0,1.4fr)_110px_130px_130px_110px_minmax(0,1fr)_auto]">
+              {lines.map((line, index) => {
+                const lineItem = (data?.items || []).find((row) => row.id === line.item_id) || null
+                return (
+                <div key={index} className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[minmax(0,1.2fr)_160px_110px_130px_130px_110px_minmax(0,1fr)_auto]">
                   <div className="space-y-1.5">
                     <Label>Товар</Label>
                     <Select
@@ -822,16 +841,21 @@ export default function StoreReceiptsPage() {
                         )
                       }
                     >
-                      <SelectTrigger><SelectValue placeholder="Выберите товар" /></SelectTrigger>
+                      <SelectTrigger className="min-w-0 [&>span]:truncate"><SelectValue placeholder="Выберите товар" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value={`__empty__${index}`}>Выберите товар</SelectItem>
                         {(data?.items || []).map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.name} · {item.barcode}
+                          <SelectItem key={item.id} value={item.id} title={`${item.name} · ${item.barcode}`}>
+                            <span className="block max-w-[420px] truncate">{item.name} · {item.barcode}</span>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Штрихкод</Label>
+                    <Input value={lineItem?.barcode || '—'} readOnly className="bg-white/[0.03]" />
                   </div>
 
                   <div className="space-y-1.5">
@@ -919,7 +943,7 @@ export default function StoreReceiptsPage() {
                     </Button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -937,8 +961,62 @@ export default function StoreReceiptsPage() {
               Провести приемку
             </Button>
           </form>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={receiptDetailsOpen} onOpenChange={setReceiptDetailsOpen}>
+        <DialogContent className="flex h-[85vh] !w-[92vw] !max-w-[92vw] sm:!max-w-[1200px] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-white/10 p-5 text-left">
+            <DialogTitle>Детали приёмки</DialogTitle>
+            <DialogDescription>
+              {selectedReceipt
+                ? `${formatDate(selectedReceipt.received_at)} · ${selectedReceipt.supplier?.name || 'Без поставщика'}`
+                : 'Проведенный акт приёмки'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto p-5">
+            {!selectedReceipt ? (
+              <p className="text-sm text-muted-foreground">Документ не выбран.</p>
+            ) : (
+              <div className="space-y-4">
+                <div className="text-sm text-muted-foreground">
+                  Локация: <span className="text-foreground">{selectedReceipt.location?.name || '—'}</span>
+                  {selectedReceipt.invoice_number ? (
+                    <span> · Накладная: <span className="text-foreground">{selectedReceipt.invoice_number}</span></span>
+                  ) : null}
+                  <span> · Сумма: <span className="text-foreground">{formatMoney(Number(selectedReceipt.total_amount || 0))}</span></span>
+                </div>
+                <div className="overflow-auto rounded-xl border border-white/10">
+                  <table className="w-full table-fixed text-sm">
+                    <thead className="bg-white/[0.03]">
+                      <tr className="text-left text-xs text-muted-foreground">
+                        <th className="px-3 py-2 font-normal">Товар</th>
+                        <th className="px-3 py-2 font-normal">Штрихкод</th>
+                        <th className="px-3 py-2 text-right font-normal">Кол-во</th>
+                        <th className="px-3 py-2 text-right font-normal">Цена закупа</th>
+                        <th className="px-3 py-2 text-right font-normal">Сумма</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(selectedReceipt.items || []).map((item) => (
+                        <tr key={item.id} className="border-t border-white/[0.06]">
+                          <td className="px-3 py-2" title={item.item?.name || 'Товар'}>
+                            <span className="block truncate">{item.item?.name || 'Товар'}</span>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{item.item?.barcode || '—'}</td>
+                          <td className="px-3 py-2 text-right">{formatQty(Number(item.quantity || 0))}</td>
+                          <td className="px-3 py-2 text-right">{formatMoney(Number(item.unit_cost || 0))}</td>
+                          <td className="px-3 py-2 text-right">{formatMoney(Number(item.total_cost || 0))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
     </TooltipProvider>
   )
