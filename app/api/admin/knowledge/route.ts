@@ -29,6 +29,7 @@ type ArticlePayload = {
   related_bonus_amount?: number | null
   sort_order?: number | null
   is_published?: boolean | null
+  requires_confirmation?: boolean | null
 }
 
 type TemplatePayload = {
@@ -447,6 +448,7 @@ export async function POST(req: Request) {
         related_bonus_amount: numberOrNull(body.payload.related_bonus_amount),
         sort_order: sortOrder(body.payload.sort_order),
         is_published: body.payload.is_published !== false,
+        requires_confirmation: body.payload.requires_confirmation === true,
       }
       if (!payload.title) return json({ error: 'Название обязательно' }, 400)
 

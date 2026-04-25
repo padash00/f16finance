@@ -47,6 +47,12 @@ export async function POST(request: Request) {
         .maybeSingle()
       return json({ error: 'point-shift-already-open', shift: existing || null }, 409)
     }
+    if (code.includes('point-shift-operator-not-onboarded')) {
+      return json(
+        { error: 'point-shift-operator-not-onboarded', detail: (error as any).message },
+        409,
+      )
+    }
     return json({ error: 'point-shift-open-failed', detail: (error as any).message }, 400)
   }
 

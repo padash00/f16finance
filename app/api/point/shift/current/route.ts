@@ -71,10 +71,41 @@ export async function GET(request: Request) {
     rows.reduce((acc, row) => acc + Number(row?.[key] || 0), 0)
 
   const orgId = (shift as any).organization_id as string | null
+  const operatorId = (shift as any).operator_id as string | null
   const filteredTemplates = templates.filter((t) => {
     // organization scope handled at template level (null = global)
     return true
   })
+
+  // Pending knowledge confirmations для оператора (если он есть в смене).
+  let pendingConfirmations: any[] = []
+  if (operatorId) {
+    const { data: critArticles } = await supabase
+      .from('knowledge_articles')
+      .select('id, title, slug, severity, version, summary')
+      .eq('is_published', true)
+      .eq('requires_confirmation', true)
+
+    const critArr = (critArticles || []) as any[]
+    if (critArr.length > 0) {
+      const { data: confirmed } = await supabase
+        .from('knowledge_article_confirmations')
+        .select('article_id, article_version')
+        .eq('staff_id', operatorId)
+        .in(
+          'article_id',
+          critArr.map((a) => a.id),
+        )
+
+      const confirmedKey = new Set(
+        ((confirmed || []) as any[]).map((c) => `${c.article_id}:${c.article_version}`),
+      )
+
+      pendingConfirmations = critArr.filter(
+        (a) => !confirmedKey.has(`${a.id}:${Number(a.version || 1)}`),
+      )
+    }
+  }
 
   return json({
     shift,
@@ -91,6 +122,9 @@ export async function GET(request: Request) {
     checklists: {
       templates: filteredTemplates,
       runs,
+    },
+    knowledge: {
+      pending_confirmations: pendingConfirmations,
     },
   })
 }
