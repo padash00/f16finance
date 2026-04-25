@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createPointInventoryReturn } from '@/lib/server/repositories/inventory'
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
 
 type ReturnBody = {
   action: 'createReturn'
@@ -261,6 +262,15 @@ export async function POST(request: Request) {
       local_ref: body.payload?.local_ref?.trim() || null,
       items,
     })
+
+    // Phase 1: best-effort привязка возврата к открытой смене.
+    const shiftIdAttach = await requireCurrentOpenShiftId(supabase, device.company_id)
+    if (shiftIdAttach && pointReturn?.return_id) {
+      await supabase
+        .from('point_returns')
+        .update({ shift_id: shiftIdAttach })
+        .eq('id', pointReturn.return_id)
+    }
 
     await writeAuditLog(supabase, {
       actorUserId: actor.actorUserId,

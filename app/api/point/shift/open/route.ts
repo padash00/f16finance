@@ -1,0 +1,68 @@
+import { NextResponse } from 'next/server'
+
+import { writeAuditLog } from '@/lib/server/audit'
+import { requirePointDevice } from '@/lib/server/point-devices'
+
+type Body = {
+  operator_id?: string | null
+  shift_type?: 'day' | 'night' | 'custom' | null
+  opening_cash?: number | null
+  opening_notes?: string | null
+  handover_from_shift_id?: string | null
+}
+
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status })
+}
+
+export async function POST(request: Request) {
+  const point = await requirePointDevice(request)
+  if ('response' in point) return point.response
+
+  const { supabase, device } = point
+  if (!device.company_id) {
+    return json({ error: 'point-company-required' }, 400)
+  }
+
+  const body = (await request.json().catch(() => ({}))) as Body
+
+  const { data, error } = await supabase.rpc('point_shift_open', {
+    p_company_id: device.company_id,
+    p_operator_id: body.operator_id || null,
+    p_point_device_id: device.id,
+    p_shift_type: body.shift_type || 'day',
+    p_opening_cash: Number(body.opening_cash || 0),
+    p_opening_notes: body.opening_notes || null,
+    p_handover_from: body.handover_from_shift_id || null,
+  })
+
+  if (error) {
+    const code = String((error as any).message || '').toLowerCase()
+    if (code.includes('point-shift-already-open')) {
+      const { data: existing } = await supabase
+        .from('point_shifts')
+        .select('id, opened_at, operator_id, shift_type')
+        .eq('company_id', device.company_id)
+        .eq('status', 'open')
+        .maybeSingle()
+      return json({ error: 'point-shift-already-open', shift: existing || null }, 409)
+    }
+    return json({ error: 'point-shift-open-failed', detail: (error as any).message }, 400)
+  }
+
+  const shiftId = (data as unknown as string) || ''
+
+  await writeAuditLog(supabase as any, {
+    action: 'point_shift.open',
+    entityType: 'point_shift',
+    entityId: shiftId,
+    payload: {
+      company_id: device.company_id,
+      operator_id: body.operator_id || null,
+      opening_cash: Number(body.opening_cash || 0),
+      shift_type: body.shift_type || 'day',
+    },
+  })
+
+  return json({ shift_id: shiftId })
+}

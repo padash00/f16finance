@@ -1,0 +1,87 @@
+import { NextResponse } from 'next/server'
+
+import { resolveCompanyScope } from '@/lib/server/organizations'
+import { getRequestAccessContext } from '@/lib/server/request-auth'
+import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
+
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status })
+}
+
+function canView(access: { isSuperAdmin: boolean; staffRole: string }) {
+  return access.isSuperAdmin || ['owner', 'manager', 'other'].includes(access.staffRole)
+}
+
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const access = await getRequestAccessContext(request)
+    if ('response' in access) return access.response
+    if (!canView(access)) return json({ error: 'forbidden' }, 403)
+
+    const { id } = await params
+    if (!id) return json({ error: 'invalid-shift-id' }, 400)
+
+    const supabase = hasAdminSupabaseCredentials() ? createAdminSupabaseClient() : access.supabase
+    const companyScope = await resolveCompanyScope({
+      activeOrganizationId: access.activeOrganization?.id || null,
+      isSuperAdmin: access.isSuperAdmin,
+    })
+
+    const { data: shift, error } = await supabase
+      .from('point_shifts')
+      .select(
+        `id, company_id, organization_id, operator_id, point_device_id,
+         status, shift_type, opened_at, closed_at,
+         opening_cash, opening_notes,
+         closing_cash, closing_kaspi, closing_kaspi_before_midnight, closing_kaspi_after_midnight, closing_notes,
+         z_report_url, x_report_url, totals_json,
+         handover_from_shift_id, closed_by, created_at, updated_at,
+         company:company_id ( id, name, code ),
+         operator:operator_id ( id, name, short_name ),
+         closer:closed_by ( id, name, short_name )`,
+      )
+      .eq('id', id)
+      .maybeSingle()
+
+    if (error) throw error
+    if (!shift) return json({ error: 'shift-not-found' }, 404)
+
+    if (
+      companyScope.allowedCompanyIds &&
+      !companyScope.allowedCompanyIds.includes((shift as any).company_id)
+    ) {
+      return json({ error: 'forbidden' }, 403)
+    }
+
+    const [salesRes, returnsRes] = await Promise.all([
+      supabase
+        .from('point_sales')
+        .select(
+          'id, sale_date, shift, payment_method, cash_amount, kaspi_amount, total_amount, comment, sold_at, source',
+        )
+        .eq('shift_id', id)
+        .order('sold_at', { ascending: false }),
+      supabase
+        .from('point_returns')
+        .select(
+          'id, return_date, shift, payment_method, cash_amount, kaspi_amount, total_amount, comment, returned_at, source',
+        )
+        .eq('shift_id', id)
+        .order('returned_at', { ascending: false }),
+    ])
+
+    return json({
+      ok: true,
+      data: {
+        shift,
+        sales: salesRes.data || [],
+        returns: returnsRes.data || [],
+      },
+    })
+  } catch (error) {
+    return json(
+      { error: 'admin-shift-detail-failed', detail: (error as any)?.message || String(error) },
+      500,
+    )
+  }
+}

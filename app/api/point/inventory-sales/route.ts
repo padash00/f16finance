@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createPointInventorySale } from '@/lib/server/repositories/inventory'
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
 import { checkAndNotifyLowStock } from '@/lib/server/low-stock-notifier'
 
 type SaleBody = {
@@ -646,6 +647,12 @@ export async function POST(request: Request) {
         area: 'point-inventory-sales:customer-sync',
         message: customerError?.message || 'Point inventory sale customer sync error',
       })
+    }
+
+    // Phase 1: best-effort привязка к открытой смене (без 409 пока операторка не обновлена).
+    const shiftIdAttach = await requireCurrentOpenShiftId(supabase, device.company_id)
+    if (shiftIdAttach && sale?.sale_id) {
+      await supabase.from('point_sales').update({ shift_id: shiftIdAttach }).eq('id', sale.sale_id)
     }
 
     const { data: savedSale } = await supabase

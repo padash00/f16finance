@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { writeAuditLog, writeSystemErrorLogSafe } from '@/lib/server/audit'
 import { createInventoryRequest } from '@/lib/server/repositories/inventory'
 import { requirePointDevice } from '@/lib/server/point-devices'
+import { requireCurrentOpenShiftId } from '@/lib/server/point-shifts'
 import { notifyInventoryRequestCreated } from '@/lib/server/telegram'
 
 type Body = {
@@ -212,6 +213,12 @@ export async function POST(request: Request) {
       created_by: actor.actorUserId,
       items,
     })
+
+    // Phase 1: best-effort привязка заявки к открытой смене.
+    const shiftIdAttach = await requireCurrentOpenShiftId(supabase, device.company_id)
+    if (shiftIdAttach && requestId) {
+      await supabase.from('inventory_requests').update({ shift_id: shiftIdAttach }).eq('id', requestId)
+    }
 
     await writeAuditLog(supabase, {
       actorUserId: actor.actorUserId,

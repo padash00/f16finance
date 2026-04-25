@@ -404,6 +404,8 @@ export const ACCESS_PAGE_GROUPS: readonly AccessPageGroup[] = [
       { path: '/shifts', label: 'Смены' },
       { path: '/shifts/add', label: 'Добавить смены' },
       { path: '/shifts/report', label: 'Отчёт по сменам' },
+      { path: '/shifts/reports', label: 'Отчёты смен (точки)' },
+      { path: '/shifts/reports/*', label: 'Карточка смены точки' },
       { path: '/operators', label: 'Операторы' },
       { path: '/operators/*', label: 'Профиль оператора' },
       { path: '/operator-analytics', label: 'Аналитика операторов' },
