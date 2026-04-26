@@ -20,6 +20,13 @@ import {
 } from 'lucide-react'
 
 import { ArticleEditorDialog, emptyArticleValue, type ArticleEditorValue } from '@/components/admin/article-editor-dialog'
+import {
+  ChecklistEditorDialog,
+  emptyChecklistItemValue,
+  emptyChecklistTemplateValue,
+  type ChecklistItemEditorValue,
+  type ChecklistTemplateEditorValue,
+} from '@/components/admin/checklist-editor-dialog'
 
 type CategoryKind = 'rules' | 'faq' | 'salary' | 'problem' | 'checklist'
 
@@ -132,19 +139,6 @@ const AUDIENCE_OPTIONS = [
   { value: 'kiosk', label: 'Киоск' },
 ] as const
 
-const emptyTemplate = {
-  title: '',
-  description: '',
-  company_id: '',
-  role_scope: 'operator',
-  shift_scope: 'any',
-  schedule_type: 'opening' as const,
-  recurrence_minutes: '',
-  blocks_shift: false,
-  sort_order: 100,
-  is_active: true,
-}
-
 const SCHEDULE_TYPE_LABELS: Record<string, string> = {
   opening: 'Открытие',
   periodic: 'Обход (по расписанию)',
@@ -216,21 +210,6 @@ const CHECKLIST_PRESETS = [
     blocks_shift: true,
   },
 ] as const
-
-const emptyItem = {
-  template_id: '',
-  category_id: '',
-  knowledge_article_id: '',
-  title: '',
-  description: '',
-  answer_type: 'boolean' as const,
-  severity: 'normal' as const,
-  fine_amount: '',
-  bonus_amount: '',
-  sort_order: 100,
-  is_required: true,
-  requires_photo: false,
-}
 
 function normalizeKnowledgeResponse(payload: Partial<KnowledgeResponse> | null | undefined): KnowledgeResponse {
   return {
@@ -315,9 +294,10 @@ export default function KnowledgeAdminPage() {
   const [notice, setNotice] = useState<string | null>(null)
 
   const [categoryForm, setCategoryForm] = useState<any>(emptyCategory)
-  const [templateForm, setTemplateForm] = useState<any>(emptyTemplate)
-  const [itemForm, setItemForm] = useState<any>(emptyItem)
-  const [checklistEditorMode, setChecklistEditorMode] = useState<'template' | 'item' | null>(null)
+  const [checklistDialogOpen, setChecklistDialogOpen] = useState(false)
+  const [checklistDialogMode, setChecklistDialogMode] = useState<'template' | 'item'>('template')
+  const [checklistTemplateValue, setChecklistTemplateValue] = useState<ChecklistTemplateEditorValue | undefined>(undefined)
+  const [checklistItemValue, setChecklistItemValue] = useState<ChecklistItemEditorValue | undefined>(undefined)
   const [articleDialogOpen, setArticleDialogOpen] = useState(false)
   const [articleDialogValue, setArticleDialogValue] = useState<ArticleEditorValue | undefined>(undefined)
 
@@ -436,10 +416,6 @@ export default function KnowledgeAdminPage() {
       if (!response.ok) throw new Error(payload.error || 'Не удалось загрузить базу знаний')
       const normalized = normalizeKnowledgeResponse(payload?.data ?? payload)
       setData(normalized)
-      setItemForm((current: any) => ({
-        ...current,
-        template_id: current.template_id || normalized.templates[0]?.id || '',
-      }))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Неизвестная ошибка')
     } finally {
@@ -531,42 +507,40 @@ export default function KnowledgeAdminPage() {
     setArticleDialogOpen(true)
   }
 
-  async function submitTemplate(event: FormEvent) {
-    event.preventDefault()
+  async function submitChecklistTemplateDialog(value: ChecklistTemplateEditorValue) {
     const result = await send('upsertTemplate', {
-      ...templateForm,
-      company_id: normalizeId(templateForm.company_id),
-      sort_order: Number(templateForm.sort_order || 100),
+      ...value,
+      company_id: normalizeId(value.company_id),
+      sort_order: Number(value.sort_order || 100),
     })
     if (result) {
-      setTemplateForm(emptyTemplate)
-      setChecklistEditorMode(null)
+      setChecklistTemplateValue(undefined)
+      setChecklistDialogOpen(false)
     }
   }
 
-  async function submitItem(event: FormEvent) {
-    event.preventDefault()
+  async function submitChecklistItemDialog(value: ChecklistItemEditorValue) {
     const result = await send('upsertItem', {
-      ...itemForm,
-      template_id: normalizeId(itemForm.template_id),
-      category_id: normalizeId(itemForm.category_id),
-      knowledge_article_id: normalizeId(itemForm.knowledge_article_id),
-      fine_amount: moneyOrNull(itemForm.fine_amount),
-      bonus_amount: moneyOrNull(itemForm.bonus_amount),
-      sort_order: Number(itemForm.sort_order || 100),
+      ...value,
+      template_id: normalizeId(value.template_id),
+      category_id: normalizeId(value.category_id),
+      knowledge_article_id: normalizeId(value.knowledge_article_id),
+      fine_amount: moneyOrNull(value.fine_amount),
+      bonus_amount: moneyOrNull(value.bonus_amount),
+      sort_order: Number(value.sort_order || 100),
     })
     if (result) {
-      setItemForm({
-        ...emptyItem,
-        template_id: itemForm.template_id,
+      setChecklistItemValue({
+        ...emptyChecklistItemValue,
+        template_id: value.template_id,
       })
-      setChecklistEditorMode(null)
     }
   }
 
   function editTemplate(template: ChecklistTemplate) {
-    setChecklistEditorMode('template')
-    setTemplateForm({
+    setChecklistDialogMode('template')
+    setChecklistItemValue(undefined)
+    setChecklistTemplateValue({
       ...template,
       company_id: template.company_id || '',
       description: template.description || '',
@@ -574,11 +548,25 @@ export default function KnowledgeAdminPage() {
       recurrence_minutes: template.recurrence_minutes ?? '',
       blocks_shift: !!template.blocks_shift,
     })
+    setChecklistDialogOpen(true)
   }
 
   function editItem(item: ChecklistItem) {
-    setChecklistEditorMode('item')
-    setItemForm({
+    const template = data.templates.find((entry) => entry.id === item.template_id)
+    setChecklistDialogMode('item')
+    setChecklistTemplateValue(
+      template
+        ? {
+            ...template,
+            company_id: template.company_id || '',
+            description: template.description || '',
+            schedule_type: template.schedule_type || 'opening',
+            recurrence_minutes: template.recurrence_minutes ?? '',
+            blocks_shift: !!template.blocks_shift,
+          }
+        : undefined,
+    )
+    setChecklistItemValue({
       ...item,
       category_id: item.category_id || '',
       knowledge_article_id: item.knowledge_article_id || '',
@@ -586,12 +574,14 @@ export default function KnowledgeAdminPage() {
       fine_amount: item.fine_amount ?? '',
       bonus_amount: item.bonus_amount ?? '',
     })
+    setChecklistDialogOpen(true)
   }
 
   function applyChecklistPreset(preset: (typeof CHECKLIST_PRESETS)[number]) {
-    setChecklistEditorMode('template')
-    setTemplateForm({
-      ...emptyTemplate,
+    setChecklistDialogMode('template')
+    setChecklistItemValue(undefined)
+    setChecklistTemplateValue({
+      ...emptyChecklistTemplateValue,
       title: preset.title,
       description: preset.description,
       schedule_type: preset.schedule_type,
@@ -600,28 +590,47 @@ export default function KnowledgeAdminPage() {
       recurrence_minutes: preset.recurrence_minutes,
       blocks_shift: preset.blocks_shift,
     })
+    setChecklistDialogOpen(true)
   }
 
   function addItemToTemplate(templateId: string) {
-    setChecklistEditorMode('item')
-    setItemForm({
-      ...emptyItem,
+    const template = data.templates.find((entry) => entry.id === templateId)
+    setChecklistDialogMode('item')
+    setChecklistTemplateValue(
+      template
+        ? {
+            ...template,
+            company_id: template.company_id || '',
+            description: template.description || '',
+            schedule_type: template.schedule_type || 'opening',
+            recurrence_minutes: template.recurrence_minutes ?? '',
+            blocks_shift: !!template.blocks_shift,
+          }
+        : undefined,
+    )
+    setChecklistItemValue({
+      ...emptyChecklistItemValue,
       template_id: templateId,
       sort_order: (itemsByTemplate.get(templateId)?.length ?? 0) * 10 + 100,
     })
+    setChecklistDialogOpen(true)
   }
 
   function openChecklistTemplateNew() {
-    setTemplateForm(emptyTemplate)
-    setChecklistEditorMode('template')
+    setChecklistDialogMode('template')
+    setChecklistTemplateValue(emptyChecklistTemplateValue)
+    setChecklistItemValue(undefined)
+    setChecklistDialogOpen(true)
   }
 
   function openChecklistItemNew() {
-    setItemForm({
-      ...emptyItem,
+    setChecklistDialogMode('item')
+    setChecklistTemplateValue(undefined)
+    setChecklistItemValue({
+      ...emptyChecklistItemValue,
       template_id: data.templates[0]?.id || '',
     })
-    setChecklistEditorMode('item')
+    setChecklistDialogOpen(true)
   }
 
   const tabs = [
@@ -908,220 +917,6 @@ export default function KnowledgeAdminPage() {
                     </div>
                   </div>
 
-                  {checklistEditorMode === 'template' && (
-                    <div className="mb-5 rounded-3xl border border-amber-300/20 bg-slate-950/50 p-5">
-                      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <h3 className="text-lg font-black text-slate-100">{templateForm.id ? 'Редактировать чек-лист' : 'Новый чек-лист'}</h3>
-                          <p className="mt-1 text-sm text-slate-500">Шаблон отвечает на вопрос “когда оператор должен пройти проверку”.</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTemplateForm(emptyTemplate)
-                            setChecklistEditorMode(null)
-                          }}
-                          className="rounded-2xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:border-slate-500"
-                        >
-                          Закрыть
-                        </button>
-                      </div>
-                      <form onSubmit={submitTemplate} className="space-y-4">
-                      <div className="space-y-2">
-                        <FieldLabel>Название чек-листа</FieldLabel>
-                        <TextInput value={templateForm.title} onChange={(event) => setTemplateForm({ ...templateForm, title: event.target.value })} placeholder="Например: Открытие смены" required />
-                      </div>
-                      <div className="space-y-2">
-                        <FieldLabel>Описание для оператора</FieldLabel>
-                        <TextArea value={templateForm.description} onChange={(event) => setTemplateForm({ ...templateForm, description: event.target.value })} placeholder="Коротко объясните, зачем нужен этот чек-лист и что будет проверяться." />
-                      </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <FieldLabel>Точка</FieldLabel>
-                          <SelectInput value={templateForm.company_id} onChange={(event) => setTemplateForm({ ...templateForm, company_id: event.target.value })}>
-                            <option value="">Для всех точек</option>
-                            {data.companies.map((company) => (
-                              <option key={company.id} value={company.id}>
-                                {company.name}
-                              </option>
-                            ))}
-                          </SelectInput>
-                        </div>
-                        <div className="space-y-2">
-                          <FieldLabel>Роль</FieldLabel>
-                          <SelectInput value={templateForm.role_scope} onChange={(event) => setTemplateForm({ ...templateForm, role_scope: event.target.value })}>
-                            {Object.entries(ROLE_SCOPE_LABELS).map(([value, label]) => (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            ))}
-                          </SelectInput>
-                        </div>
-                      </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <FieldLabel>Смена</FieldLabel>
-                          <SelectInput value={templateForm.shift_scope} onChange={(event) => setTemplateForm({ ...templateForm, shift_scope: event.target.value })}>
-                            {Object.entries(SHIFT_SCOPE_LABELS).map(([value, label]) => (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            ))}
-                          </SelectInput>
-                        </div>
-                        <div className="space-y-2">
-                          <FieldLabel>Когда срабатывает</FieldLabel>
-                          <SelectInput value={templateForm.schedule_type} onChange={(event) => setTemplateForm({ ...templateForm, schedule_type: event.target.value })}>
-                            {Object.entries(SCHEDULE_TYPE_LABELS).map(([value, label]) => (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            ))}
-                          </SelectInput>
-                        </div>
-                      </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        {templateForm.schedule_type === 'periodic' ? (
-                          <div className="space-y-2">
-                            <FieldLabel>Интервал обхода, мин</FieldLabel>
-                            <TextInput
-                              type="number"
-                              min={5}
-                              step={5}
-                              value={templateForm.recurrence_minutes}
-                              onChange={(event) => setTemplateForm({ ...templateForm, recurrence_minutes: event.target.value })}
-                              placeholder="60"
-                            />
-                          </div>
-                        ) : (
-                          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 text-sm leading-6 text-slate-400">
-                            Интервал нужен только для обходов по расписанию.
-                          </div>
-                        )}
-                        <div className="space-y-2">
-                          <FieldLabel>Порядок</FieldLabel>
-                          <TextInput value={templateForm.sort_order} onChange={(event) => setTemplateForm({ ...templateForm, sort_order: event.target.value })} inputMode="numeric" />
-                        </div>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
-                          <input type="checkbox" checked={!!templateForm.blocks_shift} onChange={(event) => setTemplateForm({ ...templateForm, blocks_shift: event.target.checked })} />
-                          Блокирует смену до прохождения
-                        </label>
-                        <label className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
-                          <input type="checkbox" checked={templateForm.is_active !== false} onChange={(event) => setTemplateForm({ ...templateForm, is_active: event.target.checked })} />
-                          Активный сценарий
-                        </label>
-                      </div>
-                      <FormActions saving={saving} reset={() => setTemplateForm(emptyTemplate)} isEditing={Boolean(templateForm.id)} />
-                    </form>
-                    </div>
-                  )}
-
-                  {checklistEditorMode === 'item' && (
-                    <div className="mb-5 rounded-3xl border border-emerald-300/20 bg-slate-950/50 p-5">
-                      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <h3 className="text-lg font-black text-slate-100">{itemForm.id ? 'Редактировать пункт чек-листа' : 'Новый пункт чек-листа'}</h3>
-                          <p className="mt-1 text-sm text-slate-500">Пункт отвечает на вопрос “что именно оператор должен проверить или подтвердить”.</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setItemForm({ ...emptyItem, template_id: itemForm.template_id })
-                            setChecklistEditorMode(null)
-                          }}
-                          className="rounded-2xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:border-slate-500"
-                        >
-                          Закрыть
-                        </button>
-                      </div>
-                      <form onSubmit={submitItem} className="space-y-4">
-                      <div className="space-y-2">
-                        <FieldLabel>Сценарий</FieldLabel>
-                        <SelectInput value={itemForm.template_id} onChange={(event) => setItemForm({ ...itemForm, template_id: event.target.value })} required>
-                          <option value="">Выберите чек-лист</option>
-                          {data.templates.map((template) => (
-                            <option key={template.id} value={template.id}>
-                              {template.title}
-                            </option>
-                          ))}
-                        </SelectInput>
-                      </div>
-                      <div className="space-y-2">
-                        <FieldLabel>Что должен сделать оператор</FieldLabel>
-                        <TextInput value={itemForm.title} onChange={(event) => setItemForm({ ...itemForm, title: event.target.value })} placeholder="Например: Проверить Kaspi терминал" required />
-                      </div>
-                      <div className="space-y-2">
-                        <FieldLabel>Пояснение</FieldLabel>
-                        <TextArea value={itemForm.description} onChange={(event) => setItemForm({ ...itemForm, description: event.target.value })} placeholder="Напишите конкретный стандарт: что считается выполненным, что делать при проблеме." />
-                      </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <FieldLabel>FAQ / статья</FieldLabel>
-                          <SelectInput value={itemForm.knowledge_article_id} onChange={(event) => setItemForm({ ...itemForm, knowledge_article_id: event.target.value })}>
-                            <option value="">Не привязана</option>
-                            {data.articles.map((article) => (
-                              <option key={article.id} value={article.id}>
-                                {article.title}
-                              </option>
-                            ))}
-                          </SelectInput>
-                        </div>
-                        <div className="space-y-2">
-                          <FieldLabel>Категория</FieldLabel>
-                          <SelectInput value={itemForm.category_id} onChange={(event) => setItemForm({ ...itemForm, category_id: event.target.value })}>
-                            <option value="">Без категории</option>
-                            {data.categories.map((category) => (
-                              <option key={category.id} value={category.id}>
-                                {category.title}
-                              </option>
-                            ))}
-                          </SelectInput>
-                        </div>
-                      </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <FieldLabel>Ответ оператора</FieldLabel>
-                          <SelectInput value={itemForm.answer_type} onChange={(event) => setItemForm({ ...itemForm, answer_type: event.target.value })}>
-                            {Object.entries(ANSWER_TYPE_LABELS).map(([value, label]) => (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            ))}
-                          </SelectInput>
-                        </div>
-                        <div className="space-y-2">
-                          <FieldLabel>Важность</FieldLabel>
-                          <SelectInput value={itemForm.severity} onChange={(event) => setItemForm({ ...itemForm, severity: event.target.value })}>
-                            {Object.entries(SEVERITY_LABELS).map(([value, label]) => (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            ))}
-                          </SelectInput>
-                        </div>
-                      </div>
-                      <div className="grid gap-4 sm:grid-cols-3">
-                        <TextInput value={itemForm.fine_amount} onChange={(event) => setItemForm({ ...itemForm, fine_amount: event.target.value })} placeholder="Штраф, ₸" inputMode="numeric" />
-                        <TextInput value={itemForm.bonus_amount} onChange={(event) => setItemForm({ ...itemForm, bonus_amount: event.target.value })} placeholder="Бонус, ₸" inputMode="numeric" />
-                        <TextInput value={itemForm.sort_order} onChange={(event) => setItemForm({ ...itemForm, sort_order: event.target.value })} placeholder="Порядок" inputMode="numeric" />
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
-                          <input type="checkbox" checked={itemForm.is_required} onChange={(event) => setItemForm({ ...itemForm, is_required: event.target.checked })} />
-                          Обязательный пункт
-                        </label>
-                        <label className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
-                          <input type="checkbox" checked={itemForm.requires_photo} onChange={(event) => setItemForm({ ...itemForm, requires_photo: event.target.checked })} />
-                          Требовать фото
-                        </label>
-                      </div>
-                      <FormActions saving={saving} reset={() => setItemForm({ ...emptyItem, template_id: itemForm.template_id })} isEditing={Boolean(itemForm.id)} />
-                    </form>
-                    </div>
-                  )}
-
                   <div className="grid gap-5">
                     {templatesBySchedule.map((group) => (
                       <div key={group.id} className="space-y-2">
@@ -1249,6 +1044,25 @@ export default function KnowledgeAdminPage() {
           companies={data.companies}
           saving={saving}
           onSubmit={submitArticleDialog}
+        />
+        <ChecklistEditorDialog
+          open={checklistDialogOpen}
+          onOpenChange={setChecklistDialogOpen}
+          initialTemplate={checklistTemplateValue}
+          initialItem={checklistItemValue}
+          initialMode={checklistDialogMode}
+          templates={data.templates}
+          items={data.items}
+          categories={data.categories}
+          articles={data.articles}
+          companies={data.companies}
+          saving={saving}
+          onSubmitTemplate={submitChecklistTemplateDialog}
+          onSubmitItem={submitChecklistItemDialog}
+          onDeleteItem={async (item) => {
+            if (!confirmDelete(item.title)) return
+            await send('deleteItem', undefined, item.id)
+          }}
         />
       </section>
     </main>
