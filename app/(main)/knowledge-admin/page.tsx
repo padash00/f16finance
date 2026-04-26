@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type * as React from 'react'
+import dynamic from 'next/dynamic'
 import {
   AlertTriangle,
   BookOpen,
-  CheckSquare,
   ClipboardList,
   FileText,
   Layers3,
@@ -17,15 +17,29 @@ import {
   Trash2,
 } from 'lucide-react'
 
-import { ArticleEditorDialog, emptyArticleValue, type ArticleEditorValue } from '@/components/admin/article-editor-dialog'
-import { CategoryEditorDialog, emptyCategoryValue, type CategoryEditorValue } from '@/components/admin/category-editor-dialog'
 import {
-  ChecklistEditorDialog,
+  emptyArticleValue,
+  emptyCategoryValue,
   emptyChecklistItemValue,
   emptyChecklistTemplateValue,
+  type ArticleEditorValue,
+  type CategoryEditorValue,
   type ChecklistItemEditorValue,
   type ChecklistTemplateEditorValue,
-} from '@/components/admin/checklist-editor-dialog'
+} from '@/components/admin/knowledge-editor-types'
+
+const ArticleEditorDialog = dynamic(
+  () => import('@/components/admin/article-editor-dialog').then((mod) => ({ default: mod.ArticleEditorDialog })),
+  { ssr: false },
+)
+const CategoryEditorDialog = dynamic(
+  () => import('@/components/admin/category-editor-dialog').then((mod) => ({ default: mod.CategoryEditorDialog })),
+  { ssr: false },
+)
+const ChecklistEditorDialog = dynamic(
+  () => import('@/components/admin/checklist-editor-dialog').then((mod) => ({ default: mod.ChecklistEditorDialog })),
+  { ssr: false },
+)
 
 type CategoryKind = 'rules' | 'faq' | 'salary' | 'problem' | 'checklist'
 
@@ -208,6 +222,22 @@ function formatMoney(value: number | null | undefined) {
   return `${new Intl.NumberFormat('ru-KZ').format(value)} ₸`
 }
 
+function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
+  const index = list.findIndex((existing) => existing.id === item.id)
+  if (index === -1) return [...list, item]
+  const next = list.slice()
+  next[index] = item
+  return next
+}
+
+function removeById<T extends { id: string }>(list: T[], id: string): T[] {
+  return list.filter((item) => item.id !== id)
+}
+
+function sortBySortOrderTitle<T extends { sort_order: number; title: string }>(list: T[]): T[] {
+  return list.slice().sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title))
+}
+
 function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
@@ -366,7 +396,12 @@ export default function KnowledgeAdminPage() {
     return window.confirm(`Удалить «${label}»? Это действие необратимо.`)
   }
 
-  async function send(action: string, payload?: unknown, id?: string) {
+  async function send(
+    action: string,
+    payload?: unknown,
+    id?: string,
+    onSuccess?: (result: any) => void,
+  ) {
     setSaving(true)
     setError(null)
     setNotice(null)
@@ -379,7 +414,11 @@ export default function KnowledgeAdminPage() {
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result.error || 'Действие не выполнено')
       setNotice('Изменения сохранены')
-      await load()
+      if (onSuccess) {
+        onSuccess(result)
+      } else {
+        await load()
+      }
       return result
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : 'Неизвестная ошибка')
@@ -390,11 +429,23 @@ export default function KnowledgeAdminPage() {
   }
 
   async function submitCategoryDialog(value: CategoryEditorValue) {
-    const result = await send('upsertCategory', {
-      ...value,
-      company_id: normalizeId(value.company_id),
-      sort_order: Number(value.sort_order || 100),
-    })
+    const result = await send(
+      'upsertCategory',
+      {
+        ...value,
+        company_id: normalizeId(value.company_id),
+        sort_order: Number(value.sort_order || 100),
+      },
+      undefined,
+      (response) => {
+        if (response?.data) {
+          setData((prev) => ({
+            ...prev,
+            categories: sortBySortOrderTitle(upsertById(prev.categories, response.data as KnowledgeCategory)),
+          }))
+        }
+      },
+    )
     if (result) setCategoryDialogOpen(false)
   }
 
@@ -417,17 +468,29 @@ export default function KnowledgeAdminPage() {
   }
 
   async function submitArticleDialog(value: ArticleEditorValue) {
-    const result = await send('upsertArticle', {
-      ...value,
-      company_id: normalizeId(value.company_id),
-      category_id: normalizeId(value.category_id),
-      tags: splitList(value.tags || ''),
-      audience: value.audience,
-      related_fine_amount: moneyOrNull(value.related_fine_amount),
-      related_bonus_amount: moneyOrNull(value.related_bonus_amount),
-      sort_order: Number(value.sort_order || 100),
-      requires_confirmation: value.requires_confirmation === true,
-    })
+    const result = await send(
+      'upsertArticle',
+      {
+        ...value,
+        company_id: normalizeId(value.company_id),
+        category_id: normalizeId(value.category_id),
+        tags: splitList(value.tags || ''),
+        audience: value.audience,
+        related_fine_amount: moneyOrNull(value.related_fine_amount),
+        related_bonus_amount: moneyOrNull(value.related_bonus_amount),
+        sort_order: Number(value.sort_order || 100),
+        requires_confirmation: value.requires_confirmation === true,
+      },
+      undefined,
+      (response) => {
+        if (response?.data) {
+          setData((prev) => ({
+            ...prev,
+            articles: upsertById(prev.articles, response.data as KnowledgeArticle),
+          }))
+        }
+      },
+    )
     if (result) {
       setArticleDialogOpen(false)
     }
@@ -459,27 +522,59 @@ export default function KnowledgeAdminPage() {
   }
 
   async function submitChecklistTemplateDialog(value: ChecklistTemplateEditorValue) {
-    const result = await send('upsertTemplate', {
-      ...value,
-      company_id: normalizeId(value.company_id),
-      sort_order: Number(value.sort_order || 100),
-    })
+    const result = await send(
+      'upsertTemplate',
+      {
+        ...value,
+        company_id: normalizeId(value.company_id),
+        sort_order: Number(value.sort_order || 100),
+      },
+      undefined,
+      (response) => {
+        if (response?.data) {
+          const saved = response.data as ChecklistTemplate
+          setData((prev) => ({
+            ...prev,
+            templates: upsertById(prev.templates, saved),
+          }))
+          setChecklistTemplateValue({
+            ...saved,
+            company_id: saved.company_id || '',
+            description: saved.description || '',
+            schedule_type: saved.schedule_type || 'opening',
+            recurrence_minutes: saved.recurrence_minutes ?? '',
+            blocks_shift: !!saved.blocks_shift,
+          })
+        }
+      },
+    )
     if (result) {
-      setChecklistTemplateValue(undefined)
       setChecklistDialogOpen(false)
     }
   }
 
   async function submitChecklistItemDialog(value: ChecklistItemEditorValue) {
-    const result = await send('upsertItem', {
-      ...value,
-      template_id: normalizeId(value.template_id),
-      category_id: normalizeId(value.category_id),
-      knowledge_article_id: normalizeId(value.knowledge_article_id),
-      fine_amount: moneyOrNull(value.fine_amount),
-      bonus_amount: moneyOrNull(value.bonus_amount),
-      sort_order: Number(value.sort_order || 100),
-    })
+    const result = await send(
+      'upsertItem',
+      {
+        ...value,
+        template_id: normalizeId(value.template_id),
+        category_id: normalizeId(value.category_id),
+        knowledge_article_id: normalizeId(value.knowledge_article_id),
+        fine_amount: moneyOrNull(value.fine_amount),
+        bonus_amount: moneyOrNull(value.bonus_amount),
+        sort_order: Number(value.sort_order || 100),
+      },
+      undefined,
+      (response) => {
+        if (response?.data) {
+          setData((prev) => ({
+            ...prev,
+            items: upsertById(prev.items, response.data as ChecklistItem),
+          }))
+        }
+      },
+    )
     if (result) {
       setChecklistItemValue({
         ...emptyChecklistItemValue,
@@ -639,7 +734,11 @@ export default function KnowledgeAdminPage() {
               Обновить
             </button>
             <button
-              onClick={() => send('seedDefaults')}
+              onClick={() =>
+                send('seedDefaults', undefined, undefined, (response) => {
+                  if (response?.data) setData(normalizeKnowledgeResponse(response.data))
+                })
+              }
               disabled={saving}
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110 disabled:opacity-50"
             >
@@ -754,7 +853,9 @@ export default function KnowledgeAdminPage() {
                               onEdit={() => openArticleDialogEdit(article)}
                               onDelete={() => {
                                 if (!confirmDelete(article.title)) return
-                                void send('deleteArticle', undefined, article.id)
+                                void send('deleteArticle', undefined, article.id, () => {
+                                  setData((prev) => ({ ...prev, articles: removeById(prev.articles, article.id) }))
+                                })
                               }}
                             />
                           ))}
@@ -863,13 +964,21 @@ export default function KnowledgeAdminPage() {
                                   onEdit={() => editTemplate(template)}
                                   onDelete={() => {
                                     if (!confirmDelete(template.title)) return
-                                    void send('deleteTemplate', undefined, template.id)
+                                    void send('deleteTemplate', undefined, template.id, () => {
+                                      setData((prev) => ({
+                                        ...prev,
+                                        templates: removeById(prev.templates, template.id),
+                                        items: prev.items.filter((entry) => entry.template_id !== template.id),
+                                      }))
+                                    })
                                   }}
                                   onAddItem={() => addItemToTemplate(template.id)}
                                   onEditItem={editItem}
                                   onDeleteItem={(item) => {
                                     if (!confirmDelete(item.title)) return
-                                    void send('deleteItem', undefined, item.id)
+                                    void send('deleteItem', undefined, item.id, () => {
+                                      setData((prev) => ({ ...prev, items: removeById(prev.items, item.id) }))
+                                    })
                                   }}
                                 />
                               ))}
@@ -926,7 +1035,9 @@ export default function KnowledgeAdminPage() {
                             onEdit={() => openCategoryDialogEdit(category)}
                             onDelete={() => {
                               if (!confirmDelete(category.title)) return
-                              void send('deleteCategory', undefined, category.id)
+                              void send('deleteCategory', undefined, category.id, () => {
+                                setData((prev) => ({ ...prev, categories: removeById(prev.categories, category.id) }))
+                              })
                             }}
                           />
                         </div>
@@ -940,42 +1051,50 @@ export default function KnowledgeAdminPage() {
           </>
         )}
 
-        <ArticleEditorDialog
-          open={articleDialogOpen}
-          onOpenChange={setArticleDialogOpen}
-          initialValue={articleDialogValue}
-          categories={data.categories}
-          companies={data.companies}
-          saving={saving}
-          onSubmit={submitArticleDialog}
-        />
-        <CategoryEditorDialog
-          open={categoryDialogOpen}
-          onOpenChange={setCategoryDialogOpen}
-          initialValue={categoryDialogValue}
-          companies={data.companies}
-          saving={saving}
-          onSubmit={submitCategoryDialog}
-        />
-        <ChecklistEditorDialog
-          open={checklistDialogOpen}
-          onOpenChange={setChecklistDialogOpen}
-          initialTemplate={checklistTemplateValue}
-          initialItem={checklistItemValue}
-          initialMode={checklistDialogMode}
-          templates={data.templates}
-          items={data.items}
-          categories={data.categories}
-          articles={data.articles}
-          companies={data.companies}
-          saving={saving}
-          onSubmitTemplate={submitChecklistTemplateDialog}
-          onSubmitItem={submitChecklistItemDialog}
-          onDeleteItem={async (item) => {
-            if (!confirmDelete(item.title)) return
-            await send('deleteItem', undefined, item.id)
-          }}
-        />
+        {articleDialogOpen && (
+          <ArticleEditorDialog
+            open={articleDialogOpen}
+            onOpenChange={setArticleDialogOpen}
+            initialValue={articleDialogValue}
+            categories={data.categories}
+            companies={data.companies}
+            saving={saving}
+            onSubmit={submitArticleDialog}
+          />
+        )}
+        {categoryDialogOpen && (
+          <CategoryEditorDialog
+            open={categoryDialogOpen}
+            onOpenChange={setCategoryDialogOpen}
+            initialValue={categoryDialogValue}
+            companies={data.companies}
+            saving={saving}
+            onSubmit={submitCategoryDialog}
+          />
+        )}
+        {checklistDialogOpen && (
+          <ChecklistEditorDialog
+            open={checklistDialogOpen}
+            onOpenChange={setChecklistDialogOpen}
+            initialTemplate={checklistTemplateValue}
+            initialItem={checklistItemValue}
+            initialMode={checklistDialogMode}
+            templates={data.templates}
+            items={data.items}
+            categories={data.categories}
+            articles={data.articles}
+            companies={data.companies}
+            saving={saving}
+            onSubmitTemplate={submitChecklistTemplateDialog}
+            onSubmitItem={submitChecklistItemDialog}
+            onDeleteItem={async (item) => {
+              if (!confirmDelete(item.title)) return
+              await send('deleteItem', undefined, item.id, () => {
+                setData((prev) => ({ ...prev, items: removeById(prev.items, item.id) }))
+              })
+            }}
+          />
+        )}
       </section>
     </main>
   )

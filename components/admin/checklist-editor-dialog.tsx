@@ -5,40 +5,18 @@ import { AlertTriangle, Camera, CheckCircle2, CheckSquare, ClipboardList, Eye, P
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { RichTextEditor } from './rich-text-editor'
+import {
+  emptyChecklistItemValue,
+  emptyChecklistTemplateValue,
+  type AnswerTypeValue as AnswerType,
+  type ChecklistItemEditorValue,
+  type ChecklistTemplateEditorValue,
+  type ScheduleTypeValue as ScheduleType,
+  type SeverityValue as Severity,
+} from './knowledge-editor-types'
 
-type ScheduleType = 'opening' | 'periodic' | 'closing' | 'onboarding' | 'handover'
-type Severity = 'info' | 'normal' | 'warning' | 'critical'
-type AnswerType = 'boolean' | 'text' | 'number' | 'photo' | 'choice'
-
-export type ChecklistTemplateEditorValue = {
-  id?: string
-  company_id: string
-  title: string
-  description: string
-  role_scope: string
-  shift_scope: string
-  schedule_type: ScheduleType
-  recurrence_minutes: number | string
-  blocks_shift: boolean
-  sort_order: number | string
-  is_active: boolean
-}
-
-export type ChecklistItemEditorValue = {
-  id?: string
-  template_id: string
-  category_id: string
-  knowledge_article_id: string
-  title: string
-  description: string
-  answer_type: AnswerType
-  severity: Severity
-  fine_amount: number | string
-  bonus_amount: number | string
-  sort_order: number | string
-  is_required: boolean
-  requires_photo: boolean
-}
+export { emptyChecklistItemValue, emptyChecklistTemplateValue }
+export type { ChecklistItemEditorValue, ChecklistTemplateEditorValue }
 
 type ChecklistTemplateOption = {
   id: string
@@ -112,34 +90,6 @@ const SEVERITY_LABELS: Record<Severity, string> = {
   normal: 'Обычно',
   warning: 'Важно',
   critical: 'Критично',
-}
-
-export const emptyChecklistTemplateValue: ChecklistTemplateEditorValue = {
-  company_id: '',
-  title: '',
-  description: '',
-  role_scope: 'operator',
-  shift_scope: 'any',
-  schedule_type: 'opening',
-  recurrence_minutes: '',
-  blocks_shift: false,
-  sort_order: 100,
-  is_active: true,
-}
-
-export const emptyChecklistItemValue: ChecklistItemEditorValue = {
-  template_id: '',
-  category_id: '',
-  knowledge_article_id: '',
-  title: '',
-  description: '',
-  answer_type: 'boolean',
-  severity: 'normal',
-  fine_amount: '',
-  bonus_amount: '',
-  sort_order: 100,
-  is_required: true,
-  requires_photo: false,
 }
 
 type Props = {

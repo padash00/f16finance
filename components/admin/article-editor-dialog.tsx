@@ -5,6 +5,10 @@ import { Save, X } from 'lucide-react'
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { RichTextEditor } from './rich-text-editor'
+import { emptyArticleValue, type ArticleEditorValue } from './knowledge-editor-types'
+
+export { emptyArticleValue }
+export type { ArticleEditorValue }
 
 type CategoryOption = { id: string; title: string; company_id: string | null }
 type CompanyOption = { id: string; name: string }
@@ -25,39 +29,6 @@ const AUDIENCE_OPTIONS = [
   { value: 'public', label: 'Публично' },
   { value: 'kiosk', label: 'Киоск' },
 ] as const
-
-export type ArticleEditorValue = {
-  id?: string
-  company_id: string
-  category_id: string
-  title: string
-  summary: string
-  content: string
-  tags: string
-  audience: string[]
-  severity: 'info' | 'normal' | 'warning' | 'critical'
-  related_fine_amount: number | string
-  related_bonus_amount: number | string
-  sort_order: number | string
-  is_published: boolean
-  requires_confirmation: boolean
-}
-
-export const emptyArticleValue: ArticleEditorValue = {
-  company_id: '',
-  category_id: '',
-  title: '',
-  summary: '',
-  content: '',
-  tags: '',
-  audience: ['operator', 'cashier', 'manager'],
-  severity: 'info',
-  related_fine_amount: '',
-  related_bonus_amount: '',
-  sort_order: 100,
-  is_published: true,
-  requires_confirmation: false,
-}
 
 type Props = {
   open: boolean

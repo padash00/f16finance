@@ -5,34 +5,21 @@ import { Save, X } from 'lucide-react'
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { RichTextEditor } from './rich-text-editor'
+import {
+  emptyCategoryValue,
+  type CategoryEditorValue,
+  type CategoryKindValue,
+} from './knowledge-editor-types'
 
-type CategoryKind = 'rules' | 'faq' | 'salary' | 'problem' | 'checklist'
+export { emptyCategoryValue }
+export type { CategoryEditorValue }
 
-const KIND_LABELS: Record<CategoryKind, string> = {
+const KIND_LABELS: Record<CategoryKindValue, string> = {
   rules: 'Правила',
   faq: 'FAQ',
   salary: 'Зарплата',
   problem: 'Проблемы',
   checklist: 'Чек-лист',
-}
-
-export type CategoryEditorValue = {
-  id?: string
-  company_id: string
-  title: string
-  description: string
-  kind: CategoryKind
-  sort_order: number | string
-  is_active: boolean
-}
-
-export const emptyCategoryValue: CategoryEditorValue = {
-  company_id: '',
-  title: '',
-  description: '',
-  kind: 'faq',
-  sort_order: 100,
-  is_active: true,
 }
 
 type CompanyOption = { id: string; name: string }
@@ -102,7 +89,7 @@ export function CategoryEditorDialog({ open, onOpenChange, initialValue, compani
               <Label>Тип</Label>
               <Select
                 value={value.kind}
-                onChange={(event) => setValue({ ...value, kind: event.target.value as CategoryKind })}
+                onChange={(event) => setValue({ ...value, kind: event.target.value as CategoryKindValue })}
               >
                 {Object.entries(KIND_LABELS).map(([key, label]) => (
                   <option key={key} value={key}>
