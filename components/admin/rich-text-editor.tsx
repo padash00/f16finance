@@ -37,6 +37,20 @@ import {
   Undo,
 } from 'lucide-react'
 
+const COLOR_SWATCHES = [
+  { label: 'Белый', value: '#f8fafc' },
+  { label: 'Жёлтый', value: '#fde047' },
+  { label: 'Зелёный', value: '#34d399' },
+  { label: 'Синий', value: '#60a5fa' },
+  { label: 'Красный', value: '#fb7185' },
+]
+
+const HIGHLIGHT_SWATCHES = [
+  { label: 'Жёлтый маркер', value: '#713f12' },
+  { label: 'Зелёный маркер', value: '#064e3b' },
+  { label: 'Красный маркер', value: '#7f1d1d' },
+]
+
 type Props = {
   value: string
   onChange: (html: string) => void
@@ -70,7 +84,22 @@ export function RichTextEditor({ value, onChange, className }: Props) {
     editorProps: {
       attributes: {
         class:
-          'prose prose-invert prose-sm max-w-none min-h-[280px] px-4 py-3 focus:outline-none [&_table]:border-collapse [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-slate-700 [&_td]:px-2 [&_td]:py-1',
+          [
+            'min-h-[360px] max-w-none px-5 py-4 text-sm leading-7 text-slate-100 focus:outline-none',
+            '[&_p]:my-3 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
+            '[&_h1]:my-5 [&_h1]:text-3xl [&_h1]:font-black [&_h1]:leading-tight [&_h1]:text-white',
+            '[&_h2]:my-4 [&_h2]:text-2xl [&_h2]:font-black [&_h2]:leading-tight [&_h2]:text-amber-100',
+            '[&_h3]:my-3 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:leading-tight [&_h3]:text-slate-100',
+            '[&_strong]:font-black [&_em]:italic [&_u]:underline [&_s]:line-through',
+            '[&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-7 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-7 [&_li]:my-1',
+            '[&_blockquote]:my-4 [&_blockquote]:border-l-4 [&_blockquote]:border-amber-300/70 [&_blockquote]:bg-amber-950/20 [&_blockquote]:px-4 [&_blockquote]:py-2 [&_blockquote]:italic [&_blockquote]:text-amber-50',
+            '[&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-700 [&_pre]:bg-slate-950 [&_pre]:p-4 [&_pre]:text-xs [&_code]:rounded [&_code]:bg-slate-800/80 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-amber-100 [&_pre_code]:bg-transparent [&_pre_code]:p-0',
+            '[&_a]:font-semibold [&_a]:text-amber-300 [&_a]:underline [&_img]:my-4 [&_img]:max-h-[420px] [&_img]:rounded-xl [&_img]:border [&_img]:border-slate-800',
+            '[&_mark]:rounded [&_mark]:px-1 [&_mark]:text-white',
+            '[&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-xl',
+            '[&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-bold',
+            '[&_td]:border [&_td]:border-slate-700 [&_td]:px-3 [&_td]:py-2',
+          ].join(' '),
       },
     },
     onUpdate: ({ editor }) => {
@@ -116,7 +145,7 @@ export function RichTextEditor({ value, onChange, className }: Props) {
 
   return (
     <div className={`overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-950/70 ${className ?? ''}`}>
-      <div className="flex flex-wrap gap-1 border-b border-slate-800 bg-slate-900/80 px-2 py-2">
+      <div className="flex flex-wrap gap-1 border-b border-slate-800 bg-slate-900/80 px-2 py-2" onMouseDown={(event) => event.preventDefault()}>
         <ToolGroup>
           <ToolButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Отменить (Ctrl+Z)">
             <Undo className="h-4 w-4" />
@@ -157,13 +186,35 @@ export function RichTextEditor({ value, onChange, className }: Props) {
         </ToolGroup>
 
         <ToolGroup>
-          <input
-            type="color"
-            onChange={(event) => editor.chain().focus().setColor(event.target.value).run()}
-            value={(editor.getAttributes('textStyle').color as string) || '#ffffff'}
-            className="h-8 w-8 cursor-pointer rounded border border-slate-700 bg-transparent"
-            title="Цвет текста"
-          />
+          {COLOR_SWATCHES.map((color) => (
+            <ToolButton
+              key={color.value}
+              active={editor.isActive('textStyle', { color: color.value })}
+              onClick={() => editor.chain().focus().setColor(color.value).run()}
+              title={`Цвет текста: ${color.label}`}
+            >
+              <span className="h-4 w-4 rounded-full border border-white/20" style={{ backgroundColor: color.value }} />
+            </ToolButton>
+          ))}
+          <ToolButton onClick={() => editor.chain().focus().unsetColor().run()} title="Сбросить цвет">
+            <span className="text-[10px] font-black">A</span>
+          </ToolButton>
+        </ToolGroup>
+
+        <ToolGroup>
+          {HIGHLIGHT_SWATCHES.map((color) => (
+            <ToolButton
+              key={color.value}
+              active={editor.isActive('highlight', { color: color.value })}
+              onClick={() => editor.chain().focus().toggleHighlight({ color: color.value }).run()}
+              title={color.label}
+            >
+              <span className="h-4 w-4 rounded border border-white/20" style={{ backgroundColor: color.value }} />
+            </ToolButton>
+          ))}
+          <ToolButton onClick={() => editor.chain().focus().unsetHighlight().run()} title="Убрать маркер">
+            <Highlighter className="h-4 w-4 opacity-50" />
+          </ToolButton>
         </ToolGroup>
 
         <ToolGroup>
@@ -230,6 +281,7 @@ function ToolButton({
   return (
     <button
       type="button"
+      onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
       disabled={disabled}
       title={title}
