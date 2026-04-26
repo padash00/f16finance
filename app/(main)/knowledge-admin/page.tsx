@@ -147,31 +147,6 @@ const SCHEDULE_TYPE_LABELS: Record<string, string> = {
   handover: 'Передача',
 }
 
-const ROLE_SCOPE_LABELS: Record<string, string> = {
-  any: 'Любая роль',
-  operator: 'Оператор',
-  cashier: 'Кассир',
-  senior_operator: 'Старший оператор',
-  senior_cashier: 'Старший кассир',
-}
-
-const SHIFT_SCOPE_LABELS: Record<string, string> = {
-  any: 'Любая смена',
-  day: 'День',
-  night: 'Ночь',
-  opening: 'Открытие',
-  closing: 'Закрытие',
-  handover: 'Передача',
-}
-
-const ANSWER_TYPE_LABELS: Record<string, string> = {
-  boolean: 'Галочка',
-  text: 'Текст',
-  number: 'Число',
-  photo: 'Фото',
-  choice: 'Выбор',
-}
-
 const CHECKLIST_PRESETS = [
   {
     title: 'Открытие смены',
@@ -397,16 +372,6 @@ export default function KnowledgeAdminPage() {
       .filter((group) => group.templates.length > 0)
   }, [filteredTemplates])
 
-  const checklistStats = useMemo(() => {
-    const items = data.items
-    return {
-      active: data.templates.filter((template) => template.is_active).length,
-      blocking: data.templates.filter((template) => template.blocks_shift).length,
-      photo: items.filter((item) => item.requires_photo || item.answer_type === 'photo').length,
-      risk: items.filter((item) => item.severity === 'critical' || item.fine_amount).length,
-    }
-  }, [data.templates, data.items])
-
   async function load() {
     setLoading(true)
     setError(null)
@@ -623,16 +588,6 @@ export default function KnowledgeAdminPage() {
     setChecklistDialogOpen(true)
   }
 
-  function openChecklistItemNew() {
-    setChecklistDialogMode('item')
-    setChecklistTemplateValue(undefined)
-    setChecklistItemValue({
-      ...emptyChecklistItemValue,
-      template_id: data.templates[0]?.id || '',
-    })
-    setChecklistDialogOpen(true)
-  }
-
   const tabs = [
     { id: 'articles' as const, label: 'Статьи и FAQ', icon: FileText, count: data.articles.length },
     { id: 'checklists' as const, label: 'Чек-листы', icon: ClipboardList, count: data.templates.length },
@@ -829,127 +784,118 @@ export default function KnowledgeAdminPage() {
             {tab === 'checklists' && (
               <div className="min-w-0">
                 <Panel title="Чек-листы для операторов" icon={ClipboardList}>
-                  <TabHint
-                    title="Что здесь создавать?"
-                    text="Это пошаговые сценарии для оператора: открыть смену, сделать обход, закрыть смену, передать смену или пройти обучение. Каждый пункт можно связать со статьёй FAQ, штрафом, бонусом и требованием фото."
-                  />
+                  <p className="mb-5 text-sm leading-6 text-slate-400">
+                    Чек-лист — это шаги, которые оператор должен пройти за смену. Например: проверить кассу, чистоту, технику. Создайте чек-лист, потом добавьте в него пункты.
+                  </p>
 
-                  <div className="mb-4 flex flex-col gap-2">
-                    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
-                      <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-                        <Search className="h-4 w-4 text-slate-500" />
-                        <input
-                          value={query}
-                          onChange={(event) => setQuery(event.target.value)}
-                          placeholder="Поиск по чек-листам, сценариям, пунктам..."
-                          className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
-                        />
+                  {!data.templates.length ? (
+                    <div className="space-y-5">
+                      <div className="rounded-3xl border border-amber-300/30 bg-amber-300/5 p-6 text-center">
+                        <h3 className="text-xl font-black text-amber-100">Начните с готового чек-листа</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-300">Один клик — и шаблон создан. Потом останется только добавить свои пункты.</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={openChecklistTemplateNew}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Новый чек-лист
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openChecklistItemNew}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500"
-                      >
-                        <CheckSquare className="h-4 w-4" />
-                        Новый пункт
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <SelectInput value={filterCompany} onChange={(event) => setFilterCompany(event.target.value)} className="!w-auto !py-2 !text-xs">
-                        <option value="all">Все точки</option>
-                        <option value="global">Только общие</option>
-                        {data.companies.map((company) => (
-                          <option key={company.id} value={company.id}>
-                            {company.name}
-                          </option>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {CHECKLIST_PRESETS.map((preset) => (
+                          <button
+                            key={preset.title}
+                            type="button"
+                            onClick={() => applyChecklistPreset(preset)}
+                            className="group flex flex-col gap-2 rounded-3xl border border-slate-800 bg-slate-950/60 p-5 text-left transition hover:border-amber-300/60 hover:bg-amber-300/5"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-300/15 text-amber-200">
+                                <ClipboardList className="h-5 w-5" />
+                              </div>
+                              <h4 className="text-lg font-black text-slate-100 group-hover:text-amber-100">{preset.title}</h4>
+                            </div>
+                            <p className="text-sm leading-6 text-slate-400">{preset.description}</p>
+                            <span className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-amber-200 opacity-0 transition group-hover:opacity-100">
+                              <Plus className="h-3 w-3" /> Создать
+                            </span>
+                          </button>
                         ))}
-                      </SelectInput>
-                      <SelectInput
-                        value={checklistScheduleFilter}
-                        onChange={(event) => setChecklistScheduleFilter(event.target.value as 'all' | ChecklistTemplate['schedule_type'])}
-                        className="!w-auto !py-2 !text-xs"
-                      >
-                        <option value="all">Все сценарии</option>
-                        {Object.entries(SCHEDULE_TYPE_LABELS).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </SelectInput>
-                      <span className="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1.5 text-xs text-slate-400">
-                        Показано {filteredTemplates.length} из {data.templates.length}
-                      </span>
-                      <span className="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1.5 text-xs text-slate-400">
-                        Пунктов {data.items.length}
-                      </span>
-                      <span className="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1.5 text-xs text-slate-400">
-                        Фото {checklistStats.photo}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {Object.entries(SCHEDULE_TYPE_LABELS).map(([value, label]) => (
-                        <ScheduleFilterButton
-                          key={value}
-                          active={checklistScheduleFilter === value}
-                          onClick={() => setChecklistScheduleFilter(value as ChecklistTemplate['schedule_type'])}
-                        >
-                          {label}
-                        </ScheduleFilterButton>
-                      ))}
-                      {CHECKLIST_PRESETS.map((preset) => (
+                      </div>
+                      <div className="text-center">
                         <button
-                          key={preset.title}
                           type="button"
-                          onClick={() => applyChecklistPreset(preset)}
-                          className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100 transition hover:border-amber-300/60 hover:bg-amber-300/15"
+                          onClick={openChecklistTemplateNew}
+                          className="text-sm font-semibold text-slate-400 underline-offset-4 hover:text-amber-200 hover:underline"
                         >
-                          + {preset.title}
+                          Или создать чек-лист с нуля
                         </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-5">
-                    {templatesBySchedule.map((group) => (
-                      <div key={group.id} className="space-y-2">
-                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                          <span>{group.title}</span>
-                          <span className="rounded-full bg-slate-900 px-2 py-0.5 text-slate-400">{group.templates.length}</span>
-                        </div>
-                        <div className="grid gap-3">
-                          {group.templates.map((template) => (
-                            <ChecklistTemplateCard
-                              key={template.id}
-                              template={template}
-                              items={itemsByTemplate.get(template.id) ?? []}
-                              companyName={template.company_id ? companyById.get(template.company_id)?.name : undefined}
-                              articleById={articleById}
-                              onEdit={() => editTemplate(template)}
-                              onDelete={() => {
-                                if (!confirmDelete(template.title)) return
-                                void send('deleteTemplate', undefined, template.id)
-                              }}
-                              onAddItem={() => addItemToTemplate(template.id)}
-                              onEditItem={editItem}
-                              onDeleteItem={(item) => {
-                                if (!confirmDelete(item.title)) return
-                                void send('deleteItem', undefined, item.id)
-                              }}
-                            />
-                          ))}
-                        </div>
                       </div>
-                    ))}
-                    {!templatesBySchedule.length && <EmptyState text="Чек-листов пока нет. Создайте первый сценарий или нажмите быстрый шаблон выше." />}
-                  </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mb-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
+                        <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                          <Search className="h-4 w-4 text-slate-500" />
+                          <input
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            placeholder="Поиск по чек-листам и пунктам…"
+                            className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
+                          />
+                        </div>
+                        <SelectInput
+                          value={checklistScheduleFilter}
+                          onChange={(event) => setChecklistScheduleFilter(event.target.value as 'all' | ChecklistTemplate['schedule_type'])}
+                          className="!w-auto !py-3 !text-sm"
+                        >
+                          <option value="all">Все сценарии</option>
+                          {Object.entries(SCHEDULE_TYPE_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </SelectInput>
+                        <button
+                          type="button"
+                          onClick={openChecklistTemplateNew}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Создать чек-лист
+                        </button>
+                      </div>
+
+                      <div className="grid gap-4">
+                        {templatesBySchedule.map((group) => (
+                          <div key={group.id} className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                              <span>{group.title}</span>
+                              <span className="rounded-full bg-slate-900 px-2 py-0.5 text-slate-400">{group.templates.length}</span>
+                            </div>
+                            <div className="grid gap-3">
+                              {group.templates.map((template) => (
+                                <ChecklistTemplateCard
+                                  key={template.id}
+                                  template={template}
+                                  items={itemsByTemplate.get(template.id) ?? []}
+                                  companyName={template.company_id ? companyById.get(template.company_id)?.name : undefined}
+                                  articleById={articleById}
+                                  onEdit={() => editTemplate(template)}
+                                  onDelete={() => {
+                                    if (!confirmDelete(template.title)) return
+                                    void send('deleteTemplate', undefined, template.id)
+                                  }}
+                                  onAddItem={() => addItemToTemplate(template.id)}
+                                  onEditItem={editItem}
+                                  onDeleteItem={(item) => {
+                                    if (!confirmDelete(item.title)) return
+                                    void send('deleteItem', undefined, item.id)
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {!templatesBySchedule.length && (
+                          <EmptyState text="Под фильтр ничего не попало. Очистите поиск или поменяйте сценарий." />
+                        )}
+                      </div>
+                    </>
+                  )}
                 </Panel>
               </div>
             )}
@@ -1218,22 +1164,6 @@ function EmptyState({ text }: { text: string }) {
   return <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 p-5 text-sm text-slate-500">{text}</div>
 }
 
-function ScheduleFilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full border px-3 py-2 text-xs font-bold transition ${
-        active
-          ? 'border-amber-300/70 bg-amber-300/15 text-amber-100'
-          : 'border-slate-800 bg-slate-950/60 text-slate-500 hover:border-slate-600 hover:text-slate-200'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
 function ChecklistTemplateCard({
   template,
   items,
@@ -1255,79 +1185,58 @@ function ChecklistTemplateCard({
   onEditItem: (item: ChecklistItem) => void
   onDeleteItem: (item: ChecklistItem) => void
 }) {
-  const requiredCount = items.filter((item) => item.is_required).length
-  const photoCount = items.filter((item) => item.requires_photo || item.answer_type === 'photo').length
-  const moneyImpact = items.reduce((sum, item) => sum + (item.fine_amount || 0) + (item.bonus_amount || 0), 0)
-
   return (
     <article className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <div className="flex flex-wrap gap-2">
-            <Badge>{companyName ? `Точка: ${companyName}` : 'Все точки'}</Badge>
-            <Badge>{SCHEDULE_TYPE_LABELS[template.schedule_type] || template.schedule_type}</Badge>
-            <Badge>{ROLE_SCOPE_LABELS[template.role_scope] || template.role_scope}</Badge>
-            <Badge>{SHIFT_SCOPE_LABELS[template.shift_scope] || template.shift_scope}</Badge>
-            {template.schedule_type === 'periodic' && template.recurrence_minutes ? <Badge>каждые {template.recurrence_minutes} мин</Badge> : null}
-            {template.blocks_shift ? <Badge>блокирует смену</Badge> : null}
-            <Badge>{template.is_active ? 'Активен' : 'Черновик'}</Badge>
-          </div>
-          <h3 className="mt-3 break-words text-xl font-black">{template.title}</h3>
-          <p className="mt-2 break-words text-sm leading-6 text-slate-400">{template.description || 'Описание пока не заполнено.'}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span className="max-w-full break-words rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">Пунктов: {items.length}</span>
-            <span className="max-w-full break-words rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">Обязательных: {requiredCount}</span>
-            <span className="max-w-full break-words rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">Фото: {photoCount}</span>
-            <span className="max-w-full break-words rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">Штраф/бонус: {formatMoney(moneyImpact) || '0 ₸'}</span>
+          <h3 className="break-words text-xl font-black">{template.title}</h3>
+          <p className="mt-1 break-words text-sm leading-6 text-slate-400">{template.description || 'Описание пока не заполнено.'}</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-slate-300">{companyName ? companyName : 'Все точки'}</span>
+            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-slate-300">{SCHEDULE_TYPE_LABELS[template.schedule_type] || template.schedule_type}</span>
+            <span className="rounded-full bg-slate-800 px-2.5 py-1 text-slate-300">{items.length} {items.length === 1 ? 'пункт' : 'пунктов'}</span>
+            {template.blocks_shift ? <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-1 font-bold text-amber-100">блокирует смену</span> : null}
+            {!template.is_active ? <span className="rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-slate-400">черновик</span> : null}
           </div>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <button
-            type="button"
-            onClick={onAddItem}
-            className="grid h-9 w-9 place-items-center rounded-xl border border-emerald-400/30 bg-emerald-950/20 text-emerald-200 hover:bg-emerald-950/40"
-            title="Добавить пункт"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-          <RowActions onEdit={onEdit} onDelete={onDelete} />
-        </div>
+        <RowActions onEdit={onEdit} onDelete={onDelete} />
       </div>
 
-      <div className="mt-5 space-y-3 border-t border-slate-800 pt-4">
+      <div className="mt-5 space-y-2 border-t border-slate-800 pt-4">
         {items.map((item, index) => {
           const linkedArticle = item.knowledge_article_id ? articleById.get(item.knowledge_article_id) : null
+          const meta: string[] = []
+          if (item.is_required) meta.push('обязательно')
+          if (item.requires_photo || item.answer_type === 'photo') meta.push('фото')
+          if (item.fine_amount) meta.push(`штраф ${formatMoney(item.fine_amount)}`)
+          if (item.bonus_amount) meta.push(`бонус ${formatMoney(item.bonus_amount)}`)
+          if (linkedArticle) meta.push(`FAQ: ${linkedArticle.title}`)
           return (
-            <div key={item.id} className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-400/10 text-xs font-black text-emerald-100">
-                      {index + 1}
-                    </span>
-                    <p className="break-words font-black text-slate-100">{item.title}</p>
-                  </div>
-                  <p className="mt-2 break-words text-xs leading-5 text-slate-500">{item.description || 'Без пояснения для оператора.'}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge>{SEVERITY_LABELS[item.severity]}</Badge>
-                    <Badge>{ANSWER_TYPE_LABELS[item.answer_type] || item.answer_type}</Badge>
-                    {item.is_required && <Badge>обязательно</Badge>}
-                    {item.requires_photo && <Badge>фото обязательно</Badge>}
-                    {formatMoney(item.fine_amount) ? <Badge>штраф {formatMoney(item.fine_amount)}</Badge> : null}
-                    {formatMoney(item.bonus_amount) ? <Badge>бонус {formatMoney(item.bonus_amount)}</Badge> : null}
-                    {linkedArticle ? <Badge>FAQ: {linkedArticle.title}</Badge> : null}
-                  </div>
-                </div>
-                <RowActions onEdit={() => onEditItem(item)} onDelete={() => onDeleteItem(item)} />
+            <div key={item.id} className="flex min-w-0 items-start gap-3 rounded-2xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+              <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-400/10 text-xs font-black text-emerald-100">
+                {index + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="break-words font-bold text-slate-100">{item.title}</p>
+                {item.description ? (
+                  <p className="mt-1 break-words text-xs leading-5 text-slate-500">{item.description}</p>
+                ) : null}
+                {meta.length ? (
+                  <p className="mt-1 break-words text-xs text-slate-500">{meta.join(' · ')}</p>
+                ) : null}
               </div>
+              <RowActions onEdit={() => onEditItem(item)} onDelete={() => onDeleteItem(item)} />
             </div>
           )
         })}
-        {!items.length && (
-          <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 p-5 text-sm leading-6 text-slate-500">
-            Пунктов пока нет. Нажмите плюс на карточке, чтобы добавить первый пункт.
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={onAddItem}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 px-4 py-3 text-sm font-semibold text-slate-400 transition hover:border-emerald-400/60 hover:text-emerald-200"
+        >
+          <Plus className="h-4 w-4" />
+          {items.length ? 'Добавить пункт' : 'Добавить первый пункт'}
+        </button>
       </div>
     </article>
   )
