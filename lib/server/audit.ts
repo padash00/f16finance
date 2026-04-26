@@ -1,6 +1,5 @@
 import 'server-only'
 
-import { isAdminEmail } from '@/lib/server/admin'
 import { createAdminSupabaseClient, hasAdminSupabaseCredentials } from '@/lib/server/supabase'
 import { sendTelegram } from '@/lib/server/telegram'
 
@@ -27,80 +26,188 @@ type SystemErrorEntry = {
   payload?: Record<string, unknown> | null
 }
 
-const superAdminCache = new Map<string, { checkedAt: number; isSuperAdmin: boolean; label: string }>()
-const SUPERADMIN_CACHE_TTL_MS = 5 * 60_000
+const actorCache = new Map<string, { checkedAt: number; isLeader: boolean; label: string; role: string | null }>()
+const companyNameCache = new Map<string, { checkedAt: number; name: string }>()
+const CACHE_TTL_MS = 5 * 60_000
 
 function escapeTelegramHtml(s: string): string {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function truncate(value: string, max = 550) {
-  if (value.length <= max) return value
-  return `${value.slice(0, max)}...`
+function toNum(v: unknown): number {
+  const n = Number(v || 0)
+  return Number.isFinite(n) ? n : 0
 }
 
-async function resolveSuperAdminActorLabel(actorUserId: string) {
+function fmtMoney(v: unknown) {
+  return `${Math.round(toNum(v)).toLocaleString('ru-RU')} ₸`
+}
+
+function kzTimeLabel(date = new Date()) {
+  return date.toLocaleString('ru-RU', {
+    timeZone: 'Asia/Almaty',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function pickCompanyId(payload: Record<string, unknown> | null | undefined): string | null {
+  if (!payload) return null
+  const direct = String(payload.company_id || '').trim()
+  if (direct) return direct
+  const nextObj = (payload.next || null) as Record<string, unknown> | null
+  const previousObj = (payload.previous || null) as Record<string, unknown> | null
+  const nextId = String(nextObj?.company_id || '').trim()
+  if (nextId) return nextId
+  const prevId = String(previousObj?.company_id || '').trim()
+  if (prevId) return prevId
+  return null
+}
+
+async function resolveCompanyName(companyId: string | null) {
+  if (!companyId || !hasAdminSupabaseCredentials()) return null
   const now = Date.now()
-  const cached = superAdminCache.get(actorUserId)
-  if (cached && now - cached.checkedAt < SUPERADMIN_CACHE_TTL_MS) {
+  const cached = companyNameCache.get(companyId)
+  if (cached && now - cached.checkedAt < CACHE_TTL_MS) return cached.name
+  try {
+    const admin = createAdminSupabaseClient()
+    const { data } = await admin.from('companies').select('name').eq('id', companyId).maybeSingle()
+    const name = String(data?.name || '').trim() || companyId
+    companyNameCache.set(companyId, { checkedAt: now, name })
+    return name
+  } catch {
+    return companyId
+  }
+}
+
+async function resolveLeaderActor(actorUserId: string) {
+  const now = Date.now()
+  const cached = actorCache.get(actorUserId)
+  if (cached && now - cached.checkedAt < CACHE_TTL_MS) {
     return cached
   }
 
   if (!hasAdminSupabaseCredentials()) {
-    const fallback = { checkedAt: now, isSuperAdmin: false, label: actorUserId }
-    superAdminCache.set(actorUserId, fallback)
+    const fallback = { checkedAt: now, isLeader: false, label: actorUserId, role: null }
+    actorCache.set(actorUserId, fallback)
     return fallback
   }
 
   try {
     const admin = createAdminSupabaseClient()
-    const { data, error } = await admin.auth.admin.getUserById(actorUserId)
+    const { data } = await admin.auth.admin.getUserById(actorUserId)
     const email = data?.user?.email || null
     const meta = (data?.user?.user_metadata || {}) as Record<string, unknown>
-    const name =
-      (typeof meta.full_name === 'string' && meta.full_name.trim()) ||
-      (typeof meta.name === 'string' && meta.name.trim()) ||
+    const staffId = typeof meta.staff_id === 'string' ? meta.staff_id.trim() : ''
+    let staffRow: any = null
+    if (staffId) {
+      const { data: staffById } = await admin
+        .from('staff')
+        .select('id, full_name, short_name, role')
+        .eq('id', staffId)
+        .maybeSingle()
+      staffRow = staffById || null
+    }
+    if (!staffRow && email) {
+      const { data: staffByEmail } = await admin
+        .from('staff')
+        .select('id, full_name, short_name, role')
+        .ilike('email', email)
+        .maybeSingle()
+      staffRow = staffByEmail || null
+    }
+    const role = String(staffRow?.role || '').trim().toLowerCase() || null
+    const label =
+      String(staffRow?.full_name || '').trim() ||
+      String(staffRow?.short_name || '').trim() ||
+      (typeof meta.full_name === 'string' ? meta.full_name.trim() : '') ||
+      (typeof meta.name === 'string' ? meta.name.trim() : '') ||
       email ||
       actorUserId
     const resolved = {
       checkedAt: now,
-      isSuperAdmin: isAdminEmail(email),
-      label: String(name),
+      isLeader: role === 'owner' || role === 'manager',
+      label: String(label),
+      role,
     }
-    superAdminCache.set(actorUserId, resolved)
+    actorCache.set(actorUserId, resolved)
     return resolved
   } catch {
-    const fallback = { checkedAt: now, isSuperAdmin: false, label: actorUserId }
-    superAdminCache.set(actorUserId, fallback)
+    const fallback = { checkedAt: now, isLeader: false, label: actorUserId, role: null }
+    actorCache.set(actorUserId, fallback)
     return fallback
   }
 }
 
-async function notifySuperAdminAudit(entry: AuditEntry) {
+async function buildHumanAuditMessage(entry: AuditEntry, actorLabel: string) {
+  const payload = (entry.payload || {}) as Record<string, unknown>
+  const at = kzTimeLabel()
+  const companyName = await resolveCompanyName(pickCompanyId(payload))
+  const where = companyName ? ` · точка: <b>${escapeTelegramHtml(companyName)}</b>` : ''
+
+  if (entry.entityType === 'auth-session' && entry.action.endsWith('-login')) {
+    return `👤 <b>${escapeTelegramHtml(actorLabel)}</b> вошла в систему.\n🕒 ${at}`
+  }
+
+  if (entry.entityType === 'page-view' && entry.action === 'visit') {
+    const pathname = String(payload.pathname || entry.entityId || '').trim() || 'unknown'
+    return `🧭 <b>${escapeTelegramHtml(actorLabel)}</b> открыла страницу <code>${escapeTelegramHtml(pathname)}</code>\n🕒 ${at}`
+  }
+
+  if (entry.entityType === 'income') {
+    const cash = toNum(payload.cash_amount)
+    const kaspi = toNum(payload.kaspi_amount)
+    const online = toNum(payload.online_amount)
+    const card = toNum(payload.card_amount)
+    const total =
+      toNum(payload.total_amount) || (cash + kaspi + online + card)
+    if (entry.action === 'create') {
+      return `💰 <b>${escapeTelegramHtml(actorLabel)}</b> добавила доход: <b>${fmtMoney(total)}</b>${where}\n` +
+        `Нал: ${fmtMoney(cash)} · Kaspi: ${fmtMoney(kaspi)} · Online: ${fmtMoney(online)} · Карта: ${fmtMoney(card)}\n🕒 ${at}`
+    }
+    if (entry.action === 'delete') {
+      return `🗑 <b>${escapeTelegramHtml(actorLabel)}</b> удалила доход${where}\n🕒 ${at}`
+    }
+    if (entry.action.startsWith('update')) {
+      return `✏️ <b>${escapeTelegramHtml(actorLabel)}</b> изменила доход${where}\n🕒 ${at}`
+    }
+  }
+
+  if (entry.entityType === 'expense') {
+    const cash = toNum(payload.cash_amount)
+    const kaspi = toNum(payload.kaspi_amount)
+    const total = toNum(payload.total_amount) || (cash + kaspi)
+    const category = String(payload.category || '').trim()
+    const categoryLabel = category ? ` · категория: <b>${escapeTelegramHtml(category)}</b>` : ''
+    if (entry.action === 'create') {
+      return `📉 <b>${escapeTelegramHtml(actorLabel)}</b> добавила расход: <b>${fmtMoney(total)}</b>${where}${categoryLabel}\n` +
+        `Нал: ${fmtMoney(cash)} · Kaspi: ${fmtMoney(kaspi)}\n🕒 ${at}`
+    }
+    if (entry.action === 'delete') {
+      return `🗑 <b>${escapeTelegramHtml(actorLabel)}</b> удалила расход${where}${categoryLabel}\n🕒 ${at}`
+    }
+    if (entry.action.startsWith('update')) {
+      return `✏️ <b>${escapeTelegramHtml(actorLabel)}</b> изменила расход${where}${categoryLabel}\n🕒 ${at}`
+    }
+  }
+
+  return `🧾 <b>${escapeTelegramHtml(actorLabel)}</b> выполнила действие <code>${escapeTelegramHtml(entry.entityType)}</code> / <code>${escapeTelegramHtml(entry.action)}</code>${where}\n🕒 ${at}`
+}
+
+async function notifyLeaderAudit(entry: AuditEntry) {
   try {
     if (!entry.actorUserId) return
-    const targetChatId = process.env.TELEGRAM_OWNER_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID
+    const targetChatId = process.env.TELEGRAM_SUPERADMIN_CHAT_ID
     if (!targetChatId) return
 
-    const actor = await resolveSuperAdminActorLabel(entry.actorUserId)
-    if (!actor.isSuperAdmin) return
+    const actor = await resolveLeaderActor(entry.actorUserId)
+    if (!actor.isLeader) return
 
-    const payloadJson = entry.payload ? truncate(JSON.stringify(entry.payload, null, 0), 550) : ''
-    const lines = [
-      '🧭 <b>Действие супер-админа</b>',
-      `👤 <b>${escapeTelegramHtml(actor.label)}</b>`,
-      `🏷 <code>${escapeTelegramHtml(entry.entityType)}</code> · <code>${escapeTelegramHtml(entry.action)}</code>`,
-      `🆔 <code>${escapeTelegramHtml(entry.entityId)}</code>`,
-    ]
-    if (entry.entityType === 'page-view') {
-      const pathname = String((entry.payload?.pathname as string) || entry.entityId || '').trim()
-      if (pathname) lines.push(`📍 Страница: <code>${escapeTelegramHtml(pathname)}</code>`)
-    }
-    if (payloadJson) {
-      lines.push(`🧾 ${escapeTelegramHtml(payloadJson)}`)
-    }
-
-    await sendTelegram(lines.join('\n'), targetChatId)
+    const text = await buildHumanAuditMessage(entry, actor.label)
+    await sendTelegram(text, targetChatId)
   } catch {
     // Notification must not break primary flow.
   }
@@ -123,7 +230,7 @@ export async function writeAuditLog(client: any, entry: AuditEntry) {
       return
     }
 
-    await notifySuperAdminAudit(entry)
+    await notifyLeaderAudit(entry)
   } catch (error) {
     console.warn('Audit log write failed', error)
   }
