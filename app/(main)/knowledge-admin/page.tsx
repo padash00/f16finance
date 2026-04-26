@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type * as React from 'react'
-import type { FormEvent } from 'react'
 import {
   AlertTriangle,
   BookOpen,
@@ -13,13 +12,13 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Save,
   Search,
   Sparkles,
   Trash2,
 } from 'lucide-react'
 
 import { ArticleEditorDialog, emptyArticleValue, type ArticleEditorValue } from '@/components/admin/article-editor-dialog'
+import { CategoryEditorDialog, emptyCategoryValue, type CategoryEditorValue } from '@/components/admin/category-editor-dialog'
 import {
   ChecklistEditorDialog,
   emptyChecklistItemValue,
@@ -120,15 +119,6 @@ const SEVERITY_LABELS = {
   critical: 'Критично',
 }
 
-const emptyCategory = {
-  title: '',
-  company_id: '',
-  description: '',
-  kind: 'faq' as CategoryKind,
-  sort_order: 100,
-  is_active: true,
-}
-
 const AUDIENCE_OPTIONS = [
   { value: 'operator', label: 'Оператор' },
   { value: 'cashier', label: 'Кассир' },
@@ -218,33 +208,11 @@ function formatMoney(value: number | null | undefined) {
   return `${new Intl.NumberFormat('ru-KZ').format(value)} ₸`
 }
 
-function FieldLabel({ children }: { children: string }) {
-  return <label className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{children}</label>
-}
-
-function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className={`w-full rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-amber-400/80 focus:ring-2 focus:ring-amber-400/15 ${props.className ?? ''}`}
-    />
-  )
-}
-
 function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
       className={`w-full rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-amber-400/80 focus:ring-2 focus:ring-amber-400/15 ${props.className ?? ''}`}
-    />
-  )
-}
-
-function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      {...props}
-      className={`min-h-28 w-full rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-amber-400/80 focus:ring-2 focus:ring-amber-400/15 ${props.className ?? ''}`}
     />
   )
 }
@@ -268,7 +236,8 @@ export default function KnowledgeAdminPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
-  const [categoryForm, setCategoryForm] = useState<any>(emptyCategory)
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
+  const [categoryDialogValue, setCategoryDialogValue] = useState<CategoryEditorValue | undefined>(undefined)
   const [checklistDialogOpen, setChecklistDialogOpen] = useState(false)
   const [checklistDialogMode, setChecklistDialogMode] = useState<'template' | 'item'>('template')
   const [checklistTemplateValue, setChecklistTemplateValue] = useState<ChecklistTemplateEditorValue | undefined>(undefined)
@@ -420,14 +389,31 @@ export default function KnowledgeAdminPage() {
     }
   }
 
-  async function submitCategory(event: FormEvent) {
-    event.preventDefault()
+  async function submitCategoryDialog(value: CategoryEditorValue) {
     const result = await send('upsertCategory', {
-      ...categoryForm,
-      company_id: normalizeId(categoryForm.company_id),
-      sort_order: Number(categoryForm.sort_order || 100),
+      ...value,
+      company_id: normalizeId(value.company_id),
+      sort_order: Number(value.sort_order || 100),
     })
-    if (result) setCategoryForm(emptyCategory)
+    if (result) setCategoryDialogOpen(false)
+  }
+
+  function openCategoryDialogNew() {
+    setCategoryDialogValue({ ...emptyCategoryValue })
+    setCategoryDialogOpen(true)
+  }
+
+  function openCategoryDialogEdit(category: KnowledgeCategory) {
+    setCategoryDialogValue({
+      id: category.id,
+      company_id: category.company_id || '',
+      title: category.title,
+      description: category.description || '',
+      kind: category.kind,
+      sort_order: category.sort_order ?? 100,
+      is_active: category.is_active,
+    })
+    setCategoryDialogOpen(true)
   }
 
   async function submitArticleDialog(value: ArticleEditorValue) {
@@ -901,12 +887,21 @@ export default function KnowledgeAdminPage() {
             )}
 
             {tab === 'categories' && (
-              <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(460px,520px)]">
+              <div className="min-w-0">
                 <Panel title="Категории базы знаний" icon={Layers3}>
-                  <TabHint
-                    title="Зачем категории?"
-                    text="Категории группируют материалы: правила клуба, зарплата и премии, штрафы, FAQ, проблемы техники, магазин и касса."
-                  />
+                  <p className="mb-5 text-sm leading-6 text-slate-400">
+                    Категории группируют материалы: правила клуба, зарплата и премии, штрафы, FAQ, проблемы техники, магазин и касса.
+                  </p>
+                  <div className="mb-5 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={openCategoryDialogNew}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-orange-950/30 transition hover:brightness-110"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Новая категория
+                    </button>
+                  </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     {data.categories.map((category) => (
                       <div key={category.id} className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
@@ -915,12 +910,20 @@ export default function KnowledgeAdminPage() {
                             <div className="flex flex-wrap gap-2">
                               <Badge>{KIND_LABELS[category.kind]}</Badge>
                               <Badge>{category.company_id ? `Точка: ${companyById.get(category.company_id)?.name || ''}` : 'Все точки'}</Badge>
+                              {!category.is_active && <Badge>черновик</Badge>}
                             </div>
                             <h3 className="mt-3 break-words text-xl font-black">{category.title}</h3>
-                            <p className="mt-2 break-words text-sm leading-6 text-slate-400">{category.description || 'Без описания'}</p>
+                            {category.description ? (
+                              <div
+                                className="mt-2 break-words text-sm leading-6 text-slate-400 [&_p]:my-1 [&_h1]:my-1.5 [&_h1]:text-base [&_h1]:font-black [&_h2]:my-1.5 [&_h2]:text-sm [&_h2]:font-black [&_h3]:my-1 [&_h3]:font-bold [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-black [&_em]:italic [&_u]:underline [&_a]:text-amber-300 [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-amber-300/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-800/80 [&_code]:px-1 [&_mark]:rounded [&_mark]:px-1 [&_img]:my-2 [&_img]:max-h-40 [&_img]:rounded [&_table]:my-2 [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-slate-700 [&_td]:px-2 [&_td]:py-1"
+                                dangerouslySetInnerHTML={{ __html: category.description }}
+                              />
+                            ) : (
+                              <p className="mt-2 break-words text-sm leading-6 text-slate-500">Без описания</p>
+                            )}
                           </div>
                           <RowActions
-                            onEdit={() => setCategoryForm({ ...category, company_id: category.company_id || '', description: category.description || '' })}
+                            onEdit={() => openCategoryDialogEdit(category)}
                             onDelete={() => {
                               if (!confirmDelete(category.title)) return
                               void send('deleteCategory', undefined, category.id)
@@ -929,53 +932,8 @@ export default function KnowledgeAdminPage() {
                         </div>
                       </div>
                     ))}
-                    {!data.categories.length && <EmptyState text="Категорий пока нет." />}
+                    {!data.categories.length && <EmptyState text="Категорий пока нет. Создайте первую через кнопку «Новая категория»." />}
                   </div>
-                </Panel>
-
-                <Panel title={categoryForm.id ? 'Редактировать категорию' : 'Новая категория'} icon={Plus}>
-                  <form onSubmit={submitCategory} className="space-y-4">
-                    <div className="space-y-2">
-                      <FieldLabel>Название</FieldLabel>
-                      <TextInput value={categoryForm.title} onChange={(event) => setCategoryForm({ ...categoryForm, title: event.target.value })} required />
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <FieldLabel>Точка</FieldLabel>
-                        <SelectInput value={categoryForm.company_id} onChange={(event) => setCategoryForm({ ...categoryForm, company_id: event.target.value })}>
-                          <option value="">Для всех точек</option>
-                          {data.companies.map((company) => (
-                            <option key={company.id} value={company.id}>
-                              {company.name}
-                            </option>
-                          ))}
-                        </SelectInput>
-                      </div>
-                      <div className="space-y-2">
-                        <FieldLabel>Тип</FieldLabel>
-                        <SelectInput value={categoryForm.kind} onChange={(event) => setCategoryForm({ ...categoryForm, kind: event.target.value })}>
-                          {Object.entries(KIND_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </SelectInput>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <FieldLabel>Описание</FieldLabel>
-                      <TextArea value={categoryForm.description} onChange={(event) => setCategoryForm({ ...categoryForm, description: event.target.value })} />
-                    </div>
-                    <div className="space-y-2">
-                      <FieldLabel>Порядок</FieldLabel>
-                      <TextInput value={categoryForm.sort_order} onChange={(event) => setCategoryForm({ ...categoryForm, sort_order: event.target.value })} inputMode="numeric" />
-                    </div>
-                    <label className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
-                      <input type="checkbox" checked={categoryForm.is_active} onChange={(event) => setCategoryForm({ ...categoryForm, is_active: event.target.checked })} />
-                      Активная категория
-                    </label>
-                    <FormActions saving={saving} reset={() => setCategoryForm(emptyCategory)} isEditing={Boolean(categoryForm.id)} />
-                  </form>
                 </Panel>
               </div>
             )}
@@ -990,6 +948,14 @@ export default function KnowledgeAdminPage() {
           companies={data.companies}
           saving={saving}
           onSubmit={submitArticleDialog}
+        />
+        <CategoryEditorDialog
+          open={categoryDialogOpen}
+          onOpenChange={setCategoryDialogOpen}
+          initialValue={categoryDialogValue}
+          companies={data.companies}
+          saving={saving}
+          onSubmit={submitCategoryDialog}
         />
         <ChecklistEditorDialog
           open={checklistDialogOpen}
@@ -1137,24 +1103,6 @@ function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => 
       </button>
       <button onClick={onDelete} className="grid h-9 w-9 place-items-center rounded-xl border border-red-500/30 bg-red-950/20 text-red-200 hover:bg-red-950/40">
         <Trash2 className="h-4 w-4" />
-      </button>
-    </div>
-  )
-}
-
-function FormActions({ saving, reset, isEditing }: { saving: boolean; reset: () => void; isEditing: boolean }) {
-  return (
-    <div className="flex flex-col gap-2 sm:flex-row">
-      <button
-        type="submit"
-        disabled={saving}
-        className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:brightness-110 disabled:opacity-50"
-      >
-        <Save className="h-4 w-4" />
-        {isEditing ? 'Сохранить' : 'Создать'}
-      </button>
-      <button type="button" onClick={reset} className="rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-300 hover:border-slate-500">
-        Сбросить
       </button>
     </div>
   )
