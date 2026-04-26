@@ -1676,7 +1676,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
 
   // ─── Tool executor ────────────────────────────────────────────────────────
   async function executeTool(name: string, args: any): Promise<string> {
-    const canManageOps = ['super_admin', 'owner', 'manager'].includes(botUser.role)
+    const canManageOps = ['super_admin', 'owner', 'manager'].includes(botUser?.role || 'unknown')
     const isIsoDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '').trim())
     const normalize = (v: string | null | undefined) => String(v || '').trim().toLowerCase()
     const pickTopNames = (rows: any[], mapper: (row: any) => string) => {
