@@ -258,6 +258,7 @@ export async function POST(request: Request) {
         ].filter(Boolean) as string[]
 
         await notifyInventoryRequestCreated({
+          requestId: requestId,
           companyName: device.company?.name || device.company_id,
           createdByName: actor.operatorId || null,
           comment: body.payload?.comment?.trim() || null,

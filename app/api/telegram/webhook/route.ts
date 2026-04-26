@@ -233,6 +233,7 @@ function buildHelpText(user: BotUser): string {
       '/cashflow — баланс и движение денег',
       '/compare — сравнение этой и прошлой недели',
       '/onshift — кто сейчас на смене',
+      '/today_shifts — смены на сегодня (день и ночь)',
       '',
       '<b>📦 Склад:</b>',
       'Отправьте фото накладной — бот создаст приёмку автоматически',
@@ -256,6 +257,7 @@ function buildHelpText(user: BotUser): string {
     )
   }
 
+  lines.push('/whoami — проверить роль и привязку Telegram')
   lines.push('', '<b>📋 Задачи:</b>', '#123 принял / готово / не могу — ответ по задаче')
 
   if (user.role === 'unknown') {
@@ -561,6 +563,90 @@ async function buildOnShiftText() {
     const operatorName = (row.operator_name || '').trim() || 'Оператор'
     const companyName = row.company?.name || 'Точка'
     lines.push(`• ${escapeTelegramHtml(operatorName)} — ${escapeTelegramHtml(companyName)}`)
+  }
+
+  return lines.join('\n')
+}
+
+async function buildTodayShiftsText() {
+  const supabase = createAdminSupabaseClient()
+  const date = todayISO()
+  const { data: shifts, error } = await supabase
+    .from('shifts')
+    .select('id, date, shift_type, operator_name, company:company_id(name)')
+    .eq('date', date)
+    .in('shift_type', ['day', 'night'])
+    .order('shift_type', { ascending: true })
+    .order('company_id', { ascending: true })
+
+  if (error) {
+    return 'Не удалось получить расписание смен на сегодня.'
+  }
+
+  const rows = (shifts || []) as any[]
+  const dayRows = rows.filter((r) => r.shift_type === 'day')
+  const nightRows = rows.filter((r) => r.shift_type === 'night')
+
+  const renderRows = (items: any[]) => {
+    if (items.length === 0) return ['• нет назначений']
+    return items.map((row) => {
+      const operatorName = (row.operator_name || '').trim() || 'Оператор'
+      const companyName = row.company?.name || 'Точка'
+      return `• ${escapeTelegramHtml(operatorName)} — ${escapeTelegramHtml(companyName)}`
+    })
+  }
+
+  const lines = [
+    '<b>📅 Смены на сегодня</b>',
+    `<i>${date}</i>`,
+    '',
+    '<b>☀️ День</b>',
+    ...renderRows(dayRows),
+    '',
+    '<b>🌙 Ночь</b>',
+    ...renderRows(nightRows),
+  ]
+
+  return lines.join('\n')
+}
+
+async function buildWhoAmIText(botUser: BotUser, telegramUserId: string) {
+  const supabase = createAdminSupabaseClient()
+  const roleLabel: Record<BotUserRole, string> = {
+    super_admin: 'Супер-администратор',
+    owner: 'Владелец',
+    manager: 'Руководитель',
+    marketer: 'Маркетолог',
+    operator: 'Оператор',
+    unknown: 'Гость',
+  }
+
+  const [allowedRes, staffRes, operatorRes] = await Promise.all([
+    supabase.from('telegram_allowed_users').select('id, label, can_finance').eq('telegram_user_id', telegramUserId).maybeSingle(),
+    supabase.from('staff').select('id, full_name, role, is_active').eq('telegram_chat_id', telegramUserId).maybeSingle(),
+    supabase.from('operators').select('id, name, short_name, is_active').eq('telegram_chat_id', telegramUserId).maybeSingle(),
+  ])
+
+  const lines = [
+    '<b>🧾 Telegram identity check</b>',
+    `👤 <b>${escapeTelegramHtml(botUser.name)}</b>`,
+    `🎭 Роль в боте: <b>${roleLabel[botUser.role]}</b>`,
+    `🆔 Telegram user id: <code>${escapeTelegramHtml(telegramUserId)}</code>`,
+    '',
+    '<b>Привязки:</b>',
+    allowedRes.data
+      ? `• telegram_allowed_users: ✅ ${escapeTelegramHtml(allowedRes.data.label || 'запись есть')}`
+      : '• telegram_allowed_users: —',
+    staffRes.data
+      ? `• staff: ✅ ${escapeTelegramHtml(staffRes.data.full_name || 'staff')} (${escapeTelegramHtml(staffRes.data.role || 'role')})`
+      : '• staff: —',
+    operatorRes.data
+      ? `• operators: ✅ ${escapeTelegramHtml(operatorRes.data.short_name || operatorRes.data.name || 'operator')}`
+      : '• operators: —',
+  ]
+
+  if (!allowedRes.data && !staffRes.data && !operatorRes.data) {
+    lines.push('', '⚠️ В системе нет привязки этого Telegram ID к пользователю.')
   }
 
   return lines.join('\n')
@@ -1411,6 +1497,8 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       birthdayContext,
       actionFlags,
     }),
+    'ВАЖНО: если пользователь спрашивает кто сейчас на смене, кто работает сейчас, кто дежурит, или на какой точке кто в смене — ОБЯЗАТЕЛЬНО вызови инструмент get_current_on_shift. Для вопроса про расписание на сегодня (день+ночь) вызывай get_today_shifts.',
+    'ВАЖНО: если пользователь просит выполнить действие в системе (поставить смену, назначить оператора, создать задачу оператору или всем операторам точки) — ОБЯЗАТЕЛЬНО вызывай соответствующий инструмент, не отвечай общими словами.',
     wrapDataBlock(dataBlock),
   ].join('\n\n')
 
@@ -1435,15 +1523,54 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       type: 'function',
       function: {
         name: 'create_task_for_operator',
-        description: 'Создать задачу в системе для конкретного оператора.',
+        description: 'Создать задачу в системе для конкретного оператора с теми же правилами, что в веб-портале.',
         parameters: {
           type: 'object',
           properties: {
             operator_name: { type: 'string', description: 'Имя оператора' },
+            company_name: { type: 'string', description: 'Название точки (желательно указывать всегда).' },
             title: { type: 'string', description: 'Название задачи' },
             description: { type: 'string', description: 'Подробное описание задачи (необязательно)' },
+            priority: { type: 'string', description: 'critical | high | medium | low (по умолчанию medium)' },
+            due_date: { type: 'string', description: 'Дедлайн YYYY-MM-DD (необязательно)' },
           },
-          required: ['operator_name', 'title'],
+          required: ['operator_name', 'title', 'company_name'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'create_task_for_company_operators',
+        description: 'Создать одну задачу всем активным операторам указанной точки.',
+        parameters: {
+          type: 'object',
+          properties: {
+            company_name: { type: 'string', description: 'Название точки' },
+            title: { type: 'string', description: 'Название задачи' },
+            description: { type: 'string', description: 'Описание задачи (необязательно)' },
+            priority: { type: 'string', description: 'critical | high | medium | low (по умолчанию medium)' },
+            due_date: { type: 'string', description: 'Дедлайн YYYY-MM-DD (необязательно)' },
+          },
+          required: ['company_name', 'title'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'assign_shift',
+        description: 'Назначить оператора на смену конкретной точки и даты (как в разделе /shifts).',
+        parameters: {
+          type: 'object',
+          properties: {
+            date: { type: 'string', description: 'Дата смены YYYY-MM-DD' },
+            shift_type: { type: 'string', description: 'day | night' },
+            company_name: { type: 'string', description: 'Название точки' },
+            operator_name: { type: 'string', description: 'Имя оператора' },
+            comment: { type: 'string', description: 'Комментарий к смене (необязательно)' },
+          },
+          required: ['date', 'shift_type', 'company_name', 'operator_name'],
         },
       },
     },
@@ -1525,7 +1652,19 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       type: 'function',
       function: {
         name: 'get_current_on_shift',
-        description: 'Получить список сотрудников, у которых прямо сейчас открыта смена.',
+        description: 'Получить список сотрудников, кто сейчас на смене по расписанию (текущий слот день/ночь). Используй всегда для вопросов "кто на смене сейчас", "кто работает сейчас", "кто дежурит".',
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_today_shifts',
+        description: 'Получить расписание смен на сегодня (оба слота: день и ночь).',
         parameters: {
           type: 'object',
           properties: {},
@@ -1537,7 +1676,70 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
 
   // ─── Tool executor ────────────────────────────────────────────────────────
   async function executeTool(name: string, args: any): Promise<string> {
+    const canManageOps = ['super_admin', 'owner', 'manager'].includes(botUser.role)
+    const isIsoDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '').trim())
+    const normalize = (v: string | null | undefined) => String(v || '').trim().toLowerCase()
+    const pickTopNames = (rows: any[], mapper: (row: any) => string) => {
+      return rows.slice(0, 5).map(mapper).filter(Boolean).join(', ')
+    }
+    const resolveCompanyByName = async (rawName: string) => {
+      const q = normalize(rawName)
+      if (!q) return { kind: 'empty' as const }
+      const { data: companies } = await supabase.from('companies').select('id, name, code').eq('is_active', true)
+      const all = (companies || []) as any[]
+      const exact = all.find((c) => normalize(c.name) === q || (!!c.code && normalize(c.code) === q))
+      if (exact) return { kind: 'ok' as const, company: exact }
+      const matches = all.filter((c) => {
+        const name = normalize(c.name)
+        const code = normalize(c.code)
+        return name.includes(q) || q.includes(name) || (!!code && (code.includes(q) || q.includes(code)))
+      })
+      if (matches.length === 0) return { kind: 'not_found' as const, candidates: all }
+      if (matches.length > 1) return { kind: 'ambiguous' as const, candidates: matches }
+      return { kind: 'ok' as const, company: matches[0] }
+    }
+    const resolveOperatorByName = async (rawName: string, companyId?: string | null) => {
+      const q = normalize(rawName)
+      if (!q) return { kind: 'empty' as const }
+      let allowedIds: string[] | null = null
+      if (companyId) {
+        const { data: assignments } = await supabase
+          .from('operator_company_assignments')
+          .select('operator_id')
+          .eq('company_id', companyId)
+          .eq('is_active', true)
+        allowedIds = (assignments || []).map((a: any) => String(a.operator_id)).filter(Boolean)
+      }
+      let query = supabase
+        .from('operators')
+        .select('id, name, short_name, telegram_chat_id, operator_profiles(full_name)')
+        .eq('is_active', true)
+      if (allowedIds) query = query.in('id', allowedIds.length > 0 ? allowedIds : ['__none__'])
+      const { data: ops } = await query
+      const all = (ops || []) as any[]
+      const displayName = (op: any) => {
+        const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
+        return (profiles?.[0]?.full_name || op.short_name || op.name || '').trim()
+      }
+      const exact = all.find((op: any) => normalize(displayName(op)) === q || normalize(op.short_name) === q || normalize(op.name) === q)
+      if (exact) return { kind: 'ok' as const, operator: exact }
+      const matches = all.filter((op: any) => {
+        const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
+        const fullName = normalize(profiles?.[0]?.full_name || op.name || '')
+        const shortName = normalize(op.short_name || '')
+        return fullName.includes(q) || shortName.includes(q) || q.includes(fullName.split(' ')[0] || '')
+      })
+      if (matches.length === 0) return { kind: 'not_found' as const, candidates: all }
+      if (matches.length > 1) return { kind: 'ambiguous' as const, candidates: matches }
+      return { kind: 'ok' as const, operator: matches[0] }
+    }
+    const getNextTaskNumber = async () => {
+      const { data: lastTask } = await supabase.from('tasks').select('task_number').order('task_number', { ascending: false }).limit(1).maybeSingle()
+      return (lastTask?.task_number || 0) + 1
+    }
+
     if (name === 'send_message_to_operator') {
+      if (!canManageOps) return '⛔ У вас нет прав на это действие.'
       const { data: ops } = await supabase.from('operators').select('id, name, short_name, telegram_chat_id, operator_profiles(full_name)').eq('is_active', true)
       if (!ops?.length) return 'Операторы не найдены в системе.'
       const query = (args.operator_name as string).toLowerCase()
@@ -1557,31 +1759,209 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     }
 
     if (name === 'create_task_for_operator') {
-      const { data: ops } = await supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true)
-      if (!ops?.length) return 'Операторы не найдены.'
-      const query = (args.operator_name as string).toLowerCase()
-      const found = ops.find((op: any) => {
-        const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
-        const fullName = (profiles?.[0]?.full_name || op.name || '').toLowerCase()
-        const shortName = (op.short_name || '').toLowerCase()
-        return fullName.includes(query) || shortName.includes(query) || query.includes(fullName.split(' ')[0] || '')
-      })
-      if (!found) return `Оператор "${args.operator_name}" не найден.`
+      if (!canManageOps) return '⛔ У вас нет прав на это действие.'
+      const companyRes = await resolveCompanyByName(String(args.company_name || ''))
+      if (companyRes.kind !== 'ok') {
+        if (companyRes.kind === 'ambiguous') {
+          return `Уточни точку: найдено несколько вариантов (${pickTopNames(companyRes.candidates, (c) => c.name)}).`
+        }
+        return `Точка "${args.company_name}" не найдена.`
+      }
+      const company = companyRes.company
+      const opRes = await resolveOperatorByName(String(args.operator_name || ''), company.id)
+      if (opRes.kind !== 'ok') {
+        if (opRes.kind === 'ambiguous') {
+          return `Уточни оператора для ${company.name}: ${pickTopNames(opRes.candidates, (o) => {
+            const p = o.operator_profiles as Array<{ full_name: string | null }> | null
+            return p?.[0]?.full_name || o.short_name || o.name
+          })}.`
+        }
+        return `Оператор "${args.operator_name}" не найден на точке ${company.name}.`
+      }
+      const found = opRes.operator
       const profiles = found.operator_profiles as Array<{ full_name: string | null }> | null
-      const displayName = profiles?.[0]?.full_name || found.name
-      // Получаем следующий номер задачи
-      const { data: lastTask } = await supabase.from('tasks').select('task_number').order('task_number', { ascending: false }).limit(1).maybeSingle()
-      const nextNumber = (lastTask?.task_number || 0) + 1
-      const { error } = await supabase.from('tasks').insert({
-        task_number: nextNumber,
-        title: args.title,
-        description: args.description || null,
-        operator_id: found.id,
-        status: 'todo',
-        created_at: new Date().toISOString(),
-      })
-      if (error) return `Ошибка создания задачи: ${error.message}`
-      return `✅ Задача #${nextNumber} "${args.title}" создана для ${displayName}.`
+      const displayName = profiles?.[0]?.full_name || found.name || 'Оператор'
+      const priority = ['critical', 'high', 'medium', 'low'].includes(String(args.priority || '').toLowerCase())
+        ? String(args.priority).toLowerCase()
+        : 'medium'
+      const dueDate = String(args.due_date || '').trim() || null
+      let taskNumber = await getNextTaskNumber()
+      let inserted: any = null
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const { data, error } = await supabase
+          .from('tasks')
+          .insert({
+            task_number: taskNumber,
+            title: String(args.title || '').trim(),
+            description: String(args.description || '').trim() || null,
+            priority,
+            status: 'todo',
+            operator_id: found.id,
+            company_id: company.id,
+            due_date: dueDate,
+            tags: [],
+          })
+          .select('id, task_number')
+          .single()
+        if (!error) {
+          inserted = data
+          break
+        }
+        if (String(error.code || '') === '23505') {
+          taskNumber = await getNextTaskNumber()
+          continue
+        }
+        return `Ошибка создания задачи: ${error.message}`
+      }
+      if (!inserted) return 'Не удалось создать задачу.'
+      return `✅ Задача #${inserted.task_number} "${String(args.title || '').trim()}" создана для ${displayName} (${company.name}).`
+    }
+
+    if (name === 'create_task_for_company_operators') {
+      if (!canManageOps) return '⛔ У вас нет прав на это действие.'
+      const companyRes = await resolveCompanyByName(String(args.company_name || ''))
+      if (companyRes.kind !== 'ok') {
+        if (companyRes.kind === 'ambiguous') {
+          return `Уточни точку: найдено несколько вариантов (${pickTopNames(companyRes.candidates, (c) => c.name)}).`
+        }
+        return `Точка "${args.company_name}" не найдена.`
+      }
+      const company = companyRes.company
+      const { data: assignments } = await supabase
+        .from('operator_company_assignments')
+        .select('operator_id')
+        .eq('company_id', company.id)
+        .eq('is_active', true)
+      const operatorIds = (assignments || []).map((a: any) => String(a.operator_id)).filter(Boolean)
+      if (operatorIds.length === 0) return `На точке ${company.name} нет активных назначений операторов.`
+      const { data: ops } = await supabase
+        .from('operators')
+        .select('id, name, short_name, operator_profiles(full_name)')
+        .eq('is_active', true)
+        .in('id', operatorIds)
+      const operators = (ops || []) as any[]
+      if (operators.length === 0) return `На точке ${company.name} нет активных операторов.`
+      const priority = ['critical', 'high', 'medium', 'low'].includes(String(args.priority || '').toLowerCase())
+        ? String(args.priority).toLowerCase()
+        : 'medium'
+      const dueDate = String(args.due_date || '').trim() || null
+      const title = String(args.title || '').trim()
+      const description = String(args.description || '').trim() || null
+      if (!title) return 'Название задачи обязательно.'
+      let nextNumber = await getNextTaskNumber()
+      let created = 0
+      const failed: string[] = []
+      for (const op of operators) {
+        let insertedOk = false
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const { error } = await supabase.from('tasks').insert({
+            task_number: nextNumber,
+            title,
+            description,
+            priority,
+            status: 'todo',
+            operator_id: op.id,
+            company_id: company.id,
+            due_date: dueDate,
+            tags: [],
+          })
+          if (!error) {
+            insertedOk = true
+            created += 1
+            nextNumber += 1
+            break
+          }
+          if (String(error.code || '') === '23505') {
+            nextNumber = await getNextTaskNumber()
+            continue
+          }
+          break
+        }
+        if (!insertedOk) {
+          const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
+          failed.push(profiles?.[0]?.full_name || op.short_name || op.name || op.id)
+        }
+      }
+      return failed.length === 0
+        ? `✅ Создано задач: ${created}. Точка: ${company.name}.`
+        : `⚠️ Создано задач: ${created}. Не удалось для: ${failed.join(', ')}.`
+    }
+
+    if (name === 'assign_shift') {
+      if (!canManageOps) return '⛔ У вас нет прав на это действие.'
+      const date = String(args.date || '').trim()
+      const shiftTypeRaw = String(args.shift_type || '').trim().toLowerCase()
+      const shiftType = shiftTypeRaw === 'night' ? 'night' : shiftTypeRaw === 'day' ? 'day' : null
+      if (!date || !shiftType) return 'Нужно указать дату (YYYY-MM-DD) и shift_type (day/night).'
+      if (!isIsoDate(date)) return 'Неверная дата. Используй формат YYYY-MM-DD, например 2026-05-02.'
+      const companyRes = await resolveCompanyByName(String(args.company_name || ''))
+      if (companyRes.kind !== 'ok') {
+        if (companyRes.kind === 'ambiguous') {
+          return `Уточни точку: найдено несколько вариантов (${pickTopNames(companyRes.candidates, (c) => c.name)}).`
+        }
+        return `Точка "${args.company_name}" не найдена.`
+      }
+      const company = companyRes.company
+      const opRes = await resolveOperatorByName(String(args.operator_name || ''), company.id)
+      if (opRes.kind !== 'ok') {
+        if (opRes.kind === 'ambiguous') {
+          return `Уточни оператора для ${company.name}: ${pickTopNames(opRes.candidates, (o) => {
+            const p = o.operator_profiles as Array<{ full_name: string | null }> | null
+            return p?.[0]?.full_name || o.short_name || o.name
+          })}.`
+        }
+        return `Оператор "${args.operator_name}" не найден на точке ${company.name}.`
+      }
+      const found = opRes.operator
+      const profiles = found.operator_profiles as Array<{ full_name: string | null }> | null
+      const operatorLabel = (profiles?.[0]?.full_name || found.short_name || found.name || '').trim()
+      const { data: conflict } = await supabase
+        .from('shifts')
+        .select('id')
+        .eq('date', date)
+        .ilike('operator_name', operatorLabel)
+        .limit(1)
+      if (conflict && conflict.length > 0) {
+        const { data: sameSlot } = await supabase
+          .from('shifts')
+          .select('id')
+          .eq('company_id', company.id)
+          .eq('date', date)
+          .eq('shift_type', shiftType)
+          .maybeSingle()
+        if (!sameSlot || sameSlot.id !== conflict[0].id) {
+          return `⚠️ Оператор ${operatorLabel} уже назначен на ${date}.`
+        }
+      }
+      const { data: existingSlot } = await supabase
+        .from('shifts')
+        .select('id')
+        .eq('company_id', company.id)
+        .eq('date', date)
+        .eq('shift_type', shiftType)
+        .maybeSingle()
+      if (existingSlot?.id) {
+        const { error } = await supabase
+          .from('shifts')
+          .update({ operator_name: operatorLabel, comment: String(args.comment || '').trim() || null })
+          .eq('id', existingSlot.id)
+        if (error) return `Ошибка назначения смены: ${error.message}`
+      } else {
+        const { error } = await supabase.from('shifts').insert({
+          company_id: company.id,
+          date,
+          shift_type: shiftType,
+          operator_name: operatorLabel,
+          cash_amount: 0,
+          kaspi_amount: 0,
+          card_amount: 0,
+          debt_amount: 0,
+          comment: String(args.comment || '').trim() || null,
+        })
+        if (error) return `Ошибка назначения смены: ${error.message}`
+      }
+      const shiftLabel = shiftType === 'day' ? 'день' : 'ночь'
+      return `✅ Смена назначена: ${date}, ${shiftLabel}, ${company.name}, оператор ${operatorLabel}.`
     }
 
     if (name === 'get_operator_info') {
@@ -1609,6 +1989,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
     }
 
     if (name === 'send_message_to_all_operators') {
+      if (!canManageOps) return '⛔ У вас нет прав на это действие.'
       const { data: ops } = await supabase.from('operators').select('name, telegram_chat_id, operator_profiles(full_name)').eq('is_active', true).not('telegram_chat_id', 'is', null)
       if (!ops?.length) return 'Нет операторов с Telegram.'
       const msgText = `📨 <b>Сообщение от руководства:</b>\n\n${args.message}`
@@ -1714,6 +2095,12 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       let operatorId = (args.operator_id as string | undefined)?.trim()
       let operatorName = 'Оператор'
 
+      // UX: оператору в Telegram не нужно вручную указывать себя.
+      if (!operatorId && !args.operator_name && botUser?.role === 'operator' && botUser?.operatorId) {
+        operatorId = botUser.operatorId
+        operatorName = botUser.name || operatorName
+      }
+
       if (!operatorId && args.operator_name) {
         // Search by name
         const { data: ops } = await supabase.from('operators').select('id, name, short_name, operator_profiles(full_name)').eq('is_active', true)
@@ -1757,6 +2144,10 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
 
     if (name === 'get_current_on_shift') {
       return buildOnShiftText()
+    }
+
+    if (name === 'get_today_shifts') {
+      return buildTodayShiftsText()
     }
 
     return 'Неизвестный инструмент.'
@@ -1812,6 +2203,8 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
           const n = tc.function.name
           if (n === 'send_message_to_operator') return '📤 Отправляю сообщение оператору...'
           if (n === 'create_task_for_operator') return '📋 Создаю задачу...'
+          if (n === 'create_task_for_company_operators') return '📋 Ставлю задачу всем операторам точки...'
+          if (n === 'assign_shift') return '📅 Назначаю смену...'
           if (n === 'get_operator_info') return '🔍 Ищу данные по оператору...'
           if (n === 'send_message_to_all_operators') return '📢 Рассылаю сообщение...'
           if (n === 'save_to_memory') return '🧠 Запоминаю...'
@@ -2065,8 +2458,8 @@ export async function POST(req: Request) {
         return json({ ok: true })
       }
 
-      // Inventory request approve / reject
-      const ireqMatch = callbackData.match(/^ireq:([0-9a-f-]+):(approve|reject)$/i)
+      // Inventory request approve / reject / edit quantities
+      const ireqMatch = callbackData.match(/^ireq:([0-9a-f-]+):(approve|reject|edit)$/i)
       if (ireqMatch) {
         const requestId = ireqMatch[1]
         const action = ireqMatch[2]
@@ -2078,6 +2471,70 @@ export async function POST(req: Request) {
           const botUser = await identifyBotUser(telegramUserId)
           if (!canUseFinance(botUser.role)) {
             await answerCallbackQuery(callbackQueryId, '⛔ Нет доступа', true)
+            return json({ ok: true })
+          }
+
+          if (action === 'edit') {
+            const { data: reqData } = await supabase
+              .from('inventory_requests')
+              .select(`
+                id, status,
+                items:inventory_request_items(
+                  id, requested_qty,
+                  item:inventory_items(name, unit)
+                )
+              `)
+              .eq('id', requestId)
+              .maybeSingle()
+            if (!reqData) {
+              await answerCallbackQuery(callbackQueryId, 'Заявка не найдена', true)
+              return json({ ok: true })
+            }
+            if (String((reqData as any).status || '') !== 'new') {
+              await answerCallbackQuery(callbackQueryId, 'Заявка уже обработана', true)
+              return json({ ok: true })
+            }
+            const items = (Array.isArray((reqData as any).items) ? (reqData as any).items : []).map((row: any) => {
+              const item = Array.isArray(row.item) ? row.item[0] : row.item
+              return {
+                request_item_id: String(row.id),
+                requested_qty: Number(row.requested_qty || 0),
+                name: String(item?.name || 'Товар'),
+                unit: String(item?.unit || 'шт'),
+              }
+            })
+            if (items.length === 0) {
+              await answerCallbackQuery(callbackQueryId, 'В заявке нет позиций', true)
+              return json({ ok: true })
+            }
+            if (chatId) {
+              await supabase.from('telegram_chat_history').upsert({
+                chat_id: `ireq_edit_${chatId}`,
+                history: [{
+                  content: JSON.stringify({
+                    requestId,
+                    messageId: messageId || null,
+                    items,
+                    startedAt: new Date().toISOString(),
+                  }),
+                }],
+                updated_at: new Date().toISOString(),
+              })
+              const helpLines = [
+                '<b>✏️ Изменить количество перед одобрением</b>',
+                'Ответьте одним сообщением в формате:',
+                '<code>1=5</code>',
+                '<code>2=1.5</code>',
+                '',
+                'Где номер — строка позиции:',
+                ...items.map((it: any, idx: number) => `${idx + 1}) ${escapeTelegramHtml(it.name)} — ${it.requested_qty} ${escapeTelegramHtml(it.unit)}`),
+                '',
+                'Позиции, которые не укажете, будут одобрены в запрошенном количестве.',
+                'Для отмены: <code>отмена</code>',
+              ]
+              await sendTelegramText(chatId, helpLines.join('\n'))
+            }
+            await answerCallbackQuery(callbackQueryId, 'Отправьте новые количества сообщением').catch(() => null)
             return json({ ok: true })
           }
 
@@ -2280,6 +2737,11 @@ export async function POST(req: Request) {
         return json({ ok: true })
       }
 
+      if (cmd === '/whoami') {
+        await sendTelegramText(chatId, await buildWhoAmIText(botUser, telegramUserId))
+        return json({ ok: true })
+      }
+
       // Finance commands
       if (['/today', '/yesterday', '/week', '/month'].includes(cmd ?? '')) {
         if (!canUseFinance(botUser.role)) {
@@ -2344,6 +2806,15 @@ export async function POST(req: Request) {
         return json({ ok: true })
       }
 
+      if (cmd === '/today_shifts') {
+        if (!canUseFinance(botUser.role)) {
+          await sendTelegramText(chatId, '⛔ Нет доступа к этой команде.')
+          return json({ ok: true })
+        }
+        await sendTelegramText(chatId, await buildTodayShiftsText())
+        return json({ ok: true })
+      }
+
       if (cmd === '/mystats') {
         if (botUser.role !== 'operator' || !botUser.operatorId) {
           await sendTelegramText(chatId, '⛔ Эта команда доступна только операторам.')
@@ -2359,6 +2830,84 @@ export async function POST(req: Request) {
           return json({ ok: true })
         }
         await handleMyShifts(Number(chatId), botUser.operatorId, botUser.name)
+        return json({ ok: true })
+      }
+
+      // Inventory request quantity editing session (manager flow from inline button).
+      const editSessionKey = `ireq_edit_${chatId}`
+      const { data: ireqEditRow } = await supabase
+        .from('telegram_chat_history')
+        .select('history')
+        .eq('chat_id', editSessionKey)
+        .maybeSingle()
+      const rawSessionContent = (ireqEditRow?.history as any[])?.[0]?.content
+      let ireqSession: any = null
+      try {
+        ireqSession = rawSessionContent ? JSON.parse(String(rawSessionContent)) : null
+      } catch {
+        ireqSession = null
+      }
+      if (ireqSession?.requestId && Array.isArray(ireqSession.items) && ireqSession.items.length > 0) {
+        if (!canUseFinance(botUser.role)) {
+          await supabase.from('telegram_chat_history').delete().eq('chat_id', editSessionKey)
+          await sendTelegramText(chatId, '⛔ Нет доступа к обработке заявки.')
+          return json({ ok: true })
+        }
+        const input = text.trim()
+        if (/^(отмена|cancel)$/i.test(input)) {
+          await supabase.from('telegram_chat_history').delete().eq('chat_id', editSessionKey)
+          await sendTelegramText(chatId, '❌ Изменение количества отменено.')
+          return json({ ok: true })
+        }
+
+        const lines = input
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+        const updates = new Map<number, number>()
+        for (const line of lines) {
+          const m = line.match(/^(\d+)\s*=\s*([0-9]+(?:[.,][0-9]+)?)$/)
+          if (!m) {
+            await sendTelegramText(
+              chatId,
+              'Неверный формат. Используйте:\n1=5\n2=1.5\n\nИли напишите "отмена".',
+            )
+            return json({ ok: true })
+          }
+          const idx = Number(m[1]) - 1
+          const qty = Number(String(m[2]).replace(',', '.'))
+          if (!Number.isFinite(idx) || idx < 0 || idx >= ireqSession.items.length) {
+            await sendTelegramText(chatId, `Позиция ${m[1]} не найдена. Проверьте номера строк.`)
+            return json({ ok: true })
+          }
+          if (!Number.isFinite(qty) || qty < 0) {
+            await sendTelegramText(chatId, `Количество для строки ${m[1]} должно быть >= 0.`)
+            return json({ ok: true })
+          }
+          updates.set(idx, qty)
+        }
+
+        const decisionItems = ireqSession.items.map((it: any, idx: number) => ({
+          request_item_id: String(it.request_item_id),
+          approved_qty: updates.has(idx) ? Number(updates.get(idx)) : Number(it.requested_qty || 0),
+        }))
+
+        try {
+          await decideInventoryRequest(supabase, {
+            request_id: String(ireqSession.requestId),
+            approved: true,
+            decision_comment: 'Одобрено через Telegram (изменено количество)',
+            actor_user_id: null,
+            items: decisionItems,
+          })
+          await supabase.from('telegram_chat_history').delete().eq('chat_id', editSessionKey)
+          if (ireqSession.messageId) {
+            await clearCallbackButtons(chatId, Number(ireqSession.messageId)).catch(() => null)
+          }
+          await sendTelegramText(chatId, '✅ Заявка одобрена с обновлёнными количествами.')
+        } catch (error: any) {
+          await sendTelegramText(chatId, `❌ Ошибка: ${error?.message || 'Не удалось принять решение по заявке'}`)
+        }
         return json({ ok: true })
       }
 

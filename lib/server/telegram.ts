@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { ordaTelegramFrame } from '@/lib/telegram/message-kit'
+import { sendTelegramMessage } from '@/lib/telegram/send'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID
@@ -122,6 +123,7 @@ function esc(s: string | null | undefined): string {
 
 /** Отправить уведомление о новой заявке на перемещение товаров */
 export async function notifyInventoryRequestCreated(params: {
+  requestId?: string | null
   companyName: string
   createdByName: string | null
   comment: string | null
@@ -144,8 +146,19 @@ export async function notifyInventoryRequestCreated(params: {
     params.comment ? `\n💬 <i>${esc(params.comment)}</i>` : null,
   ].filter(Boolean).join('\n')
 
+  const replyMarkup = params.requestId
+    ? {
+        inline_keyboard: [[
+          { text: '✅ Одобрить', callback_data: `ireq:${params.requestId}:approve` },
+          { text: '❌ Отклонить', callback_data: `ireq:${params.requestId}:reject` },
+        ], [
+          { text: '✏️ Изменить кол-во', callback_data: `ireq:${params.requestId}:edit` },
+        ]],
+      }
+    : undefined
+
   await Promise.all(
-    params.chatIds.map((id) => sendTelegram(html, id).catch(() => null)),
+    params.chatIds.map((id) => sendTelegramMessage(id, html, { replyMarkup }).catch(() => null)),
   )
 }
 

@@ -303,6 +303,7 @@ export async function POST(request: Request) {
           const uniqueChatIds = [...new Set(chatIds)]
 
           await notifyInventoryRequestCreated({
+            requestId: result,
             companyName: company?.name || companyId,
             createdByName,
             comment: String(body.comment || '').trim() || null,
