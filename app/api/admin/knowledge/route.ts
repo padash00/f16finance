@@ -131,6 +131,9 @@ function ensureEditableOrganization(rowOrganizationId: string | null | undefined
   }
 }
 
+const ARTICLE_LIST_COLUMNS =
+  'id, organization_id, company_id, category_id, title, slug, summary, tags, audience, severity, related_fine_amount, related_bonus_amount, sort_order, is_published, requires_confirmation, version, updated_at'
+
 async function loadKnowledgeData(params: { organizationId: string | null; isSuperAdmin: boolean }) {
   const supabase = createAdminSupabaseClient()
   const allowedCompanyIds = await listOrganizationCompanyIds({
@@ -145,7 +148,7 @@ async function loadKnowledgeData(params: { organizationId: string | null; isSupe
     .order('title', { ascending: true })
   let articlesQuery = supabase
     .from('knowledge_articles')
-    .select('*')
+    .select(ARTICLE_LIST_COLUMNS)
     .order('sort_order', { ascending: true })
     .order('updated_at', { ascending: false })
   let templatesQuery = supabase
@@ -363,6 +366,21 @@ export async function GET(req: Request) {
     if (guard) return guard
     const access = await getRequestAccessContext(req)
     if ('response' in access) return access.response
+
+    const url = new URL(req.url)
+    const articleId = url.searchParams.get('article')
+    if (articleId) {
+      const supabase = createAdminSupabaseClient()
+      const { data, error } = await supabase.from('knowledge_articles').select('*').eq('id', articleId).maybeSingle()
+      if (error) throw error
+      if (!data) return json({ error: 'Статья не найдена' }, 404)
+      ensureEditableOrganization(
+        (data as any).organization_id,
+        access.activeOrganization?.id || null,
+        access.isSuperAdmin,
+      )
+      return json({ ok: true, data })
+    }
 
     const data = await loadKnowledgeData({
       organizationId: access.activeOrganization?.id || null,

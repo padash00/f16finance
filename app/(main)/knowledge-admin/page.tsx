@@ -61,7 +61,7 @@ type KnowledgeArticle = {
   title: string
   slug: string
   summary: string | null
-  content: string
+  content?: string
   tags: string[] | null
   audience: string[] | null
   severity: 'info' | 'normal' | 'warning' | 'critical'
@@ -310,7 +310,7 @@ export default function KnowledgeAdminPage() {
       if (filterCompany === 'global' && article.company_id) return false
       if (filterCompany !== 'all' && filterCompany !== 'global' && article.company_id !== filterCompany) return false
       if (!needle) return true
-      return [article.title, article.summary, article.content, article.tags?.join(' ')]
+      return [article.title, article.summary, article.tags?.join(' ')]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle))
     })
@@ -501,7 +501,7 @@ export default function KnowledgeAdminPage() {
     setArticleDialogOpen(true)
   }
 
-  function openArticleDialogEdit(article: KnowledgeArticle) {
+  async function openArticleDialogEdit(article: KnowledgeArticle) {
     setArticleDialogValue({
       id: article.id,
       company_id: article.company_id || '',
@@ -519,6 +519,17 @@ export default function KnowledgeAdminPage() {
       requires_confirmation: article.requires_confirmation === true,
     })
     setArticleDialogOpen(true)
+    if (article.content !== undefined) return
+    try {
+      const response = await fetch(`/api/admin/knowledge?article=${encodeURIComponent(article.id)}`, { cache: 'no-store' })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || 'Не удалось загрузить статью')
+      const full = payload.data as KnowledgeArticle
+      setData((prev) => ({ ...prev, articles: upsertById(prev.articles, full) }))
+      setArticleDialogValue((prev) => (prev?.id === full.id ? { ...prev, content: full.content || '' } : prev))
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : 'Не удалось загрузить статью')
+    }
   }
 
   async function submitChecklistTemplateDialog(value: ChecklistTemplateEditorValue) {
@@ -1195,7 +1206,7 @@ function ArticleCard({
             ))}
           </div>
           <h3 className="mt-3 break-words text-xl font-black">{article.title}</h3>
-          <p className="mt-2 break-words text-sm leading-6 text-slate-400">{article.summary || article.content.slice(0, 180)}</p>
+          <p className="mt-2 break-words text-sm leading-6 text-slate-400">{article.summary || 'Без краткого описания'}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {(article.tags ?? []).map((tag) => (
               <span key={tag} className="max-w-full break-words rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">
