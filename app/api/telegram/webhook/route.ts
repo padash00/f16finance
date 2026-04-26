@@ -1498,6 +1498,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       actionFlags,
     }),
     'ВАЖНО: если пользователь спрашивает кто сейчас на смене, кто работает сейчас, кто дежурит, или на какой точке кто в смене — ОБЯЗАТЕЛЬНО вызови инструмент get_current_on_shift. Для вопроса про расписание на сегодня (день+ночь) вызывай get_today_shifts.',
+    'ВАЖНО: если пользователь спрашивает кто из операторов заходил на сайт, когда заходил оператор, или "кто заходил за последние дни" — ОБЯЗАТЕЛЬНО вызывай инструмент get_operator_site_logins.',
     'ВАЖНО: если пользователь просит выполнить действие в системе (поставить смену, назначить оператора, создать задачу оператору или всем операторам точки) — ОБЯЗАТЕЛЬНО вызывай соответствующий инструмент, не отвечай общими словами.',
     wrapDataBlock(dataBlock),
   ].join('\n\n')
@@ -1685,6 +1686,23 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
             leader_name: { type: 'string', description: 'Имя руководителя (необязательно, например "Акбота")' },
           },
           required: ['date_from', 'date_to'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_operator_site_logins',
+        description: 'Получить список операторов, которые входили на сайт за период, и время их последних входов.',
+        parameters: {
+          type: 'object',
+          properties: {
+            date_from: { type: 'string', description: 'Начало периода YYYY-MM-DD (необязательно, если указан days)' },
+            date_to: { type: 'string', description: 'Конец периода YYYY-MM-DD (необязательно, если указан days)' },
+            days: { type: 'number', description: 'Сколько последних дней смотреть (по умолчанию 7, максимум 30)' },
+            operator_name: { type: 'string', description: 'Имя оператора для фильтра (необязательно)' },
+          },
+          required: [],
         },
       },
     },
@@ -2329,6 +2347,116 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       return lines.join('\n')
     }
 
+    if (name === 'get_operator_site_logins') {
+      if (!canManageOps) return '⛔ У вас нет прав на это действие.'
+      const dateFromArg = String(args.date_from || '').trim()
+      const dateToArg = String(args.date_to || '').trim()
+      const operatorNameFilter = String(args.operator_name || '').trim().toLowerCase()
+      const rawDays = Number(args.days || 7)
+      const days = Number.isFinite(rawDays) ? Math.max(1, Math.min(30, Math.floor(rawDays))) : 7
+      const isoDateRe = /^\d{4}-\d{2}-\d{2}$/
+
+      let dateFrom = dateFromArg
+      let dateTo = dateToArg
+      if (!dateFrom || !dateTo) {
+        const today = todayISO()
+        dateTo = today
+        dateFrom = addDaysISO(today, -(days - 1))
+      }
+      if (!isoDateRe.test(dateFrom) || !isoDateRe.test(dateTo)) {
+        return 'Неверный формат даты. Используйте YYYY-MM-DD.'
+      }
+
+      const fromIso = `${dateFrom}T00:00:00.000Z`
+      const toIso = `${dateTo}T23:59:59.999Z`
+      const { data: rawRows, error } = await supabase
+        .from('audit_log')
+        .select('actor_user_id, action, created_at, payload')
+        .eq('entity_type', 'auth-session')
+        .ilike('action', '%operator-login%')
+        .gte('created_at', fromIso)
+        .lte('created_at', toIso)
+        .order('created_at', { ascending: false })
+        .limit(500)
+
+      if (error) return `Не удалось загрузить входы операторов: ${error.message}`
+      const rows = (rawRows || []) as any[]
+      if (rows.length === 0) return `За период ${dateFrom} — ${dateTo} входов операторов не найдено.`
+
+      const actorIds = Array.from(new Set(rows.map((r) => String(r.actor_user_id || '')).filter(Boolean)))
+      const actorToName = new Map<string, string>()
+      if (actorIds.length > 0) {
+        const { data: authLinks } = await supabase
+          .from('operator_auth')
+          .select('user_id, operators(name, short_name, operator_profiles(full_name))')
+          .in('user_id', actorIds)
+
+        for (const link of (authLinks || []) as any[]) {
+          const userId = String(link.user_id || '')
+          const op = link.operators || {}
+          const profiles = op.operator_profiles as Array<{ full_name: string | null }> | null
+          const name = String(profiles?.[0]?.full_name || op.short_name || op.name || '').trim()
+          if (userId && name) actorToName.set(userId, name)
+        }
+      }
+
+      const filtered = rows.filter((row) => {
+        const userId = String(row.actor_user_id || '')
+        const name = actorToName.get(userId) || String((row.payload || {}).email || '').trim() || `user:${userId.slice(0, 8)}`
+        if (!operatorNameFilter) return true
+        return name.toLowerCase().includes(operatorNameFilter)
+      })
+      if (filtered.length === 0) {
+        return `За период ${dateFrom} — ${dateTo} входов оператора "${operatorNameFilter}" не найдено.`
+      }
+
+      const byOperator = new Map<string, { count: number; lastAt: string }>()
+      for (const row of filtered) {
+        const userId = String(row.actor_user_id || '')
+        const name = actorToName.get(userId) || String((row.payload || {}).email || '').trim() || `user:${userId.slice(0, 8)}`
+        const createdAt = String(row.created_at || '')
+        const prev = byOperator.get(name)
+        if (!prev) {
+          byOperator.set(name, { count: 1, lastAt: createdAt })
+          continue
+        }
+        prev.count += 1
+        if (createdAt > prev.lastAt) prev.lastAt = createdAt
+      }
+
+      const sortedOperators = Array.from(byOperator.entries()).sort((a, b) => {
+        if (b[1].count !== a[1].count) return b[1].count - a[1].count
+        return b[1].lastAt.localeCompare(a[1].lastAt)
+      })
+
+      const fmtAt = (iso: string) =>
+        new Date(iso).toLocaleString('ru-RU', {
+          timeZone: 'Asia/Almaty',
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+
+      const lines: string[] = []
+      lines.push(`За период ${dateFrom} — ${dateTo} на сайт заходили ${sortedOperators.length} оператор(ов).`)
+      lines.push('')
+      lines.push('Кто заходил:')
+      for (const [name, stat] of sortedOperators.slice(0, 20)) {
+        lines.push(`• ${name} — входов: ${stat.count}, последний: ${fmtAt(stat.lastAt)}`)
+      }
+
+      lines.push('')
+      lines.push('Последние входы:')
+      for (const row of filtered.slice(0, 15)) {
+        const userId = String(row.actor_user_id || '')
+        const name = actorToName.get(userId) || String((row.payload || {}).email || '').trim() || `user:${userId.slice(0, 8)}`
+        lines.push(`• ${fmtAt(String(row.created_at || ''))} — ${name}`)
+      }
+
+      return lines.join('\n')
+    }
+
     return 'Неизвестный инструмент.'
   }
 
@@ -2385,6 +2513,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
           if (n === 'create_task_for_company_operators') return '📋 Ставлю задачу всем операторам точки...'
           if (n === 'assign_shift') return '📅 Назначаю смену...'
           if (n === 'get_leader_activity') return '🧾 Собираю активность руководителя...'
+          if (n === 'get_operator_site_logins') return '🧾 Проверяю входы операторов на сайт...'
           if (n === 'get_operator_info') return '🔍 Ищу данные по оператору...'
           if (n === 'send_message_to_all_operators') return '📢 Рассылаю сообщение...'
           if (n === 'save_to_memory') return '🧠 Запоминаю...'
