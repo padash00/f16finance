@@ -1219,7 +1219,10 @@ function ChecklistTemplateCard({
               <div className="min-w-0 flex-1">
                 <p className="break-words font-bold text-slate-100">{item.title}</p>
                 {item.description ? (
-                  <p className="mt-1 break-words text-xs leading-5 text-slate-500">{item.description}</p>
+                  <div
+                    className="mt-1 break-words text-xs leading-5 text-slate-500 [&_p]:my-1 [&_h1]:my-1.5 [&_h1]:text-sm [&_h1]:font-black [&_h2]:my-1.5 [&_h2]:text-sm [&_h2]:font-black [&_h3]:my-1 [&_h3]:font-bold [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-black [&_em]:italic [&_u]:underline [&_a]:text-amber-300 [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-amber-300/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-800/80 [&_code]:px-1 [&_mark]:rounded [&_mark]:px-1 [&_img]:my-2 [&_img]:max-h-40 [&_img]:rounded [&_table]:my-2 [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-slate-700 [&_td]:px-2 [&_td]:py-1"
+                    dangerouslySetInnerHTML={{ __html: item.description }}
+                  />
                 ) : null}
                 {meta.length ? (
                   <p className="mt-1 break-words text-xs text-slate-500">{meta.join(' · ')}</p>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Camera, CheckCircle2, CheckSquare, ClipboardList, Eye, Plus, Save, Trash2, X } from 'lucide-react'
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { RichTextEditor } from './rich-text-editor'
 
 type ScheduleType = 'opening' | 'periodic' | 'closing' | 'onboarding' | 'handover'
 type Severity = 'info' | 'normal' | 'warning' | 'critical'
@@ -419,7 +420,7 @@ export function ChecklistEditorDialog({
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-900 text-xs font-black text-amber-100">{index + 1}</span>
                       <div className="min-w-0 flex-1">
                         <p className="break-words text-sm font-black text-slate-100">{item.title}</p>
-                        <p className="mt-1 break-words text-xs leading-5 text-slate-500">{item.description || 'Описание не заполнено.'}</p>
+                        <RichDescription html={item.description} className="mt-1 text-xs leading-5 text-slate-500" empty="Описание не заполнено." />
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Badge>{ANSWER_TYPE_LABELS[item.answer_type]}</Badge>
                           {item.is_required ? <Badge>обязательный</Badge> : null}
@@ -480,13 +481,16 @@ export function ChecklistEditorDialog({
 
                 <div className="space-y-2">
                   <Label>Инструкция оператору</Label>
-                  <textarea
-                    value={itemValue.description}
-                    onChange={(event) => setItemValue({ ...itemValue, description: event.target.value })}
-                    disabled={!canEditItems}
-                    className="min-h-24 w-full rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-amber-400/80 disabled:opacity-50"
-                    placeholder="Например: проверь чистоту столов, кресел, пола и барной зоны."
-                  />
+                  {canEditItems ? (
+                    <RichTextEditor
+                      value={itemValue.description}
+                      onChange={(html) => setItemValue({ ...itemValue, description: html })}
+                    />
+                  ) : (
+                    <div className="rounded-2xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-500 opacity-50">
+                      Сначала сохраните чек-лист, чтобы заполнить инструкцию.
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -610,7 +614,7 @@ export function ChecklistEditorDialog({
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-900 text-xs font-black text-amber-100">{index + 1}</span>
                       <div className="min-w-0 flex-1">
                         <p className="break-words text-sm font-black text-slate-100">{item.title}</p>
-                        <p className="mt-1 break-words text-xs leading-5 text-slate-500">{item.description || 'Инструкция не заполнена.'}</p>
+                        <RichDescription html={item.description} className="mt-1 text-xs leading-5 text-slate-500" empty="Инструкция не заполнена." />
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Badge>{ANSWER_TYPE_LABELS[item.answer_type]}</Badge>
                           {item.is_required ? <Badge>обязательно</Badge> : null}
@@ -750,4 +754,15 @@ function formatMoney(value: number | null | undefined) {
   const amount = Number(value || 0)
   if (!Number.isFinite(amount) || amount === 0) return ''
   return `${amount.toLocaleString('ru-RU')} ₸`
+}
+
+function RichDescription({ html, className, empty }: { html: string | null | undefined; className?: string; empty: string }) {
+  const trimmed = (html || '').replace(/<p>\s*<\/p>/g, '').trim()
+  if (!trimmed) return <p className={`break-words ${className ?? ''}`}>{empty}</p>
+  return (
+    <div
+      className={`break-words [&_p]:my-1 [&_h1]:my-1.5 [&_h1]:text-sm [&_h1]:font-black [&_h2]:my-1.5 [&_h2]:text-sm [&_h2]:font-black [&_h3]:my-1 [&_h3]:font-bold [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_strong]:font-black [&_em]:italic [&_u]:underline [&_a]:text-amber-300 [&_a]:underline [&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-amber-300/50 [&_blockquote]:pl-3 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-800/80 [&_code]:px-1 [&_mark]:rounded [&_mark]:px-1 [&_img]:my-2 [&_img]:max-h-40 [&_img]:rounded [&_table]:my-2 [&_th]:border [&_th]:border-slate-700 [&_th]:bg-slate-800 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-slate-700 [&_td]:px-2 [&_td]:py-1 ${className ?? ''}`}
+      dangerouslySetInnerHTML={{ __html: trimmed }}
+    />
+  )
 }
