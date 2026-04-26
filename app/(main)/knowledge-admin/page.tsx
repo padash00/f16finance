@@ -277,7 +277,7 @@ export default function KnowledgeAdminPage() {
       const response = await fetch('/api/admin/knowledge', { cache: 'no-store' })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'Не удалось загрузить базу знаний')
-      const normalized = normalizeKnowledgeResponse(payload)
+      const normalized = normalizeKnowledgeResponse(payload?.data ?? payload)
       setData(normalized)
       setItemForm((current: any) => ({
         ...current,
