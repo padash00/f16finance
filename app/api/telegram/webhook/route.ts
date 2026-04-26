@@ -232,6 +232,7 @@ function buildHelpText(user: BotUser): string {
       '/month — последние 30 дней',
       '/cashflow — баланс и движение денег',
       '/compare — сравнение этой и прошлой недели',
+      '/onshift — кто сейчас на смене',
       '',
       '<b>📦 Склад:</b>',
       'Отправьте фото накладной — бот создаст приёмку автоматически',
@@ -518,6 +519,51 @@ async function handleMyShifts(chatId: number, operatorId: string, operatorName: 
   }
 
   await sendTelegramMessage(chatId, lines.join('\n'))
+}
+
+async function buildOnShiftText() {
+  const supabase = createAdminSupabaseClient()
+  const now = nowKZ()
+  const hour = now.getUTCHours()
+  const isDayShift = hour >= 8 && hour < 20
+  const currentShiftType: 'day' | 'night' = isDayShift ? 'day' : 'night'
+  const baseDate = todayISO()
+  const scheduleDate = !isDayShift && hour < 8 ? addDaysISO(baseDate, -1) : baseDate
+
+  const { data: plannedShifts, error } = await supabase
+    .from('shifts')
+    .select('id, date, shift_type, operator_name, company:company_id(name)')
+    .eq('date', scheduleDate)
+    .eq('shift_type', currentShiftType)
+    .order('company_id', { ascending: true })
+
+  if (error) {
+    return 'Не удалось получить текущие смены. Попробуйте чуть позже.'
+  }
+
+  const rows = (plannedShifts || []) as any[]
+  const shiftTypeLabel: Record<string, string> = {
+    day: '☀️ день',
+    night: '🌙 ночь',
+  }
+
+  if (rows.length === 0) {
+    const slotLabel = shiftTypeLabel[currentShiftType] || currentShiftType
+    return `<b>На ${scheduleDate} (${slotLabel}) нет назначенных смен.</b>`
+  }
+
+  const lines = [
+    '<b>👥 Кто сейчас на смене</b>',
+    `<i>${scheduleDate} · ${shiftTypeLabel[currentShiftType] || currentShiftType}</i>`,
+    '',
+  ]
+  for (const row of rows) {
+    const operatorName = (row.operator_name || '').trim() || 'Оператор'
+    const companyName = row.company?.name || 'Точка'
+    lines.push(`• ${escapeTelegramHtml(operatorName)} — ${escapeTelegramHtml(companyName)}`)
+  }
+
+  return lines.join('\n')
 }
 
 async function handleCashFlow(chatId: number) {
@@ -1475,6 +1521,18 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
         },
       },
     },
+    {
+      type: 'function',
+      function: {
+        name: 'get_current_on_shift',
+        description: 'Получить список сотрудников, у которых прямо сейчас открыта смена.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
+    },
   ]
 
   // ─── Tool executor ────────────────────────────────────────────────────────
@@ -1695,6 +1753,10 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       } catch (e: any) {
         return `Ошибка расчёта зарплаты: ${e?.message || 'неизвестная ошибка'}`
       }
+    }
+
+    if (name === 'get_current_on_shift') {
+      return buildOnShiftText()
     }
 
     return 'Неизвестный инструмент.'
@@ -2270,6 +2332,15 @@ export async function POST(req: Request) {
           return json({ ok: true })
         }
         await handleCompare(Number(chatId))
+        return json({ ok: true })
+      }
+
+      if (cmd === '/onshift') {
+        if (!canUseFinance(botUser.role)) {
+          await sendTelegramText(chatId, '⛔ Нет доступа к этой команде.')
+          return json({ ok: true })
+        }
+        await sendTelegramText(chatId, await buildOnShiftText())
         return json({ ok: true })
       }
 
