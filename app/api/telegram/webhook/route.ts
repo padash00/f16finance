@@ -1672,6 +1672,22 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
         },
       },
     },
+    {
+      type: 'function',
+      function: {
+        name: 'get_leader_activity',
+        description: 'Получить историю действий руководителя на сайте за период (входы, страницы, доходы, расходы).',
+        parameters: {
+          type: 'object',
+          properties: {
+            date_from: { type: 'string', description: 'Начало периода YYYY-MM-DD' },
+            date_to: { type: 'string', description: 'Конец периода YYYY-MM-DD' },
+            leader_name: { type: 'string', description: 'Имя руководителя (необязательно, например "Акбота")' },
+          },
+          required: ['date_from', 'date_to'],
+        },
+      },
+    },
   ]
 
   // ─── Tool executor ────────────────────────────────────────────────────────
@@ -2150,6 +2166,120 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
       return buildTodayShiftsText()
     }
 
+    if (name === 'get_leader_activity') {
+      if (!canManageOps) return '⛔ У вас нет прав на это действие.'
+      const dateFrom = String(args.date_from || '').trim()
+      const dateTo = String(args.date_to || '').trim()
+      const leaderName = String(args.leader_name || '').trim().toLowerCase()
+      const isoDateRe = /^\d{4}-\d{2}-\d{2}$/
+      if (!isoDateRe.test(dateFrom) || !isoDateRe.test(dateTo)) {
+        return 'Неверный формат даты. Используйте YYYY-MM-DD.'
+      }
+      const fromIso = `${dateFrom}T00:00:00.000Z`
+      const toIso = `${dateTo}T23:59:59.999Z`
+
+      const { data: rawRows, error } = await supabase
+        .from('audit_log')
+        .select('actor_user_id, entity_type, entity_id, action, payload, created_at')
+        .gte('created_at', fromIso)
+        .lte('created_at', toIso)
+        .in('entity_type', ['auth-session', 'page-view', 'income', 'expense'])
+        .order('created_at', { ascending: true })
+        .limit(500)
+
+      if (error) return `Не удалось загрузить активность: ${error.message}`
+      const rows = (rawRows || []) as any[]
+      if (rows.length === 0) return `За период ${dateFrom} — ${dateTo} активность не найдена.`
+
+      const actorIds = Array.from(new Set(rows.map((r) => String(r.actor_user_id || '')).filter(Boolean)))
+      const actorMap = new Map<string, { name: string; role: string | null }>()
+      for (const actorId of actorIds) {
+        try {
+          const { data } = await supabase.auth.admin.getUserById(actorId)
+          const email = data?.user?.email || ''
+          const meta = (data?.user?.user_metadata || {}) as Record<string, unknown>
+          const fullName = String(meta.full_name || meta.name || '').trim()
+          let staffRole: string | null = null
+          let staffName = ''
+          if (email) {
+            const { data: staff } = await supabase
+              .from('staff')
+              .select('full_name, short_name, role')
+              .ilike('email', email)
+              .maybeSingle()
+            staffRole = String(staff?.role || '').trim().toLowerCase() || null
+            staffName = String(staff?.full_name || staff?.short_name || '').trim()
+          }
+          actorMap.set(actorId, {
+            name: staffName || fullName || email || actorId,
+            role: staffRole,
+          })
+        } catch {
+          actorMap.set(actorId, { name: actorId, role: null })
+        }
+      }
+
+      const leaderRows = rows.filter((r) => {
+        const actorId = String(r.actor_user_id || '')
+        const actor = actorMap.get(actorId)
+        if (!actor) return false
+        const isLeader = actor.role === 'owner' || actor.role === 'manager'
+        if (!isLeader) return false
+        if (!leaderName) return true
+        return actor.name.toLowerCase().includes(leaderName)
+      })
+
+      if (leaderRows.length === 0) {
+        return `За период ${dateFrom} — ${dateTo} активность руководителя${leaderName ? ` "${leaderName}"` : ''} не найдена.`
+      }
+
+      const lines: string[] = [
+        `📋 Активность руководителя за ${dateFrom} — ${dateTo}`,
+        '',
+      ]
+      for (const row of leaderRows.slice(-120)) {
+        const actor = actorMap.get(String(row.actor_user_id || ''))
+        const actorLabel = actor?.name || 'Руководитель'
+        const when = new Date(String(row.created_at || '')).toLocaleString('ru-RU', {
+          timeZone: 'Asia/Almaty',
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+        if (row.entity_type === 'auth-session' && String(row.action || '').includes('login')) {
+          lines.push(`• ${when} — ${actorLabel} вошла в систему`)
+          continue
+        }
+        if (row.entity_type === 'page-view') {
+          const path = String((row.payload || {}).pathname || row.entity_id || '')
+          lines.push(`• ${when} — ${actorLabel} открыла ${path}`)
+          continue
+        }
+        if (row.entity_type === 'income') {
+          const p = (row.payload || {}) as Record<string, unknown>
+          const amount =
+            Number(p.total_amount || 0) ||
+            Number(p.cash_amount || 0) + Number(p.kaspi_amount || 0) + Number(p.online_amount || 0) + Number(p.card_amount || 0)
+          const actionLabel =
+            row.action === 'create' ? 'добавила доход' : row.action === 'delete' ? 'удалила доход' : 'изменила доход'
+          lines.push(`• ${when} — ${actorLabel} ${actionLabel} (${Math.round(amount).toLocaleString('ru-RU')} ₸)`)
+          continue
+        }
+        if (row.entity_type === 'expense') {
+          const p = (row.payload || {}) as Record<string, unknown>
+          const amount = Number(p.total_amount || 0) || Number(p.cash_amount || 0) + Number(p.kaspi_amount || 0)
+          const category = String(p.category || '')
+          const actionLabel =
+            row.action === 'create' ? 'добавила расход' : row.action === 'delete' ? 'удалила расход' : 'изменила расход'
+          lines.push(`• ${when} — ${actorLabel} ${actionLabel}${category ? ` (${category})` : ''} (${Math.round(amount).toLocaleString('ru-RU')} ₸)`)
+          continue
+        }
+      }
+
+      return lines.join('\n')
+    }
+
     return 'Неизвестный инструмент.'
   }
 
@@ -2205,6 +2335,7 @@ async function handleAIChat(chatId: number, chatIdStr: string, userText: string,
           if (n === 'create_task_for_operator') return '📋 Создаю задачу...'
           if (n === 'create_task_for_company_operators') return '📋 Ставлю задачу всем операторам точки...'
           if (n === 'assign_shift') return '📅 Назначаю смену...'
+          if (n === 'get_leader_activity') return '🧾 Собираю активность руководителя...'
           if (n === 'get_operator_info') return '🔍 Ищу данные по оператору...'
           if (n === 'send_message_to_all_operators') return '📢 Рассылаю сообщение...'
           if (n === 'save_to_memory') return '🧠 Запоминаю...'
