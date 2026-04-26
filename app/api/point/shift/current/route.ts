@@ -82,9 +82,10 @@ export async function GET(request: Request) {
   if (operatorId) {
     const { data: critArticles } = await supabase
       .from('knowledge_articles')
-      .select('id, title, slug, severity, version, summary')
+      .select('id, title, slug, severity, version, summary, company_id')
       .eq('is_published', true)
       .eq('requires_confirmation', true)
+      .or(`company_id.is.null,company_id.eq.${device.company_id}`)
 
     const critArr = (critArticles || []) as any[]
     if (critArr.length > 0) {

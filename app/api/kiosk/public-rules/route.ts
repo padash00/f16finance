@@ -20,9 +20,11 @@ export async function GET(req: NextRequest) {
     .maybeSingle()
   const organizationId = (company as any)?.organization_id || null
 
+  const stationCompanyId = (station as any).company_id as string | null
+
   let articleQuery = admin
     .from('knowledge_articles')
-    .select('id, title, slug, summary, content, severity, audience, sort_order')
+    .select('id, title, slug, summary, content, severity, audience, sort_order, company_id')
     .eq('is_published', true)
     .order('sort_order', { ascending: true })
     .limit(50)
@@ -31,6 +33,12 @@ export async function GET(req: NextRequest) {
     articleQuery = articleQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`)
   } else {
     articleQuery = articleQuery.is('organization_id', null)
+  }
+
+  if (stationCompanyId) {
+    articleQuery = articleQuery.or(`company_id.is.null,company_id.eq.${stationCompanyId}`)
+  } else {
+    articleQuery = articleQuery.is('company_id', null)
   }
 
   const { data: articles, error } = await articleQuery

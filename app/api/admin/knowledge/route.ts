@@ -7,6 +7,7 @@ import { createRequestSupabaseClient, getRequestAccessContext, requireStaffCapab
 
 type CategoryPayload = {
   id?: string
+  company_id?: string | null
   title: string
   slug?: string | null
   description?: string | null
@@ -17,6 +18,7 @@ type CategoryPayload = {
 
 type ArticlePayload = {
   id?: string
+  company_id?: string | null
   category_id?: string | null
   title: string
   slug?: string | null
@@ -402,8 +404,16 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'upsertCategory') {
+      if (body.payload.company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: organizationId,
+          isSuperAdmin: access.isSuperAdmin,
+          requestedCompanyId: body.payload.company_id,
+        })
+      }
       const payload = {
         organization_id: organizationId,
+        company_id: body.payload.company_id || null,
         title: String(body.payload.title || '').trim(),
         slug: slugify(body.payload.slug || body.payload.title),
         description: body.payload.description?.trim() || null,
@@ -434,8 +444,16 @@ export async function POST(req: Request) {
     }
 
     if (body.action === 'upsertArticle') {
+      if (body.payload.company_id) {
+        await resolveCompanyScope({
+          activeOrganizationId: organizationId,
+          isSuperAdmin: access.isSuperAdmin,
+          requestedCompanyId: body.payload.company_id,
+        })
+      }
       const payload = {
         organization_id: organizationId,
+        company_id: body.payload.company_id || null,
         category_id: body.payload.category_id || null,
         title: String(body.payload.title || '').trim(),
         slug: slugify(body.payload.slug || body.payload.title),

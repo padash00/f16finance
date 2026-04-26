@@ -21,9 +21,11 @@ export async function GET(request: Request) {
     .select(
       `id, title, slug, summary, content, tags, audience, severity, version,
        requires_confirmation, related_fine_amount, related_bonus_amount,
+       company_id,
        category_id, category:category_id ( id, title, slug, kind )`,
     )
     .eq('is_published', true)
+    .or(`company_id.is.null,company_id.eq.${device.company_id}`)
     .order('sort_order', { ascending: true })
 
   if (error) return json({ error: 'knowledge-list-failed', detail: error.message }, 400)

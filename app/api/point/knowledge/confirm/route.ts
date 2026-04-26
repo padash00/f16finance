@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   // Текущая версия статьи
   const { data: article, error: articleError } = await supabase
     .from('knowledge_articles')
-    .select('id, version, requires_confirmation, is_published')
+    .select('id, version, requires_confirmation, is_published, company_id')
     .eq('id', body.article_id)
     .maybeSingle()
 
@@ -34,6 +34,10 @@ export async function POST(request: Request) {
   }
   if (!(article as any).is_published) {
     return json({ error: 'article-not-published' }, 400)
+  }
+  const articleCompanyId = (article as any).company_id as string | null
+  if (articleCompanyId && articleCompanyId !== device.company_id) {
+    return json({ error: 'article-not-for-this-company' }, 403)
   }
 
   // Текущая открытая смена (для shift_id)

@@ -73,8 +73,9 @@ export async function POST(request: Request) {
   const [articlesRes, shiftRes] = await Promise.all([
     supabase
       .from('knowledge_articles')
-      .select('id, title, slug, summary, content, severity, audience, is_published')
+      .select('id, title, slug, summary, content, severity, audience, is_published, company_id')
       .eq('is_published', true)
+      .or(`company_id.is.null,company_id.eq.${device.company_id}`)
       .limit(200),
     supabase
       .from('point_shifts')

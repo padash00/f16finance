@@ -23,6 +23,7 @@ type CategoryKind = 'rules' | 'faq' | 'salary' | 'problem' | 'checklist'
 
 type KnowledgeCategory = {
   id: string
+  company_id: string | null
   title: string
   slug: string
   description: string | null
@@ -33,6 +34,7 @@ type KnowledgeCategory = {
 
 type KnowledgeArticle = {
   id: string
+  company_id: string | null
   category_id: string | null
   title: string
   slug: string
@@ -111,6 +113,7 @@ const SEVERITY_LABELS = {
 
 const emptyCategory = {
   title: '',
+  company_id: '',
   description: '',
   kind: 'faq' as CategoryKind,
   sort_order: 100,
@@ -129,6 +132,7 @@ const AUDIENCE_OPTIONS = [
 
 const emptyArticle = {
   title: '',
+  company_id: '',
   category_id: '',
   summary: '',
   content: '',
@@ -248,6 +252,7 @@ export default function KnowledgeAdminPage() {
   const [query, setQuery] = useState('')
   const [filterSeverity, setFilterSeverity] = useState<'all' | 'info' | 'normal' | 'warning' | 'critical'>('all')
   const [filterStatus, setFilterStatus] = useState<'all' | 'published' | 'draft' | 'confirmation'>('all')
+  const [filterCompany, setFilterCompany] = useState<string>('all')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -261,6 +266,10 @@ export default function KnowledgeAdminPage() {
   const categoryById = useMemo(() => {
     return new Map(data.categories.map((category) => [category.id, category]))
   }, [data.categories])
+
+  const companyById = useMemo(() => {
+    return new Map(data.companies.map((company) => [company.id, company]))
+  }, [data.companies])
 
   const itemsByTemplate = useMemo(() => {
     const map = new Map<string, ChecklistItem[]>()
@@ -282,12 +291,14 @@ export default function KnowledgeAdminPage() {
       if (filterStatus === 'published' && !article.is_published) return false
       if (filterStatus === 'draft' && article.is_published) return false
       if (filterStatus === 'confirmation' && !article.requires_confirmation) return false
+      if (filterCompany === 'global' && article.company_id) return false
+      if (filterCompany !== 'all' && filterCompany !== 'global' && article.company_id !== filterCompany) return false
       if (!needle) return true
       return [article.title, article.summary, article.content, article.tags?.join(' ')]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle))
     })
-  }, [data.articles, query, filterSeverity, filterStatus])
+  }, [data.articles, query, filterSeverity, filterStatus, filterCompany])
 
   const articlesByCategory = useMemo(() => {
     const groups = new Map<string, KnowledgeArticle[]>()
@@ -370,6 +381,7 @@ export default function KnowledgeAdminPage() {
     event.preventDefault()
     const result = await send('upsertCategory', {
       ...categoryForm,
+      company_id: normalizeId(categoryForm.company_id),
       sort_order: Number(categoryForm.sort_order || 100),
     })
     if (result) setCategoryForm(emptyCategory)
@@ -382,6 +394,7 @@ export default function KnowledgeAdminPage() {
       : splitList(articleForm.audience || '')
     const result = await send('upsertArticle', {
       ...articleForm,
+      company_id: normalizeId(articleForm.company_id),
       category_id: normalizeId(articleForm.category_id),
       tags: splitList(articleForm.tags || ''),
       audience,
@@ -391,9 +404,10 @@ export default function KnowledgeAdminPage() {
       requires_confirmation: articleForm.requires_confirmation === true,
     })
     if (result) {
-      // сохраняем выбор категории и аудитории — для пакетного ввода
+      // сохраняем выбор точки, категории и аудитории — для пакетного ввода
       setArticleForm({
         ...emptyArticle,
+        company_id: articleForm.company_id || '',
         category_id: articleForm.category_id || '',
         audience,
       })
@@ -563,6 +577,19 @@ export default function KnowledgeAdminPage() {
                         <option value="draft">Только черновики</option>
                         <option value="confirmation">Требуют подтверждения</option>
                       </SelectInput>
+                      <SelectInput
+                        value={filterCompany}
+                        onChange={(event) => setFilterCompany(event.target.value)}
+                        className="!w-auto !py-2 !text-xs"
+                      >
+                        <option value="all">Все точки</option>
+                        <option value="global">Только глобальные</option>
+                        {data.companies.map((company) => (
+                          <option key={company.id} value={company.id}>
+                            {company.name}
+                          </option>
+                        ))}
+                      </SelectInput>
                       <span className="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1.5 text-xs text-slate-400">
                         Показано {filteredArticles.length} из {data.articles.length}
                       </span>
@@ -582,9 +609,11 @@ export default function KnowledgeAdminPage() {
                               key={article.id}
                               article={article}
                               category={article.category_id ? categoryById.get(article.category_id) : undefined}
+                              companyName={article.company_id ? companyById.get(article.company_id)?.name : undefined}
                               onEdit={() =>
                                 setArticleForm({
                                   ...article,
+                                  company_id: article.company_id || '',
                                   category_id: article.category_id || '',
                                   summary: article.summary || '',
                                   tags: article.tags?.join(', ') || '',
@@ -615,26 +644,40 @@ export default function KnowledgeAdminPage() {
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
-                        <FieldLabel>Категория</FieldLabel>
-                        <SelectInput value={articleForm.category_id} onChange={(event) => setArticleForm({ ...articleForm, category_id: event.target.value })}>
-                          <option value="">Без категории</option>
-                          {data.categories.map((category) => (
-                            <option key={category.id} value={category.id}>
-                              {category.title}
+                        <FieldLabel>Точка</FieldLabel>
+                        <SelectInput value={articleForm.company_id} onChange={(event) => setArticleForm({ ...articleForm, company_id: event.target.value })}>
+                          <option value="">Для всех точек</option>
+                          {data.companies.map((company) => (
+                            <option key={company.id} value={company.id}>
+                              {company.name}
                             </option>
                           ))}
                         </SelectInput>
                       </div>
                       <div className="space-y-2">
-                        <FieldLabel>Важность</FieldLabel>
-                        <SelectInput value={articleForm.severity} onChange={(event) => setArticleForm({ ...articleForm, severity: event.target.value })}>
-                          {Object.entries(SEVERITY_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
+                        <FieldLabel>Категория</FieldLabel>
+                        <SelectInput value={articleForm.category_id} onChange={(event) => setArticleForm({ ...articleForm, category_id: event.target.value })}>
+                          <option value="">Без категории</option>
+                          {data.categories
+                            .filter((category) => !articleForm.company_id || !category.company_id || category.company_id === articleForm.company_id)
+                            .map((category) => (
+                              <option key={category.id} value={category.id}>
+                                {category.title}
+                                {category.company_id ? ` · ${companyById.get(category.company_id)?.name || ''}` : ''}
+                              </option>
+                            ))}
                         </SelectInput>
                       </div>
+                    </div>
+                    <div className="space-y-2">
+                      <FieldLabel>Важность</FieldLabel>
+                      <SelectInput value={articleForm.severity} onChange={(event) => setArticleForm({ ...articleForm, severity: event.target.value })}>
+                        {Object.entries(SEVERITY_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </SelectInput>
                     </div>
                     <div className="space-y-2">
                       <FieldLabel>Краткое описание</FieldLabel>
@@ -727,6 +770,7 @@ export default function KnowledgeAdminPage() {
                             <h3 className="break-words text-xl font-black">{template.title}</h3>
                             <p className="mt-1 break-words text-sm leading-6 text-slate-400">{template.description || 'Без описания'}</p>
                             <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
+                              <Badge>{template.company_id ? `Точка: ${companyById.get(template.company_id)?.name || ''}` : 'Все точки'}</Badge>
                               <Badge>{template.role_scope}</Badge>
                               <Badge>{template.shift_scope}</Badge>
                               <Badge>{SCHEDULE_TYPE_LABELS[template.schedule_type] || template.schedule_type}</Badge>
@@ -961,12 +1005,15 @@ export default function KnowledgeAdminPage() {
                       <div key={category.id} className="min-w-0 rounded-3xl border border-slate-800 bg-slate-950/50 p-5">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <Badge>{KIND_LABELS[category.kind]}</Badge>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge>{KIND_LABELS[category.kind]}</Badge>
+                              <Badge>{category.company_id ? `Точка: ${companyById.get(category.company_id)?.name || ''}` : 'Все точки'}</Badge>
+                            </div>
                             <h3 className="mt-3 break-words text-xl font-black">{category.title}</h3>
                             <p className="mt-2 break-words text-sm leading-6 text-slate-400">{category.description || 'Без описания'}</p>
                           </div>
                           <RowActions
-                            onEdit={() => setCategoryForm({ ...category, description: category.description || '' })}
+                            onEdit={() => setCategoryForm({ ...category, company_id: category.company_id || '', description: category.description || '' })}
                             onDelete={() => {
                               if (!confirmDelete(category.title)) return
                               void send('deleteCategory', undefined, category.id)
@@ -985,15 +1032,28 @@ export default function KnowledgeAdminPage() {
                       <FieldLabel>Название</FieldLabel>
                       <TextInput value={categoryForm.title} onChange={(event) => setCategoryForm({ ...categoryForm, title: event.target.value })} required />
                     </div>
-                    <div className="space-y-2">
-                      <FieldLabel>Тип</FieldLabel>
-                      <SelectInput value={categoryForm.kind} onChange={(event) => setCategoryForm({ ...categoryForm, kind: event.target.value })}>
-                        {Object.entries(KIND_LABELS).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </SelectInput>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <FieldLabel>Точка</FieldLabel>
+                        <SelectInput value={categoryForm.company_id} onChange={(event) => setCategoryForm({ ...categoryForm, company_id: event.target.value })}>
+                          <option value="">Для всех точек</option>
+                          {data.companies.map((company) => (
+                            <option key={company.id} value={company.id}>
+                              {company.name}
+                            </option>
+                          ))}
+                        </SelectInput>
+                      </div>
+                      <div className="space-y-2">
+                        <FieldLabel>Тип</FieldLabel>
+                        <SelectInput value={categoryForm.kind} onChange={(event) => setCategoryForm({ ...categoryForm, kind: event.target.value })}>
+                          {Object.entries(KIND_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </SelectInput>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <FieldLabel>Описание</FieldLabel>
@@ -1088,11 +1148,13 @@ function Panel({ title, icon: Icon, children }: { title: string; icon: React.Com
 function ArticleCard({
   article,
   category,
+  companyName,
   onEdit,
   onDelete,
 }: {
   article: KnowledgeArticle
   category?: KnowledgeCategory
+  companyName?: string
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -1101,6 +1163,7 @@ function ArticleCard({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap gap-2">
+            <Badge>{companyName ? `Точка: ${companyName}` : 'Все точки'}</Badge>
             {category && <Badge>{category.title}</Badge>}
             <Badge>{SEVERITY_LABELS[article.severity]}</Badge>
             <Badge>{article.is_published ? 'Опубликовано' : 'Черновик'}</Badge>
