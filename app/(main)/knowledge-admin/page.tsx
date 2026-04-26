@@ -45,6 +45,8 @@ type KnowledgeArticle = {
   related_bonus_amount: number | null
   is_published: boolean
   sort_order: number
+  requires_confirmation: boolean | null
+  version: number | null
 }
 
 type ChecklistTemplate = {
@@ -115,18 +117,29 @@ const emptyCategory = {
   is_active: true,
 }
 
+const AUDIENCE_OPTIONS = [
+  { value: 'operator', label: 'Оператор' },
+  { value: 'cashier', label: 'Кассир' },
+  { value: 'manager', label: 'Менеджер' },
+  { value: 'owner', label: 'Owner' },
+  { value: 'client', label: 'Клиент (киоск)' },
+  { value: 'public', label: 'Публично' },
+  { value: 'kiosk', label: 'Киоск' },
+] as const
+
 const emptyArticle = {
   title: '',
   category_id: '',
   summary: '',
   content: '',
   tags: '',
-  audience: 'operator,cashier,manager',
+  audience: ['operator', 'cashier', 'manager'] as string[],
   severity: 'info' as const,
   related_fine_amount: '',
   related_bonus_amount: '',
   sort_order: 100,
   is_published: true,
+  requires_confirmation: false,
 }
 
 const emptyTemplate = {
@@ -233,6 +246,8 @@ export default function KnowledgeAdminPage() {
   })
   const [tab, setTab] = useState<Tab>('articles')
   const [query, setQuery] = useState('')
+  const [filterSeverity, setFilterSeverity] = useState<'all' | 'info' | 'normal' | 'warning' | 'critical'>('all')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'published' | 'draft' | 'confirmation'>('all')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -262,13 +277,42 @@ export default function KnowledgeAdminPage() {
 
   const filteredArticles = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    if (!needle) return data.articles
     return data.articles.filter((article) => {
+      if (filterSeverity !== 'all' && article.severity !== filterSeverity) return false
+      if (filterStatus === 'published' && !article.is_published) return false
+      if (filterStatus === 'draft' && article.is_published) return false
+      if (filterStatus === 'confirmation' && !article.requires_confirmation) return false
+      if (!needle) return true
       return [article.title, article.summary, article.content, article.tags?.join(' ')]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle))
     })
-  }, [data.articles, query])
+  }, [data.articles, query, filterSeverity, filterStatus])
+
+  const articlesByCategory = useMemo(() => {
+    const groups = new Map<string, KnowledgeArticle[]>()
+    for (const article of filteredArticles) {
+      const key = article.category_id || '__none__'
+      const list = groups.get(key) ?? []
+      list.push(article)
+      groups.set(key, list)
+    }
+    for (const list of groups.values()) {
+      list.sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title))
+    }
+    const ordered: { id: string | null; title: string; articles: KnowledgeArticle[] }[] = []
+    for (const category of data.categories) {
+      const list = groups.get(category.id)
+      if (list && list.length) {
+        ordered.push({ id: category.id, title: category.title, articles: list })
+      }
+    }
+    const orphans = groups.get('__none__')
+    if (orphans && orphans.length) {
+      ordered.push({ id: null, title: 'Без категории', articles: orphans })
+    }
+    return ordered
+  }, [filteredArticles, data.categories])
 
   async function load() {
     setLoading(true)
@@ -293,6 +337,11 @@ export default function KnowledgeAdminPage() {
   useEffect(() => {
     load()
   }, [])
+
+  function confirmDelete(label: string) {
+    if (typeof window === 'undefined') return true
+    return window.confirm(`Удалить «${label}»? Это действие необратимо.`)
+  }
 
   async function send(action: string, payload?: unknown, id?: string) {
     setSaving(true)
@@ -328,16 +377,27 @@ export default function KnowledgeAdminPage() {
 
   async function submitArticle(event: FormEvent) {
     event.preventDefault()
+    const audience = Array.isArray(articleForm.audience)
+      ? articleForm.audience
+      : splitList(articleForm.audience || '')
     const result = await send('upsertArticle', {
       ...articleForm,
       category_id: normalizeId(articleForm.category_id),
       tags: splitList(articleForm.tags || ''),
-      audience: splitList(articleForm.audience || ''),
+      audience,
       related_fine_amount: moneyOrNull(articleForm.related_fine_amount),
       related_bonus_amount: moneyOrNull(articleForm.related_bonus_amount),
       sort_order: Number(articleForm.sort_order || 100),
+      requires_confirmation: articleForm.requires_confirmation === true,
     })
-    if (result) setArticleForm(emptyArticle)
+    if (result) {
+      // сохраняем выбор категории и аудитории — для пакетного ввода
+      setArticleForm({
+        ...emptyArticle,
+        category_id: articleForm.category_id || '',
+        audience,
+      })
+    }
   }
 
   async function submitTemplate(event: FormEvent) {
@@ -470,37 +530,80 @@ export default function KnowledgeAdminPage() {
                     title="Что здесь создавать?"
                     text="Это сами правила и ответы: как открыть смену, что делать если не работает Kaspi, когда штраф, когда премия, как разговаривать с клиентом."
                   />
-                  <div className="mb-4 flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-                    <Search className="h-4 w-4 text-slate-500" />
-                    <input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Поиск по FAQ, правилам, проблемам..."
-                      className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
-                    />
+                  <div className="mb-4 flex flex-col gap-2">
+                    <div className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                      <Search className="h-4 w-4 text-slate-500" />
+                      <input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="Поиск по FAQ, правилам, проблемам..."
+                        className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <SelectInput
+                        value={filterSeverity}
+                        onChange={(event) => setFilterSeverity(event.target.value as typeof filterSeverity)}
+                        className="!w-auto !py-2 !text-xs"
+                      >
+                        <option value="all">Любая важность</option>
+                        {Object.entries(SEVERITY_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </SelectInput>
+                      <SelectInput
+                        value={filterStatus}
+                        onChange={(event) => setFilterStatus(event.target.value as typeof filterStatus)}
+                        className="!w-auto !py-2 !text-xs"
+                      >
+                        <option value="all">Все статьи</option>
+                        <option value="published">Только опубликованные</option>
+                        <option value="draft">Только черновики</option>
+                        <option value="confirmation">Требуют подтверждения</option>
+                      </SelectInput>
+                      <span className="rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1.5 text-xs text-slate-400">
+                        Показано {filteredArticles.length} из {data.articles.length}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="grid gap-3">
-                    {filteredArticles.map((article) => (
-                      <ArticleCard
-                        key={article.id}
-                        article={article}
-                        category={article.category_id ? categoryById.get(article.category_id) : undefined}
-                        onEdit={() =>
-                          setArticleForm({
-                            ...article,
-                            category_id: article.category_id || '',
-                            summary: article.summary || '',
-                            tags: article.tags?.join(', ') || '',
-                            audience: article.audience?.join(', ') || '',
-                            related_fine_amount: article.related_fine_amount ?? '',
-                            related_bonus_amount: article.related_bonus_amount ?? '',
-                          })
-                        }
-                        onDelete={() => send('deleteArticle', undefined, article.id)}
-                      />
+                  <div className="grid gap-5">
+                    {articlesByCategory.map((group) => (
+                      <div key={group.id ?? 'none'} className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                          <span>{group.title}</span>
+                          <span className="rounded-full bg-slate-900 px-2 py-0.5 text-slate-400">{group.articles.length}</span>
+                        </div>
+                        <div className="grid gap-3">
+                          {group.articles.map((article) => (
+                            <ArticleCard
+                              key={article.id}
+                              article={article}
+                              category={article.category_id ? categoryById.get(article.category_id) : undefined}
+                              onEdit={() =>
+                                setArticleForm({
+                                  ...article,
+                                  category_id: article.category_id || '',
+                                  summary: article.summary || '',
+                                  tags: article.tags?.join(', ') || '',
+                                  audience: article.audience || [],
+                                  related_fine_amount: article.related_fine_amount ?? '',
+                                  related_bonus_amount: article.related_bonus_amount ?? '',
+                                  requires_confirmation: article.requires_confirmation === true,
+                                })
+                              }
+                              onDelete={() => {
+                                if (!confirmDelete(article.title)) return
+                                void send('deleteArticle', undefined, article.id)
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     ))}
-                    {!filteredArticles.length && <EmptyState text="Материалов пока нет. Создайте первую инструкцию или нажмите «Создать базу F16»." />}
+                    {!articlesByCategory.length && <EmptyState text="Материалов пока нет. Создайте первую инструкцию или нажмите «Создать базу F16»." />}
                   </div>
                 </Panel>
 
@@ -541,14 +644,42 @@ export default function KnowledgeAdminPage() {
                       <FieldLabel>Полный текст</FieldLabel>
                       <TextArea value={articleForm.content} onChange={(event) => setArticleForm({ ...articleForm, content: event.target.value })} required className="min-h-44" />
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <FieldLabel>Теги через запятую</FieldLabel>
-                        <TextInput value={articleForm.tags} onChange={(event) => setArticleForm({ ...articleForm, tags: event.target.value })} placeholder="касса, смена, конфликт" />
-                      </div>
-                      <div className="space-y-2">
-                        <FieldLabel>Аудитория</FieldLabel>
-                        <TextInput value={articleForm.audience} onChange={(event) => setArticleForm({ ...articleForm, audience: event.target.value })} placeholder="operator,cashier,manager" />
+                    <div className="space-y-2">
+                      <FieldLabel>Теги через запятую</FieldLabel>
+                      <TextInput value={articleForm.tags} onChange={(event) => setArticleForm({ ...articleForm, tags: event.target.value })} placeholder="касса, смена, конфликт" />
+                    </div>
+                    <div className="space-y-2">
+                      <FieldLabel>Аудитория</FieldLabel>
+                      <div className="flex flex-wrap gap-2">
+                        {AUDIENCE_OPTIONS.map((opt) => {
+                          const current: string[] = Array.isArray(articleForm.audience)
+                            ? articleForm.audience
+                            : []
+                          const checked = current.includes(opt.value)
+                          return (
+                            <label
+                              key={opt.value}
+                              className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                                checked
+                                  ? 'border-amber-300/70 bg-amber-300/15 text-amber-100'
+                                  : 'border-slate-700 bg-slate-900/70 text-slate-400 hover:border-slate-500'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="hidden"
+                                checked={checked}
+                                onChange={() => {
+                                  const next = checked
+                                    ? current.filter((v) => v !== opt.value)
+                                    : [...current, opt.value]
+                                  setArticleForm({ ...articleForm, audience: next })
+                                }}
+                              />
+                              {opt.label}
+                            </label>
+                          )
+                        })}
                       </div>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-3">
@@ -565,10 +696,16 @@ export default function KnowledgeAdminPage() {
                         <TextInput value={articleForm.sort_order} onChange={(event) => setArticleForm({ ...articleForm, sort_order: event.target.value })} inputMode="numeric" />
                       </div>
                     </div>
-                    <label className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
-                      <input type="checkbox" checked={articleForm.is_published} onChange={(event) => setArticleForm({ ...articleForm, is_published: event.target.checked })} />
-                      Опубликовано для операторов
-                    </label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
+                        <input type="checkbox" checked={articleForm.is_published} onChange={(event) => setArticleForm({ ...articleForm, is_published: event.target.checked })} />
+                        Опубликовано для операторов
+                      </label>
+                      <label className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-950/10 px-4 py-3 text-sm text-amber-100">
+                        <input type="checkbox" checked={!!articleForm.requires_confirmation} onChange={(event) => setArticleForm({ ...articleForm, requires_confirmation: event.target.checked })} />
+                        Требует подтверждения оператором
+                      </label>
+                    </div>
                     <FormActions saving={saving} reset={() => setArticleForm(emptyArticle)} isEditing={Boolean(articleForm.id)} />
                   </form>
                 </Panel>
@@ -611,7 +748,10 @@ export default function KnowledgeAdminPage() {
                                 blocks_shift: !!template.blocks_shift,
                               })
                             }
-                            onDelete={() => send('deleteTemplate', undefined, template.id)}
+                            onDelete={() => {
+                              if (!confirmDelete(template.title)) return
+                              void send('deleteTemplate', undefined, template.id)
+                            }}
                           />
                         </div>
                         <div className="mt-4 grid gap-2">
@@ -623,6 +763,14 @@ export default function KnowledgeAdminPage() {
                                   <p className="break-words font-bold">{item.title}</p>
                                 </div>
                                 <p className="mt-1 break-words text-xs leading-5 text-slate-500">{item.description || 'Без пояснения'}</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <Badge>{SEVERITY_LABELS[item.severity]}</Badge>
+                                  <Badge>{item.answer_type}</Badge>
+                                  {item.is_required && <Badge>обязательно</Badge>}
+                                  {item.requires_photo && <Badge>фото</Badge>}
+                                  {item.fine_amount ? <Badge>штраф {item.fine_amount}₸</Badge> : null}
+                                  {item.bonus_amount ? <Badge>бонус {item.bonus_amount}₸</Badge> : null}
+                                </div>
                               </div>
                               <RowActions
                                 onEdit={() =>
@@ -635,7 +783,10 @@ export default function KnowledgeAdminPage() {
                                     bonus_amount: item.bonus_amount ?? '',
                                   })
                                 }
-                                onDelete={() => send('deleteItem', undefined, item.id)}
+                                onDelete={() => {
+                                  if (!confirmDelete(item.title)) return
+                                  void send('deleteItem', undefined, item.id)
+                                }}
                               />
                             </div>
                           ))}
@@ -716,8 +867,8 @@ export default function KnowledgeAdminPage() {
                           </div>
                         )}
                       </div>
-                      {templateForm.schedule_type === 'opening' && (
-                        <label className="flex items-center gap-2 text-sm text-slate-300">
+                      {['opening', 'closing', 'onboarding'].includes(templateForm.schedule_type) && (
+                        <label className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
                           <input
                             type="checkbox"
                             checked={!!templateForm.blocks_shift}
@@ -725,7 +876,7 @@ export default function KnowledgeAdminPage() {
                               setTemplateForm({ ...templateForm, blocks_shift: event.target.checked })
                             }
                           />
-                          Блокирует работу до прохождения
+                          Блокирует смену до прохождения
                         </label>
                       )}
                       <FormActions saving={saving} reset={() => setTemplateForm(emptyTemplate)} isEditing={Boolean(templateForm.id)} />
@@ -816,7 +967,10 @@ export default function KnowledgeAdminPage() {
                           </div>
                           <RowActions
                             onEdit={() => setCategoryForm({ ...category, description: category.description || '' })}
-                            onDelete={() => send('deleteCategory', undefined, category.id)}
+                            onDelete={() => {
+                              if (!confirmDelete(category.title)) return
+                              void send('deleteCategory', undefined, category.id)
+                            }}
                           />
                         </div>
                       </div>
@@ -950,6 +1104,11 @@ function ArticleCard({
             {category && <Badge>{category.title}</Badge>}
             <Badge>{SEVERITY_LABELS[article.severity]}</Badge>
             <Badge>{article.is_published ? 'Опубликовано' : 'Черновик'}</Badge>
+            {article.requires_confirmation && <Badge>Подтверждение</Badge>}
+            {(article.version ?? 1) > 0 && <Badge>v{article.version ?? 1}</Badge>}
+            {(article.audience ?? []).map((aud) => (
+              <Badge key={aud}>{AUDIENCE_OPTIONS.find((o) => o.value === aud)?.label || aud}</Badge>
+            ))}
           </div>
           <h3 className="mt-3 break-words text-xl font-black">{article.title}</h3>
           <p className="mt-2 break-words text-sm leading-6 text-slate-400">{article.summary || article.content.slice(0, 180)}</p>
